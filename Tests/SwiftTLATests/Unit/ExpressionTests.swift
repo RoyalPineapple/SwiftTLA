@@ -53,7 +53,7 @@ final class ExpressionTests: XCTestCase {
 
     func testConstantSubstitution() throws {
         let spec = TLASpec("Test") {
-            Variable(Var<Int>("x"), .constant("N"))
+            Variable(Var<Int>("x"), TLAValue.constant("N"))
             Constant("N", 5)
             Act("Inc") { next(Var<Int>("x")) == Var<Int>("x") + 1 }
         }

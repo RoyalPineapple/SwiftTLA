@@ -54,7 +54,7 @@ final class CheckerTests: XCTestCase {
 
     func testModelCheckWithConstants() throws {
         let spec = TLASpec("Param") {
-            Variable(Var<Int>("x"), .constant("Limit"))
+            Variable(Var<Int>("x"), TLAValue.constant("Limit"))
             Constant("Limit", 2)
             Act("Tick") { next(Var<Int>("x")) == Var<Int>("x") + 1 }
             Inv("Below3") { Var<Int>("x") <= 2 }

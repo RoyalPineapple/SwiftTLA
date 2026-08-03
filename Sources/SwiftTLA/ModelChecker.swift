@@ -19,7 +19,28 @@ public struct ModelChecker {
     private func exploreWithGraph() throws -> (result: CheckResult, graph: StateGraph) {
         let spec = substituteConstants(self.spec)
         let varNames = spec.variables.map(\.name)
-        let initial = Dictionary(uniqueKeysWithValues: spec.variables.map { ($0.name, $0.initial) })
+
+        let initialState = Dictionary(uniqueKeysWithValues: spec.variables.map { ($0.name, $0.initial) })
+        let initialStates: [[String: TLAValue]] = {
+            let nondetVars = spec.variables.filter {
+                if case .set = $0.initial { return true }
+                return false
+            }
+            guard !nondetVars.isEmpty else { return [initialState] }
+
+            var states: [[String: TLAValue]] = [initialState]
+            for v in nondetVars {
+                guard case .set(let values) = v.initial else { continue }
+                states = states.flatMap { base in
+                    values.map { elem in
+                        var s = base
+                        s[v.name] = elem
+                        return s
+                    }
+                }
+            }
+            return states
+        }()
 
         let symmetrySets: [SymmetrySet] = spec.variables.compactMap { v in
             if case .set(let s) = v.initial { return SymmetrySet(variableName: v.name, values: s) }
@@ -33,16 +54,25 @@ public struct ModelChecker {
             ? [NamedAction(name: "", body: .guard_(.value(.bool(false))))]
             : spec.actions
 
-        let initCanonical = canonical(initial)
-        var stateToID: [[String: TLAValue]: StateGraph.StateID] = [initCanonical: StateGraph.StateID(0)]
-        var idToState: [StateGraph.StateID: [String: TLAValue]] = [StateGraph.StateID(0): initial]
+        var stateToID: [[String: TLAValue]: StateGraph.StateID] = [:]
+        var idToState: [StateGraph.StateID: [String: TLAValue]] = [:]
         var transitions: [StateGraph.StateID: [(action: String, target: StateGraph.StateID)]] = [:]
-        var nextID = 1
-
-        var visited: Set<[String: TLAValue]> = [initCanonical]
-        var queue: [[String: TLAValue]] = [initial]
+        var nextID = 0
+        var visited: Set<[String: TLAValue]> = []
+        var queue: [[String: TLAValue]] = []
         var predecessors: [[String: TLAValue]: ([String: TLAValue], String)] = [:]
-        var head = 0
+        let firstInitial = initialStates[0]
+
+        for initial in initialStates {
+            let canonicalInitial = canonical(initial)
+            let id = StateGraph.StateID(nextID)
+            stateToID[canonicalInitial] = id
+            idToState[id] = initial
+            visited.insert(canonicalInitial)
+            queue.append(initial)
+            predecessors[initial] = (firstInitial, "init")
+            nextID += 1
+        }
 
         let expand = { (state: [String: TLAValue]) -> [(state: [String: TLAValue], action: String)] in
             actions.flatMap { act in
@@ -51,6 +81,8 @@ public struct ModelChecker {
                 return nextStates.map { ($0, act.name) }
             }
         }
+
+        var head = 0
 
         for stepCount in 0... {
             guard stepCount < maxStates else {
@@ -92,7 +124,7 @@ public struct ModelChecker {
                     return (.invariantViolated(
                         invariant: inv.name,
                         state: current,
-                        trace: buildTrace(to: current, predecessors: predecessors, initial: initial)
+                        trace: buildTrace(to: current, predecessors: predecessors, initial: firstInitial)
                     ), graph)
                 }
             }
