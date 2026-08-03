@@ -14,10 +14,8 @@ let package = Package(
     products: [
         .library(name: "SwiftTLA", targets: ["SwiftTLA"]),
         .library(name: "SwiftTLAGenerator", targets: ["SwiftTLAGenerator"]),
-        .executable(name: "swift-tla", targets: ["SwiftTLACLI"]),
     ],
     dependencies: [
-        .package(url: "https://github.com/apple/swift-argument-parser", from: "1.3.0"),
         .package(url: "https://github.com/swiftlang/swift-syntax", from: "600.0.0"),
     ],
     targets: [
@@ -26,6 +24,7 @@ let package = Package(
             "SwiftTLA",
             .product(name: "SwiftParser", package: "swift-syntax"),
             .product(name: "SwiftBasicFormat", package: "swift-syntax"),
+            .product(name: "SwiftSyntaxBuilder", package: "swift-syntax"),
         ], swiftSettings: settings),
         .target(name: "SwiftTLAMacros", dependencies: ["SwiftTLAPlugin"]),
         .macro(name: "SwiftTLAPlugin", dependencies: [
@@ -37,12 +36,7 @@ let package = Package(
             .product(name: "SwiftDiagnostics", package: "swift-syntax"),
             .product(name: "SwiftParser", package: "swift-syntax"),
         ]),
-        .executableTarget(name: "SwiftTLACLI", dependencies: [
-            "SwiftTLA", "SwiftTLAGenerator",
-            .product(name: "ArgumentParser", package: "swift-argument-parser"),
-        ], swiftSettings: settings),
-        .testTarget(name: "SwiftTLATests", dependencies: ["SwiftTLA", "SwiftTLAGenerator"], swiftSettings: settings),
         .executableTarget(name: "SwiftTLAExamples", dependencies: ["SwiftTLA", "SwiftTLAMacros"]),
-        // .testTarget(name: "SwiftTLAMacroTests", dependencies: ["SwiftTLA", "SwiftTLAMacros"]),
+        .testTarget(name: "SwiftTLATests", dependencies: ["SwiftTLA", "SwiftTLAGenerator"], swiftSettings: settings),
     ]
 )
