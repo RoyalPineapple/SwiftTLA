@@ -114,3 +114,9 @@ public indirect enum StateExpr: Hashable, Codable, Sendable, CustomStringConvert
         }
     }
 }
+
+extension StateExpr {
+    public static func int(_ value: Int) -> StateExpr { .value(.int(value)) }
+    public static func bool(_ value: Bool) -> StateExpr { .value(.bool(value)) }
+}
+

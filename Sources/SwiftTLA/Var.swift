@@ -100,7 +100,7 @@ public func powerSet(_ e: some StateExprConvertible) -> StateExpr { .powerSet(e.
 public func unionAll(_ e: some StateExprConvertible) -> StateExpr { .unionAll(e.stateExpr) }
 public func domain(_ e: some StateExprConvertible) -> StateExpr { .domain(e.stateExpr) }
 public func functionLiteral(domain: StateExpr, _ body: StateExpr) -> StateExpr { .functionLiteral(domain, body) }
-public func functionApply(_ f: StateExpr, _ x: StateExpr) -> StateExpr { .functionApply(f, x) }
+public func functionApply<F: StateExprConvertible, X: StateExprConvertible>(_ f: F, _ x: X) -> StateExpr { .functionApply(f.stateExpr, x.stateExpr) }
 public func setFilter(_ s: StateExpr, _ p: StateExpr) -> StateExpr { .setFilter(s, p) }
 public func setMap(_ e: StateExpr, over s: StateExpr) -> StateExpr { .setMap(e, s) }
 public func tupleExpr(_ elements: [some StateExprConvertible]) -> StateExpr { .tupleLiteral(elements.map(\.stateExpr)) }
@@ -109,7 +109,7 @@ public func tupleLength(_ e: some StateExprConvertible) -> StateExpr { .tupleLen
 public func tupleAppend(_ t: StateExpr, _ e: StateExpr) -> StateExpr { .tupleAppend(t, e) }
 public func tupleConcatenate(_ a: StateExpr, _ b: StateExpr) -> StateExpr { .tupleConcatenate(a, b) }
 public func integerDivide(_ a: StateExpr, _ b: StateExpr) -> StateExpr { .integerDivide(a, b) }
-public func except(_ function: StateExpr, at key: StateExpr, value: StateExpr) -> StateExpr { .except(function, key, value) }
+public func except<F: StateExprConvertible, K: StateExprConvertible, V: StateExprConvertible>(_ function: F, at key: K, value: V) -> StateExpr { .except(function.stateExpr, key.stateExpr, value.stateExpr) }
 public func forAll(_ set: StateExpr, _ predicate: StateExpr) -> StateExpr { .forAll(set, predicate) }
 public func exists(_ set: StateExpr, _ predicate: StateExpr) -> StateExpr { .exists(set, predicate) }
 public func choose(_ set: StateExpr, _ predicate: StateExpr) -> StateExpr { .choose(set, predicate) }
