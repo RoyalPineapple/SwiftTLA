@@ -21,19 +21,27 @@ public struct ModelChecker {
         let varNames = spec.variables.map(\.name)
         let initial = Dictionary(uniqueKeysWithValues: spec.variables.map { ($0.name, $0.initial) })
 
+        let symmetrySets: [SymmetrySet] = spec.variables.compactMap { v in
+            if case .set(let s) = v.initial { return SymmetrySet(variableName: v.name, values: s) }
+            return nil
+        }
+        func canonical(_ s: [String: TLAValue]) -> [String: TLAValue] {
+            symmetrySets.reduce(s) { $1.canonicalize($0) }
+        }
+
         let actions = spec.actions.isEmpty
             ? [NamedAction(name: "", body: .guard_(.value(.bool(false))))]
             : spec.actions
 
-        var stateToID: [[String: TLAValue]: StateGraph.StateID] = [initial: StateGraph.StateID(0)]
+        let initCanonical = canonical(initial)
+        var stateToID: [[String: TLAValue]: StateGraph.StateID] = [initCanonical: StateGraph.StateID(0)]
         var idToState: [StateGraph.StateID: [String: TLAValue]] = [StateGraph.StateID(0): initial]
         var transitions: [StateGraph.StateID: [(action: String, target: StateGraph.StateID)]] = [:]
         var nextID = 1
 
-        var visited: Set<[String: TLAValue]> = [initial]
+        var visited: Set<[String: TLAValue]> = [initCanonical]
         var queue: [[String: TLAValue]] = [initial]
         var predecessors: [[String: TLAValue]: ([String: TLAValue], String)] = [:]
-
         var head = 0
 
         let expand = { (state: [String: TLAValue]) -> [(state: [String: TLAValue], action: String)] in
@@ -65,7 +73,7 @@ public struct ModelChecker {
             }
             let current = queue[head]
             head += 1
-            let currentID = stateToID[current]!
+            let currentID = stateToID[canonical(current)]!
 
             var stateWithEnabled = current
             for act in spec.actions where !act.name.isEmpty {
@@ -90,22 +98,23 @@ public struct ModelChecker {
             }
 
             var outgoing: [(action: String, target: StateGraph.StateID)] = []
-            for (succ, act) in expand(current) {
+            for (successor, action) in expand(current) {
+                let canonicalSuccessor = canonical(successor)
                 let targetID: StateGraph.StateID
-                if let existing = stateToID[succ] {
+                if let existing = stateToID[canonicalSuccessor] {
                     targetID = existing
                 } else {
                     targetID = StateGraph.StateID(nextID)
-                    stateToID[succ] = targetID
-                    idToState[targetID] = succ
+                    stateToID[canonicalSuccessor] = targetID
+                    idToState[targetID] = successor
                     nextID += 1
                 }
-                outgoing.append((act, targetID))
+                outgoing.append((action, targetID))
 
-                if !visited.contains(succ) {
-                    visited.insert(succ)
-                    predecessors[succ] = (current, act)
-                    queue.append(succ)
+                if !visited.contains(canonicalSuccessor) {
+                    visited.insert(canonicalSuccessor)
+                    predecessors[successor] = (current, action)
+                    queue.append(successor)
                 }
             }
             transitions[currentID] = outgoing

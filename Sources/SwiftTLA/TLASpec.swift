@@ -188,6 +188,30 @@ public struct SymmetrySet: Hashable, Codable, Sendable, CustomStringConvertible 
         self.values = values
     }
     public var description: String { "SYMMETRY \(variableName)" }
+
+    func canonicalize(_ state: [String: TLAValue]) -> [String: TLAValue] {
+        let sorted = values.sorted { $0.description < $1.description }
+        let present = sorted.filter { value in
+            state.values.contains(value)
+        }
+        guard !present.isEmpty else { return state }
+
+        let mapping: [TLAValue: TLAValue] = Dictionary(uniqueKeysWithValues:
+            zip(present, sorted.prefix(present.count))
+        )
+
+        return state.mapValues { val in
+            if let canonical = mapping[val] { return canonical }
+            if case .set(let s) = val {
+                var newSet = Set<TLAValue>()
+                for elem in s {
+                    newSet.insert(mapping[elem] ?? elem)
+                }
+                return .set(newSet)
+            }
+            return val
+        }
+    }
 }
 
 public func Constant(_ name: String, _ value: some TLAValueConvertible) -> ConstantDecl {
