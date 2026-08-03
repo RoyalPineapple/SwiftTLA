@@ -7,13 +7,13 @@ import SwiftParser
 import SwiftTLA
 import SwiftTLAGenerator
 
-public struct VerifiedStateMachineMacro: DeclarationMacro {
+public struct ModelMacro: DeclarationMacro {
     public static func expansion(
         of node: some FreestandingMacroExpansionSyntax,
         in context: some MacroExpansionContext
     ) throws -> [DeclSyntax] {
         guard let closure = node.trailingClosure else {
-            throw SimpleError("#VerifiedStateMachine requires a trailing closure")
+            throw SimpleError("#model requires a trailing closure")
         }
 
         let specData = try extractSpec(from: closure.statements)
@@ -65,7 +65,7 @@ public struct VerifiedStateMachineMacro: DeclarationMacro {
 }
 
 struct SpecData {
-    var typeName: String = "VerifiedStateMachine"
+    var typeName: String = "Model"
     var variables: [(name: String, initial: TLAValue)] = []
     var actions: [(name: String, body: ActionExpr)] = []
     var invariants: [(name: String, body: StateExpr)] = []
@@ -223,6 +223,6 @@ struct StateMachineGen {
 @main
 struct VerifiedMacroPlugin: CompilerPlugin {
     let providingMacros: [Macro.Type] = [
-        VerifiedStateMachineMacro.self,
+        ModelMacro.self,
     ]
 }
