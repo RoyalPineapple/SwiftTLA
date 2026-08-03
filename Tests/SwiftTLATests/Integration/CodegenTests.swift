@@ -10,7 +10,7 @@ final class CodegenTests: XCTestCase {
             Act("Flip") { next(x) == (x + 1) % 2 }
         }
         let graph = try ModelChecker(spec: spec, maxStates: 10).exploreGraph()
-        let code = StateMachineGenerator(graph: graph).generate()
+        let code = try StateMachineGenerator(graph: graph).generate()
         XCTAssertTrue(code.contains("struct Toggle"))
         XCTAssertTrue(code.contains("enum Action"))
         XCTAssertTrue(code.contains("transitions"))

@@ -1,4 +1,4 @@
-import SwiftTLAMacrosInterface
+import SwiftTLAMacros
 import SwiftTLA
 import XCTest
 

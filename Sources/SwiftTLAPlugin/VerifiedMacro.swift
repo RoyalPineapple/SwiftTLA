@@ -3,6 +3,7 @@ import SwiftSyntax
 import SwiftSyntaxBuilder
 import SwiftSyntaxMacros
 import SwiftDiagnostics
+import SwiftParser
 import SwiftTLA
 import SwiftTLAGenerator
 
@@ -24,8 +25,10 @@ public struct VerifiedStateMachineMacro: DeclarationMacro {
         switch result {
         case .ok:
             let graph = try checker.exploreGraph()
-            let code = StateMachineGenerator(graph: graph).generate()
-            return [DeclSyntax(stringLiteral: code)]
+            let code = try StateMachineGenerator(graph: graph).generate()
+            let source = Parser.parse(source: code)
+            let declarations = source.statements.compactMap { $0.item.as(DeclSyntax.self) }
+            return declarations
 
         case .invariantViolated(let inv, _, let trace):
             let traceStr = trace.map { "  \($0)" }.joined(separator: "\n")

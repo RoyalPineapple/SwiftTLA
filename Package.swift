@@ -27,21 +27,22 @@ let package = Package(
             .product(name: "SwiftParser", package: "swift-syntax"),
             .product(name: "SwiftBasicFormat", package: "swift-syntax"),
         ], swiftSettings: settings),
-        .target(name: "SwiftTLAMacrosInterface", dependencies: ["SwiftTLAMacros"]),
-        .macro(name: "SwiftTLAMacros", dependencies: [
+        .target(name: "SwiftTLAMacros", dependencies: ["SwiftTLAPlugin"]),
+        .macro(name: "SwiftTLAPlugin", dependencies: [
             "SwiftTLA",
             "SwiftTLAGenerator",
             .product(name: "SwiftCompilerPlugin", package: "swift-syntax"),
             .product(name: "SwiftSyntax", package: "swift-syntax"),
             .product(name: "SwiftSyntaxMacros", package: "swift-syntax"),
             .product(name: "SwiftDiagnostics", package: "swift-syntax"),
+            .product(name: "SwiftParser", package: "swift-syntax"),
         ]),
         .executableTarget(name: "SwiftTLACLI", dependencies: [
             "SwiftTLA", "SwiftTLAGenerator",
             .product(name: "ArgumentParser", package: "swift-argument-parser"),
         ], swiftSettings: settings),
         .testTarget(name: "SwiftTLATests", dependencies: ["SwiftTLA", "SwiftTLAGenerator"], swiftSettings: settings),
-        .testTarget(name: "SwiftTLAExamples", dependencies: ["SwiftTLA", "SwiftTLAGenerator"]),
-        // .testTarget(name: "SwiftTLAMacroTests", dependencies: ["SwiftTLA", "SwiftTLAMacrosInterface"]),
+        .executableTarget(name: "SwiftTLAExamples", dependencies: ["SwiftTLA", "SwiftTLAMacros"]),
+        // .testTarget(name: "SwiftTLAMacroTests", dependencies: ["SwiftTLA", "SwiftTLAMacros"]),
     ]
 )

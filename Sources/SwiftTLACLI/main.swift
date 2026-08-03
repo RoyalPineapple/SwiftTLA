@@ -33,7 +33,7 @@ struct Generate: ParsableCommand {
         let checker = ModelChecker(spec: spec, maxStates: 10_000)
         let graph = try checker.exploreGraph()
         let generator = StateMachineGenerator(graph: graph)
-        print(generator.generate())
+        print(try generator.generate())
     }
 }
 

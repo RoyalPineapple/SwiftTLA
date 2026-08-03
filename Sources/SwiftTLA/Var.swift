@@ -108,6 +108,7 @@ public func exists(_ set: StateExpr, _ predicate: StateExpr) -> StateExpr { .exi
 public func choose(_ set: StateExpr, _ predicate: StateExpr) -> StateExpr { .choose(set, predicate) }
 public func enabled(_ actionName: String) -> StateExpr { .enabledAction(actionName) }
 public func chooseAction(_ variable: String, from set: StateExpr) -> ActionExpr { .chooseAction(variable, set) }
+public func TypeName(_ name: String) {}
 
 infix operator ∈ : ComparisonPrecedence
 infix operator ⊆ : ComparisonPrecedence

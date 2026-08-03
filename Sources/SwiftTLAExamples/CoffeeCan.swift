@@ -1,6 +1,6 @@
 import SwiftTLA
 
-enum CoffeeCanExample {
+struct CoffeeCanExample {
     static let maxBeans = 5
     static let black = Var<Int>("black")
     static let white = Var<Int>("white")
