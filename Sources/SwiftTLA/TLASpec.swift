@@ -43,8 +43,11 @@ public struct TLASpec: Codable, Sendable, CustomStringConvertible {
     public let invariants: [NamedInvariant]
     public let temporalProperties: [NamedTemporal]
     public let fairness: [FairnessCondition]
+    public let constraint: StateExpr?
+    public let assume: StateExpr?
+    public let checkDeadlock: Bool
 
-    public init(name: String, variables: [NamedVar], constants: [String: TLAValue] = [:], actions: [NamedAction], invariants: [NamedInvariant], temporalProperties: [NamedTemporal] = [], fairness: [FairnessCondition] = []) {
+    public init(name: String, variables: [NamedVar], constants: [String: TLAValue] = [:], actions: [NamedAction], invariants: [NamedInvariant], temporalProperties: [NamedTemporal] = [], fairness: [FairnessCondition] = [], constraint: StateExpr? = nil, assume: StateExpr? = nil, checkDeadlock: Bool = false) {
         self.name = name
         self.variables = variables
         self.constants = constants
@@ -52,6 +55,9 @@ public struct TLASpec: Codable, Sendable, CustomStringConvertible {
         self.invariants = invariants
         self.temporalProperties = temporalProperties
         self.fairness = fairness
+        self.constraint = constraint
+        self.assume = assume
+        self.checkDeadlock = checkDeadlock
     }
 
     public var description: String {
@@ -120,6 +126,7 @@ public enum SpecBuilder {
     public static func buildExpression(_ expr: TemporalDecl) -> [SpecComponent] { [expr] }
     public static func buildExpression(_ expr: FairnessDecl) -> [SpecComponent] { [expr] }
     public static func buildExpression(_ expr: ConstantDecl) -> [SpecComponent] { [expr] }
+    public static func buildExpression(_ expr: DeadlockDecl) -> [SpecComponent] { [expr] }
     public static func buildOptional(_ component: [SpecComponent]?) -> [SpecComponent] { component ?? [] }
     public static func buildEither(first: [SpecComponent]) -> [SpecComponent] { first }
     public static func buildEither(second: [SpecComponent]) -> [SpecComponent] { second }
@@ -167,9 +174,8 @@ public func Temporal(_ name: String, _ expr: TemporalExpr) -> TemporalDecl {
     TemporalDecl(name, expr)
 }
 
-public func Fairness(_ condition: FairnessCondition) -> FairnessDecl {
-    FairnessDecl(condition)
-}
+public struct DeadlockDecl: SpecComponent { public init() {} }
+public func DeadlockCheck() -> DeadlockDecl { DeadlockDecl() }
 
 public struct SymmetryDecl: SpecComponent {
     public let variableName: String
@@ -227,6 +233,7 @@ extension TLASpec {
         var temporalProperties: [NamedTemporal] = []
         var fairness: [FairnessCondition] = []
         var constants: [String: TLAValue] = [:]
+        var deadlockFlag = false
 
         for comp in components {
             if let v = comp as? VarDecl { variables.append(NamedVar(name: v.name, initial: v.initial)) }
@@ -235,6 +242,7 @@ extension TLASpec {
             else if let t = comp as? TemporalDecl { temporalProperties.append(NamedTemporal(name: t.name, expr: t.expr)) }
             else if let f = comp as? FairnessDecl { fairness.append(f.condition) }
             else if let c = comp as? ConstantDecl { constants[c.name] = c.value }
+            else if comp is DeadlockDecl { deadlockFlag = true }
         }
 
         self.name = name
@@ -244,6 +252,9 @@ extension TLASpec {
         self.invariants = invariants
         self.temporalProperties = temporalProperties
         self.fairness = fairness
+        self.constraint = nil
+        self.assume = nil
+        self.checkDeadlock = deadlockFlag
     }
 }
 

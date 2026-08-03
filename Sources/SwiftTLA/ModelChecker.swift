@@ -84,6 +84,10 @@ public struct ModelChecker {
 
         var head = 0
 
+        if let assume = spec.assume, try !Evaluator.evaluateBool(assume, in: initialStates[0]) {
+            return (.error("ASSUME failed"), StateGraph(specName: spec.name, variableNames: varNames, transitions: [:], states: [:]))
+        }
+
         for stepCount in 0... {
             guard stepCount < maxStates else {
                 let graph = StateGraph(
@@ -106,6 +110,10 @@ public struct ModelChecker {
             let current = queue[head]
             head += 1
             let currentID = stateToID[canonical(current)]!
+
+            if let constraint = spec.constraint, try !Evaluator.evaluateBool(constraint, in: current) {
+                continue
+            }
 
             var stateWithEnabled = current
             for act in spec.actions where !act.name.isEmpty {
@@ -150,6 +158,11 @@ public struct ModelChecker {
                 }
             }
             transitions[currentID] = outgoing
+
+            if spec.checkDeadlock && outgoing.isEmpty {
+                let graph = StateGraph(specName: spec.name, variableNames: varNames, transitions: transitions, states: idToState)
+                return (.deadlocked(state: current), graph)
+            }
         }
         fatalError("unreachable")
     }
@@ -174,6 +187,7 @@ public enum CheckResult: CustomStringConvertible {
     case ok(statesCount: Int)
     case invariantViolated(invariant: String, state: [String: TLAValue], trace: [TraceStep])
     case depthExceeded(statesCount: Int, limit: Int)
+    case deadlocked(state: [String: TLAValue])
     case error(String)
 
     public var description: String {
@@ -191,6 +205,9 @@ public enum CheckResult: CustomStringConvertible {
 
         case .depthExceeded(let count, let limit):
             return "DEPTH EXCEEDED — explored \(count) state(s) before hitting limit of \(limit)"
+
+        case .deadlocked(let state):
+            return "DEADLOCK detected at \(formatState(state))"
 
         case .error(let msg):
             return "ERROR: \(msg)"

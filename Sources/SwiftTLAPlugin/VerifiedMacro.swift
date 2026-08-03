@@ -55,6 +55,9 @@ public struct VerifiedStateMachineMacro: DeclarationMacro {
             )
             return []
 
+        case .deadlocked:
+            return []
+
         case .error(let msg):
             throw SimpleError(msg)
         }
