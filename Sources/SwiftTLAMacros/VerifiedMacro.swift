@@ -20,7 +20,7 @@ public struct VerifiedStateMachineMacro: DeclarationMacro {
         let result = try checker.check()
 
         switch result {
-        case .ok(let count):
+        case .ok:
             let graph = try checker.exploreGraph()
             let code = StateMachineGenerator(graph: graph).generate()
             return [DeclSyntax(stringLiteral: code)]

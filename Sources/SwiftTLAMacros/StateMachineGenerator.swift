@@ -2,7 +2,6 @@ import Foundation
 import SwiftParser
 import SwiftSyntax
 import SwiftBasicFormat
-import SwiftTLA
 
 public struct StateMachineGenerator {
     public let graph: StateGraph
