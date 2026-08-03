@@ -158,6 +158,7 @@ public enum ActionBuilder {
     public static func buildEither(second: ActionExpr) -> ActionExpr { second }
 }
 
+@discardableResult
 public func Variable<T>(_ ref: Var<T>, _ initial: some TLAValueConvertible) -> VarDecl {
     VarDecl(ref.name, initial.tlaValue)
 }

@@ -14,6 +14,8 @@ let package = Package(
     products: [
         .library(name: "SwiftTLA", targets: ["SwiftTLA"]),
         .library(name: "SwiftTLAGenerator", targets: ["SwiftTLAGenerator"]),
+        .library(name: "SwiftTLAExamples", targets: ["SwiftTLAExamples"]),
+        .executable(name: "demo", targets: ["SwiftTLADemo"]),
     ],
     dependencies: [
         .package(url: "https://github.com/swiftlang/swift-syntax", from: "600.0.0"),
@@ -36,7 +38,8 @@ let package = Package(
             .product(name: "SwiftDiagnostics", package: "swift-syntax"),
             .product(name: "SwiftParser", package: "swift-syntax"),
         ]),
-        .executableTarget(name: "SwiftTLAExamples", dependencies: ["SwiftTLA", "SwiftTLAMacros"]),
+        .target(name: "SwiftTLAExamples", dependencies: ["SwiftTLA"]),
+        .executableTarget(name: "SwiftTLADemo", dependencies: ["SwiftTLA", "SwiftTLAExamples"]),
         .testTarget(name: "SwiftTLATests", dependencies: ["SwiftTLA", "SwiftTLAGenerator"], swiftSettings: settings),
     ]
 )
