@@ -1,0 +1,22 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build + Test
+        run: swift test --filter SwiftTLATests
+
+  macro:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build macro plugin
+        run: swift build --target SwiftTLAMacros
