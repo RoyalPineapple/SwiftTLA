@@ -2,9 +2,8 @@ import SwiftTLA
 import SwiftTLAExamples
 import SwiftTLAMacros
 
+// #TLASpec expands at compile time. Struct TLA is generated if invariants hold.
 let hr = Var<Int>("hr")
-
-// Compile-time: #TLASpec generates a verified struct, checked during compilation
 #TLASpec {
     Variable(hr, 1)
     Act("Tick") {
@@ -13,21 +12,12 @@ let hr = Var<Int>("hr")
         increment || wrap
     }
 }
-
 var clock = TLA(hr: 1)
-print("=== HourClock (compile-time verified) ===")
-for _ in 1...3 { clock.apply(.tick); print("  \(clock.hr):00") }
-print()
+for _ in 1...4 { clock.apply(.tick); print("HourClock: \(clock.hr):00") }
 
-// Runtime: shared specs checked by test suite
-let demos: [TLASpec] = [
-    DieHardSpec.spec,
-    CoffeeCanSpec.spec,
-]
-
+// Shared specs verified by test suite
+let demos: [TLASpec] = [DieHardSpec.spec, CoffeeCanSpec.spec]
 for spec in demos {
-    guard let graph = try? ModelChecker(spec: spec, maxStates: 10_000).exploreGraph() else {
-        print("=== \(spec.name) === FAILED"); continue
-    }
-    print("=== \(spec.name) === \(graph.states.count) states verified")
+    guard let graph = try? ModelChecker(spec: spec, maxStates: 10_000).exploreGraph() else { continue }
+    print("\(spec.name): \(graph.states.count) states verified")
 }
