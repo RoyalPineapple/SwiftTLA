@@ -171,6 +171,25 @@ public func Fairness(_ condition: FairnessCondition) -> FairnessDecl {
     FairnessDecl(condition)
 }
 
+public struct SymmetryDecl: SpecComponent {
+    public let variableName: String
+    public init(_ variableName: String) { self.variableName = variableName }
+}
+
+public func Symmetry(_ variableName: String) -> SymmetryDecl {
+    SymmetryDecl(variableName)
+}
+
+public struct SymmetrySet: Hashable, Codable, Sendable, CustomStringConvertible {
+    public let variableName: String
+    public let values: Set<TLAValue>
+    public init(variableName: String, values: Set<TLAValue>) {
+        self.variableName = variableName
+        self.values = values
+    }
+    public var description: String { "SYMMETRY \(variableName)" }
+}
+
 public func Constant(_ name: String, _ value: some TLAValueConvertible) -> ConstantDecl {
     ConstantDecl(name, value.tlaValue)
 }
@@ -287,6 +306,7 @@ private func substituteInAction(_ expr: ActionExpr, constants: [String: TLAValue
     case .assign(let v, let e): return .assign(v, substituteInState(e, constants: constants))
     case .unchanged: return expr
     case .guard_(let e): return .guard_(substituteInState(e, constants: constants))
+    case .chooseAction(let v, let s): return .chooseAction(v, substituteInState(s, constants: constants))
     case .and(let a, let b): return .and(substituteInAction(a, constants: constants), substituteInAction(b, constants: constants))
     case .or(let a, let b): return .or(substituteInAction(a, constants: constants), substituteInAction(b, constants: constants))
     }

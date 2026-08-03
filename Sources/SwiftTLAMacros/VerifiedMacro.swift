@@ -3,6 +3,8 @@ import SwiftSyntax
 import SwiftSyntaxBuilder
 import SwiftSyntaxMacros
 import SwiftDiagnostics
+import SwiftTLA
+import SwiftTLAGenerator
 
 public struct VerifiedStateMachineMacro: DeclarationMacro {
     public static func expansion(

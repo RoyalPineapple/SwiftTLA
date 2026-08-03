@@ -34,6 +34,8 @@ public struct ModelChecker {
         var queue: [[String: TLAValue]] = [initial]
         var predecessors: [[String: TLAValue]: ([String: TLAValue], String)] = [:]
 
+        var head = 0
+
         let expand = { (state: [String: TLAValue]) -> [(state: [String: TLAValue], action: String)] in
             actions.flatMap { act in
                 guard let nextStates = try? ActionEnumerator.enumerate(act.body, from: state, varNames: varNames)
@@ -52,7 +54,7 @@ public struct ModelChecker {
                 )
                 return (.depthExceeded(statesCount: stepCount, limit: maxStates), graph)
             }
-            guard !queue.isEmpty else {
+            guard head < queue.count else {
                 let graph = StateGraph(
                     specName: spec.name,
                     variableNames: varNames,
@@ -61,7 +63,8 @@ public struct ModelChecker {
                 )
                 return (.ok(statesCount: stepCount), graph)
             }
-            let current = queue.removeFirst()
+            let current = queue[head]
+            head += 1
             let currentID = stateToID[current]!
 
             var stateWithEnabled = current

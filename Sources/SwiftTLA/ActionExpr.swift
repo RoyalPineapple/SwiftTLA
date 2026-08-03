@@ -2,6 +2,7 @@ public indirect enum ActionExpr: Hashable, Codable, Sendable, CustomStringConver
     case assign(String, StateExpr)
     case unchanged(String)
     case guard_(StateExpr)
+    case chooseAction(String, StateExpr)  // CHOOSE var ∈ set : true
     case and(ActionExpr, ActionExpr)
     case or(ActionExpr, ActionExpr)
 
@@ -10,6 +11,7 @@ public indirect enum ActionExpr: Hashable, Codable, Sendable, CustomStringConver
         case .assign(let v, let e): return "\(v)' = \(e)"
         case .unchanged(let v): return "UNCHANGED \(v)"
         case .guard_(let e): return "\(e)"
+        case .chooseAction(let v, let s): return "\(v)' ∈ \(s)"
         case .and(let a, let b): return "(\(a) /\\ \(b))"
         case .or(let a, let b): return "(\(a) \\/ \(b))"
         }

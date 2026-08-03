@@ -106,6 +106,7 @@ public func forAll(_ set: StateExpr, _ predicate: StateExpr) -> StateExpr { .for
 public func exists(_ set: StateExpr, _ predicate: StateExpr) -> StateExpr { .exists(set, predicate) }
 public func choose(_ set: StateExpr, _ predicate: StateExpr) -> StateExpr { .choose(set, predicate) }
 public func enabled(_ actionName: String) -> StateExpr { .enabledAction(actionName) }
+public func chooseAction(_ variable: String, from set: StateExpr) -> ActionExpr { .chooseAction(variable, set) }
 
 infix operator ∈ : ComparisonPrecedence
 infix operator ⊆ : ComparisonPrecedence

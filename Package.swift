@@ -27,6 +27,8 @@ let package = Package(
             .product(name: "SwiftBasicFormat", package: "swift-syntax"),
         ], swiftSettings: settings),
         .executableTarget(name: "SwiftTLAMacros", dependencies: [
+            "SwiftTLA",
+            "SwiftTLAGenerator",
             .product(name: "SwiftSyntax", package: "swift-syntax"),
             .product(name: "SwiftSyntaxBuilder", package: "swift-syntax"),
             .product(name: "SwiftSyntaxMacros", package: "swift-syntax"),
