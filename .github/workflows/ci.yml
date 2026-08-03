@@ -8,15 +8,17 @@ on:
 
 jobs:
   test:
-    runs-on: macos-14
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
-      - name: Build + Test
-        run: swift test --filter SwiftTLATests
+      - run: swift test
 
   macro:
-    runs-on: macos-14
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
-      - name: Build macro plugin
+      - name: Activate macro target
+        run: |
+          sed -i '' 's/executableTarget(name: "SwiftTLAMacros"/macro(name: "SwiftTLAMacros"/' Package.swift
+      - name: Build macro
         run: swift build --target SwiftTLAMacros

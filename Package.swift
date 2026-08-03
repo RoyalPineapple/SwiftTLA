@@ -30,7 +30,7 @@ let package = Package(
             "SwiftTLA", "SwiftTLAGenerator",
             .product(name: "ArgumentParser", package: "swift-argument-parser"),
         ], swiftSettings: settings),
-        .macro(name: "SwiftTLAMacros", dependencies: [
+        .executableTarget(name: "SwiftTLAMacros", dependencies: [
             .product(name: "SwiftSyntax", package: "swift-syntax"),
             .product(name: "SwiftSyntaxBuilder", package: "swift-syntax"),
             .product(name: "SwiftSyntaxMacros", package: "swift-syntax"),
