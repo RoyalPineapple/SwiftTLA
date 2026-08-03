@@ -174,6 +174,10 @@ public func Temporal(_ name: String, _ expr: TemporalExpr) -> TemporalDecl {
     TemporalDecl(name, expr)
 }
 
+public func Fairness(_ condition: FairnessCondition) -> FairnessDecl {
+    FairnessDecl(condition)
+}
+
 public struct DeadlockDecl: SpecComponent { public init() {} }
 public func DeadlockCheck() -> DeadlockDecl { DeadlockDecl() }
 
