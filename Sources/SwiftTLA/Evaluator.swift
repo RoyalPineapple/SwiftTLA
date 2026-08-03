@@ -270,6 +270,15 @@ public enum Evaluator {
         case .enabledAction(let name):
             if let val = state["_enabled_\(name)"], case .bool(let b) = val { return .bool(b) }
             return .bool(false)
+
+        case .caseExpr(let pairs, let other):
+            for i in stride(from: 0, to: pairs.count, by: 2) {
+                if case .bool(true) = try evaluate(pairs[i], in: state) {
+                    return try evaluate(pairs[i + 1], in: state)
+                }
+            }
+            if let other = other { return try evaluate(other, in: state) }
+            throw typeMismatch("CASE: no branch matched")
         }
     }
 

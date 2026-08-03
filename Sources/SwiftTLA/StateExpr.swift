@@ -47,6 +47,7 @@ public indirect enum StateExpr: Hashable, Codable, Sendable, CustomStringConvert
     case functionLiteral(StateExpr, StateExpr)
     case functionApply(StateExpr, StateExpr)
     case except(StateExpr, StateExpr, StateExpr)
+    case caseExpr([StateExpr], StateExpr?)
 
     case forAll(StateExpr, StateExpr)
     case exists(StateExpr, StateExpr)
@@ -100,6 +101,12 @@ public indirect enum StateExpr: Hashable, Codable, Sendable, CustomStringConvert
         case .functionLiteral(let d, let e): return "[x \\in \(d) |-> \(e)]"
         case .functionApply(let f, let x): return "\(f)[\(x)]"
         case .except(let f, let x, let e): return "[\(f) EXCEPT ![\(x)] = \(e)]"
+        case .caseExpr(let pairs, let other):
+            let cases = stride(from: 0, to: pairs.count, by: 2).map {
+                "\(pairs[$0]) → \(pairs[$0 + 1])"
+            }.joined(separator: " □ ")
+            if let o = other { return "CASE \(cases) □ OTHER → \(o)" }
+            return "CASE \(cases)"
         case .forAll(let s, let p): return "∀ x ∈ \(s) : \(p)"
         case .exists(let s, let p): return "∃ x ∈ \(s) : \(p)"
         case .choose(let s, let p): return "CHOOSE x ∈ \(s) : \(p)"
