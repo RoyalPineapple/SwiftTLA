@@ -13,7 +13,7 @@ public struct ModelMacro: DeclarationMacro {
         in context: some MacroExpansionContext
     ) throws -> [DeclSyntax] {
         guard let closure = node.trailingClosure else {
-            throw SimpleError("#model requires a trailing closure")
+            throw SimpleError("#spec requires a trailing closure")
         }
 
         let specData = try extractSpec(from: closure.statements)
@@ -65,7 +65,7 @@ public struct ModelMacro: DeclarationMacro {
 }
 
 struct SpecData {
-    var typeName: String = "Model"
+    var typeName: String = "Spec"
     var variables: [(name: String, initial: TLAValue)] = []
     var actions: [(name: String, body: ActionExpr)] = []
     var invariants: [(name: String, body: StateExpr)] = []
