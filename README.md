@@ -14,45 +14,17 @@ let hr = Var<Int>("hr")
         (hr <= 11 && next(hr) == hr + 1) || (hr == 12 && next(hr) == 1)
     }
 }
-// Generates a verified struct. 12 reachable states. Stays in sync with the spec.
+// Expands to a verified struct with Action enum, transitions, and apply()
 ```
 
 ---
 
-## What you can do
+## Two ways to write specs
 
-**Define a spec.**
-```swift
-let spec = TLASpec("HourClock") {
-    Variable(hr, 1)
-    Act("Tick") {
-        let increment: ActionExpr = (hr >= 1) && (hr <= 11) && (next(hr) == hr + 1)
-        let wrap: ActionExpr = (hr == 12) && (next(hr) == 1)
-        increment || wrap
-    }
-}
-```
+**Compile-time:** `#TLA { ... }` checks the spec during compilation. Pass → generates a runnable struct. Fail → compiler error with the counterexample.
 
-**Check it.**
-```swift
-let result = try ModelChecker(spec: spec, maxStates: 20).check()
-// .ok(statesCount: 12)
-```
+**Runtime:** `TLASpec("Name") { ... }` returns a value you can inspect, check, compose, and share between tests and apps.
 
-**Generate TLA+.** `.description` produces a `.tla` file you can verify with TLC.
-```tla
----- MODULE HourClock ----
-VARIABLES hr
-Init == hr = 1
-Tick == ((((hr >= 1) /\ (hr <= 11)) /\ hr' = (hr + 1)) \/ ((hr = 12) /\ hr' = 1))
-Next == Tick
-Spec == Init /\ [][Next]_vars
-====
-```
-
-**Ship it.** `#TLA { ... }` checks your spec at compile time. If invariants hold, it generates a struct with `apply()`. If they break, you get a compiler error showing the trace.
-
-**Find bugs.**
 ```swift
 let spec = TLASpec("Counter") {
     Variable(Var<Int>("x"), 0)
@@ -67,40 +39,38 @@ let result = try ModelChecker(spec: spec).check()
 //   1. [Dec]  {x = -1}
 ```
 
-**Reuse specs.** Each example has a shared definition. Tests import it. The demo runs it. You can build on it.
-```swift
-import SwiftTLAExamples
-let graph = try ModelChecker(spec: HourClockSpec.spec).exploreGraph()
-// graph.states.count == 12
-```
+---
+
+## What you get
+
+**Export to TLA+.** `.description` is a valid `.tla` file. Run it through TLC to independently verify.
+
+**Reuse.** Shared specs in `SwiftTLAExamples`. Tests and the demo import the same definition.
+
+**Type safety.** `Var<Int>` and `Var<TLASet>` are distinct. The compiler won't let you mix them.
+
+**Generates working code.** `#TLA` produces a struct with `apply()`. Change the spec, behavior changes.
 
 ---
 
 ## Reference
 
-| TLA+ operator | SwiftTLA |
+| TLA+ | SwiftTLA |
 |---|---|
 | `x' = x + 1` | `next(x) == x + 1` |
 | `x \in S` | `x ∈ S` |
 | `S \cup T` | `S ∪ T` |
-| `\A x \in S : P` | `forAll(S) { predicate }` |
-| `EXCEPT` | `except(f, at: x, value: e)` |
+| `\A x \in S : P` | `forAll(S, predicate)` |
+| `[f EXCEPT ![x] = e]` | `except(f, at: x, value: e)` |
 | `[]<>P` | `Temporal("name", .alwaysEventually(p))` |
 | `WF(A)` | `Fairness(.weakFairness("A"))` |
 
-Types help. `Var<Int>` and `Var<TLASet>` are different — you can't union an integer into a set by accident.
-
 ---
-
-## Run it
 
 ```
 swift run demo
 ```
 
-## Use it
-
 ```swift
 .package(url: "https://github.com/RoyalPineapple/SwiftTLA", branch: "main")
 ```
-`import SwiftTLA` for the DSL and checker. `import SwiftTLAMacros` for `#TLA`.
