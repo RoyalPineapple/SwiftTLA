@@ -12,6 +12,7 @@ public struct Var<T: TLAValueType>: Hashable, Codable, Sendable, CustomStringCon
     public let name: String
     public init(_ name: String, _: T.Type = T.self) { self.name = name }
     public var description: String { name }
+    public var next: PrimedVar<T> { PrimedVar(name: name) }
 }
 
 extension Dictionary where Key == String, Value == TLAValue {
@@ -126,3 +127,17 @@ public func ∈ <L: StateExprConvertible, R: StateExprConvertible>(lhs: L, rhs: 
 public func ⊆ (lhs: StateExpr, rhs: StateExpr) -> StateExpr { .subset(lhs, rhs) }
 public func ∪ (lhs: StateExpr, rhs: StateExpr) -> StateExpr { .union(lhs, rhs) }
 public func ∩ (lhs: StateExpr, rhs: StateExpr) -> StateExpr { .intersection(lhs, rhs) }
+
+extension StateExpr {
+    public func isIn(_ set: some StateExprConvertible) -> StateExpr { .in(self, set.stateExpr) }
+    public func union(_ other: some StateExprConvertible) -> StateExpr { .union(self, other.stateExpr) }
+    public func intersection(_ other: some StateExprConvertible) -> StateExpr { .intersection(self, other.stateExpr) }
+    public func subtracting(_ other: some StateExprConvertible) -> StateExpr { .setDifference(self, other.stateExpr) }
+    public func isSubset(of other: some StateExprConvertible) -> StateExpr { .subset(self, other.stateExpr) }
+    public func updated(at key: some StateExprConvertible, to value: some StateExprConvertible) -> StateExpr {
+        .except(self, key.stateExpr, value.stateExpr)
+    }
+    public func applying(_ argument: some StateExprConvertible) -> StateExpr {
+        .functionApply(self, argument.stateExpr)
+    }
+}
