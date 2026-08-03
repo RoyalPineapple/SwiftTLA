@@ -1,0 +1,29 @@
+import XCTest
+import SwiftTLA
+import SwiftTLAGenerator
+
+final class CodegenTests: XCTestCase {
+    func testStateMachineGeneration() throws {
+        let x = Var<Int>("x")
+        let spec = TLASpec("Toggle") {
+            Variable(x, 0)
+            Act("Flip") { next(x) == (x + 1) % 2 }
+        }
+        let graph = try ModelChecker(spec: spec, maxStates: 10).exploreGraph()
+        let code = StateMachineGenerator(graph: graph).generate()
+        XCTAssertTrue(code.contains("struct Toggle"))
+        XCTAssertTrue(code.contains("enum Action"))
+        XCTAssertTrue(code.contains("transitions"))
+    }
+
+    func testCodableRoundtrip() throws {
+        let spec = TLASpec("Test") {
+            Variable(Var<Int>("x"), 0)
+            Act("Inc") { next(Var<Int>("x")) == Var<Int>("x") + 1 }
+            Inv("GE0") { Var<Int>("x") >= 0 }
+        }
+        let data = try JSONEncoder().encode(spec)
+        let decoded = try JSONDecoder().decode(TLASpec.self, from: data)
+        XCTAssertEqual(decoded.name, "Test")
+    }
+}
