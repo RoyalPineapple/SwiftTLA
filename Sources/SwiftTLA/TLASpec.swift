@@ -78,6 +78,39 @@ public struct TLASpec: Codable, Sendable, CustomStringConvertible {
         }
         return lines.joined(separator: "\n")
     }
+
+    public func extending(_ other: TLASpec, prefix: String? = nil) -> TLASpec {
+        let prefixedName = prefix.map { "\($0)!\(self.name)" } ?? self.name
+        let otherVars = other.variables.filter { v in !self.variables.contains(where: { $0.name == v.name }) }
+        return TLASpec(
+            name: prefixedName,
+            variables: self.variables + otherVars,
+            constants: self.constants.merging(other.constants) { $1 },
+            actions: self.actions + other.actions,
+            invariants: self.invariants + other.invariants,
+            temporalProperties: self.temporalProperties + other.temporalProperties,
+            fairness: self.fairness + other.fairness,
+            constraint: self.constraint,
+            assume: { if let a = self.assume, let b = other.assume { return .and(a, b) }; return self.assume ?? other.assume }(),
+            checkDeadlock: self.checkDeadlock || other.checkDeadlock
+        )
+    }
+
+    public func instantiating(_ mapping: [String: TLAValue]) -> TLASpec {
+        let constants = self.constants.merging(mapping) { $1 }
+        return TLASpec(
+            name: self.name,
+            variables: self.variables,
+            constants: constants,
+            actions: self.actions,
+            invariants: self.invariants,
+            temporalProperties: self.temporalProperties,
+            fairness: self.fairness,
+            constraint: self.constraint,
+            assume: self.assume,
+            checkDeadlock: self.checkDeadlock
+        )
+    }
 }
 
 public protocol SpecComponent {}
