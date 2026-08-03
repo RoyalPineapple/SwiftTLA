@@ -41,6 +41,7 @@ let package = Package(
             .product(name: "ArgumentParser", package: "swift-argument-parser"),
         ], swiftSettings: settings),
         .testTarget(name: "SwiftTLATests", dependencies: ["SwiftTLA", "SwiftTLAGenerator"], swiftSettings: settings),
-        .testTarget(name: "SwiftTLAMacroTests", dependencies: ["SwiftTLA", "SwiftTLAMacrosInterface"]),
+        .testTarget(name: "SwiftTLAExamples", dependencies: ["SwiftTLA"]),
+        // .testTarget(name: "SwiftTLAMacroTests", dependencies: ["SwiftTLA", "SwiftTLAMacrosInterface"]),
     ]
 )

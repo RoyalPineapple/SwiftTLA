@@ -102,6 +102,7 @@ public func tupleLength(_ e: some StateExprConvertible) -> StateExpr { .tupleLen
 public func tupleAppend(_ t: StateExpr, _ e: StateExpr) -> StateExpr { .tupleAppend(t, e) }
 public func tupleConcatenate(_ a: StateExpr, _ b: StateExpr) -> StateExpr { .tupleConcatenate(a, b) }
 public func integerDivide(_ a: StateExpr, _ b: StateExpr) -> StateExpr { .integerDivide(a, b) }
+public func except(_ function: StateExpr, at key: StateExpr, value: StateExpr) -> StateExpr { .except(function, key, value) }
 public func forAll(_ set: StateExpr, _ predicate: StateExpr) -> StateExpr { .forAll(set, predicate) }
 public func exists(_ set: StateExpr, _ predicate: StateExpr) -> StateExpr { .exists(set, predicate) }
 public func choose(_ set: StateExpr, _ predicate: StateExpr) -> StateExpr { .choose(set, predicate) }

@@ -210,6 +210,30 @@ public enum Evaluator {
             }
             throw typeMismatch("function apply: key not found '\(key)'")
 
+        case .except(let f, let x, let e):
+            let funcVal = try evaluate(f, in: state)
+            let keyVal = try evaluate(x, in: state)
+            let newVal = try evaluate(e, in: state)
+            switch funcVal {
+            case .record(var rv):
+                rv[tlaValueToString(keyVal)] = newVal
+                return .record(rv)
+            case .set(let fset):
+                let key = tlaValueToString(keyVal)
+                var newSet = Set<TLAValue>()
+                for elem in fset {
+                    if case .record(var rv) = elem, rv.keys.contains(key) {
+                        rv[key] = newVal
+                        newSet.insert(.record(rv))
+                    } else {
+                        newSet.insert(elem)
+                    }
+                }
+                return .set(newSet)
+            default:
+                throw typeMismatch("EXCEPT", got: funcVal)
+            }
+
         case .forAll(let set, let predicate):
             guard case .set(let sv) = try evaluate(set, in: state) else { throw typeMismatch("∀", got: try evaluate(set, in: state)) }
             for elem in sv {

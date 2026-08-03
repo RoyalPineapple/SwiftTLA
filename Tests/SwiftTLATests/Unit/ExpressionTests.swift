@@ -61,3 +61,10 @@ final class ExpressionTests: XCTestCase {
         XCTAssertEqual(substituted.variables.first?.initial, .int(5))
     }
 }
+
+    func testExceptRecord() throws {
+        let rec: StateExpr = .recordLiteral(["a": .value(.int(1)), "b": .value(.int(2))])
+        let result = try Evaluator.evaluate(except(rec, at: .value(.string("a")), value: .value(.int(99))), in: [:])
+        XCTAssertEqual(result, .record(["a": .int(99), "b": .int(2)]))
+    }
+}
