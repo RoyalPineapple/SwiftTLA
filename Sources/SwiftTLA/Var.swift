@@ -14,6 +14,13 @@ public struct Var<T: TLAValueType>: Hashable, Codable, Sendable, CustomStringCon
     public var description: String { name }
 }
 
+extension Dictionary where Key == String, Value == TLAValue {
+    public subscript<T: TLAValueType>(_ variable: Var<T>) -> TLAValue? {
+        get { self[variable.name] }
+        set { self[variable.name] = newValue }
+    }
+}
+
 public struct PrimedVar<T: TLAValueType>: Sendable { public let name: String }
 public func next<T>(_ v: Var<T>) -> PrimedVar<T> { PrimedVar(name: v.name) }
 
