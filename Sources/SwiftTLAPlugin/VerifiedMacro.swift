@@ -222,5 +222,7 @@ struct StateMachineGen {
 
 @main
 struct VerifiedMacroPlugin: CompilerPlugin {
-    let providingMacros: [Macro.Type] = [VerifiedStateMachineMacro.self]
+    let providingMacros: [Macro.Type] = [
+        VerifiedStateMachineMacro.self,
+    ]
 }
