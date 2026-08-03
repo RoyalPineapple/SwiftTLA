@@ -65,7 +65,7 @@ public struct ModelMacro: DeclarationMacro {
 }
 
 struct SpecData {
-    var typeName: String = "TLA"
+    var typeName: String = "TLASpec"
     var variables: [(name: String, initial: TLAValue)] = []
     var actions: [(name: String, body: ActionExpr)] = []
     var invariants: [(name: String, body: StateExpr)] = []

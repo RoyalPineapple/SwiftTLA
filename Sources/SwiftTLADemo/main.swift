@@ -16,4 +16,4 @@ for (name, spec, expected) in demos {
     print()
 }
 
-print("All specs verified. TLA+ output matches canonical. #tla macro proves at compile time.")
+print("All specs verified. TLA+ output matches canonical. #TLASpec macro proves at compile time.")

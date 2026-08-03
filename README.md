@@ -8,7 +8,7 @@ import SwiftTLAMacros
 
 let hr = Var<Int>("hr")
 
-#tla {
+#TLASpec {
     Variable(hr, 1)
     Act("Tick") {
         (hr <= 11 && next(hr) == hr + 1) || (hr == 12 && next(hr) == 1)
@@ -22,12 +22,12 @@ let hr = Var<Int>("hr")
 
 ## Always checked
 
-Every `#tla` block runs the model checker at compile time. If invariants hold, the struct is generated. If they break, you get a compiler error with the counterexample trace.
+Every `#TLASpec` block runs the model checker at compile time. If invariants hold, the struct is generated. If they break, you get a compiler error with the counterexample trace.
 
 ```swift
 let x = Var<Int>("x")
 
-#tla {
+#TLASpec {
     Variable(x, 0)
     Act("Inc") { next(x) == x + 1 }
     Act("Dec") { next(x) == x - 1 }
@@ -63,7 +63,7 @@ x ∪ nodes                      // compile error
 
 ## Generated code
 
-`#tla` produces working Swift. `apply()`, `transitions`, `availableActions`. Change the spec, the behavior changes.
+`#TLASpec` produces working Swift. `apply()`, `transitions`, `availableActions`. Change the spec, the behavior changes.
 
 ```
 swift run demo
@@ -72,4 +72,4 @@ swift run demo
 ```swift
 .package(url: "https://github.com/RoyalPineapple/SwiftTLA", branch: "main")
 ```
-`import SwiftTLA` for the DSL. `import SwiftTLAMacros` for `#tla`.
+`import SwiftTLA` for the DSL. `import SwiftTLAMacros` for `#TLASpec`.
