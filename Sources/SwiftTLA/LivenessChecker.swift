@@ -23,7 +23,14 @@ public struct LivenessChecker {
         for prop in spec.temporalProperties {
             for scc in fair {
                 if let violation = try checkProperty(prop, in: scc) {
-                    violations.append(violation)
+                    let enriched = LivenessViolation(
+                        property: violation.property,
+                        sccStates: violation.sccStates,
+                        description: violation.description,
+                        prefixPath: buildPrefix(to: scc),
+                        cyclePath: buildCycle(in: scc)
+                    )
+                    violations.append(enriched)
                 }
             }
         }
@@ -165,4 +172,53 @@ public struct LivenessViolation: CustomStringConvertible {
     public let property: String
     public let sccStates: [[String: TLAValue]]
     public let description: String
+    public let prefixPath: [[String: TLAValue]]
+    public let cyclePath: [[String: TLAValue]]
+
+    public init(property: String, sccStates: [[String: TLAValue]], description: String, prefixPath: [[String: TLAValue]] = [], cyclePath: [[String: TLAValue]] = []) {
+        self.property = property
+        self.sccStates = sccStates
+        self.description = description
+        self.prefixPath = prefixPath
+        self.cyclePath = cyclePath
+    }
+}
+
+extension LivenessChecker {
+    private func buildPrefix(to scc: Set<StateGraph.StateID>) -> [[String: TLAValue]] {
+        guard let target = scc.first else { return [] }
+        var visited: Set<StateGraph.StateID> = [target]
+        var queue: [(StateGraph.StateID, [StateGraph.StateID])] = [(target, [target])]
+
+        while !queue.isEmpty {
+            let (current, currentPath) = queue.removeFirst()
+            if current.id == 0 { return currentPath.reversed().map { graph.states[$0]! } }
+            for (otherID, transitions) in graph.transitions {
+                if transitions.contains(where: { $0.target == current }), !visited.contains(otherID) {
+                    visited.insert(otherID)
+                    queue.append((otherID, currentPath + [otherID]))
+                }
+            }
+        }
+        return []
+    }
+
+    private func buildCycle(in scc: Set<StateGraph.StateID>) -> [[String: TLAValue]] {
+        guard let start = scc.first, let firstState = graph.states[start] else { return [] }
+        var cycle: [[String: TLAValue]] = [firstState]
+        var visited: Set<StateGraph.StateID> = [start]
+        var current = start
+        for _ in 0..<min(10, scc.count) {
+            guard let transitions = graph.transitions[current] else { break }
+            if let next = transitions.first(where: { scc.contains($0.target) && !visited.contains($0.target) }) {
+                visited.insert(next.target)
+                cycle.append(graph.states[next.target]!)
+                current = next.target
+            } else if transitions.contains(where: { $0.target == start }) {
+                cycle.append(firstState)
+                break
+            } else { break }
+        }
+        return cycle
+    }
 }
