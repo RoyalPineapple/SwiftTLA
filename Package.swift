@@ -20,33 +20,16 @@ let package = Package(
         .package(url: "https://github.com/swiftlang/swift-syntax", from: "600.0.0"),
     ],
     targets: [
-        .target(
-            name: "SwiftTLA",
-            dependencies: [],
-            swiftSettings: settings
-        ),
-        .target(
-            name: "SwiftTLAGenerator",
-            dependencies: [
-                "SwiftTLA",
-                .product(name: "SwiftParser", package: "swift-syntax"),
-                .product(name: "SwiftBasicFormat", package: "swift-syntax"),
-            ],
-            swiftSettings: settings
-        ),
-        .executableTarget(
-            name: "SwiftTLACLI",
-            dependencies: [
-                "SwiftTLA",
-                "SwiftTLAGenerator",
-                .product(name: "ArgumentParser", package: "swift-argument-parser"),
-            ],
-            swiftSettings: settings
-        ),
-        .testTarget(
-            name: "SwiftTLATests",
-            dependencies: ["SwiftTLA", "SwiftTLAGenerator"],
-            swiftSettings: settings
-        ),
+        .target(name: "SwiftTLA", dependencies: [], swiftSettings: settings),
+        .target(name: "SwiftTLAGenerator", dependencies: [
+            "SwiftTLA",
+            .product(name: "SwiftParser", package: "swift-syntax"),
+            .product(name: "SwiftBasicFormat", package: "swift-syntax"),
+        ], swiftSettings: settings),
+        .executableTarget(name: "SwiftTLACLI", dependencies: [
+            "SwiftTLA", "SwiftTLAGenerator",
+            .product(name: "ArgumentParser", package: "swift-argument-parser"),
+        ], swiftSettings: settings),
+        .testTarget(name: "SwiftTLATests", dependencies: ["SwiftTLA", "SwiftTLAGenerator"], swiftSettings: settings),
     ]
 )
