@@ -39,7 +39,7 @@ let package = Package(
             .product(name: "SwiftParser", package: "swift-syntax"),
         ]),
         .target(name: "SwiftTLAExamples", dependencies: ["SwiftTLA"]),
-        .executableTarget(name: "SwiftTLADemo", dependencies: ["SwiftTLA", "SwiftTLAExamples"]),
+        .executableTarget(name: "SwiftTLADemo", dependencies: ["SwiftTLA", "SwiftTLAExamples", "SwiftTLAMacros"]),
         .testTarget(name: "SwiftTLATests", dependencies: ["SwiftTLA", "SwiftTLAGenerator"], swiftSettings: settings),
     ]
 )

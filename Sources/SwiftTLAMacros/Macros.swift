@@ -1,4 +1,4 @@
-@freestanding(declaration, names: named(TLASpec))
+@freestanding(declaration, names: named(TLA))
 public macro TLASpec(_ body: () -> Void) = #externalMacro(module: "SwiftTLAPlugin", type: "ModelMacro")
 
 @attached(member, names: named(Action), named(initial))

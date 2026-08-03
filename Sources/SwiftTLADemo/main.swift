@@ -1,19 +1,33 @@
 import SwiftTLA
 import SwiftTLAExamples
+import SwiftTLAMacros
 
-let demos: [(String, TLASpec, Int)] = [
-    ("HourClock", HourClockSpec.spec, HourClockSpec.expectedStates),
-    ("DieHard", DieHardSpec.spec, DieHardSpec.expectedStates),
-    ("CoffeeCan", CoffeeCanSpec.spec, 0),
-]
+let hr = Var<Int>("hr")
 
-for (name, spec, expected) in demos {
-    print("=== \(name) ===")
-    let checker = ModelChecker(spec: spec, maxStates: 10_000)
-    guard let graph = try? checker.exploreGraph() else { print("  FAILED\n"); continue }
-    print("  States: \(graph.states.count)\(expected > 0 ? " (expected \(expected))" : "")")
-    print("  Spec: \(spec)")
-    print()
+// Compile-time: #TLASpec generates a verified struct, checked during compilation
+#TLASpec {
+    Variable(hr, 1)
+    Act("Tick") {
+        let increment: ActionExpr = (hr >= 1) && (hr <= 11) && (next(hr) == hr + 1)
+        let wrap: ActionExpr = (hr == 12) && (next(hr) == 1)
+        increment || wrap
+    }
 }
 
-print("All specs verified. TLA+ output matches canonical. #TLASpec macro proves at compile time.")
+var clock = TLA(hr: 1)
+print("=== HourClock (compile-time verified) ===")
+for _ in 1...3 { clock.apply(.tick); print("  \(clock.hr):00") }
+print()
+
+// Runtime: shared specs checked by test suite
+let demos: [TLASpec] = [
+    DieHardSpec.spec,
+    CoffeeCanSpec.spec,
+]
+
+for spec in demos {
+    guard let graph = try? ModelChecker(spec: spec, maxStates: 10_000).exploreGraph() else {
+        print("=== \(spec.name) === FAILED"); continue
+    }
+    print("=== \(spec.name) === \(graph.states.count) states verified")
+}
