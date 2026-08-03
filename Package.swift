@@ -1,6 +1,7 @@
 // swift-tools-version: 5.9
 
 import PackageDescription
+import CompilerPluginSupport
 
 let settings: [SwiftSetting] = [
     .enableExperimentalFeature("StrictConcurrency"),
@@ -9,7 +10,7 @@ let settings: [SwiftSetting] = [
 
 let package = Package(
     name: "SwiftTLA",
-    platforms: [.macOS(.v14)],
+    platforms: [.macOS(.v13)],
     products: [
         .library(name: "SwiftTLA", targets: ["SwiftTLA"]),
         .library(name: "SwiftTLAGenerator", targets: ["SwiftTLAGenerator"]),
@@ -26,13 +27,13 @@ let package = Package(
             .product(name: "SwiftParser", package: "swift-syntax"),
             .product(name: "SwiftBasicFormat", package: "swift-syntax"),
         ], swiftSettings: settings),
-        .executableTarget(name: "SwiftTLAMacros", dependencies: [
+        .macro(name: "SwiftTLAMacros", dependencies: [
             "SwiftTLA",
             "SwiftTLAGenerator",
-            .product(name: "SwiftSyntax", package: "swift-syntax"),
-            .product(name: "SwiftSyntaxBuilder", package: "swift-syntax"),
-            .product(name: "SwiftSyntaxMacros", package: "swift-syntax"),
             .product(name: "SwiftCompilerPlugin", package: "swift-syntax"),
+            .product(name: "SwiftSyntax", package: "swift-syntax"),
+            .product(name: "SwiftSyntaxMacros", package: "swift-syntax"),
+            .product(name: "SwiftDiagnostics", package: "swift-syntax"),
         ]),
         .executableTarget(name: "SwiftTLACLI", dependencies: [
             "SwiftTLA", "SwiftTLAGenerator",
