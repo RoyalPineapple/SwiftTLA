@@ -17,4 +17,5 @@ jobs:
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
-      - run: swift build --target SwiftTLAMacros
+      - run: swift build --target SwiftTLAPlugin
+      - run: swift build --target SwiftTLAExamples
