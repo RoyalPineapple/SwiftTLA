@@ -18,5 +18,8 @@ public enum Examples {
         ExampleDescription(name:"BoundedCounter",spec:BoundedCounterSpec.spec,expectedStates:7,source:"internal",about:"A counter that stays within bounds -3…3. The invariant is checked at every state."),
         ExampleDescription(name:"Toggle",spec:ToggleSpec.spec,expectedStates:2,source:"internal",about:"A simple on/off toggle. Two states, one action. No invariants needed."),
         ExampleDescription(name:"ThreeState",spec:ThreeStateSpec.spec,expectedStates:3,source:"internal",about:"A three-state loop: 0→1→2→0. Demonstrates cyclic state machines."),
+        ExampleDescription(name:"Bridge",spec:BridgeSpec.spec,expectedStates:12,source:"internal",about:"A single-lane bridge. Never more than 3 cars. Direction switches when empty."),
+        ExampleDescription(name:"Lock",spec:LockSpec.spec,expectedStates:2,source:"internal",about:"A binary lock. Only locks when unlocked, unlocks when locked."),
+        ExampleDescription(name:"Fibonacci",spec:FibSpec.spec,expectedStates:5,source:"internal",about:"Fibonacci sequence: each step shifts a,b and computes the next term."),
     ]
 }
