@@ -56,7 +56,7 @@ struct ExampleDetailView: View {
             case "DieHard": DieHardView()
             case "CoffeeCan": CoffeeCanView()
             default:
-                Text("No interactive view for \(example.name)")
+                GraphDrivenView(example: example)
             }
         }
         .navigationTitle(example.name)
@@ -197,5 +197,58 @@ struct Bean: View {
             Text("\(count)").font(.system(size: 48, weight: .bold, design: .monospaced))
             Text(label).font(.caption)
         }
+    }
+}
+
+// MARK: - Generic graph-driven view for any example
+
+struct GraphDrivenView: View {
+    let example: ExampleDescription
+    @State private var graph: StateGraph?
+    @State private var currentID: StateGraph.StateID?
+    @State private var history: [String] = []
+    
+    var body: some View {
+        VStack(spacing: 16) {
+            if let graph, let currentID, let state = graph.states[currentID] {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("State").font(.headline)
+                    ForEach(state.sorted(by: { $0.key < $1.key }), id: \.key) { k, v in
+                        HStack { Text(k).bold(); Text("= \(v)") }
+                    }
+                }
+                .padding().background(.quaternary).cornerRadius(8)
+                
+                Text("Actions").font(.headline)
+                let transitions = graph.transitions[currentID] ?? []
+                ForEach(Array(transitions.enumerated()), id: \.offset) { _, t in
+                    Button(t.action) {
+                        self.currentID = t.target
+                        history.append(t.action)
+                    }
+                    .buttonStyle(.bordered)
+                }
+                
+                if !history.isEmpty {
+                    Text("History: \(history.joined(separator: " → "))")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+            }
+            
+            Button("Reset") { load() }
+            
+            Text("\(graph?.states.count ?? 0) states (verified)")
+                .font(.caption).foregroundStyle(.secondary)
+        }
+        .padding()
+        .onAppear { load() }
+    }
+    
+    func load() {
+        guard let g = try? ModelChecker(spec: example.spec, maxStates: 10_000).exploreGraph(),
+              let first = g.states.keys.min(by: { $0.id < $1.id }) else { return }
+        graph = g
+        currentID = first
+        history = []
     }
 }
