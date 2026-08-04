@@ -180,9 +180,17 @@ private func bfsLoop(
         return ModelChecker.Exploration(result: .deadlocked(state: current), graph: graph())
     }
 
-    let new = successors.filter { !visited.contains(canonical($0.1)) }
+    var updatedTransitions = transitions
+    for (successorAction, successorState) in successors {
+        let canonicalForm = canonical(successorState)
+        if let targetID = stateToID[canonicalForm] {
+            updatedTransitions[currentID, default: []] += [(successorAction, targetID)]
+        }
+    }
 
-    let next = new.reduce((rest, stateToID, idToState, transitions, visited, predecessors, nextID)) { accumulator, successor in
+    let newStates = successors.filter { !visited.contains(canonical($0.1)) }
+
+    let next = newStates.reduce((rest, stateToID, idToState, updatedTransitions, visited, predecessors, nextID)) { accumulator, successor in
         var (queue, stateToIDMap, idToStateMap, transitionMap, visitedSet, predecessorMap, nextIdentifier) = accumulator
         let canonicalForm = canonical(successor.1)
         let targetID = stateToIDMap[canonicalForm] ?? StateGraph.StateID(nextIdentifier)
@@ -225,14 +233,14 @@ public enum CheckResult: CustomStringConvertible {
 
     public var description: String {
         switch self {
-        case .ok(let c): return "OK — explored " + String(c) + " state(s)"
+        case .ok(let count): return "OK — explored " + String(count) + " state(s)"
         case .invariantViolated(let inv, _, let trace):
             let t = trace.enumerated().map { "  " + String($0.offset) + ". [" + $0.element.action + "] " + formatState($0.element.state) }
             return "INVARIANT VIOLATED: " + inv + "\n" + t.joined(separator: "\n")
-        case .depthExceeded(let c, let l):
-            return "DEPTH EXCEEDED — explored " + String(c) + " state(s) before hitting limit of " + String(l)
+        case .depthExceeded(let count, let l):
+            return "DEPTH EXCEEDED — explored " + String(count) + " state(s) before hitting limit of " + String(l)
         case .deadlocked(let s): return "DEADLOCK detected at " + formatState(s)
-        case .error(let m): return "ERROR: " + m
+        case .error(let message): return "ERROR: " + message
         }
     }
 }
