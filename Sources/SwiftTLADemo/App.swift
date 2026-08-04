@@ -101,14 +101,23 @@ struct ThreeScreen: View { @State private var g:StateGraph?;@State private var i
     func v(_ x:TLAValue?)->Int{if case .int(let n)=(x ?? .int(0)){return n};return 0}
 }
 
+
 struct SpecSourceView: View {
+func swiftSource(_ spec: TLASpec) -> String {
+    var lines: [String] = ["TLASpec(\"\(spec.name)\") {"]
+    for v in spec.variables { lines.append("    Variable(Var<Int>(\"\(v.name)\"), \(v.initial))") }
+    for a in spec.actions { lines.append("    Act(\"\(a.name)\") { \(a.body) }") }
+    for i in spec.invariants { lines.append("    Invariant(\"\(i.name)\") { \(i.body) }") }
+    lines.append("}")
+    return lines.joined(separator: "\n")
+}
     let spec: TLASpec
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 0) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Swift DSL").font(.caption).foregroundStyle(.secondary).padding(.horizontal, 8)
-                    ScrollView { Text(spec.description).font(.system(size: 10, design: .monospaced)).padding(8) }
+                    ScrollView { Text(swiftSource(spec)).font(.system(size: 10, design: .monospaced)).padding(8) }
                         .background(.quaternary).cornerRadius(4)
                 }.frame(maxWidth: .infinity)
                 VStack(alignment: .leading, spacing: 4) {
@@ -120,3 +129,4 @@ struct SpecSourceView: View {
         }
     }
 }
+
