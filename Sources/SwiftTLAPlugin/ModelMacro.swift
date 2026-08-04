@@ -86,7 +86,7 @@ public struct ModelMacro: MemberMacro {
                    callee.baseName.text == "TLASpec" {
                     let closure = functionCall.trailingClosure ?? functionCall.arguments.last?.expression.as(ClosureExprSyntax.self)
                     if let closure {
-                        return try parseBuilderBody(closure.statements)
+                        return parseBuilderBody(closure.statements)
                     }
                 }
             }
@@ -105,7 +105,7 @@ public struct ModelMacro: MemberMacro {
         return nil
     }
 
-    private static func parseBuilderBody throws(_ statements: CodeBlockItemListSyntax) -> ParsedSpec {
+    private static func parseBuilderBody(_ statements: CodeBlockItemListSyntax) -> ParsedSpec {
         var result = ParsedSpec()
         for statement in statements {
             switch statement.item {
