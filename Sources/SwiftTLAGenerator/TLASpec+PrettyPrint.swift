@@ -1,3 +1,4 @@
+import Foundation
 import SwiftSyntax
 import SwiftSyntaxBuilder
 import SwiftTLA
@@ -61,6 +62,12 @@ extension TLASpec {
         for inv in invariants { lines.append("\(inv.name) == \(inv.body)") }
         lines.append("====\n")
         return lines.joined(separator: "\n")
+    }
+
+    public var base64JSON: String {
+        let encoder = JSONEncoder()
+        guard let data = try? encoder.encode(self) else { return "" }
+        return data.base64EncodedString()
     }
 }
 

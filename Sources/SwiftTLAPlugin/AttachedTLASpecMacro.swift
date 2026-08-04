@@ -7,53 +7,13 @@ import SwiftParser
 import SwiftTLA
 import SwiftTLAGenerator
 
-public struct AttachedTLASpecMacro: PeerMacro {
+public struct AttachedTLASpecMacro: PeerMacro, MemberMacro {
     public static func expansion(of node: AttributeSyntax, providingPeersOf declaration: some DeclSyntaxProtocol, in context: some MacroExpansionContext) throws -> [DeclSyntax] {
         guard let structDecl = declaration.as(StructDeclSyntax.self) else { throw SimpleError("@TLA on structs only") }
-
         let typeName = structDecl.name.text
-        var variables: [(String, TLAValue)] = []
-        var actions: [(String, ActionExpr)] = []
-        var invariants: [(String, StateExpr)] = []
-        var temporal: [(String, TemporalExpr)] = []
-        var fairness: [FairnessCondition] = []
+        let parsed = parseStruct(structDecl)
 
-        for member in structDecl.memberBlock.members {
-            if let varDecl = member.decl.as(VariableDeclSyntax.self) {
-                for binding in varDecl.bindings {
-                    guard let name = binding.pattern.as(IdentifierPatternSyntax.self)?.identifier.text else { continue }
-                    
-                    if let returnType = binding.typeAnnotation?.type.description.trimmingCharacters(in: .whitespaces) {
-                        let getterBody = extractGetter(binding)
-                        
-                        if returnType == "StateExpr", let body = getterBody {
-                            if let expr = parseExprInGetter(body) { invariants.append((name, expr)) }
-                        } else if returnType.hasPrefix("TemporalExpr"), let body = getterBody {
-                            if let t = parseTemporal(body) { temporal.append((name, t)) }
-                        } else if returnType == "FairnessCondition", let body = getterBody {
-                            if let f = parseFairness(body) { fairness.append(f) }
-                        }
-                    } else {
-                        let val = extractVarInit(binding.initializer?.value)
-                        variables.append((name, val))
-                    }
-                }
-            } else if let funcDecl = member.decl.as(FunctionDeclSyntax.self) {
-                let name = funcDecl.name.text
-                if let body = funcDecl.body {
-                    let clauses = parseBody(body.statements)
-                    if clauses.isEmpty {
-                        actions.append((name, .guard_(.value(.bool(true))))) // stub — always enabled
-                    } else {
-                        actions.append((name, clauses.dropFirst().reduce(clauses[0]) { .and($0, $1) }))
-                    }
-                } else {
-                    actions.append((name, .guard_(.value(.bool(true))))) // no body — stub
-                }
-            }
-        }
-
-        let spec = TLASpec(name: typeName, variables: variables.map { NamedVar(name: $0.0, initial: $0.1) }, actions: actions.map { NamedAction(name: $0.0, body: $0.1) }, invariants: invariants.map { NamedInvariant(name: $0.0, body: $0.1) }, temporalProperties: temporal.map { NamedTemporal(name: $0.0, expr: $0.1) }, fairness: fairness)
+        let spec = TLASpec(name: typeName, variables: parsed.variables.map { NamedVar(name: $0.0, initial: $0.1) }, actions: parsed.actions.map { NamedAction(name: $0.0, body: $0.1) }, invariants: parsed.invariants.map { NamedInvariant(name: $0.0, body: $0.1) }, temporalProperties: parsed.temporal.map { NamedTemporal(name: $0.0, expr: $0.1) }, fairness: parsed.fairness)
 
         let checker = ModelChecker(spec: spec, maxStates: 10_000)
         if case .invariantViolated(let inv, _, let trace) = (try? checker.check()) {
@@ -65,6 +25,70 @@ public struct AttachedTLASpecMacro: PeerMacro {
             .replacingOccurrences(of: "struct \(typeName)", with: "struct TLAStateMachine")
             .replacingOccurrences(of: "static let initial = \(typeName)(", with: "static let initial = TLAStateMachine(")
         return Parser.parse(source: renamed).statements.compactMap { $0.item.as(DeclSyntax.self) }
+    }
+
+    public static func expansion(of node: AttributeSyntax, providingMembersOf declaration: some DeclGroupSyntax, in context: some MacroExpansionContext) throws -> [DeclSyntax] {
+        guard let structDecl = declaration.as(StructDeclSyntax.self) else { return [] }
+        let typeName = structDecl.name.text
+        let parsed = parseStruct(structDecl)
+        let spec = TLASpec(name: typeName,
+            variables: parsed.variables.map { NamedVar(name: $0.0, initial: $0.1) },
+            actions: parsed.actions.map { NamedAction(name: $0.0, body: $0.1) },
+            invariants: parsed.invariants.map { NamedInvariant(name: $0.0, body: $0.1) },
+            temporalProperties: parsed.temporal.map { NamedTemporal(name: $0.0, expr: $0.1) },
+            fairness: parsed.fairness)
+        let b64 = spec.base64JSON
+        return [DeclSyntax(stringLiteral: """
+            static var spec: TLASpec {
+                let d = Data(base64Encoded: "\(b64)")!
+                return try! JSONDecoder().decode(TLASpec.self, from: d)
+            }
+            """)]
+    }
+
+    private struct ParseResult {
+        var variables: [(String, TLAValue)] = []
+        var actions: [(String, ActionExpr)] = []
+        var invariants: [(String, StateExpr)] = []
+        var temporal: [(String, TemporalExpr)] = []
+        var fairness: [FairnessCondition] = []
+    }
+
+    private static func parseStruct(_ structDecl: StructDeclSyntax) -> ParseResult {
+        var result = ParseResult()
+        for member in structDecl.memberBlock.members {
+            if let varDecl = member.decl.as(VariableDeclSyntax.self) {
+                for binding in varDecl.bindings {
+                    guard let name = binding.pattern.as(IdentifierPatternSyntax.self)?.identifier.text else { continue }
+                    if let returnType = binding.typeAnnotation?.type.description.trimmingCharacters(in: .whitespaces) {
+                        let getterBody = extractGetter(binding)
+                        if returnType == "StateExpr", let body = getterBody {
+                            if let expr = parseExprInGetter(body) { result.invariants.append((name, expr)) }
+                        } else if returnType.hasPrefix("TemporalExpr"), let body = getterBody {
+                            if let t = parseTemporal(body) { result.temporal.append((name, t)) }
+                        } else if returnType == "FairnessCondition", let body = getterBody {
+                            if let f = parseFairness(body) { result.fairness.append(f) }
+                        }
+                    } else {
+                        let val = extractVarInit(binding.initializer?.value)
+                        result.variables.append((name, val))
+                    }
+                }
+            } else if let funcDecl = member.decl.as(FunctionDeclSyntax.self) {
+                let name = funcDecl.name.text
+                if let body = funcDecl.body {
+                    let clauses = parseBody(body.statements)
+                    if clauses.isEmpty {
+                        result.actions.append((name, .guard_(.value(.bool(true)))))
+                    } else {
+                        result.actions.append((name, clauses.dropFirst().reduce(clauses[0]) { .and($0, $1) }))
+                    }
+                } else {
+                    result.actions.append((name, .guard_(.value(.bool(true)))))
+                }
+            }
+        }
+        return result
     }
 
     private static func extractGetter(_ binding: PatternBindingSyntax) -> CodeBlockItemListSyntax? {
