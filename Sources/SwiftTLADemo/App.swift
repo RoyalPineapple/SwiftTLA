@@ -91,20 +91,23 @@ func formatSwift(_ spec: TLASpec) -> String {
 }
 
 func swiftExpr(_ e: ActionExpr) -> String {
-    var lines: [String] = []
-    collectAssignments(e, into: &lines)
-    return lines.joined(separator: "\n")
+    let clauses = flattenAnd(e)
+    return clauses.map(formatClause).joined(separator: "\n")
 }
 
-func collectAssignments(_ e: ActionExpr, into lines: inout [String]) {
+func flattenAnd(_ e: ActionExpr) -> [ActionExpr] {
     switch e {
-    case .assign(let v, let rhs): lines.append("        \(v).becomes(\(swiftState(rhs)))")
-    case .unchanged(let v): lines.append("        \(v).stays")
-    case .guard_(_): break
-    case .and(let a, let b): collectAssignments(a, into: &lines); collectAssignments(b, into: &lines)
-    case .or(let a, let b): lines.append("    or")
-        var right: [String] = []; collectAssignments(a, into: &lines); collectAssignments(b, into: &right); lines += right
-    case .chooseAction(let v, let s): lines.append("        chooseAction(\"\(v)\", from: \(swiftState(s)))")
+    case .and(let a, let b): return flattenAnd(a) + flattenAnd(b)
+    default: return [e]
+    }
+}
+
+func formatClause(_ e: ActionExpr) -> String {
+    switch e {
+    case .assign(let v, let rhs): return "        \(v).becomes(\(swiftState(rhs)))"
+    case .unchanged(let v): return "        \(v).stays"
+    case .chooseAction(let v, let s): return "        chooseAction(\"\(v)\", from: \(swiftState(s)))"
+    default: return "        /* \(e) */"
     }
 }
 
