@@ -10,7 +10,8 @@ public typealias TLARecord = TLARecordType
 
 public struct Var<T: TLAValueType>: Hashable, Codable, Sendable, CustomStringConvertible {
     public let name: String
-    public init(_ name: String, _: T.Type = T.self) { self.name = name }
+    public init(_ name: String) { self.name = name }
+    public init(_ name: String, _ value: T) { self.name = name }
     public var description: String { name }
     public var next: PrimedVar<T> { PrimedVar(name: name) }
     public func becomes(_ expr: some StateExprConvertible) -> ActionExpr { .assign(name, expr.stateExpr) }

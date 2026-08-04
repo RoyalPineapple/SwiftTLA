@@ -1,8 +1,5 @@
-@freestanding(declaration, names: named(TLA))
+@freestanding(declaration, names: named(TLAStateMachine))
 public macro TLASpec(_ body: () -> Void) = #externalMacro(module: "SwiftTLAPlugin", type: "ModelMacro")
 
-@attached(peer, names: arbitrary)
+@attached(peer, names: named(StateMachine))
 public macro TLA() = #externalMacro(module: "SwiftTLAPlugin", type: "AttachedTLASpecMacro")
-
-@attached(member, names: named(Action), named(initial))
-public macro TLASpec() = #externalMacro(module: "SwiftTLAPlugin", type: "TLASpecAttachedMacro")

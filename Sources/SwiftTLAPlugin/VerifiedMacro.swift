@@ -65,7 +65,7 @@ public struct ModelMacro: DeclarationMacro {
 }
 
 struct SpecData {
-    var typeName: String = "TLA"
+    var typeName: String = "TLAStateMachine"
     var variables: [(name: String, initial: TLAValue)] = []
     var actions: [(name: String, body: ActionExpr)] = []
     var invariants: [(name: String, body: StateExpr)] = []
@@ -224,5 +224,6 @@ struct StateMachineGen {
 struct VerifiedMacroPlugin: CompilerPlugin {
     let providingMacros: [Macro.Type] = [
         ModelMacro.self,
+        AttachedTLASpecMacro.self,
     ]
 }

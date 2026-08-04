@@ -14,7 +14,7 @@ let hr = Var<Int>("hr")
         (hr <= 11 && hr.next == hr + 1) || (hr == 12 && hr.next == 1)
     }
 }
-// → struct TLA with apply(), 12 states verified
+// → struct TLAStateMachine with apply(), 12 states verified
 ```
 
 ---
