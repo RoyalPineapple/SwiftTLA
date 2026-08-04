@@ -72,14 +72,24 @@ public struct ModelChecker {
     private func buildExpander(_ actions: [NamedAction], variableNames: [String]) -> (State) -> [(String, State)] {
         { state in
             actions.flatMap { action in
-                (try? ActionEnumerator.enumerate(action.body, from: state, varNames: variableNames))?
-                    .map { (action.name, $0) } ?? []
+                do {
+                    return try ActionEnumerator.enumerate(action.body, from: state, varNames: variableNames)
+                        .map { (action.name, $0) }
+                } catch {
+                    return [(String, State)]()
+                }
             }
         }
     }
 
     private func buildEvaluator() -> (StateExpr, State) -> Bool {
-        { expression, state in (try? Evaluator.evaluateBool(expression, in: state)) ?? false }
+        { expression, state in
+            do {
+                return try Evaluator.evaluateBool(expression, in: state)
+            } catch {
+                return false
+            }
+        }
     }
 
     private func checkAssume(_ specification: TLASpec, initial: State) throws -> Bool {

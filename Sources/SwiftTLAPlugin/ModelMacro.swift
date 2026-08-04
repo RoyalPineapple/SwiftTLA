@@ -35,10 +35,18 @@ public struct ModelMacro: MemberMacro {
             throw SimpleError("Invariant '" + invariant + "' violated:\n" + description)
         }
 
+        guard specification.actions.count > 0 else {
+            throw SimpleError("No actions parsed. Check 'static var spec' contains Action(...) calls.")
+        }
+
         var members: [DeclSyntax] = []
 
-    if let graph = try? checker.exploreGraph(),
-       let code = try? StateMachineGenerator(graph: graph).generate() {
+        if let graph = try? checker.exploreGraph(),
+           let code = try? StateMachineGenerator(graph: graph).generate() {
+            let actions = Set(graph.transitions.values.flatMap { $0.map(\.action) }).sorted()
+            if actions.isEmpty {
+                throw SimpleError("No transitions found in graph. States: " + String(graph.states.count) + " Variables: " + specification.variables.map(\.name).joined(separator: ","))
+            }
         let renamed = code
             .replacingOccurrences(of: "struct " + typeName, with: "struct Machine")
             .replacingOccurrences(of: "static let initial = " + typeName + "(", with: "static let initial = Machine(")
