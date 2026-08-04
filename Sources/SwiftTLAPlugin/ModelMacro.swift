@@ -84,7 +84,6 @@ public struct ModelMacro: MemberMacro {
                 if let functionCall = expression.as(FunctionCallExprSyntax.self),
                    let callee = functionCall.calledExpression.as(DeclReferenceExprSyntax.self),
                    callee.baseName.text == "TLASpec" {
-                    let name = extractStringLiteral(functionCall.arguments.first?.expression) ?? typeName
                     let closure = functionCall.trailingClosure ?? functionCall.arguments.last?.expression.as(ClosureExprSyntax.self)
                     if let closure {
                         return parseBuilderBody(closure.statements)
@@ -127,8 +126,7 @@ public struct ModelMacro: MemberMacro {
                 case "Action":
                     guard let name = extractStringLiteral(call.arguments.first?.expression),
                           let closure = call.trailingClosure else { continue }
-                    let action = parseActionFrom(closure)
-                        ?? .guard_(.value(.bool(true)))
+                    let action = parseActionFrom(closure) ?? .guard_(.value(.bool(true)))
                     result.actions.append((name, action))
                 case "Invariant":
                     guard let name = extractStringLiteral(call.arguments.first?.expression),
@@ -154,11 +152,6 @@ public struct ModelMacro: MemberMacro {
         if let int = expression.as(IntegerLiteralExprSyntax.self) { return .int(Int(int.literal.text) ?? 0) }
         if let bool = expression.as(BooleanLiteralExprSyntax.self) { return .bool(bool.literal.text == "true") }
         return nil
-    }
-
-    private static func parseActionClosure(_ expression: ExprSyntax?) -> ActionExpr? {
-        guard let expression, let closure = expression.as(ClosureExprSyntax.self) else { return nil }
-        return parseActionFrom(closure)
     }
 
     private static func parseActionFrom(_ closure: ClosureExprSyntax) -> ActionExpr? {
@@ -235,10 +228,15 @@ public struct ModelMacro: MemberMacro {
         return (base.baseName.text, parseStateExpr(argument) ?? .value(.int(0)))
     }
 
+    // MARK: - State expression parsing
+
     private static func parseStateExpr(_ expression: ExprSyntax?) -> StateExpr? {
         guard let expression else { return nil }
         if let int = expression.as(IntegerLiteralExprSyntax.self) { return .value(.int(Int(int.literal.text) ?? 0)) }
+        if let bool = expression.as(BooleanLiteralExprSyntax.self) { return .value(.bool(bool.literal.text == "true")) }
         if let reference = expression.as(DeclReferenceExprSyntax.self) { return .variable(reference.baseName.text) }
+        if let call = expression.as(FunctionCallExprSyntax.self) { return parseMethodCall(call) }
+        if let memberAccess = expression.as(MemberAccessExprSyntax.self) { return parseMemberAccess(memberAccess) }
         if let tuple = expression.as(TupleExprSyntax.self), let single = tuple.elements.first?.expression { return parseStateExpr(single) }
         if let infix = expression.as(InfixOperatorExprSyntax.self), let left = parseStateExpr(infix.leftOperand), let right = parseStateExpr(infix.rightOperand) {
             switch infix.operator.as(BinaryOperatorExprSyntax.self)?.operator.text {
@@ -272,5 +270,118 @@ public struct ModelMacro: MemberMacro {
             if prefix.operator.text == "-", let operand { return .negate(operand) }
         }
         return nil
+    }
+
+    // MARK: - DSL method/property parsing
+
+    private static func parseMethodCall(_ call: FunctionCallExprSyntax) -> StateExpr? {
+        guard let memberAccess = call.calledExpression.as(MemberAccessExprSyntax.self) else { return nil }
+        let method = memberAccess.declName.baseName.text
+        let firstArg = call.arguments.first?.expression
+        let base = memberAccess.base
+
+        switch method {
+        case "isIn":
+            guard let base, let selfExpr = parseStateExpr(base), let arg = parseStateExpr(firstArg) else { return nil }
+            return .in(selfExpr, arg)
+        case "union":
+            guard let base, let selfExpr = parseStateExpr(base), let arg = parseStateExpr(firstArg) else { return nil }
+            return .union(selfExpr, arg)
+        case "intersection":
+            guard let base, let selfExpr = parseStateExpr(base), let arg = parseStateExpr(firstArg) else { return nil }
+            return .intersection(selfExpr, arg)
+        case "subtracting":
+            guard let base, let selfExpr = parseStateExpr(base), let arg = parseStateExpr(firstArg) else { return nil }
+            return .setDifference(selfExpr, arg)
+        case "isSubset":
+            guard let base, let selfExpr = parseStateExpr(base), let arg = parseStateExpr(firstArg) else { return nil }
+            return .subset(selfExpr, arg)
+        case "updated":
+            guard let base, let selfExpr = parseStateExpr(base) else { return nil }
+            let args = Array(call.arguments)
+            guard args.count >= 2, let key = parseStateExpr(args[0].expression), let value = parseStateExpr(args[1].expression) else { return nil }
+            return .except(selfExpr, key, value)
+        case "applying":
+            guard let base, let selfExpr = parseStateExpr(base), let arg = parseStateExpr(firstArg) else { return nil }
+            return .functionApply(selfExpr, arg)
+        case "filtering":
+            guard let base, let selfExpr = parseStateExpr(base), let predicate = parseStateExpr(firstArg) else { return nil }
+            return .setFilter(selfExpr, predicate)
+        case "mapping":
+            guard let base, let selfExpr = parseStateExpr(base), let expression = parseStateExpr(firstArg) else { return nil }
+            return .setMap(expression, selfExpr)
+        case "appending":
+            guard let base, let selfExpr = parseStateExpr(base), let element = parseStateExpr(firstArg) else { return nil }
+            return .tupleAppend(selfExpr, element)
+        case "concatenating":
+            guard let base, let selfExpr = parseStateExpr(base), let other = parseStateExpr(firstArg) else { return nil }
+            return .tupleConcatenate(selfExpr, other)
+        default:
+            if let refBase = memberAccess.base?.as(DeclReferenceExprSyntax.self), refBase.baseName.text == "StateExpr" {
+                return parseStaticCall(memberAccess: memberAccess, arguments: Array(call.arguments), method: method)
+            }
+            return nil
+        }
+    }
+
+    private static func parseStaticCall(memberAccess: MemberAccessExprSyntax, arguments: [LabeledExprSyntax], method: String) -> StateExpr? {
+        switch method {
+        case "set":
+            let elements = arguments.first?.expression.as(ArrayExprSyntax.self)?.elements.compactMap { parseStateExpr($0.expression) } ?? []
+            return .setLiteral(elements)
+        case "tuple":
+            let elements = arguments.first?.expression.as(ArrayExprSyntax.self)?.elements.compactMap { parseStateExpr($0.expression) } ?? []
+            return .tupleLiteral(elements)
+        case "record":
+            var fields: [String: StateExpr] = [:]
+            for arg in arguments {
+                guard let label = arg.label?.text, let value = parseStateExpr(arg.expression) else { return nil }
+                fields[label] = value
+            }
+            return .recordLiteral(fields)
+        case "if":
+            guard arguments.count >= 3,
+                  let condition = parseStateExpr(arguments[0].expression),
+                  let thenValue = parseStateExpr(arguments[1].expression),
+                  let elseValue = parseStateExpr(arguments[2].expression) else { return nil }
+            return .ifThenElse(condition, thenValue, elseValue)
+        case "enabled":
+            let name = arguments.first?.expression.as(StringLiteralExprSyntax.self)?.segments.description.replacingOccurrences(of: "\"", with: "") ?? ""
+            return .enabledAction(name)
+        case "function":
+            guard arguments.count >= 2,
+                  let domain = parseStateExpr(arguments[0].expression),
+                  let body = parseStateExpr(arguments[1].expression) else { return nil }
+            return .functionLiteral(domain, body)
+        case "for":
+            guard arguments.count >= 2,
+                  let set = parseStateExpr(arguments[0].expression),
+                  let predicate = parseStateExpr(arguments[1].expression) else { return nil }
+            return .forAll(set, predicate)
+        case "exists":
+            guard arguments.count >= 2,
+                  let set = parseStateExpr(arguments[0].expression),
+                  let predicate = parseStateExpr(arguments[1].expression) else { return nil }
+            return .exists(set, predicate)
+        case "choose":
+            guard arguments.count >= 2,
+                  let set = parseStateExpr(arguments[0].expression),
+                  let predicate = parseStateExpr(arguments[1].expression) else { return nil }
+            return .choose(set, predicate)
+        default: return nil
+        }
+    }
+
+    private static func parseMemberAccess(_ memberAccess: MemberAccessExprSyntax) -> StateExpr? {
+        let property = memberAccess.declName.baseName.text
+        guard let baseExpr = memberAccess.base, let selfExpr = parseStateExpr(baseExpr) else { return nil }
+        switch property {
+        case "cardinality": return .cardinality(selfExpr)
+        case "flattened": return .unionAll(selfExpr)
+        case "subsets": return .powerSet(selfExpr)
+        case "domain": return .domain(selfExpr)
+        case "count": return .tupleLength(selfExpr)
+        default: return nil
+        }
     }
 }
