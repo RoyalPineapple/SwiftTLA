@@ -186,7 +186,7 @@ private func bfsLoop(
     for (successorAction, successorState) in successors {
         let canonicalForm = canonical(successorState)
         if let targetID = stateToID[canonicalForm] {
-            updatedTransitions[currentID, default: []] += [(successorAction, targetID)]
+            updatedTransitions[currentID, default: []] += [StateGraph.Transition(action: successorAction, target: targetID)]
         }
     }
 
@@ -196,7 +196,7 @@ private func bfsLoop(
         var (queue, stateToIDMap, idToStateMap, transitionMap, visitedSet, predecessorMap, nextIdentifier) = accumulator
         let canonicalForm = canonical(successor.1)
         let targetID = stateToIDMap[canonicalForm] ?? StateGraph.StateID(nextIdentifier)
-        transitionMap[currentID, default: []] += [(successor.0, targetID)]
+        transitionMap[currentID, default: []] += [StateGraph.Transition(action: successor.0, target: targetID)]
         if stateToIDMap[canonicalForm] != nil {
             return (queue, stateToIDMap, idToStateMap, transitionMap, visitedSet, predecessorMap, nextIdentifier)
         }

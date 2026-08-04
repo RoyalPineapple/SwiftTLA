@@ -96,17 +96,17 @@ public struct StateMachineGenerator {
             guard let state = graph.states[stateID] else { return nil }
             let values = variableNames.map { name in extractInt(state[name]) }.map(String.init).joined(separator: ", ")
             let transitions = graph.transitions[stateID] ?? []
-            let meaningfulTransitions = transitions.filter { action, targetID in
-                guard let targetState = graph.states[targetID] else { return false }
+            let meaningfulTransitions = transitions.filter { transition in
+                guard let targetState = graph.states[transition.target] else { return false }
                 return statesNotEqual(targetState, state)
             }
             let body: String
             if meaningfulTransitions.isEmpty {
                 body = "return []"
             } else {
-                let items = meaningfulTransitions.map { action, targetID in
-                    guard let targetState = graph.states[targetID] else { return "nil" }
-                    return "(." + identifier(named: action) + ", Self(" + initArgs(targetState) + "))"
+                let items = meaningfulTransitions.map { transition in
+                    guard let targetState = graph.states[transition.target] else { return "nil" }
+                    return "(." + identifier(named: transition.action) + ", Self(" + initArgs(targetState) + "))"
                 }
                 body = "return [" + items.joined(separator: ", ") + "]"
             }

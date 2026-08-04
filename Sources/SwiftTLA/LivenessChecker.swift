@@ -137,7 +137,8 @@ public struct LivenessChecker {
             stack.append(v)
             onStack.insert(v)
 
-            for (_, w) in graph.transitions[v] ?? [] {
+            for transition in graph.transitions[v] ?? [] {
+                let w = transition.target
                 if indices[w] == nil {
                     strongConnect(w)
                     lowlink[v] = min(lowlink[v]!, lowlink[w]!)
