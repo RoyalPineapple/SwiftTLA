@@ -1,33 +1,40 @@
+import Foundation
 import SwiftTLA
 import SwiftTLAExamples
 
-print("=== SwiftTLA — Layered Validation ===\n")
-
-let examples: [(name: String, spec: TLASpec, expectedStates: Int)] = [
-    ("HourClock", HourClockSpec.spec, 12),
-    ("DieHard", DieHardSpec.spec, 16),
-    ("CoffeeCan", CoffeeCanSpec.spec, 0),
+let specs: [String: (spec: TLASpec, expected: Int)] = [
+    "hourclock": (HourClockSpec.spec, 12),
+    "diehard": (DieHardSpec.spec, 16),
+    "coffeecan": (CoffeeCanSpec.spec, 0),
 ]
 
-// Layer 2: Verify state counts match TLC
-print("--- Layer 2: State counts (cross-validated against TLC) ---")
-for (name, spec, expected) in examples {
-    guard let graph = try? ModelChecker(spec: spec, maxStates: 10_000).exploreGraph() else {
-        print("\(name): FAILED"); continue
-    }
+let args = CommandLine.arguments.dropFirst()
+let command = args.first ?? "all"
+let name = args.dropFirst().first
+
+func check(_ key: String) {
+    guard let (spec, expected) = specs[key] else { return print("Unknown: \(key)") }
+    guard let graph = try? ModelChecker(spec: spec, maxStates: 10_000).exploreGraph() else { return print("\(key): FAILED") }
     let ok = expected == 0 || graph.states.count == expected
-    print("\(name): \(graph.states.count) states \(ok ? "✓" : "(expected \(expected))")")
+    print("\(key): \(graph.states.count) states \(ok ? "✓" : "(expected \(expected))")")
 }
 
-// Layer 4: Dump canonical .tla
-print("\n--- Layer 4: Canonical TLA+ (externally auditable) ---")
-for (name, spec, _) in examples {
-    let tla = spec.description
-        .split(separator: "\n")
-        .prefix(6)
-        .joined(separator: "\n    ")
-    print("\(name):\n    \(tla)\n")
+func tla(_ key: String) {
+    guard let (spec, _) = specs[key] else { return print("Unknown: \(key)") }
+    print(spec.description)
 }
 
-print("Layer 1: swift test (algebraic matrix tests)")
-print("Layer 3: make demo (hand-coded state machines)")
+func help() {
+    print("Commands: check <name>, tla <name>, all")
+    print("Names: \(specs.keys.sorted().joined(separator: ", "))")
+}
+
+switch command {
+case "check": name.map(check) ?? help()
+case "tla": name.map(tla) ?? help()
+case "all":
+    for key in specs.keys { check(key) }
+case "layer3":
+    print("Run: make demo")
+default: help()
+}
