@@ -26,7 +26,7 @@ public struct StateMachineGenerator {
         return try StructDeclSyntax(
             modifiers: [DeclModifierSyntax(name: .keyword(.internal))],
             name: .identifier(typeName),
-            inheritanceClause: inherited("Equatable", "Hashable", "Codable", "Sendable")
+            inheritanceClause: inherited("Equatable", "Hashable", "Codable", "Sendable", "TLAMachine")
         ) {
             for v in variables { "var \(raw: v): Int" }
             try memberwiseInit()
@@ -34,6 +34,7 @@ public struct StateMachineGenerator {
             actionEnum(actions)
             try transitionsProperty()
             "var availableActions: [Action] { transitions.map(\\.action) }"
+            "var enabledActions: Set<Action> { Set(availableActions) }"
             try applyMethod()
         }
     }

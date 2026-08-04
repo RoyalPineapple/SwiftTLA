@@ -9,17 +9,18 @@ import SwiftTLAGeneration
 
 public struct ModelMacro: MemberMacro {
     public static func expansion(of node: AttributeSyntax, providingMembersOf declaration: some DeclGroupSyntax, in context: some MacroExpansionContext) throws -> [DeclSyntax] {
-        guard let structDecl = declaration.as(StructDeclSyntax.self) else { return [] }
-        let typeName = structDecl.name.text
-        let parsed = parseStruct(structDecl)
+        let typeName: String
+        let isActor: Bool
+        if let s = declaration.as(StructDeclSyntax.self) { typeName = s.name.text; isActor = false }
+        else if let a = declaration.as(ActorDeclSyntax.self) { typeName = a.name.text; isActor = true }
+        else { return [] }
+
+        let parsed = parseMembers(declaration.memberBlock.members)
         let spec = TLASpec(name: typeName, variables: parsed.variables, actions: parsed.actions, invariants: parsed.invariants, temporalProperties: parsed.temporal, fairness: parsed.fairness)
 
         let checker = ModelChecker(spec: spec, maxStates: 1_000)
         if case .invariantViolated(let inv, _, let trace) = (try? checker.check()) {
-            throw SimpleError("""
-                Invariant '\(inv)' violated:
-                \(trace.map { "\($0)" }.joined(separator: "\n"))
-                """)
+            throw SimpleError("Invariant '\(inv)' violated:\n\(trace.map { "\($0)" }.joined(separator: "\n"))")
         }
 
         var members: [DeclSyntax] = []
@@ -33,6 +34,10 @@ public struct ModelMacro: MemberMacro {
                 .replacingOccurrences(of: "static let initial = \(typeName)(", with: "static let initial = Machine(")
             let decls = Parser.parse(source: renamed).statements.compactMap { $0.item.as(DeclSyntax.self) }
             members.append(contentsOf: decls)
+
+            if isActor {
+                members.append(DeclSyntax(stringLiteral: "private var machine = Machine.initial"))
+            }
         }
         return members
     }
@@ -47,9 +52,9 @@ public struct ModelMacro: MemberMacro {
         var fairness: [FairnessCondition] = []
     }
 
-    private static func parseStruct(_ structDecl: StructDeclSyntax) -> ParseResult {
+    private static func parseMembers(_ members: MemberBlockItemListSyntax) -> ParseResult {
         var result = ParseResult()
-        for member in structDecl.memberBlock.members {
+        for member in members {
             if let varDecl = member.decl.as(VariableDeclSyntax.self) {
                 for binding in varDecl.bindings {
                     guard let name = binding.pattern.as(IdentifierPatternSyntax.self)?.identifier.text else { continue }
