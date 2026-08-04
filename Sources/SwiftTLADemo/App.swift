@@ -69,7 +69,10 @@ func copy(_ text: String) { NSPasteboard.general.clearContents(); NSPasteboard.g
 func formatSwift(_ spec: TLASpec) -> String {
     var lines: [String] = ["TLASpec(\"\(spec.name)\") {"]
     for v in spec.variables { lines.append("    Variable(Var<Int>(\"\(v.name)\"), \(v.initial))") }
-    for a in spec.actions { lines.append("    Act(\"\(a.name)\") { \(swiftExpr(a.body)) }") }
+    for a in spec.actions { lines.append("    Act(\"\(a.name)\") {")
+        for line in swiftExpr(a.body).split(separator: "\n") { lines.append("        \(line)") }
+        lines.append("    }")
+    }
     for i in spec.invariants { lines.append("    Invariant(\"\(i.name)\") { \(swiftState(i.body)) }") }
     lines.append("}")
     return lines.joined(separator: "\n")
