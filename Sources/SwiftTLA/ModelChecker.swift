@@ -150,10 +150,6 @@ private func bfsLoop(
     checkDeadlock: Bool,
     specificationName: String
 ) -> ModelChecker.Exploration {
-    func graph() -> StateGraph {
-        StateGraph(specName: specificationName, variableNames: variableNames, transitions: transitions, states: idToState)
-    }
-
     var currentQueue = queue
     var currentStateToID = stateToID
     var currentIDToState = idToState
@@ -163,6 +159,10 @@ private func bfsLoop(
     var currentNextID = nextID
     var currentStepCount = stepCount
     var head = 0
+
+    func graph() -> StateGraph {
+        StateGraph(specName: specificationName, variableNames: variableNames, transitions: currentTransitions, states: currentIDToState)
+    }
 
     while true {
         guard currentStepCount < maxStates else {
