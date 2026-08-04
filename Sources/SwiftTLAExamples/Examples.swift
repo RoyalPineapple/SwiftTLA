@@ -21,5 +21,10 @@ public enum Examples {
         ExampleDescription(name:"Bridge",spec:BridgeSpec.spec,expectedStates:12,source:"internal",about:"A single-lane bridge. Never more than 3 cars. Direction switches when empty."),
         ExampleDescription(name:"Lock",spec:LockSpec.spec,expectedStates:2,source:"internal",about:"A binary lock. Only locks when unlocked, unlocks when locked."),
         ExampleDescription(name:"Fibonacci",spec:FibSpec.spec,expectedStates:5,source:"internal",about:"Fibonacci sequence: each step shifts a,b and computes the next term."),
+        ExampleDescription(name:"PingPong",spec:PingPongSpec.spec,expectedStates:2,source:"internal",about:"Ping pong: two states trading back and forth."),
+        ExampleDescription(name:"Database",spec:DatabaseSpec.spec,expectedStates:0,source:"internal",about:"Write-lock-unlock cycle. Data only changes when unlocked."),
+        ExampleDescription(name:"Elevator",spec:ElevatorSpec.spec,expectedStates:5,source:"internal",about:"An elevator moving between floors 1-5. Changes direction at ends."),
+        ExampleDescription(name:"Traffic",spec:TrafficSpec.spec,expectedStates:3,source:"internal",about:"A traffic light cycling green→yellow→red. Three states."),
+        ExampleDescription(name:"Buffer",spec:BufferSpec.spec,expectedStates:2,source:"internal",about:"A single-slot buffer. Put when empty, Get when full."),
     ]
 }
