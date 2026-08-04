@@ -7,10 +7,10 @@ import SwiftParser
 import SwiftTLA
 import SwiftTLAGenerator
 
-public struct AttachedTLASpecMacro: MemberMacro {
+public struct AttachedTLASpecMacro: PeerMacro {
     public static func expansion(
         of node: AttributeSyntax,
-        providingMembersOf declaration: some DeclGroupSyntax,
+        providingPeersOf declaration: some DeclSyntaxProtocol,
         in context: some MacroExpansionContext
     ) throws -> [DeclSyntax] {
         guard let structDecl = declaration.as(StructDeclSyntax.self) else {
