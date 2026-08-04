@@ -34,10 +34,14 @@ public struct TLARuntime: CustomStringConvertible {
     }
 
     public var description: String {
-        var lines = ["TLARuntime(\(specName))"]
-        lines.append("  state: \(state.sorted(by: { $0.key < $1.key }).map { "\($0.key) = \($0.value)" }.joined(separator: ", "))")
-        lines.append("  available: [\(availableActions.joined(separator: ", "))]")
-        if !history.isEmpty { lines.append("  history: [\(history.joined(separator: " → "))]") }
+        var lines: [String] = []
+        lines.append("TLARuntime(" + specName + ")")
+        let stateStr = state.sorted(by: { $0.key < $1.key }).map { $0.key + " = " + String(describing: $0.value) }.joined(separator: ", ")
+        lines.append("  state: " + stateStr)
+        lines.append("  available: [" + availableActions.joined(separator: ", ") + "]")
+        if !history.isEmpty {
+            lines.append("  history: [" + history.joined(separator: " → ") + "]")
+        }
         return lines.joined(separator: "\n")
     }
 }
