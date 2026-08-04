@@ -41,31 +41,65 @@ struct ExampleDetailView: View {
 
 struct SourcePanels: View {
     let spec: TLASpec
+    @State private var mode: ViewMode = .annotated
+    
+    enum ViewMode: String, CaseIterable { case annotated = "@TLA"; case formal = "TLASpec"; case tla = "TLA+" }
+    
     var body: some View {
-        HStack(alignment: .top, spacing: 0) {
-            CodePanel(title: "Swift DSL", text: formatSwift(spec))
-            Spacer().frame(width: 25)
-            CodePanel(title: "TLA+", text: formatTLA(spec))
-        }
-    }
-}
-
-struct CodePanel: View {
-    let title: String; let text: String
-    var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack { Text(title).font(.caption).foregroundStyle(.secondary); Spacer() }.padding(.horizontal, 8)
+        VStack(spacing: 8) {
+            Picker("View", selection: $mode) {
+                ForEach(ViewMode.allCases, id: \.self) { m in Text(m.rawValue).tag(m) }
+            }.pickerStyle(.segmented).padding(.horizontal)
+            
             ScrollView(.vertical) {
-                Text(text).font(.system(size: 10, design: .monospaced)).padding(8).textSelection(.enabled)
+                Text(currentText).font(.system(size: 10, design: .monospaced)).padding(8).textSelection(.enabled)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
             .background(.quaternary).cornerRadius(4)
             .overlay(alignment: .topTrailing) {
-                Button(action: { copy(text) }) { Image(systemName: "doc.on.doc").font(.caption2).padding(6) }
+                Button(action: { copy(currentText) }) { Image(systemName: "doc.on.doc").font(.caption2).padding(6) }
                     .buttonStyle(.plain).background(.regularMaterial).cornerRadius(4).padding(4)
             }
-        }.frame(maxWidth: .infinity)
+        }.padding(8)
     }
+    
+    var currentText: String {
+        switch mode {
+        case .annotated: return formatAnnotated(spec)
+        case .formal: return formatFormal(spec)
+        case .tla: return formatTLA(spec)
+        }
+    }
+}
+
+func formatAnnotated(_ spec: TLASpec) -> String {
+    var lines: [String] = ["@TLA"]
+    lines.append("struct \(spec.name.replacingOccurrences(of: " ", with: "")) {")
+    for v in spec.variables {
+        let initVal = { if case .int(let n) = v.initial { return "\(n)" }; return "0" }()
+        lines.append("    var \(v.name) = Var<Int>(\"\(v.name)\", \(initVal))")
+    }
+    for a in spec.actions {
+        lines.append("    func \(a.name.lowercased())() {")
+        for line in swiftExpr(a.body).split(separator: "\n") { lines.append("\(line)") }
+        lines.append("    }")
+    }
+    for i in spec.invariants { lines.append("    var \(i.name): StateExpr { \(swiftState(i.body)) }") }
+    lines.append("}")
+    return lines.joined(separator: "\n")
+}
+
+func formatFormal(_ spec: TLASpec) -> String {
+    var lines: [String] = ["TLASpec(\"\(spec.name)\") {"]
+    for v in spec.variables { lines.append("    Variable(Var<Int>(\"\(v.name)\"), \(v.initial))") }
+    for a in spec.actions {
+        lines.append("    Action(\"\(a.name)\") {")
+        for line in swiftExpr(a.body).split(separator: "\n") { lines.append("    \(line)") }
+        lines.append("    }")
+    }
+    for i in spec.invariants { lines.append("    Invariant(\"\(i.name)\") { \(swiftState(i.body)) }") }
+    lines.append("}")
+    return lines.joined(separator: "\n")
 }
 
 func copy(_ text: String) { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(text, forType: .string) }
