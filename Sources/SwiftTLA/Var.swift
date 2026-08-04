@@ -15,6 +15,7 @@ public struct Var<T: TLAValueType>: Hashable, Codable, Sendable, CustomStringCon
     public init(_ value: T) { self.name = "" }
     public var description: String { name }
     @_spi(Internal) public var prime: PrimedVar<T> { PrimedVar(name: name) }
+    @discardableResult
     public func becomes(_ expr: some StateExprConvertible) -> ActionExpr { .assign(name, expr.stateExpr) }
     public static func stays(_ v: Var) -> ActionExpr { .unchanged(v.name) }
     public var stays: ActionExpr { .unchanged(name) }
