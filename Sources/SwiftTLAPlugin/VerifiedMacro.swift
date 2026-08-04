@@ -224,6 +224,5 @@ struct StateMachineGen {
 struct VerifiedMacroPlugin: CompilerPlugin {
     let providingMacros: [Macro.Type] = [
         ModelMacro.self,
-        AttachedTLASpecMacro.self,
     ]
 }

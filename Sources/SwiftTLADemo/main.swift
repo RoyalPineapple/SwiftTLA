@@ -2,8 +2,9 @@ import SwiftTLA
 import SwiftTLAExamples
 import SwiftTLAMacros
 
-// #TLASpec expands at compile time. Struct TLA is generated if invariants hold.
+// #TLASpec — write TLA+ specs in Swift, checked at compile time
 let hr = Var<Int>("hr")
+
 #TLASpec {
     Variable(hr, 1)
     Act("Tick") {
