@@ -1,6 +1,6 @@
 import SwiftUI
 import SwiftTLA
-import SwiftTLAGenerator
+import SwiftTLAGeneration
 import SwiftTLAExamples
 import SwiftTLAMacros
 
@@ -43,9 +43,9 @@ struct SourcePanels: View {
     let spec: TLASpec
     var body: some View {
         HStack(alignment: .top, spacing: 0) {
-            CodePanel(title: "@TLASpec", text: spec.annotatedDescription)
+            CodePanel(title: "@TLASpec", text: spec.annotatedForm)
             Spacer().frame(width: 25)
-            CodePanel(title: "TLA+", text: spec.tlaDescription)
+            CodePanel(title: "TLA+", text: spec.tlaModule)
         }
     }
 }

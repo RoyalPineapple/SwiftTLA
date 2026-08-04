@@ -1,5 +1,5 @@
 import SwiftTLA
-import SwiftTLAGenerator
+import SwiftTLAGeneration
 import SwiftTLAMacros
 
 @TLASpec

@@ -13,7 +13,7 @@ let package = Package(
     platforms: [.macOS(.v14)],
     products: [
         .library(name: "SwiftTLA", targets: ["SwiftTLA"]),
-        .library(name: "SwiftTLAGenerator", targets: ["SwiftTLAGenerator"]),
+        .library(name: "SwiftTLAGeneration", targets: ["SwiftTLAGeneration"]),
         .library(name: "SwiftTLAExamples", targets: ["SwiftTLAExamples"]),
         .executable(name: "demo", targets: ["SwiftTLADemo"]),
     ],
@@ -22,7 +22,7 @@ let package = Package(
     ],
     targets: [
         .target(name: "SwiftTLA", dependencies: [], swiftSettings: settings),
-        .target(name: "SwiftTLAGenerator", dependencies: [
+        .target(name: "SwiftTLAGeneration", dependencies: [
             "SwiftTLA",
             .product(name: "SwiftParser", package: "swift-syntax"),
             .product(name: "SwiftBasicFormat", package: "swift-syntax"),
@@ -31,15 +31,15 @@ let package = Package(
         .target(name: "SwiftTLAMacros", dependencies: ["SwiftTLAPlugin"]),
         .macro(name: "SwiftTLAPlugin", dependencies: [
             "SwiftTLA",
-            "SwiftTLAGenerator",
+            "SwiftTLAGeneration",
             .product(name: "SwiftCompilerPlugin", package: "swift-syntax"),
             .product(name: "SwiftSyntax", package: "swift-syntax"),
             .product(name: "SwiftSyntaxMacros", package: "swift-syntax"),
             .product(name: "SwiftDiagnostics", package: "swift-syntax"),
             .product(name: "SwiftParser", package: "swift-syntax"),
         ]),
-        .target(name: "SwiftTLAExamples", dependencies: ["SwiftTLA", "SwiftTLAGenerator", "SwiftTLAMacros"]),
-        .executableTarget(name: "SwiftTLADemo", dependencies: ["SwiftTLA", "SwiftTLAGenerator", "SwiftTLAExamples", "SwiftTLAMacros"]),
-        .testTarget(name: "SwiftTLATests", dependencies: ["SwiftTLA", "SwiftTLAGenerator"], swiftSettings: settings),
+        .target(name: "SwiftTLAExamples", dependencies: ["SwiftTLA", "SwiftTLAGeneration", "SwiftTLAMacros"]),
+        .executableTarget(name: "SwiftTLADemo", dependencies: ["SwiftTLA", "SwiftTLAGeneration", "SwiftTLAExamples", "SwiftTLAMacros"]),
+        .testTarget(name: "SwiftTLATests", dependencies: ["SwiftTLA", "SwiftTLAGeneration"], swiftSettings: settings),
     ]
 )

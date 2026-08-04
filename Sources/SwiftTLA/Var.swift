@@ -104,33 +104,7 @@ public func >= <L: StateExprConvertible, R: StateExprConvertible>(lhs: L, rhs: R
 @_spi(Internal) public func == <T: TLAValueType, R: StateExprConvertible>(lhs: PrimedVar<T>, rhs: R) -> ActionExpr { .assign(lhs.name, rhs.stateExpr) }
 @_spi(Internal) public func == <T: TLAValueType>(lhs: PrimedVar<T>, rhs: Var<T>) -> ActionExpr { .assign(lhs.name, .variable(rhs.name)) }
 
-// MARK: - Set operators
-
-public func setExpr(_ elements: [some StateExprConvertible]) -> StateExpr { .setLiteral(elements.map(\.stateExpr)) }
-public func all(in set: StateExpr, _ predicate: StateExpr) -> StateExpr { .forAll(set, predicate) }
-public func exists(in set: StateExpr, _ predicate: StateExpr) -> StateExpr { .exists(set, predicate) }
-public func pickOne(from set: StateExpr, matching predicate: StateExpr) -> StateExpr { .choose(set, predicate) }
-public func count(of expr: some StateExprConvertible) -> StateExpr { .cardinality(expr.stateExpr) }
-public func flatten(_ set: some StateExprConvertible) -> StateExpr { .unionAll(set.stateExpr) }
-public func subsets(of set: some StateExprConvertible) -> StateExpr { .powerSet(set.stateExpr) }
-public func domain(_ e: some StateExprConvertible) -> StateExpr { .domain(e.stateExpr) }
-public func functionLiteral(domain: StateExpr, _ body: StateExpr) -> StateExpr { .functionLiteral(domain, body) }
-public func functionApply<F: StateExprConvertible, X: StateExprConvertible>(_ f: F, _ x: X) -> StateExpr { .functionApply(f.stateExpr, x.stateExpr) }
-public func setFilter(_ s: StateExpr, _ p: StateExpr) -> StateExpr { .setFilter(s, p) }
-public func setMap(_ e: StateExpr, over s: StateExpr) -> StateExpr { .setMap(e, s) }
-public func tupleExpr(_ elements: [some StateExprConvertible]) -> StateExpr { .tupleLiteral(elements.map(\.stateExpr)) }
-public func recordExpr(_ fields: [String: StateExpr]) -> StateExpr { .recordLiteral(fields) }
-public func tupleLength(_ e: some StateExprConvertible) -> StateExpr { .tupleLength(e.stateExpr) }
-public func tupleAppend(_ t: StateExpr, _ e: StateExpr) -> StateExpr { .tupleAppend(t, e) }
-public func tupleConcatenate(_ a: StateExpr, _ b: StateExpr) -> StateExpr { .tupleConcatenate(a, b) }
-public func integerDivide(_ a: StateExpr, _ b: StateExpr) -> StateExpr { .integerDivide(a, b) }
-public func except<F: StateExprConvertible, K: StateExprConvertible, V: StateExprConvertible>(_ function: F, at key: K, value: V) -> StateExpr { .except(function.stateExpr, key.stateExpr, value.stateExpr) }
-public func forAll(_ set: StateExpr, _ predicate: StateExpr) -> StateExpr { .forAll(set, predicate) }
-public func exists(_ set: StateExpr, _ predicate: StateExpr) -> StateExpr { .exists(set, predicate) }
-public func choose(_ set: StateExpr, _ predicate: StateExpr) -> StateExpr { .choose(set, predicate) }
-public func enabled(_ actionName: String) -> StateExpr { .enabledAction(actionName) }
-public func chooseAction(_ variable: String, from set: StateExpr) -> ActionExpr { .chooseAction(variable, set) }
-public func TypeName(_ name: String) {}
+// MARK: - Set operators as domain notation
 
 infix operator ∈ : ComparisonPrecedence
 infix operator ⊆ : ComparisonPrecedence
@@ -148,10 +122,28 @@ extension StateExpr {
     public func intersection(_ other: some StateExprConvertible) -> StateExpr { .intersection(self, other.stateExpr) }
     public func subtracting(_ other: some StateExprConvertible) -> StateExpr { .setDifference(self, other.stateExpr) }
     public func isSubset(of other: some StateExprConvertible) -> StateExpr { .subset(self, other.stateExpr) }
-    public func updated(at key: some StateExprConvertible, to value: some StateExprConvertible) -> StateExpr {
-        .except(self, key.stateExpr, value.stateExpr)
-    }
-    public func applying(_ argument: some StateExprConvertible) -> StateExpr {
-        .functionApply(self, argument.stateExpr)
-    }
+    public func updated(at key: some StateExprConvertible, to value: some StateExprConvertible) -> StateExpr { .except(self, key.stateExpr, value.stateExpr) }
+    public func applying(_ argument: some StateExprConvertible) -> StateExpr { .functionApply(self, argument.stateExpr) }
+    public var cardinality: StateExpr { .cardinality(self) }
+    public var flattened: StateExpr { .unionAll(self) }
+    public var subsets: StateExpr { .powerSet(self) }
+    public var domain: StateExpr { .domain(self) }
+    public var count: StateExpr { .tupleLength(self) }
+    public func filtering(_ predicate: StateExpr) -> StateExpr { .setFilter(self, predicate) }
+    public func mapping(_ expression: StateExpr) -> StateExpr { .setMap(expression, self) }
+    public func appending(_ element: StateExpr) -> StateExpr { .tupleAppend(self, element) }
+    public func concatenating(_ other: StateExpr) -> StateExpr { .tupleConcatenate(self, other) }
+
+    public static func set(_ elements: [some StateExprConvertible]) -> StateExpr { .setLiteral(elements.map(\.stateExpr)) }
+    public static func `for`(allIn set: StateExpr, _ predicate: StateExpr) -> StateExpr { .forAll(set, predicate) }
+    public static func exists(in set: StateExpr, _ predicate: StateExpr) -> StateExpr { .exists(set, predicate) }
+    public static func choose(from set: StateExpr, matching predicate: StateExpr) -> StateExpr { .choose(set, predicate) }
+    public static func function(domain: StateExpr, _ body: StateExpr) -> StateExpr { .functionLiteral(domain, body) }
+    public static func tuple(_ elements: [some StateExprConvertible]) -> StateExpr { .tupleLiteral(elements.map(\.stateExpr)) }
+    public static func record(_ fields: [String: StateExpr]) -> StateExpr { .recordLiteral(fields) }
+    public static func enabled(_ name: String) -> StateExpr { .enabledAction(name) }
+}
+
+extension ActionExpr {
+    public static func choose(_ variable: String, from set: StateExpr) -> ActionExpr { .chooseAction(variable, set) }
 }

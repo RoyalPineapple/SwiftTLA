@@ -5,7 +5,7 @@ import SwiftSyntaxMacros
 import SwiftDiagnostics
 import SwiftParser
 import SwiftTLA
-import SwiftTLAGenerator
+import SwiftTLAGeneration
 
 public struct ModelMacro: DeclarationMacro {
     public static func expansion(

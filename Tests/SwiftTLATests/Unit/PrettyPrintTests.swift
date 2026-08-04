@@ -1,6 +1,6 @@
 import XCTest
 @_spi(Internal) import SwiftTLA
-@_spi(Internal) import SwiftTLAGenerator
+@_spi(Internal) import SwiftTLAGeneration
 
 final class PrettyPrintTests: XCTestCase {
 
@@ -10,7 +10,7 @@ final class PrettyPrintTests: XCTestCase {
             Variable(x, 0)
             Action("Inc") { x.prime == x + 1 }
         }
-        let actual = spec.annotatedDescription
+        let actual = spec.annotatedForm
         XCTAssertTrue(actual.contains("var x = Var(\"x\", 0)"))
         XCTAssertTrue(actual.contains("func inc()"))
         XCTAssertTrue(actual.contains("x.prime == x + 1"))
@@ -22,7 +22,7 @@ final class PrettyPrintTests: XCTestCase {
             Variable(x, 0)
             Action("Nop") { x.stays }
         }
-        let actual = spec.annotatedDescription
+        let actual = spec.annotatedForm
         XCTAssertTrue(actual.contains("x.stays"))
     }
 
@@ -36,7 +36,7 @@ final class PrettyPrintTests: XCTestCase {
                 || (!(jug3 + jug5 <= 5)) && (jug5.prime == 5) && (jug3.prime == jug3 - (5 - jug5))
             }
         }
-        let actual = spec.annotatedDescription
+        let actual = spec.annotatedForm
         XCTAssertTrue(actual.contains("jug3 + jug5 <= 5"))
         XCTAssertTrue(actual.contains("||"))
         XCTAssertTrue(actual.contains("jug5.prime == 5"))
@@ -49,7 +49,7 @@ final class PrettyPrintTests: XCTestCase {
             Action("Inc") { x.prime == x + 1 }
             Invariant("NonNeg") { x >= 0 }
         }
-        let actual = spec.annotatedDescription
+        let actual = spec.annotatedForm
         XCTAssertTrue(actual.contains("var nonneg: StateExpr"))
         XCTAssertTrue(actual.contains("x >= 0"))
     }
@@ -60,7 +60,7 @@ final class PrettyPrintTests: XCTestCase {
             Variable(x, 0)
             Action("Inc") { x.prime == x + 1 }
         }
-        let actual = spec.tlaDescription
+        let actual = spec.tlaModule
         XCTAssertTrue(actual.contains("---- MODULE TLATest ----"))
         XCTAssertTrue(actual.contains("VARIABLES x"))
         XCTAssertTrue(actual.contains("Init =="))
@@ -78,7 +78,7 @@ final class PrettyPrintTests: XCTestCase {
                 x.prime == y && y.prime == x
             }
         }
-        let actual = spec.annotatedDescription
+        let actual = spec.annotatedForm
         XCTAssertTrue(actual.contains("var x = Var(\"x\", 5)"))
         XCTAssertTrue(actual.contains("var y = Var(\"y\", 10)"))
         XCTAssertTrue(actual.contains("x.prime == y"))
@@ -91,14 +91,14 @@ final class PrettyPrintTests: XCTestCase {
             Variable(x, 0)
             Action("") { x.stays }
         }
-        let actual = spec.tlaDescription
+        let actual = spec.tlaModule
         XCTAssertFalse(actual.contains("=="))
     }
 
     func testStructNameSpaceStripping() {
         let x = Var<Int>("x")
         let spec = TLASpec("My Spec", variables: [NamedVar(name: "x", initial: .int(0))], actions: [], invariants: [])
-        let actual = spec.annotatedDescription
+        let actual = spec.annotatedForm
         XCTAssertTrue(actual.contains("struct MySpec"))
     }
 }

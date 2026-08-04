@@ -4,7 +4,7 @@ import SwiftSyntaxBuilder
 import SwiftTLA
 
 extension TLASpec {
-    public var annotatedDescription: String {
+    public var annotatedForm: String {
         let structName = TokenSyntax(stringLiteral: name.replacingOccurrences(of: " ", with: ""))
         let structDecl = StructDeclSyntax(
             attributes: AttributeListSyntax { AttributeSyntax(stringLiteral: "@TLASpec") },
@@ -49,7 +49,7 @@ extension TLASpec {
         return desc
     }
 
-    public var tlaDescription: String {
+    public var tlaModule: String {
         let vars = variables.map(\.name)
         var lines: [String] = ["---- MODULE \(name.replacingOccurrences(of: " ", with: "")) ----"]
         lines.append("EXTENDS Naturals, FiniteSets, Sequences\n")
@@ -150,7 +150,22 @@ private struct StateExprSyntax: CustomStringConvertible {
         case .intersection(let a, let b): return "\(StateExprSyntax(from: a)).intersection(\(StateExprSyntax(from: b)))"
         case .setDifference(let a, let b): return "\(StateExprSyntax(from: a)).subtracting(\(StateExprSyntax(from: b)))"
         case .subset(let a, let b): return "\(StateExprSyntax(from: a)).isSubset(of: \(StateExprSyntax(from: b)))"
-        case .cardinality(let s): return "count(of: \(StateExprSyntax(from: s)))"
+        case .cardinality(let s): return "\(StateExprSyntax(from: s)).cardinality"
+        case .domain(let d): return "\(StateExprSyntax(from: d)).domain"
+        case .powerSet(let s): return "\(StateExprSyntax(from: s)).subsets"
+        case .unionAll(let s): return "\(StateExprSyntax(from: s)).flattened"
+        case .tupleLength(let t): return "\(StateExprSyntax(from: t)).count"
+        case .setFilter(let s, let p): return "\(StateExprSyntax(from: s)).filtering(\(StateExprSyntax(from: p)))"
+        case .setMap(let e, let s): return "\(StateExprSyntax(from: s)).mapping(\(StateExprSyntax(from: e)))"
+        case .tupleAppend(let t, let e): return "\(StateExprSyntax(from: t)).appending(\(StateExprSyntax(from: e)))"
+        case .tupleConcatenate(let a, let b): return "\(StateExprSyntax(from: a)).concatenating(\(StateExprSyntax(from: b)))"
+        case .forAll(let s, let p): return "StateExpr.for(allIn: \(StateExprSyntax(from: s)), \(StateExprSyntax(from: p)))"
+        case .exists(let s, let p): return "StateExpr.exists(in: \(StateExprSyntax(from: s)), \(StateExprSyntax(from: p)))"
+        case .choose(let s, let p): return "StateExpr.choose(from: \(StateExprSyntax(from: s)), matching: \(StateExprSyntax(from: p)))"
+        case .functionLiteral(let d, let b): return "StateExpr.function(domain: \(StateExprSyntax(from: d)), \(StateExprSyntax(from: b)))"
+        case .setLiteral(let es): return "StateExpr.set([\(es.map { StateExprSyntax(from: $0).description }.joined(separator: ", ")))])"
+        case .tupleLiteral(let es): return "StateExpr.tuple([\(es.map { StateExprSyntax(from: $0).description }.joined(separator: ", ")))])"
+        case .enabledAction(let n): return "StateExpr.enabled(\"\(n)\")"
         case .except(let f, let k, let v): return "\(StateExprSyntax(from: f)).updated(at: \(StateExprSyntax(from: k)), to: \(StateExprSyntax(from: v)))"
         case .functionApply(let f, let a): return "\(StateExprSyntax(from: f)).applying(\(StateExprSyntax(from: a)))"
         case .ifThenElse(let c, let t, let f): return "if \(StateExprSyntax(from: c)) { \(StateExprSyntax(from: t)) } else { \(StateExprSyntax(from: f)) }"
