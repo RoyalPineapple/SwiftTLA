@@ -7,7 +7,7 @@ import SwiftParser
 import SwiftTLA
 import SwiftTLAGeneration
 
-public struct AttachedTLASpecMacro: PeerMacro, MemberMacro {
+public struct ModelMacro: PeerMacro, MemberMacro {
     public static func expansion(of node: AttributeSyntax, providingPeersOf declaration: some DeclSyntaxProtocol, in context: some MacroExpansionContext) throws -> [DeclSyntax] {
         guard let structDecl = declaration.as(StructDeclSyntax.self) else { throw SimpleError("@TLAModel on structs only") }
         let typeName = structDecl.name.text
@@ -191,7 +191,7 @@ public struct AttachedTLASpecMacro: PeerMacro, MemberMacro {
             }
         }
         if let pe = e.as(PrefixOperatorExprSyntax.self) {
-            let op = pe.operator.as(PrefixOperatorExprSyntax.self)?.operator.text
+            let op = pe.operator.text
             let rhs = parseStateExpr(pe.expression)
             if op == "!" { if let r = rhs { return .not(r) } }
             if op == "-" { if let r = rhs { return .negate(r) } }
