@@ -1,6 +1,7 @@
 import SwiftTLA
 
-public struct ExampleDescription: Hashable {
+public struct ExampleDescription: Hashable, Identifiable {
+    public var id: String { name }
     public let name: String
     public let spec: TLASpec
     public let expectedStates: Int
