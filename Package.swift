@@ -5,6 +5,7 @@ import CompilerPluginSupport
 
 let settings: [SwiftSetting] = [
     .enableExperimentalFeature("StrictConcurrency"),
+    .unsafeFlags(["-warnings-as-errors"]),
 ]
 
 let package = Package(

@@ -26,5 +26,7 @@ public enum Examples {
         ExampleDescription(name:"Elevator",spec:Elevator.spec,expectedStates:5,source:"internal",about:"An elevator moving between floors."),
         ExampleDescription(name:"Traffic",spec:Traffic.spec,expectedStates:3,source:"internal",about:"A traffic light."),
         ExampleDescription(name:"Buffer",spec:Buffer.spec,expectedStates:2,source:"internal",about:"A single-slot buffer."),
+        ExampleDescription(name:"AlternatingBit",spec:AlternatingBit.spec,expectedStates:0,source:"https://github.com/tlaplus/Examples/tree/master/specifications",about:"Alternating bit protocol with sender/receiver/ack."),
+        ExampleDescription(name:"TwoPhaseCommit",spec:TwoPhaseCommit.spec,expectedStates:0,source:"https://github.com/tlaplus/Examples/tree/master/specifications/TwoPhase",about:"Two-phase commit with voting and finality invariant."),
     ]
 }
