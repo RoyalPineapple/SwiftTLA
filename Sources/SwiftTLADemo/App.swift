@@ -69,10 +69,39 @@ func copy(_ text: String) { NSPasteboard.general.clearContents(); NSPasteboard.g
 func formatSwift(_ spec: TLASpec) -> String {
     var lines: [String] = ["TLASpec(\"\(spec.name)\") {"]
     for v in spec.variables { lines.append("    Variable(Var<Int>(\"\(v.name)\"), \(v.initial))") }
-    for a in spec.actions { lines.append("    Act(\"\(a.name)\") { \(a.body) }") }
-    for i in spec.invariants { lines.append("    Invariant(\"\(i.name)\") { \(i.body) }") }
+    for a in spec.actions { lines.append("    Act(\"\(a.name)\") { \(swiftExpr(a.body)) }") }
+    for i in spec.invariants { lines.append("    Invariant(\"\(i.name)\") { \(swiftState(i.body)) }") }
     lines.append("}")
     return lines.joined(separator: "\n")
+}
+
+func swiftExpr(_ e: ActionExpr) -> String {
+    switch e {
+    case .assign(let v, let rhs): return "\(v).becomes(\(swiftState(rhs)))"
+    case .unchanged(let v): return "\(v).stays"
+    case .guard_(let s): return swiftState(s)
+    case .and(let a, let b): return "\(swiftExpr(a))\n    \(swiftExpr(b))"
+    case .or(let a, let b): return "\(swiftExpr(a))\n    \(swiftExpr(b))"
+    case .chooseAction(let v, let s): return "chooseAction(\"\(v)\", from: \(swiftState(s)))"
+    }
+}
+
+func swiftState(_ e: StateExpr) -> String {
+    switch e {
+    case .value(let v): return "\(v)"
+    case .variable(let n): return n
+    case .add(let a, let b): return "\(swiftState(a)) + \(swiftState(b))"
+    case .subtract(let a, let b): return "\(swiftState(a)) - \(swiftState(b))"
+    case .multiply(let a, let b): return "\(swiftState(a)) * \(swiftState(b))"
+    case .equal(let a, let b): return "\(swiftState(a)) == \(swiftState(b))"
+    case .lessThan(let a, let b): return "\(swiftState(a)) < \(swiftState(b))"
+    case .lessOrEqual(let a, let b): return "\(swiftState(a)) <= \(swiftState(b))"
+    case .greaterThan(let a, let b): return "\(swiftState(a)) > \(swiftState(b))"
+    case .greaterOrEqual(let a, let b): return "\(swiftState(a)) >= \(swiftState(b))"
+    case .not(let a): return "!(\(swiftState(a)))"
+    case .negate(let a): return "-(\(swiftState(a)))"
+    default: return e.description
+    }
 }
 
 func formatTLA(_ spec: TLASpec) -> String {
