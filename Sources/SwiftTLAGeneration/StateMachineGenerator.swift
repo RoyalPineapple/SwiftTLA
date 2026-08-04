@@ -34,7 +34,7 @@ public struct StateMachineGenerator {
             actionEnum(actions)
             try transitionsProperty()
             "public var availableActions: [Action] { transitions.map(\\.action) }"
-            "public var enabledActions: Set<Action> { Set(availableActions) }"
+            "public var enabledActions: [Action] { availableActions }"
             try applyMethod()
         }
     }
@@ -64,9 +64,9 @@ public struct StateMachineGenerator {
         EnumDeclSyntax(
             modifiers: [DeclModifierSyntax(name: .keyword(.public))],
             name: .identifier("Action"),
-            inheritanceClause: inherited("String", "CaseIterable", "Identifiable", "Hashable", "Codable", "Sendable")
+            inheritanceClause: inherited("String", "CaseIterable", "Identifiable", "Codable", "Sendable")
         ) {
-            for act in actions { "case \(raw: swiftCase(act))" }
+            for act in actions { "case \(raw: escapedCase(act))" }
             "public var id: Self { self }"
         }
     }
@@ -91,7 +91,7 @@ public struct StateMachineGenerator {
                             StmtSyntax("return [")
                             for (act, targetID) in meaningful {
                                 let args = initializerArguments(for: graph.states[targetID]!)
-                                StmtSyntax("(.\(raw: swiftCase(act)), Self(\(raw: args))),")
+                                StmtSyntax("(.\(raw: escapedCase(act)), Self(\(raw: args))),")
                             }
                             StmtSyntax("]")
                         }
@@ -122,7 +122,16 @@ public struct StateMachineGenerator {
     private func swiftCase(_ name: String) -> String {
         if name.isEmpty { return "noop" }
         let lower = name.prefix(1).lowercased() + name.dropFirst()
-        return lower.replacingOccurrences(of: " ", with: "").replacingOccurrences(of: "-", with: "_")
+        let cleaned = lower.replacingOccurrences(of: " ", with: "").replacingOccurrences(of: "-", with: "_")
+        return cleaned
+    }
+
+    private let swiftKeywords: Set<String> = ["next", "default", "case", "switch", "break", "return", "if", "else", "for", "in", "while", "repeat", "do", "catch", "throw", "where", "guard", "let", "var", "as", "is", "try", "self", "Self", "super", "nil", "true", "false", "import", "class", "struct", "enum", "protocol", "extension", "func", "init", "deinit", "subscript", "operator", "precedencegroup", "associatedtype", "typealias"]
+
+    private func escapedCase(_ name: String) -> String {
+        let cleaned = swiftCase(name)
+        if swiftKeywords.contains(cleaned) { return "action_" + cleaned }
+        return cleaned
     }
 
     private func statesEqual(_ a: [String: TLAValue], _ b: [String: TLAValue]) -> Bool {
