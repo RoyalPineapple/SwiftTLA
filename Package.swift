@@ -14,7 +14,6 @@ let package = Package(
     products: [
         .library(name: "SwiftTLA", targets: ["SwiftTLA"]),
         .library(name: "SwiftTLAGeneration", targets: ["SwiftTLAGeneration"]),
-        .library(name: "SwiftTLAExamples", targets: ["SwiftTLAExamples"]),
         .library(name: "SwiftTLASwiftUI", targets: ["SwiftTLASwiftUI"]),
     ],
     dependencies: [
@@ -39,14 +38,7 @@ let package = Package(
             .product(name: "SwiftDiagnostics", package: "swift-syntax"),
             .product(name: "SwiftParser", package: "swift-syntax"),
         ]),
-        .target(name: "SwiftTLAExamples", dependencies: ["SwiftTLA", "SwiftTLAGeneration", "SwiftTLAMacros"]),
-        .target(name: "SwiftTLASwiftUI", dependencies: [
-            "SwiftTLA",
-            "SwiftTLAGeneration",
-            .product(name: "SwiftSyntax", package: "swift-syntax"),
-            .product(name: "SwiftSyntaxBuilder", package: "swift-syntax"),
-            .product(name: "SwiftSyntaxMacros", package: "swift-syntax"),
-        ]),
+        .target(name: "SwiftTLASwiftUI", dependencies: ["SwiftTLA", "SwiftTLAGeneration"]),
         .testTarget(name: "SwiftTLATests", dependencies: ["SwiftTLA", "SwiftTLAGeneration"], swiftSettings: settings),
     ]
 )

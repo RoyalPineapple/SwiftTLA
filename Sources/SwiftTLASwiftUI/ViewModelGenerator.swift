@@ -11,34 +11,20 @@ public struct ViewModelGenerator {
     public func generate() -> String {
         let typeName = specification.name
         let stateProperties = specification.variables.map { variable in
-            "    public var \(variable.name): Int { machine.\(variable.name) }"
+            "    public var " + variable.name + ": Int { machine." + variable.name + " }"
         }.joined(separator: "\n")
 
         let actionMethods = specification.actions.map { action in
             let lowercased = lowered(action.name)
-            return "    public func \(lowercased)() { machine.apply(.\(lowercased)) }"
+            return "    public func " + lowercased + "() { machine.apply(." + lowercased + ") }"
         }.joined(separator: "\n")
 
         let canProperties = specification.actions.map { action in
             let lowercased = lowered(action.name)
-            return "    public var can\(action.name): Bool { machine.enabledActions.contains(.\(lowercased)) }"
+            return "    public var can" + action.name + ": Bool { machine.enabledActions.contains(." + lowercased + ") }"
         }.joined(separator: "\n")
 
-        return """
-        import Observation
-
-        @Observable
-        public final class ViewModel {
-            public var machine: \(typeName).Machine
-            public init(_ machine: \(typeName).Machine = \(typeName).Machine.initial) { self.machine = machine }
-
-        \(stateProperties)
-
-        \(actionMethods)
-
-        \(canProperties)
-        }
-        """
+        return "import Observation\n\n@Observable public final class ViewModel {\n    public var machine: " + typeName + ".Machine\n    public init(_ machine: " + typeName + ".Machine = " + typeName + ".Machine.initial) { self.machine = machine }\n\n" + stateProperties + "\n\n" + actionMethods + "\n\n" + canProperties + "\n}\n"
     }
 
     private func lowered(_ name: String) -> String {
