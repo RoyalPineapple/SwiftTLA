@@ -44,7 +44,7 @@ struct SourcePanels: View {
     var body: some View {
         HStack(alignment: .top, spacing: 0) {
             CodePanel(title: "Swift DSL", text: formatSwift(spec))
-            Rectangle().fill(.separator).frame(width: 2)
+            Rectangle().fill(.separator).frame(width: 25)
             CodePanel(title: "TLA+", text: formatTLA(spec))
         }
     }
