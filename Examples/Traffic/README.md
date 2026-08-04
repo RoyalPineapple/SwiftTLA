@@ -1,6 +1,0 @@
-# $name
-
-SwiftTLA example.
-
-## Spec
-

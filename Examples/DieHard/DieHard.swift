@@ -6,19 +6,21 @@ import SwiftTLAMacros
 public struct DieHard {
     static var spec: TLASpec {
         TLASpec("DieHard") {
-            let jug3 = Var(0)
-            let jug5 = Var(0)
-            Action("fill3")  { jug3.becomes(3) }
-            Action("fill5")  { jug5.becomes(5) }
-            Action("empty3") { jug3.becomes(0) }
-            Action("empty5") { jug5.becomes(0) }
-            Action("pour3to5") {
-                (jug3 + jug5 <= 5) && jug5.becomes(jug3 + jug5) && jug3.becomes(0) ||
-                (!(jug3 + jug5 <= 5)) && jug5.becomes(5) && jug3.becomes(jug3 - (5 - jug5))
+            let big = Var(0)
+            let small = Var(0)
+
+            Action("FillSmallJug")  { small.becomes(3) && big.stays }
+            Action("FillBigJug")    { big.becomes(5) && small.stays }
+            Action("EmptySmallJug") { small.becomes(0) && big.stays }
+            Action("EmptyBigJug")   { big.becomes(0) && small.stays }
+
+            Action("SmallToBig") {
+                (big + small <= 5) && big.becomes(big + small) && small.becomes(0) ||
+                (big + small > 5)  && big.becomes(5) && small.becomes(small - (5 - big))
             }
-            Action("pour5to3") {
-                (jug3 + jug5 <= 3) && jug3.becomes(jug3 + jug5) && jug5.becomes(0) ||
-                (!(jug3 + jug5 <= 3)) && jug3.becomes(3) && jug5.becomes(jug5 - (3 - jug3))
+            Action("BigToSmall") {
+                (big + small <= 3) && small.becomes(big + small) && big.becomes(0) ||
+                (big + small > 3)  && small.becomes(3) && big.becomes(big - (3 - small))
             }
         }
     }
