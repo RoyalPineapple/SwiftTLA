@@ -14,11 +14,13 @@ let package = Package(
                 .product(name: "SwiftTLA", package: "SwiftTLA"),
                 .product(name: "SwiftTLAGeneration", package: "SwiftTLA"),
                 .product(name: "SwiftTLAMacros", package: "SwiftTLA"),
-            ]
+            ],
+            path: "."
         ),
         .executableTarget(
             name: "ExamplesApp",
-            dependencies: ["Examples"]
+            dependencies: ["Examples"],
+            path: "Sources/ExamplesApp"
         ),
     ]
 )
