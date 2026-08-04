@@ -15,6 +15,7 @@ let package = Package(
         .library(name: "SwiftTLA", targets: ["SwiftTLA"]),
         .library(name: "SwiftTLAGeneration", targets: ["SwiftTLAGeneration"]),
         .library(name: "SwiftTLASwiftUI", targets: ["SwiftTLASwiftUI"]),
+        .library(name: "SwiftTLAMacros", targets: ["SwiftTLAMacros"]),
     ],
     dependencies: [
         .package(url: "https://github.com/swiftlang/swift-syntax", from: "600.0.0"),

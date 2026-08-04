@@ -18,11 +18,7 @@ let package = Package(
         ),
         .executableTarget(
             name: "ExamplesApp",
-            dependencies: [
-                "Examples",
-                .product(name: "SwiftTLA", package: "SwiftTLA"),
-                .product(name: "SwiftTLAGeneration", package: "SwiftTLA"),
-            ]
+            dependencies: ["Examples"]
         ),
     ]
 )
