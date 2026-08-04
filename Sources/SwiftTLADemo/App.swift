@@ -43,7 +43,7 @@ struct SourcePanels: View {
     let spec: TLASpec
     @State private var mode: ViewMode = .annotated
     
-    enum ViewMode: String, CaseIterable { case annotated = "@TLA"; case formal = "TLASpec"; case tla = "TLA+" }
+    enum ViewMode: String, CaseIterable { case annotated = "@TLA"; case tla = "TLA+" }
     
     var body: some View {
         VStack(spacing: 8) {
@@ -66,7 +66,6 @@ struct SourcePanels: View {
     var currentText: String {
         switch mode {
         case .annotated: return formatAnnotated(spec)
-        case .formal: return formatFormal(spec)
         case .tla: return formatTLA(spec)
         }
     }
@@ -77,7 +76,7 @@ func formatAnnotated(_ spec: TLASpec) -> String {
     lines.append("struct \(spec.name.replacingOccurrences(of: " ", with: "")) {")
     for v in spec.variables {
         let initVal = { if case .int(let n) = v.initial { return "\(n)" }; return "0" }()
-        lines.append("    var \(v.name) = Var<Int>(\"\(v.name)\", \(initVal))")
+        lines.append("    var \(v.name) = Var(\"\(v.name)\", \(initVal))")
     }
     for a in spec.actions {
         lines.append("    func \(a.name.lowercased())() {")
@@ -108,7 +107,7 @@ func formatSwift(_ spec: TLASpec) -> String {
     lines.append("struct \(spec.name.replacingOccurrences(of: " ", with: "")) {")
     for v in spec.variables {
         let initVal = { if case .int(let n) = v.initial { return "\(n)" }; return "0" }()
-        lines.append("    var \(v.name) = Var<Int>(\"\(v.name)\", \(initVal))")
+        lines.append("    var \(v.name) = Var(\"\(v.name)\", \(initVal))")
     }
     for a in spec.actions {
         lines.append("")
