@@ -14,10 +14,8 @@ public struct Var<T: TLAValueType>: Hashable, Codable, Sendable, CustomStringCon
     public init(_ name: String, _ value: T) { self.name = name }
     public init(_ value: T) { self.name = "" }
     public var description: String { name }
-    @_spi(Internal) public var prime: PrimedVar<T> { PrimedVar(name: name) }
     @discardableResult
-    public func becomes(_ expr: some StateExprConvertible) -> ActionExpr { .assign(name, expr.stateExpr) }
-    public static func stays(_ v: Var) -> ActionExpr { .unchanged(v.name) }
+    public func becomes(_ expression: some StateExprConvertible) -> ActionExpr { .assign(name, expression.stateExpr) }
     public var stays: ActionExpr { .unchanged(name) }
 }
 
@@ -34,9 +32,6 @@ extension Dictionary where Key == String, Value == TLAValue {
         set { self[variable.name] = newValue }
     }
 }
-
-@_spi(Internal) public struct PrimedVar<T: TLAValueType>: Sendable { public let name: String }
-@_spi(Internal) public func prime<T>(_ v: Var<T>) -> PrimedVar<T> { PrimedVar(name: v.name) }
 
 public protocol StateExprConvertible { var stateExpr: StateExpr { get } }
 extension StateExpr: StateExprConvertible { public var stateExpr: StateExpr { self } }
@@ -59,18 +54,7 @@ extension Var where T == Int {
     public static func % <R: StateExprConvertible>(lhs: Var, rhs: R) -> StateExpr { .modulo(.variable(lhs.name), rhs.stateExpr) }
 }
 
-extension TLAExprShim where T == Int {
-    public static func + <R: StateExprConvertible>(lhs: TLAExprShim, rhs: R) -> StateExpr { .add(lhs.stateExpr, rhs.stateExpr) }
-}
-
-// MARK: - TLAExpr helpers (for StateExpr-level ops)
-
-public struct TLAExprShim<T: TLAValueType>: StateExprConvertible {
-    public let stateExpr: StateExpr
-    public init(_ e: StateExpr) { self.stateExpr = e }
-}
-
-// MARK: - Generic StateExpr operators via protocol
+// MARK: - Generic operators (StateExpr level)
 
 extension StateExpr {
     public static func + <R: StateExprConvertible>(lhs: StateExpr, rhs: R) -> StateExpr { .add(lhs, rhs.stateExpr) }
@@ -88,10 +72,8 @@ public func * <L: StateExprConvertible, R: StateExprConvertible>(lhs: L, rhs: R)
 public func / <L: StateExprConvertible, R: StateExprConvertible>(lhs: L, rhs: R) -> StateExpr { .divide(lhs.stateExpr, rhs.stateExpr) }
 public func % <L: StateExprConvertible, R: StateExprConvertible>(lhs: L, rhs: R) -> StateExpr { .modulo(lhs.stateExpr, rhs.stateExpr) }
 
-public prefix func - <E: StateExprConvertible>(expr: E) -> StateExpr { .negate(expr.stateExpr) }
-public prefix func ! (expr: StateExpr) -> StateExpr { .not(expr) }
-
-// MARK: - Comparisons (any Var or StateExprConvertible)
+public prefix func - <E: StateExprConvertible>(expression: E) -> StateExpr { .negate(expression.stateExpr) }
+public prefix func ! (expression: StateExpr) -> StateExpr { .not(expression) }
 
 public func == <L: StateExprConvertible, R: StateExprConvertible>(lhs: L, rhs: R) -> StateExpr { .equal(lhs.stateExpr, rhs.stateExpr) }
 public func != <L: StateExprConvertible, R: StateExprConvertible>(lhs: L, rhs: R) -> StateExpr { .notEqual(lhs.stateExpr, rhs.stateExpr) }
@@ -100,12 +82,7 @@ public func <= <L: StateExprConvertible, R: StateExprConvertible>(lhs: L, rhs: R
 public func >  <L: StateExprConvertible, R: StateExprConvertible>(lhs: L, rhs: R) -> StateExpr { .greaterThan(lhs.stateExpr, rhs.stateExpr) }
 public func >= <L: StateExprConvertible, R: StateExprConvertible>(lhs: L, rhs: R) -> StateExpr { .greaterOrEqual(lhs.stateExpr, rhs.stateExpr) }
 
-// MARK: - Primed assignments
-
-@_spi(Internal) public func == <T: TLAValueType, R: StateExprConvertible>(lhs: PrimedVar<T>, rhs: R) -> ActionExpr { .assign(lhs.name, rhs.stateExpr) }
-@_spi(Internal) public func == <T: TLAValueType>(lhs: PrimedVar<T>, rhs: Var<T>) -> ActionExpr { .assign(lhs.name, .variable(rhs.name)) }
-
-// MARK: - Set operators as domain notation
+// MARK: - Set operators (domain notation)
 
 infix operator ∈ : ComparisonPrecedence
 infix operator ⊆ : ComparisonPrecedence
