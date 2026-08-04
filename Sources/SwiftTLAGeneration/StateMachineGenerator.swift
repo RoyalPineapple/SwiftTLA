@@ -24,17 +24,17 @@ public struct StateMachineGenerator {
         let firstState = graph.states[sortedIDs.first!]!
         let actions = uniqueActions()
         return try StructDeclSyntax(
-            modifiers: [DeclModifierSyntax(name: .keyword(.internal))],
+            modifiers: [DeclModifierSyntax(name: .keyword(.public))],
             name: .identifier(typeName),
             inheritanceClause: inherited("Equatable", "Hashable", "Codable", "Sendable", "TLAMachine")
         ) {
-            for v in variables { "var \(raw: v): Int" }
+            for v in variables { "public var \(raw: v): Int" }
             try memberwiseInit()
-            "static let initial = \(raw: typeName)(\(raw: initializerArguments(for: firstState)))"
+            "public static let initial = \(raw: typeName)(\(raw: initializerArguments(for: firstState)))"
             actionEnum(actions)
             try transitionsProperty()
-            "var availableActions: [Action] { transitions.map(\\.action) }"
-            "var enabledActions: Set<Action> { Set(availableActions) }"
+            "public var availableActions: [Action] { transitions.map(\\.action) }"
+            "public var enabledActions: Set<Action> { Set(availableActions) }"
             try applyMethod()
         }
     }
@@ -42,7 +42,7 @@ public struct StateMachineGenerator {
     // MARK: - Init
 
     private func memberwiseInit() throws -> InitializerDeclSyntax {
-        try InitializerDeclSyntax("init(\(raw: variables.map { "\($0): Int" }.joined(separator: ", ")))") {
+        try InitializerDeclSyntax("public init(\(raw: variables.map { "\($0): Int" }.joined(separator: ", ")))") {
             for v in variables { ExprSyntax("self.\(raw: v) = \(raw: v)") }
         }
     }
@@ -62,18 +62,19 @@ public struct StateMachineGenerator {
 
     private func actionEnum(_ actions: [String]) -> EnumDeclSyntax {
         EnumDeclSyntax(
+            modifiers: [DeclModifierSyntax(name: .keyword(.public))],
             name: .identifier("Action"),
             inheritanceClause: inherited("String", "CaseIterable", "Identifiable", "Codable", "Sendable")
         ) {
             for act in actions { "case \(raw: swiftCase(act))" }
-            "var id: Self { self }"
+            "public var id: Self { self }"
         }
     }
 
     // MARK: - Transitions
 
     private func transitionsProperty() throws -> VariableDeclSyntax {
-        try VariableDeclSyntax("var transitions: [(action: Action, target: Self)]") {
+        try VariableDeclSyntax("public var transitions: [(action: Action, target: Self)]") {
             try SwitchExprSyntax("switch (\(raw: variables.map { "self.\($0)" }.joined(separator: ", ")))") {
                 for stateID in sortedIDs {
                     let state = graph.states[stateID]!
@@ -104,7 +105,7 @@ public struct StateMachineGenerator {
     // MARK: - Apply
 
     private func applyMethod() throws -> FunctionDeclSyntax {
-        try FunctionDeclSyntax("mutating func apply(_ action: Action)") {
+        try FunctionDeclSyntax("public mutating func apply(_ action: Action)") {
             StmtSyntax("guard let next = transitions.first(where: { $0.action == action })?.target else { return }")
             StmtSyntax("self = next")
         }

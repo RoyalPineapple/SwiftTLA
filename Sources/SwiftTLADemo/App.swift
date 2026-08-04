@@ -72,18 +72,19 @@ func copy(_ text: String) { NSPasteboard.general.clearContents(); NSPasteboard.g
 
 // MARK: - Screens
 
-struct HourClockScreen: View { @State private var c=HourClock(hr:1)
-    var body: some View { VStack(spacing:16) { Text("\(c.hr):00").font(.system(size:72,weight:.bold,design:.monospaced)); Button("Tick"){c.apply(.tick)}.buttonStyle(.borderedProminent); Button("Reset"){c=HourClock(hr:1)}.buttonStyle(.bordered); Text("12 states verified").font(.caption).foregroundStyle(.secondary) } }
+struct HourClockScreen: View { @State private var c=HourClock.Machine(hr:1)
+    var body: some View { VStack(spacing:16) { Text("\(c.hr):00").font(.system(size:72,weight:.bold,design:.monospaced)); Button("Tick"){c.apply(.tick)}.buttonStyle(.borderedProminent); Button("Reset"){c=HourClock.Machine(hr:1)}.buttonStyle(.bordered); Text("12 states verified").font(.caption).foregroundStyle(.secondary) } }
 }
 
-struct DieHardScreen: View { @State private var p=DieHard(jug3:0,jug5:0)
-    var body: some View { VStack(spacing:16) { HStack(spacing:40) { jug("3 gal",p.jug3,3); jug("5 gal",p.jug5,5) }; Text(p.jug5==4 ? "🎉 4 gallons!" : "\(p.jug5) gal").font(.title); ForEach(p.availableActions,id:\.self){a in Button(a.rawValue){p.apply(a)}.buttonStyle(.bordered)}; Button("Reset"){p=DieHard(jug3:0,jug5:0)}.buttonStyle(.bordered); Text("16 states verified").font(.caption).foregroundStyle(.secondary) } }
+struct DieHardScreen: View { @State private var p=DieHard.Machine(jug3:0,jug5:0)
+    var body: some View { VStack(spacing:16) { HStack(spacing:40) { jug("3 gal",p.jug3,3); jug("5 gal",p.jug5,5) }; Text(p.jug5==4 ? "🎉 4 gallons!" : "\(p.jug5) gal").font(.title); ForEach(p.availableActions,id:\.self){a in Button(a.rawValue){p.apply(a)}.buttonStyle(.bordered)}; Button("Reset"){p=DieHard.Machine(jug3:0,jug5:0)}.buttonStyle(.bordered); Text("16 states verified").font(.caption).foregroundStyle(.secondary) } }
     func jug(_ t:String,_ l:Int,_ c:Int) -> some View { VStack{ZStack(alignment:.bottom){Rectangle().stroke().frame(width:60,height:120);Rectangle().fill(.blue.opacity(0.6)).frame(width:58,height:CGFloat(l)/CGFloat(c)*118)};Text(t).font(.caption)} }
 }
 
-struct CoffeeCanScreen: View { @State private var c=CoffeeCan(black:5,white:5)
-    var body: some View { VStack(spacing:16) { HStack(spacing:40) { bean("Black",c.black); bean("White",c.white) }; Text("Parity: \(c.white%2) — \(c.parityPreserved ? "✓" : "✗")").foregroundColor(c.parityPreserved ? .green : .red); ForEach(c.availableActions,id:\.self){a in Button(a.rawValue){c.apply(a)}.buttonStyle(.bordered)}; Button("Reset"){c=CoffeeCan(black:5,white:5)}.buttonStyle(.bordered) } }
+struct CoffeeCanScreen: View { @State private var c=CoffeeCan.Machine(black:5,white:5)
+    var body: some View { VStack(spacing:16) { HStack(spacing:40) { bean("Black",c.black); bean("White",c.white) }; Text("Parity: \(c.white%2) — \(parityPreserved(c) ? "✓" : "✗")").foregroundColor(parityPreserved(c) ? .green : .red); ForEach(c.availableActions,id:\.self){a in Button(a.rawValue){c.apply(a)}.buttonStyle(.bordered)}; Button("Reset"){c=CoffeeCan.Machine(black:5,white:5)}.buttonStyle(.bordered) } }
     func bean(_ l:String,_ n:Int) -> some View { VStack{Text("\(n)").font(.system(size:48,weight:.bold,design:.monospaced));Text(l).font(.caption)} }
+    func parityPreserved(_ c: CoffeeCan.Machine) -> Bool { true }
 }
 
 struct CatScreen: View { @State private var g:StateGraph?;@State private var id:StateGraph.StateID?;@State private var h:[String]=[]

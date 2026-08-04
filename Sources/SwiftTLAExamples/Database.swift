@@ -11,7 +11,6 @@ public struct Database {
         locked.becomes(1).when(locked == 0)
     }
     func unlock() {
-        locked.becomes(0).when(locked == 1)
-        data.stays
+        locked.becomes(0).when(locked == 1) && data.stays
     }
 }
