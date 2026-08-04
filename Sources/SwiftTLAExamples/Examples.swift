@@ -25,5 +25,8 @@ public enum Examples {
         ExampleDescription(name:"Traffic",spec:Traffic.spec,expectedStates:3,source:"internal",about:"A traffic light cycling green→yellow→red. Three states."),
         ExampleDescription(name:"Buffer",spec:Buffer.spec,expectedStates:2,source:"internal",about:"A single-slot buffer. Put when empty, Get when full."),
         ExampleDescription(name:"FairClock",spec:FairClock.spec,expectedStates:12,source:"internal",about:"A clock that ticks 1-12 with liveness: hr leads to 12."),
+        ExampleDescription(name:"DiningPhilosophers",spec:DiningPhilosophers.spec,expectedStates:0,source:"https://github.com/tlaplus/Examples/tree/master/specifications/DiningPhilosophers",about:"Three philosophers sharing forks. No two adjacent eat at once."),
+        ExampleDescription(name:"ProducerConsumer",spec:ProducerConsumer.spec,expectedStates:0,source:"internal",about:"Bounded buffer with producer and consumer. produced - consumed == buffer."),
+        ExampleDescription(name:"Bakery",spec:Bakery.spec,expectedStates:0,source:"https://lamport.azurewebsites.net/tla/book.html",about:"Lamport's bakery algorithm. Mutual exclusion without atomic read-write."),
     ]
 }
