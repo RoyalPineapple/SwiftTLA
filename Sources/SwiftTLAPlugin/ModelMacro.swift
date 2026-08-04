@@ -36,13 +36,31 @@ public struct ModelMacro: MemberMacro {
 
         var members: [DeclSyntax] = []
 
-        if let graph = try? checker.exploreGraph(),
-           let code = try? StateMachineGenerator(graph: graph).generate() {
-            let renamed = code
-                .replacingOccurrences(of: "struct " + typeName, with: "struct Machine")
-                .replacingOccurrences(of: "static let initial = " + typeName + "(", with: "static let initial = Machine(")
-            members.append(contentsOf: Parser.parse(source: renamed).statements.compactMap { $0.item.as(DeclSyntax.self) })
+        let graph: StateGraph
+        do {
+            graph = try checker.exploreGraph()
+        } catch {
+            throw SimpleError("Checker exploration failed: " + String(describing: error))
         }
+
+        guard !graph.states.isEmpty else {
+            throw SimpleError("No states in graph.")
+        }
+
+        let actions = Set(graph.transitions.values.flatMap { $0.map(\.action) }).sorted()
+        guard !actions.isEmpty else {
+            let sample = specification.actions.first.map { String(describing: $0.body) } ?? "none"
+            throw SimpleError("No transitions found. States: " + String(graph.states.count) + ". Variables: " + specification.variables.map(\.name).joined(separator: ", ") + ". Action sample: " + sample)
+        }
+
+        guard let code = try? StateMachineGenerator(graph: graph).generate() else {
+            throw SimpleError("StateMachineGenerator failed")
+        }
+
+        let renamed = code
+            .replacingOccurrences(of: "struct " + typeName, with: "struct Machine")
+            .replacingOccurrences(of: "static let initial = " + typeName + "(", with: "static let initial = Machine(")
+        members.append(contentsOf: Parser.parse(source: renamed).statements.compactMap { $0.item.as(DeclSyntax.self) })
 
         return members
     }
@@ -108,12 +126,17 @@ public struct ModelMacro: MemberMacro {
                 switch reference.baseName.text {
                 case "Action":
                     guard let name = extractStringLiteral(call.arguments.first?.expression),
-                          let body = parseActionClosure(call.arguments.dropFirst().first?.expression) else { continue }
-                    result.actions.append((name, body))
+                          let closure = call.trailingClosure else { continue }
+                    let action = parseActionFrom(closure)
+                        ?? .guard_(.value(.bool(true)))
+                    result.actions.append((name, action))
                 case "Invariant":
                     guard let name = extractStringLiteral(call.arguments.first?.expression),
-                          let body = parseStateExpr(call.arguments.dropFirst().first?.expression) else { continue }
-                    result.invariants.append((name, body))
+                          let stateExpr = call.trailingClosure?.statements.lazy.compactMap({ (stmt: CodeBlockItemSyntax) -> StateExpr? in
+                              guard case .expr(let expr) = stmt.item else { return nil }
+                              return parseStateExpr(expr)
+                          }).first else { continue }
+                    result.invariants.append((name, stateExpr))
                 default: continue
                 }
             case .stmt: continue
@@ -135,6 +158,10 @@ public struct ModelMacro: MemberMacro {
 
     private static func parseActionClosure(_ expression: ExprSyntax?) -> ActionExpr? {
         guard let expression, let closure = expression.as(ClosureExprSyntax.self) else { return nil }
+        return parseActionFrom(closure)
+    }
+
+    private static func parseActionFrom(_ closure: ClosureExprSyntax) -> ActionExpr? {
         let actions = closure.statements.compactMap { statement -> ActionExpr? in
             guard case .expr(let inner) = statement.item else { return nil }
             return parseSingleAction(inner)
