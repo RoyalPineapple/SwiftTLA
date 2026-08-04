@@ -154,59 +154,69 @@ private func bfsLoop(
         StateGraph(specName: specificationName, variableNames: variableNames, transitions: transitions, states: idToState)
     }
 
-    guard stepCount < maxStates else {
-        return ModelChecker.Exploration(result: .depthExceeded(statesCount: stepCount, limit: maxStates), graph: graph())
-    }
-    guard !queue.isEmpty else {
-        return ModelChecker.Exploration(result: .ok(statesCount: stepCount), graph: graph())
-    }
+    var currentQueue = queue
+    var currentStateToID = stateToID
+    var currentIDToState = idToState
+    var currentVisited = visited
+    var currentTransitions = transitions
+    var currentPredecessors = predecessors
+    var currentNextID = nextID
+    var currentStepCount = stepCount
+    var head = 0
 
-    let current = queue[0]
-    let rest = Array(queue.dropFirst())
-    guard let currentID = stateToID[canonical(current)] else {
-        return bfsLoop(queue: rest, stateToID: stateToID, idToState: idToState, visited: visited, transitions: transitions, predecessors: predecessors, nextID: nextID, stepCount: stepCount + 1, maxStates: maxStates, actions: actions, variableNames: variableNames, canonical: canonical, expand: expand, evaluate: evaluate, invariants: invariants, constraint: constraint, checkDeadlock: checkDeadlock, specificationName: specificationName)
-    }
-
-    if let checkConstraint = constraint, evaluate(checkConstraint, current) {
-        return bfsLoop(queue: rest, stateToID: stateToID, idToState: idToState, visited: visited, transitions: transitions, predecessors: predecessors, nextID: nextID, stepCount: stepCount + 1, maxStates: maxStates, actions: actions, variableNames: variableNames, canonical: canonical, expand: expand, evaluate: evaluate, invariants: invariants, constraint: constraint, checkDeadlock: checkDeadlock, specificationName: specificationName)
-    }
-
-    let enabled = enabledState(current, actions: actions, variableNames: variableNames)
-    for invariant in invariants where !evaluate(invariant.body, enabled) {
-        let trace = buildTrace(to: current, predecessors: predecessors, initial: queue.count > 0 ? queue[0] : current)
-        return ModelChecker.Exploration(result: .invariantViolated(invariant: invariant.name, state: current, trace: trace), graph: graph())
-    }
-
-    let successors = expand(current)
-    if checkDeadlock && successors.isEmpty {
-        return ModelChecker.Exploration(result: .deadlocked(state: current), graph: graph())
-    }
-
-    var updatedTransitions = transitions
-    for (successorAction, successorState) in successors {
-        let canonicalForm = canonical(successorState)
-        if let targetID = stateToID[canonicalForm] {
-            updatedTransitions[currentID, default: []] += [StateGraph.Transition(action: successorAction, target: targetID)]
+    while true {
+        guard currentStepCount < maxStates else {
+            return ModelChecker.Exploration(result: .depthExceeded(statesCount: currentStepCount, limit: maxStates), graph: graph())
         }
-    }
-
-    let newStates = successors.filter { !visited.contains(canonical($0.1)) }
-
-    let next = newStates.reduce((rest, stateToID, idToState, updatedTransitions, visited, predecessors, nextID)) { accumulator, successor in
-        var (queue, stateToIDMap, idToStateMap, transitionMap, visitedSet, predecessorMap, nextIdentifier) = accumulator
-        let canonicalForm = canonical(successor.1)
-        let targetID = stateToIDMap[canonicalForm] ?? StateGraph.StateID(nextIdentifier)
-        transitionMap[currentID, default: []] += [StateGraph.Transition(action: successor.0, target: targetID)]
-        if stateToIDMap[canonicalForm] != nil {
-            return (queue, stateToIDMap, idToStateMap, transitionMap, visitedSet, predecessorMap, nextIdentifier)
+        guard head < currentQueue.count else {
+            return ModelChecker.Exploration(result: .ok(statesCount: currentStepCount), graph: graph())
         }
-        stateToIDMap[canonicalForm] = StateGraph.StateID(nextIdentifier)
-        idToStateMap[StateGraph.StateID(nextIdentifier)] = successor.1
-        predecessorMap[successor.1] = (current, successor.0)
-        return (queue + [successor.1], stateToIDMap, idToStateMap, transitionMap, visitedSet.union([canonicalForm]), predecessorMap, nextIdentifier + 1)
-    }
 
-    return bfsLoop(queue: next.0, stateToID: next.1, idToState: next.2, visited: next.4, transitions: next.3, predecessors: next.5, nextID: next.6, stepCount: stepCount + 1, maxStates: maxStates, actions: actions, variableNames: variableNames, canonical: canonical, expand: expand, evaluate: evaluate, invariants: invariants, constraint: constraint, checkDeadlock: checkDeadlock, specificationName: specificationName)
+        let current = currentQueue[head]
+        head += 1
+        guard let currentID = currentStateToID[canonical(current)] else {
+            currentStepCount += 1
+            continue
+        }
+
+        if let checkConstraint = constraint, evaluate(checkConstraint, current) {
+            currentStepCount += 1
+            continue
+        }
+
+        let enabled = enabledState(current, actions: actions, variableNames: variableNames)
+        for invariant in invariants where !evaluate(invariant.body, enabled) {
+            let trace = buildTrace(to: current, predecessors: currentPredecessors, initial: currentQueue.count > 0 ? currentQueue[0] : current)
+            return ModelChecker.Exploration(result: .invariantViolated(invariant: invariant.name, state: current, trace: trace), graph: graph())
+        }
+
+        let successors = expand(current)
+        if checkDeadlock && successors.isEmpty {
+            return ModelChecker.Exploration(result: .deadlocked(state: current), graph: graph())
+        }
+
+        for (successorAction, successorState) in successors {
+            let canonicalForm = canonical(successorState)
+            if let targetID = currentStateToID[canonicalForm] {
+                currentTransitions[currentID, default: []] += [StateGraph.Transition(action: successorAction, target: targetID)]
+            }
+        }
+
+        let newStates = successors.filter { !currentVisited.contains(canonical($0.1)) }
+        for successor in newStates {
+            let canonicalForm = canonical(successor.1)
+            let targetID = currentStateToID[canonicalForm] ?? StateGraph.StateID(currentNextID)
+            currentTransitions[currentID, default: []] += [StateGraph.Transition(action: successor.0, target: targetID)]
+            if currentStateToID[canonicalForm] != nil { continue }
+            currentStateToID[canonicalForm] = StateGraph.StateID(currentNextID)
+            currentIDToState[StateGraph.StateID(currentNextID)] = successor.1
+            currentPredecessors[successor.1] = (current, successor.0)
+            currentQueue.append(successor.1)
+            currentVisited.insert(canonicalForm)
+            currentNextID += 1
+        }
+        currentStepCount += 1
+    }
 }
 
 private func enabledState(_ state: State, actions: [NamedAction], variableNames: [String]) -> State {
