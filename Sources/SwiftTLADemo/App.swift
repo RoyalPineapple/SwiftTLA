@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftTLA
+import SwiftTLAGenerator
 import SwiftTLAExamples
 
 @main struct DemoApp: App { var body: some Scene { WindowGroup { ContentView() } } }
@@ -34,7 +35,7 @@ struct ExampleDetailView: View {
         .toolbar { Button("Export .tla") { exportTLA() } }
     }
     @ViewBuilder var interactive: some View { switch example.name { case "HourClock": HourClockScreen(); case "DieHard": DieHardScreen(); case "CoffeeCan": CoffeeCanScreen(); case "MovingCat": CatScreen(); case "Majority": MajorityScreen(); case "BoundedCounter": CounterScreen(); case "Toggle": ToggleScreen(); case "ThreeState": ThreeScreen(); default: GraphScreen(ex: example) } }
-    func exportTLA() { let p = NSSavePanel(); p.nameFieldStringValue = "\(example.name).tla"; p.allowedContentTypes = [.plainText]; guard p.runModal() == .OK, let u = p.url else { return }; try? formatTLA(example.spec).write(to: u, atomically: true, encoding: .utf8) }
+    func exportTLA() { let p = NSSavePanel(); p.nameFieldStringValue = "\(example.name).tla"; p.allowedContentTypes = [.plainText]; guard p.runModal() == .OK, let u = p.url else { return }; try? example.spec.tlaDescription.write(to: u, atomically: true, encoding: .utf8) }
 }
 
 // MARK: - Source panels
@@ -65,131 +66,13 @@ struct SourcePanels: View {
     
     var currentText: String {
         switch mode {
-        case .annotated: return formatAnnotated(spec)
-        case .tla: return formatTLA(spec)
+        case .annotated: return spec.annotatedDescription
+        case .tla: return spec.tlaDescription
         }
     }
 }
 
-func formatAnnotated(_ spec: TLASpec) -> String {
-    var lines: [String] = ["@TLA"]
-    lines.append("struct \(spec.name.replacingOccurrences(of: " ", with: "")) {")
-    for v in spec.variables {
-        let initVal = { if case .int(let n) = v.initial { return "\(n)" }; return "0" }()
-        lines.append("    var \(v.name) = Var(\"\(v.name)\", \(initVal))")
-    }
-    for a in spec.actions {
-        lines.append("    func \(a.name.lowercased())() {")
-        for line in swiftExpr(a.body).split(separator: "\n") { lines.append("\(line)") }
-        lines.append("    }")
-    }
-    for i in spec.invariants { lines.append("    var \(i.name): StateExpr { \(swiftState(i.body)) }") }
-    lines.append("}")
-    return lines.joined(separator: "\n")
-}
-
-func formatFormal(_ spec: TLASpec) -> String {
-    var lines: [String] = ["TLASpec(\"\(spec.name)\") {"]
-    for v in spec.variables { lines.append("    Variable(Var<Int>(\"\(v.name)\"), \(v.initial))") }
-    for a in spec.actions {
-        lines.append("    Action(\"\(a.name)\") {")
-        for line in swiftExpr(a.body).split(separator: "\n") { lines.append("    \(line)") }
-        lines.append("    }")
-    }
-    for i in spec.invariants { lines.append("    Invariant(\"\(i.name)\") { \(swiftState(i.body)) }") }
-    lines.append("}")
-    return lines.joined(separator: "\n")
-}
-
 func copy(_ text: String) { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(text, forType: .string) }
-func formatSwift(_ spec: TLASpec) -> String {
-    var lines: [String] = ["@TLA"]
-    lines.append("struct \(spec.name.replacingOccurrences(of: " ", with: "")) {")
-    for v in spec.variables {
-        let initVal = { if case .int(let n) = v.initial { return "\(n)" }; return "0" }()
-        lines.append("    var \(v.name) = Var(\"\(v.name)\", \(initVal))")
-    }
-    for a in spec.actions {
-        lines.append("")
-        lines.append("    func \(a.name.lowercased())() {")
-        for line in swiftExpr(a.body).split(separator: "\n") { lines.append("        \(line)") }
-        lines.append("    }")
-    }
-    for i in spec.invariants {
-        lines.append("")
-        lines.append("    var \(i.name.lowercased()): StateExpr { \(swiftState(i.body)) }")
-    }
-    lines.append("}")
-    return lines.joined(separator: "\n")
-}
-
-func swiftExpr(_ e: ActionExpr) -> String {
-    let clauses = flattenAnd(e)
-    return clauses.map(formatClause).joined(separator: "\n")
-}
-
-func flattenAnd(_ e: ActionExpr) -> [ActionExpr] {
-    switch e {
-    case .and(let a, let b): return flattenAnd(a) + flattenAnd(b)
-    default: return [e]
-    }
-}
-
-func formatClause(_ e: ActionExpr) -> String {
-    switch e {
-    case .assign(let v, let rhs): return "        \(v).becomes(\(swiftState(rhs)))"
-    case .unchanged(let v): return "        \(v).stays"
-    case .chooseAction(let v, let s): return "        chooseAction(\"\(v)\", from: \(swiftState(s)))"
-    default: return "        /* \(e) */"
-    }
-}
-
-func swiftState(_ e: StateExpr) -> String {
-    switch e {
-    case .value(let v): return "\(v)"
-    case .variable(let n): return n
-    case .add(let a, let b): return "\(swiftState(a)) + \(swiftState(b))"
-    case .subtract(let a, let b): return "\(swiftState(a)) - \(swiftState(b))"
-    case .multiply(let a, let b): return "\(swiftState(a)) * \(swiftState(b))"
-    case .equal(let a, let b): return "\(swiftState(a)) == \(swiftState(b))"
-    case .lessThan(let a, let b): return "\(swiftState(a)) < \(swiftState(b))"
-    case .lessOrEqual(let a, let b): return "\(swiftState(a)) <= \(swiftState(b))"
-    case .greaterThan(let a, let b): return "\(swiftState(a)) > \(swiftState(b))"
-    case .greaterOrEqual(let a, let b): return "\(swiftState(a)) >= \(swiftState(b))"
-    case .not(let a): return "!(\(swiftState(a)))"
-    case .negate(let a): return "-(\(swiftState(a)))"
-    case .in(let a, let b): return "\(swiftState(a)).isIn(\(swiftState(b)))"
-    case .union(let a, let b): return "\(swiftState(a)).union(\(swiftState(b)))"
-    case .intersection(let a, let b): return "\(swiftState(a)).intersection(\(swiftState(b)))"
-    case .setDifference(let a, let b): return "\(swiftState(a)).subtracting(\(swiftState(b)))"
-    case .subset(let a, let b): return "\(swiftState(a)).isSubset(of: \(swiftState(b)))"
-    case .cardinality(let s): return "count(of: \(swiftState(s)))"
-    case .except(let f, let k, let v): return "\(swiftState(f)).updated(at: \(swiftState(k)), to: \(swiftState(v)))"
-    case .functionApply(let f, let a): return "\(swiftState(f)).applying(\(swiftState(a)))"
-    case .ifThenElse(let c, let t, let f): return "if \(swiftState(c)) { \(swiftState(t)) } else { \(swiftState(f)) }"
-    case .modulo(let a, let b): return "\(swiftState(a)) % \(swiftState(b))"
-    case .notEqual(let a, let b): return "\(swiftState(a)) != \(swiftState(b))"
-    case .integerDivide(let a, let b): return "\(swiftState(a)) / \(swiftState(b))"
-    case .and(let a, let b): return "\(swiftState(a)) &&\n    \(swiftState(b))"
-    case .or(let a, let b): return "\(swiftState(a)) ||\n    \(swiftState(b))"
-    default: return e.description
-    }
-}
-
-func formatTLA(_ spec: TLASpec) -> String {
-    let vars = spec.variables.map(\.name)
-    var lines: [String] = ["---- MODULE \(spec.name.replacingOccurrences(of: " ", with: "")) ----"]
-    lines.append("EXTENDS Naturals, FiniteSets, Sequences\n")
-    lines.append("VARIABLES \(vars.joined(separator: ", "))\n")
-    let inits = spec.variables.map { "\($0.name) = \($0.initial)" }.joined(separator: " /\\\n       ")
-    lines.append("Init == \(inits)\n")
-    for act in spec.actions where !act.name.isEmpty { lines.append("\(act.name) == \(act.body)\n") }
-    let nexts = spec.actions.filter { !$0.name.isEmpty }.map(\.name).joined(separator: " \\/\n      ")
-    lines.append("Next == \(nexts)\n")
-    for inv in spec.invariants { lines.append("\(inv.name) == \(inv.body)") }
-    lines.append("====\n")
-    return lines.joined(separator: "\n")
-}
 
 // MARK: - Screens
 
