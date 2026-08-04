@@ -40,7 +40,7 @@ struct ClockView: View {
             }
             
             Button("Reset") { clock = HourClock(hr: 1); history = [] }
-            TLAView(spec: HourClockSpec.spec)
+            TLAView(spec: HourClockSpec.spec, name: "HourClock")
             StatesView(states: 12)
         }
         .padding()
@@ -73,7 +73,7 @@ struct DieHardView: View {
             }
             
             Button("Reset") { puzzle = DieHard(jug3: 0, jug5: 0); history = [] }
-            TLAView(spec: DieHardSpec.spec)
+            TLAView(spec: DieHardSpec.spec, name: "DieHard")
             StatesView(states: 16)
         }
         .padding()
@@ -122,7 +122,7 @@ struct CoffeeCanView: View {
             }
             
             Button("Reset") { can = CoffeeCan(black: 5, white: 5); history = [] }
-            TLAView(spec: CoffeeCanSpec.spec)
+            TLAView(spec: CoffeeCanSpec.spec, name: "CoffeeCan")
         }
         .padding()
     }
@@ -142,16 +142,30 @@ struct BeanCounter: View {
 
 struct TLAView: View {
     let spec: TLASpec
+    let name: String
     @State private var show = false
+    
     var body: some View {
-        Button("View TLA+") { show = true }
-            .sheet(isPresented: $show) {
-                ScrollView {
-                    Text(spec.description)
-                        .font(.system(.caption, design: .monospaced))
-                        .padding()
-                }
+        HStack {
+            Button("View TLA+") { show = true }
+            Button("Export .tla") { export() }
+        }
+        .sheet(isPresented: $show) {
+            ScrollView {
+                Text(spec.description)
+                    .font(.system(.caption, design: .monospaced))
+                    .padding()
             }
+            .frame(minWidth: 500, minHeight: 400)
+        }
+    }
+    
+    func export() {
+        let panel = NSSavePanel()
+        panel.nameFieldStringValue = "\(name).tla"
+        panel.allowedContentTypes = [.plainText]
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        try? spec.description.write(to: url, atomically: true, encoding: .utf8)
     }
 }
 
