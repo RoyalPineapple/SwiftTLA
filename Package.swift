@@ -40,6 +40,6 @@ let package = Package(
         ]),
         .target(name: "SwiftTLAExamples", dependencies: ["SwiftTLA", "SwiftTLAGeneration", "SwiftTLAMacros"]),
         .executableTarget(name: "SwiftTLADemo", dependencies: ["SwiftTLA", "SwiftTLAGeneration", "SwiftTLAExamples", "SwiftTLAMacros"]),
-        .testTarget(name: "SwiftTLATests", dependencies: ["SwiftTLA", "SwiftTLAGeneration"], swiftSettings: settings),
+        .testTarget(name: "SwiftTLATests", dependencies: ["SwiftTLA", "SwiftTLAGeneration", "SwiftTLAExamples"], swiftSettings: settings),
     ]
 )

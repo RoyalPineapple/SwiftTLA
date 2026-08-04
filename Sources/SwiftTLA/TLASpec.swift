@@ -1,4 +1,4 @@
-public struct NamedVar: Codable, Sendable, CustomStringConvertible {
+public struct NamedVar: Codable, Sendable, CustomStringConvertible, Equatable {
     public let name: String
     public let initial: TLAValue
     public init(name: String, initial: TLAValue) {
@@ -8,7 +8,7 @@ public struct NamedVar: Codable, Sendable, CustomStringConvertible {
     public var description: String { "\(name) = \(initial)" }
 }
 
-public struct NamedAction: Codable, Sendable, CustomStringConvertible {
+public struct NamedAction: Codable, Sendable, CustomStringConvertible, Equatable {
     public let name: String
     public let body: ActionExpr
     public init(name: String, body: ActionExpr) {
@@ -18,14 +18,14 @@ public struct NamedAction: Codable, Sendable, CustomStringConvertible {
     public var description: String { "\(name): \(body)" }
 }
 
-public struct NamedTemporal: Codable, Sendable, CustomStringConvertible {
+public struct NamedTemporal: Codable, Sendable, CustomStringConvertible, Equatable {
     public let name: String
     public let expr: TemporalExpr
     public init(name: String, expr: TemporalExpr) { self.name = name; self.expr = expr }
     public var description: String { "\(name): \(expr)" }
 }
 
-public struct NamedInvariant: Codable, Sendable, CustomStringConvertible {
+public struct NamedInvariant: Codable, Sendable, CustomStringConvertible, Equatable {
     public let name: String
     public let body: StateExpr
     public init(name: String, body: StateExpr) {
@@ -35,7 +35,7 @@ public struct NamedInvariant: Codable, Sendable, CustomStringConvertible {
     public var description: String { "\(name): \(body)" }
 }
 
-public struct TLASpec: Codable, Sendable, CustomStringConvertible {
+public struct TLASpec: Codable, Sendable, CustomStringConvertible, Equatable {
     public let name: String
     public let variables: [NamedVar]
     public let constants: [String: TLAValue]
