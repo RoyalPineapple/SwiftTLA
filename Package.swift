@@ -15,6 +15,7 @@ let package = Package(
         .library(name: "SwiftTLA", targets: ["SwiftTLA"]),
         .library(name: "SwiftTLAGeneration", targets: ["SwiftTLAGeneration"]),
         .library(name: "SwiftTLAExamples", targets: ["SwiftTLAExamples"]),
+        .library(name: "SwiftTLASwiftUI", targets: ["SwiftTLASwiftUI"]),
         .executable(name: "demo", targets: ["SwiftTLADemo"]),
     ],
     dependencies: [
@@ -32,6 +33,7 @@ let package = Package(
         .macro(name: "SwiftTLAPlugin", dependencies: [
             "SwiftTLA",
             "SwiftTLAGeneration",
+            "SwiftTLASwiftUI",
             .product(name: "SwiftCompilerPlugin", package: "swift-syntax"),
             .product(name: "SwiftSyntax", package: "swift-syntax"),
             .product(name: "SwiftSyntaxMacros", package: "swift-syntax"),
@@ -39,6 +41,13 @@ let package = Package(
             .product(name: "SwiftParser", package: "swift-syntax"),
         ]),
         .target(name: "SwiftTLAExamples", dependencies: ["SwiftTLA", "SwiftTLAGeneration", "SwiftTLAMacros"]),
+        .target(name: "SwiftTLASwiftUI", dependencies: [
+            "SwiftTLA",
+            "SwiftTLAGeneration",
+            .product(name: "SwiftSyntax", package: "swift-syntax"),
+            .product(name: "SwiftSyntaxBuilder", package: "swift-syntax"),
+            .product(name: "SwiftSyntaxMacros", package: "swift-syntax"),
+        ]),
         .executableTarget(name: "SwiftTLADemo", dependencies: ["SwiftTLA", "SwiftTLAGeneration", "SwiftTLAExamples", "SwiftTLAMacros"]),
         .testTarget(name: "SwiftTLATests", dependencies: ["SwiftTLA", "SwiftTLAGeneration", "SwiftTLAExamples"], swiftSettings: settings),
     ]
