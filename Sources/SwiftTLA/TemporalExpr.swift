@@ -16,6 +16,12 @@ public enum TemporalExpr: Hashable, Codable, Sendable, CustomStringConvertible {
     }
 }
 
+extension StateExprConvertible {
+    public func leadsTo(_ q: some StateExprConvertible) -> TemporalExpr {
+        .leadsTo(self.stateExpr, q.stateExpr)
+    }
+}
+
 public enum FairnessCondition: Hashable, Codable, Sendable, CustomStringConvertible {
     case weakFairness(String)
     case strongFairness(String)

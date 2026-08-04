@@ -24,5 +24,6 @@ public enum Examples {
         ExampleDescription(name:"Elevator",spec:Elevator.spec,expectedStates:5,source:"internal",about:"An elevator moving between floors 1-5. Changes direction at ends."),
         ExampleDescription(name:"Traffic",spec:Traffic.spec,expectedStates:3,source:"internal",about:"A traffic light cycling green→yellow→red. Three states."),
         ExampleDescription(name:"Buffer",spec:Buffer.spec,expectedStates:2,source:"internal",about:"A single-slot buffer. Put when empty, Get when full."),
+        ExampleDescription(name:"FairClock",spec:FairClock.spec,expectedStates:12,source:"internal",about:"A clock that ticks 1-12 with liveness: hr leads to 12."),
     ]
 }

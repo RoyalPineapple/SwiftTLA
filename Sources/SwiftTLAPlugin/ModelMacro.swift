@@ -205,12 +205,35 @@ public struct ModelMacro: MemberMacro {
     private static func parseTemporal(_ body: CodeBlockItemListSyntax) -> TemporalExpr? {
         for stmt in body {
             guard case .expr(let e) = stmt.item else { continue }
-            let text = e.description.trimmingCharacters(in: .whitespaces)
-            if text.contains(".alwaysEventually") { return .alwaysEventually(.value(.bool(true))) }
-            if text.contains(".leadsTo") { return .leadsTo(.value(.bool(true)), .value(.bool(true))) }
-            if text.contains(".eventuallyAlways") { return .eventuallyAlways(.value(.bool(true))) }
-            if text.contains(".eventually") { return .eventually(.value(.bool(true))) }
-            if text.contains(".always") { return .always(.value(.bool(true))) }
+            if let temporal = extractTemporal(e) { return temporal }
+        }
+        return nil
+    }
+
+    private static func extractTemporal(_ e: ExprSyntax) -> TemporalExpr? {
+        if let call = e.as(FunctionCallExprSyntax.self),
+           let ma = call.calledExpression.as(MemberAccessExprSyntax.self) {
+            let method = ma.declName.baseName.text
+            let arg = call.arguments.first?.expression
+            let expr = arg.flatMap { parseStateExpr($0) }
+            switch method {
+            case "always": if let e = expr { return .always(e) }
+            case "eventually": if let e = expr { return .eventually(e) }
+            case "alwaysEventually": if let e = expr { return .alwaysEventually(e) }
+            case "eventuallyAlways": if let e = expr { return .eventuallyAlways(e) }
+            case "leadsTo":
+                if let base = ma.base.flatMap({ parseStateExpr($0) }), let target = expr {
+                    return .leadsTo(base, target)
+                }
+            default: break
+            }
+        }
+        if let call = e.as(FunctionCallExprSyntax.self) {
+            let text = call.calledExpression.description.trimmingCharacters(in: .whitespaces)
+            if text == "always", let arg = parseStateExpr(call.arguments.first?.expression) { return .always(arg) }
+            if text == "eventually", let arg = parseStateExpr(call.arguments.first?.expression) { return .eventually(arg) }
+            if text == "alwaysEventually", let arg = parseStateExpr(call.arguments.first?.expression) { return .alwaysEventually(arg) }
+            if text == "eventuallyAlways", let arg = parseStateExpr(call.arguments.first?.expression) { return .eventuallyAlways(arg) }
         }
         return nil
     }
@@ -218,14 +241,14 @@ public struct ModelMacro: MemberMacro {
     private static func parseFairness(_ body: CodeBlockItemListSyntax) -> FairnessCondition? {
         for stmt in body {
             guard case .expr(let e) = stmt.item else { continue }
-            let text = e.description.trimmingCharacters(in: .whitespaces)
-            if text.contains(".weakFairness") {
-                let name = text.components(separatedBy: "\"").dropFirst().first ?? "Act"
-                return .weakFairness(name)
-            }
-            if text.contains(".strongFairness") {
-                let name = text.components(separatedBy: "\"").dropFirst().first ?? "Act"
-                return .strongFairness(name)
+            if let call = e.as(FunctionCallExprSyntax.self),
+               let ma = call.calledExpression.as(MemberAccessExprSyntax.self) {
+                let method = ma.declName.baseName.text
+                if method == "weakFairness" || method == "strongFairness",
+                   let name = call.arguments.first?.expression.as(StringLiteralExprSyntax.self)?.segments.first,
+                   case .stringSegment(let seg) = name {
+                    return method == "weakFairness" ? .weakFairness(seg.content.text) : .strongFairness(seg.content.text)
+                }
             }
         }
         return nil
