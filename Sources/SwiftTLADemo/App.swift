@@ -70,19 +70,14 @@ struct CodePanel: View {
 
 func copy(_ text: String) { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(text, forType: .string) }
 func formatSwift(_ spec: TLASpec) -> String {
-    var lines: [String] = ["@TLA"]
-    lines.append("struct \(spec.name.replacingOccurrences(of: " ", with: "")) {")
-    for v in spec.variables {
-        if case .int(let n) = v.initial { lines.append("    var \(v.name) = Var<Int>(\"\(v.name)\", \(n))") }
-        else { lines.append("    var \(v.name) = Var<Int>(\"\(v.name)\", 0)") }
-    }
-    lines.append("")
+    var lines: [String] = ["TLASpec(\"\(spec.name)\") {"]
+    for v in spec.variables { lines.append("    Variable(Var<Int>(\"\(v.name)\"), \(v.initial))") }
     for a in spec.actions {
-        lines.append("    func \(a.name.lowercased())() {")
+        lines.append("    Action(\"\(a.name)\") {")
         for line in swiftExpr(a.body).split(separator: "\n") { lines.append("        \(line)") }
         lines.append("    }")
-        lines.append("")
     }
+    for i in spec.invariants { lines.append("    Invariant(\"\(i.name)\") { \(swiftState(i.body)) }") }
     lines.append("}")
     return lines.joined(separator: "\n")
 }
