@@ -1,13 +1,15 @@
-public struct TLARuntime {
+public struct TLARuntime: CustomStringConvertible {
     public private(set) var state: [String: TLAValue]
     public private(set) var history: [String]
     private let graph: StateGraph
     private let initialState: [String: TLAValue]
+    private let specName: String
 
     public init(spec: TLASpec) {
         let checker = ModelChecker(spec: spec)
         guard let g = try? checker.exploreGraph() else { fatalError("Could not explore graph") }
         self.graph = g
+        self.specName = spec.name
         self.initialState = spec.variables.reduce(into: [:]) { $0[$1.name] = $1.initial }
         self.state = initialState
         self.history = []
@@ -29,6 +31,14 @@ public struct TLARuntime {
     public mutating func reset() {
         state = initialState
         history = []
+    }
+
+    public var description: String {
+        var lines = ["TLARuntime(\(specName))"]
+        lines.append("  state: \(state.sorted(by: { $0.key < $1.key }).map { "\($0.key) = \($0.value)" }.joined(separator: ", "))")
+        lines.append("  available: [\(availableActions.joined(separator: ", "))]")
+        if !history.isEmpty { lines.append("  history: [\(history.joined(separator: " → "))]") }
+        return lines.joined(separator: "\n")
     }
 }
 
