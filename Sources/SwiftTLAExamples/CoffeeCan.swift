@@ -1,13 +1,24 @@
-@_spi(Internal) import SwiftTLA
+import SwiftTLA
+import SwiftTLAGeneration
+import SwiftTLAMacros
 
-public enum CoffeeCanSpec {
-    public static let black = Var<Int>("black")
-    public static let white = Var<Int>("white")
-    public static let maxBeans = 5
-    public static let spec = TLASpec("CoffeeCan") {
-        Variable(black, maxBeans); Variable(white, maxBeans)
-        Action("BB") { (black >= 2) && (black.prime == black - 1) && (white.prime == white) }
-        Action("WW") { (white >= 2) && (white.prime == white - 2) && (black.prime == black + 1) }
-        Action("BW") { (black >= 1) && (white >= 1) && (white.prime == white - 1) && (black.prime == black) }
+@TLAModel
+public struct CoffeeCan {
+    var black = Var(5)
+    var white = Var(5)
+
+    func bb() {
+        black.becomes(black - 1).when(black >= 2)
+        white.stays
+    }
+
+    func ww() {
+        white.becomes(white - 2).when(white >= 2)
+        black.becomes(black + 1)
+    }
+
+    func bw() {
+        white.becomes(white - 1).when(black >= 1 && white >= 1)
+        black.stays
     }
 }

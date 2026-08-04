@@ -69,17 +69,8 @@ public struct ModelMacro: MemberMacro {
                 }
             } else if let funcDecl = member.decl.as(FunctionDeclSyntax.self) {
                 let name = funcDecl.name.text
-                let returnsActionExpr = funcDecl.signature.returnClause?.type.description.trimmingCharacters(in: .whitespaces) == "ActionExpr"
-                if let body = funcDecl.body {
-                    let action = if returnsActionExpr {
-                        parseActionBody(body.statements)
-                    } else {
-                        parseBecomesBody(body.statements)
-                    }
-                    result.actions.append(NamedAction(name: name, body: action))
-                } else {
-                    result.actions.append(NamedAction(name: name, body: .guard_(.value(.bool(true)))))
-                }
+                let body = funcDecl.body.map { parseActionBody($0.statements) } ?? .guard_(.value(.bool(true)))
+                result.actions.append(NamedAction(name: name, body: body))
             }
         }
         return result
@@ -89,14 +80,15 @@ public struct ModelMacro: MemberMacro {
 
     // -> ActionExpr body: full expression language (||, &&, becomes, stays)
     private static func parseActionBody(_ s: CodeBlockItemListSyntax) -> ActionExpr {
-        for stmt in s {
+        let actions: [ActionExpr] = s.compactMap { stmt -> ActionExpr? in
             let expr: ExprSyntax? =
                 if case .expr(let e) = stmt.item { e }
                 else if case .stmt(let st) = stmt.item, let ret = st.as(ReturnStmtSyntax.self) { ret.expression }
                 else { nil }
-            if let e = expr, let parsed = parseAction(e) { return parsed }
+            return expr.flatMap { parseAction($0) }
         }
-        return .guard_(.value(.bool(true)))
+        if actions.isEmpty { return .guard_(.value(.bool(true))) }
+        return actions.dropFirst().reduce(actions[0]) { .and($0, $1) }
     }
 
     private static func parseAction(_ e: ExprSyntax) -> ActionExpr? {
@@ -122,15 +114,6 @@ public struct ModelMacro: MemberMacro {
         return nil
     }
 
-    // Void body: .becomes().when() chains only, AND-combined
-    private static func parseBecomesBody(_ s: CodeBlockItemListSyntax) -> ActionExpr {
-        let clauses: [ActionExpr] = s.compactMap { stmt in
-            guard case .expr(let e) = stmt.item, let call = e.as(FunctionCallExprSyntax.self) else { return nil }
-            return parseBecomesChain(call)
-        }
-        if clauses.isEmpty { return .guard_(.value(.bool(true))) }
-        return clauses.dropFirst().reduce(clauses[0]) { .and($0, $1) }
-    }
 
     private static func parseBecomesChain(_ call: FunctionCallExprSyntax) -> ActionExpr? {
         let chain = unwrapWhen(call)

@@ -1,20 +1,20 @@
-@_spi(Internal) import SwiftTLA
+import SwiftTLA
+import SwiftTLAGeneration
+import SwiftTLAMacros
 
-public enum MovingCatSpec {
-    public static let cat = Var<Int>("cat")
-    public static let observed = Var<Int>("observed")
-    public static let direction = Var<Int>("direction")
-    public static let N = 6
-    public static let spec = TLASpec("MovingCat") {
-        Variable(cat, 3); Variable(observed, 3); Variable(direction, 1)
-        Action("Move") {
-            let goRight: ActionExpr = (direction == 1) && (cat < N) && (cat.prime == cat + 1) && (direction.prime == direction) && (observed.prime == observed)
-            let goLeft: ActionExpr = (direction == 1) && (cat == N) && (cat.prime == cat - 1) && (direction.prime == -1) && (observed.prime == observed)
-            let contLeft: ActionExpr = (direction == -1) && (cat > 1) && (cat.prime == cat - 1) && (direction.prime == direction) && (observed.prime == observed)
-            let bounceRight: ActionExpr = (direction == -1) && (cat == 1) && (cat.prime == cat + 1) && (direction.prime == 1) && (observed.prime == observed)
-            let observe: ActionExpr = (cat == observed) && (observed.prime == observed + 1) && (cat.prime == cat) && (direction.prime == direction)
-            let observeWrap: ActionExpr = (cat == observed) && (observed == N) && (observed.prime == 1) && (cat.prime == cat) && (direction.prime == direction)
-            goRight || goLeft || contLeft || bounceRight || observe || observeWrap
-        }
+@TLAModel
+public struct MovingCat {
+    var cat = Var(3)
+    var observed = Var(3)
+    var direction = Var(1)
+    let N = 6
+
+    func move() {
+        (direction == 1) && (cat < N) && cat.becomes(cat + 1) && direction.stays && observed.stays ||
+        (direction == 1) && (cat == N) && cat.becomes(cat - 1) && direction.becomes(-1) && observed.stays ||
+        (direction == -1) && (cat > 1) && cat.becomes(cat - 1) && direction.stays && observed.stays ||
+        (direction == -1) && (cat == 1) && cat.becomes(cat + 1) && direction.becomes(1) && observed.stays ||
+        (cat == observed) && observed.becomes(observed + 1) && cat.stays && direction.stays ||
+        (cat == observed) && (observed == N) && observed.becomes(1) && cat.stays && direction.stays
     }
 }

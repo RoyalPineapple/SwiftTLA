@@ -1,13 +1,15 @@
-@_spi(Internal) import SwiftTLA
+import SwiftTLA
+import SwiftTLAGeneration
+import SwiftTLAMacros
 
-public enum HourClockSpec {
-    public static let hr = Var<Int>("hr")
-    public static let spec = TLASpec("HourClock") {
-        Variable(hr, 1)
-        Action("Tick") {
-            let inc: ActionExpr = (hr >= 1) && (hr <= 11) && (hr.prime == hr + 1)
-            let wrap: ActionExpr = (hr == 12) && (hr.prime == 1)
-            inc || wrap
-        }
+@TLAModel
+public struct HourClock {
+    var hr = Var(1)
+
+    func tick() {
+        (hr < 12) && hr.becomes(hr + 1) ||
+        (hr == 12) && hr.becomes(1)
     }
+
+    var validHours: StateExpr { hr >= 1 && hr <= 12 }
 }

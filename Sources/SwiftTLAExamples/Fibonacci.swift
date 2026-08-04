@@ -1,8 +1,16 @@
-@_spi(Internal) import SwiftTLA
-public enum FibSpec {
-    public static let a = Var<Int>("a"); public static let b = Var<Int>("b"); public static let n = Var<Int>("n")
-    public static let spec = TLASpec("Fib") {
-        Variable(a, 0); Variable(b, 1); Variable(n, 0)
-        Action("Step") { (n < 5) && (a.prime == b) && (b.prime == a + b) && (n.prime == n + 1) }
+import SwiftTLA
+import SwiftTLAGeneration
+import SwiftTLAMacros
+
+@TLAModel
+public struct Fibonacci {
+    var a = Var(0)
+    var b = Var(1)
+    var n = Var(0)
+
+    func step() {
+        a.becomes(b).when(n < 5)
+        b.becomes(a + b).when(n < 5)
+        n.becomes(n + 1).when(n < 5)
     }
 }

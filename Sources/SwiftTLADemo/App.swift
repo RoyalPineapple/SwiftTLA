@@ -88,13 +88,13 @@ struct CoffeeCanScreen: View { @State private var c=CoffeeCan(black:5,white:5)
 
 struct CatScreen: View { @State private var g:StateGraph?;@State private var id:StateGraph.StateID?;@State private var h:[String]=[]
     var body: some View { VStack(spacing:12) { if let g,let id,let s=g.states[id] { let cat=v(s["cat"]),obs=v(s["observed"]),dir=v(s["direction"]); HStack(spacing:4){ForEach(1...6,id:\.self){i in VStack{ZStack{RoundedRectangle(cornerRadius:4).fill(i<=obs ? .green.opacity(0.3):.gray.opacity(0.1)).frame(width:40,height:40);if i==cat{Text("🐱").font(.title2)}};Text("\(i)").font(.caption2)}}}; Text(dir==1 ? "→ right" : "← left").foregroundStyle(.secondary); ForEach(g.transitions[id] ?? [],id:\.action){t in Button(t.action){self.id=t.target;h.append(t.action)}.buttonStyle(.bordered)}; if !h.isEmpty{Text(h.joined(separator:" → ")).font(.caption).foregroundStyle(.secondary)} }; Button("Reset"){load()}.buttonStyle(.bordered); Text("24 states verified").font(.caption).foregroundStyle(.secondary) }.padding().onAppear{load()} }
-    func load(){if let g=try? ModelChecker(spec:MovingCatSpec.spec,maxStates:100).exploreGraph(){self.g=g;id=g.states.keys.min(by:{$0.id<$1.id});h=[]}}
+    func load(){if let g=try? ModelChecker(spec:MovingCat.spec,maxStates:100).exploreGraph(){self.g=g;id=g.states.keys.min(by:{$0.id<$1.id});h=[]}}
     func v(_ x:TLAValue?)->Int{if case .int(let n)=(x ?? .int(0)){return n};return 0}
 }
 
 struct MajorityScreen: View { @State private var g:StateGraph?;@State private var id:StateGraph.StateID?;@State private var h:[String]=[]
     var body: some View { VStack(spacing:12) { if let g,let id,let s=g.states[id] { let c=v(s["candidate"]),cnt=v(s["count"]),idx=v(s["index"]); Text("Candidate \(c) leads with \(cnt)").font(.title2); ProgressView(value:Double(idx),total:4).padding(.horizontal); Text(idx==4 ? "✓ Winner: \(c)" : "Scanning \(idx)/4").foregroundStyle(idx==4 ? .green:.secondary); ForEach(g.transitions[id] ?? [],id:\.action){t in Button(t.action){self.id=t.target;h.append(t.action)}.buttonStyle(.bordered)} }; Button("Reset"){load()}.buttonStyle(.bordered) }.padding().onAppear{load()} }
-    func load(){if let g=try? ModelChecker(spec:MajorSpec.spec,maxStates:200).exploreGraph(){self.g=g;id=g.states.keys.min(by:{$0.id<$1.id});h=[]}}
+    func load(){if let g=try? ModelChecker(spec:Majority.spec,maxStates:200).exploreGraph(){self.g=g;id=g.states.keys.min(by:{$0.id<$1.id});h=[]}}
     func v(_ x:TLAValue?)->Int{if case .int(let n)=(x ?? .int(0)){return n};return 0}
 }
 

@@ -1,21 +1,24 @@
-@_spi(Internal) import SwiftTLA
+import SwiftTLA
+import SwiftTLAGeneration
+import SwiftTLAMacros
 
-public enum DieHardSpec {
-    public static let jug3 = Var<Int>("jug3")
-    public static let jug5 = Var<Int>("jug5")
-    public static let spec = TLASpec("DieHard") {
-        Variable(jug3, 0); Variable(jug5, 0)
-        Action("Fill3") { jug3.prime == 3 }; Action("Fill5") { jug5.prime == 5 }
-        Action("Empty3") { jug3.prime == 0 }; Action("Empty5") { jug5.prime == 0 }
-        Action("Pour3to5") {
-            let pour: ActionExpr = (jug3 + jug5 <= 5) && (jug5.prime == jug3 + jug5) && (jug3.prime == 0)
-            let spill: ActionExpr = (!(jug3 + jug5 <= 5)) && (jug5.prime == 5) && (jug3.prime == jug3 - (5 - jug5))
-            pour || spill
-        }
-        Action("Pour5to3") {
-            let pour: ActionExpr = (jug3 + jug5 <= 3) && (jug3.prime == jug3 + jug5) && (jug5.prime == 0)
-            let spill: ActionExpr = (!(jug3 + jug5 <= 3)) && (jug3.prime == 3) && (jug5.prime == jug5 - (3 - jug3))
-            pour || spill
-        }
+@TLAModel
+public struct DieHard {
+    var jug3 = Var(0)
+    var jug5 = Var(0)
+
+    func fill3()   { jug3.becomes(3) }
+    func fill5()   { jug5.becomes(5) }
+    func empty3()  { jug3.becomes(0) }
+    func empty5()  { jug5.becomes(0) }
+
+    func pour3to5() {
+        (jug3 + jug5 <= 5) && jug5.becomes(jug3 + jug5) && jug3.becomes(0) ||
+        (!(jug3 + jug5 <= 5)) && jug5.becomes(5) && jug3.becomes(jug3 - (5 - jug5))
+    }
+
+    func pour5to3() {
+        (jug3 + jug5 <= 3) && jug3.becomes(jug3 + jug5) && jug5.becomes(0) ||
+        (!(jug3 + jug5 <= 3)) && jug3.becomes(3) && jug5.becomes(jug5 - (3 - jug3))
     }
 }
