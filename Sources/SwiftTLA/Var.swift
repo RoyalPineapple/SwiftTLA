@@ -18,6 +18,13 @@ public struct Var<T: TLAValueType>: Hashable, Codable, Sendable, CustomStringCon
     public var stays: ActionExpr { .unchanged(name) }
 }
 
+extension ActionExpr {
+    @discardableResult
+    public func when(_ condition: some StateExprConvertible) -> ActionExpr {
+        .and(.guard_(condition.stateExpr), self)
+    }
+}
+
 extension Dictionary where Key == String, Value == TLAValue {
     public subscript<T: TLAValueType>(_ variable: Var<T>) -> TLAValue? {
         get { self[variable.name] }
