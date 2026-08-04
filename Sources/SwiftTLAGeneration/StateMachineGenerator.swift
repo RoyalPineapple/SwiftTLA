@@ -113,7 +113,7 @@ public struct StateMachineGenerator {
             return "case (" + values + "): " + body
         }.joined(separator: "\n")
         let switchBody = "switch (" + pattern + ") {\n" + cases + "\ndefault: return []\n}"
-        return DeclSyntax(stringLiteral: "public var transitions: [StateGraph.Transition] { " + switchBody + " }")
+        return DeclSyntax(stringLiteral: "public var transitions: [(action: Action, target: Self)] { " + switchBody + " }")
     }
 
     // MARK: - Apply
