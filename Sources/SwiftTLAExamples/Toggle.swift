@@ -1,4 +1,4 @@
-import SwiftTLA
+@_spi(Internal) import SwiftTLA
 
 public enum ToggleSpec {
     public static let x = Var<Int>("x")

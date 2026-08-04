@@ -1,5 +1,5 @@
 import XCTest
-import SwiftTLA
+@_spi(Internal) import SwiftTLA
 
 private extension StateExpr {
     static func int(_ v: Int) -> StateExpr { .value(.int(v)) }

@@ -1,4 +1,4 @@
-import SwiftTLA
+@_spi(Internal) import SwiftTLA
 public enum PingPongSpec {
     public static let state = Var<Int>("state")
     public static let spec = TLASpec("PingPong") {

@@ -1,5 +1,5 @@
 import XCTest
-import SwiftTLA
+@_spi(Internal) import SwiftTLA
 
 final class CompositionTests: XCTestCase {
     func testExtendsMergesSpecs() throws {

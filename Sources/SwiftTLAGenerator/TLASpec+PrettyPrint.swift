@@ -25,7 +25,16 @@ extension TLASpec {
                     funcDecl
                 }
                 for i in invariants {
-                    DeclSyntax(stringLiteral: "    var \(i.name.lowercased()): StateExpr { \(StateExprSyntax(from: i.body)) }")
+                    VariableDeclSyntax(
+                        .let,
+                        name: PatternSyntax(stringLiteral: i.name.lowercased()),
+                        type: TypeAnnotationSyntax(
+                            type: IdentifierTypeSyntax(name: TokenSyntax(stringLiteral: "StateExpr"))
+                        ),
+                        initializer: InitializerClauseSyntax(
+                            value: ExprSyntax(stringLiteral: StateExprSyntax(from: i.body).description)
+                        )
+                    )
                 }
             }
         )
@@ -57,7 +66,7 @@ extension TLASpec {
 
 private func swiftVarDecl(_ v: NamedVar) -> DeclSyntax {
     let initVal = initValueString(v.initial)
-    return DeclSyntax(stringLiteral: "var \(v.name) = Var(\"\(v.name)\", \(initVal))")
+    return DeclSyntax(stringLiteral: "var \(v.name) = Var(\(initVal))")
 }
 
 private func initValueString(_ value: TLAValue) -> String {
@@ -66,26 +75,40 @@ private func initValueString(_ value: TLAValue) -> String {
 }
 
 private func swiftActionBody(_ a: NamedAction) -> CodeBlockSyntax {
-    let rendered = actionExprString(a.body)
-    return CodeBlockSyntax(statements: CodeBlockItemListSyntax {
-        CodeBlockItemSyntax(item: .expr(ExprSyntax(stringLiteral: rendered)))
-    })
+    let lines = renderActionExpr(a.body)
+    let stmts = lines.map { CodeBlockItemSyntax(item: .expr(ExprSyntax(stringLiteral: $0))) }
+    return CodeBlockSyntax(statements: CodeBlockItemListSyntax(stmts))
 }
 
-private func actionExprString(_ e: ActionExpr) -> String {
+private func renderActionExpr(_ e: ActionExpr) -> [String] {
     switch e {
     case .or(let a, let b):
-        let lhs = actionExprString(a)
-        let rhs = actionExprString(b)
-        return "\(lhs)\n        || \(rhs)"
-    case .and(let a, let b):
-        let lhs = actionExprString(a)
-        let rhs = actionExprString(b)
-        return "\(lhs) && \(rhs)"
-    case .guard_(let c):
-        return "(\(StateExprSyntax(from: c)))"
+        return renderActionExpr(a) + renderActionExpr(b)
+    case .and(_, _):
+        return [renderAndChain(e)]
     case .assign(let vn, let rhs):
-        return "\(vn).next == \(StateExprSyntax(from: rhs))"
+        return ["\(vn).becomes(\(StateExprSyntax(from: rhs)))"]
+    case .unchanged(let vn):
+        return ["\(vn).stays"]
+    default:
+        return [e.description]
+    }
+}
+
+private func renderAndChain(_ e: ActionExpr) -> String {
+    switch e {
+    case .and(let a, let b):
+        if case .guard_(let cond) = a, case .assign(let vn, let rhs) = b {
+            return "\(vn).becomes(\(StateExprSyntax(from: rhs))).when(\(StateExprSyntax(from: cond)))"
+        }
+        if case .and(let innerA, let innerB) = a, case .guard_(let cond) = innerA, case .assign(let vn, let rhs) = innerB, case .assign(let vn2, let rhs2) = b {
+            return "\(vn).becomes(\(StateExprSyntax(from: rhs))).when(\(StateExprSyntax(from: cond)))\n\(vn2).becomes(\(StateExprSyntax(from: rhs2)))"
+        }
+        return "\(renderAndChain(a)) && \(renderAndChain(b))"
+    case .guard_(let cond):
+        return "/* guard: \(StateExprSyntax(from: cond)) */"
+    case .assign(let vn, let rhs):
+        return "\(vn).becomes(\(StateExprSyntax(from: rhs)))"
     case .unchanged(let vn):
         return "\(vn).stays"
     default:
@@ -120,6 +143,8 @@ private struct StateExprSyntax: CustomStringConvertible {
         case .functionApply(let f, let a): return "\(StateExprSyntax(from: f)).applying(\(StateExprSyntax(from: a)))"
         case .ifThenElse(let c, let t, let f): return "if \(StateExprSyntax(from: c)) { \(StateExprSyntax(from: t)) } else { \(StateExprSyntax(from: f)) }"
         case .modulo(let a, let b): return "\(StateExprSyntax(from: a)) % \(StateExprSyntax(from: b))"
+        case .and(let a, let b): return "\(StateExprSyntax(from: a)) && \(StateExprSyntax(from: b))"
+        case .or(let a, let b): return "\(StateExprSyntax(from: a)) || \(StateExprSyntax(from: b))"
         case .notEqual(let a, let b): return "\(StateExprSyntax(from: a)) != \(StateExprSyntax(from: b))"
         case .integerDivide(let a, let b): return "\(StateExprSyntax(from: a)) / \(StateExprSyntax(from: b))"
         default: return expr.description

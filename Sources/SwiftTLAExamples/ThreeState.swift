@@ -1,4 +1,4 @@
-import SwiftTLA
+@_spi(Internal) import SwiftTLA
 
 public enum ThreeStateSpec {
     public static let s = Var<Int>("state")

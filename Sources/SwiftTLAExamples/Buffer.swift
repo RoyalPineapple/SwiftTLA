@@ -1,4 +1,4 @@
-import SwiftTLA
+@_spi(Internal) import SwiftTLA
 public enum BufferSpec {
     public static let buf = Var<Int>("buf")
     public static let spec = TLASpec("Buffer") {

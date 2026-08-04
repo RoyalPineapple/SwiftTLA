@@ -1,4 +1,4 @@
-import SwiftTLA
+@_spi(Internal) import SwiftTLA
 
 public enum MovingCatSpec {
     public static let cat = Var<Int>("cat")

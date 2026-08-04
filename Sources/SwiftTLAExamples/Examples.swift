@@ -1,4 +1,4 @@
-import SwiftTLA
+@_spi(Internal) import SwiftTLA
 
 public struct ExampleDescription: Hashable, Identifiable {
     public var id: String { name }

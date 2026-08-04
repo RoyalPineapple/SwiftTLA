@@ -1,4 +1,4 @@
-import SwiftTLA
+@_spi(Internal) import SwiftTLA
 
 public enum MajorSpec {
     public static let candidate = Var<Int>("candidate")

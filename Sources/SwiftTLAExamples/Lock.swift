@@ -1,4 +1,4 @@
-import SwiftTLA
+@_spi(Internal) import SwiftTLA
 public enum LockSpec {
     public static let lock = Var<Int>("lock")
     public static let spec = TLASpec("Lock") {

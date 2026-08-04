@@ -1,4 +1,4 @@
-import SwiftTLA
+@_spi(Internal) import SwiftTLA
 public enum FibSpec {
     public static let a = Var<Int>("a"); public static let b = Var<Int>("b"); public static let n = Var<Int>("n")
     public static let spec = TLASpec("Fib") {

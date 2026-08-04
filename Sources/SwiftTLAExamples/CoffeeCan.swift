@@ -1,4 +1,4 @@
-import SwiftTLA
+@_spi(Internal) import SwiftTLA
 
 public enum CoffeeCanSpec {
     public static let black = Var<Int>("black")

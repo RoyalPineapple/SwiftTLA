@@ -1,4 +1,4 @@
-import SwiftTLA
+@_spi(Internal) import SwiftTLA
 public enum ElevatorSpec {
     public static let floor = Var<Int>("floor"); public static let dir = Var<Int>("dir")
     public static let spec = TLASpec("Elevator") {

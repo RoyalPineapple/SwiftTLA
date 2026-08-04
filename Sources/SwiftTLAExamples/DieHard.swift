@@ -1,4 +1,4 @@
-import SwiftTLA
+@_spi(Internal) import SwiftTLA
 
 public enum DieHardSpec {
     public static let jug3 = Var<Int>("jug3")

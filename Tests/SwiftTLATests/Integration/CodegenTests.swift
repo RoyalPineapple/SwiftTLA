@@ -1,6 +1,6 @@
 import XCTest
-import SwiftTLA
-import SwiftTLAGenerator
+@_spi(Internal) import SwiftTLA
+@_spi(Internal) import SwiftTLAGenerator
 
 final class CodegenTests: XCTestCase {
     func testStateMachineGeneration() throws {

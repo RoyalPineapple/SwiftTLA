@@ -1,4 +1,4 @@
-import SwiftTLA
+@_spi(Internal) import SwiftTLA
 
 public enum BoundedCounterSpec {
     public static let x = Var<Int>("x")

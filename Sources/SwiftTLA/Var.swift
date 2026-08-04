@@ -12,8 +12,9 @@ public struct Var<T: TLAValueType>: Hashable, Codable, Sendable, CustomStringCon
     public let name: String
     public init(_ name: String) { self.name = name }
     public init(_ name: String, _ value: T) { self.name = name }
+    public init(_ value: T) { self.name = "" }
     public var description: String { name }
-    public var next: PrimedVar<T> { PrimedVar(name: name) }
+    @_spi(Internal) public var next: PrimedVar<T> { PrimedVar(name: name) }
     public func becomes(_ expr: some StateExprConvertible) -> ActionExpr { .assign(name, expr.stateExpr) }
     public static func stays(_ v: Var) -> ActionExpr { .unchanged(v.name) }
     public var stays: ActionExpr { .unchanged(name) }
@@ -33,8 +34,8 @@ extension Dictionary where Key == String, Value == TLAValue {
     }
 }
 
-public struct PrimedVar<T: TLAValueType>: Sendable { public let name: String }
-public func next<T>(_ v: Var<T>) -> PrimedVar<T> { PrimedVar(name: v.name) }
+@_spi(Internal) public struct PrimedVar<T: TLAValueType>: Sendable { public let name: String }
+@_spi(Internal) public func next<T>(_ v: Var<T>) -> PrimedVar<T> { PrimedVar(name: v.name) }
 
 public protocol StateExprConvertible { var stateExpr: StateExpr { get } }
 extension StateExpr: StateExprConvertible { public var stateExpr: StateExpr { self } }
@@ -100,8 +101,8 @@ public func >= <L: StateExprConvertible, R: StateExprConvertible>(lhs: L, rhs: R
 
 // MARK: - Primed assignments
 
-public func == <T: TLAValueType, R: StateExprConvertible>(lhs: PrimedVar<T>, rhs: R) -> ActionExpr { .assign(lhs.name, rhs.stateExpr) }
-public func == <T: TLAValueType>(lhs: PrimedVar<T>, rhs: Var<T>) -> ActionExpr { .assign(lhs.name, .variable(rhs.name)) }
+@_spi(Internal) public func == <T: TLAValueType, R: StateExprConvertible>(lhs: PrimedVar<T>, rhs: R) -> ActionExpr { .assign(lhs.name, rhs.stateExpr) }
+@_spi(Internal) public func == <T: TLAValueType>(lhs: PrimedVar<T>, rhs: Var<T>) -> ActionExpr { .assign(lhs.name, .variable(rhs.name)) }
 
 // MARK: - Set operators
 

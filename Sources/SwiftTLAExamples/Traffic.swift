@@ -1,4 +1,4 @@
-import SwiftTLA
+@_spi(Internal) import SwiftTLA
 public enum TrafficSpec {
     public static let light = Var<Int>("light")
     public static let spec = TLASpec("Traffic") {

@@ -1,4 +1,4 @@
-import SwiftTLA
+@_spi(Internal) import SwiftTLA
 
 public enum HourClockSpec {
     public static let hr = Var<Int>("hr")
