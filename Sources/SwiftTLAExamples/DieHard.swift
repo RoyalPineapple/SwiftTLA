@@ -18,5 +18,4 @@ public enum DieHardSpec {
             pour || spill
         }
     }
-    public static let expectedStates = 16
 }

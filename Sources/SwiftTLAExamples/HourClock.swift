@@ -5,10 +5,9 @@ public enum HourClockSpec {
     public static let spec = TLASpec("HourClock") {
         Variable(hr, 1)
         Act("Tick") {
-            let increment: ActionExpr = (hr >= 1) && (hr <= 11) && (hr.next == hr + 1)
+            let inc: ActionExpr = (hr >= 1) && (hr <= 11) && (hr.next == hr + 1)
             let wrap: ActionExpr = (hr == 12) && (hr.next == 1)
-            increment || wrap
+            inc || wrap
         }
     }
-    public static let expectedStates = 12
 }

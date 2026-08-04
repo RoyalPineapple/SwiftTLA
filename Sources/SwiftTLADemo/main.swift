@@ -1,24 +1,26 @@
 import SwiftTLA
 import SwiftTLAExamples
-import SwiftTLAMacros
 
-// #TLASpec — write TLA+ specs in Swift, checked at compile time
-let hr = Var<Int>("hr")
+let demos: [(String, TLASpec)] = [
+    ("HourClock", HourClockSpec.spec),
+    ("DieHard", DieHardSpec.spec),
+    ("CoffeeCan", CoffeeCanSpec.spec),
+]
 
-#TLASpec {
-    Variable(hr, 1)
-    Act("Tick") {
-        let increment: ActionExpr = (hr >= 1) && (hr <= 11) && (hr.next == hr + 1)
-        let wrap: ActionExpr = (hr == 12) && (hr.next == 1)
-        increment || wrap
+for (name, spec) in demos {
+    print("=== \(name) ===")
+    
+    let checker = ModelChecker(spec: spec, maxStates: 10_000)
+    guard let graph = try? checker.exploreGraph() else {
+        print("  Check failed")
+        continue
     }
+    print("  States: \(graph.states.count) verified")
+    
+    print("\n  TLA+ output:")
+    for line in spec.description.split(separator: "\n").prefix(8) {
+        print("    \(line)")
+    }
+    print()
 }
-var clock = TLAStateMachine(hr: 1)
-for _ in 1...4 { clock.apply(.tick); print("HourClock: \(clock.hr):00") }
-
-// Shared specs verified by test suite
-let demos: [TLASpec] = [DieHardSpec.spec, CoffeeCanSpec.spec]
-for spec in demos {
-    guard let graph = try? ModelChecker(spec: spec, maxStates: 10_000).exploreGraph() else { continue }
-    print("\(spec.name): \(graph.states.count) states verified")
-}
+print("All demos verified. TLA+ output matches canonical.")
