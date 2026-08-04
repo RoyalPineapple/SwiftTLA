@@ -15,6 +15,7 @@ extension TLASpec {
                 for a in actions {
                     let body = swiftActionBody(a)
                     let funcDecl = FunctionDeclSyntax(
+                        leadingTrivia: Trivia.newline,
                         name: TokenSyntax(stringLiteral: a.name.lowercased()),
                         signature: FunctionSignatureSyntax(parameterClause: FunctionParameterClauseSyntax(parameters: [])),
                         body: CodeBlockSyntax(statements: CodeBlockItemListSyntax {
@@ -65,25 +66,30 @@ private func initValueString(_ value: TLAValue) -> String {
 }
 
 private func swiftActionBody(_ a: NamedAction) -> CodeBlockSyntax {
-    let clauses = flattenAndExpr(a.body)
-    var stmts: [CodeBlockItemSyntax] = []
-    for c in clauses {
-        switch c {
-        case .assign(let vn, let rhs):
-            stmts.append(CodeBlockItemSyntax(item: .expr(ExprSyntax(stringLiteral: "\(vn).becomes(\(StateExprSyntax(from: rhs)))"))))
-        case .unchanged(let vn):
-            stmts.append(CodeBlockItemSyntax(item: .expr(ExprSyntax(stringLiteral: "\(vn).stays"))))
-        default:
-            stmts.append(CodeBlockItemSyntax(item: .expr(ExprSyntax(stringLiteral: "/* \(c) */"))))
-        }
-    }
-    return CodeBlockSyntax(statements: CodeBlockItemListSyntax(stmts))
+    let rendered = actionExprString(a.body)
+    return CodeBlockSyntax(statements: CodeBlockItemListSyntax {
+        CodeBlockItemSyntax(item: .expr(ExprSyntax(stringLiteral: rendered)))
+    })
 }
 
-private func flattenAndExpr(_ e: ActionExpr) -> [ActionExpr] {
+private func actionExprString(_ e: ActionExpr) -> String {
     switch e {
-    case .and(let a, let b): return flattenAndExpr(a) + flattenAndExpr(b)
-    default: return [e]
+    case .or(let a, let b):
+        let lhs = actionExprString(a)
+        let rhs = actionExprString(b)
+        return "\(lhs)\n        || \(rhs)"
+    case .and(let a, let b):
+        let lhs = actionExprString(a)
+        let rhs = actionExprString(b)
+        return "\(lhs) && \(rhs)"
+    case .guard_(let c):
+        return "(\(StateExprSyntax(from: c)))"
+    case .assign(let vn, let rhs):
+        return "\(vn).next == \(StateExprSyntax(from: rhs))"
+    case .unchanged(let vn):
+        return "\(vn).stays"
+    default:
+        return e.description
     }
 }
 
