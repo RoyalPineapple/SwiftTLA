@@ -87,8 +87,8 @@ func swiftExpr(_ e: ActionExpr) -> String {
     case .assign(let v, let rhs): return "\(v).becomes(\(swiftState(rhs)))"
     case .unchanged(let v): return "\(v).stays"
     case .guard_(let s): return "guard: \(swiftState(s))"
-    case .and(let a, let b): return "\(swiftExpr(a)), \(swiftExpr(b))"
-    case .or(let a, let b): return "\(swiftExpr(a)) | \(swiftExpr(b))"
+    case .and(let a, let b): return "\(swiftExpr(a))\n    && \(swiftExpr(b))"
+    case .or(let a, let b): return "\(swiftExpr(a))\n    || \(swiftExpr(b))"
     case .chooseAction(let v, let s): return "chooseAction(\"\(v)\", from: \(swiftState(s)))"
     }
 }
@@ -119,8 +119,8 @@ func swiftState(_ e: StateExpr) -> String {
     case .modulo(let a, let b): return "\(swiftState(a)) % \(swiftState(b))"
     case .notEqual(let a, let b): return "\(swiftState(a)) != \(swiftState(b))"
     case .integerDivide(let a, let b): return "\(swiftState(a)) / \(swiftState(b))"
-    case .and(let a, let b): return "\(swiftState(a)) && \(swiftState(b))"
-    case .or(let a, let b): return "\(swiftState(a)) || \(swiftState(b))"
+    case .and(let a, let b): return "\(swiftState(a))\n    && \(swiftState(b))"
+    case .or(let a, let b): return "\(swiftState(a))\n    || \(swiftState(b))"
     default: return e.description
     }
 }
