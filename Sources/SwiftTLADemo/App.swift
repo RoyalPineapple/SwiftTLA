@@ -54,13 +54,16 @@ struct CodePanel: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack { Text(title).font(.caption).foregroundStyle(.secondary); Spacer() }.padding(.horizontal, 8)
-            ScrollView { Text(text).font(.system(size: 10, design: .monospaced)).padding(8).textSelection(.enabled) }
-                .background(.quaternary).cornerRadius(4)
-                .overlay(alignment: .topTrailing) {
-                    Button(action: { copy(text) }) { Image(systemName: "doc.on.doc").font(.caption2).padding(6) }
-                        .buttonStyle(.plain).background(.regularMaterial).cornerRadius(4).padding(4)
-                }
-        }.frame(maxWidth: .infinity).frame(minWidth: 480)
+            ScrollView(.horizontal) {
+                Text(text).font(.system(size: 10, design: .monospaced)).padding(8).textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .background(.quaternary).cornerRadius(4)
+            .overlay(alignment: .topTrailing) {
+                Button(action: { copy(text) }) { Image(systemName: "doc.on.doc").font(.caption2).padding(6) }
+                    .buttonStyle(.plain).background(.regularMaterial).cornerRadius(4).padding(4)
+            }
+        }.frame(maxWidth: .infinity)
     }
 }
 
@@ -82,9 +85,9 @@ func swiftExpr(_ e: ActionExpr) -> String {
     switch e {
     case .assign(let v, let rhs): return "\(v).becomes(\(swiftState(rhs)))"
     case .unchanged(let v): return "\(v).stays"
-    case .guard_(let s): return swiftState(s)
-    case .and(let a, let b): return "\(swiftExpr(a))\n    \(swiftExpr(b))"
-    case .or(let a, let b): return "\(swiftExpr(a))\n    \(swiftExpr(b))"
+    case .guard_(let s): return "guard: \(swiftState(s))"
+    case .and(let a, let b): return "\(swiftExpr(a)), \(swiftExpr(b))"
+    case .or(let a, let b): return "\(swiftExpr(a)) | \(swiftExpr(b))"
     case .chooseAction(let v, let s): return "chooseAction(\"\(v)\", from: \(swiftState(s)))"
     }
 }
