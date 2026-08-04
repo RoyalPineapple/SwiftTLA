@@ -121,7 +121,7 @@ public struct VarDecl: SpecComponent {
     public init(_ name: String, _ initial: TLAValue) { self.name = name; self.initial = initial }
 }
 
-public struct ActDecl: SpecComponent {
+public struct ActionDecl: SpecComponent {
     public let name: String
     public let body: ActionExpr
     public init(_ name: String, _ body: ActionExpr) { self.name = name; self.body = body }
@@ -154,7 +154,7 @@ public struct ConstantDecl: SpecComponent {
 public enum SpecBuilder {
     public static func buildBlock(_ components: [SpecComponent]...) -> [SpecComponent] { components.flatMap { $0 } }
     public static func buildExpression(_ expr: VarDecl) -> [SpecComponent] { [expr] }
-    public static func buildExpression(_ expr: ActDecl) -> [SpecComponent] { [expr] }
+    public static func buildExpression(_ expr: ActionDecl) -> [SpecComponent] { [expr] }
     public static func buildExpression(_ expr: InvDecl) -> [SpecComponent] { [expr] }
     public static func buildExpression(_ expr: TemporalDecl) -> [SpecComponent] { [expr] }
     public static func buildExpression(_ expr: FairnessDecl) -> [SpecComponent] { [expr] }
@@ -197,8 +197,8 @@ public func Variable<T>(_ ref: Var<T>, _ initial: some TLAValueConvertible) -> V
 }
 
 @discardableResult
-public func Act(_ name: String, @ActionBuilder _ body: () -> ActionExpr) -> ActDecl {
-    ActDecl(name, body())
+public func Action(_ name: String, @ActionBuilder _ body: () -> ActionExpr) -> ActionDecl {
+    ActionDecl(name, body())
 }
 
 public func Invariant(_ name: String, @InvariantBuilder _ body: () -> StateExpr) -> InvDecl {
@@ -292,7 +292,7 @@ extension TLASpec {
 
         for comp in components {
             if let v = comp as? VarDecl { variables.append(NamedVar(name: v.name, initial: v.initial)) }
-            else if let a = comp as? ActDecl { actions.append(NamedAction(name: a.name, body: a.body)) }
+            else if let a = comp as? ActionDecl { actions.append(NamedAction(name: a.name, body: a.body)) }
             else if let i = comp as? InvDecl { invariants.append(NamedInvariant(name: i.name, body: i.body)) }
             else if let t = comp as? TemporalDecl { temporalProperties.append(NamedTemporal(name: t.name, expr: t.expr)) }
             else if let f = comp as? FairnessDecl { fairness.append(f.condition) }

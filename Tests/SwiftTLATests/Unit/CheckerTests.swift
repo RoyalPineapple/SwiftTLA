@@ -6,8 +6,8 @@ final class CheckerTests: XCTestCase {
         let x = Var<Int>("x")
         let spec = TLASpec("Counter") {
             Variable(x, 0)
-            Act("Inc") { x.next == x + 1 }
-            Act("Dec") { x.next == x - 1 }
+            Action("Inc") { x.next == x + 1 }
+            Action("Dec") { x.next == x - 1 }
             Invariant("NeverNegative") { !(x < 0) }
         }
         let result = try ModelChecker(spec: spec).check()
@@ -21,7 +21,7 @@ final class CheckerTests: XCTestCase {
         let x = Var<Int>("x")
         let spec = TLASpec("Counter") {
             Variable(x, 0)
-            Act("Inc") { x.next == x + 1 }
+            Action("Inc") { x.next == x + 1 }
             Invariant("NonNeg") { x >= 0 }
         }
         let checker = ModelChecker(spec: spec, maxStates: 100)
@@ -35,7 +35,7 @@ final class CheckerTests: XCTestCase {
         let x = Var<Int>("x")
         let spec = TLASpec("Test") {
             Variable(x, 0)
-            Act("Inc") { x.next == x + 1 }
+            Action("Inc") { x.next == x + 1 }
             Invariant("NonNeg") { x >= 0 }
         }
         XCTAssertEqual(spec.invariants.count, 1)
@@ -45,7 +45,7 @@ final class CheckerTests: XCTestCase {
         let x = Var<Int>("x")
         let spec = TLASpec("EnabledTest") {
             Variable(x, 0)
-            Act("CanInc") { (x < 3) && (x.next == x + 1) }
+            Action("CanInc") { (x < 3) && (x.next == x + 1) }
             Invariant("IncUntil3") { (x < 3) == enabled("CanInc") }
         }
         let result = try ModelChecker(spec: spec, maxStates: 10).check()
@@ -56,7 +56,7 @@ final class CheckerTests: XCTestCase {
         let spec = TLASpec("Param") {
             Variable(Var<Int>("x"), TLAValue.constant("Limit"))
             Constant("Limit", 2)
-            Act("Tick") { next(Var<Int>("x")) == Var<Int>("x") + 1 }
+            Action("Tick") { next(Var<Int>("x")) == Var<Int>("x") + 1 }
             Invariant("Below3") { Var<Int>("x") <= 2 }
         }
         let result = try ModelChecker(spec: spec, maxStates: 10).check()

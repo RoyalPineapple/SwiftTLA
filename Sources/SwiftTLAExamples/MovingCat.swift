@@ -7,7 +7,7 @@ public enum MovingCatSpec {
     public static let N = 6
     public static let spec = TLASpec("MovingCat") {
         Variable(cat, 3); Variable(observed, 3); Variable(direction, 1)
-        Act("Move") {
+        Action("Move") {
             let goRight: ActionExpr = (direction == 1) && (cat < N) && (cat.next == cat + 1) && (direction.next == direction) && (observed.next == observed)
             let goLeft: ActionExpr = (direction == 1) && (cat == N) && (cat.next == cat - 1) && (direction.next == -1) && (observed.next == observed)
             let contLeft: ActionExpr = (direction == -1) && (cat > 1) && (cat.next == cat - 1) && (direction.next == direction) && (observed.next == observed)

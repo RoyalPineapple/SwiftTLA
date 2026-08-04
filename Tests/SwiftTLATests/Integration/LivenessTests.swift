@@ -6,7 +6,7 @@ final class LivenessTests: XCTestCase {
         let hr = Var<Int>("hr")
         let spec = TLASpec("Clock") {
             Variable(hr, 0)
-            Act("Tick") {
+            Action("Tick") {
                 let inc: ActionExpr = (hr < 5) && (hr.next == hr + 1)
                 let wrap: ActionExpr = (hr == 5) && (hr.next == 0)
                 inc || wrap
@@ -22,7 +22,7 @@ final class LivenessTests: XCTestCase {
         let x = Var<Int>("x")
         let spec = TLASpec("Stuck") {
             Variable(x, 0)
-            Act("Inc") { (x < 3) && (x.next == x + 1) }
+            Action("Inc") { (x < 3) && (x.next == x + 1) }
             Temporal("AlwaysEventually4", .alwaysEventually(x == 4))
         }
         let graph = try ModelChecker(spec: spec, maxStates: 10).exploreGraph()
@@ -34,7 +34,7 @@ final class LivenessTests: XCTestCase {
         let x = Var<Int>("x")
         let spec = TLASpec("LeadsTo") {
             Variable(x, 0)
-            Act("Inc") { (x < 5) && (x.next == x + 1) }
+            Action("Inc") { (x < 5) && (x.next == x + 1) }
             Temporal("FiveLeadsToTwo", .leadsTo(x == 5, x == 2))
         }
         let graph = try ModelChecker(spec: spec, maxStates: 10).exploreGraph()
@@ -46,8 +46,8 @@ final class LivenessTests: XCTestCase {
         let x = Var<Int>("x")
         let spec = TLASpec("FairClock") {
             Variable(x, 0)
-            Act("Tick") { (x < 3) && (x.next == x + 1) }
-            Act("Stutter") { x.next == x }
+            Action("Tick") { (x < 3) && (x.next == x + 1) }
+            Action("Stutter") { x.next == x }
             Temporal("AlwaysEventually3", .alwaysEventually(x == 3))
             WeakFairness("Tick")
         }
