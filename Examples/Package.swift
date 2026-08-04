@@ -17,10 +17,5 @@ let package = Package(
             ],
             path: "."
         ),
-        .executableTarget(
-            name: "ExamplesApp",
-            dependencies: ["Examples"],
-            path: "Sources/ExamplesApp"
-        ),
     ]
 )
