@@ -8,17 +8,32 @@ public typealias TLASet = TLASetType
 public typealias TLATuple = TLATupleType
 public typealias TLARecord = TLARecordType
 
+/// A typed TLA+ variable. Holds a name and typed initial value.
+/// Used in `@TLAModel` spec bodies and builder DSL closures.
+///
+/// ```swift
+/// let isLocked = Var(0)          // Var<Int>, name inferred from binding
+/// let isLocked = Var("isLocked") // explicit name
+/// ```
 public struct Var<T: TLAValueType>: Hashable, Codable, Sendable, CustomStringConvertible {
     public let name: String
+    /// Creates a variable with an explicit TLA+ name.
     public init(_ name: String) { self.name = name }
+    /// Creates a variable with a name and typed initial value.
     public init(_ name: String, _ value: T) { self.name = name }
+    /// Creates a variable from an initial value. The TLA+ name comes from
+    /// the `let` binding name, read by the `@TLAModel` macro.
     public init(_ value: T) { self.name = "" }
     public var description: String { name }
+    /// Returns `x' = expression` — the variable's value in the next state.
     @discardableResult
     public func becomes(_ expression: some StateExprConvertible) -> ActionExpr { .assign(name, expression.stateExpr) }
+    /// Returns `UNCHANGED x` — the variable stays the same in the next state.
     public var stays: ActionExpr { .unchanged(name) }
 }
 
+/// Attaches a guard condition to an action.
+/// `x.becomes(1).when(x == 0)` produces `(x == 0) /\ x' = 1`.
 extension ActionExpr {
     @discardableResult
     public func when(_ condition: some StateExprConvertible) -> ActionExpr {

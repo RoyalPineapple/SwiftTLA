@@ -4,6 +4,13 @@ public protocol TLAMachine<Action>: Sendable {
     mutating func apply(_ action: Action)
 }
 
+/// A concurrency boundary around a `TLAMachine`. Serializes all action delivery.
+/// Use `schedule(_:)` to apply an action and `snapshot()` to read current state.
+///
+/// ```swift
+/// let lock = Runtime(Lock.Machine.initial)
+/// await lock.schedule(.unlock)
+/// ```
 public actor Runtime<M: TLAMachine> {
     private var machine: M
 

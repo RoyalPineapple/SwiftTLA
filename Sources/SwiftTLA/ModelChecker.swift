@@ -1,3 +1,5 @@
+/// Explores every reachable state of a TLA+ specification, checking invariants,
+/// deadlock, and constraints. Uses functional BFS with symmetry reduction.
 public struct ModelChecker {
     public let spec: TLASpec
     public let maxStates: Int
