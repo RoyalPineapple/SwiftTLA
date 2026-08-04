@@ -32,43 +32,38 @@ struct ExampleDetailView: View {
                 SourcePanels(spec: example.spec)
             }
         }
-        .toolbar { Button("Export .tla") { exportTLA() } }
     }
     @ViewBuilder var interactive: some View { switch example.name { case "HourClock": HourClockScreen(); case "DieHard": DieHardScreen(); case "CoffeeCan": CoffeeCanScreen(); case "MovingCat": CatScreen(); case "Majority": MajorityScreen(); case "BoundedCounter": CounterScreen(); case "Toggle": ToggleScreen(); case "ThreeState": ThreeScreen(); default: GraphScreen(ex: example) } }
-    func exportTLA() { let p = NSSavePanel(); p.nameFieldStringValue = "\(example.name).tla"; p.allowedContentTypes = [.plainText]; guard p.runModal() == .OK, let u = p.url else { return }; try? example.spec.tlaDescription.write(to: u, atomically: true, encoding: .utf8) }
 }
 
 // MARK: - Source panels
 
 struct SourcePanels: View {
     let spec: TLASpec
-    @State private var mode: ViewMode = .annotated
-    
-    enum ViewMode: String, CaseIterable { case annotated = "@TLA"; case tla = "TLA+" }
-    
     var body: some View {
-        VStack(spacing: 8) {
-            Picker("View", selection: $mode) {
-                ForEach(ViewMode.allCases, id: \.self) { m in Text(m.rawValue).tag(m) }
-            }.pickerStyle(.segmented).padding(.horizontal)
-            
+        HStack(alignment: .top, spacing: 0) {
+            CodePanel(title: "@TLASpec", text: spec.annotatedDescription)
+            Spacer().frame(width: 25)
+            CodePanel(title: "TLA+", text: spec.tlaDescription)
+        }
+    }
+}
+
+struct CodePanel: View {
+    let title: String; let text: String
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack { Text(title).font(.caption).foregroundStyle(.secondary); Spacer() }.padding(.horizontal, 8)
             ScrollView(.vertical) {
-                Text(currentText).font(.system(size: 10, design: .monospaced)).padding(8).textSelection(.enabled)
+                Text(text).font(.system(size: 10, design: .monospaced)).padding(8).textSelection(.enabled)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
             .background(.quaternary).cornerRadius(4)
             .overlay(alignment: .topTrailing) {
-                Button(action: { copy(currentText) }) { Image(systemName: "doc.on.doc").font(.caption2).padding(6) }
+                Button(action: { copy(text) }) { Image(systemName: "doc.on.doc").font(.caption2).padding(6) }
                     .buttonStyle(.plain).background(.regularMaterial).cornerRadius(4).padding(4)
             }
-        }.padding(8)
-    }
-    
-    var currentText: String {
-        switch mode {
-        case .annotated: return spec.annotatedDescription
-        case .tla: return spec.tlaDescription
-        }
+        }.frame(maxWidth: .infinity)
     }
 }
 
