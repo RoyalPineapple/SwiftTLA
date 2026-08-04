@@ -196,6 +196,7 @@ public func Variable<T>(_ ref: Var<T>, _ initial: some TLAValueConvertible) -> V
     VarDecl(ref.name, initial.tlaValue)
 }
 
+@discardableResult
 public func Act(_ name: String, @ActionBuilder _ body: () -> ActionExpr) -> ActDecl {
     ActDecl(name, body())
 }
