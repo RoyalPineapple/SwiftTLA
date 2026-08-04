@@ -135,7 +135,7 @@ private func bfsLoop(
     stateToID: [State: StateGraph.StateID],
     idToState: [StateGraph.StateID: State],
     visited: Set<State>,
-    transitions: [StateGraph.StateID: [(String, StateGraph.StateID)]],
+    transitions: [StateGraph.StateID: [StateGraph.Transition]],
     predecessors: [State: (State, String)],
     nextID: Int,
     stepCount: Int,

@@ -238,6 +238,7 @@ public struct ModelMacro: MemberMacro {
     private static func parseStateExpr(_ expression: ExprSyntax?) -> StateExpr? {
         guard let expression else { return nil }
         if let int = expression.as(IntegerLiteralExprSyntax.self) { return .value(.int(Int(int.literal.text) ?? 0)) }
+        if let bool = expression.as(BooleanLiteralExprSyntax.self) { return .value(.bool(bool.literal.text == "true")) }
         if let reference = expression.as(DeclReferenceExprSyntax.self) { return .variable(reference.baseName.text) }
         if let tuple = expression.as(TupleExprSyntax.self), let single = tuple.elements.first?.expression { return parseStateExpr(single) }
         if let infix = expression.as(InfixOperatorExprSyntax.self), let left = parseStateExpr(infix.leftOperand), let right = parseStateExpr(infix.rightOperand) {
