@@ -1,52 +1,32 @@
 # SwiftTLA
 
-Specification language that IS Swift. Write TLA+ specs as `@TLASpec` structs. The compiler checks invariants at build time. The same struct produces a valid `.tla` file for TLC audit.
+Write specs in Swift. The compiler proves them. Output a `.tla` file for external audit by TLC.
 
 ```mermaid
 flowchart LR
-    subgraph Source["Your Swift Code"]
-        S["@TLASpec struct"]
+    subgraph You["Checked-in code"]
+        M["@TLAModel struct Lock"]
     end
-    subgraph Compile["Swift Compiler"]
-        P["Parse vars + methods"]
+    subgraph Macro["Compile-time"]
+        P["Parse vars + actions"]
         C["Model checker"]
         V{"Invariant?"}
-        M["TLAStateMachine peer"]
-        F["static var spec"]
+        E[Compiler error]
+        G["Generate TLAStateMachine"]
+        S[".tla output"]
     end
-    S --> P --> C --> V
-    V -- "holds" --> M
-    V -- "holds" --> F
-    V -- "broken" --> E[Compiler error]
-    M --> R["apply(.tick)"]
-    F --> D["annotatedForm / tlaModule"]
+    M --> P --> C --> V
+    V -- "broken" --> E
+    V -- "holds" --> G
+    M --> S
 ```
-
-```mermaid
-graph TB
-    subgraph User["write once"]
-        STRUCT["@TLASpec struct Foo {\n  var x = Var(0)\n  func inc() { x.becomes(x + 1).when(x < 3) }\n  var invariant: StateExpr { x >= 0 }\n}"]
-    end
-    subgraph Generated["three outputs"]
-        PEER["TLAStateMachine\napply(), availableActions"]
-        SPEC["static var spec: TLASpec\nbase64-encoded"]
-        TLA["annotatedForm + tlaModule\nfor display"]
-    end
-    STRUCT --> PEER
-    STRUCT --> SPEC
-    SPEC --> TLA
-```
-
----
-
-## Quick start
 
 ```swift
 import SwiftTLA
 import SwiftTLAGeneration
 import SwiftTLAMacros
 
-@TLASpec
+@TLAModel
 struct HourClock {
     var hr = Var(1)
 
@@ -59,119 +39,82 @@ struct HourClock {
 }
 ```
 
-`swift build` checks the invariant at compile time. The expanded type includes:
-
-```
-TLAStateMachine     —  apply(.tick), availableActions, 12 states
-HourClock.spec      —  TLASpec for formatted output
-HourClock.annotatedForm  —  @TLASpec self-portrait
-HourClock.spec.tlaModule —  valid .tla file
-```
-
----
-
-## Externally auditable
+Compiles → 12 states verified. Broken invariant → compiler error.
 
 ```swift
 print(HourClock.spec.tlaModule)
+// ---- MODULE HourClock ----
+// VARIABLES hr
+// Init == hr = 1
+// tick == ...
+// ====
 ```
-
-```tla
----- MODULE HourClock ----
-EXTENDS Naturals, FiniteSets, Sequences
-
-VARIABLES hr
-
-Init == hr = 1
-
-tick == (hr < 12) /\ hr' = hr + 1 \/ (hr == 12) /\ hr' = 1
-
-Next == tick
-
-====
-```
-
-TLC verifies the same property independently.
 
 ---
 
-## Architecture
+## Three layers
 
 ```mermaid
 graph TD
-    subgraph Libraries
-        TLA[SwiftTLA\nStateExpr, ActionExpr, TLAValue,\nVar, TLASpec, ModelChecker]
-        GEN[SwiftTLAGeneration\nPretty-printer, StateMachineGenerator,\nbase64 JSON codec]
+    subgraph L1["@TLAModel"]
+        STRUCT["struct Clock {\n  var hr = Var(1)\n  func tick() { hr.becomes(hr + 1).when(hr < 12) }\n  var validHours: StateExpr { hr >= 1 && hr <= 12 }\n}"]
     end
-    subgraph Plugin
-        MAC[SwiftTLAPlugin\n@TLASpec macro\nparse struct → checker → codegen]
-        DEC[SwiftTLAMacros\nMacro declarations]
+    subgraph L2["TLAStateMachine (generated)"]
+        PEER["apply(.tick)\navailableActions\nstate graph"]
     end
-    subgraph Ship
-        EX[SwiftTLAExamples\n16 example specs]
-        DM[SwiftTLADemo\nSwiftUI app: sidebar, interactive,\nside-by-side panels]
+    subgraph L3["@TLAActor (optional)"]
+        ACTOR["actor SafeClock {\n  @State var spec = Clock.spec\n  func tick() async { await spec.apply(.tick) }\n}"]
     end
-    DM --> EX --> TLA
-    DM --> GEN --> TLA
-    MAC --> TLA
-    MAC --> GEN
-    DEC --> MAC
+    STRUCT -->|"prove at compile time"| PEER
+    STRUCT -->|"export for TLC"| TLA[".tla file"]
+    PEER -->|"wrap for concurrency"| ACTOR
 ```
 
----
-
-## Public API
-
-| Expression | Meaning | TLA+ |
-|---|---|---|
-| `x.becomes(expr)` | x' = expr | `x' = expr` |
-| `x.becomes(expr).when(cond)` | guarded assignment | `cond /\ x' = expr` |
-| `x.stays` | x unchanged | `UNCHANGED x` |
-| `x == y` | equality | `x = y` |
-| `x + y`, `x - y`, `x * y` | arithmetic | `x + y`, etc. |
-| `x < y`, `x <= y`, `x > y`, `x >= y` | comparisons | `x < y`, etc. |
-| `x.isIn(S)` | set membership | `x \in S` |
-| `S.union(T)` | set union | `S \cup T` |
-| `S.intersection(T)` | set intersection | `S \cap T` |
-| `S.subtracting(T)` | set difference | `S \ T` |
-| `S.isSubset(of: T)` | subset | `S \subseteq T` |
-| `S.cardinality` | cardinality | `Cardinality(S)` |
-| `S.flattened` | union of all elements | `UNION S` |
-| `S.subsets` | power set | `SUBSET S` |
-| `S.domain` | function domain | `DOMAIN S` |
-| `S.filtering(p)` | set filter | `{x ∈ S : p}` |
-| `S.mapping(e)` | set map | `{e : x ∈ S}` |
-| `f.applying(a)` | function application | `f[a]` |
-| `f.updated(at: k, to: v)` | function except | `[f EXCEPT ![k] = v]` |
-| `StateExpr.set([a, b])` | set literal | `{a, b}` |
-| `StateExpr.tuple([a, b])` | tuple literal | `<<a, b>>` |
-| `StateExpr.record(["f": a])` | record literal | `[f ↦ a]` |
-| `StateExpr.for(allIn: S, p)` | universal quantification | `∀ x ∈ S : p` |
-| `StateExpr.exists(in: S, p)` | existential quantification | `∃ x ∈ S : p` |
-| `StateExpr.choose(from: S, matching: p)` | CHOOSE | `CHOOSE x ∈ S : p` |
-| `StateExpr.function(domain: S, body)` | function literal | `[x ∈ S ↦ body]` |
-| `StateExpr.enabled("Act")` | enabled predicate | `ENABLED Act` |
-| `ActionExpr.choose("v", from: S)` | nondeterministic choose | `v' ∈ S` |
-
-Operators (domain notation): `∈`, `⊆`, `∪`, `∩`.
+`@TLAModel` proves the spec. `TLAStateMachine` runs it. `@TLAActor` wraps it in Swift concurrency.
 
 ---
 
-## Liveness
-
-`@TLASpec` structs can declare temporal properties and fairness:
+## The code you check in
 
 ```swift
-@TLASpec
-struct Progress {
-    var x = Var(0)
-    func inc() { x.becomes(x + 1).when(x < 5) }
-    var eventuallyDone: TemporalExpr { x.leadsTo(x == 5) }
-    var fairInc: FairnessCondition { .weakFairness("inc") }
+@TLAModel
+struct Lock {
+    var isLocked = Var(0)
+
+    func lock()   { isLocked.becomes(1).when(isLocked == 0) }
+    func unlock() { isLocked.becomes(0).when(isLocked == 1) }
+
+    var binary: StateExpr { isLocked >= 0 && isLocked <= 1 }
 }
 ```
 
-Checker uses Tarjan SCC decomposition with fairness constraints.
+Four special words: `@TLAModel`, `Var`, `.becomes().when()`, `StateExpr`. Everything else is plain Swift.
+
+| Element | Reads like |
+|---|---|
+| `var isLocked = Var(0)` | A variable, starts at 0 |
+| `func lock()` | An atomic action |
+| `isLocked.becomes(1)` | In the next state, isLocked equals 1 |
+| `.when(isLocked == 0)` | Only when isLocked is currently 0 |
+| `var binary: StateExpr` | An invariant that must always hold |
+
+---
+
+## API
+
+| Expression | Meaning |
+|---|---|
+| `x.becomes(expr)` | x' = expr |
+| `x.becomes(expr).when(cond)` | cond ∧ x' = expr |
+| `x.stays` | UNCHANGED x |
+| `x == y`, `x + y`, `x < y` | state expressions (arithmetic and Boolean) |
+| `x.isIn(S)`, `S.union(T)`, `S.subtracting(T)` | set operations |
+| `S.cardinality`, `S.flattened`, `S.subsets` | set properties |
+| `f.applying(a)`, `f.updated(at: k, to: v)` | function operations |
+| `StateExpr.for(allIn: S, ...)`, `.exists(in: S, ...)` | quantifiers |
+| `StateExpr.set([...])`, `.tuple([...])`, `.record([...])` | literals |
+
+Operators (domain notation): `∈`, `⊆`, `∪`, `∩`.
 
 ---
 
@@ -181,9 +124,7 @@ Checker uses Tarjan SCC decomposition with fairness constraints.
 swift run demo
 ```
 
-16 examples in the sidebar. Interactive views for HourClock, DieHard, CoffeeCan. Graph-driven exploration for all others. Side-by-side `@TLASpec` and TLA+ panels with copy buttons.
-
-Add a dependency:
+16 examples. Interactive views. Side-by-side `@TLAModel` and TLA+ panels.
 
 ```swift
 .package(url: "https://github.com/RoyalPineapple/SwiftTLA", branch: "main")

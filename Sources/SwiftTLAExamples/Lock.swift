@@ -2,7 +2,7 @@ import SwiftTLA
 import SwiftTLAGeneration
 import SwiftTLAMacros
 
-@TLASpec
+@TLAModel
 public struct Lock {
     var isLocked = Var(0)
     func lock() { isLocked.becomes(1).when(isLocked == 0) }

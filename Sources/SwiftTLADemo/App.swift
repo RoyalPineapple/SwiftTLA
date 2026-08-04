@@ -43,7 +43,7 @@ struct SourcePanels: View {
     let spec: TLASpec
     var body: some View {
         HStack(alignment: .top, spacing: 0) {
-            CodePanel(title: "@TLASpec", text: spec.annotatedForm)
+            CodePanel(title: "@TLAModel", text: spec.annotatedForm)
             Spacer().frame(width: 25)
             CodePanel(title: "TLA+", text: spec.tlaModule)
         }

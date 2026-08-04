@@ -7,7 +7,7 @@ extension TLASpec {
     public var annotatedForm: String {
         let structName = TokenSyntax(stringLiteral: name.replacingOccurrences(of: " ", with: ""))
         let structDecl = StructDeclSyntax(
-            attributes: AttributeListSyntax { AttributeSyntax(stringLiteral: "@TLASpec") },
+            attributes: AttributeListSyntax { AttributeSyntax(stringLiteral: "@TLAModel") },
             name: structName,
             memberBlock: MemberBlockSyntax {
                 for v in variables {

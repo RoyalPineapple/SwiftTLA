@@ -9,7 +9,7 @@ import SwiftTLAGeneration
 
 public struct AttachedTLASpecMacro: PeerMacro, MemberMacro {
     public static func expansion(of node: AttributeSyntax, providingPeersOf declaration: some DeclSyntaxProtocol, in context: some MacroExpansionContext) throws -> [DeclSyntax] {
-        guard let structDecl = declaration.as(StructDeclSyntax.self) else { throw SimpleError("@TLA on structs only") }
+        guard let structDecl = declaration.as(StructDeclSyntax.self) else { throw SimpleError("@TLAModel on structs only") }
         let typeName = structDecl.name.text
         let parsed = parseStruct(structDecl)
 
