@@ -1,9 +1,9 @@
-@_spi(Internal) import SwiftTLA
+import SwiftTLA
+import SwiftTLAGeneration
+import SwiftTLAMacros
 
-public enum ToggleSpec {
-    public static let x = Var<Int>("x")
-    public static let spec = TLASpec("Toggle") {
-        Variable(x, 0)
-        Action("Flip") { x.prime == (x + 1) % 2 }
-    }
+@TLAModel
+public struct Toggle {
+    var x = Var(0)
+    func flip() { x.becomes((x + 1) % 2) }
 }

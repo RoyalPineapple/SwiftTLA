@@ -1,9 +1,10 @@
-@_spi(Internal) import SwiftTLA
-public enum TrafficSpec {
-    public static let light = Var<Int>("light")
-    public static let spec = TLASpec("Traffic") {
-        Variable(light, 0)
-        Action("Next") { light.prime == (light + 1) % 3 }
-        Invariant("Valid") { light >= 0 && light <= 2 }
-    }
+import SwiftTLA
+import SwiftTLAGeneration
+import SwiftTLAMacros
+
+@TLAModel
+public struct Traffic {
+    var light = Var(0)
+    func next() { light.becomes((light + 1) % 3) }
+    var valid: StateExpr { light >= 0 && light <= 2 }
 }

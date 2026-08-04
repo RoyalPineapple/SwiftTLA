@@ -1,11 +1,11 @@
-@_spi(Internal) import SwiftTLA
+import SwiftTLA
+import SwiftTLAGeneration
+import SwiftTLAMacros
 
-public enum BoundedCounterSpec {
-    public static let x = Var<Int>("x")
-    public static let spec = TLASpec("BoundedCounter") {
-        Variable(x, 0)
-        Action("Inc") { (x < 3) && (x.prime == x + 1) }
-        Action("Dec") { (x > -3) && (x.prime == x - 1) }
-        Invariant("InBound") { (x >= -3) && (x <= 3) }
-    }
+@TLAModel
+public struct BoundedCounter {
+    var x = Var(0)
+    func inc() { x.becomes(x + 1).when(x < 3) }
+    func dec() { x.becomes(x - 1).when(x > -3) }
+    var bounded: StateExpr { x >= -3 && x <= 3 }
 }

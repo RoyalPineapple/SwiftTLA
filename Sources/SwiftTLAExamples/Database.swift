@@ -1,10 +1,17 @@
-@_spi(Internal) import SwiftTLA
-public enum DatabaseSpec {
-    public static let data = Var<Int>("data"); public static let locked = Var<Int>("locked")
-    public static let spec = TLASpec("Database") {
-        Variable(data, 0); Variable(locked, 0)
-        Action("Write") { locked == 0 && data.prime == data + 1 && locked.prime == 1 }
-        Action("Unlock") { locked == 1 && locked.prime == 0 && data.prime == data }
-        Invariant("Consistent") { (locked == 0) || (locked == 1) }
+import SwiftTLA
+import SwiftTLAGeneration
+import SwiftTLAMacros
+
+@TLAModel
+public struct Database {
+    var data = Var(0)
+    var locked = Var(0)
+    func write() { 
+        data.becomes(data + 1).when(locked == 0)
+        locked.becomes(1).when(locked == 0)
+    }
+    func unlock() {
+        locked.becomes(0).when(locked == 1)
+        data.stays
     }
 }
