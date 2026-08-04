@@ -10,7 +10,7 @@ let settings: [SwiftSetting] = [
 
 let package = Package(
     name: "SwiftTLA",
-    platforms: [.macOS(.v13)],
+    platforms: [.macOS(.v14)],
     products: [
         .library(name: "SwiftTLA", targets: ["SwiftTLA"]),
         .library(name: "SwiftTLAGenerator", targets: ["SwiftTLAGenerator"]),
