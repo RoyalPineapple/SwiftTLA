@@ -28,5 +28,7 @@ public enum Examples {
         ExampleDescription(name:"DiningPhilosophers",spec:DiningPhilosophers.spec,expectedStates:0,source:"https://github.com/tlaplus/Examples/tree/master/specifications/DiningPhilosophers",about:"Three philosophers sharing forks. No two adjacent eat at once."),
         ExampleDescription(name:"ProducerConsumer",spec:ProducerConsumer.spec,expectedStates:0,source:"internal",about:"Bounded buffer with producer and consumer. produced - consumed == buffer."),
         ExampleDescription(name:"Bakery",spec:Bakery.spec,expectedStates:0,source:"https://lamport.azurewebsites.net/tla/book.html",about:"Lamport's bakery algorithm. Mutual exclusion without atomic read-write."),
+        ExampleDescription(name:"Ticket",spec:Ticket.spec,expectedStates:0,source:"internal",about:"Ticket-based mutual exclusion. serving <= ticket invariant."),
+        ExampleDescription(name:"Wire",spec:Wire.spec,expectedStates:0,source:"internal",about:"Communication channel. sent, received, in-transit with no-duplicate invariant."),
     ]
 }

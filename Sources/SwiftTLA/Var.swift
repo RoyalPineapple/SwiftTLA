@@ -147,3 +147,9 @@ extension StateExpr {
 extension ActionExpr {
     public static func choose(_ variable: String, from set: StateExpr) -> ActionExpr { .chooseAction(variable, set) }
 }
+
+extension StateExpr {
+    public static func `if`(_ condition: some StateExprConvertible, then: some StateExprConvertible, else: some StateExprConvertible) -> StateExpr {
+        .ifThenElse(condition.stateExpr, then.stateExpr, `else`.stateExpr)
+    }
+}
