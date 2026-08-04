@@ -13,6 +13,9 @@ public struct Var<T: TLAValueType>: Hashable, Codable, Sendable, CustomStringCon
     public init(_ name: String, _: T.Type = T.self) { self.name = name }
     public var description: String { name }
     public var next: PrimedVar<T> { PrimedVar(name: name) }
+    public func becomes(_ expr: some StateExprConvertible) -> ActionExpr { .assign(name, expr.stateExpr) }
+    public static func stays(_ v: Var) -> ActionExpr { .unchanged(v.name) }
+    public var stays: ActionExpr { .unchanged(name) }
 }
 
 extension Dictionary where Key == String, Value == TLAValue {
@@ -95,10 +98,12 @@ public func == <T: TLAValueType>(lhs: PrimedVar<T>, rhs: Var<T>) -> ActionExpr {
 // MARK: - Set operators
 
 public func setExpr(_ elements: [some StateExprConvertible]) -> StateExpr { .setLiteral(elements.map(\.stateExpr)) }
-public func cardinality(_ e: some StateExprConvertible) -> StateExpr { .cardinality(e.stateExpr) }
-public func setDifference(_ a: StateExpr, _ b: StateExpr) -> StateExpr { .setDifference(a, b) }
-public func powerSet(_ e: some StateExprConvertible) -> StateExpr { .powerSet(e.stateExpr) }
-public func unionAll(_ e: some StateExprConvertible) -> StateExpr { .unionAll(e.stateExpr) }
+public func all(in set: StateExpr, _ predicate: StateExpr) -> StateExpr { .forAll(set, predicate) }
+public func exists(in set: StateExpr, _ predicate: StateExpr) -> StateExpr { .exists(set, predicate) }
+public func pickOne(from set: StateExpr, matching predicate: StateExpr) -> StateExpr { .choose(set, predicate) }
+public func count(of expr: some StateExprConvertible) -> StateExpr { .cardinality(expr.stateExpr) }
+public func flatten(_ set: some StateExprConvertible) -> StateExpr { .unionAll(set.stateExpr) }
+public func subsets(of set: some StateExprConvertible) -> StateExpr { .powerSet(set.stateExpr) }
 public func domain(_ e: some StateExprConvertible) -> StateExpr { .domain(e.stateExpr) }
 public func functionLiteral(domain: StateExpr, _ body: StateExpr) -> StateExpr { .functionLiteral(domain, body) }
 public func functionApply<F: StateExprConvertible, X: StateExprConvertible>(_ f: F, _ x: X) -> StateExpr { .functionApply(f.stateExpr, x.stateExpr) }

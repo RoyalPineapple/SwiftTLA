@@ -10,12 +10,12 @@ public enum MajorSpec {
         Variable(candidate, 0)
         Variable(count, 0)
         Variable(index, 0)
-        Act("Start") { (index == 0) && (next(candidate) == 1) && (next(count) == 1) && (next(index) == 1) }
+        Act("Start") { (index == 0) && (candidate.next == 1) && (count.next == 1) && (index.next == 1) }
         Act("Vote") {
-            (index >= 1) && (index < N)
-            && (((candidate == index) && (next(candidate) == candidate) && (next(count) == count + 1) && (next(index) == index + 1))
-            || ((candidate != index) && (count > 1) && (next(candidate) == candidate) && (next(count) == count - 1) && (next(index) == index + 1))
-            || ((candidate != index) && (count <= 1) && (next(candidate) == index) && (next(count) == 1) && (next(index) == index + 1)))
+            let same: ActionExpr = (candidate == index) && (candidate.next == candidate) && (count.next == count + 1) && (index.next == index + 1)
+            let keep: ActionExpr = (candidate != index) && (count > 1) && (candidate.next == candidate) && (count.next == count - 1) && (index.next == index + 1)
+            let swap: ActionExpr = (candidate != index) && (count <= 1) && (candidate.next == index) && (count.next == 1) && (index.next == index + 1)
+            (index >= 1) && (index < N) && (same || keep || swap)
         }
     }
     public static let expectedStates = 0

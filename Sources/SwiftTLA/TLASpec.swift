@@ -200,16 +200,32 @@ public func Act(_ name: String, @ActionBuilder _ body: () -> ActionExpr) -> ActD
     ActDecl(name, body())
 }
 
-public func Inv(_ name: String, @InvariantBuilder _ body: () -> StateExpr) -> InvDecl {
+public func Invariant(_ name: String, @InvariantBuilder _ body: () -> StateExpr) -> InvDecl {
     InvDecl(name, body())
 }
 
-public func Temporal(_ name: String, _ expr: TemporalExpr) -> TemporalDecl {
-    TemporalDecl(name, expr)
+public func LeadsTo(_ name: String, _ from: StateExpr, _ to: StateExpr) -> TemporalDecl {
+    TemporalDecl(name, .leadsTo(from, to))
 }
 
-public func Fairness(_ condition: FairnessCondition) -> FairnessDecl {
-    FairnessDecl(condition)
+public func Eventually(_ name: String, _ expr: StateExpr) -> TemporalDecl {
+    TemporalDecl(name, .eventually(expr))
+}
+
+public func AlwaysEventually(_ name: String, _ expr: StateExpr) -> TemporalDecl {
+    TemporalDecl(name, .alwaysEventually(expr))
+}
+
+public func EventuallyAlways(_ name: String, _ expr: StateExpr) -> TemporalDecl {
+    TemporalDecl(name, .eventuallyAlways(expr))
+}
+
+public func WeakFairness(_ action: String) -> FairnessDecl {
+    FairnessDecl(.weakFairness(action))
+}
+
+public func StrongFairness(_ action: String) -> FairnessDecl {
+    FairnessDecl(.strongFairness(action))
 }
 
 public struct DeadlockDecl: SpecComponent { public init() {} }

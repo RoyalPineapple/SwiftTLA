@@ -7,8 +7,8 @@ public enum CoffeeCanSpec {
     public static let spec = TLASpec("CoffeeCan") {
         Variable(black, maxBeans)
         Variable(white, maxBeans)
-        Act("RemoveTwoBlack") { (black >= 2) && (next(black) == black - 1) && (next(white) == white) }
-        Act("RemoveTwoWhite") { (white >= 2) && (next(white) == white - 2) && (next(black) == black + 1) }
-        Act("RemoveOneEach") { (black >= 1) && (white >= 1) && (next(white) == white - 1) && (next(black) == black) }
+        Act("RemoveTwoBlack") { (black >= 2) && (black.next == black - 1) && (white.next == white) }
+        Act("RemoveTwoWhite") { (white >= 2) && (white.next == white - 2) && (black.next == black + 1) }
+        Act("RemoveOneEach") { (black >= 1) && (white >= 1) && (white.next == white - 1) && (black.next == black) }
     }
 }

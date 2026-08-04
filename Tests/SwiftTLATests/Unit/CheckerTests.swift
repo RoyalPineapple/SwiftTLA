@@ -6,9 +6,9 @@ final class CheckerTests: XCTestCase {
         let x = Var<Int>("x")
         let spec = TLASpec("Counter") {
             Variable(x, 0)
-            Act("Inc") { next(x) == x + 1 }
-            Act("Dec") { next(x) == x - 1 }
-            Inv("NeverNegative") { !(x < 0) }
+            Act("Inc") { x.next == x + 1 }
+            Act("Dec") { x.next == x - 1 }
+            Invariant("NeverNegative") { !(x < 0) }
         }
         let result = try ModelChecker(spec: spec).check()
         if case .invariantViolated(let inv, let state, _) = result {
@@ -21,8 +21,8 @@ final class CheckerTests: XCTestCase {
         let x = Var<Int>("x")
         let spec = TLASpec("Counter") {
             Variable(x, 0)
-            Act("Inc") { next(x) == x + 1 }
-            Inv("NonNeg") { x >= 0 }
+            Act("Inc") { x.next == x + 1 }
+            Invariant("NonNeg") { x >= 0 }
         }
         let checker = ModelChecker(spec: spec, maxStates: 100)
         let result = try checker.check()
@@ -35,8 +35,8 @@ final class CheckerTests: XCTestCase {
         let x = Var<Int>("x")
         let spec = TLASpec("Test") {
             Variable(x, 0)
-            Act("Inc") { next(x) == x + 1 }
-            Inv("NonNeg") { x >= 0 }
+            Act("Inc") { x.next == x + 1 }
+            Invariant("NonNeg") { x >= 0 }
         }
         XCTAssertEqual(spec.invariants.count, 1)
     }
@@ -45,8 +45,8 @@ final class CheckerTests: XCTestCase {
         let x = Var<Int>("x")
         let spec = TLASpec("EnabledTest") {
             Variable(x, 0)
-            Act("CanInc") { (x < 3) && (next(x) == x + 1) }
-            Inv("IncUntil3") { (x < 3) == enabled("CanInc") }
+            Act("CanInc") { (x < 3) && (x.next == x + 1) }
+            Invariant("IncUntil3") { (x < 3) == enabled("CanInc") }
         }
         let result = try ModelChecker(spec: spec, maxStates: 10).check()
         if case .invariantViolated = result { XCTFail("ENABLED check should pass") }
@@ -57,7 +57,7 @@ final class CheckerTests: XCTestCase {
             Variable(Var<Int>("x"), TLAValue.constant("Limit"))
             Constant("Limit", 2)
             Act("Tick") { next(Var<Int>("x")) == Var<Int>("x") + 1 }
-            Inv("Below3") { Var<Int>("x") <= 2 }
+            Invariant("Below3") { Var<Int>("x") <= 2 }
         }
         let result = try ModelChecker(spec: spec, maxStates: 10).check()
         if case .invariantViolated = result { } else { XCTFail("Expected violation") }

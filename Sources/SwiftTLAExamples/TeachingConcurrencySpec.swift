@@ -18,19 +18,19 @@ public enum TeachingConcurrencySpec {
             let previous = (i - 1 + N) % N
             Act("a\(i)") {
                 let write: ActionExpr = functionApply(x, StateExpr.int(i)) == StateExpr.int(0)
-                    && (next(x) == except(x, at: StateExpr.int(i), value: StateExpr.int(1)))
-                    && (next(y) == y)
+                    && (x.next == except(x, at: StateExpr.int(i), value: StateExpr.int(1)))
+                    && (y.next == y)
                 write
             }
             Act("b\(i)") {
                 let write: ActionExpr = functionApply(x, StateExpr.int(i)) == StateExpr.int(1)
-                    && (next(y) == except(y, at: StateExpr.int(i), value: functionApply(x, StateExpr.int(previous))))
-                    && (next(x) == x)
+                    && (y.next == except(y, at: StateExpr.int(i), value: functionApply(x, StateExpr.int(previous))))
+                    && (x.next == x)
                 write
             }
         }
 
-        Inv("SomeYisOne") {
+        Invariant("SomeYisOne") {
             exists(.setLiteral(processValues.map { .value($0) }), functionApply(y, StateExpr.variable("_q")) == StateExpr.int(1))
         }
     }

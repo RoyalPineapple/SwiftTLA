@@ -11,12 +11,12 @@ public enum MovingCatSpec {
         Variable(observed, 3)
         Variable(direction, 1)
         Act("Move") {
-            let goRight: ActionExpr = (direction == 1) && (cat < N) && (next(cat) == cat + 1) && (next(direction) == direction) && (next(observed) == observed)
-            let goLeft: ActionExpr = (direction == 1) && (cat == N) && (next(cat) == cat - 1) && (next(direction) == -1) && (next(observed) == observed)
-            let contLeft: ActionExpr = (direction == -1) && (cat > 1) && (next(cat) == cat - 1) && (next(direction) == direction) && (next(observed) == observed)
-            let goRight2: ActionExpr = (direction == -1) && (cat == 1) && (next(cat) == cat + 1) && (next(direction) == 1) && (next(observed) == observed)
-            let observe: ActionExpr = (cat == observed) && (next(observed) == observed + 1) && (next(cat) == cat) && (next(direction) == direction)
-            let observeWrap: ActionExpr = (cat == observed) && (observed == N) && (next(observed) == 1) && (next(cat) == cat) && (next(direction) == direction)
+            let goRight: ActionExpr = (direction == 1) && (cat < N) && (cat.next == cat + 1) && (direction.next == direction) && (observed.next == observed)
+            let goLeft: ActionExpr = (direction == 1) && (cat == N) && (cat.next == cat - 1) && (direction.next == -1) && (observed.next == observed)
+            let contLeft: ActionExpr = (direction == -1) && (cat > 1) && (cat.next == cat - 1) && (direction.next == direction) && (observed.next == observed)
+            let goRight2: ActionExpr = (direction == -1) && (cat == 1) && (cat.next == cat + 1) && (direction.next == 1) && (observed.next == observed)
+            let observe: ActionExpr = (cat == observed) && (observed.next == observed + 1) && (cat.next == cat) && (direction.next == direction)
+            let observeWrap: ActionExpr = (cat == observed) && (observed == N) && (observed.next == 1) && (cat.next == cat) && (direction.next == direction)
             goRight || goLeft || contLeft || goRight2 || observe || observeWrap
         }
     }
