@@ -106,6 +106,18 @@ func swiftState(_ e: StateExpr) -> String {
     case .greaterOrEqual(let a, let b): return "\(swiftState(a)) >= \(swiftState(b))"
     case .not(let a): return "!(\(swiftState(a)))"
     case .negate(let a): return "-(\(swiftState(a)))"
+    case .in(let a, let b): return "\(swiftState(a)).isIn(\(swiftState(b)))"
+    case .union(let a, let b): return "\(swiftState(a)).union(\(swiftState(b)))"
+    case .intersection(let a, let b): return "\(swiftState(a)).intersection(\(swiftState(b)))"
+    case .setDifference(let a, let b): return "\(swiftState(a)).subtracting(\(swiftState(b)))"
+    case .subset(let a, let b): return "\(swiftState(a)).isSubset(of: \(swiftState(b)))"
+    case .cardinality(let s): return "count(of: \(swiftState(s)))"
+    case .except(let f, let k, let v): return "\(swiftState(f)).updated(at: \(swiftState(k)), to: \(swiftState(v)))"
+    case .functionApply(let f, let a): return "\(swiftState(f)).applying(\(swiftState(a)))"
+    case .ifThenElse(let c, let t, let f): return "if \(swiftState(c)) { \(swiftState(t)) } else { \(swiftState(f)) }"
+    case .modulo(let a, let b): return "\(swiftState(a)) % \(swiftState(b))"
+    case .notEqual(let a, let b): return "\(swiftState(a)) != \(swiftState(b))"
+    case .integerDivide(let a, let b): return "\(swiftState(a)) / \(swiftState(b))"
     default: return e.description
     }
 }
