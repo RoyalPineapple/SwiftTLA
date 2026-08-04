@@ -29,13 +29,13 @@ final class CompositionTests: XCTestCase {
 
     func testInstanceSubstitutesConstants() throws {
         let spec = TLASpec("Param") {
-            Variable(Var<Int>("x"), .constant("N"))
+            Variable(Var<Int>("x"), TLAValue.constant("N"))
             Constant("N", 5)
             Act("Inc") { next(Var<Int>("x")) == Var<Int>("x") + 1 }
             Invariant("Positive") { Var<Int>("x") >= 0 }
         }
 
-        let instantiated = spec.instantiating(["N": .int(3)])
+        let instantiated = spec.instantiating(["N": TLAValue.int(3)])
         let graph = try ModelChecker(spec: instantiated, maxStates: 10).exploreGraph()
         XCTAssertFalse(graph.states.isEmpty)
     }

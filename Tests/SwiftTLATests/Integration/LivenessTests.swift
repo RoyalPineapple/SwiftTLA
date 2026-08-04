@@ -49,7 +49,7 @@ final class LivenessTests: XCTestCase {
             Act("Tick") { (x < 3) && (x.next == x + 1) }
             Act("Stutter") { x.next == x }
             Temporal("AlwaysEventually3", .alwaysEventually(x == 3))
-            WeakFairness(("Tick"))
+            WeakFairness("Tick")
         }
         let graph = try ModelChecker(spec: spec, maxStates: 10).exploreGraph()
         let violations = try LivenessChecker(graph: graph, spec: spec).check()
