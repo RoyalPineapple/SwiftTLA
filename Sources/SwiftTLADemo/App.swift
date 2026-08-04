@@ -3,6 +3,34 @@ import SwiftTLA
 import SwiftTLAGeneration
 import SwiftTLAExamples
 
+struct ExampleDescription: Hashable, Identifiable {
+    var id: String { name }
+    let name: String; let spec: TLASpec; let expectedStates: Int
+    let source: String; let about: String
+    func hash(into hasher: inout Hasher) { hasher.combine(name) }
+    static func == (a: ExampleDescription, b: ExampleDescription) -> Bool { a.name == b.name }
+}
+
+let allExamples: [ExampleDescription] = [
+    .init(name: "HourClock", spec: HourClock.spec, expectedStates: 12, source: "https://lamport.azurewebsites.net/tla/book.html", about: "A clock that ticks from 1 to 12 and wraps."),
+    .init(name: "DieHard", spec: DieHard.spec, expectedStates: 16, source: "https://github.com/tlaplus/Examples/tree/master/specifications/DieHard", about: "Measure exactly 4 gallons using 3 and 5 gallon jugs."),
+    .init(name: "CoffeeCan", spec: CoffeeCan.spec, expectedStates: 0, source: "https://github.com/tlaplus/Examples/tree/master/specifications/CoffeeCan", about: "Remove beans from a can."),
+    .init(name: "MovingCat", spec: MovingCat.spec, expectedStates: 24, source: "https://github.com/tlaplus/Examples/tree/master/specifications/Moving_Cat_Puzzle", about: "A cat bounces between boxes."),
+    .init(name: "Majority", spec: Majority.spec, expectedStates: 0, source: "https://github.com/tlaplus/Examples/tree/master/specifications/Majority", about: "Boyer-Moore majority vote."),
+    .init(name: "BoundedCounter", spec: BoundedCounter.spec, expectedStates: 7, source: "internal", about: "A counter that stays within bounds."),
+    .init(name: "Toggle", spec: Toggle.spec, expectedStates: 2, source: "internal", about: "A simple on/off toggle."),
+    .init(name: "BoolToggle", spec: BoolToggle.spec, expectedStates: 2, source: "internal", about: "A boolean toggle."),
+    .init(name: "ThreeState", spec: ThreeState.spec, expectedStates: 3, source: "internal", about: "A three-state loop."),
+    .init(name: "Bridge", spec: Bridge.spec, expectedStates: 12, source: "internal", about: "A single-lane bridge."),
+    .init(name: "Lock", spec: Lock.spec, expectedStates: 2, source: "internal", about: "A binary lock."),
+    .init(name: "Fibonacci", spec: Fibonacci.spec, expectedStates: 5, source: "internal", about: "Fibonacci sequence."),
+    .init(name: "PingPong", spec: PingPong.spec, expectedStates: 2, source: "internal", about: "Ping pong."),
+    .init(name: "Database", spec: Database.spec, expectedStates: 0, source: "internal", about: "Write-lock-unlock cycle."),
+    .init(name: "Elevator", spec: Elevator.spec, expectedStates: 5, source: "internal", about: "An elevator moving between floors."),
+    .init(name: "Traffic", spec: Traffic.spec, expectedStates: 3, source: "internal", about: "A traffic light."),
+    .init(name: "Buffer", spec: Buffer.spec, expectedStates: 2, source: "internal", about: "A single-slot buffer."),
+]
+
 @main
 struct DemoApp: App {
     var body: some Scene {
@@ -16,9 +44,8 @@ struct ContentView: View {
     var body: some View {
         NavigationSplitView {
             List(selection: $selected) {
-                ForEach(Examples.all) { example in
-                    Label(example.name, systemImage: icon(for: example.name))
-                        .tag(example)
+                ForEach(allExamples) { example in
+                    Label(example.name, systemImage: "square.grid.3x3").tag(example)
                 }
             }
             .navigationTitle("Examples")
@@ -26,71 +53,36 @@ struct ContentView: View {
             .frame(minWidth: 200)
         } detail: {
             if let example = selected {
-                ExampleDetailView(example: example)
+                ExampleDetail(example: example)
             }
         }
     }
-
-    func icon(for name: String) -> String {
-        let icons = [
-            "HourClock": "clock",
-            "DieHard": "drop",
-            "CoffeeCan": "cup.and.saucer",
-            "MovingCat": "cat",
-            "Majority": "checkmark.circle",
-        ]
-        return icons[name] ?? "square.grid.3x3"
-    }
 }
 
-struct ExampleDetailView: View {
+struct ExampleDetail: View {
     let example: ExampleDescription
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                header
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(example.name).font(.largeTitle).bold()
+                    Text(example.about).foregroundStyle(.secondary)
+                    if let url = URL(string: example.source) {
+                        Link("Source \u{2197}", destination: url).font(.caption)
+                    }
+                }.padding()
                 Divider()
-                interactiveView
-                    .frame(maxWidth: .infinity)
-                    .padding()
+                StateExplorer(example: example).frame(maxWidth: .infinity).padding()
                 Divider()
                 SourcePanels(spec: example.spec)
             }
         }
     }
-
-    var header: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(example.name)
-                .font(.largeTitle)
-                .bold()
-            Text(example.about)
-                .foregroundStyle(.secondary)
-            if let url = URL(string: example.source) {
-                Link("Source \u{2197}", destination: url)
-                    .font(.caption)
-            }
-        }
-        .padding()
-    }
-
-    @ViewBuilder
-    var interactiveView: some View {
-        switch example.name {
-        case "HourClock": HourClockScreen()
-        case "DieHard": DieHardScreen()
-        case "CoffeeCan": CoffeeCanScreen()
-        default: StateExplorer(example: example)
-        }
-    }
 }
-
-// MARK: - Source panels
 
 struct SourcePanels: View {
     let spec: TLASpec
-
     var body: some View {
         HStack(alignment: .top, spacing: 0) {
             CodePanel(title: "@TLAModel", text: spec.annotatedForm)
@@ -101,48 +93,26 @@ struct SourcePanels: View {
 }
 
 struct CodePanel: View {
-    let title: String
-    let text: String
-
+    let title: String; let text: String
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            HStack {
-                Text(title)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                Spacer()
-            }
-            .padding(.horizontal, 8)
-
+            HStack { Text(title).font(.caption).foregroundStyle(.secondary); Spacer() }.padding(.horizontal, 8)
             ScrollView(.vertical) {
-                Text(text)
-                    .font(.system(size: 10, design: .monospaced))
-                    .padding(8)
-                    .textSelection(.enabled)
+                Text(text).font(.system(size: 10, design: .monospaced)).padding(8).textSelection(.enabled)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .background(.quaternary)
-            .cornerRadius(4)
+            .background(.quaternary).cornerRadius(4)
             .overlay(alignment: .topTrailing) {
                 Button {
                     NSPasteboard.general.clearContents()
                     NSPasteboard.general.setString(text, forType: .string)
                 } label: {
-                    Image(systemName: "doc.on.doc")
-                        .font(.caption2)
-                        .padding(6)
-                }
-                .buttonStyle(.plain)
-                .background(.regularMaterial)
-                .cornerRadius(4)
-                .padding(4)
+                    Image(systemName: "doc.on.doc").font(.caption2).padding(6)
+                }.buttonStyle(.plain).background(.regularMaterial).cornerRadius(4).padding(4)
             }
-        }
-        .frame(maxWidth: .infinity)
+        }.frame(maxWidth: .infinity)
     }
 }
-
-// MARK: - State explorer (generic, works with any spec)
 
 struct StateExplorer: View {
     let example: ExampleDescription
@@ -153,47 +123,26 @@ struct StateExplorer: View {
     var body: some View {
         VStack(spacing: 12) {
             if let graph, let stateID = currentStateID, let state = graph.states[stateID] {
-                stateView(state)
-                actionsView(graph: graph, stateID: stateID)
+                VStack(spacing: 4) {
+                    ForEach(state.sorted(by: { $0.key < $1.key }), id: \.key) { key, value in
+                        HStack { Text(key).bold(); Text("= \(value)") }
+                    }
+                }.padding().background(.quaternary).cornerRadius(8)
+
+                let transitions = graph.transitions[stateID] ?? []
+                ForEach(transitions, id: \.action) { transition in
+                    Button(transition.action) {
+                        currentStateID = transition.target
+                        history.append(transition.action)
+                    }.buttonStyle(.bordered)
+                }
                 if !history.isEmpty {
-                    Text(history.joined(separator: " \u{2192} "))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                    Text(history.joined(separator: " \u{2192} ")).font(.caption).foregroundStyle(.secondary)
                 }
             }
-            Button("Reset") { loadGraph() }
-                .buttonStyle(.bordered)
-            Text("\(graph?.states.count ?? 0) states verified")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        }
-        .padding()
-        .onAppear { loadGraph() }
-    }
-
-    func stateView(_ state: [String: TLAValue]) -> some View {
-        VStack(spacing: 4) {
-            ForEach(state.sorted(by: { $0.key < $1.key }), id: \.key) { key, value in
-                HStack {
-                    Text(key).bold()
-                    Text("= \(value)")
-                }
-            }
-        }
-        .padding()
-        .background(.quaternary)
-        .cornerRadius(8)
-    }
-
-    func actionsView(graph: StateGraph, stateID: StateGraph.StateID) -> some View {
-        let transitions = graph.transitions[stateID] ?? []
-        return ForEach(transitions, id: \.action) { transition in
-            Button(transition.action) {
-                currentStateID = transition.target
-                history.append(transition.action)
-            }
-            .buttonStyle(.bordered)
-        }
+            Button("Reset") { loadGraph() }.buttonStyle(.bordered)
+            Text("\(graph?.states.count ?? 0) states verified").font(.caption).foregroundStyle(.secondary)
+        }.padding().onAppear { loadGraph() }
     }
 
     func loadGraph() {
@@ -201,106 +150,6 @@ struct StateExplorer: View {
             graph = result
             currentStateID = result.states.keys.min(by: { $0.id < $1.id })
             history = []
-        }
-    }
-}
-
-// MARK: - Interactive screens (typed, using Machine)
-
-struct HourClockScreen: View {
-    @State private var clock = HourClock.Machine(hr: 1)
-
-    var body: some View {
-        VStack(spacing: 16) {
-            Text("\(clock.hr):00")
-                .font(.system(size: 72, weight: .bold, design: .monospaced))
-            Button("Tick") { clock.apply(.tick) }
-                .buttonStyle(.borderedProminent)
-            Button("Reset") { clock = HourClock.Machine(hr: 1) }
-                .buttonStyle(.bordered)
-            Text("12 states verified")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        }
-    }
-}
-
-struct DieHardScreen: View {
-    @State private var puzzle = DieHard.Machine(jug3: 0, jug5: 0)
-
-    var body: some View {
-        VStack(spacing: 16) {
-            HStack(spacing: 40) {
-                JugView(label: "3 gal", level: puzzle.jug3, capacity: 3)
-                JugView(label: "5 gal", level: puzzle.jug5, capacity: 5)
-            }
-            Text(puzzle.jug5 == 4 ? "\u{1F389} 4 gallons!" : "\(puzzle.jug5) gal")
-                .font(.title)
-            ForEach(puzzle.availableActions, id: \.self) { action in
-                Button(action.rawValue) { puzzle.apply(action) }
-                    .buttonStyle(.bordered)
-            }
-            Button("Reset") { puzzle = DieHard.Machine(jug3: 0, jug5: 0) }
-                .buttonStyle(.bordered)
-            Text("16 states verified")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        }
-    }
-}
-
-struct JugView: View {
-    let label: String
-    let level: Int
-    let capacity: Int
-
-    var body: some View {
-        VStack {
-            ZStack(alignment: .bottom) {
-                Rectangle()
-                    .stroke()
-                    .frame(width: 60, height: 120)
-                Rectangle()
-                    .fill(.blue.opacity(0.6))
-                    .frame(width: 58, height: CGFloat(level) / CGFloat(capacity) * 118)
-            }
-            Text(label).font(.caption)
-        }
-    }
-}
-
-struct CoffeeCanScreen: View {
-    @State private var can = CoffeeCan.Machine(black: 5, white: 5)
-
-    var body: some View {
-        VStack(spacing: 16) {
-            HStack(spacing: 40) {
-                BeanView(label: "Black", count: can.black)
-                BeanView(label: "White", count: can.white)
-            }
-            Text("Parity: \(can.white % 2)")
-                .foregroundColor(parityPreserved ? .green : .red)
-            ForEach(can.availableActions, id: \.self) { action in
-                Button(action.rawValue) { can.apply(action) }
-                    .buttonStyle(.bordered)
-            }
-            Button("Reset") { can = CoffeeCan.Machine(black: 5, white: 5) }
-                .buttonStyle(.bordered)
-        }
-    }
-
-    var parityPreserved: Bool { true }
-}
-
-struct BeanView: View {
-    let label: String
-    let count: Int
-
-    var body: some View {
-        VStack {
-            Text("\(count)")
-                .font(.system(size: 48, weight: .bold, design: .monospaced))
-            Text(label).font(.caption)
         }
     }
 }
