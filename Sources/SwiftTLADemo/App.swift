@@ -54,7 +54,7 @@ struct CodePanel: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack { Text(title).font(.caption).foregroundStyle(.secondary); Spacer() }.padding(.horizontal, 8)
-            ScrollView(.horizontal) {
+            ScrollView(.vertical) {
                 Text(text).font(.system(size: 10, design: .monospaced)).padding(8).textSelection(.enabled)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
