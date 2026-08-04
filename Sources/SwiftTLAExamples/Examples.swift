@@ -1,9 +1,12 @@
 import SwiftTLA
 
-public struct ExampleDescription {
+public struct ExampleDescription: Hashable {
     public let name: String
     public let spec: TLASpec
     public let expectedStates: Int
+    
+    public func hash(into hasher: inout Hasher) { hasher.combine(name) }
+    public static func == (lhs: ExampleDescription, rhs: ExampleDescription) -> Bool { lhs.name == rhs.name }
 }
 
 public enum Examples {
