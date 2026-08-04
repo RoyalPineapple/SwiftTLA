@@ -8,12 +8,12 @@ final class PrettyPrintTests: XCTestCase {
         let x = Var<Int>("x")
         let spec = TLASpec("Simple") {
             Variable(x, 0)
-            Action("Inc") { x.next == x + 1 }
+            Action("Inc") { x.prime == x + 1 }
         }
         let actual = spec.annotatedDescription
         XCTAssertTrue(actual.contains("var x = Var(\"x\", 0)"))
         XCTAssertTrue(actual.contains("func inc()"))
-        XCTAssertTrue(actual.contains("x.next == x + 1"))
+        XCTAssertTrue(actual.contains("x.prime == x + 1"))
     }
 
     func testStays() {
@@ -32,21 +32,21 @@ final class PrettyPrintTests: XCTestCase {
         let spec = TLASpec("Pour") {
             Variable(jug3, 0); Variable(jug5, 0)
             Action("Pour3to5") {
-                (jug3 + jug5 <= 5) && (jug5.next == jug3 + jug5) && (jug3.next == 0)
-                || (!(jug3 + jug5 <= 5)) && (jug5.next == 5) && (jug3.next == jug3 - (5 - jug5))
+                (jug3 + jug5 <= 5) && (jug5.prime == jug3 + jug5) && (jug3.prime == 0)
+                || (!(jug3 + jug5 <= 5)) && (jug5.prime == 5) && (jug3.prime == jug3 - (5 - jug5))
             }
         }
         let actual = spec.annotatedDescription
         XCTAssertTrue(actual.contains("jug3 + jug5 <= 5"))
         XCTAssertTrue(actual.contains("||"))
-        XCTAssertTrue(actual.contains("jug5.next == 5"))
+        XCTAssertTrue(actual.contains("jug5.prime == 5"))
     }
 
     func testInvariant() {
         let x = Var<Int>("x")
         let spec = TLASpec("Inv") {
             Variable(x, 0)
-            Action("Inc") { x.next == x + 1 }
+            Action("Inc") { x.prime == x + 1 }
             Invariant("NonNeg") { x >= 0 }
         }
         let actual = spec.annotatedDescription
@@ -58,7 +58,7 @@ final class PrettyPrintTests: XCTestCase {
         let x = Var<Int>("x")
         let spec = TLASpec("TLATest") {
             Variable(x, 0)
-            Action("Inc") { x.next == x + 1 }
+            Action("Inc") { x.prime == x + 1 }
         }
         let actual = spec.tlaDescription
         XCTAssertTrue(actual.contains("---- MODULE TLATest ----"))
@@ -75,14 +75,14 @@ final class PrettyPrintTests: XCTestCase {
         let spec = TLASpec("Multi") {
             Variable(x, 5); Variable(y, 10)
             Action("Swap") {
-                x.next == y && y.next == x
+                x.prime == y && y.prime == x
             }
         }
         let actual = spec.annotatedDescription
         XCTAssertTrue(actual.contains("var x = Var(\"x\", 5)"))
         XCTAssertTrue(actual.contains("var y = Var(\"y\", 10)"))
-        XCTAssertTrue(actual.contains("x.next == y"))
-        XCTAssertTrue(actual.contains("y.next == x"))
+        XCTAssertTrue(actual.contains("x.prime == y"))
+        XCTAssertTrue(actual.contains("y.prime == x"))
     }
 
     func testEmptyNameActionsExcludedFromTLA() {

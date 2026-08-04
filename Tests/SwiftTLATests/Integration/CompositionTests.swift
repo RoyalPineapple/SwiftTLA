@@ -8,13 +8,13 @@ final class CompositionTests: XCTestCase {
 
         let specA = TLASpec("A") {
             Variable(x, 0)
-            Action("IncX") { x.next == x + 1 }
+            Action("IncX") { x.prime == x + 1 }
             Invariant("XNonNeg") { x >= 0 }
         }
 
         let specB = TLASpec("B") {
             Variable(y, 0)
-            Action("IncY") { y.next == y + 1 }
+            Action("IncY") { y.prime == y + 1 }
             Invariant("YNonNeg") { y >= 0 }
         }
 
@@ -31,7 +31,7 @@ final class CompositionTests: XCTestCase {
         let spec = TLASpec("Param") {
             Variable(Var<Int>("x"), TLAValue.constant("N"))
             Constant("N", 5)
-            Action("Inc") { next(Var<Int>("x")) == Var<Int>("x") + 1 }
+            Action("Inc") { prime(Var<Int>("x")) == Var<Int>("x") + 1 }
             Invariant("Positive") { Var<Int>("x") >= 0 }
         }
 
@@ -44,7 +44,7 @@ final class CompositionTests: XCTestCase {
         let x = Var<Int>("x")
         let spec = TLASpec("Bounded") {
             Variable(x, 0)
-            Action("Inc") { x.next == x + 1 }
+            Action("Inc") { x.prime == x + 1 }
         }
 
         let bounded = spec.extending(TLASpec("Bounds") {

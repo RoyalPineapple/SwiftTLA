@@ -7,7 +7,7 @@ final class CodegenTests: XCTestCase {
         let x = Var<Int>("x")
         let spec = TLASpec("Toggle") {
             Variable(x, 0)
-            Action("Flip") { x.next == (x + 1) % 2 }
+            Action("Flip") { x.prime == (x + 1) % 2 }
         }
         let graph = try ModelChecker(spec: spec, maxStates: 10).exploreGraph()
         let code = try StateMachineGenerator(graph: graph).generate()
@@ -19,7 +19,7 @@ final class CodegenTests: XCTestCase {
     func testCodableRoundtrip() throws {
         let spec = TLASpec("Test") {
             Variable(Var<Int>("x"), 0)
-            Action("Inc") { next(Var<Int>("x")) == Var<Int>("x") + 1 }
+            Action("Inc") { prime(Var<Int>("x")) == Var<Int>("x") + 1 }
             Invariant("GE0") { Var<Int>("x") >= 0 }
         }
         let data = try JSONEncoder().encode(spec)

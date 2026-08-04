@@ -36,7 +36,7 @@ final class AttachedMacroTests: XCTestCase {
         let x = Var<Int>("x")
         let spec = TLASpec("Test") {
             Variable(x, 0)
-            Action("Inc") { (x < 3) && (x.next == x + 1) }
+            Action("Inc") { (x < 3) && (x.prime == x + 1) }
         }
         let graph = try! ModelChecker(spec: spec, maxStates: 10).exploreGraph()
         XCTAssertEqual(graph.states.count, 4)
@@ -46,7 +46,7 @@ final class AttachedMacroTests: XCTestCase {
         let x = Var<Int>("x")
         let spec = TLASpec("Test") {
             Variable(x, 0)
-            Action("Dec") { x.next == x - 1 }
+            Action("Dec") { x.prime == x - 1 }
             Invariant("NonNeg") { x >= 0 }
         }
         let result = try! ModelChecker(spec: spec, maxStates: 10).check()

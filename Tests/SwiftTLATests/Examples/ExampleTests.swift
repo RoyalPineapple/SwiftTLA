@@ -1,6 +1,6 @@
 import XCTest
 @_spi(Internal) import SwiftTLA
-@_spi(Internal) import SwiftTLAExamples
+import SwiftTLAExamples
 
 final class ExampleTests: XCTestCase {
     func testStateCounts() throws {
