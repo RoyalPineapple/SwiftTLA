@@ -36,16 +36,55 @@ public struct ModelMacro: MemberMacro {
 
         var members: [DeclSyntax] = []
 
-        if let graph = try? checker.exploreGraph(),
-           let code = try? StateMachineGenerator(graph: graph).generate() {
-            let renamed = code
-                .replacingOccurrences(of: "struct " + typeName, with: "struct Machine")
-                .replacingOccurrences(of: "static let initial = " + typeName + "(", with: "static let initial = Machine(")
-            members.append(contentsOf: Parser.parse(source: renamed).statements.compactMap { $0.item.as(DeclSyntax.self) })
-        }
+    if let graph = try? checker.exploreGraph(),
+       let code = try? StateMachineGenerator(graph: graph).generate() {
+        let renamed = code
+            .replacingOccurrences(of: "struct " + typeName, with: "struct Machine")
+            .replacingOccurrences(of: "static let initial = " + typeName + "(", with: "static let initial = Machine(")
+        members.append(contentsOf: Parser.parse(source: renamed).statements.compactMap { $0.item.as(DeclSyntax.self) })
 
-        return members
+        let viewModelSource = generateViewModel(typeName: typeName, parsed: parsed)
+        members.append(DeclSyntax(stringLiteral: viewModelSource))
+        let viewModelSource = generateViewModel(typeName: typeName, parsed: parsed)
+        members.append(DeclSyntax(stringLiteral: viewModelSource))
     }
+
+    return members
+}
+
+private static func generateViewModel(typeName: String, parsed: ParsedSpec) -> String {
+    let stateProperties = parsed.variables.map { variable in
+        "public var \(variable.name): Int { machine.\(variable.name) }"
+    }.joined(separator: "\n        ")
+
+    let actionMethods = parsed.actions.map { action in
+        let lowercased = action.name.prefix(1).lowercased() + action.name.dropFirst()
+            .replacingOccurrences(of: " ", with: "")
+            .replacingOccurrences(of: "-", with: "_")
+        return "public func \(lowercased)() { machine.apply(.\(lowercased)) }"
+    }.joined(separator: "\n        ")
+
+    let canProperties = parsed.actions.map { action in
+        let lowercased = action.name.prefix(1).lowercased() + action.name.dropFirst()
+            .replacingOccurrences(of: " ", with: "")
+            .replacingOccurrences(of: "-", with: "_")
+        return "public var can\(action.name): Bool { machine.enabledActions.contains(.\(lowercased)) }"
+    }.joined(separator: "\n        ")
+
+    return """
+    @Observable
+    public final class ViewModel {
+        public var machine: Machine
+        public init(_ machine: Machine = Machine.initial) { self.machine = machine }
+
+        \(stateProperties)
+
+        \(actionMethods)
+
+        \(canProperties)
+    }
+    """
+}
 
     private struct ParsedSpec {
         var variables: [(name: String, initial: TLAValue)] = []
