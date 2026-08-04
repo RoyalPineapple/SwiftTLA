@@ -16,8 +16,11 @@ struct ContentView: View {
     
     var body: some View {
         NavigationSplitView {
-            List(Examples.all, id: \.name, selection: $selected) { ex in
-                Label(ex.name, systemImage: icon(for: ex.name))
+            List(selection: $selected) {
+                ForEach(Examples.all) { ex in
+                    Label(ex.name, systemImage: icon(for: ex.name))
+                        .tag(ex)
+                }
             }
             .navigationTitle("Examples")
             .listStyle(.sidebar)
