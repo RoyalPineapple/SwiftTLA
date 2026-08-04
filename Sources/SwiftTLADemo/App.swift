@@ -2,45 +2,95 @@ import SwiftUI
 import SwiftTLA
 import SwiftTLAGeneration
 import SwiftTLAExamples
-import SwiftTLAMacros
 
-@main struct DemoApp: App { var body: some Scene { WindowGroup { ContentView() } } }
+@main
+struct DemoApp: App {
+    var body: some Scene {
+        WindowGroup { ContentView() }
+    }
+}
 
 struct ContentView: View {
     @State private var selected: ExampleDescription?
+
     var body: some View {
         NavigationSplitView {
-            List(selection: $selected) { ForEach(Examples.all) { ex in Label(ex.name, systemImage: icon(ex.name)).tag(ex) } }
-                .navigationTitle("Examples").listStyle(.sidebar).frame(minWidth: 200)
-        } detail: { if let ex = selected { ExampleDetailView(example: ex) } }
+            List(selection: $selected) {
+                ForEach(Examples.all) { example in
+                    Label(example.name, systemImage: icon(for: example.name))
+                        .tag(example)
+                }
+            }
+            .navigationTitle("Examples")
+            .listStyle(.sidebar)
+            .frame(minWidth: 200)
+        } detail: {
+            if let example = selected {
+                ExampleDetailView(example: example)
+            }
+        }
     }
-    func icon(_ n: String) -> String { ["HourClock":"clock","DieHard":"drop","CoffeeCan":"cup.and.saucer","MovingCat":"cat","Majority":"checkmark.circle"][n] ?? "square.grid.3x3" }
+
+    func icon(for name: String) -> String {
+        let icons = [
+            "HourClock": "clock",
+            "DieHard": "drop",
+            "CoffeeCan": "cup.and.saucer",
+            "MovingCat": "cat",
+            "Majority": "checkmark.circle",
+        ]
+        return icons[name] ?? "square.grid.3x3"
+    }
 }
 
 struct ExampleDetailView: View {
-    let example: ExampleDescription; @State private var showTLA = false
+    let example: ExampleDescription
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(example.name).font(.largeTitle).bold()
-                    Text(example.about).foregroundStyle(.secondary)
-                    if let u = URL(string: example.source) { Link("Source ↗", destination: u).font(.caption) }
-                }.padding()
+                header
                 Divider()
-                interactive.frame(maxWidth: .infinity).padding()
+                interactiveView
+                    .frame(maxWidth: .infinity)
+                    .padding()
                 Divider()
                 SourcePanels(spec: example.spec)
             }
         }
     }
-    @ViewBuilder var interactive: some View { switch example.name { case "HourClock": HourClockScreen(); case "DieHard": DieHardScreen(); case "CoffeeCan": CoffeeCanScreen(); case "MovingCat": CatScreen(); case "Majority": MajorityScreen(); case "BoundedCounter": CounterScreen(); case "Toggle": ToggleScreen(); case "ThreeState": ThreeScreen(); default: GraphScreen(ex: example) } }
+
+    var header: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(example.name)
+                .font(.largeTitle)
+                .bold()
+            Text(example.about)
+                .foregroundStyle(.secondary)
+            if let url = URL(string: example.source) {
+                Link("Source \u{2197}", destination: url)
+                    .font(.caption)
+            }
+        }
+        .padding()
+    }
+
+    @ViewBuilder
+    var interactiveView: some View {
+        switch example.name {
+        case "HourClock": HourClockScreen()
+        case "DieHard": DieHardScreen()
+        case "CoffeeCan": CoffeeCanScreen()
+        default: StateExplorer(example: example)
+        }
+    }
 }
 
 // MARK: - Source panels
 
 struct SourcePanels: View {
     let spec: TLASpec
+
     var body: some View {
         HStack(alignment: .top, spacing: 0) {
             CodePanel(title: "@TLAModel", text: spec.annotatedForm)
@@ -51,73 +101,206 @@ struct SourcePanels: View {
 }
 
 struct CodePanel: View {
-    let title: String; let text: String
+    let title: String
+    let text: String
+
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            HStack { Text(title).font(.caption).foregroundStyle(.secondary); Spacer() }.padding(.horizontal, 8)
+            HStack {
+                Text(title)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Spacer()
+            }
+            .padding(.horizontal, 8)
+
             ScrollView(.vertical) {
-                Text(text).font(.system(size: 10, design: .monospaced)).padding(8).textSelection(.enabled)
+                Text(text)
+                    .font(.system(size: 10, design: .monospaced))
+                    .padding(8)
+                    .textSelection(.enabled)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .background(.quaternary).cornerRadius(4)
+            .background(.quaternary)
+            .cornerRadius(4)
             .overlay(alignment: .topTrailing) {
-                Button(action: { copy(text) }) { Image(systemName: "doc.on.doc").font(.caption2).padding(6) }
-                    .buttonStyle(.plain).background(.regularMaterial).cornerRadius(4).padding(4)
+                Button {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(text, forType: .string)
+                } label: {
+                    Image(systemName: "doc.on.doc")
+                        .font(.caption2)
+                        .padding(6)
+                }
+                .buttonStyle(.plain)
+                .background(.regularMaterial)
+                .cornerRadius(4)
+                .padding(4)
             }
-        }.frame(maxWidth: .infinity)
+        }
+        .frame(maxWidth: .infinity)
     }
 }
 
-func copy(_ text: String) { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(text, forType: .string) }
+// MARK: - State explorer (generic, works with any spec)
 
-// MARK: - Screens
+struct StateExplorer: View {
+    let example: ExampleDescription
+    @State private var graph: StateGraph?
+    @State private var currentStateID: StateGraph.StateID?
+    @State private var history: [String] = []
 
-struct HourClockScreen: View { @State private var c=HourClock.Machine(hr:1)
-    var body: some View { VStack(spacing:16) { Text("\(c.hr):00").font(.system(size:72,weight:.bold,design:.monospaced)); Button("Tick"){c.apply(.tick)}.buttonStyle(.borderedProminent); Button("Reset"){c=HourClock.Machine(hr:1)}.buttonStyle(.bordered); Text("12 states verified").font(.caption).foregroundStyle(.secondary) } }
+    var body: some View {
+        VStack(spacing: 12) {
+            if let graph, let stateID = currentStateID, let state = graph.states[stateID] {
+                stateView(state)
+                actionsView(graph: graph, stateID: stateID)
+                if !history.isEmpty {
+                    Text(history.joined(separator: " \u{2192} "))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            Button("Reset") { loadGraph() }
+                .buttonStyle(.bordered)
+            Text("\(graph?.states.count ?? 0) states verified")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .padding()
+        .onAppear { loadGraph() }
+    }
+
+    func stateView(_ state: [String: TLAValue]) -> some View {
+        VStack(spacing: 4) {
+            ForEach(state.sorted(by: { $0.key < $1.key }), id: \.key) { key, value in
+                HStack {
+                    Text(key).bold()
+                    Text("= \(value)")
+                }
+            }
+        }
+        .padding()
+        .background(.quaternary)
+        .cornerRadius(8)
+    }
+
+    func actionsView(graph: StateGraph, stateID: StateGraph.StateID) -> some View {
+        let transitions = graph.transitions[stateID] ?? []
+        return ForEach(transitions, id: \.action) { transition in
+            Button(transition.action) {
+                currentStateID = transition.target
+                history.append(transition.action)
+            }
+            .buttonStyle(.bordered)
+        }
+    }
+
+    func loadGraph() {
+        if let result = try? ModelChecker(spec: example.spec, maxStates: 10000).exploreGraph() {
+            graph = result
+            currentStateID = result.states.keys.min(by: { $0.id < $1.id })
+            history = []
+        }
+    }
 }
 
-struct DieHardScreen: View { @State private var p=DieHard.Machine(jug3:0,jug5:0)
-    var body: some View { VStack(spacing:16) { HStack(spacing:40) { jug("3 gal",p.jug3,3); jug("5 gal",p.jug5,5) }; Text(p.jug5==4 ? "🎉 4 gallons!" : "\(p.jug5) gal").font(.title); ForEach(p.availableActions,id:\.self){a in Button(a.rawValue){p.apply(a)}.buttonStyle(.bordered)}; Button("Reset"){p=DieHard.Machine(jug3:0,jug5:0)}.buttonStyle(.bordered); Text("16 states verified").font(.caption).foregroundStyle(.secondary) } }
-    func jug(_ t:String,_ l:Int,_ c:Int) -> some View { VStack{ZStack(alignment:.bottom){Rectangle().stroke().frame(width:60,height:120);Rectangle().fill(.blue.opacity(0.6)).frame(width:58,height:CGFloat(l)/CGFloat(c)*118)};Text(t).font(.caption)} }
+// MARK: - Interactive screens (typed, using Machine)
+
+struct HourClockScreen: View {
+    @State private var clock = HourClock.Machine(hr: 1)
+
+    var body: some View {
+        VStack(spacing: 16) {
+            Text("\(clock.hr):00")
+                .font(.system(size: 72, weight: .bold, design: .monospaced))
+            Button("Tick") { clock.apply(.tick) }
+                .buttonStyle(.borderedProminent)
+            Button("Reset") { clock = HourClock.Machine(hr: 1) }
+                .buttonStyle(.bordered)
+            Text("12 states verified")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
 }
 
-struct CoffeeCanScreen: View { @State private var c=CoffeeCan.Machine(black:5,white:5)
-    var body: some View { VStack(spacing:16) { HStack(spacing:40) { bean("Black",c.black); bean("White",c.white) }; Text("Parity: \(c.white%2) — \(parityPreserved(c) ? "✓" : "✗")").foregroundColor(parityPreserved(c) ? .green : .red); ForEach(c.availableActions,id:\.self){a in Button(a.rawValue){c.apply(a)}.buttonStyle(.bordered)}; Button("Reset"){c=CoffeeCan.Machine(black:5,white:5)}.buttonStyle(.bordered) } }
-    func bean(_ l:String,_ n:Int) -> some View { VStack{Text("\(n)").font(.system(size:48,weight:.bold,design:.monospaced));Text(l).font(.caption)} }
-    func parityPreserved(_ c: CoffeeCan.Machine) -> Bool { true }
+struct DieHardScreen: View {
+    @State private var puzzle = DieHard.Machine(jug3: 0, jug5: 0)
+
+    var body: some View {
+        VStack(spacing: 16) {
+            HStack(spacing: 40) {
+                JugView(label: "3 gal", level: puzzle.jug3, capacity: 3)
+                JugView(label: "5 gal", level: puzzle.jug5, capacity: 5)
+            }
+            Text(puzzle.jug5 == 4 ? "\u{1F389} 4 gallons!" : "\(puzzle.jug5) gal")
+                .font(.title)
+            ForEach(puzzle.availableActions, id: \.self) { action in
+                Button(action.rawValue) { puzzle.apply(action) }
+                    .buttonStyle(.bordered)
+            }
+            Button("Reset") { puzzle = DieHard.Machine(jug3: 0, jug5: 0) }
+                .buttonStyle(.bordered)
+            Text("16 states verified")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
 }
 
-struct CatScreen: View { @State private var g:StateGraph?;@State private var id:StateGraph.StateID?;@State private var h:[String]=[]
-    var body: some View { VStack(spacing:12) { if let g,let id,let s=g.states[id] { let cat=v(s["cat"]),obs=v(s["observed"]),dir=v(s["direction"]); HStack(spacing:4){ForEach(1...6,id:\.self){i in VStack{ZStack{RoundedRectangle(cornerRadius:4).fill(i<=obs ? .green.opacity(0.3):.gray.opacity(0.1)).frame(width:40,height:40);if i==cat{Text("🐱").font(.title2)}};Text("\(i)").font(.caption2)}}}; Text(dir==1 ? "→ right" : "← left").foregroundStyle(.secondary); ForEach(g.transitions[id] ?? [],id:\.action){t in Button(t.action){self.id=t.target;h.append(t.action)}.buttonStyle(.bordered)}; if !h.isEmpty{Text(h.joined(separator:" → ")).font(.caption).foregroundStyle(.secondary)} }; Button("Reset"){load()}.buttonStyle(.bordered); Text("24 states verified").font(.caption).foregroundStyle(.secondary) }.padding().onAppear{load()} }
-    func load(){if let g=try? ModelChecker(spec:MovingCat.spec,maxStates:100).exploreGraph(){self.g=g;id=g.states.keys.min(by:{$0.id<$1.id});h=[]}}
-    func v(_ x:TLAValue?)->Int{if case .int(let n)=(x ?? .int(0)){return n};return 0}
+struct JugView: View {
+    let label: String
+    let level: Int
+    let capacity: Int
+
+    var body: some View {
+        VStack {
+            ZStack(alignment: .bottom) {
+                Rectangle()
+                    .stroke()
+                    .frame(width: 60, height: 120)
+                Rectangle()
+                    .fill(.blue.opacity(0.6))
+                    .frame(width: 58, height: CGFloat(level) / CGFloat(capacity) * 118)
+            }
+            Text(label).font(.caption)
+        }
+    }
 }
 
-struct MajorityScreen: View { @State private var g:StateGraph?;@State private var id:StateGraph.StateID?;@State private var h:[String]=[]
-    var body: some View { VStack(spacing:12) { if let g,let id,let s=g.states[id] { let c=v(s["candidate"]),cnt=v(s["count"]),idx=v(s["index"]); Text("Candidate \(c) leads with \(cnt)").font(.title2); ProgressView(value:Double(idx),total:4).padding(.horizontal); Text(idx==4 ? "✓ Winner: \(c)" : "Scanning \(idx)/4").foregroundStyle(idx==4 ? .green:.secondary); ForEach(g.transitions[id] ?? [],id:\.action){t in Button(t.action){self.id=t.target;h.append(t.action)}.buttonStyle(.bordered)} }; Button("Reset"){load()}.buttonStyle(.bordered) }.padding().onAppear{load()} }
-    func load(){if let g=try? ModelChecker(spec:Majority.spec,maxStates:200).exploreGraph(){self.g=g;id=g.states.keys.min(by:{$0.id<$1.id});h=[]}}
-    func v(_ x:TLAValue?)->Int{if case .int(let n)=(x ?? .int(0)){return n};return 0}
+struct CoffeeCanScreen: View {
+    @State private var can = CoffeeCan.Machine(black: 5, white: 5)
+
+    var body: some View {
+        VStack(spacing: 16) {
+            HStack(spacing: 40) {
+                BeanView(label: "Black", count: can.black)
+                BeanView(label: "White", count: can.white)
+            }
+            Text("Parity: \(can.white % 2)")
+                .foregroundColor(parityPreserved ? .green : .red)
+            ForEach(can.availableActions, id: \.self) { action in
+                Button(action.rawValue) { can.apply(action) }
+                    .buttonStyle(.bordered)
+            }
+            Button("Reset") { can = CoffeeCan.Machine(black: 5, white: 5) }
+                .buttonStyle(.bordered)
+        }
+    }
+
+    var parityPreserved: Bool { true }
 }
 
-struct CounterScreen: View { @State private var g:StateGraph?;@State private var id:StateGraph.StateID?;@State private var h:[String]=[]
-    var body: some View { VStack(spacing:12) { if let g,let id,let s=g.states[id] { let x=v(s["x"]); HStack(spacing:0){ForEach(-3...3,id:\.self){n in VStack{Rectangle().fill(n==x ? .blue:.gray.opacity(0.2)).frame(width:30,height:n==x ? 30:20);Text("\(n)").font(.caption2)}}}; Text("x = \(x)").font(.title3); ForEach(g.transitions[id] ?? [],id:\.action){t in Button(t.action){self.id=t.target;h.append(t.action)}.buttonStyle(.bordered)} }; Button("Reset"){load()}.buttonStyle(.bordered); Text("7 states verified").font(.caption).foregroundStyle(.secondary) }.padding().onAppear{load()} }
-    func load(){if let g=try? ModelChecker(spec:BoundedCounter.spec,maxStates:20).exploreGraph(){self.g=g;id=g.states.keys.min(by:{$0.id<$1.id});h=[]}}
-    func v(_ x:TLAValue?)->Int{if case .int(let n)=(x ?? .int(0)){return n};return 0}
-}
+struct BeanView: View {
+    let label: String
+    let count: Int
 
-struct ToggleScreen: View { @State private var g:StateGraph?;@State private var id:StateGraph.StateID?;@State private var h:[String]=[]
-    var body: some View { VStack(spacing:12) { if let g,let id,let s=g.states[id] { let x=v(s["x"]); Circle().fill(x==1 ? .green:.gray).frame(width:80,height:80).overlay(Text(x==1 ?"ON":"OFF").foregroundColor(.white).bold()); ForEach(g.transitions[id] ?? [],id:\.action){t in Button(t.action){self.id=t.target;h.append(t.action)}.buttonStyle(.bordered)} }; Button("Reset"){load()}.buttonStyle(.bordered); Text("2 states verified").font(.caption).foregroundStyle(.secondary) }.padding().onAppear{load()} }
-    func load(){if let g=try? ModelChecker(spec:Toggle.spec,maxStates:10).exploreGraph(){self.g=g;id=g.states.keys.min(by:{$0.id<$1.id});h=[]}}
-    func v(_ x:TLAValue?)->Int{if case .int(let n)=(x ?? .int(0)){return n};return 0}
-}
-
-struct ThreeScreen: View { @State private var g:StateGraph?;@State private var id:StateGraph.StateID?;@State private var h:[String]=[]
-    var body: some View { VStack(spacing:12) { if let g,let id,let s=g.states[id] { let st=v(s["state"]); HStack(spacing:40){ForEach(0..<3,id:\.self){i in VStack{Circle().fill(i==st ? .orange:.gray.opacity(0.2)).frame(width:50,height:50).overlay(Text("\(i)").bold());if i==st{Text("current").font(.caption2)}}}}; ForEach(g.transitions[id] ?? [],id:\.action){t in Button(t.action){self.id=t.target;h.append(t.action)}.buttonStyle(.bordered)} }; Button("Reset"){load()}.buttonStyle(.bordered); Text("3 states verified").font(.caption).foregroundStyle(.secondary) }.padding().onAppear{load()} }
-    func load(){if let g=try? ModelChecker(spec:ThreeState.spec,maxStates:10).exploreGraph(){self.g=g;id=g.states.keys.min(by:{$0.id<$1.id});h=[]}}
-    func v(_ x:TLAValue?)->Int{if case .int(let n)=(x ?? .int(0)){return n};return 0}
-}
-
-struct GraphScreen: View { let ex:ExampleDescription; @State private var g:StateGraph?;@State private var id:StateGraph.StateID?;@State private var h:[String]=[]
-    var body: some View { VStack(spacing:12) { if let g,let id,let s=g.states[id] { VStack(spacing:4){ForEach(s.sorted(by:{$0.key<$1.key}),id:\.key){k,v in HStack{Text(k).bold();Text("=\(v)")}}}.padding().background(.quaternary).cornerRadius(8); ForEach(g.transitions[id] ?? [],id:\.action){t in Button(t.action){self.id=t.target;h.append(t.action)}.buttonStyle(.bordered)}; if !h.isEmpty{Text(h.joined(separator:" → ")).font(.caption)} }; Button("Reset"){load()}.buttonStyle(.bordered); Text("\(g?.states.count ?? 0) states verified").font(.caption).foregroundStyle(.secondary) }.padding().onAppear{load()} }
-    func load(){if let g=try? ModelChecker(spec:ex.spec,maxStates:10000).exploreGraph(){self.g=g;id=g.states.keys.min(by:{$0.id<$1.id});h=[]}}
+    var body: some View {
+        VStack {
+            Text("\(count)")
+                .font(.system(size: 48, weight: .bold, design: .monospaced))
+            Text(label).font(.caption)
+        }
+    }
 }
