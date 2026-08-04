@@ -95,39 +95,63 @@ private func swiftActionBody(_ a: NamedAction) -> CodeBlockSyntax {
 private func renderActionExpr(_ e: ActionExpr) -> [String] {
     switch e {
     case .or(let a, let b):
-        return renderActionExpr(a) + renderActionExpr(b)
+        let lhs = renderActionExpr(a)
+        let rhs = renderActionExpr(b)
+        if let last = lhs.last {
+            return lhs.dropLast() + [last + " ||"] + rhs.map { "        " + $0 }
+        }
+        return rhs
     case .and(_, _):
-        return [renderAndChain(e)]
-    case .assign(let vn, let rhs):
-        return ["\(vn).becomes(\(StateExprSyntax(from: rhs)))"]
-    case .unchanged(let vn):
-        return ["\(vn).stays"]
+        let atoms = flattenAction(e)
+        let grouped = groupGuards(atoms)
+        let lines = grouped.map(renderActionAtom)
+        if lines.count <= 1 { return lines }
+        return lines.enumerated().map { i, line in
+            i < lines.count - 1 ? line + " &&" : line
+        }
     default:
-        return [e.description]
+        return [renderActionAtom(e)]
     }
 }
 
-
-private func renderAndChain(_ e: ActionExpr) -> String {
+private func flattenAction(_ e: ActionExpr) -> [ActionExpr] {
     switch e {
-    case .and(let a, let b):
-        if case .guard_(let cond) = a, case .assign(let vn, let rhs) = b {
-            return "\(vn).becomes(\(StateExprSyntax(from: rhs))).when(\(StateExprSyntax(from: cond)))"
+    case .and(let a, let b): return flattenAction(a) + flattenAction(b)
+    default: return [e]
+    }
+}
+
+private func groupGuards(_ atoms: [ActionExpr]) -> [ActionExpr] {
+    var result: [ActionExpr] = []
+    var pending: StateExpr?
+    for atom in atoms {
+        if case .guard_(let cond) = atom {
+            pending = cond
+            continue
         }
-        if case .and(let innerA, let innerB) = a, case .guard_(let cond) = innerA, case .assign(let vn, let rhs) = innerB, case .assign(let vn2, let rhs2) = b {
-            return "\(vn).becomes(\(StateExprSyntax(from: rhs))).when(\(StateExprSyntax(from: cond)))\n\(vn2).becomes(\(StateExprSyntax(from: rhs2)))"
+        if let cond = pending {
+            result.append(.and(.guard_(cond), atom))
+            pending = nil
+        } else {
+            result.append(atom)
         }
-        return "\(renderAndChain(a)) && \(renderAndChain(b))"
-    case .guard_(let cond):
-        return "/* guard: \(StateExprSyntax(from: cond)) */"
+    }
+    return result
+}
+
+private func renderActionAtom(_ e: ActionExpr) -> String {
+    switch e {
     case .assign(let vn, let rhs):
         return "\(vn).becomes(\(StateExprSyntax(from: rhs)))"
     case .unchanged(let vn):
         return "\(vn).stays"
+    case .and(.guard_(let cond), .assign(let vn, let rhs)):
+        return "\(vn).becomes(\(StateExprSyntax(from: rhs))).when(\(StateExprSyntax(from: cond)))"
     default:
         return e.description
     }
 }
+
 
 private struct StateExprSyntax: CustomStringConvertible {
     let expr: StateExpr

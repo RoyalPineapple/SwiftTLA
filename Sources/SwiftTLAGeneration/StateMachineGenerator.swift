@@ -64,7 +64,7 @@ public struct StateMachineGenerator {
         EnumDeclSyntax(
             modifiers: [DeclModifierSyntax(name: .keyword(.public))],
             name: .identifier("Action"),
-            inheritanceClause: inherited("String", "CaseIterable", "Identifiable", "Codable", "Sendable")
+            inheritanceClause: inherited("String", "CaseIterable", "Identifiable", "Hashable", "Codable", "Sendable")
         ) {
             for act in actions { "case \(raw: swiftCase(act))" }
             "public var id: Self { self }"
