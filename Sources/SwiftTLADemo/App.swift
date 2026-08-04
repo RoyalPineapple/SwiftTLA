@@ -60,7 +60,7 @@ struct CodePanel: View {
                     Button(action: { copy(text) }) { Image(systemName: "doc.on.doc").font(.caption2).padding(6) }
                         .buttonStyle(.plain).background(.regularMaterial).cornerRadius(4).padding(4)
                 }
-        }.frame(maxWidth: .infinity)
+        }.frame(maxWidth: .infinity).frame(minWidth: 480)
     }
 }
 
