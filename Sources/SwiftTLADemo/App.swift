@@ -91,13 +91,20 @@ func formatSwift(_ spec: TLASpec) -> String {
 }
 
 func swiftExpr(_ e: ActionExpr) -> String {
+    var lines: [String] = []
+    collectAssignments(e, into: &lines)
+    return lines.joined(separator: "\n")
+}
+
+func collectAssignments(_ e: ActionExpr, into lines: inout [String]) {
     switch e {
-    case .assign(let v, let rhs): return "\(v).becomes(\(swiftState(rhs)))"
-    case .unchanged(let v): return "\(v).stays"
-    case .guard_(let s): return "guard: \(swiftState(s))"
-    case .and(let a, let b): return "\(swiftExpr(a)) &&\n    \(swiftExpr(b))"
-    case .or(let a, let b): return "\(swiftExpr(a)) ||\n    \(swiftExpr(b))"
-    case .chooseAction(let v, let s): return "chooseAction(\"\(v)\", from: \(swiftState(s)))"
+    case .assign(let v, let rhs): lines.append("        \(v).becomes(\(swiftState(rhs)))")
+    case .unchanged(let v): lines.append("        \(v).stays")
+    case .guard_(_): break
+    case .and(let a, let b): collectAssignments(a, into: &lines); collectAssignments(b, into: &lines)
+    case .or(let a, let b): lines.append("    or")
+        var right: [String] = []; collectAssignments(a, into: &lines); collectAssignments(b, into: &right); lines += right
+    case .chooseAction(let v, let s): lines.append("        chooseAction(\"\(v)\", from: \(swiftState(s)))")
     }
 }
 

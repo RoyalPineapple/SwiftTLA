@@ -39,11 +39,16 @@ public struct AttachedTLASpecMacro: PeerMacro {
                     }
                 }
             } else if let funcDecl = member.decl.as(FunctionDeclSyntax.self) {
+                let name = funcDecl.name.text
                 if let body = funcDecl.body {
                     let clauses = parseBody(body.statements)
-                    if !clauses.isEmpty {
-                        actions.append((funcDecl.name.text, clauses.dropFirst().reduce(clauses[0]) { .and($0, $1) }))
+                    if clauses.isEmpty {
+                        actions.append((name, .guard_(.value(.bool(true))))) // stub — always enabled
+                    } else {
+                        actions.append((name, clauses.dropFirst().reduce(clauses[0]) { .and($0, $1) }))
                     }
+                } else {
+                    actions.append((name, .guard_(.value(.bool(true))))) // no body — stub
                 }
             }
         }
@@ -56,7 +61,10 @@ public struct AttachedTLASpecMacro: PeerMacro {
         }
         guard let graph = try? checker.exploreGraph() else { throw SimpleError("Could not explore state graph") }
         let code = (try? StateMachineGenerator(graph: graph).generate()) ?? ""
-        return Parser.parse(source: code).statements.compactMap { $0.item.as(DeclSyntax.self) }
+        let renamed = code
+            .replacingOccurrences(of: "struct \(typeName)", with: "struct TLAStateMachine")
+            .replacingOccurrences(of: "static let initial = \(typeName)(", with: "static let initial = TLAStateMachine(")
+        return Parser.parse(source: renamed).statements.compactMap { $0.item.as(DeclSyntax.self) }
     }
 
     private static func extractGetter(_ binding: PatternBindingSyntax) -> CodeBlockItemListSyntax? {
