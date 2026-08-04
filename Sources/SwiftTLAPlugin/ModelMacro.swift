@@ -18,7 +18,7 @@ public struct ModelMacro: MemberMacro {
         let parsed = parseMembers(declaration.memberBlock.members)
         let spec = TLASpec(name: typeName, variables: parsed.variables, actions: parsed.actions, invariants: parsed.invariants, temporalProperties: parsed.temporal, fairness: parsed.fairness)
 
-        let checker = ModelChecker(spec: spec, maxStates: 1_000)
+        let checker = ModelChecker(spec: spec, maxStates: 10_000)
         if case .invariantViolated(let inv, _, let trace) = (try? checker.check()) {
             throw SimpleError("Invariant '\(inv)' violated:\n\(trace.map { "\($0)" }.joined(separator: "\n"))")
         }
@@ -151,6 +151,9 @@ public struct ModelMacro: MemberMacro {
         guard let e else { return nil }
         if let il = e.as(IntegerLiteralExprSyntax.self) { return .value(.int(Int(il.literal.text) ?? 0)) }
         if let dr = e.as(DeclReferenceExprSyntax.self) { return .variable(dr.baseName.text) }
+        if let tuple = e.as(TupleExprSyntax.self), let single = tuple.elements.first?.expression {
+            return parseStateExpr(single)
+        }
         if let io = e.as(InfixOperatorExprSyntax.self), let l = parseStateExpr(io.leftOperand), let r = parseStateExpr(io.rightOperand) {
             switch io.operator.as(BinaryOperatorExprSyntax.self)?.operator.text {
             case "+": return .add(l, r); case "-": return .subtract(l, r)
