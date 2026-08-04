@@ -119,6 +119,8 @@ func swiftState(_ e: StateExpr) -> String {
     case .modulo(let a, let b): return "\(swiftState(a)) % \(swiftState(b))"
     case .notEqual(let a, let b): return "\(swiftState(a)) != \(swiftState(b))"
     case .integerDivide(let a, let b): return "\(swiftState(a)) / \(swiftState(b))"
+    case .and(let a, let b): return "\(swiftState(a)) && \(swiftState(b))"
+    case .or(let a, let b): return "\(swiftState(a)) || \(swiftState(b))"
     default: return e.description
     }
 }

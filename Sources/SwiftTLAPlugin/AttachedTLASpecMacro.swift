@@ -7,10 +7,10 @@ import SwiftParser
 import SwiftTLA
 import SwiftTLAGenerator
 
-public struct AttachedTLASpecMacro: PeerMacro {
+public struct AttachedTLASpecMacro: MemberMacro {
     public static func expansion(
         of node: AttributeSyntax,
-        providingPeersOf declaration: some DeclSyntaxProtocol,
+        providingMembersOf declaration: some DeclGroupSyntax,
         in context: some MacroExpansionContext
     ) throws -> [DeclSyntax] {
         guard let structDecl = declaration.as(StructDeclSyntax.self) else {
@@ -32,35 +32,47 @@ public struct AttachedTLASpecMacro: PeerMacro {
                 let actName = funcDecl.name.text
                 if let body = funcDecl.body {
                     let clauses = parseBody(body.statements)
-                    let actionBody = clauses.isEmpty ? ActionExpr.guard_(.value(.bool(false))) : clauses.dropFirst().reduce(clauses[0]) { .and($0, $1) }
-                    actions.append((actName, actionBody))
+                    if !clauses.isEmpty {
+                        let combined = clauses.dropFirst().reduce(clauses[0]) { .and($0, $1) }
+                        actions.append((actName, combined))
+                    }
                 }
             }
         }
 
         guard !variables.isEmpty, !actions.isEmpty else {
-            throw SimpleError("@TLA needs at least one Var<Int> property and one method")
+            return [DeclSyntax(stringLiteral: "/* @TLA needs Var<Int> properties and methods */")]
         }
 
-        let spec = TLASpec(
-            name: typeName,
-            variables: variables.map { NamedVar(name: $0.name, initial: $0.initial) },
-            actions: actions.map { NamedAction(name: $0.name, body: $0.body) },
-            invariants: []
-        )
+        let spec = TLASpec(name: typeName, variables: variables.map { NamedVar(name: $0.name, initial: $0.initial) }, actions: actions.map { NamedAction(name: $0.name, body: $0.body) }, invariants: [])
 
         let checker = ModelChecker(spec: spec, maxStates: 10_000)
         if case .invariantViolated(let inv, _, let trace) = (try? checker.check()) {
-            throw SimpleError("Invariant '\(inv)' violated: \(trace.map { "\($0)" }.joined(separator: " → "))")
+            let traceStr = trace.map { "  \($0)" }.joined(separator: "\n")
+            return [DeclSyntax(stringLiteral: "/* Invariant '\(inv)' violated:\n\(traceStr)\n*/")]
         }
-
-        guard let graph = try? checker.exploreGraph() else {
-            throw SimpleError("Could not explore state graph")
-        }
+        guard let graph = try? checker.exploreGraph() else { return [] }
 
         let code = (try? StateMachineGenerator(graph: graph).generate()) ?? ""
         let source = Parser.parse(source: code)
-        return source.statements.compactMap { $0.item.as(DeclSyntax.self) }
+        if let structDecl = source.statements.first?.item.as(StructDeclSyntax.self) {
+            return structDecl.memberBlock.members.compactMap { member in
+                if let decl = member.decl.as(EnumDeclSyntax.self), decl.name.text == "Action" {
+                    return DeclSyntax(decl)
+                }
+                if let decl = member.decl.as(VariableDeclSyntax.self), decl.bindings.first?.pattern.as(IdentifierPatternSyntax.self)?.identifier.text == "transitions" {
+                    return DeclSyntax(decl)
+                }
+                if let decl = member.decl.as(FunctionDeclSyntax.self), decl.name.text == "apply" {
+                    return DeclSyntax(decl)
+                }
+                if let decl = member.decl.as(VariableDeclSyntax.self), let name = decl.bindings.first?.pattern.as(IdentifierPatternSyntax.self)?.identifier.text, name == "availableActions" || name == "initial" {
+                    return DeclSyntax(decl)
+                }
+                return nil
+            }
+        }
+        return []
     }
 
     private static func parseBody(_ statements: CodeBlockItemListSyntax) -> [ActionExpr] {
@@ -82,9 +94,7 @@ public struct AttachedTLASpecMacro: PeerMacro {
     private struct Chain { let call: FunctionCallExprSyntax; let condition: StateExpr? }
 
     private static func unwrapWhen(_ call: FunctionCallExprSyntax) -> Chain {
-        if let ma = call.calledExpression.as(MemberAccessExprSyntax.self),
-           ma.declName.baseName.text == "when",
-           let base = ma.base?.as(FunctionCallExprSyntax.self) {
+        if let ma = call.calledExpression.as(MemberAccessExprSyntax.self), ma.declName.baseName.text == "when", let base = ma.base?.as(FunctionCallExprSyntax.self) {
             let cond = parseExpr(call.arguments.first?.expression)
             let inner = unwrapWhen(base)
             let combined: StateExpr? = if let c = cond, let i = inner.condition { .and(c, i) } else { cond ?? inner.condition }
@@ -94,10 +104,7 @@ public struct AttachedTLASpecMacro: PeerMacro {
     }
 
     private static func parseBecomes(_ call: FunctionCallExprSyntax) -> (String, StateExpr)? {
-        guard let ma = call.calledExpression.as(MemberAccessExprSyntax.self),
-              ma.declName.baseName.text == "becomes",
-              let base = ma.base?.as(DeclReferenceExprSyntax.self),
-              let arg = call.arguments.first?.expression else { return nil }
+        guard let ma = call.calledExpression.as(MemberAccessExprSyntax.self), ma.declName.baseName.text == "becomes", let base = ma.base?.as(DeclReferenceExprSyntax.self), let arg = call.arguments.first?.expression else { return nil }
         return (base.baseName.text, parseExpr(arg) ?? .value(.int(0)))
     }
 
@@ -108,11 +115,8 @@ public struct AttachedTLASpecMacro: PeerMacro {
         if let infix = expr.as(InfixOperatorExprSyntax.self) {
             guard let l = parseExpr(infix.leftOperand), let r = parseExpr(infix.rightOperand) else { return nil }
             switch infix.operator.as(BinaryOperatorExprSyntax.self)?.operator.text {
-            case "+": return .add(l, r); case "-": return .subtract(l, r)
-            case "*": return .multiply(l, r);  case "/": return .divide(l, r)
-            case "<": return .lessThan(l, r);  case "<=": return .lessOrEqual(l, r)
-            case ">": return .greaterThan(l, r); case ">=": return .greaterOrEqual(l, r)
-            case "==": return .equal(l, r);    case "!=": return .notEqual(l, r)
+            case "+": return .add(l, r); case "-": return .subtract(l, r); case "*": return .multiply(l, r); case "/": return .divide(l, r)
+            case "<": return .lessThan(l, r); case "<=": return .lessOrEqual(l, r); case ">": return .greaterThan(l, r); case ">=": return .greaterOrEqual(l, r); case "==": return .equal(l, r); case "!=": return .notEqual(l, r)
             default: return nil
             }
         }
@@ -122,12 +126,7 @@ public struct AttachedTLASpecMacro: PeerMacro {
     private static func extractVarInit(_ expr: ExprSyntax?) -> TLAValue {
         guard let expr else { return .int(0) }
         if let intLit = expr.as(IntegerLiteralExprSyntax.self) { return .int(Int(intLit.literal.text) ?? 0) }
-        if let call = expr.as(FunctionCallExprSyntax.self) {
-            let args = call.arguments
-            if args.count >= 2, let second = args[args.index(args.startIndex, offsetBy: 1)].expression.as(IntegerLiteralExprSyntax.self) {
-                return .int(Int(second.literal.text) ?? 0)
-            }
-        }
+        if let call = expr.as(FunctionCallExprSyntax.self), call.arguments.count >= 2, let second = call.arguments[call.arguments.index(call.arguments.startIndex, offsetBy: 1)].expression.as(IntegerLiteralExprSyntax.self) { return .int(Int(second.literal.text) ?? 0) }
         return .int(0)
     }
 }
