@@ -151,10 +151,17 @@ struct TLAView: View {
             Button("Export .tla") { export() }
         }
         .sheet(isPresented: $show) {
-            ScrollView {
-                Text(spec.description)
-                    .font(.system(.caption, design: .monospaced))
-                    .padding()
+            VStack {
+                HStack {
+                    Spacer()
+                    Button("Close") { show = false }
+                }
+                .padding()
+                ScrollView {
+                    Text(spec.description)
+                        .font(.system(.caption, design: .monospaced))
+                        .padding()
+                }
             }
             .frame(minWidth: 500, minHeight: 400)
         }
