@@ -27,6 +27,8 @@ struct ExampleDetailView: View {
                 }.padding()
                 Divider()
                 interactive.frame(maxWidth: .infinity).padding()
+                Divider()
+                SpecSourceView(spec: example.spec)
             }
         }
         .toolbar { Button("View TLA+") { showTLA = true } }
@@ -97,4 +99,24 @@ struct ThreeScreen: View { @State private var g:StateGraph?;@State private var i
     var body: some View { VStack(spacing:12) { if let g,let id,let s=g.states[id] { let st=v(s["state"]); HStack(spacing:40){ForEach(0..<3,id:\.self){i in VStack{Circle().fill(i==st ? .orange:.gray.opacity(0.2)).frame(width:50,height:50).overlay(Text("\(i)").bold());if i==st{Text("current").font(.caption2)}}}}; ForEach(g.transitions[id] ?? [],id:\.action){t in Button(t.action){self.id=t.target;h.append(t.action)}.buttonStyle(.bordered)} } else { Text("Loading...") }; Button("Reset"){load()}.buttonStyle(.bordered); Text("3 states verified").font(.caption).foregroundStyle(.secondary) }.padding().onAppear{load()} }
     func load(){if let g=try? ModelChecker(spec:ThreeStateSpec.spec,maxStates:10).exploreGraph(){self.g=g;id=g.states.keys.min(by:{$0.id<$1.id});h=[]}}
     func v(_ x:TLAValue?)->Int{if case .int(let n)=(x ?? .int(0)){return n};return 0}
+}
+
+struct SpecSourceView: View {
+    let spec: TLASpec
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 0) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Swift DSL").font(.caption).foregroundStyle(.secondary).padding(.horizontal, 8)
+                    ScrollView { Text(spec.description).font(.system(size: 10, design: .monospaced)).padding(8) }
+                        .background(.quaternary).cornerRadius(4)
+                }.frame(maxWidth: .infinity)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("TLA+").font(.caption).foregroundStyle(.secondary).padding(.horizontal, 8)
+                    ScrollView { Text(spec.description).font(.system(size: 10, design: .monospaced)).padding(8) }
+                        .background(.quaternary).cornerRadius(4)
+                }.frame(maxWidth: .infinity)
+            }.padding(8)
+        }
+    }
 }
