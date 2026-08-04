@@ -16,7 +16,6 @@ let package = Package(
         .library(name: "SwiftTLAGeneration", targets: ["SwiftTLAGeneration"]),
         .library(name: "SwiftTLAExamples", targets: ["SwiftTLAExamples"]),
         .library(name: "SwiftTLASwiftUI", targets: ["SwiftTLASwiftUI"]),
-        .executable(name: "demo", targets: ["SwiftTLADemo"]),
     ],
     dependencies: [
         .package(url: "https://github.com/swiftlang/swift-syntax", from: "600.0.0"),
@@ -48,7 +47,6 @@ let package = Package(
             .product(name: "SwiftSyntaxBuilder", package: "swift-syntax"),
             .product(name: "SwiftSyntaxMacros", package: "swift-syntax"),
         ]),
-        .executableTarget(name: "SwiftTLADemo", dependencies: ["SwiftTLA", "SwiftTLAGeneration", "SwiftTLAExamples", "SwiftTLAMacros"]),
         .testTarget(name: "SwiftTLATests", dependencies: ["SwiftTLA", "SwiftTLAGeneration"], swiftSettings: settings),
     ]
 )
