@@ -70,14 +70,22 @@ struct CodePanel: View {
 
 func copy(_ text: String) { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(text, forType: .string) }
 func formatSwift(_ spec: TLASpec) -> String {
-    var lines: [String] = ["TLASpec(\"\(spec.name)\") {"]
-    for v in spec.variables { lines.append("    Variable(Var<Int>(\"\(v.name)\"), \(v.initial))") }
+    var lines: [String] = ["@TLA"]
+    lines.append("struct \(spec.name.replacingOccurrences(of: " ", with: "")) {")
+    for v in spec.variables {
+        let initVal = { if case .int(let n) = v.initial { return "\(n)" }; return "0" }()
+        lines.append("    var \(v.name) = Var<Int>(\"\(v.name)\", \(initVal))")
+    }
     for a in spec.actions {
-        lines.append("    Action(\"\(a.name)\") {")
+        lines.append("")
+        lines.append("    func \(a.name.lowercased())() {")
         for line in swiftExpr(a.body).split(separator: "\n") { lines.append("        \(line)") }
         lines.append("    }")
     }
-    for i in spec.invariants { lines.append("    Invariant(\"\(i.name)\") { \(swiftState(i.body)) }") }
+    for i in spec.invariants {
+        lines.append("")
+        lines.append("    var \(i.name.lowercased()): StateExpr { \(swiftState(i.body)) }")
+    }
     lines.append("}")
     return lines.joined(separator: "\n")
 }
