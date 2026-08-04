@@ -18,7 +18,7 @@ public struct ModelMacro: MemberMacro {
         }
         let typeName = structDeclaration.name.text
 
-        let parsed = try parseSpecFromMembers(structDeclaration.memberBlock.members, typeName: typeName)
+        let parsed = try parseSpecBody(structDeclaration.memberBlock.members, typeName: typeName)
         let specification = TLASpec(
             name: typeName,
             variables: parsed.variables.map { NamedVar(name: $0.name, initial: $0.initial) },
@@ -29,25 +29,22 @@ public struct ModelMacro: MemberMacro {
         )
 
         let checker = ModelChecker(spec: specification, maxStates: 10_000)
-        if case .invariantViolated(let invariant, let state, let trace) = (try? checker.check()) {
+        if case .invariantViolated(let invariant, _, let trace) = (try? checker.check()) {
             let description = trace.map { String(describing: $0) }.joined(separator: "\n")
             throw SimpleError("Invariant '" + invariant + "' violated:\n" + description)
         }
 
-        var generatedMembers: [DeclSyntax] = []
+        var members: [DeclSyntax] = []
 
         if let graph = try? checker.exploreGraph(),
            let code = try? StateMachineGenerator(graph: graph).generate() {
             let renamed = code
                 .replacingOccurrences(of: "struct " + typeName, with: "struct Machine")
                 .replacingOccurrences(of: "static let initial = " + typeName + "(", with: "static let initial = Machine(")
-            let machineDeclarations = Parser.parse(source: renamed).statements.compactMap {
-                $0.item.as(DeclSyntax.self)
-            }
-            generatedMembers.append(contentsOf: machineDeclarations)
+            members.append(contentsOf: Parser.parse(source: renamed).statements.compactMap { $0.item.as(DeclSyntax.self) })
         }
 
-        return generatedMembers
+        return members
     }
 
     private struct ParsedSpec {
@@ -56,29 +53,28 @@ public struct ModelMacro: MemberMacro {
         var invariants: [(name: String, body: StateExpr)] = []
     }
 
-    private static func parseSpecFromMembers(_ members: MemberBlockItemListSyntax, typeName: String) throws -> ParsedSpec {
+    private static func parseSpecBody(_ members: MemberBlockItemListSyntax, typeName: String) throws -> ParsedSpec {
         for member in members {
             guard let variableDeclaration = member.decl.as(VariableDeclSyntax.self),
-                  variableDeclaration.modifiers.contains(where: { $0.name.text == "static" }),
                   let binding = variableDeclaration.bindings.first,
-                  binding.pattern.as(IdentifierPatternSyntax.self)?.identifier.text == "spec"
+                  binding.pattern.as(IdentifierPatternSyntax.self)?.identifier.text == "spec",
+                  let getter = extractGetterBody(binding)
             else { continue }
 
-            // TLASpec("Name") { ... } direct init
-            if let initializer = binding.initializer?.value.as(FunctionCallExprSyntax.self),
-               let callee = initializer.calledExpression.as(DeclReferenceExprSyntax.self),
-               callee.baseName.text == "TLASpec",
-               let trailingClosure = initializer.trailingClosure {
-                let name = extractStringLiteral(initializer.arguments.first?.expression) ?? typeName
-                return parseBuilderBody(trailingClosure.statements, typeName: name)
-            }
-
-            // static var spec: TLASpec { ... } getter
-            if let getter = extractGetterBody(binding) {
-                return parseBuilderBody(getter, typeName: typeName)
+            for statement in getter {
+                guard case .expr(let expression) = statement.item else { continue }
+                if let functionCall = expression.as(FunctionCallExprSyntax.self),
+                   let callee = functionCall.calledExpression.as(DeclReferenceExprSyntax.self),
+                   callee.baseName.text == "TLASpec" {
+                    let name = extractStringLiteral(functionCall.arguments.first?.expression) ?? typeName
+                    let closure = functionCall.trailingClosure ?? functionCall.arguments.last?.expression.as(ClosureExprSyntax.self)
+                    if let closure {
+                        return parseBuilderBody(closure.statements)
+                    }
+                }
             }
         }
-        throw SimpleError("@TLAModel struct must contain 'static var spec = TLASpec(\"Name\") { ... }' or 'static var spec: TLASpec { ... }'")
+        throw SimpleError("@TLAModel struct must contain 'static var spec: TLASpec { TLASpec(\"Name\") { ... } }'")
     }
 
     private static func extractGetterBody(_ binding: PatternBindingSyntax) -> CodeBlockItemListSyntax? {
@@ -92,7 +88,7 @@ public struct ModelMacro: MemberMacro {
         return nil
     }
 
-    private static func parseBuilderBody(_ statements: CodeBlockItemListSyntax, typeName: String) -> ParsedSpec {
+    private static func parseBuilderBody(_ statements: CodeBlockItemListSyntax) -> ParsedSpec {
         var result = ParsedSpec()
         for statement in statements {
             switch statement.item {
@@ -100,10 +96,10 @@ public struct ModelMacro: MemberMacro {
                 if let variableDeclaration = declaration.as(VariableDeclSyntax.self),
                    let binding = variableDeclaration.bindings.first,
                    let name = binding.pattern.as(IdentifierPatternSyntax.self)?.identifier.text,
-                   let initializerCall = binding.initializer?.value.as(FunctionCallExprSyntax.self),
-                   let callee = initializerCall.calledExpression.as(DeclReferenceExprSyntax.self),
+                   let initCall = binding.initializer?.value.as(FunctionCallExprSyntax.self),
+                   let callee = initCall.calledExpression.as(DeclReferenceExprSyntax.self),
                    callee.baseName.text == "Var",
-                   let value = parseInitialValue(initializerCall.arguments.first?.expression) {
+                   let value = parseInitialValue(initCall.arguments.first?.expression) {
                     result.variables.append((name, value))
                 }
             case .expr(let expression):
@@ -132,12 +128,8 @@ public struct ModelMacro: MemberMacro {
 
     private static func parseInitialValue(_ expression: ExprSyntax?) -> TLAValue? {
         guard let expression else { return nil }
-        if let integerLiteral = expression.as(IntegerLiteralExprSyntax.self) {
-            return .int(Int(integerLiteral.literal.text) ?? 0)
-        }
-        if let booleanLiteral = expression.as(BooleanLiteralExprSyntax.self) {
-            return .bool(booleanLiteral.literal.text == "true")
-        }
+        if let int = expression.as(IntegerLiteralExprSyntax.self) { return .int(Int(int.literal.text) ?? 0) }
+        if let bool = expression.as(BooleanLiteralExprSyntax.self) { return .bool(bool.literal.text == "true") }
         return nil
     }
 
@@ -152,6 +144,30 @@ public struct ModelMacro: MemberMacro {
     }
 
     private static func parseSingleAction(_ expression: ExprSyntax) -> ActionExpr? {
+        if let infix = expression.as(InfixOperatorExprSyntax.self) {
+            let operatorText = infix.operator.as(BinaryOperatorExprSyntax.self)?.operator.text
+            if operatorText == "||", let left = parseSingleAction(infix.leftOperand), let right = parseSingleAction(infix.rightOperand) {
+                return .or(left, right)
+            }
+            if operatorText == "&&" {
+                let leftState = parseStateExpr(infix.leftOperand)
+                let rightState = parseStateExpr(infix.rightOperand)
+                let leftAction = leftState == nil ? parseSingleAction(infix.leftOperand) : nil
+                let rightAction = rightState == nil ? parseSingleAction(infix.rightOperand) : nil
+                if let guardCondition = leftState, let action = rightAction { return .and(.guard_(guardCondition), action) }
+                if let action = leftAction, let guardCondition = rightState { return .and(action, .guard_(guardCondition)) }
+                if let left = leftAction, let right = rightAction { return .and(left, right) }
+            }
+        }
+        if let sequence = expression.as(SequenceExprSyntax.self) {
+            let elements = Array(sequence.elements)
+            guard elements.count == 3,
+                  let operatorText = elements[1].as(BinaryOperatorExprSyntax.self)?.operator.text,
+                  let left = parseSingleAction(elements[0]),
+                  let right = parseSingleAction(elements[2]) else { return nil }
+            if operatorText == "||" { return .or(left, right) }
+            if operatorText == "&&" { return .and(left, right) }
+        }
         if let call = expression.as(FunctionCallExprSyntax.self), let chain = parseBecomesChain(call) { return chain }
         if let memberAccess = expression.as(MemberAccessExprSyntax.self),
            memberAccess.declName.baseName.text == "stays",
@@ -194,7 +210,7 @@ public struct ModelMacro: MemberMacro {
 
     private static func parseStateExpr(_ expression: ExprSyntax?) -> StateExpr? {
         guard let expression else { return nil }
-        if let integerLiteral = expression.as(IntegerLiteralExprSyntax.self) { return .value(.int(Int(integerLiteral.literal.text) ?? 0)) }
+        if let int = expression.as(IntegerLiteralExprSyntax.self) { return .value(.int(Int(int.literal.text) ?? 0)) }
         if let reference = expression.as(DeclReferenceExprSyntax.self) { return .variable(reference.baseName.text) }
         if let tuple = expression.as(TupleExprSyntax.self), let single = tuple.elements.first?.expression { return parseStateExpr(single) }
         if let infix = expression.as(InfixOperatorExprSyntax.self), let left = parseStateExpr(infix.leftOperand), let right = parseStateExpr(infix.rightOperand) {

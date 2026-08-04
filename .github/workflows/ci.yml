@@ -11,13 +11,13 @@ jobs:
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
-      - run: swift test --filter SwiftTLATests
+      - run: swift test
 
-  demo:
+  build:
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
-      - run: swift run demo
+      - run: swift build
 
   macro:
     runs-on: macos-15
