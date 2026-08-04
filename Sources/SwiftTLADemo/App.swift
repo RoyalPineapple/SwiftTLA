@@ -2,6 +2,7 @@ import SwiftUI
 import SwiftTLA
 import SwiftTLAGenerator
 import SwiftTLAExamples
+import SwiftTLAMacros
 
 @main struct DemoApp: App { var body: some Scene { WindowGroup { ContentView() } } }
 

@@ -1,10 +1,11 @@
-@_spi(Internal) import SwiftTLA
-public enum LockSpec {
-    public static let lock = Var<Int>("lock")
-    public static let spec = TLASpec("Lock") {
-        Variable(lock, 0)
-        Action("Lock") { lock == 0 && lock.prime == 1 }
-        Action("Unlock") { lock == 1 && lock.prime == 0 }
-        Invariant("Binary") { lock >= 0 && lock <= 1 }
-    }
+import SwiftTLA
+import SwiftTLAGenerator
+import SwiftTLAMacros
+
+@TLASpec
+public struct Lock {
+    var isLocked = Var(0)
+    func lock() { isLocked.becomes(1).when(isLocked == 0) }
+    func unlock() { isLocked.becomes(0).when(isLocked == 1) }
+    var binary: StateExpr { isLocked >= 0 && isLocked <= 1 }
 }

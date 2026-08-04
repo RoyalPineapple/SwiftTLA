@@ -69,6 +69,11 @@ extension TLASpec {
         guard let data = try? encoder.encode(self) else { return "" }
         return data.base64EncodedString()
     }
+
+    public static func decode(base64: String) -> TLASpec {
+        let d = Data(base64Encoded: base64)!
+        return try! JSONDecoder().decode(TLASpec.self, from: d)
+    }
 }
 
 private func swiftVarDecl(_ v: NamedVar) -> DeclSyntax {

@@ -39,10 +39,7 @@ public struct AttachedTLASpecMacro: PeerMacro, MemberMacro {
             fairness: parsed.fairness)
         let b64 = spec.base64JSON
         return [DeclSyntax(stringLiteral: """
-            static var spec: TLASpec {
-                let d = Data(base64Encoded: "\(b64)")!
-                return try! JSONDecoder().decode(TLASpec.self, from: d)
-            }
+            static var spec: TLASpec { TLASpec.decode(base64: "\(b64)") }
             """)]
     }
 
@@ -174,8 +171,30 @@ public struct AttachedTLASpecMacro: PeerMacro, MemberMacro {
             case "+": return .add(l, r); case "-": return .subtract(l, r); case "*": return .multiply(l, r); case "/": return .divide(l, r)
             case "<": return .lessThan(l, r); case "<=": return .lessOrEqual(l, r); case ">": return .greaterThan(l, r); case ">=": return .greaterOrEqual(l, r)
             case "==": return .equal(l, r); case "!=": return .notEqual(l, r); case "%": return .modulo(l, r)
+            case "&&": return .and(l, r); case "||": return .or(l, r)
             default: return nil
             }
+        }
+        if let se = e.as(SequenceExprSyntax.self) {
+            let components = Array(se.elements)
+            guard components.count == 3 else { return nil }
+            let lhs = parseStateExpr(components[0])
+            let op = components[1].as(BinaryOperatorExprSyntax.self)?.operator.text
+            let rhs = parseStateExpr(components[2])
+            guard let l = lhs, let r = rhs, let o = op else { return nil }
+            switch o {
+            case "+": return .add(l, r); case "-": return .subtract(l, r); case "*": return .multiply(l, r); case "/": return .divide(l, r)
+            case "<": return .lessThan(l, r); case "<=": return .lessOrEqual(l, r); case ">": return .greaterThan(l, r); case ">=": return .greaterOrEqual(l, r)
+            case "==": return .equal(l, r); case "!=": return .notEqual(l, r); case "%": return .modulo(l, r)
+            case "&&": return .and(l, r); case "||": return .or(l, r)
+            default: return nil
+            }
+        }
+        if let pe = e.as(PrefixOperatorExprSyntax.self) {
+            let op = pe.operator.as(PrefixOperatorExprSyntax.self)?.operator.text
+            let rhs = parseStateExpr(pe.expression)
+            if op == "!" { if let r = rhs { return .not(r) } }
+            if op == "-" { if let r = rhs { return .negate(r) } }
         }
         return nil
     }
