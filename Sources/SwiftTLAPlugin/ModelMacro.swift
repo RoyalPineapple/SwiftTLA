@@ -62,9 +62,6 @@ public struct ModelMacro: MemberMacro {
             .replacingOccurrences(of: "struct " + typeName, with: "struct StateMachine")
             .replacingOccurrences(of: "static let initial = " + typeName + "(", with: "static let initial = StateMachine(")
         members.append(contentsOf: Parser.parse(source: renamed).statements.compactMap { $0.item.as(DeclSyntax.self) })
-        if let graphCode = try? StateMachineGenerator(graph: graph).generateGraph() {
-            members.append(contentsOf: Parser.parse(source: graphCode).statements.compactMap { $0.item.as(DeclSyntax.self) })
-        }
 
         return members
     }

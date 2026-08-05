@@ -7,7 +7,6 @@ import SwiftTLA
 public final class TLAMachineInspectorModel<Machine: TLAMachine & Hashable> {
     public private(set) var machine: Machine
     public private(set) var history: [Record] = []
-    public let graph: TLAMachineGraph<Machine>
 
     public struct Record: Identifiable {
         public let id = UUID()
@@ -18,7 +17,6 @@ public final class TLAMachineInspectorModel<Machine: TLAMachine & Hashable> {
 
     public init(machine: Machine = .initial) {
         self.machine = machine
-        self.graph = Machine.graph
     }
 
     public func apply(_ transition: Machine.Transition) {

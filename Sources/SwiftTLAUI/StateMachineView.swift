@@ -1,7 +1,6 @@
 import SwiftUI
 import SwiftTLA
 
-@available(macOS 14, iOS 17, *)
 public struct StateMachineView<M: TLAMachine>: View {
     @State private var machine: M
     @State private var stepCount = 0

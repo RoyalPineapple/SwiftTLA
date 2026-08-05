@@ -13,21 +13,21 @@ public struct StateMachineGenerator {
         return BasicFormat().rewrite(source).description
     }
 
-    public func generateGraph() -> String {
+    public func generateGraph(structName: String) -> String {
         var nodeStrings: [String] = []
         var edgeStrings: [String] = []
         for id in orderedIDs {
             guard let state = graph.states[id] else { continue }
             let args = variableNames.map { "\($0): \(extractInt(state[$0]))" }.joined(separator: ", ")
-            nodeStrings.append("TLAMachineGraph<Self>.Node(state: Self(\(args)))")
+            nodeStrings.append("TLAMachineGraph<\(structName)>.Node(state: \(structName)(\(args)))")
             for t in graph.transitions[id] ?? [] {
                 guard let target = graph.states[t.target] else { continue }
                 let srcArgs = variableNames.map { "\($0): \(extractInt(state[$0]))" }.joined(separator: ", ")
                 let dstArgs = variableNames.map { "\($0): \(extractInt(target[$0]))" }.joined(separator: ", ")
-                edgeStrings.append("TLAMachineGraph<Self>.Edge(source: Self(\(srcArgs)), transition: .\(identifier(named: t.action)), destination: Self(\(dstArgs)))")
+                edgeStrings.append("TLAMachineGraph<\(structName)>.Edge(source: \(structName)(\(srcArgs)), transition: .\(identifier(named: t.action)), destination: \(structName)(\(dstArgs)))")
             }
         }
-        return "static let graph: TLAMachineGraph<Self> = TLAMachineGraph(nodes: [\(nodeStrings.joined(separator: ", "))], edges: [\(edgeStrings.joined(separator: ", "))])"
+        return "static let graph: TLAMachineGraph<\(structName)> = TLAMachineGraph(nodes: [\(nodeStrings.joined(separator: ", "))], edges: [\(edgeStrings.joined(separator: ", "))])"
     }
 
     private var specName: String { graph.specName.replacingOccurrences(of: " ", with: "").replacingOccurrences(of: "-", with: "_") }
