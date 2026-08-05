@@ -1,58 +1,29 @@
 import SwiftUI
 import SwiftTLA
-import SwiftTLAMacros
 import SwiftTLAUI
 
 enum ExampleID: Int, CaseIterable {
     case hourClock = 0, dieHard, coffeeCan, movingCat, majority, sumsEven, allocator
 }
 
-@TLAModel
-struct AppNavigation {
-    static var spec: TLASpec {
-        TLASpec("AppNavigation") {
-            let screen = Var<Int>("screen")
-            Variable(screen, 0)
-            Action("selectHourClock") { screen.becomes(ExampleID.hourClock.rawValue) }
-            Action("selectDieHard")   { screen.becomes(ExampleID.dieHard.rawValue) }
-            Action("selectCoffeeCan") { screen.becomes(ExampleID.coffeeCan.rawValue) }
-            Action("selectMovingCat") { screen.becomes(ExampleID.movingCat.rawValue) }
-            Action("selectMajority")  { screen.becomes(ExampleID.majority.rawValue) }
-            Action("selectSumsEven")  { screen.becomes(ExampleID.sumsEven.rawValue) }
-            Action("selectAllocator") { screen.becomes(ExampleID.allocator.rawValue) }
-            Invariant("validScreen") { screen >= 0 && screen < ExampleID.allCases.count }
-        }
-    }
-}
-
 @main
 struct ExamplesApp: App {
-    @State private var nav = AppNavigation.Machine.initial
+    @State private var selected: ExampleID = .hourClock
 
     var body: some Scene {
         WindowGroup {
             NavigationSplitView {
                 List(ExampleID.allCases, id: \.self) { id in
                     Button(examples[id]!.name) {
-                        var copy = nav
-                        switch id {
-                        case .hourClock: copy.apply(.selectHourClock)
-                        case .dieHard: copy.apply(.selectDieHard)
-                        case .coffeeCan: copy.apply(.selectCoffeeCan)
-                        case .movingCat: copy.apply(.selectMovingCat)
-                        case .majority: copy.apply(.selectMajority)
-                        case .sumsEven: copy.apply(.selectSumsEven)
-                        case .allocator: copy.apply(.selectAllocator)
-                        }
-                        nav = copy
+                        selected = id
                     }
                     .buttonStyle(.plain)
-                    .foregroundStyle(nav.screen == id.rawValue ? .primary : .secondary)
-                    .fontWeight(nav.screen == id.rawValue ? .bold : .regular)
+                    .foregroundStyle(selected == id ? .primary : .secondary)
+                    .fontWeight(selected == id ? .bold : .regular)
                 }
                 .navigationTitle("Examples")
             } detail: {
-                ExamplePage(id: ExampleID(rawValue: nav.screen) ?? .hourClock)
+                ExamplePage(id: selected)
             }
         }
     }
@@ -86,14 +57,16 @@ struct ExamplePage: View {
         VStack {
             Text("Inspector").font(.headline).padding(.top, 8)
             Divider()
-            switch id {
-            case .hourClock: StateMachineView(machine: HourClock.Machine.initial).id("hc")
-            case .dieHard: StateMachineView(machine: DieHard.Machine.initial).id("dh")
-            case .coffeeCan: StateMachineView(machine: CoffeeCan.Machine.initial).id("cc")
-            case .movingCat: StateMachineView(machine: MovingCat.Machine.initial).id("mc")
-            case .majority: StateMachineView(machine: Majority.Machine.initial).id("mj")
-            case .sumsEven: EmptyView()
-            case .allocator: StateMachineView(machine: Allocator.Machine.initial).id("al")
+            if id != .sumsEven {
+                switch id {
+                case .hourClock: StateMachineView(machine: HourClock.Machine.initial).id("hc")
+                case .dieHard: StateMachineView(machine: DieHard.Machine.initial).id("dh")
+                case .coffeeCan: StateMachineView(machine: CoffeeCan.Machine.initial).id("cc")
+                case .movingCat: StateMachineView(machine: MovingCat.Machine.initial).id("mc")
+                case .majority: StateMachineView(machine: Majority.Machine.initial).id("mj")
+                case .allocator: StateMachineView(machine: Allocator.Machine.initial).id("al")
+                default: EmptyView()
+                }
             }
         }
         .background(.regularMaterial)
