@@ -6,20 +6,23 @@ public struct MovingCat {
     static var spec: TLASpec {
         TLASpec("MovingCat") {
             Extends("Naturals")
-            let cat = Var("cat", value: 3)
-            let observed = Var("observed", value: 3)
-            let direction = Var("direction", value: 1)
+            let cat = Var<Int>("cat", value: 3)
+            let observed = Var<Int>("observed", value: 3)
+            let direction = Var<String>("direction", value: "right")
             Variable(cat, 3)
             Variable(observed, 3)
-            Variable(direction, 1)
+            Variable(direction, "right")
             Definition("Number_Of_Boxes == 6")
-            Invariant("TypeOK") { cat >= 1 && cat <= 6 && observed >= 2 && observed <= 5 && direction >= -1 && direction <= 1 }
+            Invariant("TypeOK") {
+                cat >= 1 && cat <= 6 && observed >= 2 && observed <= 5 &&
+                (direction == "left" || direction == "right")
+            }
             Action("Next") {
                 (cat < 6 && cat.becomes(cat + 1) || cat > 1 && cat.becomes(cat - 1)) &&
-                ((direction == 1 && observed < 5) && observed.becomes(observed + 1) && direction.stays ||
-                 (direction == 1 && observed == 5) && observed.becomes(observed - 1) && direction.becomes(-1) ||
-                 (direction == -1 && observed > 2) && observed.becomes(observed - 1) && direction.stays ||
-                 (direction == -1 && observed == 2) && observed.becomes(observed + 1) && direction.becomes(1))
+                ((direction == "right" && observed < 5) && observed.becomes(observed + 1) && direction.stays ||
+                 (direction == "right" && observed == 5) && observed.becomes(observed - 1) && direction.becomes("left") ||
+                 (direction == "left" && observed > 2) && observed.becomes(observed - 1) && direction.stays ||
+                 (direction == "left" && observed == 2) && observed.becomes(observed + 1) && direction.becomes("right"))
             }
         }
     }

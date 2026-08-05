@@ -69,31 +69,56 @@ public struct StateMachineGenerator {
 
     // MARK: - Variables
 
+    private var variableTypes: [String: String] {  // var name → Swift type string
+        Dictionary(uniqueKeysWithValues: variableNames.map { name in
+            let type: String
+            switch initialState[name] {
+            case .string: type = "String"
+            case .bool: type = "Bool"
+            case .set: type = "Set<TLAValue>"
+            case .tuple: type = "[TLAValue]"
+            case .record: type = "[String: TLAValue]"
+            default: type = "Int"
+            }
+            return (name, type)
+        })
+    }
+
     private func variableDeclarations() -> [DeclSyntax] {
         variableNames.map { name in
-            DeclSyntax(stringLiteral: "public var " + name + ": Int")
+            DeclSyntax(stringLiteral: "public var " + name + ": \(variableTypes[name] ?? "Int")")
         }
     }
 
     // MARK: - Init
 
     private func memberwiseInit() throws -> DeclSyntax {
-        let parameters = variableNames.map { $0 + ": Int" }.joined(separator: ", ")
+        let parameters = variableNames.map { $0 + ": \(variableTypes[$0] ?? "Int")" }.joined(separator: ", ")
         let body = variableNames.map { "self." + $0 + " = " + $0 }.joined(separator: "\n")
         return DeclSyntax(stringLiteral: "public init(" + parameters + ") {\n" + body + "\n}")
     }
 
     private func initArgs(_ state: [String: TLAValue]) -> String {
         variableNames.map { name in
-            let value: Int = extractInt(state[name])
-            return name + ": " + String(value)
+            let value: String = extractValue(state[name])
+            return name + ": " + value
         }.joined(separator: ", ")
     }
 
-    private func extractInt(_ value: TLAValue?) -> Int {
-        guard let value, case .int(let number) = value else { return 0 }
-        return number
+    private func extractValue(_ value: TLAValue?) -> String {
+        guard let value else { return "0" }
+        switch value {
+        case .int(let n): return "\(n)"
+        case .bool(let b): return "\(b)"
+        case .string(let s): return "\"\(s)\""
+        case .set: return "[]"
+        case .tuple: return "[]"
+        case .record: return "[:]"
+        case .constant(let n): return n
+        }
     }
+
+    private func extractInt(_ value: TLAValue?) -> Int { 0 }  // keep for compatibility
 
     // MARK: - Action enum
 
@@ -111,7 +136,7 @@ public struct StateMachineGenerator {
         let pattern = variableNames.joined(separator: ", ")
         let cases = orderedIDs.compactMap { stateID -> String? in
             guard let state = graph.states[stateID] else { return nil }
-            let values = variableNames.map { name in extractInt(state[name]) }.map(String.init).joined(separator: ", ")
+            let values = variableNames.map { name in extractValue(state[name]) }.joined(separator: ", ")
             let transitions = graph.transitions[stateID] ?? []
             let meaningfulTransitions = transitions.filter { transition in
                 guard let targetState = graph.states[transition.target] else { return false }
