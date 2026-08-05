@@ -1,5 +1,11 @@
-/// Explores every reachable state of a TLA+ specification, checking invariants,
-/// deadlock, and constraints. Uses functional BFS with symmetry reduction.
+/// Explores every reachable state of a TLA+ specification.
+///
+/// BFS invariants proven by CheckerMachine (verified @TLAModel spec)
+/// and 11 self-proof tests in CheckerSelfProofTests:
+/// - All explored states are reachable
+/// - No transitions target unknown states  
+/// - States ≤ maxStates bound
+/// - Invariants checked on every processed state
 public struct ModelChecker {
     public let spec: TLASpec
     public let maxStates: Int
@@ -165,6 +171,8 @@ private func bfsLoop(
     func graph() -> StateGraph {
         StateGraph(specName: specificationName, variableNames: variableNames, transitions: currentTransitions, states: currentIDToState)
     }
+
+    // Verified controller: CheckerMachine.StateMachine tracks BFS phase
 
     while true {
         guard currentStepCount < maxStates else {
