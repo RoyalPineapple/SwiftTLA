@@ -23,10 +23,11 @@ public struct ModelMacro: MemberMacro {
         let specification = TLASpec(
             name: typeName,
             variables: parsed.variables.map { NamedVar(name: $0.name, initial: $0.initial) },
+            constants: parsed.constants,
             actions: parsed.actions.map { NamedAction(name: $0.name, body: $0.body) },
             invariants: parsed.invariants.map { NamedInvariant(name: $0.name, body: $0.body) },
-            temporalProperties: [],
-            fairness: []
+            temporalProperties: parsed.temporal.map { NamedTemporal(name: $0.name, expr: $0.expr) },
+            fairness: parsed.fairness
         )
 
         let checker = ModelChecker(spec: specification, maxStates: 10_000)
@@ -70,6 +71,9 @@ public struct ModelMacro: MemberMacro {
         var variables: [(name: String, initial: TLAValue)] = []
         var actions: [(name: String, body: ActionExpr)] = []
         var invariants: [(name: String, body: StateExpr)] = []
+        var temporal: [(name: String, expr: TemporalExpr)] = []
+        var fairness: [FairnessCondition] = []
+        var constants: [String: TLAValue] = [:]
     }
 
     private static func parseSpecBody(_ members: MemberBlockItemListSyntax, typeName: String) throws -> ParsedSpec {
@@ -139,6 +143,21 @@ public struct ModelMacro: MemberMacro {
                               return parseStateExpr(expr)
                           }).first else { continue }
                     result.invariants.append((name, stateExpr))
+                case "Temporal":
+                    guard let name = extractStringLiteral(call.arguments.first?.expression),
+                          let closure = call.trailingClosure else { continue }
+                    for stmt in closure.statements {
+                        if case .expr(let expr) = stmt.item { if let t = parseTemporal(expr) { result.temporal.append((name, t)); break } }
+                    }
+                case "Fairness":
+                    guard let closure = call.trailingClosure else { continue }
+                    for stmt in closure.statements {
+                        if case .expr(let expr) = stmt.item { if let f = parseFairnessExpr(expr) { result.fairness.append(f); break } }
+                    }
+                case "Constant":
+                    guard let name = extractStringLiteral(call.arguments.first?.expression),
+                          let value = parseInitialValue(call.arguments.dropFirst().first?.expression) else { continue }
+                    result.constants[name] = value
                 default: continue
                 }
             case .stmt: continue
@@ -155,6 +174,12 @@ public struct ModelMacro: MemberMacro {
         guard let expression else { return nil }
         if let int = expression.as(IntegerLiteralExprSyntax.self) { return .int(Int(int.literal.text) ?? 0) }
         if let bool = expression.as(BooleanLiteralExprSyntax.self) { return .bool(bool.literal.text == "true") }
+        if let call = expression.as(FunctionCallExprSyntax.self),
+           let ma = call.calledExpression.as(MemberAccessExprSyntax.self),
+           ma.declName.baseName.text == "set" {
+            let elements = call.arguments.first?.expression.as(ArrayExprSyntax.self)?.elements.compactMap { parseInitialValue($0.expression) } ?? []
+            return .set(elements)
+        }
         return nil
     }
 
@@ -276,7 +301,32 @@ public struct ModelMacro: MemberMacro {
         return nil
     }
 
-    // MARK: - DSL method/property parsing
+    private static func parseTemporal(_ expr: ExprSyntax) -> TemporalExpr? {
+        guard let call = expr.as(FunctionCallExprSyntax.self),
+              let ref = call.calledExpression.as(MemberAccessExprSyntax.self) else { return nil }
+        let method = ref.declName.baseName.text
+        let arg = call.arguments.first?.expression.flatMap { parseStateExpr($0) }
+        switch method {
+        case "leadsTo": return arg.map { TemporalExpr.leadsTo(parseStateExpr(ref.base) ?? .value(.bool(true)), $0) }
+        case "always": return arg.map { TemporalExpr.always($0) }
+        case "eventually": return arg.map { TemporalExpr.eventually($0) }
+        case "alwaysEventually": return arg.map { TemporalExpr.alwaysEventually($0) }
+        case "eventuallyAlways": return arg.map { TemporalExpr.eventuallyAlways($0) }
+        default: return nil
+        }
+    }
+
+    private static func parseFairnessExpr(_ expr: ExprSyntax) -> FairnessCondition? {
+        guard let call = expr.as(FunctionCallExprSyntax.self),
+              let ref = call.calledExpression.as(MemberAccessExprSyntax.self) else { return nil }
+        let method = ref.declName.baseName.text
+        let name = call.arguments.first?.expression.as(StringLiteralExprSyntax.self)?.segments.description.replacingOccurrences(of: "\"", with: "") ?? ""
+        switch method {
+        case "weakFairness": return .weakFairness(name)
+        case "strongFairness": return .strongFairness(name)
+        default: return nil
+        }
+    }
 
     private static func parseMethodCall(_ call: FunctionCallExprSyntax) -> StateExpr? {
         guard let memberAccess = call.calledExpression.as(MemberAccessExprSyntax.self) else { return nil }
