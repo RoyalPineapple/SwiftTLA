@@ -13,6 +13,23 @@ public struct StateMachineGenerator {
         return BasicFormat().rewrite(source).description
     }
 
+    public func generateGraph() -> String {
+        var nodeStrings: [String] = []
+        var edgeStrings: [String] = []
+        for id in orderedIDs {
+            guard let state = graph.states[id] else { continue }
+            let args = variableNames.map { "\($0): \(extractInt(state[$0]))" }.joined(separator: ", ")
+            nodeStrings.append("TLAMachineGraph<Self>.Node(state: Self(\(args)))")
+            for t in graph.transitions[id] ?? [] {
+                guard let target = graph.states[t.target] else { continue }
+                let srcArgs = variableNames.map { "\($0): \(extractInt(state[$0]))" }.joined(separator: ", ")
+                let dstArgs = variableNames.map { "\($0): \(extractInt(target[$0]))" }.joined(separator: ", ")
+                edgeStrings.append("TLAMachineGraph<Self>.Edge(source: Self(\(srcArgs)), transition: .\(identifier(named: t.action)), destination: Self(\(dstArgs)))")
+            }
+        }
+        return "static let graph: TLAMachineGraph<Self> = TLAMachineGraph(nodes: [\(nodeStrings.joined(separator: ", "))], edges: [\(edgeStrings.joined(separator: ", "))])"
+    }
+
     private var specName: String { graph.specName.replacingOccurrences(of: " ", with: "").replacingOccurrences(of: "-", with: "_") }
     private var variableNames: [String] { graph.variableNames }
     private var orderedIDs: [StateGraph.StateID] { graph.states.keys.sorted { $0.id < $1.id } }
