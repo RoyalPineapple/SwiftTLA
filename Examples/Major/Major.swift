@@ -18,8 +18,8 @@ public struct Majority {
             Action("Next") {
                 (i <= 3) && i.becomes(i + 1) &&
                 (cnt == 0 && cand.becomes(i) && cnt.becomes(1) ||
-                 cnt != 0 && cand == i && cand.stays && cnt.becomes(cnt + 1) ||
-                 cnt != 0 && cand != i && cand.stays && cnt.becomes(cnt - 1))
+                 cnt != 0 && cand == i && cnt.becomes(cnt + 1) ||
+                 cnt != 0 && cand != i && cnt.becomes(cnt - 1))
             }
             DeadlockCheck()
         }

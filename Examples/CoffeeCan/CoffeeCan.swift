@@ -13,16 +13,16 @@ public struct CoffeeCan {
             Definition("MaxBeanCount == 10")
             Definition("BeanCount == black + white")
             Action("PickSameColorBlack") {
-                (black + white > 1) && (black >= 2) && black.becomes(black - 1) && white.stays
+                (black + white > 1) && (black >= 2) && black.becomes(black - 1)
             }
             Action("PickSameColorWhite") {
                 (black + white > 1) && (white >= 2) && black.becomes(black + 1) && white.becomes(white - 2)
             }
             Action("PickDifferentColor") {
-                (black + white > 1) && (black >= 1) && (white >= 1) && black.becomes(black - 1) && white.stays
+                (black + white > 1) && (black >= 1) && (white >= 1) && black.becomes(black - 1)
             }
             Action("Termination") {
-                (black + white == 1) && black.stays && white.stays
+                (black + white == 1)
             }
             DeadlockCheck()
         }

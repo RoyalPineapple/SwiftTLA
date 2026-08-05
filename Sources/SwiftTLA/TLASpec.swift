@@ -395,6 +395,18 @@ extension TLASpec {
             else if comp is DeadlockDecl { deadlockFlag = true }
         }
 
+        // Auto-UNCHANGED: unassigned vars implicitly stay unchanged (like TLA+)
+        let vn = variables.map(\.name)
+        actions = actions.map { a in
+            let assigned = assignedVars(a.body)
+            let explicit = explicitUnchanged(a.body)
+            var body = a.body
+            for v in vn where !assigned.contains(v) && !explicit.contains(v) {
+                body = .and(body, .unchanged(v))
+            }
+            return NamedAction(name: a.name, body: body)
+        }
+
         self.name = name
         self.variables = variables
         self.constants = constants
@@ -504,5 +516,23 @@ private func substituteInAction(_ expr: ActionExpr, constants: [String: TLAValue
     case .chooseAction(let v, let s): return .chooseAction(v, substituteInState(s, constants: constants))
     case .and(let a, let b): return .and(substituteInAction(a, constants: constants), substituteInAction(b, constants: constants))
     case .or(let a, let b): return .or(substituteInAction(a, constants: constants), substituteInAction(b, constants: constants))
+    }
+}
+
+private func assignedVars(_ e: ActionExpr) -> Set<String> {
+    switch e {
+    case .assign(let v, _), .chooseAction(let v, _): return [v]
+    case .unchanged, .guard_: return []
+    case .and(let a, let b): return assignedVars(a).union(assignedVars(b))
+    case .or(let a, let b): return assignedVars(a).union(assignedVars(b))
+    }
+}
+
+private func explicitUnchanged(_ e: ActionExpr) -> Set<String> {
+    switch e {
+    case .unchanged(let v): return [v]
+    case .and(let a, let b): return explicitUnchanged(a).union(explicitUnchanged(b))
+    case .or(let a, let b): return explicitUnchanged(a).intersection(explicitUnchanged(b))
+    default: return []
     }
 }

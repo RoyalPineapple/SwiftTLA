@@ -19,9 +19,9 @@ public struct MovingCat {
             }
             Action("Next") {
                 (cat < 6 && cat.becomes(cat + 1) || cat > 1 && cat.becomes(cat - 1)) &&
-                ((direction == "right" && observed < 5) && observed.becomes(observed + 1) && direction.stays ||
+                ((direction == "right" && observed < 5) && observed.becomes(observed + 1) ||
                  (direction == "right" && observed == 5) && observed.becomes(observed - 1) && direction.becomes("left") ||
-                 (direction == "left" && observed > 2) && observed.becomes(observed - 1) && direction.stays ||
+                 (direction == "left" && observed > 2) && observed.becomes(observed - 1) ||
                  (direction == "left" && observed == 2) && observed.becomes(observed + 1) && direction.becomes("right"))
             }
         }

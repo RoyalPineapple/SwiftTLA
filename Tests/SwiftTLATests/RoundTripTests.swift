@@ -368,8 +368,8 @@ struct ModelCheckerMatrix {
         let b = Var<Int>("b", value: 0)
         let spec = TLASpec("Test") {
             Variable(a, 0); Variable(b, 0)
-            Action("incA") { a.becomes(a + 1).when(a < 2) && b.stays }
-            Action("incB") { b.becomes(b + 1).when(b < 2) && a.stays }
+            Action("incA") { a.becomes(a + 1).when(a < 2) }
+            Action("incB") { b.becomes(b + 1).when(b < 2) }
         }
         let graph = try ModelChecker(spec: spec, maxStates: 100).exploreGraph()
         #expect(graph.states.count == 9)
@@ -380,10 +380,10 @@ struct ModelCheckerMatrix {
         let small = Var<Int>("small", value: 0)
         let spec = TLASpec("DieHard") {
             Variable(big, 0); Variable(small, 0)
-            Action("FB") { big.becomes(5) && small.stays }
-            Action("FS") { small.becomes(3) && big.stays }
-            Action("EB") { big.becomes(0) && small.stays }
-            Action("ES") { small.becomes(0) && big.stays }
+            Action("FB") { big.becomes(5) }
+            Action("FS") { small.becomes(3) }
+            Action("EB") { big.becomes(0) }
+            Action("ES") { small.becomes(0) }
             Action("S2B") {
                 (big + small <= 5) && big.becomes(big + small) && small.becomes(0) ||
                 (big + small > 5)  && big.becomes(5) && small.becomes(small - (5 - big))
@@ -512,10 +512,10 @@ struct GoldenTests {
         let big = Var<Int>("big", value: 0); let small = Var<Int>("small", value: 0)
         let spec = TLASpec("DieHard") {
             Variable(big, 0); Variable(small, 0)
-            Action("FB") { big.becomes(5) && small.stays }
-            Action("FS") { small.becomes(3) && big.stays }
-            Action("EB") { big.becomes(0) && small.stays }
-            Action("ES") { small.becomes(0) && big.stays }
+            Action("FB") { big.becomes(5) }
+            Action("FS") { small.becomes(3) }
+            Action("EB") { big.becomes(0) }
+            Action("ES") { small.becomes(0) }
             Action("S2B") { (big+small<=5) && big.becomes(big+small) && small.becomes(0) || (big+small>5) && big.becomes(5) && small.becomes(small-(5-big)) }
             Action("B2S") { (big+small<=3) && small.becomes(big+small) && big.becomes(0) || (big+small>3) && small.becomes(3) && big.becomes(big-(3-small)) }
         }
@@ -527,8 +527,8 @@ struct GoldenTests {
         let big = Var<Int>("big", value: 0); let small = Var<Int>("small", value: 0)
         let spec = TLASpec("DieHard") {
             Variable(big, 0); Variable(small, 0)
-            Action("FB") { big.becomes(5) && small.stays }; Action("FS") { small.becomes(3) && big.stays }
-            Action("EB") { big.becomes(0) && small.stays }; Action("ES") { small.becomes(0) && big.stays }
+            Action("FB") { big.becomes(5) }; Action("FS") { small.becomes(3) }
+            Action("EB") { big.becomes(0) }; Action("ES") { small.becomes(0) }
             Action("S2B") { (big+small<=5) && big.becomes(big+small) && small.becomes(0) || (big+small>5) && big.becomes(5) && small.becomes(small-(5-big)) }
             Action("B2S") { (big+small<=3) && small.becomes(big+small) && big.becomes(0) || (big+small>3) && small.becomes(3) && big.becomes(big-(3-small)) }
             Invariant("TypeOK") { big >= 0 && big <= 5 && small >= 0 && small <= 3 }
@@ -566,9 +566,9 @@ struct GoldenTests {
         let bl = Var<Int>("black", value: 5); let wh = Var<Int>("white", value: 5)
         let spec = TLASpec("CoffeeCan") {
             Variable(bl, 5); Variable(wh, 5)
-            Action("BB") { (bl+wh>1) && bl>=2 && bl.becomes(bl-1) && wh.stays }
+            Action("BB") { (bl+wh>1) && bl>=2 && bl.becomes(bl-1) }
             Action("WW") { (bl+wh>1) && wh>=2 && bl.becomes(bl+1) && wh.becomes(wh-2) }
-            Action("BW") { (bl+wh>1) && bl>=1 && wh>=1 && bl.becomes(bl-1) && wh.stays }
+            Action("BW") { (bl+wh>1) && bl>=1 && wh>=1 && bl.becomes(bl-1) }
         }
         #expect(try ModelChecker(spec: spec, maxStates: 500).exploreGraph().states.count == 21)
     }
@@ -580,9 +580,9 @@ struct GoldenTests {
             Variable(c, 3); Variable(o, 3); Variable(d, 1)
             Action("Next") {
                 (c < 6 && c.becomes(c + 1) || c > 1 && c.becomes(c - 1)) &&
-                ((d == 1 && o < 5) && o.becomes(o + 1) && d.stays ||
+                ((d == 1 && o < 5) && o.becomes(o + 1) ||
                  (d == 1 && o == 5) && o.becomes(o - 1) && d.becomes(-1) ||
-                 (d == -1 && o > 2) && o.becomes(o - 1) && d.stays ||
+                 (d == -1 && o > 2) && o.becomes(o - 1) ||
                  (d == -1 && o == 2) && o.becomes(o + 1) && d.becomes(1))
             }
         }
@@ -673,7 +673,7 @@ struct GeneratorTests {
     @Test("Multi-variable spec generates correct init")
     func multiVarInit() throws {
         let big = Var<Int>("big", value: 0); let small = Var<Int>("small", value: 0)
-        let spec = TLASpec("Test") { Variable(big, 0); Variable(small, 0); Action("FB") { big.becomes(5) && small.stays } }
+        let spec = TLASpec("Test") { Variable(big, 0); Variable(small, 0); Action("FB") { big.becomes(5) } }
         let graph = try ModelChecker(spec: spec, maxStates: 100).exploreGraph()
         let code = try StateMachineGenerator(graph: graph).generate()
         #expect(code.contains("var big: Int"))
@@ -703,8 +703,8 @@ struct CheckerSelfProofTests {
         let a = Var<Int>("a", value: 0); let b = Var<Int>("b", value: 0)
         let spec = TLASpec("Test") {
             Variable(a, 0); Variable(b, 0)
-            Action("incA") { a.becomes(a+1).when(a<3) && b.stays }
-            Action("incB") { b.becomes(b+1).when(b<3) && a.stays }
+            Action("incA") { a.becomes(a+1).when(a<3) }
+            Action("incB") { b.becomes(b+1).when(b<3) }
         }
         let graph = try ModelChecker(spec: spec, maxStates: 100).exploreGraph()
         for (_, ts) in graph.transitions {
