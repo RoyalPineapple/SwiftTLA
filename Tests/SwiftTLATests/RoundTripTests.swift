@@ -601,3 +601,70 @@ struct GoldenTests {
         #expect(try ModelChecker(spec: spec, maxStates: 100).exploreGraph().states.count >= 1)
     }
 }
+
+// MARK: - StateMachineGenerator: proves macro output is correct
+
+struct GeneratorTests {
+    @Test("Generates struct declaration with TLAMachine conformance")
+    func structDecl() throws {
+        let hr = Var<Int>("hr", value: 1)
+        let spec = TLASpec("HourClock") { Variable(hr, 1); Action("Tick") { hr.becomes(hr + 1).when(hr < 12) || (hr == 12 && hr.becomes(1)) } }
+        let graph = try ModelChecker(spec: spec, maxStates: 100).exploreGraph()
+        let code = try StateMachineGenerator(graph: graph).generate()
+        #expect(code.contains("struct HourClock"))
+        #expect(code.contains("Equatable"))
+        #expect(code.contains("Hashable"))
+        #expect(code.contains("TLAMachine"))
+        #expect(code.contains("var hr: Int"))
+        #expect(code.contains("init(hr: Int)"))
+        #expect(code.contains("static let initial"))
+        #expect(code.contains("enum Transition"))
+        #expect(code.contains("case tick"))
+        #expect(code.contains("var transitions: [(action: Transition, target: Self)]"))
+        #expect(code.contains("var availableTransitions: [Transition]"))
+        #expect(code.contains("mutating func apply"))
+    }
+
+    @Test("Generated initial has correct value")
+    func correctInitial() throws {
+        let hr = Var<Int>("hr", value: 1)
+        let spec = TLASpec("HourClock") { Variable(hr, 1); Action("Tick") { hr.becomes(hr + 1).when(hr < 3) } }
+        let graph = try ModelChecker(spec: spec, maxStates: 100).exploreGraph()
+        let code = try StateMachineGenerator(graph: graph).generate()
+        #expect(code.contains("static let initial = HourClock(hr: 1)"))
+    }
+
+    @Test("Generates transitions for all states")
+    func allStateTransitions() throws {
+        let hr = Var<Int>("hr", value: 1)
+        let spec = TLASpec("HourClock") { Variable(hr, 1); Action("Tick") { hr.becomes(hr + 1).when(hr < 3) || (hr == 3 && hr.becomes(1)) } }
+        let graph = try ModelChecker(spec: spec, maxStates: 100).exploreGraph()
+        let code = try StateMachineGenerator(graph: graph).generate()
+        #expect(code.contains("case (1):"))
+        #expect(code.contains("case (2):"))
+        #expect(code.contains("case (3):"))
+        #expect(code.contains("Self(hr: 1)"))
+        #expect(code.contains("Self(hr: 2)"))
+        #expect(code.contains("Self(hr: 3)"))
+    }
+
+    @Test("Reserved keyword action gets prefixed")
+    func reservedKeywordAction() throws {
+        let x = Var<Int>("x", value: 0)
+        let spec = TLASpec("Test") { Variable(x, 0); Action("Next") { x.becomes(1).when(x == 0) } }
+        let graph = try ModelChecker(spec: spec, maxStates: 100).exploreGraph()
+        let code = try StateMachineGenerator(graph: graph).generate()
+        #expect(code.contains("case action_next"))  // "Next" -> "next" is keyword -> "action_next"
+    }
+
+    @Test("Multi-variable spec generates correct init")
+    func multiVarInit() throws {
+        let big = Var<Int>("big", value: 0); let small = Var<Int>("small", value: 0)
+        let spec = TLASpec("Test") { Variable(big, 0); Variable(small, 0); Action("FB") { big.becomes(5) && small.stays } }
+        let graph = try ModelChecker(spec: spec, maxStates: 100).exploreGraph()
+        let code = try StateMachineGenerator(graph: graph).generate()
+        #expect(code.contains("var big: Int"))
+        #expect(code.contains("var small: Int"))
+        #expect(code.contains("init(big: Int"))  // includes small: Int on next line
+    }
+}
