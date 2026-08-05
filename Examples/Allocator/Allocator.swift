@@ -6,8 +6,8 @@ public struct Allocator {
     static var spec: TLASpec {
         TLASpec("allocator") {
             Extends("Naturals")
-            let available = Var("available", 3)
-            let allocated = Var("allocated", 0)
+            let available = Var("available", value: 3)
+            let allocated = Var("allocated", value: 0)
             Variable(available, 3)
             Variable(allocated, 0)
             Action("Allocate")   { available.becomes(available - 1).when(available > 0) && allocated.becomes(allocated + 1) }

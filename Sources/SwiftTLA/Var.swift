@@ -21,8 +21,9 @@ public typealias TLARecord = TLARecordType
 /// ```
 public struct Var<T: TLAValueType>: Codable, Sendable, CustomStringConvertible {
     public let name: String
-    public init(_ name: String, _ value: T) { self.name = name }
-    public init(_ name: String) where T: TLAValueType { self.init(name, T.defaultValue) }
+    public init(_ name: String? = nil, value: T? = nil) {
+        self.name = name ?? ""
+    }
     public var description: String { name }
     /// Returns `x' = expression` — the variable's value in the next state.
     @discardableResult

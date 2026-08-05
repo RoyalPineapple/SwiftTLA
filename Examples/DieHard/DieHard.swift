@@ -6,8 +6,8 @@ public struct DieHard {
     static var spec: TLASpec {
         TLASpec("DieHard") {
             Extends("Naturals")
-            let big = Var("big", 0)
-            let small = Var("small", 0)
+            let big = Var("big", value: 0)
+            let small = Var("small", value: 0)
             Variable(big, 0)
             Variable(small, 0)
             Definition("Min(m,n) == IF m < n THEN m ELSE n")

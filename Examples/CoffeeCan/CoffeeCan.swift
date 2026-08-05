@@ -6,8 +6,8 @@ public struct CoffeeCan {
     static var spec: TLASpec {
         TLASpec("CoffeeCan") {
             Extends("Naturals")
-            let black = Var("black", 5)
-            let white = Var("white", 5)
+            let black = Var("black", value: 5)
+            let white = Var("white", value: 5)
             Variable(black, 5)
             Variable(white, 5)
             Definition("MaxBeanCount == 10")

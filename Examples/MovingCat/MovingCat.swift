@@ -6,9 +6,9 @@ public struct MovingCat {
     static var spec: TLASpec {
         TLASpec("MovingCat") {
             Extends("Naturals")
-            let cat = Var("cat", 3)
-            let observed = Var("observed", 3)
-            let direction = Var("direction", 1)
+            let cat = Var("cat", value: 3)
+            let observed = Var("observed", value: 3)
+            let direction = Var("direction", value: 1)
             Variable(cat, 3)
             Variable(observed, 3)
             Variable(direction, 1)

@@ -187,7 +187,7 @@ private func explicitUnchanged(_ e: ActionExpr) -> Set<String> {
 
 private func swiftVarDecl(_ v: NamedVar) -> DeclSyntax {
     let initVal = initValueString(v.initial)
-    return DeclSyntax(stringLiteral: "var \(v.name) = Var(\(initVal))")
+    return DeclSyntax(stringLiteral: "var \(v.name) = Var(name: \"\(v.name)\", value: \(initVal))")
 }
 
 private func initValueString(_ value: TLAValue) -> String {

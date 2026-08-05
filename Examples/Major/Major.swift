@@ -6,9 +6,9 @@ public struct Majority {
     static var spec: TLASpec {
         TLASpec("Majority") {
             Extends("Integers")
-            let cand = Var("cand", 0)
-            let cnt = Var("cnt", 0)
-            let i = Var("i", 1)
+            let cand = Var("cand", value: 0)
+            let cnt = Var("cnt", value: 0)
+            let i = Var("i", value: 1)
             Variable(cand, 0)
             Variable(cnt, 0)
             Variable(i, 1)

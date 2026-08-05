@@ -17,7 +17,7 @@ enum ExampleID: Int, CaseIterable {
 struct AppNavigation {
     static var spec: TLASpec {
         TLASpec("AppNavigation") {
-            let screen = Var("screen", 0)
+            let screen = Var("screen", value: 0)
             Variable(screen, 0)
             Action("selectHourClock") { screen.becomes(ExampleID.hourClock.rawValue) }
             Action("selectDieHard")   { screen.becomes(ExampleID.dieHard.rawValue) }
