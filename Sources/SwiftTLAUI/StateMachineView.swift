@@ -25,23 +25,27 @@ public struct StateMachineView<M: TLAMachine>: View {
                     .clipShape(RoundedRectangle(cornerRadius: 10))
             }
 
-            if !current.availableActions.isEmpty {
-                Text("Actions").font(.subheadline).foregroundStyle(.secondary)
-                ForEach(Array(current.availableActions), id: \.self) { action in
-                    Button {
-                        var next = current
-                        next.apply(action)
-                        current = next
-                        stepCount += 1
-                        trace.append(String(describing: action))
-                    } label: {
-                        Label(String(describing: action), systemImage: "arrow.right")
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                    .buttonStyle(.bordered)
+            Text("Available: \(current.availableActions.count) actions")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            ForEach(Array(current.availableActions.enumerated()), id: \.offset) { i, action in
+                Button {
+                    var next = current
+                    next.apply(action)
+                    current = next
+                    stepCount += 1
+                    trace.append(String(describing: action))
+                } label: {
+                    Label(String(describing: action), systemImage: "arrow.right.circle.fill")
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
-            } else {
-                Label("No actions available", systemImage: "stop.circle")
+                .buttonStyle(.borderedProminent)
+                .tint(.accentColor)
+            }
+
+            if current.availableActions.isEmpty {
+                Label("Terminal state", systemImage: "stop.circle.fill")
                     .foregroundStyle(.secondary)
             }
 
