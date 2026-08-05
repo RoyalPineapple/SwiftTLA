@@ -8,11 +8,12 @@ let package = Package(
         .package(path: "../"),
     ],
     targets: [
-        .target(
+        .executableTarget(
             name: "Examples",
             dependencies: [
                 .product(name: "SwiftTLA", package: "SwiftTLA"),
                 .product(name: "SwiftTLAMacros", package: "SwiftTLA"),
+                .product(name: "SwiftTLAUI", package: "SwiftTLA"),
             ],
             path: "."
         ),

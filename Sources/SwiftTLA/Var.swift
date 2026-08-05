@@ -1,11 +1,13 @@
-public protocol TLAValueType: TLAValueConvertible {}
-extension Int: TLAValueType {}
-extension Bool: TLAValueType {}
-extension String: TLAValueType {}
-extension TLAValue: TLAValueType {}
-public enum TLASetType: TLAValueType { public var tlaValue: TLAValue { .set([]) } }
-public enum TLATupleType: TLAValueType { public var tlaValue: TLAValue { .tuple([]) } }
-public enum TLARecordType: TLAValueType { public var tlaValue: TLAValue { .record([:]) } }
+public protocol TLAValueType: TLAValueConvertible {
+    static var defaultValue: Self { get }
+}
+extension Int: TLAValueType { public static var defaultValue: Int { 0 } }
+extension Bool: TLAValueType { public static var defaultValue: Bool { false } }
+extension String: TLAValueType { public static var defaultValue: String { "" } }
+extension TLAValue: TLAValueType { public static var defaultValue: TLAValue { .int(0) } }
+public enum TLASetType: TLAValueType { case placeholder; public var tlaValue: TLAValue { .set([]) }; public static var defaultValue: TLASetType { .placeholder } }
+public enum TLATupleType: TLAValueType { case placeholder; public var tlaValue: TLAValue { .tuple([]) }; public static var defaultValue: TLATupleType { .placeholder } }
+public enum TLARecordType: TLAValueType { case placeholder; public var tlaValue: TLAValue { .record([:]) }; public static var defaultValue: TLARecordType { .placeholder } }
 public typealias TLASet = TLASetType
 public typealias TLATuple = TLATupleType
 public typealias TLARecord = TLARecordType
@@ -19,13 +21,8 @@ public typealias TLARecord = TLARecordType
 /// ```
 public struct Var<T: TLAValueType>: Codable, Sendable, CustomStringConvertible {
     public let name: String
-    /// Creates a variable with an explicit TLA+ name.
-    public init(_ name: String) { self.name = name }
-    /// Creates a variable with a name and typed initial value.
     public init(_ name: String, _ value: T) { self.name = name }
-    /// Creates a variable from an initial value. The TLA+ name comes from
-    /// the `let` binding name, read by the `@TLAModel` macro.
-    public init(_ value: T) { self.name = "" }
+    public init(_ name: String) where T: TLAValueType { self.init(name, T.defaultValue) }
     public var description: String { name }
     /// Returns `x' = expression` — the variable's value in the next state.
     @discardableResult

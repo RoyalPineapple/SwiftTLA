@@ -4,7 +4,7 @@ import SwiftTLA
 struct CheckerTests {
     @Test("Lock: 2 states, 2 actions, invariant holds")
     func lockSpec() throws {
-        let v = Var<Int>("isLocked")
+        let v = Var("isLocked", 0)
         let spec = TLASpec("Lock") {
             Variable(v, 0)
             Action("lock") { v.becomes(1).when(v == 0) }
@@ -18,7 +18,7 @@ struct CheckerTests {
 
     @Test("Toggle: 2 states")
     func toggleSpec() throws {
-        let x = Var<Int>("x")
+        let x = Var("x", 0)
         let spec = TLASpec("Toggle") {
             Variable(x, 0)
             Action("flip") { x.becomes((x + 1) % 2) }
@@ -29,7 +29,7 @@ struct CheckerTests {
 
     @Test("Counter: invariant violation")
     func counterViolation() throws {
-        let x = Var<Int>("x")
+        let x = Var("x", 0)
         let spec = TLASpec("Counter") {
             Variable(x, 0)
             Action("inc") { x.becomes(x + 1) }
