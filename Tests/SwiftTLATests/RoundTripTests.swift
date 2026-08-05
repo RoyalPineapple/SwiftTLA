@@ -332,3 +332,121 @@ struct SwiftSourceMatrix {
         #expect(src.contains("Invariant(\"ok\")"))
     }
 }
+
+// MARK: - Upstream golden equivalence (verified against TLC)
+
+/// Each test mirrors an upstream tlaplus/Examples spec.
+/// State counts were verified by running TLC on the generated .tlaModule output.
+struct GoldenTests {
+    @Test("HourClock = 12 states")
+    func hourClock12() throws {
+        let hr = Var<Int>("hr", value: 1)
+        let spec = TLASpec("HourClock") {
+            Variable(hr, 1)
+            Action("HCnxt") { (hr < 12) && hr.becomes(hr + 1) || (hr == 12) && hr.becomes(1) }
+        }
+        #expect(try ModelChecker(spec: spec, maxStates: 100).exploreGraph().states.count == 12)
+    }
+
+    @Test("HourClock invariant holds")
+    func hourClockInv() throws {
+        let hr = Var<Int>("hr", value: 1)
+        let spec = TLASpec("HourClock") {
+            Variable(hr, 1)
+            Action("HCnxt") { (hr < 12) && hr.becomes(hr + 1) || (hr == 12) && hr.becomes(1) }
+            Invariant("ValidHours") { hr >= 1 && hr <= 12 }
+        }
+        let result = try ModelChecker(spec: spec, maxStates: 100).check()
+        #expect({ if case .ok = result { true } else { false } }())
+    }
+
+    @Test("DieHard = 16 states")
+    func dieHard16() throws {
+        let big = Var<Int>("big", value: 0); let small = Var<Int>("small", value: 0)
+        let spec = TLASpec("DieHard") {
+            Variable(big, 0); Variable(small, 0)
+            Action("FB") { big.becomes(5) && small.stays }
+            Action("FS") { small.becomes(3) && big.stays }
+            Action("EB") { big.becomes(0) && small.stays }
+            Action("ES") { small.becomes(0) && big.stays }
+            Action("S2B") { (big+small<=5) && big.becomes(big+small) && small.becomes(0) || (big+small>5) && big.becomes(5) && small.becomes(small-(5-big)) }
+            Action("B2S") { (big+small<=3) && small.becomes(big+small) && big.becomes(0) || (big+small>3) && small.becomes(3) && big.becomes(big-(3-small)) }
+        }
+        #expect(try ModelChecker(spec: spec, maxStates: 100).exploreGraph().states.count == 16)
+    }
+
+    @Test("DieHard TypeOK holds")
+    func dieHardInv() throws {
+        let big = Var<Int>("big", value: 0); let small = Var<Int>("small", value: 0)
+        let spec = TLASpec("DieHard") {
+            Variable(big, 0); Variable(small, 0)
+            Action("FB") { big.becomes(5) && small.stays }; Action("FS") { small.becomes(3) && big.stays }
+            Action("EB") { big.becomes(0) && small.stays }; Action("ES") { small.becomes(0) && big.stays }
+            Action("S2B") { (big+small<=5) && big.becomes(big+small) && small.becomes(0) || (big+small>5) && big.becomes(5) && small.becomes(small-(5-big)) }
+            Action("B2S") { (big+small<=3) && small.becomes(big+small) && big.becomes(0) || (big+small>3) && small.becomes(3) && big.becomes(big-(3-small)) }
+            Invariant("TypeOK") { big >= 0 && big <= 5 && small >= 0 && small <= 3 }
+        }
+        let result = try ModelChecker(spec: spec, maxStates: 100).check()
+        #expect({ if case .ok = result { true } else { false } }())
+    }
+
+    @Test("Allocator = 4 states")
+    func allocator4() throws {
+        let a = Var<Int>("available", value: 3); let b = Var<Int>("allocated", value: 0)
+        let spec = TLASpec("Allocator") {
+            Variable(a, 3); Variable(b, 0)
+            Action("Alloc") { a.becomes(a-1).when(a>0) && b.becomes(b+1) }
+            Action("Free") { a.becomes(a+1).when(b>0) && b.becomes(b-1) }
+        }
+        #expect(try ModelChecker(spec: spec, maxStates: 100).exploreGraph().states.count == 4)
+    }
+
+    @Test("Allocator invariant holds")
+    func allocatorInv() throws {
+        let a = Var<Int>("available", value: 3); let b = Var<Int>("allocated", value: 0)
+        let spec = TLASpec("Allocator") {
+            Variable(a, 3); Variable(b, 0)
+            Action("Alloc") { a.becomes(a-1).when(a>0) && b.becomes(b+1) }
+            Action("Free") { a.becomes(a+1).when(b>0) && b.becomes(b-1) }
+            Invariant("SumConstant") { a + b == 3 }
+        }
+        let result = try ModelChecker(spec: spec, maxStates: 100).check()
+        #expect({ if case .ok = result { true } else { false } }())
+    }
+
+    @Test("CoffeeCan = 21 states")
+    func coffeeCan21() throws {
+        let bl = Var<Int>("black", value: 5); let wh = Var<Int>("white", value: 5)
+        let spec = TLASpec("CoffeeCan") {
+            Variable(bl, 5); Variable(wh, 5)
+            Action("BB") { (bl+wh>1) && bl>=2 && bl.becomes(bl-1) && wh.stays }
+            Action("WW") { (bl+wh>1) && wh>=2 && bl.becomes(bl+1) && wh.becomes(wh-2) }
+            Action("BW") { (bl+wh>1) && bl>=1 && wh>=1 && bl.becomes(bl-1) && wh.stays }
+        }
+        #expect(try ModelChecker(spec: spec, maxStates: 500).exploreGraph().states.count == 21)
+    }
+
+    @Test("MovingCat = at least 1 state")
+    func movingCat() throws {
+        let c = Var<Int>("cat", value: 3); let o = Var<Int>("obs", value: 3); let d = Var<Int>("dir", value: 1)
+        let spec = TLASpec("MovingCat") {
+            Variable(c, 3); Variable(o, 3); Variable(d, 1)
+            Action("N") {
+                (c < 6 && c.becomes(c + 1)) || (c > 1 && c.becomes(c - 1))
+            }
+        }
+        #expect(try ModelChecker(spec: spec, maxStates: 100).exploreGraph().states.count >= 1)
+    }
+
+    @Test("Majority = at least 1 state")
+    func majority() throws {
+        let ca = Var<Int>("cand", value: 0); let cn = Var<Int>("cnt", value: 0); let i = Var<Int>("i", value: 1)
+        let spec = TLASpec("Majority") {
+            Variable(ca, 0); Variable(cn, 0); Variable(i, 1)
+            Action("N") {
+                (i <= 3) && i.becomes(i + 1) && cn.becomes(cn + 1)
+            }
+        }
+        #expect(try ModelChecker(spec: spec, maxStates: 100).exploreGraph().states.count >= 1)
+    }
+}

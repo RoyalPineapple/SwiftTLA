@@ -16,7 +16,7 @@ public enum ActionEnumerator {
         from oldState: [String: TLAValue],
         varNames: [String]
     ) throws -> [[String: TLAValue]] {
-        let disjuncts = splitOr(action)
+        let disjuncts = distOr(action)
         return try disjuncts.flatMap { try processDisjunct($0, oldState: oldState, varNames: varNames) }
     }
 
@@ -25,9 +25,7 @@ public enum ActionEnumerator {
         oldState: [String: TLAValue],
         varNames: [String]
     ) throws -> [[String: TLAValue]] {
-        // Check for CHOOSE — enumerate all choices
         let chooseAssignments = try extractChooseActions(action)
-
         if !chooseAssignments.isEmpty {
             var results: [[String: TLAValue]] = []
             for (varName, setExpr) in chooseAssignments {
@@ -45,7 +43,7 @@ public enum ActionEnumerator {
             return results
         }
 
-        let (assignments, guards) = try extractAssignments(action, isTopLevel: true)
+        let (assignments, guards) = try extractAssignments(action)
         guard try Evaluator.evaluateBool(
             guards.reduce(StateExpr.value(.bool(true))) { .and($0, $1) },
             in: oldState
@@ -66,7 +64,7 @@ public enum ActionEnumerator {
         varNames: [String],
         skip: String
     ) throws -> [String: TLAValue]? {
-        let (assignments, guards) = try extractAssignments(action, isTopLevel: false)
+        let (assignments, guards) = try extractAssignments(action)
         guard try Evaluator.evaluateBool(
             guards.reduce(StateExpr.value(.bool(true))) { .and($0, $1) },
             in: oldState
@@ -81,19 +79,31 @@ public enum ActionEnumerator {
         return newState
     }
 
+    /// Flattens OR at all levels by distributing AND over OR
+    private static func distOr(_ action: ActionExpr) -> [ActionExpr] {
+        switch action {
+        case .or(let a, let b):
+            return distOr(a) + distOr(b)
+        case .and(let a, let b):
+            let lhs = distOr(a)
+            let rhs = distOr(b)
+            return lhs.flatMap { l in rhs.map { r in .and(l, r) } }
+        default:
+            return [action]
+        }
+    }
+
     private static func extractChooseActions(_ action: ActionExpr) throws -> [(String, StateExpr)] {
         switch action {
         case .chooseAction(let v, let s): return [(v, s)]
         case .and(let a, let b):
-            let lhs = try extractChooseActions(a)
-            let rhs = try extractChooseActions(b)
-            return lhs + rhs
+            return try extractChooseActions(a) + extractChooseActions(b)
+        case .or: return []
         case .assign, .unchanged, .guard_: return []
-        case .or: throw ActionError.invalidActionForm("CHOOSE must not be inside OR")
         }
     }
 
-    private static func extractAssignments(_ action: ActionExpr, isTopLevel: Bool) throws -> (assignments: [String: StateExpr], guards: [StateExpr]) {
+    private static func extractAssignments(_ action: ActionExpr) throws -> (assignments: [String: StateExpr], guards: [StateExpr]) {
         switch action {
         case .assign(let name, let expr):
             return ([name: expr], [])
@@ -102,25 +112,16 @@ public enum ActionEnumerator {
         case .guard_(let expr):
             return ([:], [expr])
         case .chooseAction:
-            if isTopLevel { return ([:], []) }
-            return ([:], [.value(.bool(true))])
+            return ([:], [])
         case .and(let a, let b):
-            let (lhsAssign, lhsGuards) = try extractAssignments(a, isTopLevel: isTopLevel)
-            let (rhsAssign, rhsGuards) = try extractAssignments(b, isTopLevel: isTopLevel)
+            let (lhsAssign, lhsGuards) = try extractAssignments(a)
+            let (rhsAssign, rhsGuards) = try extractAssignments(b)
             for key in rhsAssign.keys where lhsAssign[key] != nil {
                 throw ActionError.multipleAssignment(key)
             }
             return (lhsAssign.merging(rhsAssign) { $1 }, lhsGuards + rhsGuards)
         case .or:
-            if isTopLevel { return ([:], []) }
-            throw ActionError.invalidActionForm("OR must be at the top level of an action, not nested inside AND")
+            return ([:], [])
         }
-    }
-
-    private static func splitOr(_ action: ActionExpr) -> [ActionExpr] {
-        if case .or(let a, let b) = action {
-            return splitOr(a) + splitOr(b)
-        }
-        return [action]
     }
 }
