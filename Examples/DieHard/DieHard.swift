@@ -6,8 +6,10 @@ import SwiftTLAMacros
 public struct DieHard {
     static var spec: TLASpec {
         TLASpec("DieHard") {
-            let big = Var(0)
-            let small = Var(0)
+            let big = Var("big", 0)
+            let small = Var("small", 0)
+            Variable(big, 0)
+            Variable(small, 0)
 
             Action("FillSmallJug")  { small.becomes(3) && big.stays }
             Action("FillBigJug")    { big.becomes(5) && small.stays }

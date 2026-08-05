@@ -1,6 +1,3 @@
-# $name
+# Major
 
-SwiftTLA example.
-
-## Spec
-
+https://github.com/tlaplus/Examples/tree/master/specifications/Major

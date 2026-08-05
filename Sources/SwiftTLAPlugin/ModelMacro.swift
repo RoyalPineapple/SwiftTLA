@@ -19,6 +19,7 @@ public struct ModelMacro: MemberMacro {
         let typeName = structDeclaration.name.text
 
         let parsed = try parseSpecBody(structDeclaration.memberBlock.members, typeName: typeName)
+        if parsed.variables.isEmpty { throw SimpleError("parsed.variables is empty after parseSpecBody") }
         let specification = TLASpec(
             name: typeName,
             variables: parsed.variables.map { NamedVar(name: $0.name, initial: $0.initial) },
@@ -86,7 +87,7 @@ public struct ModelMacro: MemberMacro {
                    callee.baseName.text == "TLASpec" {
                     let closure = functionCall.trailingClosure ?? functionCall.arguments.last?.expression.as(ClosureExprSyntax.self)
                     if let closure {
-                        return parseBuilderBody(closure.statements)
+                        return try parseBuilderBody(closure.statements)
                     }
                 }
             }
@@ -105,24 +106,27 @@ public struct ModelMacro: MemberMacro {
         return nil
     }
 
-    private static func parseBuilderBody(_ statements: CodeBlockItemListSyntax) -> ParsedSpec {
+    private static func parseBuilderBody(_ statements: CodeBlockItemListSyntax) throws -> ParsedSpec {
         var result = ParsedSpec()
         for statement in statements {
             switch statement.item {
             case .decl(let declaration):
-                if let variableDeclaration = declaration.as(VariableDeclSyntax.self),
-                   let binding = variableDeclaration.bindings.first,
-                   let name = binding.pattern.as(IdentifierPatternSyntax.self)?.identifier.text,
-                   let initCall = binding.initializer?.value.as(FunctionCallExprSyntax.self),
-                   let callee = initCall.calledExpression.as(DeclReferenceExprSyntax.self),
-                   callee.baseName.text == "Var",
-                   let value = parseInitialValue(initCall.arguments.first?.expression) {
-                    result.variables.append((name, value))
-                }
+                guard let variableDeclaration = declaration.as(VariableDeclSyntax.self) else { continue }
+                guard let binding = variableDeclaration.bindings.first else { continue }
+                guard let name = binding.pattern.as(IdentifierPatternSyntax.self)?.identifier.text else { continue }
+                guard let initCall = binding.initializer?.value.as(FunctionCallExprSyntax.self) else { throw SimpleError("step1 failed: not FunctionCallExpr") }
+                guard let callee = initCall.calledExpression.as(DeclReferenceExprSyntax.self) else { throw SimpleError("step2 failed: callee is " + initCall.calledExpression.debugDescription) }
+                guard callee.baseName.text == "Var" else { throw SimpleError("step3 failed: callee is " + callee.baseName.text) }
+                guard let value = parseInitialValue(initCall.arguments.first?.expression) else { throw SimpleError("step4 failed: " + (initCall.arguments.first?.expression.debugDescription ?? "nil")) }
+                result.variables.append((name, value))
             case .expr(let expression):
                 guard let call = expression.as(FunctionCallExprSyntax.self),
                       let reference = call.calledExpression.as(DeclReferenceExprSyntax.self) else { continue }
                 switch reference.baseName.text {
+                case "Variable":
+                    guard let ref = call.arguments.first?.expression.as(DeclReferenceExprSyntax.self),
+                          let value = parseInitialValue(call.arguments.dropFirst().first?.expression) else { continue }
+                    result.variables.append((ref.baseName.text, value))
                 case "Action":
                     guard let name = extractStringLiteral(call.arguments.first?.expression),
                           let closure = call.trailingClosure else { continue }
