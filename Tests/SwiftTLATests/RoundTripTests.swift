@@ -4,23 +4,115 @@ import SwiftTLA
 // MARK: - Var<T> operators: full matrix
 
 struct VarOperatorMatrix {
-    @Test func arithmetic() {
+    @Test("Arithmetic", arguments: [
+        ("+", 3, "(x + 3)"),
+        ("-", 1, "(x - 1)"),
+        ("*", 2, "(x * 2)"),
+        ("%", 5, "(x % 5)"),
+    ])
+    func arithmetic(_ op: String, _ val: Int, _ expected: String) {
         let x = Var<Int>("x", value: 1)
-        #expect((x + 3).description == "(x + 3)")
-        #expect((x - 1).description == "(x - 1)")
-        #expect((x * 2).description == "(x * 2)")
-        #expect((x % 5).description == "(x % 5)")
+        let result: String
+        switch op {
+        case "+": result = (x + val).description
+        case "-": result = (x - val).description
+        case "*": result = (x * val).description
+        case "%": result = (x % val).description
+        default: result = ""
+        }
+        #expect(result == expected)
     }
 
-    @Test func comparison() {
+    @Test("Comparison matrix", arguments: [
+        ("==", 0, "(x = 0)"),
+        ("==", 1, "(x = 1)"),
+        ("!=", 0, "(x /= 0)"),
+        ("<",  5, "(x < 5)"),
+        ("<=", 5, "(x <= 5)"),
+        (">",  0, "(x > 0)"),
+        (">=", 1, "(x >= 1)"),
+    ])
+    func comparison(_ op: String, _ val: Int, _ expected: String) {
         let x = Var<Int>("x", value: 1)
-        #expect((x == 0).description == "(x = 0)")
-        #expect((x == 1).description == "(x = 1)")
-        #expect((x != 0).description == "(x /= 0)")
-        #expect((x < 5).description == "(x < 5)")
-        #expect((x <= 5).description == "(x <= 5)")
-        #expect((x > 0).description == "(x > 0)")
-        #expect((x >= 1).description == "(x >= 1)")
+        let result: String
+        switch op {
+        case "==": result = (x == val).description
+        case "!=": result = (x != val).description
+        case "<":  result = (x < val).description
+        case "<=": result = (x <= val).description
+        case ">":  result = (x > val).description
+        case ">=": result = (x >= val).description
+        default:   result = ""
+        }
+        #expect(result == expected)
+    }
+
+    @Test("ActionEnumerator variants", arguments: [
+        ("simpleAssign", 1),
+        ("guardTrue", 1),
+        ("guardFalse", 0),
+        ("orBranches", 2),
+        ("twoVars", 1),
+    ] as [(String, Int)])
+    func actionMatrix(_ variant: String, _ expected: Int) throws {
+        let s: [String: TLAValue] = ["x": .int(0), "y": .int(0)]
+        let action: ActionExpr
+        switch variant {
+        case "simpleAssign": action = .assign("x", .value(.int(42)))
+        case "guardTrue":    action = .and(.guard_(.equal(.variable("x"), .value(.int(0)))), .assign("x", .value(.int(1))))
+        case "guardFalse":   action = .and(.guard_(.equal(.variable("x"), .value(.int(1)))), .assign("x", .value(.int(2))))
+        case "orBranches":   action = .or(.assign("x", .value(.int(1))), .assign("x", .value(.int(2))))
+        case "twoVars":      action = .and(.assign("x", .value(.int(1))), .assign("y", .value(.int(2))))
+        default:             action = .assign("x", .value(.int(0)))
+        }
+        let r = try ActionEnumerator.enumerate(action, from: s, varNames: ["x", "y"])
+        #expect(r.count == expected)
+    }
+
+    @Test("StateExpr cases", arguments: [
+        ("valueInt",    "42"),
+        ("valueBool",   "true"),
+        ("valueString", "\"hi\""),
+        ("variable",    "x"),
+        ("add",         "(1 + 2)"),
+        ("subtract",   "(5 - 3)"),
+        ("multiply",   "(2 * 3)"),
+        ("modulo",     "(7 % 3)"),
+        ("negate",     "(-1)"),
+        ("equal",      "(1 = 1)"),
+        ("notEqual",   "(1 /= 2)"),
+        ("lessThan",   "(1 < 2)"),
+        ("greaterThan","(2 > 1)"),
+        ("setLiteral", "{1, 2}"),
+        ("inSet",      "(1 \\in {1, 2})"),
+        ("tupleLiteral","<<1, 2>>"),
+        ("ifThen",     "(IF true THEN 1 ELSE 2)"),
+        ("enabled",    "ENABLED Tick"),
+    ] as [(String, String)])
+    func stateExprMatrix(_ caseName: String, _ expected: String) {
+        let e: StateExpr
+        switch caseName {
+        case "valueInt":    e = .value(.int(42))
+        case "valueBool":   e = .value(.bool(true))
+        case "valueString": e = .value(.string("hi"))
+        case "variable":    e = .variable("x")
+        case "add":         e = .add(.int(1), .int(2))
+        case "subtract":   e = .subtract(.int(5), .int(3))
+        case "multiply":   e = .multiply(.int(2), .int(3))
+        case "modulo":     e = .modulo(.int(7), .int(3))
+        case "negate":     e = .negate(.int(1))
+        case "equal":      e = .equal(.int(1), .int(1))
+        case "notEqual":   e = .notEqual(.int(1), .int(2))
+        case "lessThan":   e = .lessThan(.int(1), .int(2))
+        case "greaterThan": e = .greaterThan(.int(2), .int(1))
+        case "setLiteral": e = .setLiteral([.int(1), .int(2)])
+        case "inSet":      e = .in(.int(1), .setLiteral([.int(1), .int(2)]))
+        case "tupleLiteral": e = .tupleLiteral([.int(1), .int(2)])
+        case "ifThen":     e = .ifThenElse(.bool(true), .int(1), .int(2))
+        case "enabled":    e = .enabledAction("Tick")
+        default: e = .value(.int(0))
+        }
+        #expect(e.description == expected)
     }
 
     @Test func varVsVar() {
@@ -426,16 +518,20 @@ struct GoldenTests {
         #expect(try ModelChecker(spec: spec, maxStates: 500).exploreGraph().states.count == 21)
     }
 
-    @Test("MovingCat = at least 1 state")
+    @Test("MovingCat = 18 states (composite && fixed)")
     func movingCat() throws {
         let c = Var<Int>("cat", value: 3); let o = Var<Int>("obs", value: 3); let d = Var<Int>("dir", value: 1)
         let spec = TLASpec("MovingCat") {
             Variable(c, 3); Variable(o, 3); Variable(d, 1)
-            Action("N") {
-                (c < 6 && c.becomes(c + 1)) || (c > 1 && c.becomes(c - 1))
+            Action("Next") {
+                (c < 6 && c.becomes(c + 1) || c > 1 && c.becomes(c - 1)) &&
+                ((d == 1 && o < 5) && o.becomes(o + 1) && d.stays ||
+                 (d == 1 && o == 5) && o.becomes(o - 1) && d.becomes(-1) ||
+                 (d == -1 && o > 2) && o.becomes(o - 1) && d.stays ||
+                 (d == -1 && o == 2) && o.becomes(o + 1) && d.becomes(1))
             }
         }
-        #expect(try ModelChecker(spec: spec, maxStates: 100).exploreGraph().states.count >= 1)
+        #expect(try ModelChecker(spec: spec, maxStates: 200).exploreGraph().states.count == 18)
     }
 
     @Test("Majority = at least 1 state")
