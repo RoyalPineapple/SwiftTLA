@@ -19,6 +19,7 @@ public typealias TLARecord = TLARecordType
 /// let isLocked = Var(0)          // Var<Int>, name inferred from binding
 /// let isLocked = Var("isLocked") // explicit name
 /// ```
+@dynamicMemberLookup
 public struct Var<T: TLAValueType>: Codable, Sendable, CustomStringConvertible {
     public let name: String
     public init(_ name: String? = nil, value: T? = nil) {
@@ -30,6 +31,8 @@ public struct Var<T: TLAValueType>: Codable, Sendable, CustomStringConvertible {
     public func becomes(_ expression: some StateExprConvertible) -> ActionExpr { .assign(name, expression.stateExpr) }
     /// Returns `UNCHANGED x` — the variable stays the same in the next state.
     public var stays: ActionExpr { .unchanged(name) }
+
+    public subscript(dynamicMember field: String) -> StateExpr { .recordAccess(.variable(name), field) }
 }
 
 /// Attaches a guard condition to an action.
@@ -54,6 +57,7 @@ extension Int: StateExprConvertible { public var stateExpr: StateExpr { .value(.
 extension Bool: StateExprConvertible { public var stateExpr: StateExpr { .value(.bool(self)) } }
 extension String: StateExprConvertible { public var stateExpr: StateExpr { .value(.string(self)) } }
 extension Var: StateExprConvertible { public var stateExpr: StateExpr { .variable(name) } }
+extension TLAValue: StateExprConvertible { public var stateExpr: StateExpr { .value(self) } }
 
 public protocol TLAValueConvertible { var tlaValue: TLAValue { get } }
 extension TLAValue: TLAValueConvertible { public var tlaValue: TLAValue { self } }
