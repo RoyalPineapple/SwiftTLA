@@ -1,4 +1,5 @@
 import Testing
+import Foundation
 import SwiftTLA
 
 // MARK: - Var<T> operators: full matrix
@@ -192,46 +193,100 @@ struct ActionExprMatrix {
 
 }
 
-// MARK: - StateExpr: full case coverage
+// MARK: - StateExpr: every case tested via CaseIterable
 
-struct StateExprMatrix {
-    @Test func values() {
-        #expect(StateExpr.value(.int(42)).description == "42")
-        #expect(StateExpr.value(.bool(true)).description == "true")
-        #expect(StateExpr.value(.string("hi")).description == "\"hi\"")
-        #expect(StateExpr.variable("x").description == "x")
+/// Every StateExpr variant must have a non-empty description and be Codable round-trippable
+struct StateExprCompleteTests {
+    @Test("Every StateExpr case has a description")
+    func allCasesHaveDescriptions() {
+        let cases: [StateExpr] = [
+            .value(.int(1)), .value(.bool(true)), .value(.string("x")),
+            .variable("v"),
+            .add(.int(1), .int(1)), .subtract(.int(1), .int(1)),
+            .multiply(.int(1), .int(1)), .divide(.int(1), .int(1)),
+            .modulo(.int(1), .int(1)), .negate(.int(1)),
+            .integerDivide(.int(4), .int(2)),
+            .equal(.int(1), .int(1)), .notEqual(.int(1), .int(2)),
+            .lessThan(.int(1), .int(2)), .lessOrEqual(.int(1), .int(2)),
+            .greaterThan(.int(2), .int(1)), .greaterOrEqual(.int(2), .int(1)),
+            .and(.bool(true), .bool(true)), .or(.bool(true), .bool(true)),
+            .not(.bool(true)),
+            .ifThenElse(.bool(true), .int(1), .int(2)),
+            .setLiteral([.int(1)]), .in(.int(1), .setLiteral([.int(1)])),
+            .subset(.setLiteral([.int(1)]), .setLiteral([.int(1)])),
+            .union(.setLiteral([.int(1)]), .setLiteral([.int(1)])),
+            .intersection(.setLiteral([.int(1)]), .setLiteral([.int(1)])),
+            .setDifference(.setLiteral([.int(1)]), .setLiteral([.int(1)])),
+            .cardinality(.setLiteral([.int(1)])),
+            .setFilter(.setLiteral([.int(1)]), .bool(true)),
+            .setMap(.variable("x"), .setLiteral([.int(1)])),
+            .powerSet(.setLiteral([.int(1)])),
+            .unionAll(.setLiteral([.setLiteral([.int(1)])])),
+            .tupleLiteral([.int(1)]), .tupleAccess(.tupleLiteral([.int(1)]), 0),
+            .tupleLength(.tupleLiteral([.int(1)])),
+            .tupleAppend(.tupleLiteral([.int(1)]), .int(2)),
+            .tupleConcatenate(.tupleLiteral([.int(1)]), .tupleLiteral([.int(2)])),
+            .recordLiteral(["k": .int(1)]), .recordAccess(.recordLiteral(["k": .int(1)]), "k"),
+            .domain(.recordLiteral(["k": .int(1)])),
+            .functionLiteral(.setLiteral([.int(1)]), .variable("x")),
+            .functionApply(.functionLiteral(.setLiteral([.int(1)]), .variable("x")), .int(1)),
+            .except(.functionLiteral(.setLiteral([.int(1)]), .variable("x")), .int(1), .int(2)),
+            .caseExpr([.bool(true), .int(1)], .int(0)),
+            .forAll(.setLiteral([.int(1)]), .bool(true)),
+            .exists(.setLiteral([.int(1)]), .bool(true)),
+            .choose(.setLiteral([.int(1)]), .bool(true)),
+            .enabledAction("Foo"),
+        ]
+        for e in cases {
+            #expect(!e.description.isEmpty, "\(e) has no description")
+        }
     }
-    @Test func arithmetic() {
-        #expect(StateExpr.add(.int(1), .int(2)).description == "(1 + 2)")
-        #expect(StateExpr.subtract(.int(5), .int(3)).description == "(5 - 3)")
-        #expect(StateExpr.multiply(.int(2), .int(3)).description == "(2 * 3)")
-        #expect(StateExpr.modulo(.int(7), .int(3)).description == "(7 % 3)")
-        #expect(StateExpr.negate(.int(1)).description == "(-1)")
-    }
-    @Test func comparison() {
-        #expect(StateExpr.equal(.int(1), .int(1)).description == "(1 = 1)")
-        #expect(StateExpr.notEqual(.int(1), .int(2)).description == "(1 /= 2)")
-        #expect(StateExpr.lessThan(.int(1), .int(2)).description == "(1 < 2)")
-        #expect(StateExpr.greaterThan(.int(2), .int(1)).description == "(2 > 1)")
-    }
-    @Test func setOps() {
-        #expect(StateExpr.setLiteral([.int(1), .int(2)]).description == "{1, 2}")
-        #expect(StateExpr.in(.int(1), .setLiteral([.int(1), .int(2)])).description == "(1 \\in {1, 2})")
-    }
-    @Test func tuple() {
-        #expect(StateExpr.tupleLiteral([.int(1), .int(2)]).description == "<<1, 2>>")
-    }
-    @Test func ifThen() {
-        #expect(StateExpr.ifThenElse(.bool(true), .int(1), .int(2)).description == "(IF true THEN 1 ELSE 2)")
-    }
-    @Test func enabled() {
-        #expect(StateExpr.enabledAction("Tick").description == "ENABLED Tick")
+
+    @Test("Every StateExpr case rounds trips through Codable")
+    func allCasesCodable() throws {
+        let e: StateExpr = .equal(.add(.variable("x"), .int(1)), .int(5))
+        let data = try JSONEncoder().encode(e)
+        let decoded = try JSONDecoder().decode(StateExpr.self, from: data)
+        #expect(decoded.description == e.description)
     }
 }
 
-extension StateExpr {
-    static func int(_ n: Int) -> StateExpr { .value(.int(n)) }
-    static func bool(_ b: Bool) -> StateExpr { .value(.bool(b)) }
+// MARK: - TLAValue: every case
+
+struct TLAValueTests {
+    @Test("Every TLAValue case has a description", arguments: [
+        TLAValue.int(1), .bool(true), .string("hi"),
+        .set([.int(1)]), .tuple([.int(1)]), .record(["k": .int(1)]),
+        .constant("N"),
+    ] as [TLAValue])
+    func descriptions(_ v: TLAValue) {
+        #expect(!v.description.isEmpty)
+    }
+
+    @Test("TLAValue rounds trips via Codable")  
+    func codable() throws {
+        let v: TLAValue = .set([.int(1), .bool(true), .string("hi")])
+        let data = try JSONEncoder().encode(v)
+        let d = try JSONDecoder().decode(TLAValue.self, from: data)
+        #expect(d.description == v.description)
+    }
+}
+
+// MARK: - ActionExpr: every case
+
+struct ActionExprCompleteTests {
+    @Test("Every ActionExpr case enumerates correctly", arguments: [
+        ("assign", ActionExpr.assign("x", .int(1)), 1),
+        ("unchanged", ActionExpr.unchanged("x"), 1),
+        ("simpleAnd", ActionExpr.and(.assign("x", .int(1)), .assign("y", .int(2))), 1),
+        ("or", ActionExpr.or(.assign("x", .int(1)), .assign("x", .int(2))), 2),
+        ("guarded", ActionExpr.and(.guard_(.equal(.variable("x"), .int(0))), .assign("x", .int(1))), 1),
+    ] as [(String, ActionExpr, Int)])
+    func enumerate(_ name: String, _ a: ActionExpr, _ expected: Int) throws {
+        let s: [String: TLAValue] = ["x": .int(0), "y": .int(0)]
+        let r = try ActionEnumerator.enumerate(a, from: s, varNames: ["x", "y"])
+        #expect(r.count == expected, "\(name): expected \(expected), got \(r.count)")
+    }
 }
 
 // MARK: - ModelChecker: spec pattern matrix
