@@ -118,8 +118,8 @@ private func bfs(
 ) -> ModelChecker.Exploration {
     bfsLoop(
         queue: seeds.map(\.1),
-        stateToID: Dictionary(uniqueKeysWithValues: seeds.map { (canonical($0.1), $0.0) }),
-        idToState: Dictionary(uniqueKeysWithValues: seeds.map { ($0.0, $0.1) }),
+        stateToID: Dictionary(seeds.map { (canonical($0.1), $0.0) }, uniquingKeysWith: { existing, _ in existing }),
+        idToState: Dictionary(seeds.map { ($0.0, $0.1) }, uniquingKeysWith: { existing, _ in existing }),
         visited: Set(seeds.map { canonical($0.1) }),
         transitions: [:],
         predecessors: [:],
