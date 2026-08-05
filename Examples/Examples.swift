@@ -19,6 +19,8 @@ public enum Examples {
         .init(name: "MovingCat", spec: MovingCat.spec, expectedStates: 70, source: "specifications/Moving_Cat_Puzzle", about: "Cat bouncing between boxes."),
         .init(name: "Majority", spec: Majority.spec, expectedStates: 5, source: "specifications/Majority", about: "Boyer-Moore majority vote."),
         .init(name: "SumsEven", spec: SumsEven.spec, expectedStates: 0, source: "specifications/sums_even", about: "Proof that x+x is always even."),
+        .init(name: "Bakery", spec: Bakery.spec, expectedStates: 0, source: "specifications/Bakery-Boulangerie", about: "Lamport's mutual exclusion algorithm for concurrent actors."),
+        .init(name: "DiningPhilosophers", spec: DiningPhilosophers.spec, expectedStates: 0, source: "specifications/DiningPhilosophers", about: "Deadlock avoidance in concurrent resource acquisition."),
         .init(name: "Allocator", spec: Allocator.spec, expectedStates: 4, source: "specifications/allocator", about: "Resource allocator."),
     ]
 }
