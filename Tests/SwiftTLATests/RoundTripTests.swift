@@ -1,43 +1,334 @@
 import Testing
 import SwiftTLA
 
-struct CheckerTests {
-    @Test("Lock: 2 states, 2 actions, invariant holds")
-    func lockSpec() throws {
-        let v = Var<Int>("isLocked")
-        let spec = TLASpec("Lock") {
-            Variable(v, 0)
-            Action("lock") { v.becomes(1).when(v == 0) }
-            Action("unlock") { v.becomes(0).when(v == 1) }
-            Invariant("binary") { v >= 0 && v <= 1 }
-        }
-        let result = try ModelChecker(spec: spec, maxStates: 100).check()
-        guard case .ok(let count) = result else { #expect(Bool(false), "Expected ok"); return }
-        #expect(count == 2)
+// MARK: - Var<T> operators: full matrix
+
+struct VarOperatorMatrix {
+    @Test func arithmetic() {
+        let x = Var<Int>("x", value: 1)
+        #expect((x + 3).description == "(x + 3)")
+        #expect((x - 1).description == "(x - 1)")
+        #expect((x * 2).description == "(x * 2)")
+        #expect((x % 5).description == "(x % 5)")
     }
 
-    @Test("Toggle: 2 states")
-    func toggleSpec() throws {
-        let x = Var<Int>("x")
-        let spec = TLASpec("Toggle") {
+    @Test func comparison() {
+        let x = Var<Int>("x", value: 1)
+        #expect((x == 0).description == "(x = 0)")
+        #expect((x == 1).description == "(x = 1)")
+        #expect((x != 0).description == "(x /= 0)")
+        #expect((x < 5).description == "(x < 5)")
+        #expect((x <= 5).description == "(x <= 5)")
+        #expect((x > 0).description == "(x > 0)")
+        #expect((x >= 1).description == "(x >= 1)")
+    }
+
+    @Test func varVsVar() {
+        let a = Var<Int>("a", value: 1)
+        let b = Var<Int>("b", value: 2)
+        #expect((a == b).description == "(a = b)")
+        #expect((a != b).description == "(a /= b)")
+        #expect((a < b).description == "(a < b)")
+    }
+
+    @Test func prefix() {
+        let x = Var<Int>("x", value: 1)
+        #expect((-x).description == "(-x)")
+    }
+
+    @Test func stringComparison() {
+        let s = Var<String>("s", value: "right")
+        #expect((s == "right").description == "(s = \"right\")")
+    }
+
+    @Test func assignmentAndWhen() {
+        let x = Var<Int>("x", value: 0)
+        let a = x.becomes(1)
+        #expect(a.description.contains("x' = 1"))
+        let g = x.becomes(1).when(x == 0)
+        #expect(g.description.contains("(x = 0)") && g.description.contains("x' = 1"))
+        let s = x.stays
+        #expect(s.description.contains("UNCHANGED x"))
+    }
+}
+
+// MARK: - ActionExpr: full variant coverage
+
+struct ActionExprMatrix {
+    let s0: [String: TLAValue] = ["x": .int(0)]
+    let s2: [String: TLAValue] = ["a": .int(0), "b": .int(0)]
+
+    @Test func simpleAssign() throws {
+        let r = try ActionEnumerator.enumerate(.assign("x", .value(.int(42))), from: s0, varNames: ["x"])
+        #expect(r.count == 1 && r[0]["x"] == .int(42))
+    }
+
+    @Test func unchanged() throws {
+        let r = try ActionEnumerator.enumerate(.unchanged("x"), from: s0, varNames: ["x"])
+        #expect(r.count == 1 && r[0]["x"] == .int(0))
+    }
+
+    @Test func guardTrue() throws {
+        let a: ActionExpr = .and(.guard_(.equal(.variable("x"), .value(.int(0)))), .assign("x", .value(.int(1))))
+        let r = try ActionEnumerator.enumerate(a, from: s0, varNames: ["x"])
+        #expect(r.count == 1)
+    }
+
+    @Test func guardFalse() throws {
+        let a: ActionExpr = .and(.guard_(.equal(.variable("x"), .value(.int(1)))), .assign("x", .value(.int(2))))
+        let r = try ActionEnumerator.enumerate(a, from: s0, varNames: ["x"])
+        #expect(r.isEmpty)
+    }
+
+    @Test func twoVars() throws {
+        let a: ActionExpr = .and(.assign("a", .value(.int(1))), .assign("b", .value(.int(2))))
+        let r = try ActionEnumerator.enumerate(a, from: s2, varNames: ["a", "b"])
+        #expect(r.count == 1 && r[0]["a"] == .int(1) && r[0]["b"] == .int(2))
+    }
+
+    @Test func orBranches() throws {
+        let a: ActionExpr = .or(.assign("x", .value(.int(1))), .assign("x", .value(.int(2))))
+        let r = try ActionEnumerator.enumerate(a, from: s0, varNames: ["x"])
+        #expect(r.count == 2)
+    }
+
+    @Test func nestedOr() throws {
+        let a: ActionExpr = .or(.or(.assign("x", .value(.int(1))), .assign("x", .value(.int(2)))), .assign("x", .value(.int(3))))
+        let r = try ActionEnumerator.enumerate(a, from: s0, varNames: ["x"])
+        #expect(r.count == 3)
+    }
+
+}
+
+// MARK: - StateExpr: full case coverage
+
+struct StateExprMatrix {
+    @Test func values() {
+        #expect(StateExpr.value(.int(42)).description == "42")
+        #expect(StateExpr.value(.bool(true)).description == "true")
+        #expect(StateExpr.value(.string("hi")).description == "\"hi\"")
+        #expect(StateExpr.variable("x").description == "x")
+    }
+    @Test func arithmetic() {
+        #expect(StateExpr.add(.int(1), .int(2)).description == "(1 + 2)")
+        #expect(StateExpr.subtract(.int(5), .int(3)).description == "(5 - 3)")
+        #expect(StateExpr.multiply(.int(2), .int(3)).description == "(2 * 3)")
+        #expect(StateExpr.modulo(.int(7), .int(3)).description == "(7 % 3)")
+        #expect(StateExpr.negate(.int(1)).description == "(-1)")
+    }
+    @Test func comparison() {
+        #expect(StateExpr.equal(.int(1), .int(1)).description == "(1 = 1)")
+        #expect(StateExpr.notEqual(.int(1), .int(2)).description == "(1 /= 2)")
+        #expect(StateExpr.lessThan(.int(1), .int(2)).description == "(1 < 2)")
+        #expect(StateExpr.greaterThan(.int(2), .int(1)).description == "(2 > 1)")
+    }
+    @Test func setOps() {
+        #expect(StateExpr.setLiteral([.int(1), .int(2)]).description == "{1, 2}")
+        #expect(StateExpr.in(.int(1), .setLiteral([.int(1), .int(2)])).description == "(1 \\in {1, 2})")
+    }
+    @Test func tuple() {
+        #expect(StateExpr.tupleLiteral([.int(1), .int(2)]).description == "<<1, 2>>")
+    }
+    @Test func ifThen() {
+        #expect(StateExpr.ifThenElse(.bool(true), .int(1), .int(2)).description == "(IF true THEN 1 ELSE 2)")
+    }
+    @Test func enabled() {
+        #expect(StateExpr.enabledAction("Tick").description == "ENABLED Tick")
+    }
+}
+
+extension StateExpr {
+    static func int(_ n: Int) -> StateExpr { .value(.int(n)) }
+    static func bool(_ b: Bool) -> StateExpr { .value(.bool(b)) }
+}
+
+// MARK: - ModelChecker: spec pattern matrix
+
+struct ModelCheckerMatrix {
+    @Test func singleVarLinear() throws {
+        let x = Var<Int>("x", value: 0)
+        let spec = TLASpec("Test") {
             Variable(x, 0)
-            Action("flip") { x.becomes((x + 1) % 2) }
+            Action("inc") { x.becomes(x + 1).when(x < 3) }
+        }
+        let graph = try ModelChecker(spec: spec, maxStates: 100).exploreGraph()
+        #expect(graph.states.count == 4)
+    }
+
+    @Test func singleVarCyclic() throws {
+        let x = Var<Int>("x", value: 0)
+        let spec = TLASpec("Test") {
+            Variable(x, 0)
+            Action("toggle") { x.becomes((x + 1) % 2) }
         }
         let graph = try ModelChecker(spec: spec, maxStates: 100).exploreGraph()
         #expect(graph.states.count == 2)
     }
 
-    @Test("Counter: invariant violation")
-    func counterViolation() throws {
-        let x = Var<Int>("x")
-        let spec = TLASpec("Counter") {
+    @Test func invariantHolds() throws {
+        let x = Var<Int>("x", value: 0)
+        let spec = TLASpec("Test") {
             Variable(x, 0)
-            Action("inc") { x.becomes(x + 1) }
-            Action("dec") { x.becomes(x - 1) }
+            Action("inc") { x.becomes(x + 1).when(x < 5) }
             Invariant("nonNeg") { x >= 0 }
         }
-        let result = try ModelChecker(spec: spec, maxStates: 100).check()
-        guard case .invariantViolated(let name, _, _) = result else { #expect(Bool(false), "Expected violation"); return }
-        #expect(name == "nonNeg")
+        if case .ok(let count) = try ModelChecker(spec: spec, maxStates: 100).check() {
+            #expect(count == 6)
+        } else {
+            #expect(Bool(false))
+        }
+    }
+
+    @Test func invariantViolated() throws {
+        let x = Var<Int>("x", value: 0)
+        let spec = TLASpec("Test") {
+            Variable(x, 0)
+            Action("inc") { x.becomes(x + 1) }
+            Invariant("lt3") { x < 3 }
+        }
+        if case .invariantViolated(let name, _, _) = try ModelChecker(spec: spec, maxStates: 100).check() {
+            #expect(name == "lt3")
+        } else {
+            #expect(Bool(false))
+        }
+    }
+
+    @Test func maxStatesBound() throws {
+        let x = Var<Int>("x", value: 0)
+        let spec = TLASpec("Test") {
+            Variable(x, 0)
+            Action("inc") { x.becomes(x + 1) }
+        }
+        let graph = try ModelChecker(spec: spec, maxStates: 3).exploreGraph()
+        // Processes 3 states, discovers 4 (successors of last processed also stored)
+        #expect(graph.states.count >= 3 && graph.states.count <= 4)
+    }
+
+
+    @Test func deadlockNotDetectedWhenFlagFalse() throws {
+        let x = Var<Int>("x", value: 0)
+        let spec = TLASpec("Test") {
+            Variable(x, 0)
+            Action("once") { x.becomes(1).when(x == 0) }
+        }
+        if case .ok(let c) = try ModelChecker(spec: spec, maxStates: 100).check() {
+            #expect(c == 2)
+        } else { #expect(Bool(false)) }
+    }
+
+    @Test func twoVarBranching() throws {
+        let a = Var<Int>("a", value: 0)
+        let b = Var<Int>("b", value: 0)
+        let spec = TLASpec("Test") {
+            Variable(a, 0); Variable(b, 0)
+            Action("incA") { a.becomes(a + 1).when(a < 2) && b.stays }
+            Action("incB") { b.becomes(b + 1).when(b < 2) && a.stays }
+        }
+        let graph = try ModelChecker(spec: spec, maxStates: 100).exploreGraph()
+        #expect(graph.states.count == 9)
+    }
+
+    @Test func dieHard16() throws {
+        let big = Var<Int>("big", value: 0)
+        let small = Var<Int>("small", value: 0)
+        let spec = TLASpec("DieHard") {
+            Variable(big, 0); Variable(small, 0)
+            Action("FB") { big.becomes(5) && small.stays }
+            Action("FS") { small.becomes(3) && big.stays }
+            Action("EB") { big.becomes(0) && small.stays }
+            Action("ES") { small.becomes(0) && big.stays }
+            Action("S2B") {
+                (big + small <= 5) && big.becomes(big + small) && small.becomes(0) ||
+                (big + small > 5)  && big.becomes(5) && small.becomes(small - (5 - big))
+            }
+            Action("B2S") {
+                (big + small <= 3) && small.becomes(big + small) && big.becomes(0) ||
+                (big + small > 3)  && small.becomes(3) && big.becomes(big - (3 - small))
+            }
+        }
+        let graph = try ModelChecker(spec: spec, maxStates: 100).exploreGraph()
+        #expect(graph.states.count == 16)
+    }
+}
+
+// MARK: - .tlaModule: section coverage
+
+struct TLAModuleMatrix {
+    @Test func constantsAndAssume() {
+        let x = Var<Int>("x", value: 0)
+        let spec = TLASpec("Test") {
+            Extends("Naturals")
+            Constant("N", 10)
+            Assume(StateExpr.greaterOrEqual(.variable("N"), .value(.int(1))))
+            Variable(x, 0)
+            Action("inc") { x.becomes(x + 1).when(x < 3) }
+        }
+        let tla = spec.tlaModule
+        #expect(tla.contains("CONSTANTS N"))
+        #expect(tla.contains("ASSUME"))
+    }
+
+    @Test func fairnessWF() {
+        let x = Var<Int>("x", value: 0)
+        let spec = TLASpec("Test") {
+            Variable(x, 0)
+            Action("Next") { x.becomes(x + 1).when(x < 3) }
+            WeakFairness("Next")
+        }
+        let tla = spec.tlaModule
+        #expect(tla.contains("WF_x(Next)"))  // single var → no tuple brackets
+    }
+
+    @Test func theoremOutput() {
+        let x = Var<Int>("x", value: 0)
+        let spec = TLASpec("Test") {
+            Variable(x, 0)
+            Action("inc") { x.becomes(x + 1).when(x < 3) }
+            Theorem("Spec => [](x >= 0)")
+        }
+        let tla = spec.tlaModule
+        #expect(tla.contains("THEOREM"))
+    }
+
+    @Test func definitionsOutput() {
+        let x = Var<Int>("x", value: 0)
+        let spec = TLASpec("Test") {
+            Definition("Min(m,n) == IF m < n THEN m ELSE n")
+            Variable(x, 0)
+            Action("inc") { x.becomes(x + 1).when(x < 3) }
+        }
+        let tla = spec.tlaModule
+        #expect(tla.contains("Min(m,n) =="))
+    }
+
+    @Test func extendsNaturals() {
+        let x = Var<Int>("x", value: 0)
+        let spec = TLASpec("Test") {
+            Extends("Naturals")
+            Variable(x, 0)
+            Action("inc") { x.becomes(x + 1).when(x < 3) }
+        }
+        let tla = spec.tlaModule
+        #expect(tla.contains("EXTENDS Naturals"))
+    }
+}
+
+// MARK: - .swiftSource: output coverage
+
+struct SwiftSourceMatrix {
+    @Test func roundTripStructure() {
+        let x = Var<Int>("x", value: 0)
+        let spec = TLASpec("Test") {
+            Variable(x, 0)
+            Action("inc") { x.becomes(x + 1).when(x < 5) }
+            Action("reset") { x.becomes(0) }
+            Invariant("ok") { x >= 0 }
+        }
+        let src = spec.swiftSource
+        #expect(src.contains("@TLAModel"))
+        #expect(src.contains("struct Test"))
+        #expect(src.contains("Action(\"inc\")"))
+        #expect(src.contains("Action(\"reset\")"))
+        #expect(src.contains("Invariant(\"ok\")"))
     }
 }

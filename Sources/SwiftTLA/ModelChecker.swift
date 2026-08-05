@@ -46,7 +46,8 @@ public struct ModelChecker {
             invariants: substituted.invariants,
             constraint: substituted.constraint,
             checkDeadlock: substituted.checkDeadlock,
-            specificationName: substituted.name
+            specificationName: substituted.name,
+            maxStates: self.maxStates
         )
     }
 
@@ -106,7 +107,8 @@ private func bfs(
     invariants: [NamedInvariant],
     constraint: StateExpr?,
     checkDeadlock: Bool,
-    specificationName: String
+    specificationName: String,
+    maxStates: Int
 ) -> ModelChecker.Exploration {
     bfsLoop(
         queue: seeds.map(\.1),
@@ -117,7 +119,7 @@ private func bfs(
         predecessors: [:],
         nextID: seeds.count,
         stepCount: 0,
-        maxStates: 10_000,
+        maxStates: maxStates,
         actions: actions,
         variableNames: variableNames,
         canonical: canonical,
