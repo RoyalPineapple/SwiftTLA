@@ -32,4 +32,11 @@ public enum FairnessCondition: Hashable, Codable, Sendable, CustomStringConverti
         case .strongFairness(let a): return "SF(\(a))"
         }
     }
+
+    public func tlaForm(vars: String) -> String {
+        switch self {
+        case .weakFairness(let a): return "WF_\(vars)(\(a))"
+        case .strongFairness(let a): return "SF_\(vars)(\(a))"
+        }
+    }
 }

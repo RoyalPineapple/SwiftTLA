@@ -1,28 +1,27 @@
 import SwiftTLA
-import SwiftTLAGeneration
 import SwiftTLAMacros
 
 @TLAModel
 public struct Majority {
     static var spec: TLASpec {
         TLASpec("Majority") {
-            let candidate = Var("candidate", 0)
-            let count = Var("count", 0)
-            let index = Var("index", 0)
-            Variable(candidate, 0)
-            Variable(count, 0)
-            Variable(index, 0)
-
-            Action("Start") {
-                candidate.becomes(1).when(index == 0) &&
-                count.becomes(1).when(index == 0) &&
-                index.becomes(1).when(index == 0)
+            Extends("Integers")
+            let cand = Var("cand", 0)
+            let cnt = Var("cnt", 0)
+            let i = Var("i", 1)
+            Variable(cand, 0)
+            Variable(cnt, 0)
+            Variable(i, 1)
+            Definition("Value == {1, 2, 3}")
+            Definition("seq == <<1, 2, 1>>")
+            Invariant("TypeOK") { i >= 1 && i <= 4 && cand >= 1 && cand <= 3 && cnt >= 0 && cnt <= 3 }
+            Action("Next") {
+                (i <= 3) && i.becomes(i + 1) &&
+                (cnt == 0 && cand.becomes(i) && cnt.becomes(1) ||
+                 cnt != 0 && cand == i && cand.stays && cnt.becomes(cnt + 1) ||
+                 cnt != 0 && cand != i && cand.stays && cnt.becomes(cnt - 1))
             }
-            Action("Scan") {
-                (index >= 1) && (index < 4) && (candidate == index) && candidate.stays && count.becomes(count + 1) && index.becomes(index + 1) ||
-                (index >= 1) && (index < 4) && (candidate != index) && (count > 1) && candidate.stays && count.becomes(count - 1) && index.becomes(index + 1) ||
-                (index >= 1) && (index < 4) && (candidate != index) && (count <= 1) && candidate.becomes(index) && count.becomes(1) && index.becomes(index + 1)
-            }
+            DeadlockCheck()
         }
     }
 }

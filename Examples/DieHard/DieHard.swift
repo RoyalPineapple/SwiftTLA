@@ -1,16 +1,17 @@
 import SwiftTLA
-import SwiftTLAGeneration
 import SwiftTLAMacros
 
 @TLAModel
 public struct DieHard {
     static var spec: TLASpec {
         TLASpec("DieHard") {
+            Extends("Naturals")
             let big = Var("big", 0)
             let small = Var("small", 0)
             Variable(big, 0)
             Variable(small, 0)
-
+            Definition("Min(m,n) == IF m < n THEN m ELSE n")
+            Invariant("TypeOK") { big >= 0 && big <= 5 && small >= 0 && small <= 3 }
             Action("FillSmallJug")  { small.becomes(3) && big.stays }
             Action("FillBigJug")    { big.becomes(5) && small.stays }
             Action("EmptySmallJug") { small.becomes(0) && big.stays }
@@ -23,6 +24,7 @@ public struct DieHard {
                 (big + small <= 3) && small.becomes(big + small) && big.becomes(0) ||
                 (big + small > 3)  && small.becomes(3) && big.becomes(big - (3 - small))
             }
+            Invariant("NotSolved") { big != 4 }
         }
     }
 }

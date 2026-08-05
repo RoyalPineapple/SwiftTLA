@@ -1,19 +1,18 @@
 import SwiftTLA
-import SwiftTLAGeneration
 import SwiftTLAMacros
 
 @TLAModel
 public struct HourClock {
     static var spec: TLASpec {
         TLASpec("HourClock") {
+            Extends("Naturals")
             let hr = Var("hr", 1)
-            Variable(hr, 1)
-
-            Action("Tick") {
-                (hr < 12) && hr.becomes(hr + 1) ||
+            Variable(hr, in: 1...12)
+            Action("HCnxt") {
+                (hr != 12) && hr.becomes(hr + 1) ||
                 (hr == 12) && hr.becomes(1)
             }
-            Invariant("ValidHours") { hr >= 1 && hr <= 12 }
+            Invariant("HCini") { hr >= 1 && hr <= 12 }
         }
     }
 }

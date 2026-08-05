@@ -5,7 +5,6 @@ import SwiftSyntaxMacros
 import SwiftDiagnostics
 import SwiftParser
 import SwiftTLA
-import SwiftTLAGeneration
 
 public struct ModelMacro: MemberMacro {
     public static func expansion(
@@ -22,7 +21,7 @@ public struct ModelMacro: MemberMacro {
         if parsed.variables.isEmpty { throw SimpleError("parsed.variables is empty after parseSpecBody") }
         let specification = TLASpec(
             name: typeName,
-            variables: parsed.variables.map { NamedVar(name: $0.name, initial: $0.initial) },
+            variables: parsed.variables.map { NamedVar(name: $0.name, initial: $0.initial, initialSet: $0.initialSet) },
             constants: parsed.constants,
             actions: parsed.actions.map { NamedAction(name: $0.name, body: $0.body) },
             invariants: parsed.invariants.map { NamedInvariant(name: $0.name, body: $0.body) },
@@ -68,7 +67,7 @@ public struct ModelMacro: MemberMacro {
     }
 
     private struct ParsedSpec {
-        var variables: [(name: String, initial: TLAValue)] = []
+        var variables: [(name: String, initial: TLAValue, initialSet: StateExpr?)] = []
         var actions: [(name: String, body: ActionExpr)] = []
         var invariants: [(name: String, body: StateExpr)] = []
         var temporal: [(name: String, expr: TemporalExpr)] = []
@@ -114,23 +113,20 @@ public struct ModelMacro: MemberMacro {
         var result = ParsedSpec()
         for statement in statements {
             switch statement.item {
-            case .decl(let declaration):
-                guard let variableDeclaration = declaration.as(VariableDeclSyntax.self) else { continue }
-                guard let binding = variableDeclaration.bindings.first else { continue }
-                guard let name = binding.pattern.as(IdentifierPatternSyntax.self)?.identifier.text else { continue }
-                guard let initCall = binding.initializer?.value.as(FunctionCallExprSyntax.self) else { throw SimpleError("step1 failed: not FunctionCallExpr") }
-                guard let callee = initCall.calledExpression.as(DeclReferenceExprSyntax.self) else { throw SimpleError("step2 failed: callee is " + initCall.calledExpression.debugDescription) }
-                guard callee.baseName.text == "Var" else { throw SimpleError("step3 failed: callee is " + callee.baseName.text) }
-                guard let value = parseInitialValue(initCall.arguments.first?.expression) else { throw SimpleError("step4 failed: " + (initCall.arguments.first?.expression.debugDescription ?? "nil")) }
-                result.variables.append((name, value))
+            case .decl: continue  // let declarations are type-checked by Swift — no parsing needed
             case .expr(let expression):
                 guard let call = expression.as(FunctionCallExprSyntax.self),
                       let reference = call.calledExpression.as(DeclReferenceExprSyntax.self) else { continue }
                 switch reference.baseName.text {
                 case "Variable":
-                    guard let ref = call.arguments.first?.expression.as(DeclReferenceExprSyntax.self),
-                          let value = parseInitialValue(call.arguments.dropFirst().first?.expression) else { continue }
-                    result.variables.append((ref.baseName.text, value))
+                    guard let ref = call.arguments.first?.expression.as(DeclReferenceExprSyntax.self) else { continue }
+                    if call.arguments.count >= 2, call.arguments[call.arguments.index(call.arguments.startIndex, offsetBy: 1)].label?.text == "in" {
+                        let setExpr = call.arguments.dropFirst().first?.expression
+                        result.variables.append((ref.baseName.text, .int(0), setExpr.flatMap(parseStateExpr)))
+                    } else {
+                        guard let value = parseInitialValue(call.arguments.dropFirst().first?.expression) else { continue }
+                        result.variables.append((ref.baseName.text, value, nil))
+                    }
                 case "Action":
                     guard let name = extractStringLiteral(call.arguments.first?.expression),
                           let closure = call.trailingClosure else { continue }
@@ -178,7 +174,7 @@ public struct ModelMacro: MemberMacro {
            let ma = call.calledExpression.as(MemberAccessExprSyntax.self),
            ma.declName.baseName.text == "set" {
             let elements = call.arguments.first?.expression.as(ArrayExprSyntax.self)?.elements.compactMap { parseInitialValue($0.expression) } ?? []
-            return .set(elements)
+            return .set(Set(elements))
         }
         return nil
     }
@@ -305,7 +301,7 @@ public struct ModelMacro: MemberMacro {
         guard let call = expr.as(FunctionCallExprSyntax.self),
               let ref = call.calledExpression.as(MemberAccessExprSyntax.self) else { return nil }
         let method = ref.declName.baseName.text
-        let arg = call.arguments.first?.expression.flatMap { parseStateExpr($0) }
+        let arg = call.arguments.first.flatMap { parseStateExpr($0.expression) }
         switch method {
         case "leadsTo": return arg.map { TemporalExpr.leadsTo(parseStateExpr(ref.base) ?? .value(.bool(true)), $0) }
         case "always": return arg.map { TemporalExpr.always($0) }

@@ -1,7 +1,8 @@
-public protocol TLAMachine<Action>: Sendable {
-    associatedtype Action: Sendable
+public protocol TLAMachine<Action>: Sendable, CustomStringConvertible {
+    associatedtype Action: Sendable, CustomStringConvertible, Hashable
     static var initial: Self { get }
     mutating func apply(_ action: Action)
+    var availableActions: [Action] { get }
 }
 
 /// A concurrency boundary around a `TLAMachine`. Serializes all action delivery.

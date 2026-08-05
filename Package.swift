@@ -13,17 +13,14 @@ let package = Package(
     platforms: [.macOS(.v14)],
     products: [
         .library(name: "SwiftTLA", targets: ["SwiftTLA"]),
-        .library(name: "SwiftTLAGeneration", targets: ["SwiftTLAGeneration"]),
-        .library(name: "SwiftTLASwiftUI", targets: ["SwiftTLASwiftUI"]),
         .library(name: "SwiftTLAMacros", targets: ["SwiftTLAMacros"]),
+        .library(name: "SwiftTLAUI", targets: ["SwiftTLAUI"]),
     ],
     dependencies: [
         .package(url: "https://github.com/swiftlang/swift-syntax", from: "600.0.0"),
     ],
     targets: [
-        .target(name: "SwiftTLA", dependencies: [], swiftSettings: settings),
-        .target(name: "SwiftTLAGeneration", dependencies: [
-            "SwiftTLA",
+        .target(name: "SwiftTLA", dependencies: [
             .product(name: "SwiftParser", package: "swift-syntax"),
             .product(name: "SwiftBasicFormat", package: "swift-syntax"),
             .product(name: "SwiftSyntaxBuilder", package: "swift-syntax"),
@@ -31,15 +28,14 @@ let package = Package(
         .target(name: "SwiftTLAMacros", dependencies: ["SwiftTLAPlugin"]),
         .macro(name: "SwiftTLAPlugin", dependencies: [
             "SwiftTLA",
-            "SwiftTLAGeneration",
-            "SwiftTLASwiftUI",
+            "SwiftTLAUI",
             .product(name: "SwiftCompilerPlugin", package: "swift-syntax"),
             .product(name: "SwiftSyntax", package: "swift-syntax"),
             .product(name: "SwiftSyntaxMacros", package: "swift-syntax"),
             .product(name: "SwiftDiagnostics", package: "swift-syntax"),
             .product(name: "SwiftParser", package: "swift-syntax"),
         ]),
-        .target(name: "SwiftTLASwiftUI", dependencies: ["SwiftTLA", "SwiftTLAGeneration"]),
-        .testTarget(name: "SwiftTLATests", dependencies: ["SwiftTLA", "SwiftTLAGeneration"], swiftSettings: settings),
+        .target(name: "SwiftTLAUI", dependencies: ["SwiftTLA"]),
+        .testTarget(name: "SwiftTLATests", dependencies: ["SwiftTLA"], swiftSettings: settings),
     ]
 )

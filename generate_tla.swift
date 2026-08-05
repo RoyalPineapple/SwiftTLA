@@ -1,5 +1,4 @@
 import SwiftTLA
-import SwiftTLAGeneration
 
 let specs: [String: () -> TLASpec] = [
     "HourClock": { HourClock.spec },

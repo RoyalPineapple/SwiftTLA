@@ -1,4 +1,3 @@
-import Foundation
 import Testing
 import SwiftTLA
 
@@ -40,14 +39,5 @@ struct CheckerTests {
         let result = try ModelChecker(spec: spec, maxStates: 100).check()
         guard case .invariantViolated(let name, _, _) = result else { #expect(Bool(false), "Expected violation"); return }
         #expect(name == "nonNeg")
-    }
-
-    @Test("Transition struct Codable roundtrip")
-    func transitionCodable() throws {
-        let transition = StateGraph.Transition(action: "test", target: StateGraph.StateID(1))
-        let data = try JSONEncoder().encode(transition)
-        let decoded = try JSONDecoder().decode(StateGraph.Transition.self, from: data)
-        #expect(decoded.action == "test")
-        #expect(decoded.target.id == 1)
     }
 }

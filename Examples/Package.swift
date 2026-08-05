@@ -12,7 +12,6 @@ let package = Package(
             name: "Examples",
             dependencies: [
                 .product(name: "SwiftTLA", package: "SwiftTLA"),
-                .product(name: "SwiftTLAGeneration", package: "SwiftTLA"),
                 .product(name: "SwiftTLAMacros", package: "SwiftTLA"),
             ],
             path: "."

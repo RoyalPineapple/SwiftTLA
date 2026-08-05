@@ -1,6 +1,8 @@
 public protocol TLAValueType: TLAValueConvertible {}
 extension Int: TLAValueType {}
 extension Bool: TLAValueType {}
+extension String: TLAValueType {}
+extension TLAValue: TLAValueType {}
 public enum TLASetType: TLAValueType { public var tlaValue: TLAValue { .set([]) } }
 public enum TLATupleType: TLAValueType { public var tlaValue: TLAValue { .tuple([]) } }
 public enum TLARecordType: TLAValueType { public var tlaValue: TLAValue { .record([:]) } }
@@ -15,7 +17,7 @@ public typealias TLARecord = TLARecordType
 /// let isLocked = Var(0)          // Var<Int>, name inferred from binding
 /// let isLocked = Var("isLocked") // explicit name
 /// ```
-public struct Var<T: TLAValueType>: Hashable, Codable, Sendable, CustomStringConvertible {
+public struct Var<T: TLAValueType>: Codable, Sendable, CustomStringConvertible {
     public let name: String
     /// Creates a variable with an explicit TLA+ name.
     public init(_ name: String) { self.name = name }
@@ -52,12 +54,14 @@ public protocol StateExprConvertible { var stateExpr: StateExpr { get } }
 extension StateExpr: StateExprConvertible { public var stateExpr: StateExpr { self } }
 extension Int: StateExprConvertible { public var stateExpr: StateExpr { .value(.int(self)) } }
 extension Bool: StateExprConvertible { public var stateExpr: StateExpr { .value(.bool(self)) } }
+extension String: StateExprConvertible { public var stateExpr: StateExpr { .value(.string(self)) } }
 extension Var: StateExprConvertible { public var stateExpr: StateExpr { .variable(name) } }
 
 public protocol TLAValueConvertible { var tlaValue: TLAValue { get } }
 extension TLAValue: TLAValueConvertible { public var tlaValue: TLAValue { self } }
 extension Int: TLAValueConvertible { public var tlaValue: TLAValue { .int(self) } }
 extension Bool: TLAValueConvertible { public var tlaValue: TLAValue { .bool(self) } }
+extension String: TLAValueConvertible { public var tlaValue: TLAValue { .string(self) } }
 
 // MARK: - Arithmetic (Var<Int> only)
 

@@ -3,7 +3,6 @@ import SwiftParser
 import SwiftSyntax
 import SwiftBasicFormat
 import SwiftSyntaxBuilder
-import SwiftTLA
 
 public struct StateMachineGenerator {
     public let graph: StateGraph
@@ -47,6 +46,7 @@ public struct StateMachineGenerator {
             DeclSyntax(stringLiteral: "public var availableActions: [Action] { transitions.map { $0.action } }")
             DeclSyntax(stringLiteral: "public var enabledActions: [Action] { availableActions }")
             try applyMethod()
+            try descriptionProperty()
         }
     }
 
@@ -85,7 +85,7 @@ public struct StateMachineGenerator {
             let caseName = identifier(named: name)
             return "case " + caseName
         }.joined(separator: "\n")
-        return DeclSyntax(stringLiteral: "public enum Action: String, CaseIterable, Identifiable, Codable, Sendable {\n" + cases + "\npublic var id: Self { self }\n}")
+        return DeclSyntax(stringLiteral: "public enum Action: String, CaseIterable, Identifiable, Codable, Sendable, CustomStringConvertible {\n" + cases + "\npublic var id: Self { self }\npublic var description: String { rawValue }\n}")
     }
 
     // MARK: - Transitions
@@ -140,6 +140,13 @@ public struct StateMachineGenerator {
             StmtSyntax(stringLiteral: "guard let next = transitions.first(where: { $0.action == action })?.target else { return }")
             StmtSyntax(stringLiteral: "self = next")
         }
+    }
+
+    // MARK: - Description
+
+    private func descriptionProperty() throws -> DeclSyntax {
+        let parts = variableNames.map { "\"\\(\($0))\"" }.joined(separator: ", \", \", ")
+        return DeclSyntax(stringLiteral: "public var description: String { [\(parts)].joined() }")
     }
 
     // MARK: - Helpers

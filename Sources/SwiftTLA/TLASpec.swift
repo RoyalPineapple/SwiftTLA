@@ -1,11 +1,16 @@
 public struct NamedVar: Codable, Sendable, CustomStringConvertible, Equatable {
     public let name: String
     public let initial: TLAValue
-    public init(name: String, initial: TLAValue) {
+    public let initialSet: StateExpr?
+    public init(name: String, initial: TLAValue, initialSet: StateExpr? = nil) {
         self.name = name
         self.initial = initial
+        self.initialSet = initialSet
     }
-    public var description: String { "\(name) = \(initial)" }
+    public var description: String {
+        if let s = initialSet { return "\(name) \\in \(s)" }
+        return "\(name) = \(initial)"
+    }
 }
 
 public struct NamedAction: Codable, Sendable, CustomStringConvertible, Equatable {
@@ -46,8 +51,11 @@ public struct TLASpec: Codable, Sendable, CustomStringConvertible, Equatable {
     public let constraint: StateExpr?
     public let assume: StateExpr?
     public let checkDeadlock: Bool
+    public let definitions: [String]
+    public let theorems: [String]
+    public let extendsModules: String
 
-    public init(name: String, variables: [NamedVar], constants: [String: TLAValue] = [:], actions: [NamedAction], invariants: [NamedInvariant], temporalProperties: [NamedTemporal] = [], fairness: [FairnessCondition] = [], constraint: StateExpr? = nil, assume: StateExpr? = nil, checkDeadlock: Bool = false) {
+    public init(name: String, variables: [NamedVar], constants: [String: TLAValue] = [:], actions: [NamedAction], invariants: [NamedInvariant], temporalProperties: [NamedTemporal] = [], fairness: [FairnessCondition] = [], constraint: StateExpr? = nil, assume: StateExpr? = nil, checkDeadlock: Bool = false, definitions: [String] = [], theorems: [String] = [], extendsModules: String = "Integers") {
         self.name = name
         self.variables = variables
         self.constants = constants
@@ -58,6 +66,9 @@ public struct TLASpec: Codable, Sendable, CustomStringConvertible, Equatable {
         self.constraint = constraint
         self.assume = assume
         self.checkDeadlock = checkDeadlock
+        self.definitions = definitions
+        self.theorems = theorems
+        self.extendsModules = extendsModules
     }
 
     public var description: String {
@@ -92,7 +103,10 @@ public struct TLASpec: Codable, Sendable, CustomStringConvertible, Equatable {
             fairness: self.fairness + other.fairness,
             constraint: self.constraint,
             assume: { if let a = self.assume, let b = other.assume { return .and(a, b) }; return self.assume ?? other.assume }(),
-            checkDeadlock: self.checkDeadlock || other.checkDeadlock
+            checkDeadlock: self.checkDeadlock || other.checkDeadlock,
+            definitions: self.definitions + other.definitions,
+            theorems: self.theorems + other.theorems,
+            extendsModules: self.extendsModules
         )
     }
 
@@ -108,7 +122,10 @@ public struct TLASpec: Codable, Sendable, CustomStringConvertible, Equatable {
             fairness: self.fairness,
             constraint: self.constraint,
             assume: self.assume,
-            checkDeadlock: self.checkDeadlock
+            checkDeadlock: self.checkDeadlock,
+            definitions: self.definitions,
+            theorems: self.theorems,
+            extendsModules: self.extendsModules
         )
     }
 }
@@ -118,7 +135,9 @@ public protocol SpecComponent {}
 public struct VarDecl: SpecComponent {
     public let name: String
     public let initial: TLAValue
-    public init(_ name: String, _ initial: TLAValue) { self.name = name; self.initial = initial }
+    public let initialSet: StateExpr?
+    public init(_ name: String, _ initial: TLAValue) { self.name = name; self.initial = initial; self.initialSet = nil }
+    public init(_ name: String, _ initial: TLAValue, initialSet: StateExpr?) { self.name = name; self.initial = initial; self.initialSet = initialSet }
 }
 
 public struct ActionDecl: SpecComponent {
@@ -150,6 +169,31 @@ public struct ConstantDecl: SpecComponent {
     public init(_ name: String, _ value: TLAValue) { self.name = name; self.value = value }
 }
 
+public struct DefinitionDecl: SpecComponent, Equatable {
+    public let tlaText: String
+    public init(_ tlaText: String) { self.tlaText = tlaText }
+}
+
+public struct TheoremDecl: SpecComponent, Equatable {
+    public let tlaText: String
+    public let name: String?
+    public let temporalBody: TemporalExpr?
+    public let stateBody: StateExpr?
+    public init(_ tlaText: String) { self.tlaText = tlaText; self.name = nil; self.temporalBody = nil; self.stateBody = nil }
+    public init(name: String, temporal: TemporalExpr) { self.tlaText = ""; self.name = name; self.temporalBody = temporal; self.stateBody = nil }
+    public init(name: String, state: StateExpr) { self.tlaText = ""; self.name = name; self.temporalBody = nil; self.stateBody = state }
+}
+
+public struct AssumeDecl: SpecComponent, Equatable {
+    public let expr: StateExpr
+    public init(_ expr: StateExpr) { self.expr = expr }
+}
+
+public struct ExtendsDecl: SpecComponent, Equatable {
+    public let modules: String
+    public init(_ modules: String) { self.modules = modules }
+}
+
 @resultBuilder
 public enum SpecBuilder {
     public static func buildBlock(_ components: [SpecComponent]...) -> [SpecComponent] { components.flatMap { $0 } }
@@ -159,6 +203,10 @@ public enum SpecBuilder {
     public static func buildExpression(_ expr: TemporalDecl) -> [SpecComponent] { [expr] }
     public static func buildExpression(_ expr: FairnessDecl) -> [SpecComponent] { [expr] }
     public static func buildExpression(_ expr: ConstantDecl) -> [SpecComponent] { [expr] }
+    public static func buildExpression(_ expr: DefinitionDecl) -> [SpecComponent] { [expr] }
+    public static func buildExpression(_ expr: TheoremDecl) -> [SpecComponent] { [expr] }
+    public static func buildExpression(_ expr: AssumeDecl) -> [SpecComponent] { [expr] }
+    public static func buildExpression(_ expr: ExtendsDecl) -> [SpecComponent] { [expr] }
     public static func buildExpression(_ expr: DeadlockDecl) -> [SpecComponent] { [expr] }
     public static func buildOptional(_ component: [SpecComponent]?) -> [SpecComponent] { component ?? [] }
     public static func buildEither(first: [SpecComponent]) -> [SpecComponent] { first }
@@ -194,6 +242,13 @@ public enum ActionBuilder {
 @discardableResult
 public func Variable<T>(_ ref: Var<T>, _ initial: some TLAValueConvertible) -> VarDecl {
     VarDecl(ref.name, initial.tlaValue)
+}
+
+@discardableResult
+public func Variable<T>(_ ref: Var<T>, in values: some Sequence<some TLAValueConvertible>) -> VarDecl {
+    let set = Set(values.map(\.tlaValue))
+    let stateSet: StateExpr = .setLiteral(set.map { .value($0) })
+    return VarDecl(ref.name, .set(set), initialSet: stateSet)
 }
 
 @discardableResult
@@ -279,6 +334,30 @@ public func Constant(_ name: String, _ value: some TLAValueConvertible) -> Const
     ConstantDecl(name, value.tlaValue)
 }
 
+public func Definition(_ tlaText: String) -> DefinitionDecl {
+    DefinitionDecl(tlaText)
+}
+
+public func Theorem(_ tlaText: String) -> TheoremDecl {
+    TheoremDecl(tlaText)
+}
+
+public func Theorem(name: String, always state: StateExpr) -> TheoremDecl {
+    TheoremDecl(name: name, state: state)
+}
+
+public func Theorem(name: String, temporal: TemporalExpr) -> TheoremDecl {
+    TheoremDecl(name: name, temporal: temporal)
+}
+
+public func Assume(_ expr: some StateExprConvertible) -> AssumeDecl {
+    AssumeDecl(expr.stateExpr)
+}
+
+public func Extends(_ modules: String) -> ExtendsDecl {
+    ExtendsDecl(modules)
+}
+
 extension TLASpec {
     public init(_ name: String, @SpecBuilder _ builder: () -> [SpecComponent]) {
         let components = builder()
@@ -288,15 +367,31 @@ extension TLASpec {
         var temporalProperties: [NamedTemporal] = []
         var fairness: [FairnessCondition] = []
         var constants: [String: TLAValue] = [:]
+        var definitions: [String] = []
+        var theorems: [String] = []
+        var assumes: StateExpr?
+        var extendsMods = "Integers"
         var deadlockFlag = false
 
         for comp in components {
-            if let v = comp as? VarDecl { variables.append(NamedVar(name: v.name, initial: v.initial)) }
+            if let v = comp as? VarDecl { variables.append(NamedVar(name: v.name, initial: v.initial, initialSet: v.initialSet)) }
             else if let a = comp as? ActionDecl { actions.append(NamedAction(name: a.name, body: a.body)) }
             else if let i = comp as? InvDecl { invariants.append(NamedInvariant(name: i.name, body: i.body)) }
             else if let t = comp as? TemporalDecl { temporalProperties.append(NamedTemporal(name: t.name, expr: t.expr)) }
             else if let f = comp as? FairnessDecl { fairness.append(f.condition) }
             else if let c = comp as? ConstantDecl { constants[c.name] = c.value }
+            else if let d = comp as? DefinitionDecl { definitions.append(d.tlaText) }
+            else if let th = comp as? TheoremDecl {
+                if !th.tlaText.isEmpty {
+                    theorems.append(th.tlaText)
+                } else if let name = th.name, let body = th.temporalBody {
+                    theorems.append("\(name) == Spec => \(body)")
+                } else if let name = th.name, let body = th.stateBody {
+                    theorems.append("\(name) == Spec => [](\(body))")
+                }
+            }
+            else if let a = comp as? AssumeDecl { assumes = assumes.map { .and($0, a.expr) } ?? a.expr }
+            else if let e = comp as? ExtendsDecl { extendsMods = e.modules }
             else if comp is DeadlockDecl { deadlockFlag = true }
         }
 
@@ -308,8 +403,11 @@ extension TLASpec {
         self.temporalProperties = temporalProperties
         self.fairness = fairness
         self.constraint = nil
-        self.assume = nil
+        self.assume = assumes
         self.checkDeadlock = deadlockFlag
+        self.definitions = definitions
+        self.theorems = theorems
+        self.extendsModules = extendsMods
     }
 }
 
