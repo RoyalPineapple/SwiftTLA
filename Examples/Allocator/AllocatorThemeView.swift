@@ -2,7 +2,7 @@ import SwiftUI
 import SwiftTLAUI
 
 public struct AllocatorThemeView: View {
-    @State private var machine = Allocator.Machine.initial
+    @State private var machine = Allocator.StateMachine.initial
     public init() {}
     public var body: some View {
         VStack(spacing: 24) {
@@ -34,10 +34,10 @@ public struct AllocatorThemeView: View {
                 Button("Allocate") { apply(.allocate) }
                 Button("Deallocate") { apply(.deallocate) }
             }
-            Button("Reset") { machine = Allocator.Machine.initial }.buttonStyle(.bordered).tint(.red)
+            Button("Reset") { machine = Allocator.StateMachine.initial }.buttonStyle(.bordered).tint(.red)
         }
         .padding(32)
         .buttonStyle(.bordered)
     }
-    private func apply(_ action: Allocator.Machine.Action) { var m = machine; m.apply(action); machine = m }
+    private func apply(_ action: Allocator.StateMachine.Transition) { var m = machine; m.apply(action); machine = m }
 }

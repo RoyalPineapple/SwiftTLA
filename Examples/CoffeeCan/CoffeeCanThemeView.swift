@@ -2,7 +2,7 @@ import SwiftUI
 import SwiftTLAUI
 
 public struct CoffeeCanThemeView: View {
-    @State private var machine = CoffeeCan.Machine.initial
+    @State private var machine = CoffeeCan.StateMachine.initial
     public init() {}
     public var body: some View {
         VStack(spacing: 24) {
@@ -26,10 +26,10 @@ public struct CoffeeCanThemeView: View {
                 Button("Two White") { apply(.pickSameColorWhite) }
                 Button("One Each") { apply(.pickDifferentColor) }
             }
-            Button("Reset") { machine = CoffeeCan.Machine.initial }.buttonStyle(.bordered).tint(.red)
+            Button("Reset") { machine = CoffeeCan.StateMachine.initial }.buttonStyle(.bordered).tint(.red)
         }
         .padding(32)
         .buttonStyle(.bordered)
     }
-    private func apply(_ action: CoffeeCan.Machine.Action) { var m = machine; m.apply(action); machine = m }
+    private func apply(_ action: CoffeeCan.StateMachine.Transition) { var m = machine; m.apply(action); machine = m }
 }

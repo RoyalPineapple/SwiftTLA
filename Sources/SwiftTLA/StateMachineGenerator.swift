@@ -43,8 +43,8 @@ public struct StateMachineGenerator {
             DeclSyntax(stringLiteral: "public static let initial = " + specName + "(" + initArgs(initialState) + ")")
             try actionEnum()
             try transitionsProperty()
-            DeclSyntax(stringLiteral: "public var availableActions: [Action] { transitions.map { $0.action } }")
-            DeclSyntax(stringLiteral: "public var enabledActions: [Action] { availableActions }")
+            DeclSyntax(stringLiteral: "public var availableTransitions: [Transition] { transitions.map { $0.action } }")
+            DeclSyntax(stringLiteral: "public var enabledTransitions: [Transition] { availableTransitions }")
             try applyMethod()
             try descriptionProperty()
         }
@@ -85,7 +85,7 @@ public struct StateMachineGenerator {
             let caseName = identifier(named: name)
             return "case " + caseName
         }.joined(separator: "\n")
-        return DeclSyntax(stringLiteral: "public enum Action: String, CaseIterable, Identifiable, Codable, Sendable, CustomStringConvertible {\n" + cases + "\npublic var id: Self { self }\npublic var description: String { rawValue }\n}")
+        return DeclSyntax(stringLiteral: "public enum Transition: String, CaseIterable, Identifiable, Codable, Sendable, CustomStringConvertible {\n" + cases + "\npublic var id: Self { self }\npublic var description: String { rawValue }\n}")
     }
 
     // MARK: - Transitions
@@ -113,7 +113,7 @@ public struct StateMachineGenerator {
             return "case (" + values + "): " + body
         }.joined(separator: "\n")
         let switchBody = "switch (" + pattern + ") {\n" + cases + "\ndefault: return []\n}"
-        return DeclSyntax(stringLiteral: "public var transitions: [(action: Action, target: Self)] { " + switchBody + " }")
+        return DeclSyntax(stringLiteral: "public var transitions: [(action: Transition, target: Self)] { " + switchBody + " }")
     }
 
     // MARK: - Apply
@@ -130,14 +130,14 @@ public struct StateMachineGenerator {
                     parameters: FunctionParameterListSyntax {
                         FunctionParameterSyntax(
                             firstName: .wildcardToken(),
-                            secondName: .identifier("action"),
-                            type: IdentifierTypeSyntax(name: .identifier("Action"))
+                            secondName: .identifier("transition"),
+                            type: IdentifierTypeSyntax(name: .identifier("Transition"))
                         )
                     }
                 )
             )
         ) {
-            StmtSyntax(stringLiteral: "guard let next = transitions.first(where: { $0.action == action })?.target else { return }")
+            StmtSyntax(stringLiteral: "guard let next = transitions.first(where: { $0.action == transition })?.target else { return }")
             StmtSyntax(stringLiteral: "self = next")
         }
     }

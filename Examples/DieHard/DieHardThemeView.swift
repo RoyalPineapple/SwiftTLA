@@ -2,7 +2,7 @@ import SwiftUI
 import SwiftTLAUI
 
 public struct DieHardThemeView: View {
-    @State private var machine = DieHard.Machine.initial
+    @State private var machine = DieHard.StateMachine.initial
     @State private var lastAction = ""
 
     public init() {}
@@ -39,11 +39,11 @@ public struct DieHardThemeView: View {
             HStack(spacing: 8) { Button("Fill Big") { apply(.fillBigJug) }; Button("Empty Big") { apply(.emptyBigJug) } }
             HStack(spacing: 8) { Button("Fill Small") { apply(.fillSmallJug) }; Button("Empty Small") { apply(.emptySmallJug) } }
             HStack(spacing: 8) { Button("Small → Big") { apply(.smallToBig) }; Button("Big → Small") { apply(.bigToSmall) } }
-            Button("Reset") { machine = DieHard.Machine.initial; lastAction = "" }.buttonStyle(.bordered).tint(.red)
+            Button("Reset") { machine = DieHard.StateMachine.initial; lastAction = "" }.buttonStyle(.bordered).tint(.red)
         }
         .padding(32)
         .buttonStyle(.bordered)
     }
 
-    private func apply(_ action: DieHard.Machine.Action) { var m = machine; m.apply(action); machine = m; lastAction = action.rawValue }
+    private func apply(_ action: DieHard.StateMachine.Transition) { var m = machine; m.apply(action); machine = m; lastAction = action.rawValue }
 }

@@ -2,7 +2,7 @@ import SwiftUI
 import SwiftTLAUI
 
 public struct HourClockThemeView: View {
-    @State private var machine = HourClock.Machine.initial
+    @State private var machine = HourClock.StateMachine.initial
     @State private var ticks = 0
 
     public init() {}
@@ -19,7 +19,7 @@ public struct HourClockThemeView: View {
 
             Button("Tick") { var m = machine; m.apply(.hCnxt); machine = m; ticks += 1 }
                 .buttonStyle(.borderedProminent).controlSize(.large)
-            Button("Reset") { machine = HourClock.Machine.initial; ticks = 0 }
+            Button("Reset") { machine = HourClock.StateMachine.initial; ticks = 0 }
         }
         .padding(32)
     }

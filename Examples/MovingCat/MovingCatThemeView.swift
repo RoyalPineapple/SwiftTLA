@@ -2,7 +2,7 @@ import SwiftUI
 import SwiftTLAUI
 
 public struct MovingCatThemeView: View {
-    @State private var machine = MovingCat.Machine.initial
+    @State private var machine = MovingCat.StateMachine.initial
     public init() {}
     public var body: some View {
         VStack(spacing: 24) {
@@ -20,7 +20,7 @@ public struct MovingCatThemeView: View {
                 .foregroundStyle(.secondary)
             Button("Step") { var m = machine; m.apply(.action_next); machine = m }
                 .buttonStyle(.borderedProminent).controlSize(.large)
-            Button("Reset") { machine = MovingCat.Machine.initial }.buttonStyle(.bordered).tint(.red)
+            Button("Reset") { machine = MovingCat.StateMachine.initial }.buttonStyle(.bordered).tint(.red)
         }
         .padding(32)
     }

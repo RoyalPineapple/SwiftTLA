@@ -59,8 +59,8 @@ public struct ModelMacro: MemberMacro {
         }
 
         let renamed = code
-            .replacingOccurrences(of: "struct " + typeName, with: "struct Machine")
-            .replacingOccurrences(of: "static let initial = " + typeName + "(", with: "static let initial = Machine(")
+            .replacingOccurrences(of: "struct " + typeName, with: "struct StateMachine")
+            .replacingOccurrences(of: "static let initial = " + typeName + "(", with: "static let initial = StateMachine(")
         members.append(contentsOf: Parser.parse(source: renamed).statements.compactMap { $0.item.as(DeclSyntax.self) })
 
         return members

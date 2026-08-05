@@ -59,12 +59,12 @@ struct ExamplePage: View {
             Divider()
             if id != .sumsEven {
                 switch id {
-                case .hourClock: StateMachineView(machine: HourClock.Machine.initial).id("hc")
-                case .dieHard: StateMachineView(machine: DieHard.Machine.initial).id("dh")
-                case .coffeeCan: StateMachineView(machine: CoffeeCan.Machine.initial).id("cc")
-                case .movingCat: StateMachineView(machine: MovingCat.Machine.initial).id("mc")
-                case .majority: StateMachineView(machine: Majority.Machine.initial).id("mj")
-                case .allocator: StateMachineView(machine: Allocator.Machine.initial).id("al")
+                case .hourClock: StateMachineView(machine: HourClock.StateMachine.initial).id("hc")
+                case .dieHard: StateMachineView(machine: DieHard.StateMachine.initial).id("dh")
+                case .coffeeCan: StateMachineView(machine: CoffeeCan.StateMachine.initial).id("cc")
+                case .movingCat: StateMachineView(machine: MovingCat.StateMachine.initial).id("mc")
+                case .majority: StateMachineView(machine: Majority.StateMachine.initial).id("mj")
+                case .allocator: StateMachineView(machine: Allocator.StateMachine.initial).id("al")
                 default: EmptyView()
                 }
             }

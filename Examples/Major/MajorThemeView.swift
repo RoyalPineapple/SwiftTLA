@@ -2,7 +2,7 @@ import SwiftUI
 import SwiftTLAUI
 
 public struct MajorityThemeView: View {
-    @State private var machine = Majority.Machine.initial
+    @State private var machine = Majority.StateMachine.initial
     public init() {}
     public var body: some View {
         VStack(spacing: 24) {
@@ -16,7 +16,7 @@ public struct MajorityThemeView: View {
                 .foregroundStyle(.secondary)
             Button("Step") { var m = machine; m.apply(.action_next); machine = m }
                 .buttonStyle(.borderedProminent).controlSize(.large)
-            Button("Reset") { machine = Majority.Machine.initial }.buttonStyle(.bordered).tint(.red)
+            Button("Reset") { machine = Majority.StateMachine.initial }.buttonStyle(.bordered).tint(.red)
         }
         .padding(32)
     }
