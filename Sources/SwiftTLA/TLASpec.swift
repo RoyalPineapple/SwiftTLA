@@ -429,7 +429,12 @@ public func substituteConstants(_ spec: TLASpec) -> TLASpec {
         actions: acts,
         invariants: invs,
         temporalProperties: spec.temporalProperties,
-        fairness: spec.fairness
+        fairness: spec.fairness,
+        assume: spec.assume,
+        checkDeadlock: spec.checkDeadlock,
+        definitions: spec.definitions,
+        theorems: spec.theorems,
+        extendsModules: spec.extendsModules
     )
 }
 

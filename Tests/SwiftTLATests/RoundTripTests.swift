@@ -589,6 +589,19 @@ struct GoldenTests {
         #expect(try ModelChecker(spec: spec, maxStates: 200).exploreGraph().states.count == 18)
     }
 
+    @Test("Deadlock detected with DeadlockCheck()")
+    func deadlock() throws {
+        let x = Var<Int>("x", value: 0)
+        let spec = TLASpec("Test") {
+            Variable(x, 0)
+            Action("once") { x.becomes(1).when(x == 0) }
+            DeadlockCheck()
+        }
+        let r = try ModelChecker(spec: spec, maxStates: 100).check()
+        if case .deadlocked(let s) = r { #expect(s["x"] == .int(1)) }
+        else { #expect(Bool(false)) }
+    }
+
     @Test("Majority = at least 1 state")
     func majority() throws {
         let ca = Var<Int>("cand", value: 0); let cn = Var<Int>("cnt", value: 0); let i = Var<Int>("i", value: 1)
