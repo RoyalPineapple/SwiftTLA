@@ -53,8 +53,7 @@ extension TLASpec {
         lines.append("")
 
         for act in actions where !act.name.isEmpty {
-            let complete = completeAction(act.body, allVars: varNames)
-            lines.append("\(act.name) == \(complete)")
+            lines.append("\(act.name) == \(act.body)")
         }
         lines.append("")
 

@@ -180,12 +180,7 @@ public struct ModelMacro: MemberMacro {
     }
 
     private static func parseActionFrom(_ closure: ClosureExprSyntax) -> ActionExpr? {
-        let actions = closure.statements.compactMap { statement -> ActionExpr? in
-            guard case .expr(let inner) = statement.item else { return nil }
-            return parseSingleAction(inner)
-        }
-        if actions.isEmpty { return .guard_(.value(.bool(true))) }
-        return actions.dropFirst().reduce(actions[0]) { .and($0, $1) }
+        return SpecParser.parseActionFrom(closure)
     }
 
     private static func parseSingleAction(_ expression: ExprSyntax) -> ActionExpr? {
@@ -256,72 +251,15 @@ public struct ModelMacro: MemberMacro {
     // MARK: - State expression parsing
 
     private static func parseStateExpr(_ expression: ExprSyntax?) -> StateExpr? {
-        guard let expression else { return nil }
-        if let int = expression.as(IntegerLiteralExprSyntax.self) { return .value(.int(Int(int.literal.text) ?? 0)) }
-        if let bool = expression.as(BooleanLiteralExprSyntax.self) { return .value(.bool(bool.literal.text == "true")) }
-        if let reference = expression.as(DeclReferenceExprSyntax.self) { return .variable(reference.baseName.text) }
-        if let call = expression.as(FunctionCallExprSyntax.self) { return parseMethodCall(call) }
-        if let memberAccess = expression.as(MemberAccessExprSyntax.self) { return parseMemberAccess(memberAccess) }
-        if let tuple = expression.as(TupleExprSyntax.self), let single = tuple.elements.first?.expression { return parseStateExpr(single) }
-        if let infix = expression.as(InfixOperatorExprSyntax.self), let left = parseStateExpr(infix.leftOperand), let right = parseStateExpr(infix.rightOperand) {
-            switch infix.operator.as(BinaryOperatorExprSyntax.self)?.operator.text {
-            case "+": return .add(left, right); case "-": return .subtract(left, right)
-            case "*": return .multiply(left, right); case "/": return .divide(left, right); case "%": return .modulo(left, right)
-            case "<": return .lessThan(left, right); case "<=": return .lessOrEqual(left, right)
-            case ">": return .greaterThan(left, right); case ">=": return .greaterOrEqual(left, right)
-            case "==": return .equal(left, right); case "!=": return .notEqual(left, right)
-            case "&&": return .and(left, right); case "||": return .or(left, right)
-            default: return nil
-            }
-        }
-        if let sequence = expression.as(SequenceExprSyntax.self) {
-            let elements = Array(sequence.elements)
-            guard elements.count == 3, let left = parseStateExpr(elements[0]),
-                  let operatorText = elements[1].as(BinaryOperatorExprSyntax.self)?.operator.text,
-                  let right = parseStateExpr(elements[2]) else { return nil }
-            switch operatorText {
-            case "+": return .add(left, right); case "-": return .subtract(left, right)
-            case "*": return .multiply(left, right); case "/": return .divide(left, right); case "%": return .modulo(left, right)
-            case "<": return .lessThan(left, right); case "<=": return .lessOrEqual(left, right)
-            case ">": return .greaterThan(left, right); case ">=": return .greaterOrEqual(left, right)
-            case "==": return .equal(left, right); case "!=": return .notEqual(left, right)
-            case "&&": return .and(left, right); case "||": return .or(left, right)
-            default: return nil
-            }
-        }
-        if let prefix = expression.as(PrefixOperatorExprSyntax.self) {
-            let operand = parseStateExpr(prefix.expression)
-            if prefix.operator.text == "!", let operand { return .not(operand) }
-            if prefix.operator.text == "-", let operand { return .negate(operand) }
-        }
-        return nil
+        return SpecParser.parseStateExpr(expression)
     }
 
     private static func parseTemporal(_ expr: ExprSyntax) -> TemporalExpr? {
-        guard let call = expr.as(FunctionCallExprSyntax.self),
-              let ref = call.calledExpression.as(MemberAccessExprSyntax.self) else { return nil }
-        let method = ref.declName.baseName.text
-        let arg = call.arguments.first.flatMap { parseStateExpr($0.expression) }
-        switch method {
-        case "leadsTo": return arg.map { TemporalExpr.leadsTo(parseStateExpr(ref.base) ?? .value(.bool(true)), $0) }
-        case "always": return arg.map { TemporalExpr.always($0) }
-        case "eventually": return arg.map { TemporalExpr.eventually($0) }
-        case "alwaysEventually": return arg.map { TemporalExpr.alwaysEventually($0) }
-        case "eventuallyAlways": return arg.map { TemporalExpr.eventuallyAlways($0) }
-        default: return nil
-        }
+        return SpecParser.parseTemporal(expr)
     }
 
     private static func parseFairnessExpr(_ expr: ExprSyntax) -> FairnessCondition? {
-        guard let call = expr.as(FunctionCallExprSyntax.self),
-              let ref = call.calledExpression.as(MemberAccessExprSyntax.self) else { return nil }
-        let method = ref.declName.baseName.text
-        let name = call.arguments.first?.expression.as(StringLiteralExprSyntax.self)?.segments.description.replacingOccurrences(of: "\"", with: "") ?? ""
-        switch method {
-        case "weakFairness": return .weakFairness(name)
-        case "strongFairness": return .strongFairness(name)
-        default: return nil
-        }
+        return SpecParser.parseFairnessExpr(expr)
     }
 
     private static func parseMethodCall(_ call: FunctionCallExprSyntax) -> StateExpr? {
