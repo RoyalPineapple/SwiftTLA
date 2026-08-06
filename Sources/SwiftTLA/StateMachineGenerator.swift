@@ -78,6 +78,7 @@ public struct StateMachineGenerator {
             case .set: type = "Set<TLAValue>"
             case .tuple: type = "[TLAValue]"
             case .record: type = "[String: TLAValue]"
+            case .function: type = "[TLAValue: TLAValue]"
             default: type = "Int"
             }
             return (name, type)

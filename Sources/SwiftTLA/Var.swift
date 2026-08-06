@@ -8,6 +8,7 @@ extension TLAValue: TLAValueType { public static var defaultValue: TLAValue { .i
 public enum TLASetType: TLAValueType { case placeholder; public var tlaValue: TLAValue { .set([]) }; public static var defaultValue: TLASetType { .placeholder } }
 public enum TLATupleType: TLAValueType { case placeholder; public var tlaValue: TLAValue { .tuple([]) }; public static var defaultValue: TLATupleType { .placeholder } }
 public enum TLARecordType: TLAValueType { case placeholder; public var tlaValue: TLAValue { .record([:]) }; public static var defaultValue: TLARecordType { .placeholder } }
+public enum TLAFunctionType: TLAValueType { case placeholder; public var tlaValue: TLAValue { .function([:]) }; public static var defaultValue: TLAFunctionType { .placeholder } }
 public typealias TLASet = TLASetType
 public typealias TLATuple = TLATupleType
 public typealias TLARecord = TLARecordType
