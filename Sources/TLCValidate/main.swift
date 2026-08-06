@@ -73,7 +73,7 @@ case "tuples":
             val.becomes(StateExpr.tuple([1, 2]).count).when(val == 0)
         }
         Action("access") {
-            val.becomes(StateExpr.tuple([5, 6]).at(0)).when(val == 2)
+            val.becomes(StateExpr.tuple([5, 6]).at(1)).when(val == 2)
         }
     }
     output = spec.tlaModule

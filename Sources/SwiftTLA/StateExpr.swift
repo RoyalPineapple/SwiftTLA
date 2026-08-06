@@ -89,7 +89,7 @@ public indirect enum StateExpr: Hashable, Codable, Sendable, CustomStringConvert
         case .powerSet(let s): return "SUBSET \(s)"
         case .unionAll(let s): return "UNION \(s)"
         case .tupleLiteral(let elems): return "<<\(elems.map(\.description).joined(separator: ", "))>>"
-        case .tupleAccess(let t, let i): return "\(t)[\(i + 1)]"
+        case .tupleAccess(let t, let i): return "\(t)[\(i)]"
         case .tupleLength(let t): return "Len(\(t))"
         case .tupleAppend(let t, let e): return "Append(\(t), \(e))"
         case .tupleConcatenate(let a, let b): return "(\(a) \\o \(b))"
