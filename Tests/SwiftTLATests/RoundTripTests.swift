@@ -685,6 +685,33 @@ struct GeneratorTests {
 // MARK: - Checker self-proof: BFS invariants verified on our own checker
 
 struct CheckerSelfProofTests {
+    @Test("BFSExplorer 1:1 TLA+ port model-checks with sets")
+    func bfsExplorer1to1() throws {
+        let spec = createBFSExplorerSpec()
+        let result = try ModelChecker(spec: spec, maxStates: 200).check()
+        switch result {
+        case .ok(let count):
+            #expect(count > 0)
+        case .invariantViolated(let name, let state, let trace):
+            print("Invariant \(name) violated at state: \(state)")
+            for step in trace { print("  \(step)") }
+            #expect(Bool(false), "Invariant \(name) violated")
+        default:
+            #expect(Bool(false), "Unexpected: \(result)")
+        }
+    }
+
+    @Test("BFSExplorer TLA+ output matches upstream structure")
+    func bfsExplorerTLA() {
+        let tla = createBFSExplorerSpec().tlaModule
+        #expect(tla.contains("q"))
+        #expect(tla.contains("visited"))
+        #expect(tla.contains("explored"))
+        #expect(tla.contains("q' = ((q \\ {0})"))
+        #expect(tla.contains("visited' = (visited \\cup {1})"))
+        #expect(tla.contains("explored' = (explored \\cup {0})"))
+    }
+
     @Test("CheckerController is bounded — processes up to limit then completes")
     func checkerControllerTransitions() {
         var machine = CheckerController(phase: 0, processed: 0, queued: 2, limit: 2)

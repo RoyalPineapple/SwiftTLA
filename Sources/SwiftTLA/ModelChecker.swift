@@ -59,7 +59,11 @@ public struct ModelChecker {
 
     private func computeInitialStates(_ specification: TLASpec) -> [State] {
         let base = Dictionary(uniqueKeysWithValues: specification.variables.map { ($0.name, $0.initial) })
-        let nondeterministic = specification.variables.filter { if case .set = $0.initial { return true }; return false }
+        let nondeterministic = specification.variables.filter { v in
+            guard v.initialSet != nil else { return false }
+            if case .set = v.initial { return true }
+            return false
+        }
         return nondeterministic.reduce([base]) { states, variable in
             guard case .set(let values) = variable.initial else { return states }
             let sorted = TLAValue.sorted(values)

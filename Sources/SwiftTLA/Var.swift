@@ -59,6 +59,30 @@ extension String: StateExprConvertible { public var stateExpr: StateExpr { .valu
 extension Var: StateExprConvertible { public var stateExpr: StateExpr { .variable(name) } }
 extension TLAValue: StateExprConvertible { public var stateExpr: StateExpr { .value(self) } }
 
+// Forward all StateExpr methods through StateExprConvertible so that
+// Var<TLASetType>.subtracting(...), Var<Int>.isIn(...), etc. work inside
+// Action closures without explicit .stateExpr calls.
+extension StateExprConvertible {
+    public func isIn(_ set: some StateExprConvertible) -> StateExpr { stateExpr.isIn(set) }
+    public func union(_ other: some StateExprConvertible) -> StateExpr { stateExpr.union(other) }
+    public func intersection(_ other: some StateExprConvertible) -> StateExpr { stateExpr.intersection(other) }
+    public func subtracting(_ other: some StateExprConvertible) -> StateExpr { stateExpr.subtracting(other) }
+    public func isSubset(of other: some StateExprConvertible) -> StateExpr { stateExpr.isSubset(of: other) }
+    public func updated(at key: some StateExprConvertible, to value: some StateExprConvertible) -> StateExpr { stateExpr.updated(at: key, to: value) }
+    public func applying(_ argument: some StateExprConvertible) -> StateExpr { stateExpr.applying(argument) }
+    public var cardinality: StateExpr { stateExpr.cardinality }
+    public var flattened: StateExpr { stateExpr.flattened }
+    public var subsets: StateExpr { stateExpr.subsets }
+    public var domain: StateExpr { stateExpr.domain }
+    public var count: StateExpr { stateExpr.count }
+    public func filtering(_ predicate: StateExpr) -> StateExpr { stateExpr.filtering(predicate) }
+    public func mapping(_ expression: StateExpr) -> StateExpr { stateExpr.mapping(expression) }
+    public func appending(_ element: StateExpr) -> StateExpr { stateExpr.appending(element) }
+    public func concatenating(_ other: StateExpr) -> StateExpr { stateExpr.concatenating(other) }
+    public func at(_ index: Int) -> StateExpr { stateExpr.at(index) }
+    public func integerDivided(by divisor: some StateExprConvertible) -> StateExpr { stateExpr.integerDivided(by: divisor) }
+}
+
 public protocol TLAValueConvertible { var tlaValue: TLAValue { get } }
 extension TLAValue: TLAValueConvertible { public var tlaValue: TLAValue { self } }
 extension Int: TLAValueConvertible { public var tlaValue: TLAValue { .int(self) } }
