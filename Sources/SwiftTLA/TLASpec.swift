@@ -395,16 +395,10 @@ extension TLASpec {
             else if comp is DeadlockDecl { deadlockFlag = true }
         }
 
-        // Auto-UNCHANGED: unassigned vars implicitly stay unchanged (like TLA+)
+        // Auto-UNCHANGED: push into OR branches so TLC sees complete assignments
         let vn = variables.map(\.name)
         actions = actions.map { a in
-            let assigned = assignedVars(a.body)
-            let explicit = explicitUnchanged(a.body)
-            var body = a.body
-            for v in vn where !assigned.contains(v) && !explicit.contains(v) {
-                body = .and(body, .unchanged(v))
-            }
-            return NamedAction(name: a.name, body: body)
+            NamedAction(name: a.name, body: completeAction(a.body, allVars: vn))
         }
 
         self.name = name

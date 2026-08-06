@@ -72,7 +72,7 @@ struct VarOperatorMatrix {
 
     @Test("StateExpr cases", arguments: [
         ("valueInt",    "42"),
-        ("valueBool",   "true"),
+        ("valueBool",   "TRUE"),
         ("valueString", "\"hi\""),
         ("variable",    "x"),
         ("add",         "(1 + 2)"),
@@ -87,7 +87,7 @@ struct VarOperatorMatrix {
         ("setLiteral", "{1, 2}"),
         ("inSet",      "(1 \\in {1, 2})"),
         ("tupleLiteral","<<1, 2>>"),
-        ("ifThen",     "(IF true THEN 1 ELSE 2)"),
+        ("ifThen",     "(IF TRUE THEN 1 ELSE 2)"),
         ("enabled",    "ENABLED Tick"),
     ] as [(String, String)])
     func stateExprMatrix(_ caseName: String, _ expected: String) {

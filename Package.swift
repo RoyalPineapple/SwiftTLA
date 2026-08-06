@@ -36,6 +36,7 @@ let package = Package(
             .product(name: "SwiftParser", package: "swift-syntax"),
         ]),
         .target(name: "SwiftTLAUI", dependencies: ["SwiftTLA"]),
+        .executableTarget(name: "tlc-validate", dependencies: ["SwiftTLA"], path: "Sources/TLCValidate"),
         .testTarget(name: "SwiftTLATests", dependencies: ["SwiftTLA"], swiftSettings: settings),
     ]
 )

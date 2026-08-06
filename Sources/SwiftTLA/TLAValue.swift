@@ -10,7 +10,7 @@ public enum TLAValue: Hashable, Codable, Sendable, CustomStringConvertible {
     public var description: String {
         switch self {
         case .int(let n): return "\(n)"
-        case .bool(let b): return "\(b)"
+        case .bool(let b): return b ? "TRUE" : "FALSE"
         case .string(let s): return "\"\(s)\""
         case .set(let s):
             return "{\(s.map(\.description).sorted().joined(separator: ", "))}"

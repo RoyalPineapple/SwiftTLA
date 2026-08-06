@@ -89,7 +89,7 @@ public indirect enum StateExpr: Hashable, Codable, Sendable, CustomStringConvert
         case .powerSet(let s): return "SUBSET \(s)"
         case .unionAll(let s): return "UNION \(s)"
         case .tupleLiteral(let elems): return "<<\(elems.map(\.description).joined(separator: ", "))>>"
-        case .tupleAccess(let t, let i): return "\(t)[\(i)]"
+        case .tupleAccess(let t, let i): return "\(t)[\(i + 1)]"
         case .tupleLength(let t): return "Len(\(t))"
         case .tupleAppend(let t, let e): return "Append(\(t), \(e))"
         case .tupleConcatenate(let a, let b): return "(\(a) \\o \(b))"
@@ -103,13 +103,13 @@ public indirect enum StateExpr: Hashable, Codable, Sendable, CustomStringConvert
         case .except(let f, let x, let e): return "[\(f) EXCEPT ![\(x)] = \(e)]"
         case .caseExpr(let pairs, let other):
             let cases = stride(from: 0, to: pairs.count, by: 2).map {
-                "\(pairs[$0]) → \(pairs[$0 + 1])"
-            }.joined(separator: " □ ")
-            if let o = other { return "CASE \(cases) □ OTHER → \(o)" }
+                "\(pairs[$0]) -> \(pairs[$0 + 1])"
+            }.joined(separator: " [] ")
+            if let o = other { return "CASE \(cases) [] OTHER -> \(o)" }
             return "CASE \(cases)"
-        case .forAll(let s, let p): return "∀ x ∈ \(s) : \(p)"
-        case .exists(let s, let p): return "∃ x ∈ \(s) : \(p)"
-        case .choose(let s, let p): return "CHOOSE x ∈ \(s) : \(p)"
+        case .forAll(let s, let p): return "\\A x \\in \(s) : \(p)"
+        case .exists(let s, let p): return "\\E x \\in \(s) : \(p)"
+        case .choose(let s, let p): return "CHOOSE x \\in \(s) : \(p)"
         case .enabledAction(let a): return "ENABLED \(a)"
         }
     }
