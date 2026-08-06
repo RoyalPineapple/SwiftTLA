@@ -96,4 +96,16 @@ struct CodeView: View {
     }
 }
 
-private let examples: [ExampleID: ExampleDescription] = Dictionary(uniqueKeysWithValues: zip(ExampleID.allCases, Examples.all))
+private let examples: [ExampleID: ExampleDescription] = {
+    let allByName = Dictionary(grouping: Examples.all, by: { $0.name })
+    var result: [ExampleID: ExampleDescription] = [:]
+    let mapping: [ExampleID: String] = [
+        .hourClock: "HourClock", .dieHard: "DieHard", .coffeeCan: "CoffeeCan",
+        .movingCat: "MovingCat", .majority: "Majority", .sumsEven: "SumsEven",
+        .allocator: "Allocator"
+    ]
+    for (id, name) in mapping {
+        result[id] = allByName[name]?.first
+    }
+    return result
+}()

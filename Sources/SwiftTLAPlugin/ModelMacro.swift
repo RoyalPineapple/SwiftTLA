@@ -20,14 +20,8 @@ public struct ModelMacro: MemberMacro {
         let parsed = try parseSpecBody(structDeclaration.memberBlock.members, typeName: typeName)
         if parsed.variables.isEmpty { throw SimpleError("parsed.variables is empty after parseSpecBody") }
         let variableNames = parsed.variables.map(\.name)
-        let actionsWithUnchanged = parsed.actions.map { a -> NamedAction in
-            let assigned = assignedVars(a.body)
-            let explicit = explicitUnchanged(a.body)
-            var body = a.body
-            for v in variableNames where !assigned.contains(v) && !explicit.contains(v) {
-                body = .and(body, .unchanged(v))
-            }
-            return NamedAction(name: a.name, body: body)
+        let actionsWithUnchanged = parsed.actions.map { a in
+            NamedAction(name: a.name, body: completeAction(a.body, allVars: variableNames))
         }
         let specification = TLASpec(
             name: typeName,
@@ -40,28 +34,45 @@ public struct ModelMacro: MemberMacro {
         )
 
         let checker = ModelChecker(spec: specification, maxStates: 10_000)
-        if case .invariantViolated(let invariant, _, let trace) = (try? checker.check()) {
-            let description = trace.map { String(describing: $0) }.joined(separator: "\n")
-            throw SimpleError("Invariant '" + invariant + "' violated:\n" + description)
+        let checkResult: CheckResult
+        do {
+            checkResult = try checker.check()
+        } catch {
+            throw SimpleError("Checker failed: " + String(describing: error))
         }
 
-        var members: [DeclSyntax] = []
+        switch checkResult {
+        case .invariantViolated(let invariant, _, let trace):
+            let description = trace.map { String(describing: $0) }.joined(separator: "\n")
+            throw SimpleError("Invariant '" + invariant + "' violated:\n" + description)
+        case .error(let message):
+            throw SimpleError("Checker error: " + message)
+        case .deadlocked(let state):
+            let sample = specification.actions.first.map { String(describing: $0.body) } ?? "none"
+            throw SimpleError("Deadlock detected at state: " + state.description + ". Action sample: " + sample)
+        case .depthExceeded(let count, let limit):
+            throw SimpleError("Depth exceeded: explored \(count) states (limit \(limit))")
+        case .ok:
+            break
+        }
 
         let graph: StateGraph
         do {
             graph = try checker.exploreGraph()
         } catch {
-            throw SimpleError("Checker exploration failed: " + String(describing: error))
+            throw SimpleError("Exploration failed: " + String(describing: error))
         }
 
         guard !graph.states.isEmpty else {
             throw SimpleError("No states in graph.")
         }
 
+        var members = [DeclSyntax]()
+
         let actions = Set(graph.transitions.values.flatMap { $0.map(\.action) }).sorted()
-        guard !actions.isEmpty else {
-            let sample = specification.actions.first.map { String(describing: $0.body) } ?? "none"
-            throw SimpleError("No transitions found. States: " + String(graph.states.count) + ". Variables: " + specification.variables.map(\.name).joined(separator: ", ") + ". Action sample: " + sample)
+        if actions.isEmpty {
+            // Terminal-only spec: Init + invariants, no actions. Allow.
+            return try makeTerminalStateMachine(specification: specification)
         }
 
         guard let code = try? StateMachineGenerator(graph: graph).generate() else {
@@ -262,6 +273,33 @@ public struct ModelMacro: MemberMacro {
 
     private static func parseFairnessExpr(_ expr: ExprSyntax) -> FairnessCondition? {
         return SpecParser.parseFairnessExpr(expr)
+    }
+
+    private static func makeTerminalStateMachine(specification: TLASpec) throws -> [DeclSyntax] {
+        let varNames = specification.variables.map(\.name)
+        let initArgs = specification.variables.map { v in
+            "\(v.name): \(v.initial.swiftLiteral)"
+        }.joined(separator: ", ")
+
+        let source = """
+        public struct StateMachine: Equatable, Hashable, Codable, Sendable, TLAMachine {
+            \(varNames.map { "public var \($0): Int" }.joined(separator: "\n    "))
+            public init(\(varNames.map { "\($0): Int" }.joined(separator: ", "))) {
+                \(varNames.map { "self.\($0) = \($0)" }.joined(separator: "\n        "))
+            }
+            public static let initial = StateMachine(\(initArgs))
+            public enum Transition: String, CaseIterable, Identifiable, Codable, Sendable, CustomStringConvertible {
+                public var id: Self { self }
+                public var description: String { rawValue }
+            }
+            public var transitions: [(action: Transition, target: Self)] { [] }
+            public var availableTransitions: [Transition] { [] }
+            public var enabledTransitions: [Transition] { [] }
+            public mutating func apply(_ transition: Transition) {}
+            public var description: String { "" }
+        }
+        """
+        return Array(Parser.parse(source: source).statements.compactMap { $0.item.as(DeclSyntax.self) })
     }
 
 }

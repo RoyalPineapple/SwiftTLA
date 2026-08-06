@@ -28,7 +28,7 @@ extension TLASpec {
 }
 
 extension TLAValue {
-    var swiftLiteral: String {
+    public var swiftLiteral: String {
         switch self {
         case .int(let n): return "\(n)"
         case .bool(let b): return "\(b)"
