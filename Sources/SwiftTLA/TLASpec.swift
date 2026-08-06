@@ -2,10 +2,9 @@ public struct NamedVar: Codable, Sendable, CustomStringConvertible, Equatable {
     public let name: String
     public let initial: TLAValue
     public let initialSet: StateExpr?
-    public init(name: String, initial: TLAValue, initialSet: StateExpr? = nil) {
-        self.name = name
-        self.initial = initial
-        self.initialSet = initialSet
+    public let initExpr: StateExpr?  // computed from other initial vars
+    public init(name: String, initial: TLAValue, initialSet: StateExpr? = nil, initExpr: StateExpr? = nil) {
+        self.name = name; self.initial = initial; self.initialSet = initialSet; self.initExpr = initExpr
     }
     public var description: String {
         if let s = initialSet { return "\(name) \\in \(s)" }
@@ -132,8 +131,10 @@ public struct VarDecl: SpecComponent {
     public let name: String
     public let initial: TLAValue
     public let initialSet: StateExpr?
-    public init(_ name: String, _ initial: TLAValue) { self.name = name; self.initial = initial; self.initialSet = nil }
-    public init(_ name: String, _ initial: TLAValue, initialSet: StateExpr?) { self.name = name; self.initial = initial; self.initialSet = initialSet }
+    public let initExpr: StateExpr?
+    public init(_ name: String, _ initial: TLAValue) { self.name = name; self.initial = initial; self.initialSet = nil; self.initExpr = nil }
+    public init(_ name: String, _ initial: TLAValue, initialSet: StateExpr?) { self.name = name; self.initial = initial; self.initialSet = initialSet; self.initExpr = nil }
+    public init(_ name: String, initExpr: StateExpr) { self.name = name; self.initial = .int(0); self.initialSet = nil; self.initExpr = initExpr }
 }
 
 public struct ActionDecl: SpecComponent {
@@ -204,6 +205,7 @@ public enum SpecBuilder {
     public static func buildExpression(_ expr: AssumeDecl) -> [SpecComponent] { [expr] }
     public static func buildExpression(_ expr: ExtendsDecl) -> [SpecComponent] { [expr] }
     public static func buildExpression(_ expr: DeadlockDecl) -> [SpecComponent] { [expr] }
+    public static func buildExpression(_ expr: ComputedInitDecl) -> [SpecComponent] { [expr] }
     public static func buildOptional(_ component: [SpecComponent]?) -> [SpecComponent] { component ?? [] }
     public static func buildEither(first: [SpecComponent]) -> [SpecComponent] { first }
     public static func buildEither(second: [SpecComponent]) -> [SpecComponent] { second }
@@ -280,8 +282,26 @@ public func StrongFairness(_ action: String) -> FairnessDecl {
     FairnessDecl(.strongFairness(action))
 }
 
+@discardableResult
+public func Variable<T>(computed ref: Var<T>, _ expr: StateExpr) -> VarDecl {
+    VarDecl(ref.name, initExpr: expr)
+}
+
 public struct DeadlockDecl: SpecComponent { public init() {} }
 public func DeadlockCheck() -> DeadlockDecl { DeadlockDecl() }
+
+public struct ComputedInitDecl: SpecComponent {
+    public let name: String
+    public let computation: ([String: TLAValue]) -> TLAValue
+    public init(_ name: String, _ computation: @escaping ([String: TLAValue]) -> TLAValue) {
+        self.name = name; self.computation = computation
+    }
+}
+
+@discardableResult
+public func ComputedVariable<T>(_ ref: Var<T>, _ computation: @escaping ([String: TLAValue]) -> TLAValue) -> ComputedInitDecl {
+    ComputedInitDecl(ref.name, computation)
+}
 
 public struct SymmetryDecl: SpecComponent {
     public let variableName: String
@@ -370,7 +390,7 @@ extension TLASpec {
         var deadlockFlag = false
 
         for comp in components {
-            if let v = comp as? VarDecl { variables.append(NamedVar(name: v.name, initial: v.initial, initialSet: v.initialSet)) }
+            if let v = comp as? VarDecl { variables.append(NamedVar(name: v.name, initial: v.initial, initialSet: v.initialSet, initExpr: v.initExpr)) }
             else if let a = comp as? ActionDecl { actions.append(NamedAction(name: a.name, body: a.body)) }
             else if let i = comp as? InvDecl { invariants.append(NamedInvariant(name: i.name, body: i.body)) }
             else if let t = comp as? TemporalDecl { temporalProperties.append(NamedTemporal(name: t.name, expr: t.expr)) }
