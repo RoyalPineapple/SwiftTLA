@@ -227,9 +227,8 @@ public enum Evaluator {
         case .forAll(let set, let predicate):
             guard case .set(let sv) = try evaluate(set, in: state) else { throw typeMismatch("∀", got: try evaluate(set, in: state)) }
             for elem in sv {
-                var bound = state
-                bound["_q"] = elem
-                if case .bool(false) = try evaluate(predicate, in: bound) {
+                let substituted = substituteVariable("_x", elem, in: predicate)
+                if case .bool(false) = try evaluate(substituted, in: state) {
                     return .bool(false)
                 }
             }
@@ -238,9 +237,8 @@ public enum Evaluator {
         case .exists(let set, let predicate):
             guard case .set(let sv) = try evaluate(set, in: state) else { throw typeMismatch("∃", got: try evaluate(set, in: state)) }
             for elem in sv {
-                var bound = state
-                bound["_q"] = elem
-                if case .bool(true) = try evaluate(predicate, in: bound) {
+                let substituted = substituteVariable("_x", elem, in: predicate)
+                if case .bool(true) = try evaluate(substituted, in: state) {
                     return .bool(true)
                 }
             }
@@ -249,9 +247,8 @@ public enum Evaluator {
         case .choose(let set, let predicate):
             guard case .set(let sv) = try evaluate(set, in: state) else { throw typeMismatch("CHOOSE", got: try evaluate(set, in: state)) }
             for elem in sv {
-                var bound = state
-                bound["_q"] = elem
-                if case .bool(true) = try evaluate(predicate, in: bound) {
+                let substituted = substituteVariable("_x", elem, in: predicate)
+                if case .bool(true) = try evaluate(substituted, in: state) {
                     return elem
                 }
             }

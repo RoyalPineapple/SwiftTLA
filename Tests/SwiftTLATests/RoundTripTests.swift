@@ -1,6 +1,8 @@
 import Testing
 import Foundation
 import SwiftTLA
+import SwiftParser
+import SwiftSyntax
 
 // MARK: - Var<T> operators: full matrix
 
@@ -863,5 +865,201 @@ struct EdgeCaseTests {
         let spec = TLASpec("T") { Variable(x, 0); Action("a") { x.becomes(x + 1) } }
         let g = try ModelChecker(spec: spec, maxStates: 1).exploreGraph()
         #expect(g.states.count <= 2)
+    }
+}
+
+// MARK: - Phase 1-7: bound variables, functions, sequences, EXCEPT, CONSTANTS
+
+struct BoundVariableTests {
+    @Test("Function literal with bound variable evaluates correctly")
+    func functionLiteralWithBoundVar() {
+        let p = Var<Int>("p")
+        let domain = StateExpr.set([1, 2, 3])
+        let fun = StateExpr.functionLiteral(p, in: domain, p * 2)
+        let result = try! Evaluator.evaluate(fun, in: [:])
+        guard case .function(let mapping) = result else {
+            #expect(Bool(false))
+            return
+        }
+        #expect(mapping[.int(1)] == .int(2))
+        #expect(mapping[.int(2)] == .int(4))
+        #expect(mapping[.int(3)] == .int(6))
+    }
+
+    @Test("Function apply on constructed function")
+    func functionApply() throws {
+        let p = Var<Int>("p")
+        let domain = StateExpr.set([1, 2])
+        let fun = StateExpr.functionLiteral(p, in: domain, p * 10)
+        let apply = StateExpr.functionApply(fun, .value(.int(2)))
+        let result = try Evaluator.evaluate(apply, in: [:])
+        #expect(result == .int(20))
+    }
+
+    @Test("Function EXCEPT updates a key")
+    func functionExcept() throws {
+        let p = Var<Int>("p")
+        let domain = StateExpr.set([1, 2])
+        let fun = StateExpr.functionLiteral(p, in: domain, p * 10)
+        let updated = StateExpr.except(fun, .value(.int(1)), .value(.int(99)))
+        let result = try Evaluator.evaluate(updated, in: [:])
+        guard case .function(let mapping) = result else {
+            #expect(Bool(false))
+            return
+        }
+        #expect(mapping[.int(1)] == .int(99))
+        #expect(mapping[.int(2)] == .int(20))
+    }
+
+    @Test("Nested EXCEPT chains correctly")
+    func nestedExcept() throws {
+        let p = Var<Int>("p")
+        let domain = StateExpr.set([1, 2])
+        let fun = StateExpr.functionLiteral(p, in: domain, p.stateExpr)
+        let expr = StateExpr.except(
+            StateExpr.except(fun, .value(.int(1)), .value(.int(10))),
+            .value(.int(2)), .value(.int(20))
+        )
+        let result = try Evaluator.evaluate(expr, in: [:])
+        guard case .function(let mapping) = result else {
+            #expect(Bool(false))
+            return
+        }
+        #expect(mapping[.int(1)] == .int(10))
+        #expect(mapping[.int(2)] == .int(20))
+    }
+
+    @Test("FunctionApply with bound variable predicate evaluates")
+    func forAllWithBoundVar() throws {
+        let p = Var<Int>("p")
+        let domain = StateExpr.set([1, 2, 3])
+        let predicate = StateExpr.forAll(p, in: domain, StateExpr.greaterThan(p.stateExpr, StateExpr.value(.int(0))))
+        let result = try Evaluator.evaluateBool(predicate, in: [:])
+        #expect(result)
+    }
+
+    @Test("exists with bound variable finds matching element")
+    func existsWithBoundVar() throws {
+        let p = Var<Int>("p")
+        let domain = StateExpr.set([1, 2, 3])
+        let predicate = StateExpr.exists(p, in: domain, StateExpr.equal(p.stateExpr, StateExpr.value(.int(2))))
+        let result = try Evaluator.evaluateBool(predicate, in: [:])
+        #expect(result)
+    }
+
+    @Test("Sequence variable append and read in model checker")
+    func sequenceVariableAppendRead() throws {
+        let seq = Var<TLATupleType>("seq")
+        let result = Var<Int>("result", value: 0)
+        let spec = TLASpec("SeqTest") {
+            Variable(seq, TLAValue.tuple([]))
+            Variable(result, 0)
+            Action("push") { seq.becomes(seq.appending(42)).when(seq.count == 0) && result.stays }
+            Action("pop") { seq.count > 0 && result.becomes(seq.at(1)) }
+        }
+        let g = try! ModelChecker(spec: spec, maxStates: 10).exploreGraph()
+        let states = g.states.values
+        let results = Set(states.compactMap { $0["result"] })
+        #expect(results.contains(.int(0)))
+        #expect(results.contains(.int(42)))
+    }
+
+    @Test("Function-typed variable stores and retrieves values")
+    func functionVariable() throws {
+        let clock = Var<TLAFunctionType>("clock")
+        let p = Var<Int>("p")
+        let domain = StateExpr.set([1, 2])
+        let spec = TLASpec("FuncTest") {
+            Variable(clock, TLAValue.function([:]))
+            Action("init") {
+                let fun = StateExpr.functionLiteral(p, in: domain, p * 10)
+                clock.becomes(fun).when(clock.domain.cardinality == 0)
+            }
+        }
+        let g = try! ModelChecker(spec: spec, maxStates: 10).exploreGraph()
+        let states = g.states.values
+        var found = false
+        for s in states {
+            if case .function(let m) = s["clock"] {
+                if m[.int(1)] == .int(10) && m[.int(2)] == .int(20) {
+                    found = true
+                }
+            }
+        }
+        #expect(found)
+    }
+
+    @Test("CONSTANT with ASSUME generates valid TLA+ and model-checks")
+    func constantModelCheck() {
+        let bound = 5
+        let x = Var<Int>("x", value: 0)
+        let spec = TLASpec("ConstTest") {
+            Constant("N", bound)
+            Variable(x, 0)
+            Action("inc") { x.becomes(x + 1).when(x < bound) }
+        }
+        let tla = spec.tlaModule
+        #expect(tla.contains("CONSTANTS N"))
+        #expect(tla.contains("ASSUME N = 5"))
+        let g = try! ModelChecker(spec: substituteConstants(spec), maxStates: 10).exploreGraph()
+        #expect(g.states.count == bound + 1)
+    }
+
+    @Test("choose action produces nondeterministic assignment")
+    func chooseAction() throws {
+        let picked = Var<Int>("picked", value: 0)
+        let source = Var<TLASetType>("source")
+        let spec = TLASpec("ChooseTest") {
+            Variable(picked, 0)
+            Variable(source, TLAValue.set([.int(1), .int(2), .int(3)]))
+            Action("pick") {
+                source.cardinality > 0
+                && choose(picked, from: source)
+                && source.becomes(source.subtracting(StateExpr.singleton(picked)))
+            }
+        }
+        if case .ok(let count) = try ModelChecker(spec: spec, maxStates: 20).check() {
+            #expect(count > 0)
+        } else {
+            #expect(Bool(false))
+        }
+    }
+
+    @Test("SpecParser parses choose(variable, from:) call")
+    func specParserChooseCall() {
+        let source = "choose(picked, from: q)"
+        let expr = Parser.parse(source: source).statements.first!.item.as(ExprSyntax.self)!
+        let result = SpecParser.parseSingleAction(expr)
+        #expect(result == ActionExpr.chooseAction("picked", .variable("q")))
+    }
+
+    @Test("SpecParser parses singleton()")
+    func specParserSingleton() throws {
+        let source = "StateExpr.singleton(x)"
+        let expr = Parser.parse(source: source).statements.first!.item.as(ExprSyntax.self)!
+        let result = SpecParser.parseStateExpr(expr)
+        #expect(result == StateExpr.setLiteral([.variable("x")]))
+    }
+
+    @Test("SpecParser parses functionLiteral(p, in: domain, body)")
+    func specParserFunctionLiteral() throws {
+        let source = "StateExpr.functionLiteral(StateExpr.set([1]), (2 + 3))"
+        let expr = Parser.parse(source: source).statements.first!.item.as(ExprSyntax.self)!
+        let result = SpecParser.parseStateExpr(expr)
+        #expect(result == StateExpr.functionLiteral(
+            StateExpr.setLiteral([StateExpr.value(.int(1))]),
+            StateExpr.add(StateExpr.value(.int(2)), StateExpr.value(.int(3)))
+        ))
+    }
+
+    @Test("Function TLA+ output is valid ASCII")
+    func functionTLAOutput() {
+        let p = Var<Int>("p")
+        let domain = StateExpr.set([1, 2])
+        let fun = StateExpr.functionLiteral(p, in: domain, p * 10)
+        let desc = fun.description
+        #expect(desc.contains("[x \\in"))
+        #expect(desc.contains("|->"))
+        #expect(!desc.contains("_x"))
     }
 }
