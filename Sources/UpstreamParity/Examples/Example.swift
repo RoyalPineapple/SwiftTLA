@@ -34,6 +34,7 @@ public enum Example {
         ewd840,
         hourClock,
         hourClock2,
+        lamportMutexN2,
         simpleAllocator,
         syncTD,
         tCommit,
