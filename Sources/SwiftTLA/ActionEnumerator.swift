@@ -32,12 +32,16 @@ public enum ActionEnumerator {
                 guard case .set(let sv) = try Evaluator.evaluate(setExpr, in: oldState) else {
                     throw ActionError.invalidActionForm("CHOOSE set for \(varName) must be a set")
                 }
-                let baseState = try applyNonChooseAssignments(action, oldState: oldState, varNames: varNames, skip: varName)
-                if baseState == nil { continue }
                 for elem in sv {
-                    var s = baseState!
-                    s[varName] = elem
-                    results.append(s)
+                    // Make the chosen value available in the state so subsequent
+                    // expressions (function applies, guards) can reference it.
+                    var enrichedState = oldState
+                    enrichedState[varName] = elem
+                    guard let baseState = try applyNonChooseAssignments(action, oldState: enrichedState, varNames: varNames, skip: varName)
+                    else { continue }
+                    var finalState = baseState
+                    finalState[varName] = elem
+                    results.append(finalState)
                 }
             }
             return results

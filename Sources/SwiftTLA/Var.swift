@@ -12,6 +12,7 @@ public enum TLAFunctionType: TLAValueType { case placeholder; public var tlaValu
 public typealias TLASet = TLASetType
 public typealias TLATuple = TLATupleType
 public typealias TLARecord = TLARecordType
+public typealias TLASequence = TLATupleType  // TLA+ sequences are tuples at runtime
 
 /// A typed TLA+ variable. Holds a name and typed initial value.
 /// Used in `@TLAModel` spec bodies and builder DSL closures.
