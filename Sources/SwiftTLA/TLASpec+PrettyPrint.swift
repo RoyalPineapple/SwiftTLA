@@ -118,7 +118,7 @@ private func assignedVarNames(_ e: ActionExpr) -> Set<String> {
     }
 }
 
-func completeAction(_ e: ActionExpr, allVars: [String]) -> ActionExpr {
+public func completeAction(_ e: ActionExpr, allVars: [String]) -> ActionExpr {
     switch e {
     case .or(let a, let b):
         return .or(completeAction(a, allVars: allVars), completeAction(b, allVars: allVars))

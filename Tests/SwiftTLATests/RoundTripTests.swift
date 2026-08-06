@@ -1063,3 +1063,150 @@ struct BoundVariableTests {
         #expect(!desc.contains("_x"))
     }
 }
+
+// MARK: - Completion tests: UNCHANGED per-branch, CHOOSE + functionApply, Codable
+
+struct CompletionCoverageTests {
+    @Test("completeAction pushes UNCHANGED into OR branches")
+    func perBranchUnchanged() {
+        // OR action: only one branch assigns x, the other doesn't
+        let action: ActionExpr = .or(
+            .assign("x", .value(.int(1))),
+            .assign("y", .value(.int(2)))
+        )
+        // completeAction should add UNCHANGED y to first branch, UNCHANGED x to second
+        let completed = completeAction(action, allVars: ["x", "y"])
+        let desc = completed.description
+        #expect(desc.contains("UNCHANGED y"))
+        #expect(desc.contains("UNCHANGED x"))
+    }
+
+    @Test("completeAction doesn't add UNCHANGED when all vars assigned")
+    func noUnchangedWhenAllAssigned() {
+        let action: ActionExpr = .and(
+            .assign("x", .value(.int(1))),
+            .assign("y", .value(.int(2)))
+        )
+        let completed = completeAction(action, allVars: ["x", "y"])
+        #expect(!completed.description.contains("UNCHANGED"))
+    }
+
+    @Test("CHOOSE + functionApply + EXCEPT in single action enumerates correctly")
+    func chooseWithFunctionApply() throws {
+        let chosenProcess: ActionExpr = .chooseAction("process", .setLiteral([.value(.int(1)), .value(.int(2))]))
+        let readState: ActionExpr = .guard_(.equal(
+            .functionApply(.variable("programCounter"), .variable("process")),
+            .value(.string("initial"))
+        ))
+        let updateState: ActionExpr = .assign("programCounter",
+            .except(.variable("programCounter"), .variable("process"), .value(.string("done")))
+        )
+        let unchanged: ActionExpr = .unchanged("sent")
+        let action = ActionExpr.and(chosenProcess, ActionExpr.and(readState, ActionExpr.and(updateState, unchanged)))
+
+        let state: [String: TLAValue] = [
+            "programCounter": .function([.int(1): "initial", .int(2): "initial"]),
+            "sent": .set([]),
+            "process": .int(0)
+        ]
+        let successors = try ActionEnumerator.enumerate(action, from: state, varNames: ["programCounter", "sent", "process"])
+        #expect(successors.count == 2)
+        for s in successors {
+            let pc = s["programCounter"]
+            let proc = s["process"]
+            guard case .function(let mapping) = pc else { #expect(Bool(false)); return }
+            if case .int(1) = proc {
+                #expect(mapping[.int(1)] == "done")
+                #expect(mapping[.int(2)] == "initial")
+            }
+        }
+    }
+
+    @Test("TLAValue.function Codable round-trip")
+    func functionCodable() throws {
+        let original = TLAValue.function([.int(1): "one", .int(2): "two"])
+        let encoder = JSONEncoder()
+        let data = try encoder.encode(original)
+        let decoder = JSONDecoder()
+        let decoded = try decoder.decode(TLAValue.self, from: data)
+        #expect(original == decoded)
+    }
+
+    @Test("TLAValue.function Comparable ordering")
+    func functionComparable() {
+        let small = TLAValue.function([.int(1): "a"])
+        let large = TLAValue.function([.int(1): "a", .int(2): "b"])
+        #expect(small < large)
+        #expect(!(large < small))
+    }
+
+    @Test("substituteVariableBody replaces nested variable references")
+    func substituteVariableBodyNested() {
+        let body: StateExpr = .add(
+            .multiply(.variable("userVar"), .value(.int(2))),
+            .variable("userVar")
+        )
+        let result = substituteVariableBody("userVar", with: "_x", in: body)
+        let desc = result.description
+        #expect(!desc.contains("userVar"))
+        #expect(desc.contains("_x"))
+    }
+
+    @Test("StateExprConvertible forwarding: functionApply on Var<TLAFunctionType>")
+    func functionApplyForwarding() {
+        let pc = Var<TLAFunctionType>("pc")
+        let selfProcess = Var<Int>("self")
+        let result = pc.applying(selfProcess)
+        let expected: StateExpr = .functionApply(.variable("pc"), .variable("self"))
+        #expect(result == expected)
+    }
+
+    @Test("StateExprConvertible forwarding: updated on Var<TLAFunctionType>")
+    func functionUpdateForwarding() {
+        let pc = Var<TLAFunctionType>("pc")
+        let selfProcess = Var<Int>("self")
+        let result = pc.updated(at: selfProcess, to: "done")
+        let expected: StateExpr = .except(.variable("pc"), .variable("self"), .value(.string("done")))
+        #expect(result == expected)
+    }
+
+    @Test("Function-typed variable works end-to-end in ModelChecker")
+    func functionVariableEndToEnd() throws {
+        let programCounter = Var<TLAFunctionType>("programCounter")
+        let selfProcess = Var<Int>("selfProcess")
+        let spec = TLASpec("FuncEndToEnd") {
+            Variable(programCounter, TLAValue.function([.int(1): "initial", .int(2): "initial"]))
+            Variable(selfProcess, 0)
+            Action("process") {
+                choose(selfProcess, from: StateExpr.set([1, 2]))
+                && programCounter.applying(selfProcess) == "initial"
+                && programCounter.becomes(programCounter.updated(at: selfProcess, to: "done"))
+            }
+        }
+        if case .ok(let count) = try ModelChecker(spec: spec, maxStates: 50).check() {
+            #expect(count >= 2)
+        } else {
+            #expect(Bool(false))
+        }
+    }
+
+    @Test("StateMachineGenerator handles function-typed variable correctly")
+    func functionTypeGeneration() throws {
+        let programCounter = Var<TLAFunctionType>("programCounter")
+        let spec = TLASpec("FuncGen") {
+            Variable(programCounter, TLAValue.function([:]))
+            Action("init") {
+                let domain = StateExpr.set([1])
+                let p = Var<Int>("p")
+                let fun = StateExpr.functionLiteral(p, in: domain, "ready")
+                programCounter.becomes(fun).when(programCounter.domain.cardinality == 0)
+            }
+        }
+        let graph = try ModelChecker(spec: spec, maxStates: 10).exploreGraph()
+        let generator = StateMachineGenerator(graph: graph)
+        let code = try generator.generate()
+        #expect(code.contains("var programCounter: [TLAValue: TLAValue]"))
+        #expect(code.contains("struct FuncGen"))
+        #expect(code.contains("TLAMachine"))
+    }
+}
