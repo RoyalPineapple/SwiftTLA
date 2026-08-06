@@ -182,11 +182,54 @@ public struct ModelMacro: MemberMacro {
         guard let expression else { return nil }
         if let int = expression.as(IntegerLiteralExprSyntax.self) { return .int(Int(int.literal.text) ?? 0) }
         if let bool = expression.as(BooleanLiteralExprSyntax.self) { return .bool(bool.literal.text == "true") }
+        if let string = expression.as(StringLiteralExprSyntax.self) {
+            let text = string.segments.description
+            return .string(text)
+        }
         if let call = expression.as(FunctionCallExprSyntax.self),
-           let ma = call.calledExpression.as(MemberAccessExprSyntax.self),
-           ma.declName.baseName.text == "set" {
-            let elements = call.arguments.first?.expression.as(ArrayExprSyntax.self)?.elements.compactMap { parseInitialValue($0.expression) } ?? []
-            return .set(Set(elements))
+           let memberAccess = call.calledExpression.as(MemberAccessExprSyntax.self),
+           let base = memberAccess.base?.as(DeclReferenceExprSyntax.self),
+           base.baseName.text == "TLAValue" {
+            let method = memberAccess.declName.baseName.text
+            switch method {
+            case "int":
+                guard let intExpr = call.arguments.first?.expression.as(IntegerLiteralExprSyntax.self),
+                      let value = Int(intExpr.literal.text)
+                else { return nil }
+                return .int(value)
+            case "bool":
+                guard let boolExpr = call.arguments.first?.expression.as(BooleanLiteralExprSyntax.self)
+                else { return nil }
+                return .bool(boolExpr.literal.text == "true")
+            case "string":
+                guard let stringExpr = call.arguments.first?.expression.as(StringLiteralExprSyntax.self)
+                else { return nil }
+                return .string(stringExpr.segments.description)
+            case "set":
+                let elements = call.arguments.first?.expression
+                    .as(ArrayExprSyntax.self)?
+                    .elements.compactMap { parseInitialValue($0.expression) } ?? []
+                return .set(Set(elements))
+            case "function":
+                let pairs = call.arguments.first?.expression
+                    .as(DictionaryExprSyntax.self)?
+                    .content.as(DictionaryElementListSyntax.self)?
+                    .compactMap { element -> (TLAValue, TLAValue)? in
+                        guard let key = parseInitialValue(element.key.as(ExprSyntax.self)),
+                              let value = parseInitialValue(element.value.as(ExprSyntax.self))
+                        else { return nil }
+                        return (key, value)
+                    } ?? []
+                var mapping: [TLAValue: TLAValue] = [:]
+                for (key, value) in pairs { mapping[key] = value }
+                return .function(mapping)
+            case "tuple":
+                let elements = call.arguments.first?.expression
+                    .as(ArrayExprSyntax.self)?
+                    .elements.compactMap { parseInitialValue($0.expression) } ?? []
+                return .tuple(elements)
+            default: return nil
+            }
         }
         return nil
     }
