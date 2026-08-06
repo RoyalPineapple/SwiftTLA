@@ -156,6 +156,14 @@ public enum Evaluator {
             tv.append(try evaluate(e, in: state))
             return .tuple(tv)
 
+        case .tupleHead(let t):
+            guard case .tuple(let tv) = try evaluate(t, in: state) else { throw typeMismatch("Head", got: try evaluate(t, in: state)) }
+            guard !tv.isEmpty else { throw typeMismatch("Head of empty sequence") }
+            return tv[0]
+        case .tupleTail(let t):
+            guard case .tuple(let tv) = try evaluate(t, in: state) else { throw typeMismatch("Tail", got: try evaluate(t, in: state)) }
+            guard !tv.isEmpty else { throw typeMismatch("Tail of empty sequence") }
+            return .tuple(Array(tv.dropFirst()))
         case .tupleConcatenate(let a, let b):
             guard case .tuple(let ta) = try evaluate(a, in: state), case .tuple(let tb) = try evaluate(b, in: state) else {
                 throw typeMismatch("tuple concat", got: try evaluate(a, in: state), try evaluate(b, in: state))
@@ -313,6 +321,8 @@ public enum Evaluator {
         case .tupleAccess(let t, let i): return .tupleAccess(sub(t), i)
         case .tupleLength(let t): return .tupleLength(sub(t))
         case .tupleAppend(let t, let e): return .tupleAppend(sub(t), sub(e))
+        case .tupleHead(let t): return .tupleHead(sub(t))
+        case .tupleTail(let t): return .tupleTail(sub(t))
         case .tupleConcatenate(let a, let b): return .tupleConcatenate(sub(a), sub(b))
         case .recordLiteral(let fs): return .recordLiteral(fs.mapValues(sub))
         case .recordAccess(let r, let f): return .recordAccess(sub(r), f)

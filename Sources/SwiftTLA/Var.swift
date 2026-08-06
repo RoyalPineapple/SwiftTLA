@@ -79,6 +79,8 @@ extension StateExprConvertible {
     public func mapping(_ expression: StateExpr) -> StateExpr { stateExpr.mapping(expression) }
     public func appending(_ element: StateExpr) -> StateExpr { stateExpr.appending(element) }
     public func concatenating(_ other: StateExpr) -> StateExpr { stateExpr.concatenating(other) }
+    public var head: StateExpr { stateExpr.head }
+    public var tail: StateExpr { stateExpr.tail }
     public func at(_ index: Int) -> StateExpr { stateExpr.at(index) }
     public func integerDivided(by divisor: some StateExprConvertible) -> StateExpr { stateExpr.integerDivided(by: divisor) }
 
@@ -148,6 +150,8 @@ extension StateExpr {
     public var subsets: StateExpr { .powerSet(self) }
     public var domain: StateExpr { .domain(self) }
     public var count: StateExpr { .tupleLength(self) }
+    public var head: StateExpr { .tupleHead(self) }
+    public var tail: StateExpr { .tupleTail(self) }
     public func filtering(_ predicate: StateExpr) -> StateExpr { .setFilter(self, predicate) }
     public func mapping(_ expression: StateExpr) -> StateExpr { .setMap(expression, self) }
     public func appending(_ element: StateExpr) -> StateExpr { .tupleAppend(self, element) }
@@ -256,7 +260,9 @@ private func replaceVarInState(_ from: String, with to: String, in expression: S
     case .tupleAccess(let t, let i): return .tupleAccess(replace(t), i)
     case .tupleLength(let t): return .tupleLength(replace(t))
     case .tupleAppend(let t, let e): return .tupleAppend(replace(t), replace(e))
-    case .tupleConcatenate(let a, let b): return .tupleConcatenate(replace(a), replace(b))
+    case .tupleHead(let t): return .tupleHead(replace(t))
+        case .tupleTail(let t): return .tupleTail(replace(t))
+        case .tupleConcatenate(let a, let b): return .tupleConcatenate(replace(a), replace(b))
     case .recordLiteral(let fs): return .recordLiteral(fs.mapValues(replace))
     case .recordAccess(let r, let f): return .recordAccess(replace(r), f)
     case .domain(let f): return .domain(replace(f))

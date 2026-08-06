@@ -39,6 +39,8 @@ public indirect enum StateExpr: Hashable, Codable, Sendable, CustomStringConvert
     case tupleAccess(StateExpr, Int)
     case tupleLength(StateExpr)
     case tupleAppend(StateExpr, StateExpr)
+    case tupleHead(StateExpr)
+    case tupleTail(StateExpr)
     case tupleConcatenate(StateExpr, StateExpr)
 
     case recordLiteral([String: StateExpr])
@@ -92,6 +94,8 @@ public indirect enum StateExpr: Hashable, Codable, Sendable, CustomStringConvert
         case .tupleAccess(let t, let i): return "\(t)[\(i)]"
         case .tupleLength(let t): return "Len(\(t))"
         case .tupleAppend(let t, let e): return "Append(\(t), \(e))"
+        case .tupleHead(let t): return "Head(\(t))"
+        case .tupleTail(let t): return "Tail(\(t))"
         case .tupleConcatenate(let a, let b): return "(\(a) \\o \(b))"
         case .recordLiteral(let fields):
             let entries = fields.sorted(by: { $0.key < $1.key }).map { "\($0.key) |-> \($0.value)" }
