@@ -24,6 +24,7 @@ public enum Examples {
         .init(name: "Prisoners", spec: Prisoners.spec, expectedStates: 0, source: "specifications/Prisoners", about: "100 prisoners and a light bulb coordination problem."),
         .init(name: "CarTalkPuzzle", spec: CarTalkPuzzle.spec, expectedStates: 0, source: "specifications/CarTalkPuzzle", about: "Number puzzle from Car Talk."),
         .init(name: "Prisoners", spec: Prisoners.spec, expectedStates: 0, source: "specifications/Prisoners", about: "Prisoners and light bulb."),
+        .init(name: "Paxos", spec: Paxos.spec, expectedStates: 0, source: "specifications/Paxos", about: "Distributed consensus with record-based messages."),
         .init(name: "Bakery", spec: Bakery.spec, expectedStates: 0, source: "specifications/Bakery-Boulangerie", about: "Lamport's mutual exclusion algorithm for concurrent actors."),
         .init(name: "DiningPhilosophers", spec: DiningPhilosophers.spec, expectedStates: 0, source: "specifications/DiningPhilosophers", about: "Deadlock avoidance in concurrent resource acquisition."),
         .init(name: "Allocator", spec: Allocator.spec, expectedStates: 4, source: "specifications/allocator", about: "Resource allocator."),
