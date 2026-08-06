@@ -107,23 +107,12 @@ extension TLASpec {
     }
 }
 
-private func assignedVarNames(_ e: ActionExpr) -> Set<String> {
-    switch e {
-    case .assign(let v, _): return [v]
-    case .unchanged: return []
-    case .guard_: return []
-    case .chooseAction(let v, _): return [v]
-    case .and(let a, let b): return assignedVarNames(a).union(assignedVarNames(b))
-    case .or(let a, let b): return assignedVarNames(a).union(assignedVarNames(b))
-    }
-}
-
 public func completeAction(_ e: ActionExpr, allVars: [String]) -> ActionExpr {
     switch e {
     case .or(let a, let b):
         return .or(completeAction(a, allVars: allVars), completeAction(b, allVars: allVars))
     default:
-        let assigned = assignedVarNames(e)
+        let assigned = assignedVars(e)
         let explicit = explicitUnchanged(e)
         var result = e
         for v in allVars where !assigned.contains(v) && !explicit.contains(v) {
