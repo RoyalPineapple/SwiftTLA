@@ -28,5 +28,6 @@ public enum Example {
     /// Registry of all parity ports.
     public static let all: [Entry] = [
         dieHardTypeOK,
+        changRobertsN3,
     ]
 }
