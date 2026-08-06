@@ -32,7 +32,22 @@ public enum ParityCatalog {
         cigaretteSmokers,
         ewd840,
         syncTD,
+        coffeeCanMax100,
     ]
+
+    // MARK: CoffeeCan MaxBeanCount=100 (same factory, scale up)
+
+    public static let coffeeCanMax100 = Entry(
+        id: "CoffeeCan/MaxBeanCount100",
+        upstreamSpec: "CoffeeCan",
+        upstreamModule: "specifications/CoffeeCan/CoffeeCan.tla",
+        upstreamCfg: nil,
+        expectedDistinct: 5150,
+        expectedResult: "success",
+        spec: coffeeCanSpec(maxBeanCount: 100),
+        notes: "M=100. Same spec shape as M=5.",
+        matchesUpstreamTLC: true
+    )
 
     public static var ids: [String] { all.map(\.id) }
 
