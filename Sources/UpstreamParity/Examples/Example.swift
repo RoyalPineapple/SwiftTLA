@@ -1,7 +1,5 @@
 import SwiftTLA
 
-/// Namespace for upstream parity ports.
-/// Each port lives in its own file and extends this enum.
 public enum Example {
     public struct Entry: Sendable {
         public let id: String
@@ -22,5 +20,25 @@ public enum Example {
             self.matchesUpstreamTLC = matchesUpstreamTLC
         }
     }
-    public static let all: [Entry] = []
+    public static let all: [Entry] = [
+        asynchInterface,
+        barrierN6,
+        catEvenBoxes,
+        catOddBoxes,
+        changRobertsN3,
+        channel,
+        cigaretteSmokers,
+        coffeeCanMax100,
+        coffeeCanMax5,
+        dieHardTypeOK,
+        ewd840,
+        hourClock,
+        hourClock2,
+        simpleAllocator,
+        syncTD,
+        tCommit,
+        teachingSimpleN2,
+        teachingSimpleN3,
+        twoPhase,
+    ]
 }

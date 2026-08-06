@@ -13,7 +13,7 @@ guard let name = args.first else {
 }
 
 if name == "list" {
-    for e in ParityCatalog.all {
+    for e in Example.all {
         let flag = e.matchesUpstreamTLC ? "UPSTREAM" : "SLICE"
         print("\(e.id)\t\(e.expectedDistinct)\t\(flag)\t\(e.notes)")
     }
@@ -130,7 +130,7 @@ case "forall":
     }.tlaModule
 
 default:
-    if let entry = ParityCatalog.entry(id: name) {
+    if let entry = Example.all.first(where: { $0.id == name }) {
         output = entry.spec.tlaModule
     } else {
         fputs("Unknown spec: \(name)\n", stderr)
