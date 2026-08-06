@@ -5,7 +5,7 @@ var output = ""
 switch specName {
 case "HourClock":
     let hr = Var<Int>("hr", value: 1)
-    let s = TLASpec("HourClock") { Variable(hr, 1); Action("HCnxt") { (hr != 12) && hr.becomes(hr + 1) || (hr == 12) && hr.becomes(1) } }
+    let s = TLASpec("HourClock") { Variable(hr, in: 1...12); Action("HCnxt") { (hr != 12) && hr.becomes(hr + 1) || (hr == 12) && hr.becomes(1) } }
     output = s.tlaModule
 case "DieHard":
     let big = Var<Int>("big", value: 0); let small = Var<Int>("small", value: 0)
