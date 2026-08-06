@@ -48,7 +48,6 @@ public struct ModelChecker {
             evaluate: evaluate,
             actions: actions,
             invariants: substituted.invariants,
-            constraint: substituted.constraint,
             checkDeadlock: substituted.checkDeadlock,
             specificationName: substituted.name,
             maxStates: self.maxStates
@@ -117,7 +116,6 @@ private func bfs(
     evaluate: (StateExpr, State) -> Bool,
     actions: [NamedAction],
     invariants: [NamedInvariant],
-    constraint: StateExpr?,
     checkDeadlock: Bool,
     specificationName: String,
     maxStates: Int
@@ -137,7 +135,6 @@ private func bfs(
         expand: expand,
         evaluate: evaluate,
         invariants: invariants,
-        constraint: constraint,
         checkDeadlock: checkDeadlock,
         specificationName: specificationName
     )
@@ -158,7 +155,6 @@ private func bfsLoop(
     expand: (State) -> [(String, State)],
     evaluate: (StateExpr, State) -> Bool,
     invariants: [NamedInvariant],
-    constraint: StateExpr?,
     checkDeadlock: Bool,
     specificationName: String
 ) -> ModelChecker.Exploration {
@@ -195,10 +191,6 @@ private func bfsLoop(
             continue
         }
 
-        if let checkConstraint = constraint, evaluate(checkConstraint, current) {
-            checker.apply(.stepNoNew)
-            continue
-        }
 
         let enabled = enabledState(current, actions: actions, variableNames: variableNames)
         for invariant in invariants where !evaluate(invariant.body, enabled) {

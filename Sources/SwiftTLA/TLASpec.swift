@@ -48,14 +48,13 @@ public struct TLASpec: Codable, Sendable, CustomStringConvertible, Equatable {
     public let invariants: [NamedInvariant]
     public let temporalProperties: [NamedTemporal]
     public let fairness: [FairnessCondition]
-    public let constraint: StateExpr?
     public let assume: StateExpr?
     public let checkDeadlock: Bool
     public let definitions: [String]
     public let theorems: [String]
     public let extendsModules: String
 
-    public init(name: String, variables: [NamedVar], constants: [String: TLAValue] = [:], actions: [NamedAction], invariants: [NamedInvariant], temporalProperties: [NamedTemporal] = [], fairness: [FairnessCondition] = [], constraint: StateExpr? = nil, assume: StateExpr? = nil, checkDeadlock: Bool = false, definitions: [String] = [], theorems: [String] = [], extendsModules: String = "Integers") {
+    public init(name: String, variables: [NamedVar], constants: [String: TLAValue] = [:], actions: [NamedAction], invariants: [NamedInvariant], temporalProperties: [NamedTemporal] = [], fairness: [FairnessCondition] = [], assume: StateExpr? = nil, checkDeadlock: Bool = false, definitions: [String] = [], theorems: [String] = [], extendsModules: String = "Integers") {
         self.name = name
         self.variables = variables
         self.constants = constants
@@ -63,7 +62,6 @@ public struct TLASpec: Codable, Sendable, CustomStringConvertible, Equatable {
         self.invariants = invariants
         self.temporalProperties = temporalProperties
         self.fairness = fairness
-        self.constraint = constraint
         self.assume = assume
         self.checkDeadlock = checkDeadlock
         self.definitions = definitions
@@ -101,7 +99,6 @@ public struct TLASpec: Codable, Sendable, CustomStringConvertible, Equatable {
             invariants: self.invariants + other.invariants,
             temporalProperties: self.temporalProperties + other.temporalProperties,
             fairness: self.fairness + other.fairness,
-            constraint: self.constraint,
             assume: { if let a = self.assume, let b = other.assume { return .and(a, b) }; return self.assume ?? other.assume }(),
             checkDeadlock: self.checkDeadlock || other.checkDeadlock,
             definitions: self.definitions + other.definitions,
@@ -120,7 +117,6 @@ public struct TLASpec: Codable, Sendable, CustomStringConvertible, Equatable {
             invariants: self.invariants,
             temporalProperties: self.temporalProperties,
             fairness: self.fairness,
-            constraint: self.constraint,
             assume: self.assume,
             checkDeadlock: self.checkDeadlock,
             definitions: self.definitions,
@@ -408,7 +404,6 @@ extension TLASpec {
         self.invariants = invariants
         self.temporalProperties = temporalProperties
         self.fairness = fairness
-        self.constraint = nil
         self.assume = assumes
         self.checkDeadlock = deadlockFlag
         self.definitions = definitions
