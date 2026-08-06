@@ -16,6 +16,9 @@ extension TLASpec {
 
         if !constants.isEmpty {
             lines.append("CONSTANTS \(constants.keys.sorted().joined(separator: ", "))")
+            for (name, value) in constants.sorted(by: { $0.key < $1.key }) {
+                lines.append("ASSUME \(name) = \(value)")
+            }
             lines.append("")
         }
 
