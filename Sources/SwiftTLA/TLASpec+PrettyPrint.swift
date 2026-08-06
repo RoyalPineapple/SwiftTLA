@@ -45,6 +45,7 @@ extension TLASpec {
 
         let inits = variables.map { v -> String in
             if let s = v.initialSet { return "\(v.name) \\in \(s)" }
+            if let expr = v.initExpr { return "\(v.name) = \(expr)" }
             return "\(v.name) = \(v.initial)"
         }
         if inits.count == 1 {
