@@ -1,9 +1,7 @@
 import SwiftTLA
-import SwiftTLAMacros
 
-@TLAModel
 public struct DieHard {
-    static var spec: TLASpec {
+    public static var spec: TLASpec {
         TLASpec("DieHard") {
             Extends("Naturals")
             let big = Var("big", value: 0)

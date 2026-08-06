@@ -1,12 +1,10 @@
 import SwiftTLA
-import SwiftTLAMacros
 
 /// Paxos consensus algorithm (simplified: 1 leader, 2 acceptors, 2 values).
 /// Uses record-based messages: msg.type, msg.bal, msg.val.
 /// Proves that once a value is chosen, no other value can be chosen.
-@TLAModel
 public struct Paxos {
-    static var spec: TLASpec {
+    public static var spec: TLASpec {
         TLASpec("Paxos") {
             Extends("Integers")
             let phase = Var<Int>("phase", value: 0)

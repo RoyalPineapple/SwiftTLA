@@ -1,6 +1,8 @@
 // swift-tools-version: 5.9
 import PackageDescription
 
+/// Validated upstream ports live in the root `UpstreamParity` product.
+/// This package is a thin CLI that lists and emits them. Views come later.
 let package = Package(
     name: "Examples",
     platforms: [.macOS(.v14)],
@@ -8,21 +10,13 @@ let package = Package(
         .package(path: "../"),
     ],
     targets: [
-        .target(
-            name: "ExamplesLibrary",
-            dependencies: [
-                .product(name: "SwiftTLA", package: "SwiftTLA"),
-                .product(name: "SwiftTLAMacros", package: "SwiftTLA"),
-            ],
-            path: "Sources/Examples"
-        ),
         .executableTarget(
             name: "Examples",
             dependencies: [
-                "ExamplesLibrary",
-                .product(name: "SwiftTLAUI", package: "SwiftTLA"),
+                .product(name: "SwiftTLA", package: "SwiftTLA"),
+                .product(name: "UpstreamParity", package: "SwiftTLA"),
             ],
-            path: "Sources/ExamplesApp"
+            path: "Sources/ExamplesCLI"
         ),
     ]
 )

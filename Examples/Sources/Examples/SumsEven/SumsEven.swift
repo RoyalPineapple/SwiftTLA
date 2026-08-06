@@ -1,9 +1,7 @@
 import SwiftTLA
-import SwiftTLAMacros
 
-@TLAModel
 public struct SumsEven {
-    static var spec: TLASpec {
+    public static var spec: TLASpec {
         TLASpec("sums_even") {
             Extends("Naturals")
             let sum = Var("sum", value: 0)

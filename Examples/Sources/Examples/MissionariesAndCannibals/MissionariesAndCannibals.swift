@@ -1,11 +1,9 @@
 import SwiftTLA
-import SwiftTLAMacros
 
 /// Missionaries and Cannibals: 3 missionaries and 3 cannibals must cross a river.
 /// Boat carries 1-2 people. Cannibals must never outnumber missionaries on either bank.
-@TLAModel
 public struct MissionariesAndCannibals {
-    static var spec: TLASpec {
+    public static var spec: TLASpec {
         TLASpec("MissionariesAndCannibals") {
             Extends("Naturals")
             let ml = Var<Int>("ml", value: 3)   // missionaries left

@@ -45,7 +45,6 @@ public struct StateMachineGenerator {
             try actionEnum()
             try transitionsProperty()
             DeclSyntax(stringLiteral: "public var availableTransitions: [Transition] { transitions.map { $0.action } }")
-            DeclSyntax(stringLiteral: "public var enabledTransitions: [Transition] { availableTransitions }")
             try applyMethod()
             try descriptionProperty()
         }

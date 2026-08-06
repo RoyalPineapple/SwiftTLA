@@ -27,22 +27,37 @@ public enum ActionEnumerator {
     ) throws -> [[String: TLAValue]] {
         let chooseAssignments = try extractChooseActions(action)
         if !chooseAssignments.isEmpty {
-            var results: [[String: TLAValue]] = []
+            // Cartesian product: each CHOOSE binds in an environment that
+            // already includes earlier choose bindings (set expr may depend on them).
+            var partials: [[String: TLAValue]] = [[:]]
             for (varName, setExpr) in chooseAssignments {
-                guard case .set(let sv) = try Evaluator.evaluate(setExpr, in: oldState) else {
-                    throw ActionError.invalidActionForm("CHOOSE set for \(varName) must be a set")
+                var next: [[String: TLAValue]] = []
+                for partial in partials {
+                    let env = oldState.merging(partial) { _, new in new }
+                    guard case .set(let sv) = try Evaluator.evaluate(setExpr, in: env) else {
+                        throw ActionError.invalidActionForm("CHOOSE set for \(varName) must be a set")
+                    }
+                    for elem in sv {
+                        var binding = partial
+                        binding[varName] = elem
+                        next.append(binding)
+                    }
                 }
-                for elem in sv {
-                    // Make the chosen value available in the state so subsequent
-                    // expressions (function applies, guards) can reference it.
-                    var enrichedState = oldState
-                    enrichedState[varName] = elem
-                    guard let baseState = try applyNonChooseAssignments(action, oldState: enrichedState, varNames: varNames, skip: varName)
-                    else { continue }
-                    var finalState = baseState
-                    finalState[varName] = elem
-                    results.append(finalState)
+                partials = next
+            }
+
+            let skip = Set(chooseAssignments.map(\.0))
+            var results: [[String: TLAValue]] = []
+            for partial in partials {
+                let enriched = oldState.merging(partial) { _, new in new }
+                guard let baseState = try applyNonChooseAssignments(
+                    action, oldState: enriched, varNames: varNames, skip: skip
+                ) else { continue }
+                var finalState = baseState
+                for (name, value) in partial {
+                    finalState[name] = value
                 }
+                results.append(finalState)
             }
             return results
         }
@@ -66,7 +81,7 @@ public enum ActionEnumerator {
         _ action: ActionExpr,
         oldState: [String: TLAValue],
         varNames: [String],
-        skip: String
+        skip: Set<String>
     ) throws -> [String: TLAValue]? {
         let (assignments, guards) = try extractAssignments(action)
         guard try Evaluator.evaluateBool(
@@ -75,7 +90,7 @@ public enum ActionEnumerator {
         ) else { return nil }
 
         var newState = oldState
-        for varName in varNames where varName != skip {
+        for varName in varNames where !skip.contains(varName) {
             if let rhs = assignments[varName] {
                 newState[varName] = try Evaluator.evaluate(rhs, in: oldState)
             }
@@ -83,7 +98,6 @@ public enum ActionEnumerator {
         return newState
     }
 
-    /// Flattens OR at all levels by distributing AND over OR
     private static func distOr(_ action: ActionExpr) -> [ActionExpr] {
         switch action {
         case .or(let a, let b):

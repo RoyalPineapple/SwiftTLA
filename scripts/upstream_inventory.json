@@ -1,0 +1,5750 @@
+{
+  "exhaustive_success": [
+    {
+      "spec": "Bakery-Boulangerie",
+      "module": "MCBakery.tla",
+      "cfg": "MCBakery.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:10",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "Bakery-Boulangerie",
+      "module": "MCBoulanger.tla",
+      "cfg": "MCBoulanger.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:01:00",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "CarTalkPuzzle",
+      "module": "MC.tla",
+      "cfg": "MC.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "CarTalkPuzzle",
+      "module": "MC.tla",
+      "cfg": "MC.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:05",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "Chameneos",
+      "module": "Chameneos.tla",
+      "cfg": "Chameneos.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "CheckpointCoordination",
+      "module": "MCCheckpointCoordination.tla",
+      "cfg": "MCCheckpointCoordination.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:01:00",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "CigaretteSmokers",
+      "module": "CigaretteSmokers.tla",
+      "cfg": "CigaretteSmokers.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "CoffeeCan",
+      "module": "CoffeeCan.tla",
+      "cfg": "CoffeeCan1000Beans.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:15",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "CoffeeCan",
+      "module": "CoffeeCan.tla",
+      "cfg": "CoffeeCan100Beans.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:05",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "CoffeeCan",
+      "module": "CoffeeCan.tla",
+      "cfg": "CoffeeCan3000Beans.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:02:30",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "DiningPhilosophers",
+      "module": "DiningPhilosophers.tla",
+      "cfg": "DiningPhilosophers.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": true,
+      "features": "pluscal"
+    },
+    {
+      "spec": "Disruptor",
+      "module": "Disruptor_MPMC.tla",
+      "cfg": "Disruptor_MPMC.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:10",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "Disruptor",
+      "module": "Disruptor_MPMC.tla",
+      "cfg": "Disruptor_MPMC_liveliness.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:10",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "Disruptor",
+      "module": "Disruptor_SPMC.tla",
+      "cfg": "Disruptor_SPMC.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:10",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "FiniteMonotonic",
+      "module": "MCCRDT.tla",
+      "cfg": "MCCRDT.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:05",
+      "beginner": false,
+      "features": "action composition"
+    },
+    {
+      "spec": "FiniteMonotonic",
+      "module": "MCReplicatedLog.tla",
+      "cfg": "MCReplicatedLog.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:05",
+      "beginner": false,
+      "features": "action composition"
+    },
+    {
+      "spec": "FlashProtocol",
+      "module": "MCFlashWithMutex.tla",
+      "cfg": "MCFlashWithMutex.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:04",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "FlashProtocol",
+      "module": "MCFlashWithMutexLive.tla",
+      "cfg": "MCFlashWithMutexLive.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:04:44",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "GameOfLife",
+      "module": "GameOfLife.tla",
+      "cfg": "GameOfLife.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:05",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "GermanProtocol",
+      "module": "MCGermanCMPWithMutex.tla",
+      "cfg": "MCGermanCMPWithMutex.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "GermanProtocol",
+      "module": "MCGermanControl.tla",
+      "cfg": "MCGermanControl.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "GermanProtocol",
+      "module": "MCGermanData.tla",
+      "cfg": "MCGermanData.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "Huang",
+      "module": "Huang.tla",
+      "cfg": "Huang.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:40",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "KeyValueStore",
+      "module": "MCKVS.tla",
+      "cfg": "MCKVSSafetyLarge.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "07:16:00",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "KeyValueStore",
+      "module": "MCKVS.tla",
+      "cfg": "MCKVSSafetyMedium.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:04:30",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "KeyValueStore",
+      "module": "MCKVS.tla",
+      "cfg": "MCKVSSafetySmall.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:40",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "KeyValueStore",
+      "module": "MCKVsnap.tla",
+      "cfg": "MCKVsnap.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:50",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "LearnProofs",
+      "module": "MCFindHighest.tla",
+      "cfg": "MCFindHighest.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "LeastCircularSubstring",
+      "module": "MCLeastCircularSubstring.tla",
+      "cfg": "MCLeastCircularSubstringMedium.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:01:00",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "LeastCircularSubstring",
+      "module": "MCLeastCircularSubstring.tla",
+      "cfg": "MCLeastCircularSubstringSmall.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:05",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "LoopInvariance",
+      "module": "MCBinarySearch.tla",
+      "cfg": "MCBinarySearch.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:05",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "LoopInvariance",
+      "module": "MCQuicksort.tla",
+      "cfg": "MCQuicksort.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:05",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "Majority",
+      "module": "MCMajority.tla",
+      "cfg": "MCMajority.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:05",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "MisraReachability",
+      "module": "MCParReach.tla",
+      "cfg": "MCParReach.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:30",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "MisraReachability",
+      "module": "MCReachabilityTest.tla",
+      "cfg": "MCReachabilityTestAllGraphs.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:20",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "MisraReachability",
+      "module": "MCReachabilityTest.tla",
+      "cfg": "MCReachabilityTestRandomGraphs.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:10",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "MisraReachability",
+      "module": "MCReachable.tla",
+      "cfg": "MCReachable.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:01:30",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "Moving_Cat_Puzzle",
+      "module": "Cat.tla",
+      "cfg": "CatEvenBoxes.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "Moving_Cat_Puzzle",
+      "module": "Cat.tla",
+      "cfg": "CatOddBoxes.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "MultiCarElevator",
+      "module": "Elevator.tla",
+      "cfg": "ElevatorLivenessLarge.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:11:00",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "MultiCarElevator",
+      "module": "Elevator.tla",
+      "cfg": "ElevatorLivenessMedium.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:10",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "MultiCarElevator",
+      "module": "Elevator.tla",
+      "cfg": "ElevatorSafetyLarge.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:10:00",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "MultiCarElevator",
+      "module": "Elevator.tla",
+      "cfg": "ElevatorSafetyMedium.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:03:00",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "MultiCarElevator",
+      "module": "Elevator.tla",
+      "cfg": "ElevatorSafetySmall.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:15",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "MultiPaxos-SMR",
+      "module": "MultiPaxos_MC.tla",
+      "cfg": "MultiPaxos_MC.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:07:53",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "MultiPaxos-SMR",
+      "module": "MultiPaxos_MC.tla",
+      "cfg": "MultiPaxos_MC_small.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:10",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "NanoBlockchain",
+      "module": "MCNano.tla",
+      "cfg": "MCNanoLarge.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:20:00",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "NanoBlockchain",
+      "module": "MCNano.tla",
+      "cfg": "MCNanoMedium.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:15",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "NanoBlockchain",
+      "module": "MCNano.tla",
+      "cfg": "MCNanoSmall.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:05",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "Paxos",
+      "module": "MCConsensus.tla",
+      "cfg": "MCConsensus.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "Paxos",
+      "module": "MCPaxos.tla",
+      "cfg": "MCPaxos.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "Paxos",
+      "module": "MCVoting.tla",
+      "cfg": "MCVoting.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "PaxosHowToWinATuringAward",
+      "module": "MCConsensus.tla",
+      "cfg": "MCConsensus.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "PaxosHowToWinATuringAward",
+      "module": "MCPaxos.tla",
+      "cfg": "MCPaxosSmall.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:01:00",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "PaxosHowToWinATuringAward",
+      "module": "MCPaxos.tla",
+      "cfg": "MCPaxosTiny.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "PaxosHowToWinATuringAward",
+      "module": "MCVoting.tla",
+      "cfg": "MCVoting.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "Prisoners",
+      "module": "Prisoners.tla",
+      "cfg": "Prisoners.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "Prisoners_Single_Switch",
+      "module": "Prisoner.tla",
+      "cfg": "Prisoner.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "Prisoners_Single_Switch",
+      "module": "Prisoner.tla",
+      "cfg": "PrisonerLightUnknown.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "Prisoners_Single_Switch",
+      "module": "Prisoner.tla",
+      "cfg": "PrisonerSolo.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "Prisoners_Single_Switch",
+      "module": "Prisoner.tla",
+      "cfg": "PrisonerSoloLightUnknown.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "ReadersWriters",
+      "module": "MC.tla",
+      "cfg": "MC.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:05",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "SDP_Verification",
+      "module": "MC.tla",
+      "cfg": "MC.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "SimplifiedFastPaxos",
+      "module": "FastPaxos.tla",
+      "cfg": "FastPaxos.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:20",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "SimplifiedFastPaxos",
+      "module": "Paxos.tla",
+      "cfg": "Paxos.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:05",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "SingleLaneBridge",
+      "module": "MC.tla",
+      "cfg": "MC.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:10",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "SlushProtocol",
+      "module": "Slush.tla",
+      "cfg": "SlushLarge.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:50:00",
+      "beginner": false,
+      "features": "pluscal"
+    },
+    {
+      "spec": "SlushProtocol",
+      "module": "Slush.tla",
+      "cfg": "SlushMedium.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:01:00",
+      "beginner": false,
+      "features": "pluscal"
+    },
+    {
+      "spec": "SlushProtocol",
+      "module": "Slush.tla",
+      "cfg": "SlushSmall.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:15",
+      "beginner": false,
+      "features": "pluscal"
+    },
+    {
+      "spec": "SpanningTree",
+      "module": "SpanTree.tla",
+      "cfg": "SpanTree.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "SpanningTree",
+      "module": "SpanTreeRandom.tla",
+      "cfg": "SpanTreeRandom.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "SpanningTree",
+      "module": "SpanTreeTest.tla",
+      "cfg": "SpanTreeTest4Nodes.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "SpecifyingSystems",
+      "module": "MCInnerSequential.tla",
+      "cfg": "MCInnerSequential.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "SpecifyingSystems",
+      "module": "MCInnerSerial.tla",
+      "cfg": "MCInnerSerial.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:01:30",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "SpecifyingSystems",
+      "module": "AsynchInterface.tla",
+      "cfg": "AsynchInterface.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "SpecifyingSystems",
+      "module": "Channel.tla",
+      "cfg": "Channel.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "SpecifyingSystems",
+      "module": "PrintValues.tla",
+      "cfg": "PrintValues.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "SpecifyingSystems",
+      "module": "MCInternalMemory.tla",
+      "cfg": "MCInternalMemory.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "SpecifyingSystems",
+      "module": "MCWriteThroughCache.tla",
+      "cfg": "MCWriteThroughCache.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "SpecifyingSystems",
+      "module": "MCInnerFIFO.tla",
+      "cfg": "MCInnerFIFO.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "SpecifyingSystems",
+      "module": "HourClock.tla",
+      "cfg": "HourClock.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "SpecifyingSystems",
+      "module": "HourClock2.tla",
+      "cfg": "HourClock2.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "SpecifyingSystems",
+      "module": "LiveHourClock.tla",
+      "cfg": "LiveHourClock.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "SpecifyingSystems",
+      "module": "MCLiveInternalMemory.tla",
+      "cfg": "MCLiveInternalMemory.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "SpecifyingSystems",
+      "module": "MCLiveWriteThroughCache.tla",
+      "cfg": "MCLiveWriteThroughCache.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:05",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "SpecifyingSystems",
+      "module": "SimpleMath.tla",
+      "cfg": "SimpleMath.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "SpecifyingSystems",
+      "module": "ABCorrectness.tla",
+      "cfg": "ABCorrectness.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "SpecifyingSystems",
+      "module": "MCAlternatingBit.tla",
+      "cfg": "MCAlternatingBit.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "Stones",
+      "module": "Stones.tla",
+      "cfg": "Stones.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "TLC",
+      "module": "TestGraphs.tla",
+      "cfg": "TestGraphs.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:05",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "TLC",
+      "module": "TestMCReachability.tla",
+      "cfg": "TestMCReachability.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "unknown",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "TeachingConcurrency",
+      "module": "Simple.tla",
+      "cfg": "Simple.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": true,
+      "features": "pluscal"
+    },
+    {
+      "spec": "TeachingConcurrency",
+      "module": "SimpleRegular.tla",
+      "cfg": "SimpleRegular.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:05",
+      "beginner": true,
+      "features": "pluscal"
+    },
+    {
+      "spec": "TransitiveClosure",
+      "module": "TransitiveClosure.tla",
+      "cfg": "TransitiveClosure.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:05",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "TwoPhase",
+      "module": "MCTwoPhase.tla",
+      "cfg": "MCTwoPhase.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "YoYo",
+      "module": "MCYoYoNoPruning.tla",
+      "cfg": "MCYoYoNoPruning.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "YoYo",
+      "module": "MCYoYoPruning.tla",
+      "cfg": "MCYoYoPruning.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "YoYo",
+      "module": "YoYoAllGraphs.tla",
+      "cfg": "YoYoAllGraphs.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:02",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "aba-asyn-byz",
+      "module": "aba_asyn_byz.tla",
+      "cfg": "aba_asyn_byz.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:10:00",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "acp",
+      "module": "ACP_NB_TLC.tla",
+      "cfg": "ACP_NB_TLC.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "acp",
+      "module": "ACP_SB_TLC.tla",
+      "cfg": "ACP_SB_TLC.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "allocator",
+      "module": "AllocatorImplementation.tla",
+      "cfg": "AllocatorImplementation.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:15",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "allocator",
+      "module": "AllocatorRefinement.tla",
+      "cfg": "AllocatorRefinement.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:05",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "allocator",
+      "module": "SchedulingAllocator.tla",
+      "cfg": "SchedulingAllocator.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:10",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "allocator",
+      "module": "SimpleAllocator.tla",
+      "cfg": "SimpleAllocator.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:05",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "barriers",
+      "module": "Barrier.tla",
+      "cfg": "Barrier.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "barriers",
+      "module": "Barriers.tla",
+      "cfg": "Barriers.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:05",
+      "beginner": false,
+      "features": "pluscal"
+    },
+    {
+      "spec": "bcastByz",
+      "module": "bcastByz.tla",
+      "cfg": "bcastByz.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:10",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "bcastByz",
+      "module": "bcastByz.tla",
+      "cfg": "bcastByzNoBcast.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "bcastFolklore",
+      "module": "bcastFolklore.tla",
+      "cfg": "bcastFolklore.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:30:00",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "bosco",
+      "module": "bosco.tla",
+      "cfg": "bosco.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:03:00",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "braf",
+      "module": "BufferedRandomAccessFile.tla",
+      "cfg": "BufferedRandomAccessFile.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:09",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "btree",
+      "module": "btree.tla",
+      "cfg": "btree.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:15",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "btree",
+      "module": "kvstore.tla",
+      "cfg": "kvstore.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "byihive",
+      "module": "VoucherCancel.tla",
+      "cfg": "VoucherCancel.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "byihive",
+      "module": "VoucherIssue.tla",
+      "cfg": "VoucherIssue.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "byihive",
+      "module": "VoucherLifeCycle.tla",
+      "cfg": "VoucherLifeCycle.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "byihive",
+      "module": "VoucherRedeem.tla",
+      "cfg": "VoucherRedeem.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "byihive",
+      "module": "VoucherTransfer.tla",
+      "cfg": "VoucherTransfer.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "byzpaxos",
+      "module": "Consensus.tla",
+      "cfg": "Consensus.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": "pluscal"
+    },
+    {
+      "spec": "byzpaxos",
+      "module": "PConProof.tla",
+      "cfg": "PConProof.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:06:00",
+      "beginner": false,
+      "features": "pluscal"
+    },
+    {
+      "spec": "byzpaxos",
+      "module": "VoteProof.tla",
+      "cfg": "VoteProof.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:05",
+      "beginner": false,
+      "features": "pluscal"
+    },
+    {
+      "spec": "cf1s-folklore",
+      "module": "cf1s_folklore.tla",
+      "cfg": "cf1s_folklore.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:01:00",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "chang_roberts",
+      "module": "MCChangRoberts.tla",
+      "cfg": "MCChangRoberts.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "dag-consensus",
+      "module": "BlockDagTest.tla",
+      "cfg": "BlockDagTest.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:10",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "dag-consensus",
+      "module": "TLCSailfish1.tla",
+      "cfg": "TLCSailfish1.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:10",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "dag-consensus",
+      "module": "TLCSailfish2.tla",
+      "cfg": "TLCSailfish2.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "unknown",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "detector_chan96",
+      "module": "EnvironmentController.tla",
+      "cfg": "EnvironmentController.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "02:00:00",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "dijkstra-mutex",
+      "module": "MC.tla",
+      "cfg": "MC.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:50",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "dijkstra-mutex",
+      "module": "MC.tla",
+      "cfg": "MC.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:02:00",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "echo",
+      "module": "MCEcho.tla",
+      "cfg": "MCEcho.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "ewd426",
+      "module": "TokenRing.tla",
+      "cfg": "TokenRing.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:05",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "ewd687a",
+      "module": "MCEWD687a.tla",
+      "cfg": "MCEWD687a.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:01:00",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "ewd840",
+      "module": "EWD840.tla",
+      "cfg": "EWD840.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "ewd840",
+      "module": "EWD840_json.tla",
+      "cfg": "EWD840_json.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "ewd840",
+      "module": "SyncTerminationDetection.tla",
+      "cfg": "SyncTerminationDetection.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "ewd998",
+      "module": "AsyncTerminationDetection.tla",
+      "cfg": "AsyncTerminationDetection.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "ewd998",
+      "module": "EWD998.tla",
+      "cfg": "EWD998.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:50:00",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "ewd998",
+      "module": "EWD998.tla",
+      "cfg": "EWD998Small.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:05:00",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "ewd998",
+      "module": "EWD998Chan.tla",
+      "cfg": "EWD998Chan.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:05:00",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "ewd998",
+      "module": "EWD998ChanID.tla",
+      "cfg": "EWD998ChanID.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:05",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "ewd998",
+      "module": "EWD998ChanTrace.tla",
+      "cfg": "EWD998ChanTrace.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "ewd998",
+      "module": "EWD998PCal.tla",
+      "cfg": "EWD998PCal.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:21",
+      "beginner": false,
+      "features": "pluscal"
+    },
+    {
+      "spec": "glowingRaccoon",
+      "module": "clean.tla",
+      "cfg": "clean.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "glowingRaccoon",
+      "module": "product.tla",
+      "cfg": "product.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "glowingRaccoon",
+      "module": "stages.tla",
+      "cfg": "stages.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "lamport_mutex",
+      "module": "MCLamportMutex.tla",
+      "cfg": "MCLamportMutex.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:10",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "locks_auxiliary_vars",
+      "module": "Lock.tla",
+      "cfg": "Lock.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": "pluscal"
+    },
+    {
+      "spec": "locks_auxiliary_vars",
+      "module": "LockHS.tla",
+      "cfg": "LockHS.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "locks_auxiliary_vars",
+      "module": "Peterson.tla",
+      "cfg": "Peterson.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": "pluscal"
+    },
+    {
+      "spec": "nbacc_ray97",
+      "module": "nbacc_ray97.tla",
+      "cfg": "nbacc_ray97.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "nbacg_guer01",
+      "module": "nbacg_guer01.tla",
+      "cfg": "nbacg_guer01.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:05",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "sums_even",
+      "module": "MC_sums_even.tla",
+      "cfg": "MC_sums_even.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "tcp",
+      "module": "MCtcp.tla",
+      "cfg": "MCtcp.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "transaction_commit",
+      "module": "2PCwithBTM.tla",
+      "cfg": "2PCwithBTM.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": "pluscal"
+    },
+    {
+      "spec": "transaction_commit",
+      "module": "PaxosCommit.tla",
+      "cfg": "PaxosCommit.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:01:00",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "transaction_commit",
+      "module": "TCommit.tla",
+      "cfg": "TCommit.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "transaction_commit",
+      "module": "TwoPhase.tla",
+      "cfg": "TwoPhase.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    }
+  ],
+  "exhaustive_all": [
+    {
+      "spec": "Bakery-Boulangerie",
+      "module": "MCBakery.tla",
+      "cfg": "MCBakery.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:10",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "Bakery-Boulangerie",
+      "module": "MCBoulanger.tla",
+      "cfg": "MCBoulanger.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:01:00",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "CarTalkPuzzle",
+      "module": "MC.tla",
+      "cfg": "MC.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "CarTalkPuzzle",
+      "module": "MC.tla",
+      "cfg": "MC.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:05",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "CarTalkPuzzle",
+      "module": "MC.tla",
+      "cfg": "MC.cfg",
+      "mode": "exhaustive search",
+      "result": "unknown",
+      "runtime": "unknown",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "Chameneos",
+      "module": "Chameneos.tla",
+      "cfg": "Chameneos.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "CheckpointCoordination",
+      "module": "MCCheckpointCoordination.tla",
+      "cfg": "MCCheckpointCoordination.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:01:00",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "CheckpointCoordination",
+      "module": "MCCheckpointCoordination.tla",
+      "cfg": "MCCheckpointCoordinationFailure.cfg",
+      "mode": "exhaustive search",
+      "result": "safety failure",
+      "runtime": "00:00:10",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "CigaretteSmokers",
+      "module": "CigaretteSmokers.tla",
+      "cfg": "CigaretteSmokers.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "CoffeeCan",
+      "module": "CoffeeCan.tla",
+      "cfg": "CoffeeCan1000Beans.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:15",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "CoffeeCan",
+      "module": "CoffeeCan.tla",
+      "cfg": "CoffeeCan100Beans.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:05",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "CoffeeCan",
+      "module": "CoffeeCan.tla",
+      "cfg": "CoffeeCan3000Beans.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:02:30",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "DieHard",
+      "module": "DieHard.tla",
+      "cfg": "DieHard.cfg",
+      "mode": "exhaustive search",
+      "result": "safety failure",
+      "runtime": "00:00:01",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "DieHard",
+      "module": "MCDieHarder.tla",
+      "cfg": "MCDieHarder.cfg",
+      "mode": "exhaustive search",
+      "result": "safety failure",
+      "runtime": "00:00:01",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "DieHard",
+      "module": "MCDieHardest.tla",
+      "cfg": "MCDieHardest.cfg",
+      "mode": "exhaustive search",
+      "result": "safety failure",
+      "runtime": "00:00:01",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "DiningPhilosophers",
+      "module": "DiningPhilosophers.tla",
+      "cfg": "DiningPhilosophers.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": true,
+      "features": "pluscal"
+    },
+    {
+      "spec": "Disruptor",
+      "module": "Disruptor_MPMC.tla",
+      "cfg": "Disruptor_MPMC.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:10",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "Disruptor",
+      "module": "Disruptor_MPMC.tla",
+      "cfg": "Disruptor_MPMC_liveliness.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:10",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "Disruptor",
+      "module": "Disruptor_SPMC.tla",
+      "cfg": "Disruptor_SPMC.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:10",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "FiniteMonotonic",
+      "module": "MCCRDT.tla",
+      "cfg": "MCCRDT.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:05",
+      "beginner": false,
+      "features": "action composition"
+    },
+    {
+      "spec": "FiniteMonotonic",
+      "module": "MCDistributedReplicatedLog.tla",
+      "cfg": "MCDistributedReplicatedLog.cfg",
+      "mode": "exhaustive search",
+      "result": "liveness failure",
+      "runtime": "00:00:05",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "FiniteMonotonic",
+      "module": "MCReplicatedLog.tla",
+      "cfg": "MCReplicatedLog.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:05",
+      "beginner": false,
+      "features": "action composition"
+    },
+    {
+      "spec": "FlashProtocol",
+      "module": "MCFlashWithMutex.tla",
+      "cfg": "MCFlashWithMutex.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:04",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "FlashProtocol",
+      "module": "MCFlashWithMutexLive.tla",
+      "cfg": "MCFlashWithMutexLive.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:04:44",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "GameOfLife",
+      "module": "GameOfLife.tla",
+      "cfg": "GameOfLife.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:05",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "GermanProtocol",
+      "module": "MCGermanCMPWithMutex.tla",
+      "cfg": "MCGermanCMPWithMutex.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "GermanProtocol",
+      "module": "MCGermanControl.tla",
+      "cfg": "MCGermanControl.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "GermanProtocol",
+      "module": "MCGermanData.tla",
+      "cfg": "MCGermanData.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "Huang",
+      "module": "Huang.tla",
+      "cfg": "Huang.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:40",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "KeyValueStore",
+      "module": "MCKVS.tla",
+      "cfg": "MCKVSSafetyLarge.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "07:16:00",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "KeyValueStore",
+      "module": "MCKVS.tla",
+      "cfg": "MCKVSSafetyMedium.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:04:30",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "KeyValueStore",
+      "module": "MCKVS.tla",
+      "cfg": "MCKVSSafetySmall.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:40",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "KeyValueStore",
+      "module": "MCKVsnap.tla",
+      "cfg": "MCKVsnap.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:50",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "LearnProofs",
+      "module": "MCFindHighest.tla",
+      "cfg": "MCFindHighest.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "LeastCircularSubstring",
+      "module": "MCLeastCircularSubstring.tla",
+      "cfg": "MCLeastCircularSubstringMedium.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:01:00",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "LeastCircularSubstring",
+      "module": "MCLeastCircularSubstring.tla",
+      "cfg": "MCLeastCircularSubstringSmall.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:05",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "LoopInvariance",
+      "module": "MCBinarySearch.tla",
+      "cfg": "MCBinarySearch.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:05",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "LoopInvariance",
+      "module": "MCQuicksort.tla",
+      "cfg": "MCQuicksort.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:05",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "Majority",
+      "module": "MCMajority.tla",
+      "cfg": "MCMajority.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:05",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "MisraReachability",
+      "module": "MCParReach.tla",
+      "cfg": "MCParReach.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:30",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "MisraReachability",
+      "module": "MCReachabilityTest.tla",
+      "cfg": "MCReachabilityTestAllGraphs.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:20",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "MisraReachability",
+      "module": "MCReachabilityTest.tla",
+      "cfg": "MCReachabilityTestRandomGraphs.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:10",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "MisraReachability",
+      "module": "MCReachable.tla",
+      "cfg": "MCReachable.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:01:30",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "MissionariesAndCannibals",
+      "module": "MissionariesAndCannibals.tla",
+      "cfg": "MissionariesAndCannibals.cfg",
+      "mode": "exhaustive search",
+      "result": "safety failure",
+      "runtime": "00:00:01",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "Moving_Cat_Puzzle",
+      "module": "Cat.tla",
+      "cfg": "CatEvenBoxes.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "Moving_Cat_Puzzle",
+      "module": "Cat.tla",
+      "cfg": "CatOddBoxes.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "MultiCarElevator",
+      "module": "Elevator.tla",
+      "cfg": "ElevatorLivenessLarge.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:11:00",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "MultiCarElevator",
+      "module": "Elevator.tla",
+      "cfg": "ElevatorLivenessMedium.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:10",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "MultiCarElevator",
+      "module": "Elevator.tla",
+      "cfg": "ElevatorSafetyLarge.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:10:00",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "MultiCarElevator",
+      "module": "Elevator.tla",
+      "cfg": "ElevatorSafetyMedium.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:03:00",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "MultiCarElevator",
+      "module": "Elevator.tla",
+      "cfg": "ElevatorSafetySmall.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:15",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "MultiPaxos-SMR",
+      "module": "MultiPaxos_MC.tla",
+      "cfg": "MultiPaxos_MC.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:07:53",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "MultiPaxos-SMR",
+      "module": "MultiPaxos_MC.tla",
+      "cfg": "MultiPaxos_MC_small.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:10",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "N-Queens",
+      "module": "MC.tla",
+      "cfg": "MC.cfg",
+      "mode": "exhaustive search",
+      "result": "safety failure",
+      "runtime": "00:00:01",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "N-Queens",
+      "module": "MC.tla",
+      "cfg": "MC.cfg",
+      "mode": "exhaustive search",
+      "result": "safety failure",
+      "runtime": "00:00:01",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "NanoBlockchain",
+      "module": "MCNano.tla",
+      "cfg": "MCNanoLarge.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:20:00",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "NanoBlockchain",
+      "module": "MCNano.tla",
+      "cfg": "MCNanoMedium.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:15",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "NanoBlockchain",
+      "module": "MCNano.tla",
+      "cfg": "MCNanoSmall.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:05",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "Paxos",
+      "module": "MCConsensus.tla",
+      "cfg": "MCConsensus.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "Paxos",
+      "module": "MCPaxos.tla",
+      "cfg": "MCPaxos.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "Paxos",
+      "module": "MCVoting.tla",
+      "cfg": "MCVoting.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "PaxosHowToWinATuringAward",
+      "module": "MCConsensus.tla",
+      "cfg": "MCConsensus.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "PaxosHowToWinATuringAward",
+      "module": "MCPaxos.tla",
+      "cfg": "MCPaxosSmall.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:01:00",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "PaxosHowToWinATuringAward",
+      "module": "MCPaxos.tla",
+      "cfg": "MCPaxosTiny.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "PaxosHowToWinATuringAward",
+      "module": "MCVoting.tla",
+      "cfg": "MCVoting.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "Prisoners",
+      "module": "Prisoners.tla",
+      "cfg": "Prisoners.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "Prisoners_Single_Switch",
+      "module": "Prisoner.tla",
+      "cfg": "Prisoner.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "Prisoners_Single_Switch",
+      "module": "Prisoner.tla",
+      "cfg": "PrisonerLightUnknown.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "Prisoners_Single_Switch",
+      "module": "Prisoner.tla",
+      "cfg": "PrisonerSolo.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "Prisoners_Single_Switch",
+      "module": "Prisoner.tla",
+      "cfg": "PrisonerSoloLightUnknown.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "ReadersWriters",
+      "module": "MC.tla",
+      "cfg": "MC.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:05",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "SDP_Verification",
+      "module": "MC.tla",
+      "cfg": "MC.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "SDP_Verification",
+      "module": "MC.tla",
+      "cfg": "MC.cfg",
+      "mode": "exhaustive search",
+      "result": "safety failure",
+      "runtime": "00:00:05",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "SimplifiedFastPaxos",
+      "module": "FastPaxos.tla",
+      "cfg": "FastPaxos.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:20",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "SimplifiedFastPaxos",
+      "module": "Paxos.tla",
+      "cfg": "Paxos.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:05",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "SingleLaneBridge",
+      "module": "MC.tla",
+      "cfg": "MC.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:10",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "SlidingPuzzles",
+      "module": "SlidingPuzzles.tla",
+      "cfg": "SlidingPuzzles.cfg",
+      "mode": "exhaustive search",
+      "result": "safety failure",
+      "runtime": "00:00:05",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "SlidingPuzzles",
+      "module": "SlidingPuzzles_anim.tla",
+      "cfg": "SlidingPuzzles_anim.cfg",
+      "mode": "exhaustive search",
+      "result": "safety failure",
+      "runtime": "00:00:10",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "SlushProtocol",
+      "module": "Slush.tla",
+      "cfg": "SlushLarge.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:50:00",
+      "beginner": false,
+      "features": "pluscal"
+    },
+    {
+      "spec": "SlushProtocol",
+      "module": "Slush.tla",
+      "cfg": "SlushMedium.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:01:00",
+      "beginner": false,
+      "features": "pluscal"
+    },
+    {
+      "spec": "SlushProtocol",
+      "module": "Slush.tla",
+      "cfg": "SlushSmall.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:15",
+      "beginner": false,
+      "features": "pluscal"
+    },
+    {
+      "spec": "SpanningTree",
+      "module": "SpanTree.tla",
+      "cfg": "SpanTree.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "SpanningTree",
+      "module": "SpanTreeRandom.tla",
+      "cfg": "SpanTreeRandom.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "SpanningTree",
+      "module": "SpanTreeTest.tla",
+      "cfg": "SpanTreeTest4Nodes.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "SpanningTree",
+      "module": "SpanTreeTest.tla",
+      "cfg": "SpanTreeTest5Nodes.cfg",
+      "mode": "exhaustive search",
+      "result": "unknown",
+      "runtime": "unknown",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "SpecifyingSystems",
+      "module": "MCInnerSequential.tla",
+      "cfg": "MCInnerSequential.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "SpecifyingSystems",
+      "module": "MCInnerSerial.tla",
+      "cfg": "MCInnerSerial.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:01:30",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "SpecifyingSystems",
+      "module": "AsynchInterface.tla",
+      "cfg": "AsynchInterface.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "SpecifyingSystems",
+      "module": "Channel.tla",
+      "cfg": "Channel.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "SpecifyingSystems",
+      "module": "PrintValues.tla",
+      "cfg": "PrintValues.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "SpecifyingSystems",
+      "module": "MCInternalMemory.tla",
+      "cfg": "MCInternalMemory.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "SpecifyingSystems",
+      "module": "MCWriteThroughCache.tla",
+      "cfg": "MCWriteThroughCache.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "SpecifyingSystems",
+      "module": "MCInnerFIFO.tla",
+      "cfg": "MCInnerFIFO.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "SpecifyingSystems",
+      "module": "HourClock.tla",
+      "cfg": "HourClock.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "SpecifyingSystems",
+      "module": "HourClock2.tla",
+      "cfg": "HourClock2.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "SpecifyingSystems",
+      "module": "LiveHourClock.tla",
+      "cfg": "LiveHourClock.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "SpecifyingSystems",
+      "module": "MCLiveInternalMemory.tla",
+      "cfg": "MCLiveInternalMemory.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "SpecifyingSystems",
+      "module": "MCLiveWriteThroughCache.tla",
+      "cfg": "MCLiveWriteThroughCache.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:05",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "SpecifyingSystems",
+      "module": "MCRealTimeHourClock.tla",
+      "cfg": "MCRealTimeHourClock.cfg",
+      "mode": "exhaustive search",
+      "result": "liveness failure",
+      "runtime": "00:00:01",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "SpecifyingSystems",
+      "module": "SimpleMath.tla",
+      "cfg": "SimpleMath.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "SpecifyingSystems",
+      "module": "ABCorrectness.tla",
+      "cfg": "ABCorrectness.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "SpecifyingSystems",
+      "module": "MCAlternatingBit.tla",
+      "cfg": "MCAlternatingBit.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "Stones",
+      "module": "Stones.tla",
+      "cfg": "Stones.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "TLC",
+      "module": "TestGraphs.tla",
+      "cfg": "TestGraphs.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:05",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "TLC",
+      "module": "TestMCReachability.tla",
+      "cfg": "TestMCReachability.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "unknown",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "TeachingConcurrency",
+      "module": "Simple.tla",
+      "cfg": "Simple.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": true,
+      "features": "pluscal"
+    },
+    {
+      "spec": "TeachingConcurrency",
+      "module": "SimpleRegular.tla",
+      "cfg": "SimpleRegular.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:05",
+      "beginner": true,
+      "features": "pluscal"
+    },
+    {
+      "spec": "TransitiveClosure",
+      "module": "TransitiveClosure.tla",
+      "cfg": "TransitiveClosure.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:05",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "TwoPhase",
+      "module": "MCTwoPhase.tla",
+      "cfg": "MCTwoPhase.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "YoYo",
+      "module": "MCYoYoNoPruning.tla",
+      "cfg": "MCYoYoNoPruning.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "YoYo",
+      "module": "MCYoYoPruning.tla",
+      "cfg": "MCYoYoPruning.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "YoYo",
+      "module": "YoYoAllGraphs.tla",
+      "cfg": "YoYoAllGraphs.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:02",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "aba-asyn-byz",
+      "module": "aba_asyn_byz.tla",
+      "cfg": "aba_asyn_byz.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:10:00",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "acp",
+      "module": "ACP_NB_TLC.tla",
+      "cfg": "ACP_NB_TLC.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "acp",
+      "module": "ACP_NB_WRONG_TLC.tla",
+      "cfg": "ACP_NB_WRONG_TLC.cfg",
+      "mode": "exhaustive search",
+      "result": "safety failure",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "acp",
+      "module": "ACP_SB_TLC.tla",
+      "cfg": "ACP_SB_TLC.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "allocator",
+      "module": "AllocatorImplementation.tla",
+      "cfg": "AllocatorImplementation.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:15",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "allocator",
+      "module": "AllocatorRefinement.tla",
+      "cfg": "AllocatorRefinement.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:05",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "allocator",
+      "module": "SchedulingAllocator.tla",
+      "cfg": "SchedulingAllocator.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:10",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "allocator",
+      "module": "SimpleAllocator.tla",
+      "cfg": "SimpleAllocator.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:05",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "barriers",
+      "module": "Barrier.tla",
+      "cfg": "Barrier.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "barriers",
+      "module": "Barriers.tla",
+      "cfg": "Barriers.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:05",
+      "beginner": false,
+      "features": "pluscal"
+    },
+    {
+      "spec": "bcastByz",
+      "module": "bcastByz.tla",
+      "cfg": "bcastByz.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:10",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "bcastByz",
+      "module": "bcastByz.tla",
+      "cfg": "bcastByzNoBcast.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "bcastFolklore",
+      "module": "bcastFolklore.tla",
+      "cfg": "bcastFolklore.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:30:00",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "bosco",
+      "module": "bosco.tla",
+      "cfg": "bosco.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:03:00",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "braf",
+      "module": "BufferedRandomAccessFile.tla",
+      "cfg": "BufferedRandomAccessFile.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:09",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "btree",
+      "module": "btree.tla",
+      "cfg": "btree.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:15",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "btree",
+      "module": "kvstore.tla",
+      "cfg": "kvstore.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "byihive",
+      "module": "VoucherCancel.tla",
+      "cfg": "VoucherCancel.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "byihive",
+      "module": "VoucherIssue.tla",
+      "cfg": "VoucherIssue.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "byihive",
+      "module": "VoucherLifeCycle.tla",
+      "cfg": "VoucherLifeCycle.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "byihive",
+      "module": "VoucherRedeem.tla",
+      "cfg": "VoucherRedeem.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "byihive",
+      "module": "VoucherTransfer.tla",
+      "cfg": "VoucherTransfer.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "byzpaxos",
+      "module": "BPConProof.tla",
+      "cfg": "BPConProof.cfg",
+      "mode": "exhaustive search",
+      "result": "unknown",
+      "runtime": "unknown",
+      "beginner": false,
+      "features": "pluscal"
+    },
+    {
+      "spec": "byzpaxos",
+      "module": "Consensus.tla",
+      "cfg": "Consensus.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": "pluscal"
+    },
+    {
+      "spec": "byzpaxos",
+      "module": "PConProof.tla",
+      "cfg": "PConProof.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:06:00",
+      "beginner": false,
+      "features": "pluscal"
+    },
+    {
+      "spec": "byzpaxos",
+      "module": "VoteProof.tla",
+      "cfg": "VoteProof.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:05",
+      "beginner": false,
+      "features": "pluscal"
+    },
+    {
+      "spec": "c1cs",
+      "module": "c1cs.tla",
+      "cfg": "c1cs.cfg",
+      "mode": "exhaustive search",
+      "result": "unknown",
+      "runtime": "unknown",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "cf1s-folklore",
+      "module": "cf1s_folklore.tla",
+      "cfg": "cf1s_folklore.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:01:00",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "chang_roberts",
+      "module": "MCChangRoberts.tla",
+      "cfg": "MCChangRoberts.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "dag-consensus",
+      "module": "BlockDagTest.tla",
+      "cfg": "BlockDagTest.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:10",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "dag-consensus",
+      "module": "TLCSailfish1.tla",
+      "cfg": "TLCSailfish1.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:10",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "dag-consensus",
+      "module": "TLCSailfish2.tla",
+      "cfg": "TLCSailfish2.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "unknown",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "detector_chan96",
+      "module": "EnvironmentController.tla",
+      "cfg": "EnvironmentController.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "02:00:00",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "dijkstra-mutex",
+      "module": "MC.tla",
+      "cfg": "MC.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:50",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "dijkstra-mutex",
+      "module": "MC.tla",
+      "cfg": "MC.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:02:00",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "diskpaxos",
+      "module": "MC_HDiskSynod.tla",
+      "cfg": "MC_HDiskSynod.cfg",
+      "mode": "exhaustive search",
+      "result": "unknown",
+      "runtime": "unknown",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "echo",
+      "module": "MCEcho.tla",
+      "cfg": "MCEcho.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "ewd426",
+      "module": "TokenRing.tla",
+      "cfg": "TokenRing.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:05",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "ewd687a",
+      "module": "MCEWD687a.tla",
+      "cfg": "MCEWD687a.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:01:00",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "ewd840",
+      "module": "EWD840.tla",
+      "cfg": "EWD840.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "ewd840",
+      "module": "EWD840_json.tla",
+      "cfg": "EWD840_json.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "ewd840",
+      "module": "SyncTerminationDetection.tla",
+      "cfg": "SyncTerminationDetection.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "ewd998",
+      "module": "AsyncTerminationDetection.tla",
+      "cfg": "AsyncTerminationDetection.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "ewd998",
+      "module": "EWD998.tla",
+      "cfg": "EWD998.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:50:00",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "ewd998",
+      "module": "EWD998.tla",
+      "cfg": "EWD998Small.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:05:00",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "ewd998",
+      "module": "EWD998Chan.tla",
+      "cfg": "EWD998Chan.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:05:00",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "ewd998",
+      "module": "EWD998ChanID.tla",
+      "cfg": "EWD998ChanID.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:05",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "ewd998",
+      "module": "EWD998ChanID_export.tla",
+      "cfg": "EWD998ChanID_export.cfg",
+      "mode": "exhaustive search",
+      "result": "unknown",
+      "runtime": "unknown",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "ewd998",
+      "module": "EWD998ChanID_shiviz.tla",
+      "cfg": "EWD998ChanID_shiviz.cfg",
+      "mode": "exhaustive search",
+      "result": "unknown",
+      "runtime": "unknown",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "ewd998",
+      "module": "EWD998ChanTrace.tla",
+      "cfg": "EWD998ChanTrace.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "ewd998",
+      "module": "EWD998PCal.tla",
+      "cfg": "EWD998PCal.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:21",
+      "beginner": false,
+      "features": "pluscal"
+    },
+    {
+      "spec": "ewd998",
+      "module": "SmokeEWD998_SC.tla",
+      "cfg": "SmokeEWD998_SC.cfg",
+      "mode": "exhaustive search",
+      "result": "unknown",
+      "runtime": "unknown",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "glowingRaccoon",
+      "module": "clean.tla",
+      "cfg": "clean.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "glowingRaccoon",
+      "module": "product.tla",
+      "cfg": "product.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "glowingRaccoon",
+      "module": "stages.tla",
+      "cfg": "stages.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "lamport_mutex",
+      "module": "MCLamportMutex.tla",
+      "cfg": "MCLamportMutex.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:10",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "locks_auxiliary_vars",
+      "module": "Lock.tla",
+      "cfg": "Lock.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": "pluscal"
+    },
+    {
+      "spec": "locks_auxiliary_vars",
+      "module": "LockHS.tla",
+      "cfg": "LockHS.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "locks_auxiliary_vars",
+      "module": "Peterson.tla",
+      "cfg": "Peterson.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": "pluscal"
+    },
+    {
+      "spec": "nbacc_ray97",
+      "module": "nbacc_ray97.tla",
+      "cfg": "nbacc_ray97.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "nbacg_guer01",
+      "module": "nbacg_guer01.tla",
+      "cfg": "nbacg_guer01.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:05",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "spanning",
+      "module": "MC_spanning.tla",
+      "cfg": "MC_spanning.cfg",
+      "mode": "exhaustive search",
+      "result": "safety failure",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "sums_even",
+      "module": "MC_sums_even.tla",
+      "cfg": "MC_sums_even.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "tcp",
+      "module": "MCtcp.tla",
+      "cfg": "MCtcp.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "tower_of_hanoi",
+      "module": "MC.tla",
+      "cfg": "MC.cfg",
+      "mode": "exhaustive search",
+      "result": "safety failure",
+      "runtime": "00:00:01",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "tower_of_hanoi",
+      "module": "Hanoi_anim.tla",
+      "cfg": "Hanoi_anim.cfg",
+      "mode": "exhaustive search",
+      "result": "safety failure",
+      "runtime": "00:00:01",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "transaction_commit",
+      "module": "2PCwithBTM.tla",
+      "cfg": "2PCwithBTM.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": "pluscal"
+    },
+    {
+      "spec": "transaction_commit",
+      "module": "PaxosCommit.tla",
+      "cfg": "PaxosCommit.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:01:00",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "transaction_commit",
+      "module": "TCommit.tla",
+      "cfg": "TCommit.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "transaction_commit",
+      "module": "TwoPhase.tla",
+      "cfg": "TwoPhase.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    }
+  ],
+  "all_models": [
+    {
+      "spec": "Bakery-Boulangerie",
+      "module": "MCBakery.tla",
+      "cfg": "MCBakery.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:10",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "Bakery-Boulangerie",
+      "module": "MCBoulanger.tla",
+      "cfg": "MCBoulanger.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:01:00",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "CarTalkPuzzle",
+      "module": "MC.tla",
+      "cfg": "MC.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "CarTalkPuzzle",
+      "module": "MC.tla",
+      "cfg": "MC.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:05",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "CarTalkPuzzle",
+      "module": "MC.tla",
+      "cfg": "MC.cfg",
+      "mode": "exhaustive search",
+      "result": "unknown",
+      "runtime": "unknown",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "Chameneos",
+      "module": "Chameneos.tla",
+      "cfg": "Chameneos.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "CheckpointCoordination",
+      "module": "MCCheckpointCoordination.tla",
+      "cfg": "MCCheckpointCoordination.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:01:00",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "CheckpointCoordination",
+      "module": "MCCheckpointCoordination.tla",
+      "cfg": "MCCheckpointCoordinationFailure.cfg",
+      "mode": "exhaustive search",
+      "result": "safety failure",
+      "runtime": "00:00:10",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "CigaretteSmokers",
+      "module": "APCigaretteSmokers.tla",
+      "cfg": "APCigaretteSmokers.cfg",
+      "mode": "symbolic",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "CigaretteSmokers",
+      "module": "CigaretteSmokers.tla",
+      "cfg": "CigaretteSmokers.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "CoffeeCan",
+      "module": "APCoffeeCan.tla",
+      "cfg": "APCoffeeCan.cfg",
+      "mode": "symbolic",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "CoffeeCan",
+      "module": "CoffeeCan.tla",
+      "cfg": "CoffeeCan1000Beans.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:15",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "CoffeeCan",
+      "module": "CoffeeCan.tla",
+      "cfg": "CoffeeCan100Beans.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:05",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "CoffeeCan",
+      "module": "CoffeeCan.tla",
+      "cfg": "CoffeeCan3000Beans.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:02:30",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "DieHard",
+      "module": "APDieHarder.tla",
+      "cfg": "APDieHarder.cfg",
+      "mode": "symbolic",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "DieHard",
+      "module": "DieHard.tla",
+      "cfg": "DieHard.cfg",
+      "mode": "exhaustive search",
+      "result": "safety failure",
+      "runtime": "00:00:01",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "DieHard",
+      "module": "MCDieHarder.tla",
+      "cfg": "MCDieHarder.cfg",
+      "mode": "exhaustive search",
+      "result": "safety failure",
+      "runtime": "00:00:01",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "DieHard",
+      "module": "MCDieHardest.tla",
+      "cfg": "MCDieHardest.cfg",
+      "mode": "exhaustive search",
+      "result": "safety failure",
+      "runtime": "00:00:01",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "DiningPhilosophers",
+      "module": "APDiningPhilosophers.tla",
+      "cfg": "APDiningPhilosophers.cfg",
+      "mode": "symbolic",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "DiningPhilosophers",
+      "module": "DiningPhilosophers.tla",
+      "cfg": "DiningPhilosophers.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": true,
+      "features": "pluscal"
+    },
+    {
+      "spec": "Disruptor",
+      "module": "APDisruptor_MPMC.tla",
+      "cfg": "APDisruptor_MPMC.cfg",
+      "mode": "symbolic",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "Disruptor",
+      "module": "APDisruptor_SPMC.tla",
+      "cfg": "APDisruptor_SPMC.cfg",
+      "mode": "symbolic",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "Disruptor",
+      "module": "Disruptor_MPMC.tla",
+      "cfg": "Disruptor_MPMC.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:10",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "Disruptor",
+      "module": "Disruptor_MPMC.tla",
+      "cfg": "Disruptor_MPMC_liveliness.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:10",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "Disruptor",
+      "module": "Disruptor_SPMC.tla",
+      "cfg": "Disruptor_SPMC.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:10",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "EinsteinRiddle",
+      "module": "Einstein.tla",
+      "cfg": "Einstein.cfg",
+      "mode": "symbolic",
+      "result": "safety failure",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "FiniteMonotonic",
+      "module": "APCRDT.tla",
+      "cfg": "APCRDT.cfg",
+      "mode": "symbolic",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "FiniteMonotonic",
+      "module": "APReplicatedLog.tla",
+      "cfg": "APReplicatedLog.cfg",
+      "mode": "symbolic",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "FiniteMonotonic",
+      "module": "MCCRDT.tla",
+      "cfg": "MCCRDT.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:05",
+      "beginner": false,
+      "features": "action composition"
+    },
+    {
+      "spec": "FiniteMonotonic",
+      "module": "MCDistributedReplicatedLog.tla",
+      "cfg": "MCDistributedReplicatedLog.cfg",
+      "mode": "exhaustive search",
+      "result": "liveness failure",
+      "runtime": "00:00:05",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "FiniteMonotonic",
+      "module": "MCReplicatedLog.tla",
+      "cfg": "MCReplicatedLog.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:05",
+      "beginner": false,
+      "features": "action composition"
+    },
+    {
+      "spec": "FlashProtocol",
+      "module": "APFlashWithMutex.tla",
+      "cfg": "APFlashWithMutex.cfg",
+      "mode": "symbolic",
+      "result": "success",
+      "runtime": "00:38:09",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "FlashProtocol",
+      "module": "MCFlashWithMutex.tla",
+      "cfg": "MCFlashWithMutex.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:04",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "FlashProtocol",
+      "module": "MCFlashWithMutexLive.tla",
+      "cfg": "MCFlashWithMutexLive.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:04:44",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "GameOfLife",
+      "module": "GameOfLife.tla",
+      "cfg": "GameOfLife.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:05",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "GermanProtocol",
+      "module": "APGermanCMPWithMutex.tla",
+      "cfg": "APGermanCMPWithMutex.cfg",
+      "mode": "symbolic",
+      "result": "success",
+      "runtime": "00:00:20",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "GermanProtocol",
+      "module": "APGermanControl.tla",
+      "cfg": "APGermanControl.cfg",
+      "mode": "symbolic",
+      "result": "success",
+      "runtime": "00:00:08",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "GermanProtocol",
+      "module": "APGermanData.tla",
+      "cfg": "APGermanData.cfg",
+      "mode": "symbolic",
+      "result": "success",
+      "runtime": "00:00:39",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "GermanProtocol",
+      "module": "MCGermanCMPWithMutex.tla",
+      "cfg": "MCGermanCMPWithMutex.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "GermanProtocol",
+      "module": "MCGermanControl.tla",
+      "cfg": "MCGermanControl.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "GermanProtocol",
+      "module": "MCGermanData.tla",
+      "cfg": "MCGermanData.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "Huang",
+      "module": "Huang.tla",
+      "cfg": "Huang.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:40",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "KeyValueStore",
+      "module": "MCKVS.tla",
+      "cfg": "MCKVSSafetyLarge.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "07:16:00",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "KeyValueStore",
+      "module": "MCKVS.tla",
+      "cfg": "MCKVSSafetyMedium.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:04:30",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "KeyValueStore",
+      "module": "MCKVS.tla",
+      "cfg": "MCKVSSafetySmall.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:40",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "KeyValueStore",
+      "module": "MCKVsnap.tla",
+      "cfg": "MCKVsnap.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:50",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "KnuthYao",
+      "module": "SimKnuthYao.tla",
+      "cfg": "SimKnuthYao.cfg",
+      "mode": "generate",
+      "result": "unknown",
+      "runtime": "unknown",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "LearnProofs",
+      "module": "MCFindHighest.tla",
+      "cfg": "MCFindHighest.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "LeastCircularSubstring",
+      "module": "MCLeastCircularSubstring.tla",
+      "cfg": "MCLeastCircularSubstringMedium.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:01:00",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "LeastCircularSubstring",
+      "module": "MCLeastCircularSubstring.tla",
+      "cfg": "MCLeastCircularSubstringSmall.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:05",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "LoopInvariance",
+      "module": "MCBinarySearch.tla",
+      "cfg": "MCBinarySearch.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:05",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "LoopInvariance",
+      "module": "MCQuicksort.tla",
+      "cfg": "MCQuicksort.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:05",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "Majority",
+      "module": "MCMajority.tla",
+      "cfg": "MCMajority.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:05",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "MisraReachability",
+      "module": "APParReach.tla",
+      "cfg": "APParReach.cfg",
+      "mode": "symbolic",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "MisraReachability",
+      "module": "MCParReach.tla",
+      "cfg": "MCParReach.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:30",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "MisraReachability",
+      "module": "MCReachabilityTest.tla",
+      "cfg": "MCReachabilityTestAllGraphs.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:20",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "MisraReachability",
+      "module": "MCReachabilityTest.tla",
+      "cfg": "MCReachabilityTestRandomGraphs.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:10",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "MisraReachability",
+      "module": "MCReachable.tla",
+      "cfg": "MCReachable.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:01:30",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "MissionariesAndCannibals",
+      "module": "APMissionariesAndCannibals.tla",
+      "cfg": "APMissionariesAndCannibals.cfg",
+      "mode": "symbolic",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "MissionariesAndCannibals",
+      "module": "MissionariesAndCannibals.tla",
+      "cfg": "MissionariesAndCannibals.cfg",
+      "mode": "exhaustive search",
+      "result": "safety failure",
+      "runtime": "00:00:01",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "Moving_Cat_Puzzle",
+      "module": "APCat.tla",
+      "cfg": "APCat.cfg",
+      "mode": "symbolic",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "Moving_Cat_Puzzle",
+      "module": "Cat.tla",
+      "cfg": "CatEvenBoxes.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "Moving_Cat_Puzzle",
+      "module": "Cat.tla",
+      "cfg": "CatOddBoxes.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "MultiCarElevator",
+      "module": "Elevator.tla",
+      "cfg": "ElevatorLivenessLarge.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:11:00",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "MultiCarElevator",
+      "module": "Elevator.tla",
+      "cfg": "ElevatorLivenessMedium.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:10",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "MultiCarElevator",
+      "module": "Elevator.tla",
+      "cfg": "ElevatorSafetyLarge.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:10:00",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "MultiCarElevator",
+      "module": "Elevator.tla",
+      "cfg": "ElevatorSafetyMedium.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:03:00",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "MultiCarElevator",
+      "module": "Elevator.tla",
+      "cfg": "ElevatorSafetySmall.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:15",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "MultiPaxos-SMR",
+      "module": "MultiPaxos_MC.tla",
+      "cfg": "MultiPaxos_MC.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:07:53",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "MultiPaxos-SMR",
+      "module": "MultiPaxos_MC.tla",
+      "cfg": "MultiPaxos_MC_small.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:10",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "N-Queens",
+      "module": "MC.tla",
+      "cfg": "MC.cfg",
+      "mode": "exhaustive search",
+      "result": "safety failure",
+      "runtime": "00:00:01",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "N-Queens",
+      "module": "MC.tla",
+      "cfg": "MC.cfg",
+      "mode": "exhaustive search",
+      "result": "safety failure",
+      "runtime": "00:00:01",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "NanoBlockchain",
+      "module": "MCNano.tla",
+      "cfg": "MCNanoLarge.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:20:00",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "NanoBlockchain",
+      "module": "MCNano.tla",
+      "cfg": "MCNanoMedium.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:15",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "NanoBlockchain",
+      "module": "MCNano.tla",
+      "cfg": "MCNanoSmall.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:05",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "Paxos",
+      "module": "MCConsensus.tla",
+      "cfg": "MCConsensus.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "Paxos",
+      "module": "MCPaxos.tla",
+      "cfg": "MCPaxos.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "Paxos",
+      "module": "MCVoting.tla",
+      "cfg": "MCVoting.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "PaxosHowToWinATuringAward",
+      "module": "MCConsensus.tla",
+      "cfg": "MCConsensus.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "PaxosHowToWinATuringAward",
+      "module": "MCPaxos.tla",
+      "cfg": "MCPaxosSmall.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:01:00",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "PaxosHowToWinATuringAward",
+      "module": "MCPaxos.tla",
+      "cfg": "MCPaxosTiny.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "PaxosHowToWinATuringAward",
+      "module": "MCVoting.tla",
+      "cfg": "MCVoting.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "Prisoners",
+      "module": "Prisoners.tla",
+      "cfg": "Prisoners.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "Prisoners_Single_Switch",
+      "module": "Prisoner.tla",
+      "cfg": "Prisoner.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "Prisoners_Single_Switch",
+      "module": "Prisoner.tla",
+      "cfg": "PrisonerLightUnknown.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "Prisoners_Single_Switch",
+      "module": "Prisoner.tla",
+      "cfg": "PrisonerSolo.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "Prisoners_Single_Switch",
+      "module": "Prisoner.tla",
+      "cfg": "PrisonerSoloLightUnknown.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "ReadersWriters",
+      "module": "APReadersWriters.tla",
+      "cfg": "APReadersWriters.cfg",
+      "mode": "symbolic",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "ReadersWriters",
+      "module": "MC.tla",
+      "cfg": "MC.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:05",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "SDP_Verification",
+      "module": "MC.tla",
+      "cfg": "MC.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "SDP_Verification",
+      "module": "MC.tla",
+      "cfg": "MC.cfg",
+      "mode": "exhaustive search",
+      "result": "safety failure",
+      "runtime": "00:00:05",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "SimplifiedFastPaxos",
+      "module": "FastPaxos.tla",
+      "cfg": "FastPaxos.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:20",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "SimplifiedFastPaxos",
+      "module": "Paxos.tla",
+      "cfg": "Paxos.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:05",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "SingleLaneBridge",
+      "module": "MC.tla",
+      "cfg": "MC.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:10",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "SlidingPuzzles",
+      "module": "SlidingPuzzles.tla",
+      "cfg": "SlidingPuzzles.cfg",
+      "mode": "exhaustive search",
+      "result": "safety failure",
+      "runtime": "00:00:05",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "SlidingPuzzles",
+      "module": "SlidingPuzzles_anim.tla",
+      "cfg": "SlidingPuzzles_anim.cfg",
+      "mode": "exhaustive search",
+      "result": "safety failure",
+      "runtime": "00:00:10",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "SlushProtocol",
+      "module": "Slush.tla",
+      "cfg": "SlushLarge.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:50:00",
+      "beginner": false,
+      "features": "pluscal"
+    },
+    {
+      "spec": "SlushProtocol",
+      "module": "Slush.tla",
+      "cfg": "SlushMedium.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:01:00",
+      "beginner": false,
+      "features": "pluscal"
+    },
+    {
+      "spec": "SlushProtocol",
+      "module": "Slush.tla",
+      "cfg": "SlushSmall.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:15",
+      "beginner": false,
+      "features": "pluscal"
+    },
+    {
+      "spec": "SpanningTree",
+      "module": "APSpanTree.tla",
+      "cfg": "APSpanTree.cfg",
+      "mode": "symbolic",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "SpanningTree",
+      "module": "SpanTree.tla",
+      "cfg": "SpanTree.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "SpanningTree",
+      "module": "SpanTreeRandom.tla",
+      "cfg": "SpanTreeRandom.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "SpanningTree",
+      "module": "SpanTreeTest.tla",
+      "cfg": "SpanTreeTest4Nodes.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "SpanningTree",
+      "module": "SpanTreeTest.tla",
+      "cfg": "SpanTreeTest5Nodes.cfg",
+      "mode": "exhaustive search",
+      "result": "unknown",
+      "runtime": "unknown",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "SpecifyingSystems",
+      "module": "MCInnerSequential.tla",
+      "cfg": "MCInnerSequential.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "SpecifyingSystems",
+      "module": "MCInnerSerial.tla",
+      "cfg": "MCInnerSerial.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:01:30",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "SpecifyingSystems",
+      "module": "APAsynchInterface.tla",
+      "cfg": "APAsynchInterface.cfg",
+      "mode": "symbolic",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "SpecifyingSystems",
+      "module": "APChannel.tla",
+      "cfg": "APChannel.cfg",
+      "mode": "symbolic",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "SpecifyingSystems",
+      "module": "AsynchInterface.tla",
+      "cfg": "AsynchInterface.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "SpecifyingSystems",
+      "module": "Channel.tla",
+      "cfg": "Channel.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "SpecifyingSystems",
+      "module": "PrintValues.tla",
+      "cfg": "PrintValues.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "SpecifyingSystems",
+      "module": "MCInternalMemory.tla",
+      "cfg": "MCInternalMemory.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "SpecifyingSystems",
+      "module": "MCWriteThroughCache.tla",
+      "cfg": "MCWriteThroughCache.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "SpecifyingSystems",
+      "module": "APChannel.tla",
+      "cfg": "APChannel.cfg",
+      "mode": "symbolic",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "SpecifyingSystems",
+      "module": "APHourClock.tla",
+      "cfg": "APHourClock.cfg",
+      "mode": "symbolic",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "SpecifyingSystems",
+      "module": "APChannel.tla",
+      "cfg": "APChannel.cfg",
+      "mode": "symbolic",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "SpecifyingSystems",
+      "module": "APInnerFIFO.tla",
+      "cfg": "APInnerFIFO.cfg",
+      "mode": "symbolic",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "SpecifyingSystems",
+      "module": "APInnerFIFOInstanced.tla",
+      "cfg": "APInnerFIFOInstanced.cfg",
+      "mode": "symbolic",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "SpecifyingSystems",
+      "module": "APMCInnerFIFO.tla",
+      "cfg": "APMCInnerFIFO.cfg",
+      "mode": "symbolic",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "SpecifyingSystems",
+      "module": "MCInnerFIFO.tla",
+      "cfg": "MCInnerFIFO.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "SpecifyingSystems",
+      "module": "APHourClock.tla",
+      "cfg": "APHourClock.cfg",
+      "mode": "symbolic",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "SpecifyingSystems",
+      "module": "APHourClock2.tla",
+      "cfg": "APHourClock2.cfg",
+      "mode": "symbolic",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "SpecifyingSystems",
+      "module": "HourClock.tla",
+      "cfg": "HourClock.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "SpecifyingSystems",
+      "module": "HourClock2.tla",
+      "cfg": "HourClock2.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "SpecifyingSystems",
+      "module": "APHourClock.tla",
+      "cfg": "APHourClock.cfg",
+      "mode": "symbolic",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "SpecifyingSystems",
+      "module": "APLiveHourClock.tla",
+      "cfg": "APLiveHourClock.cfg",
+      "mode": "symbolic",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "SpecifyingSystems",
+      "module": "LiveHourClock.tla",
+      "cfg": "LiveHourClock.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "SpecifyingSystems",
+      "module": "MCLiveInternalMemory.tla",
+      "cfg": "MCLiveInternalMemory.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "SpecifyingSystems",
+      "module": "MCLiveWriteThroughCache.tla",
+      "cfg": "MCLiveWriteThroughCache.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:05",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "SpecifyingSystems",
+      "module": "MCRealTimeHourClock.tla",
+      "cfg": "MCRealTimeHourClock.cfg",
+      "mode": "exhaustive search",
+      "result": "liveness failure",
+      "runtime": "00:00:01",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "SpecifyingSystems",
+      "module": "SimpleMath.tla",
+      "cfg": "SimpleMath.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "SpecifyingSystems",
+      "module": "ABCorrectness.tla",
+      "cfg": "ABCorrectness.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "SpecifyingSystems",
+      "module": "MCAlternatingBit.tla",
+      "cfg": "MCAlternatingBit.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "Stones",
+      "module": "Stones.tla",
+      "cfg": "Stones.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "TLC",
+      "module": "TestGraphs.tla",
+      "cfg": "TestGraphs.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:05",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "TLC",
+      "module": "TestMCReachability.tla",
+      "cfg": "TestMCReachability.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "unknown",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "TeachingConcurrency",
+      "module": "Simple.tla",
+      "cfg": "Simple.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": true,
+      "features": "pluscal"
+    },
+    {
+      "spec": "TeachingConcurrency",
+      "module": "SimpleRegular.tla",
+      "cfg": "SimpleRegular.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:05",
+      "beginner": true,
+      "features": "pluscal"
+    },
+    {
+      "spec": "TransitiveClosure",
+      "module": "TransitiveClosure.tla",
+      "cfg": "TransitiveClosure.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:05",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "TwoPhase",
+      "module": "MCTwoPhase.tla",
+      "cfg": "MCTwoPhase.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "YoYo",
+      "module": "MCYoYoNoPruning.tla",
+      "cfg": "MCYoYoNoPruning.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "YoYo",
+      "module": "MCYoYoPruning.tla",
+      "cfg": "MCYoYoPruning.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "YoYo",
+      "module": "YoYoAllGraphs.tla",
+      "cfg": "YoYoAllGraphs.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:02",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "aba-asyn-byz",
+      "module": "aba_asyn_byz.tla",
+      "cfg": "aba_asyn_byz.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:10:00",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "acp",
+      "module": "ACP_NB_TLC.tla",
+      "cfg": "ACP_NB_TLC.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "acp",
+      "module": "ACP_NB_WRONG_TLC.tla",
+      "cfg": "ACP_NB_WRONG_TLC.cfg",
+      "mode": "exhaustive search",
+      "result": "safety failure",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "acp",
+      "module": "ACP_SB_TLC.tla",
+      "cfg": "ACP_SB_TLC.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "acp",
+      "module": "APACP_SB.tla",
+      "cfg": "APACP_SB.cfg",
+      "mode": "symbolic",
+      "result": "success",
+      "runtime": "00:00:10",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "allocator",
+      "module": "AllocatorImplementation.tla",
+      "cfg": "AllocatorImplementation.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:15",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "allocator",
+      "module": "AllocatorRefinement.tla",
+      "cfg": "AllocatorRefinement.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:05",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "allocator",
+      "module": "SchedulingAllocator.tla",
+      "cfg": "SchedulingAllocator.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:10",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "allocator",
+      "module": "SimpleAllocator.tla",
+      "cfg": "SimpleAllocator.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:05",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "barriers",
+      "module": "APBarrier.tla",
+      "cfg": "APBarrier.cfg",
+      "mode": "symbolic",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "barriers",
+      "module": "Barrier.tla",
+      "cfg": "Barrier.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "barriers",
+      "module": "Barriers.tla",
+      "cfg": "Barriers.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:05",
+      "beginner": false,
+      "features": "pluscal"
+    },
+    {
+      "spec": "bcastByz",
+      "module": "bcastByz.tla",
+      "cfg": "bcastByz.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:10",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "bcastByz",
+      "module": "bcastByz.tla",
+      "cfg": "bcastByzNoBcast.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "bcastFolklore",
+      "module": "APbcastFolklore.tla",
+      "cfg": "APbcastFolklore.cfg",
+      "mode": "symbolic",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "bcastFolklore",
+      "module": "bcastFolklore.tla",
+      "cfg": "bcastFolklore.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:30:00",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "bosco",
+      "module": "APbosco.tla",
+      "cfg": "APbosco.cfg",
+      "mode": "symbolic",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "bosco",
+      "module": "bosco.tla",
+      "cfg": "bosco.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:03:00",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "braf",
+      "module": "BufferedRandomAccessFile.tla",
+      "cfg": "BufferedRandomAccessFile.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:09",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "btree",
+      "module": "btree.tla",
+      "cfg": "btree.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:15",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "btree",
+      "module": "kvstore.tla",
+      "cfg": "kvstore.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "byihive",
+      "module": "VoucherCancel.tla",
+      "cfg": "VoucherCancel.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "byihive",
+      "module": "VoucherIssue.tla",
+      "cfg": "VoucherIssue.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "byihive",
+      "module": "VoucherLifeCycle.tla",
+      "cfg": "VoucherLifeCycle.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "byihive",
+      "module": "VoucherRedeem.tla",
+      "cfg": "VoucherRedeem.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "byihive",
+      "module": "VoucherTransfer.tla",
+      "cfg": "VoucherTransfer.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "byzpaxos",
+      "module": "BPConProof.tla",
+      "cfg": "BPConProof.cfg",
+      "mode": "exhaustive search",
+      "result": "unknown",
+      "runtime": "unknown",
+      "beginner": false,
+      "features": "pluscal"
+    },
+    {
+      "spec": "byzpaxos",
+      "module": "Consensus.tla",
+      "cfg": "Consensus.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": "pluscal"
+    },
+    {
+      "spec": "byzpaxos",
+      "module": "PConProof.tla",
+      "cfg": "PConProof.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:06:00",
+      "beginner": false,
+      "features": "pluscal"
+    },
+    {
+      "spec": "byzpaxos",
+      "module": "VoteProof.tla",
+      "cfg": "VoteProof.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:05",
+      "beginner": false,
+      "features": "pluscal"
+    },
+    {
+      "spec": "c1cs",
+      "module": "APc1cs.tla",
+      "cfg": "APc1cs.cfg",
+      "mode": "symbolic",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "c1cs",
+      "module": "c1cs.tla",
+      "cfg": "c1cs.cfg",
+      "mode": "exhaustive search",
+      "result": "unknown",
+      "runtime": "unknown",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "cf1s-folklore",
+      "module": "cf1s_folklore.tla",
+      "cfg": "cf1s_folklore.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:01:00",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "chang_roberts",
+      "module": "APChangRoberts.tla",
+      "cfg": "APChangRoberts.cfg",
+      "mode": "symbolic",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "chang_roberts",
+      "module": "MCChangRoberts.tla",
+      "cfg": "MCChangRoberts.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "dag-consensus",
+      "module": "BlockDagTest.tla",
+      "cfg": "BlockDagTest.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:10",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "dag-consensus",
+      "module": "TLCSailfish1.tla",
+      "cfg": "TLCSailfish1.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:10",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "dag-consensus",
+      "module": "TLCSailfish2.tla",
+      "cfg": "TLCSailfish2.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "unknown",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "detector_chan96",
+      "module": "EnvironmentController.tla",
+      "cfg": "EnvironmentController.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "02:00:00",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "dijkstra-mutex",
+      "module": "MC.tla",
+      "cfg": "MC.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:50",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "dijkstra-mutex",
+      "module": "MC.tla",
+      "cfg": "MC.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:02:00",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "diskpaxos",
+      "module": "MC_HDiskSynod.tla",
+      "cfg": "MC_HDiskSynod.cfg",
+      "mode": "exhaustive search",
+      "result": "unknown",
+      "runtime": "unknown",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "echo",
+      "module": "MCEcho.tla",
+      "cfg": "MCEcho.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "ewd426",
+      "module": "APTokenRing.tla",
+      "cfg": "APTokenRing.cfg",
+      "mode": "symbolic",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "ewd426",
+      "module": "SimTokenRing.tla",
+      "cfg": "SimTokenRing.cfg",
+      "mode": "generate",
+      "result": "unknown",
+      "runtime": "unknown",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "ewd426",
+      "module": "TokenRing.tla",
+      "cfg": "TokenRing.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:05",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "ewd687a",
+      "module": "EWD687a_anim.tla",
+      "cfg": "EWD687a_anim.cfg",
+      "mode": {
+        "simulate": {
+          "traceCount": 100
+        }
+      },
+      "result": "safety failure",
+      "runtime": "00:00:01",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "ewd687a",
+      "module": "MCEWD687a.tla",
+      "cfg": "MCEWD687a.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:01:00",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "ewd840",
+      "module": "APEWD840.tla",
+      "cfg": "APEWD840.cfg",
+      "mode": "symbolic",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "ewd840",
+      "module": "APSyncTerminationDetection.tla",
+      "cfg": "APSyncTerminationDetection.cfg",
+      "mode": "symbolic",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "ewd840",
+      "module": "EWD840.tla",
+      "cfg": "EWD840.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "ewd840",
+      "module": "EWD840_anim.tla",
+      "cfg": "EWD840_anim.cfg",
+      "mode": {
+        "simulate": {
+          "traceCount": 100
+        }
+      },
+      "result": "safety failure",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "ewd840",
+      "module": "EWD840_json.tla",
+      "cfg": "EWD840_json.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "ewd840",
+      "module": "SyncTerminationDetection.tla",
+      "cfg": "SyncTerminationDetection.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "ewd998",
+      "module": "AsyncTerminationDetection.tla",
+      "cfg": "AsyncTerminationDetection.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "ewd998",
+      "module": "EWD998.tla",
+      "cfg": "EWD998.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:50:00",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "ewd998",
+      "module": "EWD998.tla",
+      "cfg": "EWD998Small.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:05:00",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "ewd998",
+      "module": "EWD998Chan.tla",
+      "cfg": "EWD998Chan.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:05:00",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "ewd998",
+      "module": "EWD998ChanID.tla",
+      "cfg": "EWD998ChanID.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:05",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "ewd998",
+      "module": "EWD998ChanID_export.tla",
+      "cfg": "EWD998ChanID_export.cfg",
+      "mode": "exhaustive search",
+      "result": "unknown",
+      "runtime": "unknown",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "ewd998",
+      "module": "EWD998ChanID_shiviz.tla",
+      "cfg": "EWD998ChanID_shiviz.cfg",
+      "mode": "exhaustive search",
+      "result": "unknown",
+      "runtime": "unknown",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "ewd998",
+      "module": "EWD998ChanTrace.tla",
+      "cfg": "EWD998ChanTrace.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "ewd998",
+      "module": "EWD998PCal.tla",
+      "cfg": "EWD998PCal.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:21",
+      "beginner": false,
+      "features": "pluscal"
+    },
+    {
+      "spec": "ewd998",
+      "module": "SmokeEWD998.tla",
+      "cfg": "SmokeEWD998.cfg",
+      "mode": {
+        "simulate": {
+          "traceCount": 100
+        }
+      },
+      "result": "success",
+      "runtime": "00:00:05",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "ewd998",
+      "module": "SmokeEWD998_SC.tla",
+      "cfg": "SmokeEWD998_SC.cfg",
+      "mode": "exhaustive search",
+      "result": "unknown",
+      "runtime": "unknown",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "glowingRaccoon",
+      "module": "APclean.tla",
+      "cfg": "APclean.cfg",
+      "mode": "symbolic",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "glowingRaccoon",
+      "module": "APstages.tla",
+      "cfg": "APstages.cfg",
+      "mode": "symbolic",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "glowingRaccoon",
+      "module": "clean.tla",
+      "cfg": "clean.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "glowingRaccoon",
+      "module": "product.tla",
+      "cfg": "product.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "glowingRaccoon",
+      "module": "stages.tla",
+      "cfg": "stages.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "lamport_mutex",
+      "module": "APLamportMutex.tla",
+      "cfg": "APLamportMutex.cfg",
+      "mode": "symbolic",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "lamport_mutex",
+      "module": "MCLamportMutex.tla",
+      "cfg": "MCLamportMutex.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:10",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "locks_auxiliary_vars",
+      "module": "Lock.tla",
+      "cfg": "Lock.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": "pluscal"
+    },
+    {
+      "spec": "locks_auxiliary_vars",
+      "module": "LockHS.tla",
+      "cfg": "LockHS.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "locks_auxiliary_vars",
+      "module": "Peterson.tla",
+      "cfg": "Peterson.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": "pluscal"
+    },
+    {
+      "spec": "nbacc_ray97",
+      "module": "nbacc_ray97.tla",
+      "cfg": "nbacc_ray97.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "nbacg_guer01",
+      "module": "APnbacg_guer01.tla",
+      "cfg": "APnbacg_guer01.cfg",
+      "mode": "symbolic",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "nbacg_guer01",
+      "module": "nbacg_guer01.tla",
+      "cfg": "nbacg_guer01.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:05",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "spanning",
+      "module": "APspanning.tla",
+      "cfg": "APspanning.cfg",
+      "mode": "symbolic",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "spanning",
+      "module": "MC_spanning.tla",
+      "cfg": "MC_spanning.cfg",
+      "mode": "exhaustive search",
+      "result": "safety failure",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "sums_even",
+      "module": "MC_sums_even.tla",
+      "cfg": "MC_sums_even.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "tcp",
+      "module": "APtcp.tla",
+      "cfg": "APtcp.cfg",
+      "mode": "symbolic",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "tcp",
+      "module": "MCtcp.tla",
+      "cfg": "MCtcp.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "tower_of_hanoi",
+      "module": "MC.tla",
+      "cfg": "MC.cfg",
+      "mode": "exhaustive search",
+      "result": "safety failure",
+      "runtime": "00:00:01",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "tower_of_hanoi",
+      "module": "Hanoi_anim.tla",
+      "cfg": "Hanoi_anim.cfg",
+      "mode": "exhaustive search",
+      "result": "safety failure",
+      "runtime": "00:00:01",
+      "beginner": true,
+      "features": ""
+    },
+    {
+      "spec": "transaction_commit",
+      "module": "2PCwithBTM.tla",
+      "cfg": "2PCwithBTM.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": "pluscal"
+    },
+    {
+      "spec": "transaction_commit",
+      "module": "APTCommit.tla",
+      "cfg": "APTCommit.cfg",
+      "mode": "symbolic",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "transaction_commit",
+      "module": "PaxosCommit.tla",
+      "cfg": "PaxosCommit.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:01:00",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "transaction_commit",
+      "module": "TCommit.tla",
+      "cfg": "TCommit.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    },
+    {
+      "spec": "transaction_commit",
+      "module": "TwoPhase.tla",
+      "cfg": "TwoPhase.cfg",
+      "mode": "exhaustive search",
+      "result": "success",
+      "runtime": "00:00:01",
+      "beginner": false,
+      "features": ""
+    }
+  ]
+}

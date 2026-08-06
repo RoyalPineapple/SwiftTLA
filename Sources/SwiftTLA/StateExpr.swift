@@ -100,7 +100,10 @@ public indirect enum StateExpr: Hashable, Codable, Sendable, CustomStringConvert
         case .domain(let f): return "DOMAIN \(f)"
         case .functionLiteral(let d, let e): return "[x \\in \(d) |-> \(e)]\n".replacing("_x", with: "x")
         case .functionApply(let f, let x): return "\(f)[\(x)]"
-        case .except(let f, let x, let e): return "[\(f) EXCEPT ![\(x)] = \(e)]"
+        case .except(let f, let x, let e):
+            // Functions need ![key]; records accept !["field"] in TLC.
+            return "[\(f) EXCEPT ![\(x)] = \(e)]"
+
         case .caseExpr(let pairs, let other):
             let cases = stride(from: 0, to: pairs.count, by: 2).map {
                 "\(pairs[$0]) -> \(pairs[$0 + 1])"

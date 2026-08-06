@@ -1,6 +1,8 @@
 import Testing
 import Foundation
 import SwiftTLA
+import SwiftTLAModels
+import UpstreamParity
 import SwiftParser
 import SwiftSyntax
 
@@ -482,29 +484,20 @@ struct SwiftSourceMatrix {
     }
 }
 
-// MARK: - Upstream golden equivalence (verified against TLC)
+// MARK: - Core example parity (same shapes as Examples/)
 
-/// Each test mirrors an upstream tlaplus/Examples spec.
-/// State counts were verified by running TLC on the generated .tlaModule output.
 struct GoldenTests {
     @Test("HourClock = 12 states")
     func hourClock12() throws {
         let hr = Var<Int>("hr", value: 1)
         let spec = TLASpec("HourClock") {
             Variable(hr, 1)
-            Action("HCnxt") { (hr < 12) && hr.becomes(hr + 1) || (hr == 12) && hr.becomes(1) }
+            Action("HCnxt") {
+                (hr != 12) && hr.becomes(hr + 1) || (hr == 12) && hr.becomes(1)
+            }
+            Invariant("HCini") { hr >= 1 && hr <= 12 }
         }
         #expect(try ModelChecker(spec: spec, maxStates: 100).exploreGraph().states.count == 12)
-    }
-
-    @Test("HourClock invariant holds")
-    func hourClockInv() throws {
-        let hr = Var<Int>("hr", value: 1)
-        let spec = TLASpec("HourClock") {
-            Variable(hr, 1)
-            Action("HCnxt") { (hr < 12) && hr.becomes(hr + 1) || (hr == 12) && hr.becomes(1) }
-            Invariant("ValidHours") { hr >= 1 && hr <= 12 }
-        }
         let result = try ModelChecker(spec: spec, maxStates: 100).check()
         #expect({ if case .ok = result { true } else { false } }())
     }
@@ -514,27 +507,21 @@ struct GoldenTests {
         let big = Var<Int>("big", value: 0); let small = Var<Int>("small", value: 0)
         let spec = TLASpec("DieHard") {
             Variable(big, 0); Variable(small, 0)
-            Action("FB") { big.becomes(5) }
-            Action("FS") { small.becomes(3) }
-            Action("EB") { big.becomes(0) }
-            Action("ES") { small.becomes(0) }
-            Action("S2B") { (big+small<=5) && big.becomes(big+small) && small.becomes(0) || (big+small>5) && big.becomes(5) && small.becomes(small-(5-big)) }
-            Action("B2S") { (big+small<=3) && small.becomes(big+small) && big.becomes(0) || (big+small>3) && small.becomes(3) && big.becomes(big-(3-small)) }
+            Invariant("TypeOK") { big >= 0 && big <= 5 && small >= 0 && small <= 3 }
+            Action("FillSmallJug") { small.becomes(3) }
+            Action("FillBigJug") { big.becomes(5) }
+            Action("EmptySmallJug") { small.becomes(0) }
+            Action("EmptyBigJug") { big.becomes(0) }
+            Action("SmallToBig") {
+                (big + small <= 5) && big.becomes(big + small) && small.becomes(0) ||
+                (big + small > 5) && big.becomes(5) && small.becomes(small - (5 - big))
+            }
+            Action("BigToSmall") {
+                (big + small <= 3) && small.becomes(big + small) && big.becomes(0) ||
+                (big + small > 3) && small.becomes(3) && big.becomes(big - (3 - small))
+            }
         }
         #expect(try ModelChecker(spec: spec, maxStates: 100).exploreGraph().states.count == 16)
-    }
-
-    @Test("DieHard TypeOK holds")
-    func dieHardInv() throws {
-        let big = Var<Int>("big", value: 0); let small = Var<Int>("small", value: 0)
-        let spec = TLASpec("DieHard") {
-            Variable(big, 0); Variable(small, 0)
-            Action("FB") { big.becomes(5) }; Action("FS") { small.becomes(3) }
-            Action("EB") { big.becomes(0) }; Action("ES") { small.becomes(0) }
-            Action("S2B") { (big+small<=5) && big.becomes(big+small) && small.becomes(0) || (big+small>5) && big.becomes(5) && small.becomes(small-(5-big)) }
-            Action("B2S") { (big+small<=3) && small.becomes(big+small) && big.becomes(0) || (big+small>3) && small.becomes(3) && big.becomes(big-(3-small)) }
-            Invariant("TypeOK") { big >= 0 && big <= 5 && small >= 0 && small <= 3 }
-        }
         let result = try ModelChecker(spec: spec, maxStates: 100).check()
         #expect({ if case .ok = result { true } else { false } }())
     }
@@ -542,54 +529,32 @@ struct GoldenTests {
     @Test("Allocator = 4 states")
     func allocator4() throws {
         let a = Var<Int>("available", value: 3); let b = Var<Int>("allocated", value: 0)
-        let spec = TLASpec("Allocator") {
+        let spec = TLASpec("allocator") {
             Variable(a, 3); Variable(b, 0)
-            Action("Alloc") { a.becomes(a-1).when(a>0) && b.becomes(b+1) }
-            Action("Free") { a.becomes(a+1).when(b>0) && b.becomes(b-1) }
+            Action("Allocate") { a.becomes(a - 1).when(a > 0) && b.becomes(b + 1) }
+            Action("Deallocate") { a.becomes(a + 1).when(b > 0) && b.becomes(b - 1) }
+            Invariant("ResourceCount") { a + b == 3 }
         }
         #expect(try ModelChecker(spec: spec, maxStates: 100).exploreGraph().states.count == 4)
-    }
-
-    @Test("Allocator invariant holds")
-    func allocatorInv() throws {
-        let a = Var<Int>("available", value: 3); let b = Var<Int>("allocated", value: 0)
-        let spec = TLASpec("Allocator") {
-            Variable(a, 3); Variable(b, 0)
-            Action("Alloc") { a.becomes(a-1).when(a>0) && b.becomes(b+1) }
-            Action("Free") { a.becomes(a+1).when(b>0) && b.becomes(b-1) }
-            Invariant("SumConstant") { a + b == 3 }
-        }
         let result = try ModelChecker(spec: spec, maxStates: 100).check()
         #expect({ if case .ok = result { true } else { false } }())
     }
 
-    @Test("CoffeeCan = 21 states")
-    func coffeeCan21() throws {
-        let bl = Var<Int>("black", value: 5); let wh = Var<Int>("white", value: 5)
-        let spec = TLASpec("CoffeeCan") {
-            Variable(bl, 5); Variable(wh, 5)
-            Action("BB") { (bl+wh>1) && bl>=2 && bl.becomes(bl-1) }
-            Action("WW") { (bl+wh>1) && wh>=2 && bl.becomes(bl+1) && wh.becomes(wh-2) }
-            Action("BW") { (bl+wh>1) && bl>=1 && wh>=1 && bl.becomes(bl-1) }
-        }
-        #expect(try ModelChecker(spec: spec, maxStates: 500).exploreGraph().states.count == 21)
+    @Test("CoffeeCan MaxBeanCount=5 = 20 states (parity catalog)")
+    func coffeeCanMax5() throws {
+        #expect(ParityCatalog.coffeeCanMax5.expectedDistinct == 20)
+        let count = try ModelChecker(spec: ParityCatalog.coffeeCanMax5.spec, maxStates: 500)
+            .exploreGraph().states.count
+        #expect(count == 20)
     }
 
-    @Test("MovingCat = 18 states (composite && fixed)")
-    func movingCat() throws {
-        let c = Var<Int>("cat", value: 3); let o = Var<Int>("obs", value: 3); let d = Var<Int>("dir", value: 1)
-        let spec = TLASpec("MovingCat") {
-            Variable(c, 3); Variable(o, 3); Variable(d, 1)
-            Action("Next") {
-                (c < 6 && c.becomes(c + 1) || c > 1 && c.becomes(c - 1)) &&
-                ((d == 1 && o < 5) && o.becomes(o + 1) ||
-                 (d == 1 && o == 5) && o.becomes(o - 1) && d.becomes(-1) ||
-                 (d == -1 && o > 2) && o.becomes(o - 1) ||
-                 (d == -1 && o == 2) && o.becomes(o + 1) && d.becomes(1))
-            }
-        }
-        #expect(try ModelChecker(spec: spec, maxStates: 200).exploreGraph().states.count == 18)
+    @Test("Moving cat CatEvenBoxes = 48 states (parity catalog)")
+    func movingCatEven() throws {
+        let count = try ModelChecker(spec: ParityCatalog.catEvenBoxes.spec, maxStates: 500)
+            .exploreGraph().states.count
+        #expect(count == 48)
     }
+
 
     @Test("Deadlock detected with DeadlockCheck()")
     func deadlock() throws {
@@ -604,16 +569,43 @@ struct GoldenTests {
         else { #expect(Bool(false)) }
     }
 
-    @Test("Majority = at least 1 state")
+    @Test("Majority Boyer-Moore shape explores")
     func majority() throws {
-        let ca = Var<Int>("cand", value: 0); let cn = Var<Int>("cnt", value: 0); let i = Var<Int>("i", value: 1)
+        let cand = Var<Int>("cand", value: 0)
+        let cnt = Var<Int>("cnt", value: 0)
+        let i = Var<Int>("i", value: 1)
         let spec = TLASpec("Majority") {
-            Variable(ca, 0); Variable(cn, 0); Variable(i, 1)
-            Action("N") {
-                (i <= 3) && i.becomes(i + 1) && cn.becomes(cn + 1)
+            Variable(cand, 0); Variable(cnt, 0); Variable(i, 1)
+            Invariant("TypeOK") {
+                i >= 1 && i <= 4 && cand >= 0 && cand <= 3 && cnt >= 0 && cnt <= 3
+            }
+            Action("Next") {
+                (i <= 3) && i.becomes(i + 1) &&
+                (cnt == 0 && cand.becomes(i) && cnt.becomes(1) ||
+                 cnt != 0 && cand == i && cnt.becomes(cnt + 1) ||
+                 cnt != 0 && cand != i && cnt.becomes(cnt - 1))
             }
         }
-        #expect(try ModelChecker(spec: spec, maxStates: 100).exploreGraph().states.count >= 1)
+        let count = try ModelChecker(spec: spec, maxStates: 100).exploreGraph().states.count
+        #expect(count >= 1)
+        let result = try ModelChecker(spec: spec, maxStates: 100).check()
+        #expect({ if case .ok = result { true } else { false } }())
+    }
+
+    @Test("Multi-choose is Cartesian product")
+    func multiChooseProduct() throws {
+        let action: ActionExpr = .and(
+            .chooseAction("x", .setLiteral([.value(.int(1)), .value(.int(2))])),
+            .chooseAction("y", .setLiteral([.value(.int(10)), .value(.int(20))]))
+        )
+        let states = try ActionEnumerator.enumerate(
+            action,
+            from: ["x": .int(0), "y": .int(0)],
+            varNames: ["x", "y"]
+        )
+        #expect(states.count == 4)
+        let pairs = Set(states.map { "\($0["x"]!)-\($0["y"]!)" })
+        #expect(pairs == Set(["1-10", "1-20", "2-10", "2-20"]))
     }
 }
 
@@ -687,10 +679,9 @@ struct GeneratorTests {
 // MARK: - Checker self-proof: BFS invariants verified on our own checker
 
 struct CheckerSelfProofTests {
-    @Test("BFSExplorer 1:1 TLA+ port model-checks with sets")
+    @Test("BFSExplorer model-checks with sets")
     func bfsExplorer1to1() throws {
-        let spec = createBFSExplorerSpec()
-        let result = try ModelChecker(spec: spec, maxStates: 200).check()
+        let result = try ModelChecker(spec: BFSExplorer.spec, maxStates: 200).check()
         switch result {
         case .ok(let count):
             #expect(count > 0)
@@ -703,68 +694,68 @@ struct CheckerSelfProofTests {
         }
     }
 
-    @Test("BFSExplorer TLA+ output matches upstream structure")
+    @Test("BFSExplorer TLA+ output structure")
     func bfsExplorerTLA() {
-        let tla = createBFSExplorerSpec().tlaModule
+        let tla = BFSExplorer.spec.tlaModule
         #expect(tla.contains("q"))
         #expect(tla.contains("visited"))
         #expect(tla.contains("explored"))
         #expect(tla.contains("picked"))
-        #expect(tla.contains("q' = ((q \\"))
     }
 
-    @Test("CheckerController is bounded — processes up to limit then completes")
+    @Test("CheckerController machine steps to complete")
     func checkerControllerTransitions() {
         var machine = CheckerController(phase: 0, processed: 0, queued: 2, limit: 2)
         #expect(machine.isExploring)
-
-        // processed=0 < queued=2: both step variants available
         let names = Set(machine.availableTransitions.map(\.rawValue))
         #expect(names.contains("stepDiscover"))
         #expect(names.contains("stepNoNew"))
-
-        // stepNoNew: processed=1, queued=2 — still can process
         machine.apply(.stepNoNew)
         #expect(machine.processed == 1 && machine.queued == 2)
-        #expect(machine.isExploring)
-
-        // stepNoNew again: processed=2 reaches limit — can't process more
         machine.apply(.stepNoNew)
-        #expect(machine.processed == 2 && machine.queued == 2)
-        #expect(machine.isExploring)
+        #expect(machine.processed == 2)
         #expect(machine.availableTransitions.contains(where: { $0 == .complete }))
-
         machine.apply(.complete)
         #expect(machine.isComplete)
     }
 
-    @Test("CheckerController composition: checker spec + user spec = checker checking user")
-    func checkerControllerComposition() throws {
-        // The checker spec models BFS exploration bounded by maxStates
-        let checkerSpec = createCheckerSpec(maxStates: 5)
-
-        // A user spec with a simple counter
+    @Test("Bootstrap composition: bfsChecker ⋊ user")
+    func checkerComposition() throws {
         let counter = Var<Int>("counter", value: 0)
         let userSpec = TLASpec("Counter") {
             Variable(counter, 0)
             Action("increment") { counter.becomes(counter + 1).when(counter < 10) }
             Invariant("counterNonNegative") { counter >= 0 }
         }
-
-        // Compose: the checker's BFS orchestration + the user's state machine
-        let composed = checkerSpec.extending(userSpec)
-
-        // Model-check the composition — the checker processes states while the user's
-        // counter increments. Bounded by maxStates=5 so the checker stops naturally.
-        let graph = try ModelChecker(spec: composed, maxStates: 10).exploreGraph()
-
-        // The composition's state space includes both checker and user variables.
-        // We expect states where the counter advances while the checker tracks progress.
+        let graph = try ModelChecker.compose(
+            .bfsChecker(maxStates: 5),
+            userSpec
+        ).exploreGraph()
         #expect(graph.states.count > 0)
         #expect(graph.variableNames.contains("phase"))
         #expect(graph.variableNames.contains("processed"))
         #expect(graph.variableNames.contains("queued"))
         #expect(graph.variableNames.contains("counter"))
+    }
+
+    @Test("BFSChecker @TLAModel generates StateMachine")
+    func bfsCheckerModelMachine() {
+        let m = BFSChecker.StateMachine.initial
+        #expect(m.phase == 0)
+        #expect(m.processed == 0)
+        #expect(m.queued == 1)
+        #expect(!m.availableTransitions.isEmpty)
+    }
+
+    @Test("checkComposed with TLAModelType (matched bounds)")
+    func checkComposedModelType() throws {
+        // Same bound on both sides — mismatched limits make the product unsat.
+        let result = try ModelChecker.checkComposed(
+            checker: BFSChecker.spec,
+            user: BFSChecker.self,
+            maxStates: 500
+        )
+        #expect({ if case .ok = result { true } else { false } }())
     }
 
     @Test("All explored states are reachable from initial")

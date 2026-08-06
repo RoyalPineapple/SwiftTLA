@@ -1,12 +1,10 @@
 import SwiftTLA
-import SwiftTLAMacros
 
 /// Lamport's Bakery mutual exclusion algorithm (N=2 processes).
 /// Faithful translation of tlaplus/Examples Bakery-Boulangerie spec.
 /// If this were Swift concurrency: two actors that must never overlap execution.
-@TLAModel
 public struct Bakery {
-    static var spec: TLASpec {
+    public static var spec: TLASpec {
         TLASpec("Bakery") {
             Extends("Integers")
             let num1 = Var<Int>("num1", value: 0); let num2 = Var<Int>("num2", value: 0)

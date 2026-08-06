@@ -1,9 +1,18 @@
-.PHONY: demo test
-
-demo:
-	@echo "GUI: swift run demo"
-	@echo "CLI: swift run demo check hourclock"
-	@echo "CLI: swift run demo interactive hourclock"
+.PHONY: test tlc parity build examples
 
 test:
-	swift test --filter SwiftTLATests
+	swift test
+
+tlc:
+	./scripts/setup-tlc.sh
+	./scripts/validate_tlc.sh
+
+parity:
+	./scripts/setup-tlc.sh
+	./scripts/validate_upstream_parity.sh
+
+build:
+	swift build
+
+examples:
+	swift build --package-path Examples

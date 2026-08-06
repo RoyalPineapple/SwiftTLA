@@ -1,9 +1,7 @@
 import SwiftTLA
-import SwiftTLAMacros
 
-@TLAModel
 public struct Majority {
-    static var spec: TLASpec {
+    public static var spec: TLASpec {
         TLASpec("Majority") {
             Extends("Integers")
             let cand = Var("cand", value: 0)

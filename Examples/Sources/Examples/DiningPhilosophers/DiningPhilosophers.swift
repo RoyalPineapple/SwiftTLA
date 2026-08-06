@@ -1,12 +1,10 @@
 import SwiftTLA
-import SwiftTLAMacros
 
 /// Dining Philosophers (2 philosophers, 2 forks).
 /// Models deadlock avoidance in Swift actor resource acquisition.
 /// Each philosopher needs both forks to eat. Deadlock if both grab one fork each.
-@TLAModel
 public struct DiningPhilosophers {
-    static var spec: TLASpec {
+    public static var spec: TLASpec {
         TLASpec("DiningPhilosophers") {
             Extends("Integers")
             let fork0 = Var<Int>("fork0", value: 0) // 0=free, 1=taken by P0, 2=taken by P1

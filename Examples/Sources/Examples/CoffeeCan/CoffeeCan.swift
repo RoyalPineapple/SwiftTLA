@@ -1,30 +1,56 @@
 import SwiftTLA
-import SwiftTLAMacros
 
-@TLAModel
+/// CoffeeCan — MaxBeanCount=5, upstream record shape.
+/// (Not @TLAModel: init set is built in Swift before the builder.)
 public struct CoffeeCan {
-    static var spec: TLASpec {
-        TLASpec("CoffeeCan") {
+    public static var spec: TLASpec {
+        ParityCatalog_CoffeeCan.max5
+    }
+}
+
+/// Local builder (Examples package cannot depend on UpstreamParity without a product).
+enum ParityCatalog_CoffeeCan {
+    static var max5: TLASpec {
+        let maxBeanCount = 5
+        let can = Var<TLARecordType>("can")
+        var cans: [TLAValue] = []
+        for black in 0...maxBeanCount {
+            for white in 0...maxBeanCount where (1...maxBeanCount).contains(black + white) {
+                cans.append(.record(["black": .int(black), "white": .int(white)]))
+            }
+        }
+        return TLASpec("CoffeeCan") {
             Extends("Naturals")
-            let black = Var("black", value: 5)
-            let white = Var("white", value: 5)
-            Variable(black, 5)
-            Variable(white, 5)
-            Definition("MaxBeanCount == 10")
-            Definition("BeanCount == black + white")
+            Variable(can, in: cans)
             Action("PickSameColorBlack") {
-                (black + white > 1) && (black >= 2) && black.becomes(black - 1)
+                can.black + can.white > 1 && can.black >= 2
+                    && can.becomes(can.updated(at: "black", to: can.black - 1))
             }
             Action("PickSameColorWhite") {
-                (black + white > 1) && (white >= 2) && black.becomes(black + 1) && white.becomes(white - 2)
+                can.black + can.white > 1 && can.white >= 2
+                    && can.becomes(
+                        StateExpr.except(
+                            StateExpr.except(
+                                .variable("can"),
+                                .value(.string("black")),
+                                can.black + 1
+                            ),
+                            .value(.string("white")),
+                            can.white - 2
+                        )
+                    )
             }
             Action("PickDifferentColor") {
-                (black + white > 1) && (black >= 1) && (white >= 1) && black.becomes(black - 1)
+                can.black + can.white > 1 && can.black >= 1 && can.white >= 1
+                    && can.becomes(can.updated(at: "black", to: can.black - 1))
             }
             Action("Termination") {
-                (black + white == 1)
+                can.black + can.white == 1
             }
-            DeadlockCheck()
+            Invariant("TypeInvariant") {
+                can.black >= 0 && can.black <= maxBeanCount
+                    && can.white >= 0 && can.white <= maxBeanCount
+            }
         }
     }
 }

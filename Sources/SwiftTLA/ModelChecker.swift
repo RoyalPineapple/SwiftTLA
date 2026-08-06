@@ -1,9 +1,7 @@
-/// Explores every reachable state of a TLA+ specification.
+/// Explores every reachable state of a TLA+ specification (plain BFS).
 ///
-/// Pure-functional BFS model checker.
-/// The BFS loop drives CheckerController to track its lifecycle
-/// (exploring → complete / violated / deadlocked).
-/// Verified by CheckerSelfProofTests.
+/// Lifecycle self-proof lives in `TLASpec.bfsChecker` / `@TLAModel BFSChecker`
+/// and composition APIs — not as a decorative controller inside this loop.
 public struct ModelChecker {
     public let spec: TLASpec
     public let maxStates: Int
@@ -15,6 +13,27 @@ public struct ModelChecker {
 
     public func check() throws -> CheckResult { try explore().result }
     public func exploreGraph() throws -> StateGraph { try explore().graph }
+
+    /// Compose checker lifecycle ⋊ user and explore (bootstrap entry point).
+    public static func compose(_ checker: TLASpec, _ user: TLASpec) -> ModelChecker {
+        ModelChecker(spec: checker.extending(user))
+    }
+
+    public static func checkComposed(
+        checker: TLASpec = .bfsChecker(maxStates: 20),
+        user: TLASpec,
+        maxStates: Int = 10_000
+    ) throws -> CheckResult {
+        try compose(checker, user).check()
+    }
+
+    public static func checkComposed<M: TLAModelType>(
+        checker: TLASpec = .bfsChecker(maxStates: 20),
+        user: M.Type,
+        maxStates: Int = 10_000
+    ) throws -> CheckResult {
+        try checkComposed(checker: checker, user: user.spec, maxStates: maxStates)
+    }
 
     private typealias State = [String: TLAValue]
 
@@ -31,21 +50,20 @@ public struct ModelChecker {
             : substituted.actions
 
         let initialStates = computeInitialStates(substituted)
-        let canonical = buildCanonicalizer(substituted.variables)
-        let expand = buildExpander(actions, variableNames: variableNames)
-        let evaluate = buildEvaluator()
+        guard !initialStates.isEmpty else {
+            return emptyExploration(substituted, variableNames: variableNames, result: .error("No initial states"))
+        }
 
         guard try checkAssume(substituted, initial: initialStates[0]) else {
             return emptyExploration(substituted, variableNames: variableNames, result: .error("ASSUME failed"))
         }
 
         let seeds = initialStates.enumerated().map { (StateGraph.StateID($0.offset), $0.element) }
-        return bfs(
+        return try bfs(
             seeds: seeds,
             variableNames: variableNames,
-            canonical: canonical,
-            expand: expand,
-            evaluate: evaluate,
+            expand: buildExpander(actions, variableNames: variableNames),
+            evaluate: buildEvaluator(),
             actions: actions,
             invariants: substituted.invariants,
             checkDeadlock: substituted.checkDeadlock,
@@ -54,14 +72,9 @@ public struct ModelChecker {
         )
     }
 
-    // MARK: - Pure helpers
-
     private func computeInitialStates(_ specification: TLASpec) -> [State] {
         let base = Dictionary(uniqueKeysWithValues: specification.variables.map { ($0.name, $0.initial) })
         let nondeterministic = specification.variables.filter { v in
-            // Only variables with an explicit initialSet (set via `in:` range)
-            // are nondeterministic. Plain .set([...]) initial values are
-            // concrete (e.g. q = {0} for a set-typed variable).
             guard v.initialSet != nil else { return false }
             if case .set = v.initial { return true }
             return false
@@ -73,25 +86,28 @@ public struct ModelChecker {
         }
     }
 
-    private func buildCanonicalizer(_ variables: [NamedVar]) -> (State) -> State {
-        let symmetrySets: [SymmetrySet] = variables.compactMap { variable in
-            guard case .set(let values) = variable.initial else { return nil }
-            return SymmetrySet(variableName: variable.name, values: values)
-        }
-        return { state in symmetrySets.reduce(state) { $1.canonicalize($0) } }
-    }
-
-    private func buildExpander(_ actions: [NamedAction], variableNames: [String]) -> (State) -> [(String, State)] {
+    private func buildExpander(
+        _ actions: [NamedAction],
+        variableNames: [String]
+    ) -> (State) throws -> [(String, State)] {
         { state in
-            actions.flatMap { action -> [(String, State)] in
-                guard let successors = try? ActionEnumerator.enumerate(action.body, from: state, varNames: variableNames) else { return [] }
-                return successors.map { (action.name, $0) }
+            var result: [(String, State)] = []
+            for action in actions {
+                do {
+                    let successors = try ActionEnumerator.enumerate(
+                        action.body, from: state, varNames: variableNames
+                    )
+                    result.append(contentsOf: successors.map { (action.name, $0) })
+                } catch {
+                    throw CheckerEvalError.action(action.name, error)
+                }
             }
+            return result
         }
     }
 
-    private func buildEvaluator() -> (StateExpr, State) -> Bool {
-        { expression, state in (try? Evaluator.evaluateBool(expression, in: state)) ?? false }
+    private func buildEvaluator() -> (StateExpr, State) throws -> Bool {
+        { expression, state in try Evaluator.evaluateBool(expression, in: state) }
     }
 
     private func checkAssume(_ specification: TLASpec, initial: State) throws -> Bool {
@@ -99,156 +115,208 @@ public struct ModelChecker {
         return try Evaluator.evaluateBool(assume, in: initial)
     }
 
-    private func emptyExploration(_ specification: TLASpec, variableNames: [String], result: CheckResult) -> Exploration {
-        Exploration(result: result, graph: StateGraph(specName: specification.name, variableNames: variableNames, transitions: [:], states: [:]))
+    private func emptyExploration(
+        _ specification: TLASpec,
+        variableNames: [String],
+        result: CheckResult
+    ) -> Exploration {
+        Exploration(
+            result: result,
+            graph: StateGraph(
+                specName: specification.name,
+                variableNames: variableNames,
+                transitions: [:],
+                states: [:]
+            )
+        )
     }
 }
 
-// MARK: - Pure functional BFS
+// MARK: - Plain BFS
 
 private typealias State = [String: TLAValue]
+
+private enum CheckerEvalError: Error, CustomStringConvertible {
+    case action(String, Error)
+    case invariant(String, Error)
+    case enabled(String, Error)
+
+    var description: String {
+        switch self {
+        case .action(let n, let e): return "Action '\(n)': \(e)"
+        case .invariant(let n, let e): return "Invariant '\(n)': \(e)"
+        case .enabled(let n, let e): return "ENABLED('\(n)'): \(e)"
+        }
+    }
+}
 
 private func bfs(
     seeds: [(StateGraph.StateID, State)],
     variableNames: [String],
-    canonical: (State) -> State,
-    expand: (State) -> [(String, State)],
-    evaluate: (StateExpr, State) -> Bool,
+    expand: (State) throws -> [(String, State)],
+    evaluate: (StateExpr, State) throws -> Bool,
     actions: [NamedAction],
     invariants: [NamedInvariant],
     checkDeadlock: Bool,
     specificationName: String,
     maxStates: Int
-) -> ModelChecker.Exploration {
-    bfsLoop(
-        queue: seeds.map(\.1),
-        stateToID: Dictionary(seeds.map { (canonical($0.1), $0.0) }, uniquingKeysWith: { existing, _ in existing }),
-        idToState: Dictionary(seeds.map { ($0.0, $0.1) }, uniquingKeysWith: { existing, _ in existing }),
-        visited: Set(seeds.map { canonical($0.1) }),
-        transitions: [:],
-        predecessors: [:],
-        nextID: seeds.count,
-        maxStates: maxStates,
-        actions: actions,
-        variableNames: variableNames,
-        canonical: canonical,
-        expand: expand,
-        evaluate: evaluate,
-        invariants: invariants,
-        checkDeadlock: checkDeadlock,
-        specificationName: specificationName
+) throws -> ModelChecker.Exploration {
+    var queue = seeds.map(\.1)
+    var stateToID = Dictionary(
+        seeds.map { (canonicalKey($0.1), $0.0) },
+        uniquingKeysWith: { existing, _ in existing }
     )
-}
-
-private func bfsLoop(
-    queue: [State],
-    stateToID: [State: StateGraph.StateID],
-    idToState: [StateGraph.StateID: State],
-    visited: Set<State>,
-    transitions: [StateGraph.StateID: [StateGraph.Transition]],
-    predecessors: [State: (State, String)],
-    nextID: Int,
-    maxStates: Int,
-    actions: [NamedAction],
-    variableNames: [String],
-    canonical: (State) -> State,
-    expand: (State) -> [(String, State)],
-    evaluate: (StateExpr, State) -> Bool,
-    invariants: [NamedInvariant],
-    checkDeadlock: Bool,
-    specificationName: String
-) -> ModelChecker.Exploration {
-    var currentQueue = queue
-    var currentStateToID = stateToID
-    var currentIDToState = idToState
-    var currentVisited = visited
-    var currentTransitions = transitions
-    var currentPredecessors = predecessors
-    var currentNextID = nextID
+    var idToState = Dictionary(
+        seeds.map { ($0.0, $0.1) },
+        uniquingKeysWith: { existing, _ in existing }
+    )
+    var visited = Set(seeds.map { canonicalKey($0.1) })
+    var transitions: [StateGraph.StateID: [StateGraph.Transition]] = [:]
+    var predecessors: [State: (State, String)] = [:]
+    var nextID = seeds.count
     var head = 0
-
-    // CheckerController tracks the BFS lifecycle, bounded by maxStates
-    var checker = CheckerController(phase: CheckerController.phaseExploring, processed: 0, queued: currentQueue.count, limit: maxStates)
+    var processed = 0
 
     func graph() -> StateGraph {
-        StateGraph(specName: specificationName, variableNames: variableNames, transitions: currentTransitions, states: currentIDToState)
+        StateGraph(
+            specName: specificationName,
+            variableNames: variableNames,
+            transitions: transitions,
+            states: idToState
+        )
     }
 
-    while checker.isExploring {
-        guard checker.processed < maxStates else {
-            return ModelChecker.Exploration(result: .depthExceeded(statesCount: checker.processed, limit: maxStates), graph: graph())
-        }
-        guard head < currentQueue.count else {
-            checker.apply(.complete)
-            return ModelChecker.Exploration(result: .ok(statesCount: checker.processed), graph: graph())
+    while head < queue.count {
+        guard processed < maxStates else {
+            return ModelChecker.Exploration(
+                result: .depthExceeded(statesCount: processed, limit: maxStates),
+                graph: graph()
+            )
         }
 
-        let current = currentQueue[head]
+        let current = queue[head]
         head += 1
+        processed += 1
 
-        guard let currentID = currentStateToID[canonical(current)] else {
-            checker.apply(.stepNoNew)
-            continue
+        guard let currentID = stateToID[canonicalKey(current)] else { continue }
+
+        let enabled: State
+        do {
+            enabled = try enabledState(current, actions: actions, variableNames: variableNames)
+        } catch {
+            return ModelChecker.Exploration(
+                result: .error(String(describing: error)),
+                graph: graph()
+            )
         }
 
-
-        let enabled = enabledState(current, actions: actions, variableNames: variableNames)
-        for invariant in invariants where !evaluate(invariant.body, enabled) {
-            checker.apply(.violate)
-            let trace = buildTrace(to: current, predecessors: currentPredecessors, initial: currentQueue.count > 0 ? currentQueue[0] : current)
-            return ModelChecker.Exploration(result: .invariantViolated(invariant: invariant.name, state: current, trace: trace), graph: graph())
+        for invariant in invariants {
+            let holds: Bool
+            do {
+                holds = try evaluate(invariant.body, enabled)
+            } catch {
+                return ModelChecker.Exploration(
+                    result: .error("Invariant '\(invariant.name)': \(error)"),
+                    graph: graph()
+                )
+            }
+            if !holds {
+                let trace = buildTrace(
+                    to: current,
+                    predecessors: predecessors,
+                    initial: queue.isEmpty ? current : queue[0]
+                )
+                return ModelChecker.Exploration(
+                    result: .invariantViolated(
+                        invariant: invariant.name,
+                        state: current,
+                        trace: trace
+                    ),
+                    graph: graph()
+                )
+            }
         }
 
-        let successors = expand(current)
+        let successors: [(String, State)]
+        do {
+            successors = try expand(current)
+        } catch {
+            return ModelChecker.Exploration(
+                result: .error(String(describing: error)),
+                graph: graph()
+            )
+        }
+
         if checkDeadlock && successors.isEmpty {
-            checker.apply(.deadlock)
-            return ModelChecker.Exploration(result: .deadlocked(state: current), graph: graph())
+            return ModelChecker.Exploration(
+                result: .deadlocked(state: current),
+                graph: graph()
+            )
         }
 
         for (successorAction, successorState) in successors {
-            let canonicalForm = canonical(successorState)
-            if let targetID = currentStateToID[canonicalForm] {
-                currentTransitions[currentID, default: []] += [StateGraph.Transition(action: successorAction, target: targetID)]
+            let key = canonicalKey(successorState)
+            if let targetID = stateToID[key] {
+                transitions[currentID, default: []] += [
+                    StateGraph.Transition(action: successorAction, target: targetID)
+                ]
             }
         }
 
-        let newStates = successors.filter { !currentVisited.contains(canonical($0.1)) }
-        if newStates.isEmpty {
-            checker.apply(.stepNoNew)
-        } else {
-            for successor in newStates {
-                let canonicalForm = canonical(successor.1)
-                let targetID = currentStateToID[canonicalForm] ?? StateGraph.StateID(currentNextID)
-                currentTransitions[currentID, default: []] += [StateGraph.Transition(action: successor.0, target: targetID)]
-                if currentStateToID[canonicalForm] != nil { continue }
-                currentStateToID[canonicalForm] = StateGraph.StateID(currentNextID)
-                currentIDToState[StateGraph.StateID(currentNextID)] = successor.1
-                currentPredecessors[successor.1] = (current, successor.0)
-                currentQueue.append(successor.1)
-                currentVisited.insert(canonicalForm)
-                currentNextID += 1
-            }
-            checker.apply(.stepDiscover)
+        for successor in successors where !visited.contains(canonicalKey(successor.1)) {
+            let key = canonicalKey(successor.1)
+            let targetID = StateGraph.StateID(nextID)
+            transitions[currentID, default: []] += [
+                StateGraph.Transition(action: successor.0, target: targetID)
+            ]
+            stateToID[key] = targetID
+            idToState[targetID] = successor.1
+            predecessors[successor.1] = (current, successor.0)
+            queue.append(successor.1)
+            visited.insert(key)
+            nextID += 1
         }
     }
 
-    // Loop exited — only possible via checker.apply(.complete) when queue is empty
-    return ModelChecker.Exploration(result: .ok(statesCount: checker.processed), graph: graph())
+    return ModelChecker.Exploration(
+        result: .ok(statesCount: processed),
+        graph: graph()
+    )
 }
 
-private func enabledState(_ state: State, actions: [NamedAction], variableNames: [String]) -> State {
-    actions.filter { !$0.name.isEmpty }.reduce(state) { currentState, action in
-        let isEnabled = (try? ActionEnumerator.enumerate(action.body, from: state, varNames: variableNames))?.isEmpty == false
-        return currentState.merging(["_enabled_" + action.name: TLAValue.bool(isEnabled)]) { _, new in new }
+/// Identity key — no silent symmetry (fragment v1).
+private func canonicalKey(_ state: State) -> State { state }
+
+private func enabledState(
+    _ state: State,
+    actions: [NamedAction],
+    variableNames: [String]
+) throws -> State {
+    var result = state
+    for action in actions where !action.name.isEmpty {
+        do {
+            let successors = try ActionEnumerator.enumerate(
+                action.body, from: state, varNames: variableNames
+            )
+            result["_enabled_" + action.name] = .bool(!successors.isEmpty)
+        } catch {
+            throw CheckerEvalError.enabled(action.name, error)
+        }
     }
+    return result
 }
 
-private func buildTrace(to final: State, predecessors: [State: (State, String)], initial: State) -> [TraceStep] {
+private func buildTrace(
+    to final: State,
+    predecessors: [State: (State, String)],
+    initial: State
+) -> [TraceStep] {
     func loop(_ current: State, _ accumulated: [(State, String)]) -> [(State, String)] {
         guard let (predecessor, action) = predecessors[current] else { return accumulated }
         return loop(predecessor, [(current, action)] + accumulated)
     }
-    return [TraceStep(state: initial, action: "init")] + loop(final, []).map { TraceStep(state: $0.0, action: $0.1) }
+    return [TraceStep(state: initial, action: "init")]
+        + loop(final, []).map { TraceStep(state: $0.0, action: $0.1) }
 }
 
 // MARK: - Results
@@ -264,7 +332,9 @@ public enum CheckResult: CustomStringConvertible {
         switch self {
         case .ok(let count): return "OK — explored " + String(count) + " state(s)"
         case .invariantViolated(let inv, _, let trace):
-            let t = trace.enumerated().map { "  " + String($0.offset) + ". [" + $0.element.action + "] " + formatState($0.element.state) }
+            let t = trace.enumerated().map {
+                "  " + String($0.offset) + ". [" + $0.element.action + "] " + formatState($0.element.state)
+            }
             return "INVARIANT VIOLATED: " + inv + "\n" + t.joined(separator: "\n")
         case .depthExceeded(let count, let l):
             return "DEPTH EXCEEDED — explored " + String(count) + " state(s) before hitting limit of " + String(l)
@@ -281,5 +351,7 @@ public struct TraceStep: CustomStringConvertible {
 }
 
 private func formatState(_ state: [String: TLAValue]) -> String {
-    "{" + state.sorted { $0.key < $1.key }.map { $0.key + " = " + String(describing: $0.value) }.joined(separator: ", ") + "}"
+    "{" + state.sorted { $0.key < $1.key }.map {
+        $0.key + " = " + String(describing: $0.value)
+    }.joined(separator: ", ") + "}"
 }

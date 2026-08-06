@@ -1,28 +1,31 @@
 import SwiftTLA
-import SwiftTLAMacros
 
-@TLAModel
+/// Moving cat — 6 boxes (upstream CatEvenBoxes). Not @TLAModel (parametric N).
 public struct MovingCat {
-    static var spec: TLASpec {
-        TLASpec("MovingCat") {
+    public static var spec: TLASpec { catSpec(boxes: 6) }
+
+    static func catSpec(boxes: Int) -> TLASpec {
+        let cat = Var<Int>("cat_box", value: 1)
+        let observed = Var<Int>("observed_box", value: 2)
+        let direction = Var<String>("direction", value: "right")
+        return TLASpec("MovingCat") {
             Extends("Naturals")
-            let cat = Var<Int>("cat", value: 3)
-            let observed = Var<Int>("observed", value: 3)
-            let direction = Var<String>("direction", value: "right")
-            Variable(cat, 3)
-            Variable(observed, 3)
-            Variable(direction, "right")
-            Definition("Number_Of_Boxes == 6")
+            Variable(cat, in: 1...boxes)
+            Variable(observed, in: 2...(boxes - 1))
+            Variable(direction, in: ["left", "right"])
             Invariant("TypeOK") {
-                cat >= 1 && cat <= 6 && observed >= 2 && observed <= 5 &&
-                (direction == "left" || direction == "right")
+                cat >= 1 && cat <= boxes
+                    && observed >= 2 && observed <= boxes - 1
+                    && (direction == "left" || direction == "right")
             }
             Action("Next") {
-                (cat < 6 && cat.becomes(cat + 1) || cat > 1 && cat.becomes(cat - 1)) &&
-                ((direction == "right" && observed < 5) && observed.becomes(observed + 1) ||
-                 (direction == "right" && observed == 5) && observed.becomes(observed - 1) && direction.becomes("left") ||
-                 (direction == "left" && observed > 2) && observed.becomes(observed - 1) ||
-                 (direction == "left" && observed == 2) && observed.becomes(observed + 1) && direction.becomes("right"))
+                ((cat < boxes && cat.becomes(cat + 1)) || (cat > 1 && cat.becomes(cat - 1)))
+                    && (
+                        (direction == "right" && observed < boxes - 1 && observed.becomes(observed + 1))
+                            || (direction == "right" && observed == boxes - 1 && direction.becomes("left"))
+                            || (direction == "left" && observed > 2 && observed.becomes(observed - 1))
+                            || (direction == "left" && observed == 2 && direction.becomes("right"))
+                    )
             }
         }
     }

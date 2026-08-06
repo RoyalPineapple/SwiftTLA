@@ -14,7 +14,9 @@ let package = Package(
     products: [
         .library(name: "SwiftTLA", targets: ["SwiftTLA"]),
         .library(name: "SwiftTLAMacros", targets: ["SwiftTLAMacros"]),
+        .library(name: "SwiftTLAModels", targets: ["SwiftTLAModels"]),
         .library(name: "SwiftTLAUI", targets: ["SwiftTLAUI"]),
+        .library(name: "UpstreamParity", targets: ["UpstreamParity"]),
     ],
     dependencies: [
         .package(url: "https://github.com/swiftlang/swift-syntax", from: "600.0.0"),
@@ -25,18 +27,24 @@ let package = Package(
             .product(name: "SwiftBasicFormat", package: "swift-syntax"),
             .product(name: "SwiftSyntaxBuilder", package: "swift-syntax"),
         ], swiftSettings: settings),
-        .target(name: "SwiftTLAMacros", dependencies: ["SwiftTLAPlugin"]),
+        .target(name: "SwiftTLAMacros", dependencies: ["SwiftTLA", "SwiftTLAPlugin"]),
         .macro(name: "SwiftTLAPlugin", dependencies: [
             "SwiftTLA",
-            "SwiftTLAUI",
             .product(name: "SwiftCompilerPlugin", package: "swift-syntax"),
             .product(name: "SwiftSyntax", package: "swift-syntax"),
             .product(name: "SwiftSyntaxMacros", package: "swift-syntax"),
             .product(name: "SwiftDiagnostics", package: "swift-syntax"),
             .product(name: "SwiftParser", package: "swift-syntax"),
         ]),
+        .target(name: "SwiftTLAModels", dependencies: ["SwiftTLA", "SwiftTLAMacros"], swiftSettings: settings),
         .target(name: "SwiftTLAUI", dependencies: ["SwiftTLA"]),
-        .executableTarget(name: "tlc-validate", dependencies: ["SwiftTLA"], path: "Sources/TLCValidate"),
-        .testTarget(name: "SwiftTLATests", dependencies: ["SwiftTLA"], swiftSettings: settings),
+        .target(name: "UpstreamParity", dependencies: ["SwiftTLA"], swiftSettings: settings),
+        .executableTarget(name: "tlc-validate", dependencies: ["SwiftTLA", "UpstreamParity"], path: "Sources/TLCValidate"),
+        .testTarget(name: "SwiftTLATests", dependencies: [
+            "SwiftTLA",
+            "SwiftTLAModels",
+            "SwiftTLAMacros",
+            "UpstreamParity",
+        ], swiftSettings: settings),
     ]
 )

@@ -107,18 +107,34 @@ extension TLASpec {
     }
 }
 
+/// Push UNCHANGED into every OR branch after distributing AND over OR.
+/// Without distribution, `assignedVars` unions all branches and a variable
+/// assigned in only one arm is treated as assigned in every arm (TLC error).
 public func completeAction(_ e: ActionExpr, allVars: [String]) -> ActionExpr {
-    switch e {
-    case .or(let a, let b):
-        return .or(completeAction(a, allVars: allVars), completeAction(b, allVars: allVars))
-    default:
-        let assigned = assignedVars(e)
-        let explicit = explicitUnchanged(e)
-        var result = e
+    let branches = distributeActionOr(e)
+    let completed: [ActionExpr] = branches.map { branch in
+        let assigned = assignedVars(branch)
+        let explicit = explicitUnchanged(branch)
+        var result = branch
         for v in allVars where !assigned.contains(v) && !explicit.contains(v) {
             result = .and(result, .unchanged(v))
         }
         return result
+    }
+    guard let first = completed.first else { return e }
+    return completed.dropFirst().reduce(first) { .or($0, $1) }
+}
+
+private func distributeActionOr(_ action: ActionExpr) -> [ActionExpr] {
+    switch action {
+    case .or(let a, let b):
+        return distributeActionOr(a) + distributeActionOr(b)
+    case .and(let a, let b):
+        let lhs = distributeActionOr(a)
+        let rhs = distributeActionOr(b)
+        return lhs.flatMap { l in rhs.map { r in .and(l, r) } }
+    default:
+        return [action]
     }
 }
 

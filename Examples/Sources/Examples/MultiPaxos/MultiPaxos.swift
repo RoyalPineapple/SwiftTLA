@@ -1,11 +1,9 @@
 import SwiftTLA
-import SwiftTLAMacros
 
 /// MultiPaxos consensus with record-based messages and quorum acceptance.
 /// 2 acceptors, 2 values, 2 ballots. Records: msg.type, msg.bal, msg.val, msg.acc.
-@TLAModel
 public struct MultiPaxos {
-    static var spec: TLASpec {
+    public static var spec: TLASpec {
         TLASpec("MultiPaxos") {
             Extends("Integers")
 

@@ -7,15 +7,12 @@ public struct ViewGenerator {
 
     public func generate() -> String {
         let specName = graph.specName.replacingOccurrences(of: " ", with: "")
-        let varNames = graph.variableNames
-        let stateDesc = varNames.map { v in "\"\(v): \\(machine.\(v))\"" }.joined(separator: " + \"\\n\" + ")
-
         return """
         import SwiftUI
         import SwiftTLA
 
         public struct \(specName)DemoView: View {
-            @State private var machine = \(specName).Machine.initial
+            @State private var machine = \(specName).StateMachine.initial
 
             public init() {}
 

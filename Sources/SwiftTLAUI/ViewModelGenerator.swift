@@ -21,10 +21,15 @@ public struct ViewModelGenerator {
 
         let canProperties = specification.actions.map { action in
             let lowercased = lowered(action.name)
-            return "    public var can" + action.name + ": Bool { machine.enabledActions.contains(." + lowercased + ") }"
+            return "    public var can" + action.name
+                + ": Bool { machine.availableTransitions.contains(." + lowercased + ") }"
         }.joined(separator: "\n")
 
-        return "import Observation\n\n@Observable public final class ViewModel {\n    public var machine: " + typeName + ".Machine\n    public init(_ machine: " + typeName + ".Machine = " + typeName + ".Machine.initial) { self.machine = machine }\n\n" + stateProperties + "\n\n" + actionMethods + "\n\n" + canProperties + "\n}\n"
+        return "import Observation\n\n@Observable public final class ViewModel {\n"
+            + "    public var machine: " + typeName + ".StateMachine\n"
+            + "    public init(_ machine: " + typeName + ".StateMachine = "
+            + typeName + ".StateMachine.initial) { self.machine = machine }\n\n"
+            + stateProperties + "\n\n" + actionMethods + "\n\n" + canProperties + "\n}\n"
     }
 
     private func lowered(_ name: String) -> String {

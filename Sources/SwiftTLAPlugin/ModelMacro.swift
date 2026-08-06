@@ -6,7 +6,22 @@ import SwiftDiagnostics
 import SwiftParser
 import SwiftTLA
 
-public struct ModelMacro: MemberMacro {
+public struct ModelMacro: MemberMacro, ExtensionMacro {
+    public static func expansion(
+        of node: AttributeSyntax,
+        attachedTo declaration: some DeclGroupSyntax,
+        providingExtensionsOf type: some TypeSyntaxProtocol,
+        conformingTo protocols: [TypeSyntax],
+        in context: some MacroExpansionContext
+    ) throws -> [ExtensionDeclSyntax] {
+        guard let ext = ("""
+            extension \(type.trimmed): TLAModelType {}
+            """ as DeclSyntax).as(ExtensionDeclSyntax.self) else {
+            return []
+        }
+        return [ext]
+    }
+
     public static func expansion(
         of node: AttributeSyntax,
         providingMembersOf declaration: some DeclGroupSyntax,
@@ -294,7 +309,6 @@ public struct ModelMacro: MemberMacro {
             }
             public var transitions: [(action: Transition, target: Self)] { [] }
             public var availableTransitions: [Transition] { [] }
-            public var enabledTransitions: [Transition] { [] }
             public mutating func apply(_ transition: Transition) {}
             public var description: String { "" }
         }

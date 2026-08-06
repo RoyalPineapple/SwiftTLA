@@ -1,11 +1,9 @@
 import SwiftTLA
-import SwiftTLAMacros
 
 /// Tortoise and Hare: Floyd's cycle detection algorithm.
 /// Two pointers move at different speeds through a linked list of N nodes.
-@TLAModel
 public struct TortoiseHare {
-    static var spec: TLASpec {
+    public static var spec: TLASpec {
         TLASpec("TortoiseHare") {
             Extends("Naturals")
             let t = Var<Int>("tortoise", value: 0)
