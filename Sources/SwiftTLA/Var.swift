@@ -64,8 +64,6 @@ extension TLAValue: StateExprConvertible { public var stateExpr: StateExpr { .va
 // Action closures without explicit .stateExpr calls.
 extension StateExprConvertible {
     public func isIn(_ set: some StateExprConvertible) -> StateExpr { stateExpr.isIn(set) }
-    public func union(_ other: some StateExprConvertible) -> StateExpr { stateExpr.union(other) }
-    public func intersection(_ other: some StateExprConvertible) -> StateExpr { stateExpr.intersection(other) }
     public func subtracting(_ other: some StateExprConvertible) -> StateExpr { stateExpr.subtracting(other) }
     public func isSubset(of other: some StateExprConvertible) -> StateExpr { stateExpr.isSubset(of: other) }
     public func updated(at key: some StateExprConvertible, to value: some StateExprConvertible) -> StateExpr { stateExpr.updated(at: key, to: value) }
@@ -81,6 +79,14 @@ extension StateExprConvertible {
     public func concatenating(_ other: StateExpr) -> StateExpr { stateExpr.concatenating(other) }
     public func at(_ index: Int) -> StateExpr { stateExpr.at(index) }
     public func integerDivided(by divisor: some StateExprConvertible) -> StateExpr { stateExpr.integerDivided(by: divisor) }
+
+    // `union` and `intersection` clash with StateExpr enum cases — call the constructor directly.
+    public func union(_ other: some StateExprConvertible) -> StateExpr {
+        StateExpr.union(stateExpr, other.stateExpr)
+    }
+    public func intersection(_ other: some StateExprConvertible) -> StateExpr {
+        StateExpr.intersection(stateExpr, other.stateExpr)
+    }
 }
 
 public protocol TLAValueConvertible { var tlaValue: TLAValue { get } }
@@ -160,6 +166,21 @@ extension StateExpr {
 
 extension ActionExpr {
     public static func choose(_ variable: String, from set: StateExpr) -> ActionExpr { .chooseAction(variable, set) }
+}
+
+extension StateExpr {
+    /// Shorthand for single-element set: `.set(value)` = `setLiteral([value])`.
+    public static func singleton(_ element: some StateExprConvertible) -> StateExpr {
+        .setLiteral([element.stateExpr])
+    }
+}
+
+/// Nondeterministically picks a value from a set and binds it to the variable.
+/// `choose(s, from: q)` produces `s' ∈ q` (chooseAction). Subsequent references
+/// to `s` in the action body resolve to the chosen value.
+@discardableResult
+public func choose(_ variable: Var<some TLAValueType>, from set: some StateExprConvertible) -> ActionExpr {
+    .chooseAction(variable.name, set.stateExpr)
 }
 
 extension StateExpr {

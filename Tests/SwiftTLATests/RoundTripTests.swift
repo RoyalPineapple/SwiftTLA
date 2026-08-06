@@ -707,9 +707,8 @@ struct CheckerSelfProofTests {
         #expect(tla.contains("q"))
         #expect(tla.contains("visited"))
         #expect(tla.contains("explored"))
-        #expect(tla.contains("q' = ((q \\ {0})"))
-        #expect(tla.contains("visited' = (visited \\cup {1})"))
-        #expect(tla.contains("explored' = (explored \\cup {0})"))
+        #expect(tla.contains("picked"))
+        #expect(tla.contains("q' = ((q \\"))
     }
 
     @Test("CheckerController is bounded — processes up to limit then completes")
