@@ -536,3 +536,11 @@ private func explicitUnchanged(_ e: ActionExpr) -> Set<String> {
     default: return []
     }
 }
+
+/// Joint nondeterministic init: two variables from a constrained cross-product.
+/// CoffeeCan: Variable(black, white, in: 0...10, where: { b, w in b + w > 0 && b + w <= 10 })
+@discardableResult
+public func Variable<T, U>(_ ref1: Var<T>, _ ref2: Var<U>, in range: ClosedRange<Int>, where predicate: (Int, Int) -> Bool) -> VarDecl {
+    let values = range.flatMap { v1 in range.compactMap { v2 in predicate(v1, v2) ? TLAValue.tuple([.int(v1), .int(v2)]) : nil } }
+    return VarDecl("\(ref1.name)+\(ref2.name)", .tuple(values))
+}
