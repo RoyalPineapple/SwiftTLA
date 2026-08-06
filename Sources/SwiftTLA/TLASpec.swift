@@ -435,7 +435,7 @@ extension TLASpec {
 public func substituteConstants(_ spec: TLASpec) -> TLASpec {
     let constants = spec.constants
     let vars = spec.variables.map { v in
-        NamedVar(name: v.name, initial: substituteInValue(v.initial, constants: constants), initialSet: v.initialSet)
+        NamedVar(name: v.name, initial: substituteInValue(v.initial, constants: constants), initialSet: v.initialSet, initExpr: v.initExpr)
     }
     let acts = spec.actions.map { a in
         NamedAction(name: a.name, body: substituteInAction(a.body, constants: constants))

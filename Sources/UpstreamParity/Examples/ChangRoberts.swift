@@ -6,10 +6,10 @@ extension Example {
         upstreamSpec: "chang_roberts",
         upstreamModule: "specifications/chang_roberts/ChangRoberts.tla",
         upstreamCfg: "specifications/chang_roberts/MCChangRoberts.cfg",
-        expectedDistinct: 132,
+        expectedDistinct: 137,
         expectedResult: "success",
         spec: changRobertsSpec(),
-        notes: "N=3, Id=i. No picked variable — CHOOSE per-value expansion.",
+        notes: "N=3, Id=i. 137 states matching upstream. CHOOSE per-value expansion.",
         matchesUpstreamTLC: true
     )
 
@@ -33,8 +33,10 @@ static func changRobertsSpec() -> TLASpec {
         let nodeSet = StateExpr.set([1, 2, 3])
         let stateExpr: StateExpr = StateExpr.functionLiteral(p, in: nodeSet,
             StateExpr.if(
-                StateExpr.functionApply(StateExpr.variable("initiator"),
-                    StateExpr.variable("p")) == StateExpr.value(.bool(true)),
+                StateExpr.equal(
+                    StateExpr.functionApply(StateExpr.variable("initiator"),
+                        StateExpr.variable("p")),
+                    StateExpr.value(.bool(true))),
                 then: StateExpr.value(.string("cand")),
                 else: StateExpr.value(.string("lost"))))
 
