@@ -21,7 +21,6 @@ public enum TLAValue: Hashable, Codable, Sendable, CustomStringConvertible {
             let fields = r.sorted(by: { $0.key < $1.key }).map { "\($0.key) |-> \($0.value)" }
             return "[\(fields.joined(separator: ", "))]"
         case .function(let mapping):
-            // Prefer [x \in {k1,k2} |-> v] when all values equal; else enum with @@ (needs TLC).
             let sorted = mapping.sorted(by: { $0.key < $1.key })
             if sorted.isEmpty { return "[x \\in {} |-> TRUE]" }
             let values = Set(sorted.map(\.value))
@@ -29,9 +28,9 @@ public enum TLAValue: Hashable, Codable, Sendable, CustomStringConvertible {
                 let domain = "{\(sorted.map { "\($0.key)" }.joined(separator: ", "))}"
                 return "[x \\in \(domain) |-> \(v)]"
             }
-            let entries = sorted.map { "(\($0.key) :> \($0.value))" }
-            if entries.count == 1 { return entries[0] }
-            return entries.joined(separator: " @@ ")
+            let domain = "{\(sorted.map { "\($0.key)" }.joined(separator: ", "))}"
+            let body = sorted.map { "(x = \($0.key)) -> \($0.value)" }.joined(separator: " [] ")
+            return "[x \\in \(domain) |-> CASE \(body)]"
 
         case .constant(let name): return name
         }
