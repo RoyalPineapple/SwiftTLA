@@ -152,6 +152,15 @@ public enum SpecParser {
             return becomesChain
         }
 
+        if let functionCall = expression.as(FunctionCallExprSyntax.self) {
+            if let becomesChain = parseBecomesChain(functionCall) {
+                return becomesChain
+            }
+            if let chooseAction = parseChooseCall(functionCall) {
+                return chooseAction
+            }
+        }
+
         if let memberAccess = expression.as(MemberAccessExprSyntax.self),
            memberAccess.declName.baseName.text == "stays",
            let baseReference = memberAccess.base?.as(DeclReferenceExprSyntax.self) {
@@ -159,6 +168,17 @@ public enum SpecParser {
         }
 
         return nil
+    }
+
+    /// Parses `choose(variable, from: set)` into `.chooseAction(name, set)`.
+    private static func parseChooseCall(_ call: FunctionCallExprSyntax) -> ActionExpr? {
+        guard let ref = call.calledExpression.as(DeclReferenceExprSyntax.self),
+              ref.baseName.text == "choose",
+              let variableArg = call.arguments.first?.expression.as(DeclReferenceExprSyntax.self),
+              let fromArg = call.arguments.dropFirst().first?.expression,
+              let setExpr = parseStateExpr(fromArg)
+        else { return nil }
+        return .chooseAction(variableArg.baseName.text, setExpr)
     }
 
     /// Folds a multi-element SequenceExprSyntax (5+ elements) into an ActionExpr
@@ -508,6 +528,17 @@ public enum SpecParser {
                 }
             }
             return .caseExpr(flatPairs, fallbackExpr)
+
+        case "singleton":
+            guard let element = parseStateExpr(arguments.first?.expression) else { return nil }
+            return .setLiteral([element])
+
+        case "functionLiteral":
+            guard arguments.count >= 2,
+                  let domain = parseStateExpr(arguments[0].expression),
+                  let body = parseStateExpr(arguments[1].expression)
+            else { return nil }
+            return .functionLiteral(domain, body)
 
         default:
             return nil
