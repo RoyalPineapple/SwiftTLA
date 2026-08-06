@@ -1,11 +1,9 @@
 /// Explores every reachable state of a TLA+ specification.
 ///
-/// BFS invariants proven by CheckerMachine (verified @TLAModel spec)
-/// and 11 self-proof tests in CheckerSelfProofTests:
-/// - All explored states are reachable
-/// - No transitions target unknown states  
-/// - States ≤ maxStates bound
-/// - Invariants checked on every processed state
+/// Pure-functional BFS model checker.
+/// The BFS loop drives CheckerController to track its lifecycle
+/// (exploring → complete / violated / deadlocked).
+/// Verified by CheckerSelfProofTests.
 public struct ModelChecker {
     public let spec: TLASpec
     public let maxStates: Int
@@ -125,7 +123,6 @@ private func bfs(
         transitions: [:],
         predecessors: [:],
         nextID: seeds.count,
-        stepCount: 0,
         maxStates: maxStates,
         actions: actions,
         variableNames: variableNames,
@@ -147,7 +144,6 @@ private func bfsLoop(
     transitions: [StateGraph.StateID: [StateGraph.Transition]],
     predecessors: [State: (State, String)],
     nextID: Int,
-    stepCount: Int,
     maxStates: Int,
     actions: [NamedAction],
     variableNames: [String],
@@ -166,43 +162,47 @@ private func bfsLoop(
     var currentTransitions = transitions
     var currentPredecessors = predecessors
     var currentNextID = nextID
-    var currentStepCount = stepCount
     var head = 0
+
+    // CheckerController tracks the BFS lifecycle, bounded by maxStates
+    var checker = CheckerController(phase: CheckerController.phaseExploring, processed: 0, queued: currentQueue.count, limit: maxStates)
 
     func graph() -> StateGraph {
         StateGraph(specName: specificationName, variableNames: variableNames, transitions: currentTransitions, states: currentIDToState)
     }
 
-    // Verified controller: CheckerMachine.StateMachine tracks BFS phase
-
-    while true {
-        guard currentStepCount < maxStates else {
-            return ModelChecker.Exploration(result: .depthExceeded(statesCount: currentStepCount, limit: maxStates), graph: graph())
+    while checker.isExploring {
+        guard checker.processed < maxStates else {
+            return ModelChecker.Exploration(result: .depthExceeded(statesCount: checker.processed, limit: maxStates), graph: graph())
         }
         guard head < currentQueue.count else {
-            return ModelChecker.Exploration(result: .ok(statesCount: currentStepCount), graph: graph())
+            checker.apply(.complete)
+            return ModelChecker.Exploration(result: .ok(statesCount: checker.processed), graph: graph())
         }
 
         let current = currentQueue[head]
         head += 1
+
         guard let currentID = currentStateToID[canonical(current)] else {
-            currentStepCount += 1
+            checker.apply(.stepNoNew)
             continue
         }
 
         if let checkConstraint = constraint, evaluate(checkConstraint, current) {
-            currentStepCount += 1
+            checker.apply(.stepNoNew)
             continue
         }
 
         let enabled = enabledState(current, actions: actions, variableNames: variableNames)
         for invariant in invariants where !evaluate(invariant.body, enabled) {
+            checker.apply(.violate)
             let trace = buildTrace(to: current, predecessors: currentPredecessors, initial: currentQueue.count > 0 ? currentQueue[0] : current)
             return ModelChecker.Exploration(result: .invariantViolated(invariant: invariant.name, state: current, trace: trace), graph: graph())
         }
 
         let successors = expand(current)
         if checkDeadlock && successors.isEmpty {
+            checker.apply(.deadlock)
             return ModelChecker.Exploration(result: .deadlocked(state: current), graph: graph())
         }
 
@@ -214,19 +214,34 @@ private func bfsLoop(
         }
 
         let newStates = successors.filter { !currentVisited.contains(canonical($0.1)) }
-        for successor in newStates {
-            let canonicalForm = canonical(successor.1)
-            let targetID = currentStateToID[canonicalForm] ?? StateGraph.StateID(currentNextID)
-            currentTransitions[currentID, default: []] += [StateGraph.Transition(action: successor.0, target: targetID)]
-            if currentStateToID[canonicalForm] != nil { continue }
-            currentStateToID[canonicalForm] = StateGraph.StateID(currentNextID)
-            currentIDToState[StateGraph.StateID(currentNextID)] = successor.1
-            currentPredecessors[successor.1] = (current, successor.0)
-            currentQueue.append(successor.1)
-            currentVisited.insert(canonicalForm)
-            currentNextID += 1
+        if newStates.isEmpty {
+            checker.apply(.stepNoNew)
+        } else {
+            for successor in newStates {
+                let canonicalForm = canonical(successor.1)
+                let targetID = currentStateToID[canonicalForm] ?? StateGraph.StateID(currentNextID)
+                currentTransitions[currentID, default: []] += [StateGraph.Transition(action: successor.0, target: targetID)]
+                if currentStateToID[canonicalForm] != nil { continue }
+                currentStateToID[canonicalForm] = StateGraph.StateID(currentNextID)
+                currentIDToState[StateGraph.StateID(currentNextID)] = successor.1
+                currentPredecessors[successor.1] = (current, successor.0)
+                currentQueue.append(successor.1)
+                currentVisited.insert(canonicalForm)
+                currentNextID += 1
+            }
+            checker.apply(.stepDiscover)
         }
-        currentStepCount += 1
+    }
+
+    switch checker.phase {
+    case CheckerController.phaseComplete:
+        return ModelChecker.Exploration(result: .ok(statesCount: checker.processed), graph: graph())
+    case CheckerController.phaseViolated:
+        return ModelChecker.Exploration(result: .depthExceeded(statesCount: checker.processed, limit: maxStates), graph: graph())
+    case CheckerController.phaseDeadlocked:
+        return ModelChecker.Exploration(result: .depthExceeded(statesCount: checker.processed, limit: maxStates), graph: graph())
+    default:
+        return ModelChecker.Exploration(result: .depthExceeded(statesCount: checker.processed, limit: maxStates), graph: graph())
     }
 }
 

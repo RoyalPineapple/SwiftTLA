@@ -685,6 +685,60 @@ struct GeneratorTests {
 // MARK: - Checker self-proof: BFS invariants verified on our own checker
 
 struct CheckerSelfProofTests {
+    @Test("CheckerController is bounded — processes up to limit then completes")
+    func checkerControllerTransitions() {
+        var machine = CheckerController(phase: 0, processed: 0, queued: 2, limit: 2)
+        #expect(machine.isExploring)
+
+        // processed=0 < queued=2: both step variants available
+        let names = Set(machine.availableTransitions.map(\.rawValue))
+        #expect(names.contains("stepDiscover"))
+        #expect(names.contains("stepNoNew"))
+
+        // stepNoNew: processed=1, queued=2 — still can process
+        machine.apply(.stepNoNew)
+        #expect(machine.processed == 1 && machine.queued == 2)
+        #expect(machine.isExploring)
+
+        // stepNoNew again: processed=2 reaches limit — can't process more
+        machine.apply(.stepNoNew)
+        #expect(machine.processed == 2 && machine.queued == 2)
+        #expect(machine.isExploring)
+        #expect(machine.availableTransitions.contains(where: { $0 == .complete }))
+
+        machine.apply(.complete)
+        #expect(machine.isComplete)
+    }
+
+    @Test("CheckerController composition: checker spec + user spec = checker checking user")
+    func checkerControllerComposition() throws {
+        // The checker spec models BFS exploration bounded by maxStates
+        let checkerSpec = createCheckerSpec(maxStates: 5)
+
+        // A user spec with a simple counter
+        let counter = Var<Int>("counter", value: 0)
+        let userSpec = TLASpec("Counter") {
+            Variable(counter, 0)
+            Action("increment") { counter.becomes(counter + 1).when(counter < 10) }
+            Invariant("counterNonNegative") { counter >= 0 }
+        }
+
+        // Compose: the checker's BFS orchestration + the user's state machine
+        let composed = checkerSpec.extending(userSpec)
+
+        // Model-check the composition — the checker processes states while the user's
+        // counter increments. Bounded by maxStates=5 so the checker stops naturally.
+        let graph = try ModelChecker(spec: composed, maxStates: 10).exploreGraph()
+
+        // The composition's state space includes both checker and user variables.
+        // We expect states where the counter advances while the checker tracks progress.
+        #expect(graph.states.count > 0)
+        #expect(graph.variableNames.contains("phase"))
+        #expect(graph.variableNames.contains("processed"))
+        #expect(graph.variableNames.contains("queued"))
+        #expect(graph.variableNames.contains("counter"))
+    }
+
     @Test("All explored states are reachable from initial")
     func reachability() throws {
         let x = Var<Int>("x", value: 0)

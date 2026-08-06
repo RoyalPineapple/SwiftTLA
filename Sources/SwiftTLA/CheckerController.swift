@@ -1,47 +1,81 @@
-/// Manually implemented BFS controller. Semantics verified by:
-/// - CheckerMachine spec (Specifications/BFSExplorer/CheckerMachine.swift)
-/// - CheckerSelfProofTests (11 invariants)
-/// - TLA+ BFSExplorer model (Specifications/BFSExplorer/BFSExplorer.tla)
-public enum CheckerPhase: Int { case exploring = 0, ok = 1, violation = 2, deadlock = 3 }
-
+/// BFS model checker state machine. Bounded by a `limit` — the checker
+/// stops processing when `processed >= limit`, mirroring the TLA+ pattern
+/// `CONSTANT MaxExplore / Cardinality(explored) < MaxExplore`.
+///
+/// Generated from the DSL spec in CheckerModel.swift; regenerate there.
 public struct CheckerController: Equatable, Hashable, Codable, Sendable, TLAMachine {
-    public var phase: Int
-    public var step: Int
-    public var count: Int
+    public static let phaseExploring  = 0
+    public static let phaseComplete   = 1
+    public static let phaseViolated   = 2
+    public static let phaseDeadlocked = 3
 
-    public init(phase: Int, step: Int, count: Int) {
-        self.phase = phase; self.step = step; self.count = count
+    public var phase: Int
+    public var processed: Int
+    public var queued: Int
+    public var limit: Int
+
+    public var isExploring:  Bool { phase == Self.phaseExploring }
+    public var isComplete:   Bool { phase == Self.phaseComplete }
+    public var isViolated:   Bool { phase == Self.phaseViolated }
+    public var isDeadlocked: Bool { phase == Self.phaseDeadlocked }
+
+    public init(phase: Int = Self.phaseExploring, processed: Int = 0, queued: Int = 1, limit: Int = 100) {
+        self.phase = phase
+        self.processed = processed
+        self.queued = queued
+        self.limit = limit
     }
 
-    public static let initial = CheckerController(phase: 0, step: 0, count: 1)
+    public static func initial(limit: Int = 100) -> CheckerController {
+        CheckerController(phase: phaseExploring, processed: 0, queued: 1, limit: limit)
+    }
+
+    public static let initial = CheckerController(phase: phaseExploring, processed: 0, queued: 1, limit: 100)
 
     public enum Transition: String, CaseIterable, Identifiable, Codable, Sendable, CustomStringConvertible {
-        case explore; case exploreNoNew; case finish; case violate; case deadlock
+        case stepDiscover
+        case stepNoNew
+        case complete
+        case violate
+        case deadlock
         public var id: Self { self }
         public var description: String { rawValue }
     }
 
-    public var transitions: [(transition: Transition, target: CheckerController)] {
-        switch (phase, step, count) {
-        case (0, let s, let c) where s < c:
-            return [(.explore, CheckerController(phase: 0, step: s+1, count: c+1)),
-                    (.exploreNoNew, CheckerController(phase: 0, step: s+1, count: c))]
-        case (0, let s, let c) where s >= c && c > 0:
-            return [(.finish, CheckerController(phase: 1, step: s, count: c)),
-                    (.deadlock, CheckerController(phase: 3, step: s, count: c))]
-        case (0, _, _):
-            return [(.violate, CheckerController(phase: 2, step: step, count: count))]
+    public var transitions: [(action: Transition, target: Self)] {
+        let canProcess = processed < queued && processed < limit
+
+        switch phase {
+        case Self.phaseExploring where canProcess:
+            return [
+                (.stepDiscover, CheckerController(phase: Self.phaseExploring, processed: processed + 1, queued: queued + 1, limit: limit)),
+                (.stepNoNew,   CheckerController(phase: Self.phaseExploring, processed: processed + 1, queued: queued,     limit: limit)),
+            ]
+        case Self.phaseExploring where processed >= queued && queued > 0 && processed < limit:
+            return [
+                (.complete, CheckerController(phase: Self.phaseComplete, processed: processed, queued: queued, limit: limit)),
+                (.deadlock, CheckerController(phase: Self.phaseDeadlocked, processed: processed, queued: queued, limit: limit)),
+            ]
+        case Self.phaseExploring where processed >= limit:
+            return [
+                (.complete, CheckerController(phase: Self.phaseComplete, processed: processed, queued: queued, limit: limit)),
+            ]
+        case Self.phaseExploring where queued == 0:
+            return [
+                (.violate, CheckerController(phase: Self.phaseViolated, processed: processed, queued: queued, limit: limit)),
+            ]
         default:
             return []
         }
     }
 
-    public var availableTransitions: [Transition] { transitions.map(\.transition) }
+    public var availableTransitions: [Transition] { transitions.map { $0.action } }
+    public var enabledTransitions: [Transition] { availableTransitions }
 
-    public mutating func apply(_ t: Transition) {
-        guard let next = transitions.first(where: { $0.transition == t })?.target else { return }
+    public mutating func apply(_ transition: Transition) {
+        guard let next = transitions.first(where: { $0.action == transition })?.target else { return }
         self = next
     }
 
-    public var description: String { "p=\(phase) s=\(step) c=\(count)" }
+    public var description: String { "phase=\(phase) p=\(processed) q=\(queued) L=\(limit)" }
 }

@@ -1,4 +1,5 @@
 import SwiftSyntax
+import SwiftParser
 
 /// Parses SwiftSyntax AST nodes into DSL types (StateExpr, ActionExpr, etc.).
 /// Every AST pattern maps deterministically to a DSL value.
@@ -134,13 +135,16 @@ public enum SpecParser {
 
         if let sequence = expression.as(SequenceExprSyntax.self) {
             let elements = Array(sequence.elements)
-            guard elements.count == 3,
-                  let operatorText = elements[1].as(BinaryOperatorExprSyntax.self)?.operator.text,
-                  let leftAction = parseSingleAction(elements[0]),
-                  let rightAction = parseSingleAction(elements[2])
-            else { return nil }
-            if operatorText == "||" { return .or(leftAction, rightAction) }
-            if operatorText == "&&" { return .and(leftAction, rightAction) }
+            if elements.count == 3 {
+                let operatorText = elements[1].as(BinaryOperatorExprSyntax.self)?.operator.text
+                if let leftAction = parseSingleAction(elements[0]),
+                   let rightAction = parseSingleAction(elements[2]) {
+                    if operatorText == "||" { return .or(leftAction, rightAction) }
+                    if operatorText == "&&" { return .and(leftAction, rightAction) }
+                }
+            } else if elements.count > 3 {
+                return foldActionSequence(elements)
+            }
         }
 
         if let functionCall = expression.as(FunctionCallExprSyntax.self),
@@ -154,6 +158,91 @@ public enum SpecParser {
             return .unchanged(baseReference.baseName.text)
         }
 
+        return nil
+    }
+
+    /// Folds a multi-element SequenceExprSyntax (5+ elements) into an ActionExpr
+    /// by splitting on || (lowest precedence) then && within each group.
+    private static func foldActionSequence(_ elements: [ExprSyntax]) -> ActionExpr? {
+        // The sequence alternates: leaf, operator, leaf, operator, leaf, ...
+        // Operator positions: 1, 3, 5, ...   Leaf positions: 0, 2, 4, ...
+        guard elements.count >= 3, elements.count % 2 == 1 else { return nil }
+
+        var orSplitIndices: [Int] = []
+        for index in stride(from: 1, to: elements.count, by: 2) {
+            if elements[index].as(BinaryOperatorExprSyntax.self)?.operator.text == "||" {
+                orSplitIndices.append(index)
+            }
+        }
+
+        if orSplitIndices.isEmpty {
+            return foldAndGroup(elements)
+        }
+
+        var groups: [ActionExpr] = []
+        var start = 0
+        for splitIndex in orSplitIndices {
+            if let group = foldAndGroup(Array(elements[start..<splitIndex])) {
+                groups.append(group)
+            }
+            start = splitIndex + 1
+        }
+        if start < elements.count, let group = foldAndGroup(Array(elements[start...])) {
+            groups.append(group)
+        }
+
+        guard !groups.isEmpty else { return nil }
+        return groups.dropFirst().reduce(groups[0]) { .or($0, $1) }
+    }
+
+    /// Folds a sequence containing only && operators (or a single leaf) into an ActionExpr.
+    private static func foldAndGroup(_ elements: [ExprSyntax]) -> ActionExpr? {
+        guard elements.count >= 1 else { return nil }
+        if elements.count == 1 { return parseLeafAsAction(elements[0]) }
+
+        var andSplitIndices: [Int] = []
+        for index in stride(from: 1, to: elements.count, by: 2) {
+            if elements[index].as(BinaryOperatorExprSyntax.self)?.operator.text == "&&" {
+                andSplitIndices.append(index)
+            }
+        }
+
+        if andSplitIndices.isEmpty {
+            return parseAndLeaf(elements)
+        }
+
+        var leafActions: [ActionExpr] = []
+        var start = 0
+        for splitIndex in andSplitIndices {
+            if let leaf = parseAndLeaf(Array(elements[start..<splitIndex])) {
+                leafActions.append(leaf)
+            }
+            start = splitIndex + 1
+        }
+        if start < elements.count, let leaf = parseAndLeaf(Array(elements[start...])) {
+            leafActions.append(leaf)
+        }
+
+        guard !leafActions.isEmpty else { return nil }
+        return leafActions.dropFirst().reduce(leafActions[0]) { .and($0, $1) }
+    }
+
+    /// Parses a leaf slice (one or more ExprSyntax elements) as an action or guard.
+    private static func parseAndLeaf(_ slice: [ExprSyntax]) -> ActionExpr? {
+        if slice.count == 1 {
+            return parseLeafAsAction(slice[0])
+        }
+        let source = slice.map { $0.description }.joined()
+        guard let reconstructed = SwiftParser.Parser.parse(source: source).statements.first?.item.as(ExprSyntax.self) else {
+            return nil
+        }
+        return parseLeafAsAction(reconstructed)
+    }
+
+    /// Tries to parse a single expression as either an action or a guard (state expression).
+    private static func parseLeafAsAction(_ expression: ExprSyntax) -> ActionExpr? {
+        if let action = parseSingleAction(expression) { return action }
+        if let state = parseStateExpr(expression) { return .guard_(state) }
         return nil
     }
 
