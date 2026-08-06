@@ -60,6 +60,9 @@ public struct ModelChecker {
     private func computeInitialStates(_ specification: TLASpec) -> [State] {
         let base = Dictionary(uniqueKeysWithValues: specification.variables.map { ($0.name, $0.initial) })
         let nondeterministic = specification.variables.filter { v in
+            // Only variables with an explicit initialSet (set via `in:` range)
+            // are nondeterministic. Plain .set([...]) initial values are
+            // concrete (e.g. q = {0} for a set-typed variable).
             guard v.initialSet != nil else { return false }
             if case .set = v.initial { return true }
             return false

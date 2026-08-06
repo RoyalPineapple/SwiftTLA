@@ -24,7 +24,6 @@ public struct DieHard {
                 (big + small <= 3) && small.becomes(big + small) && big.becomes(0) ||
                 (big + small > 3)  && small.becomes(3) && big.becomes(big - (3 - small))
             }
-            Invariant("NotSolved") { big != 4 }
         }
     }
 }

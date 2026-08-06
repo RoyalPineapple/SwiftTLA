@@ -133,7 +133,7 @@ public struct ModelMacro: MemberMacro {
                     if call.arguments.count >= 2, call.arguments[call.arguments.index(call.arguments.startIndex, offsetBy: 1)].label?.text == "in" {
                         let rangeExpr = call.arguments.dropFirst().first?.expression
                         let values = parseRangeValues(rangeExpr)
-                        let stateSet = rangeExpr.flatMap(parseStateExpr)
+                        let stateSet: StateExpr? = rangeExpr.flatMap { expr in parseStateExpr(expr) }
                         result.variables.append((ref.baseName.text, .set(values), stateSet))
                     } else {
                         guard let value = parseInitialValue(call.arguments.dropFirst().first?.expression) else { continue }
