@@ -103,18 +103,6 @@ public func <= <L: StateExprConvertible, R: StateExprConvertible>(lhs: L, rhs: R
 public func >  <L: StateExprConvertible, R: StateExprConvertible>(lhs: L, rhs: R) -> StateExpr { .greaterThan(lhs.stateExpr, rhs.stateExpr) }
 public func >= <L: StateExprConvertible, R: StateExprConvertible>(lhs: L, rhs: R) -> StateExpr { .greaterOrEqual(lhs.stateExpr, rhs.stateExpr) }
 
-// MARK: - Set operators (domain notation)
-
-infix operator ∈ : ComparisonPrecedence
-infix operator ⊆ : ComparisonPrecedence
-infix operator ∪ : AdditionPrecedence
-infix operator ∩ : MultiplicationPrecedence
-
-public func ∈ <L: StateExprConvertible, R: StateExprConvertible>(lhs: L, rhs: R) -> StateExpr { .in(lhs.stateExpr, rhs.stateExpr) }
-public func ⊆ (lhs: StateExpr, rhs: StateExpr) -> StateExpr { .subset(lhs, rhs) }
-public func ∪ (lhs: StateExpr, rhs: StateExpr) -> StateExpr { .union(lhs, rhs) }
-public func ∩ (lhs: StateExpr, rhs: StateExpr) -> StateExpr { .intersection(lhs, rhs) }
-
 extension StateExpr {
     public func isIn(_ set: some StateExprConvertible) -> StateExpr { .in(self, set.stateExpr) }
     public func union(_ other: some StateExprConvertible) -> StateExpr { .union(self, other.stateExpr) }
@@ -132,11 +120,14 @@ extension StateExpr {
     public func mapping(_ expression: StateExpr) -> StateExpr { .setMap(expression, self) }
     public func appending(_ element: StateExpr) -> StateExpr { .tupleAppend(self, element) }
     public func concatenating(_ other: StateExpr) -> StateExpr { .tupleConcatenate(self, other) }
+    public func at(_ index: Int) -> StateExpr { .tupleAccess(self, index) }
+    public func integerDivided(by divisor: some StateExprConvertible) -> StateExpr { .integerDivide(self, divisor.stateExpr) }
 
     public static func set(_ elements: [some StateExprConvertible]) -> StateExpr { .setLiteral(elements.map(\.stateExpr)) }
     public static func `for`(allIn set: StateExpr, _ predicate: StateExpr) -> StateExpr { .forAll(set, predicate) }
     public static func exists(in set: StateExpr, _ predicate: StateExpr) -> StateExpr { .exists(set, predicate) }
     public static func choose(from set: StateExpr, matching predicate: StateExpr) -> StateExpr { .choose(set, predicate) }
+    public static func any(from set: StateExpr) -> StateExpr { .choose(set, .value(.bool(true))) }
     public static func function(domain: StateExpr, _ body: StateExpr) -> StateExpr { .functionLiteral(domain, body) }
     public static func tuple(_ elements: [some StateExprConvertible]) -> StateExpr { .tupleLiteral(elements.map(\.stateExpr)) }
     public static func record(_ fields: [String: StateExpr]) -> StateExpr { .recordLiteral(fields) }
@@ -150,5 +141,12 @@ extension ActionExpr {
 extension StateExpr {
     public static func `if`(_ condition: some StateExprConvertible, then: some StateExprConvertible, else: some StateExprConvertible) -> StateExpr {
         .ifThenElse(condition.stateExpr, then.stateExpr, `else`.stateExpr)
+    }
+
+    public static func firstMatch(
+        _ cases: (when: StateExpr, then: StateExpr)...,
+        fallback: StateExpr? = nil
+    ) -> StateExpr {
+        .caseExpr(cases.flatMap { [$0.when, $0.then] }, fallback)
     }
 }

@@ -130,11 +130,4 @@ private func completeAction(_ e: ActionExpr, allVars: [String]) -> ActionExpr {
     }
 }
 
-private func explicitUnchanged(_ e: ActionExpr) -> Set<String> {
-    switch e {
-    case .unchanged(let v): return [v]
-    case .or(let a, let b): return explicitUnchanged(a).intersection(explicitUnchanged(b))
-    case .and(let a, let b): return explicitUnchanged(a).union(explicitUnchanged(b))
-    default: return []
-    }
-}
+

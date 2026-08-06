@@ -64,7 +64,8 @@ public struct ModelChecker {
         let nondeterministic = specification.variables.filter { if case .set = $0.initial { return true }; return false }
         return nondeterministic.reduce([base]) { states, variable in
             guard case .set(let values) = variable.initial else { return states }
-            return states.flatMap { state in values.map { state.merging([variable.name: $0]) { _, new in new } } }
+            let sorted = TLAValue.sorted(values)
+            return states.flatMap { state in sorted.map { state.merging([variable.name: $0]) { _, new in new } } }
         }
     }
 

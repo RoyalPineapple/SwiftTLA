@@ -120,3 +120,15 @@ extension StateExpr {
     public static func bool(_ value: Bool) -> StateExpr { .value(.bool(value)) }
 }
 
+extension StateExpr: ExpressibleByIntegerLiteral {
+    public init(integerLiteral value: Int) { self = .value(.int(value)) }
+}
+
+extension StateExpr: ExpressibleByBooleanLiteral {
+    public init(booleanLiteral value: Bool) { self = .value(.bool(value)) }
+}
+
+extension StateExpr: ExpressibleByStringLiteral {
+    public init(stringLiteral value: String) { self = .value(.string(value)) }
+}
+

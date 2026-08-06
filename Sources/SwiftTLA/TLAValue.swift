@@ -44,6 +44,36 @@ extension TLAValue: ExpressibleByBooleanLiteral {
     public init(booleanLiteral value: Bool) { self = .bool(value) }
 }
 
+extension TLAValue: Comparable {
+    public static func < (lhs: TLAValue, rhs: TLAValue) -> Bool {
+        switch (lhs, rhs) {
+        case (.int(let a), .int(let b)): return a < b
+        case (.int, _): return false
+        case (_, .int): return true
+        case (.bool(let a), .bool(let b)): return (a ? 1 : 0) < (b ? 1 : 0)
+        case (.bool, _): return false
+        case (_, .bool): return true
+        case (.string(let a), .string(let b)): return a < b
+        case (.string, _): return false
+        case (_, .string): return true
+        case (.set(let a), .set(let b)): return a.count < b.count
+        case (.set, _): return false
+        case (_, .set): return true
+        case (.tuple(let a), .tuple(let b)): return a.count < b.count
+        case (.tuple, _): return false
+        case (_, .tuple): return true
+        case (.record(let a), .record(let b)): return a.count < b.count
+        case (.record, _): return false
+        case (_, .record): return true
+        case (.constant(let a), .constant(let b)): return a < b
+        }
+    }
+
+    public static func sorted(_ values: Set<TLAValue>) -> [TLAValue] {
+        Array(values).sorted()
+    }
+}
+
 extension TLAValue: ExpressibleByStringLiteral {
     public init(stringLiteral value: String) { self = .string(value) }
 }

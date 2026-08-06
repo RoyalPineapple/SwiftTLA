@@ -19,11 +19,21 @@ public struct ModelMacro: MemberMacro {
 
         let parsed = try parseSpecBody(structDeclaration.memberBlock.members, typeName: typeName)
         if parsed.variables.isEmpty { throw SimpleError("parsed.variables is empty after parseSpecBody") }
+        let variableNames = parsed.variables.map(\.name)
+        let actionsWithUnchanged = parsed.actions.map { a -> NamedAction in
+            let assigned = assignedVars(a.body)
+            let explicit = explicitUnchanged(a.body)
+            var body = a.body
+            for v in variableNames where !assigned.contains(v) && !explicit.contains(v) {
+                body = .and(body, .unchanged(v))
+            }
+            return NamedAction(name: a.name, body: body)
+        }
         let specification = TLASpec(
             name: typeName,
             variables: parsed.variables.map { NamedVar(name: $0.name, initial: $0.initial, initialSet: $0.initialSet) },
             constants: parsed.constants,
-            actions: parsed.actions.map { NamedAction(name: $0.name, body: $0.body) },
+            actions: actionsWithUnchanged,
             invariants: parsed.invariants.map { NamedInvariant(name: $0.name, body: $0.body) },
             temporalProperties: parsed.temporal.map { NamedTemporal(name: $0.name, expr: $0.expr) },
             fairness: parsed.fairness
@@ -121,8 +131,10 @@ public struct ModelMacro: MemberMacro {
                 case "Variable":
                     guard let ref = call.arguments.first?.expression.as(DeclReferenceExprSyntax.self) else { continue }
                     if call.arguments.count >= 2, call.arguments[call.arguments.index(call.arguments.startIndex, offsetBy: 1)].label?.text == "in" {
-                        let setExpr = call.arguments.dropFirst().first?.expression
-                        result.variables.append((ref.baseName.text, .int(0), setExpr.flatMap(parseStateExpr)))
+                        let rangeExpr = call.arguments.dropFirst().first?.expression
+                        let values = parseRangeValues(rangeExpr)
+                        let stateSet = rangeExpr.flatMap(parseStateExpr)
+                        result.variables.append((ref.baseName.text, .set(values), stateSet))
                     } else {
                         guard let value = parseInitialValue(call.arguments.dropFirst().first?.expression) else { continue }
                         result.variables.append((ref.baseName.text, value, nil))
@@ -246,6 +258,18 @@ public struct ModelMacro: MemberMacro {
               let base = memberAccess.base?.as(DeclReferenceExprSyntax.self),
               let argument = call.arguments.first?.expression else { return nil }
         return (base.baseName.text, parseStateExpr(argument) ?? .value(.int(0)))
+    }
+
+    private static func parseRangeValues(_ expression: ExprSyntax?) -> Set<TLAValue> {
+        guard let sequence = expression?.as(SequenceExprSyntax.self) else { return [] }
+        let elements = Array(sequence.elements)
+        guard elements.count == 3,
+              elements[1].as(BinaryOperatorExprSyntax.self)?.operator.text == "...",
+              let start = elements[0].as(IntegerLiteralExprSyntax.self),
+              let end = elements[2].as(IntegerLiteralExprSyntax.self),
+              let startVal = Int(start.literal.text),
+              let endVal = Int(end.literal.text) else { return [] }
+        return Set((startVal...endVal).map { .int($0) })
     }
 
     // MARK: - State expression parsing
