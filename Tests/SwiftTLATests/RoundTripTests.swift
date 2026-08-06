@@ -736,3 +736,52 @@ struct CheckerSelfProofTests {
         } else { #expect(Bool(false)) }
     }
 }
+
+struct EdgeCaseTests {
+    @Test("3-level nested OR in AND")
+    func nestedOrL3() throws {
+        let a: ActionExpr = .and(
+            .assign("x", .value(.int(1))),
+            .or(.or(.assign("y", .value(.int(2))), .assign("y", .value(.int(3)))), .assign("y", .value(.int(4))))
+        )
+        let s: [String: TLAValue] = ["x": .int(0), "y": .int(0), "z": .int(0)]
+        let r = try ActionEnumerator.enumerate(a, from: s, varNames: ["x", "y", "z"])
+        #expect(r.count == 3)
+    }
+
+    @Test("Deadlock when guard fails at init")
+    func deadlockAtInit() throws {
+        let x = Var<Int>("x", value: 0)
+        let spec = TLASpec("T") { Variable(x, 0); Action("a") { x.becomes(2).when(x == 1) }; DeadlockCheck() }
+        let result = try ModelChecker(spec: spec, maxStates: 100).check()
+        var dead = false; if case .deadlocked = result { dead = true } else { dead = false }
+        #expect(dead)
+    }
+
+    @Test("Deadlock at terminal linear state")
+    func deadlockTerminal() throws {
+        let x = Var<Int>("x", value: 0)
+        let spec = TLASpec("T") { Variable(x, 0); Action("a") { x.becomes(x + 1).when(x < 2) }; DeadlockCheck() }
+        let result = try ModelChecker(spec: spec, maxStates: 100).check()
+        var val: TLAValue = .int(-1)
+        if case .deadlocked(let s) = result { val = s["x"] ?? .int(-1) }
+        #expect(val == .int(2))
+    }
+
+    @Test("No deadlock on cyclic spec")
+    func noDeadlockCyclic() throws {
+        let x = Var<Int>("x", value: 0)
+        let spec = TLASpec("T") { Variable(x, 0); Action("a") { x.becomes((x + 1) % 2) }; DeadlockCheck() }
+        let result = try ModelChecker(spec: spec, maxStates: 100).check()
+        var ok = false; if case .ok = result { ok = true }
+        #expect(ok)
+    }
+
+    @Test("maxStates=1 bounds state count")
+    func maxStatesOne() throws {
+        let x = Var<Int>("x", value: 0)
+        let spec = TLASpec("T") { Variable(x, 0); Action("a") { x.becomes(x + 1) } }
+        let g = try ModelChecker(spec: spec, maxStates: 1).exploreGraph()
+        #expect(g.states.count <= 2)
+    }
+}

@@ -36,6 +36,7 @@ let package = Package(
             .product(name: "SwiftParser", package: "swift-syntax"),
         ]),
         .target(name: "SwiftTLAUI", dependencies: ["SwiftTLA"]),
+        .executableTarget(name: "GoldenVerify", dependencies: ["SwiftTLA"], path: "Sources/GoldenVerify"),
         .testTarget(name: "SwiftTLATests", dependencies: ["SwiftTLA"], swiftSettings: settings),
     ]
 )
