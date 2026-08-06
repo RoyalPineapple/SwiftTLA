@@ -173,65 +173,55 @@ public enum Evaluator {
             return val
 
         case .domain(let f):
-            let v = try evaluate(f, in: state)
-            switch v {
-            case .record(let rv): return .set(Set(rv.keys.map { .string($0) }))
-            case .set(let sv):
-                var keys = Set<TLAValue>()
-                for elem in sv {
-                    if case .record(let rv) = elem { keys.formUnion(rv.keys.map { .string($0) }) }
-                    else if case .tuple(let tv) = elem { keys.formUnion(tv.enumerated().map { .int($0.offset + 1) }) }
-                }
-                return .set(keys)
-            default: throw typeMismatch("DOMAIN", got: v)
+            let value = try evaluate(f, in: state)
+            switch value {
+            case .function(let mapping): return .set(Set(mapping.keys))
+            case .record(let record): return .set(Set(record.keys.map { .string($0) }))
+            default: throw typeMismatch("DOMAIN", got: value)
             }
 
-        case .functionLiteral(let d, let e):
-            guard case .set(let domainSet) = try evaluate(d, in: state) else { throw typeMismatch("function domain", got: try evaluate(d, in: state)) }
-            var result = Set<TLAValue>()
-            for elem in domainSet {
-                let exprWithVar = substituteVariable("_x", elem, in: e)
-                let val = try evaluate(exprWithVar, in: state)
-                if case .tuple(let pair) = elem, pair.count == 2 {
-                    result.insert(.record([tlaValueToString(pair[0]): val]))
-                } else {
-                    result.insert(.record([tlaValueToString(elem): val]))
-                }
+        case .functionLiteral(let domain, let body):
+            guard case .set(let domainSet) = try evaluate(domain, in: state) else {
+                throw typeMismatch("function domain", got: try evaluate(domain, in: state))
             }
-            return .set(result)
-
-        case .functionApply(let f, let x):
-            let funcVal = try evaluate(f, in: state)
-            let argVal = try evaluate(x, in: state)
-            guard case .set(let fset) = funcVal else { throw typeMismatch("function apply", got: funcVal) }
-            let key = tlaValueToString(argVal)
-            for elem in fset {
-                if case .record(let rv) = elem, let v = rv[key] { return v }
+            var mapping: [TLAValue: TLAValue] = [:]
+            for element in domainSet {
+                let substituted = substituteVariable("_x", element, in: body)
+                mapping[element] = try evaluate(substituted, in: state)
             }
-            throw typeMismatch("function apply: key not found '\(key)'")
+            return .function(mapping)
 
-        case .except(let f, let x, let e):
-            let funcVal = try evaluate(f, in: state)
-            let keyVal = try evaluate(x, in: state)
-            let newVal = try evaluate(e, in: state)
-            switch funcVal {
-            case .record(var rv):
-                rv[tlaValueToString(keyVal)] = newVal
-                return .record(rv)
-            case .set(let fset):
-                let key = tlaValueToString(keyVal)
-                var newSet = Set<TLAValue>()
-                for elem in fset {
-                    if case .record(var rv) = elem, rv.keys.contains(key) {
-                        rv[key] = newVal
-                        newSet.insert(.record(rv))
-                    } else {
-                        newSet.insert(elem)
-                    }
+        case .functionApply(let function, let argument):
+            let functionValue = try evaluate(function, in: state)
+            let key = try evaluate(argument, in: state)
+            switch functionValue {
+            case .function(let mapping):
+                guard let result = mapping[key] else {
+                    throw typeMismatch("function apply: key \(key) not found in domain")
                 }
-                return .set(newSet)
+                return result
+            case .record(let record):
+                guard let result = record[tlaValueToString(key)] else {
+                    throw typeMismatch("record field not found")
+                }
+                return result
             default:
-                throw typeMismatch("EXCEPT", got: funcVal)
+                throw typeMismatch("function apply", got: functionValue)
+            }
+
+        case .except(let function, let keyExpr, let valueExpr):
+            let functionValue = try evaluate(function, in: state)
+            let key = try evaluate(keyExpr, in: state)
+            let newValue = try evaluate(valueExpr, in: state)
+            switch functionValue {
+            case .function(var mapping):
+                mapping[key] = newValue
+                return .function(mapping)
+            case .record(var record):
+                record[tlaValueToString(key)] = newValue
+                return .record(record)
+            default:
+                throw typeMismatch("EXCEPT", got: functionValue)
             }
 
         case .forAll(let set, let predicate):
@@ -293,9 +283,53 @@ public enum Evaluator {
         switch expr {
         case .variable(let n) where n == name: return .value(value)
         case .variable: return expr
-        case .value: return expr
-        default: return expr  // shallow substitution — only direct var refs for set filter/map
+        case .value, .enabledAction: return expr
+        case .add(let l, let r): return .add(sub(l), sub(r))
+        case .subtract(let l, let r): return .subtract(sub(l), sub(r))
+        case .multiply(let l, let r): return .multiply(sub(l), sub(r))
+        case .divide(let l, let r): return .divide(sub(l), sub(r))
+        case .modulo(let l, let r): return .modulo(sub(l), sub(r))
+        case .negate(let x): return .negate(sub(x))
+        case .integerDivide(let l, let r): return .integerDivide(sub(l), sub(r))
+        case .equal(let l, let r): return .equal(sub(l), sub(r))
+        case .notEqual(let l, let r): return .notEqual(sub(l), sub(r))
+        case .lessThan(let l, let r): return .lessThan(sub(l), sub(r))
+        case .lessOrEqual(let l, let r): return .lessOrEqual(sub(l), sub(r))
+        case .greaterThan(let l, let r): return .greaterThan(sub(l), sub(r))
+        case .greaterOrEqual(let l, let r): return .greaterOrEqual(sub(l), sub(r))
+        case .and(let l, let r): return .and(sub(l), sub(r))
+        case .or(let l, let r): return .or(sub(l), sub(r))
+        case .not(let x): return .not(sub(x))
+        case .ifThenElse(let c, let t, let e): return .ifThenElse(sub(c), sub(t), sub(e))
+        case .setLiteral(let es): return .setLiteral(es.map(sub))
+        case .in(let e, let s): return .in(sub(e), sub(s))
+        case .subset(let a, let b): return .subset(sub(a), sub(b))
+        case .union(let a, let b): return .union(sub(a), sub(b))
+        case .intersection(let a, let b): return .intersection(sub(a), sub(b))
+        case .setDifference(let a, let b): return .setDifference(sub(a), sub(b))
+        case .cardinality(let s): return .cardinality(sub(s))
+        case .setFilter(let s, let p): return .setFilter(sub(s), sub(p))
+        case .setMap(let e, let s): return .setMap(sub(e), sub(s))
+        case .powerSet(let s): return .powerSet(sub(s))
+        case .unionAll(let s): return .unionAll(sub(s))
+        case .tupleLiteral(let es): return .tupleLiteral(es.map(sub))
+        case .tupleAccess(let t, let i): return .tupleAccess(sub(t), i)
+        case .tupleLength(let t): return .tupleLength(sub(t))
+        case .tupleAppend(let t, let e): return .tupleAppend(sub(t), sub(e))
+        case .tupleConcatenate(let a, let b): return .tupleConcatenate(sub(a), sub(b))
+        case .recordLiteral(let fs): return .recordLiteral(fs.mapValues(sub))
+        case .recordAccess(let r, let f): return .recordAccess(sub(r), f)
+        case .domain(let f): return .domain(sub(f))
+        case .functionLiteral(let d, let body): return .functionLiteral(sub(d), sub(body))
+        case .functionApply(let f, let x): return .functionApply(sub(f), sub(x))
+        case .except(let f, let x, let e): return .except(sub(f), sub(x), sub(e))
+        case .caseExpr(let ps, let fb): return .caseExpr(ps.map(sub), fb.map(sub))
+        case .forAll(let s, let p): return .forAll(sub(s), sub(p))
+        case .exists(let s, let p): return .exists(sub(s), sub(p))
+        case .choose(let s, let p): return .choose(sub(s), sub(p))
         }
+
+        func sub(_ e: StateExpr) -> StateExpr { substituteVariable(name, value, in: e) }
     }
 
     private static func tlaValueToString(_ v: TLAValue) -> String {
@@ -303,7 +337,7 @@ public enum Evaluator {
         case .int(let n): return "\(n)"
         case .string(let s): return s
         case .bool(let b): return "\(b)"
-        case .tuple, .record, .set: return v.description
+        case .tuple, .record, .set, .function: return v.description
         case .constant(let name): return name
         }
     }

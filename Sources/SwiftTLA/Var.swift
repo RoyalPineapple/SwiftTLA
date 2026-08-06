@@ -162,6 +162,21 @@ extension StateExpr {
     public static func tuple(_ elements: [some StateExprConvertible]) -> StateExpr { .tupleLiteral(elements.map(\.stateExpr)) }
     public static func record(_ fields: [String: StateExpr]) -> StateExpr { .recordLiteral(fields) }
     public static func enabled(_ name: String) -> StateExpr { .enabledAction(name) }
+
+    // MARK: - Bound variables
+
+    public static func forAll(_ variable: Var<some TLAValueType>, in set: StateExpr, _ body: StateExpr) -> StateExpr {
+        .forAll(set, substituteVariableBody(variable.name, with: "_x", in: body))
+    }
+    public static func exists(_ variable: Var<some TLAValueType>, in set: StateExpr, _ body: StateExpr) -> StateExpr {
+        .exists(set, substituteVariableBody(variable.name, with: "_x", in: body))
+    }
+    public static func choose(_ variable: Var<some TLAValueType>, from set: StateExpr, matching predicate: StateExpr) -> StateExpr {
+        .choose(set, substituteVariableBody(variable.name, with: "_x", in: predicate))
+    }
+    public static func functionLiteral(_ variable: Var<some TLAValueType>, in domain: StateExpr, _ body: StateExpr) -> StateExpr {
+        .functionLiteral(domain, substituteVariableBody(variable.name, with: "_x", in: body))
+    }
 }
 
 extension ActionExpr {
@@ -194,4 +209,63 @@ extension StateExpr {
     ) -> StateExpr {
         .caseExpr(cases.flatMap { [$0.when, $0.then] }, fallback)
     }
+}
+
+/// Replaces `.variable(from)` with `.variable(to)` throughout a StateExpr.
+/// Used to bind user-facing variable names to the internal `_x` placeholder
+/// so the evaluator's `substituteVariable("_x", value, ...)` can bind actual values.
+public func substituteVariableBody(_ from: String, with to: String, in expression: StateExpr) -> StateExpr {
+    replaceVarInState(from, with: to, in: expression)
+}
+
+private func replaceVarInState(_ from: String, with to: String, in expression: StateExpr) -> StateExpr {
+    switch expression {
+    case .variable(let name): return name == from ? .variable(to) : expression
+    case .value, .enabledAction: return expression
+    case .add(let l, let r): return .add(replace(l), replace(r))
+    case .subtract(let l, let r): return .subtract(replace(l), replace(r))
+    case .multiply(let l, let r): return .multiply(replace(l), replace(r))
+    case .divide(let l, let r): return .divide(replace(l), replace(r))
+    case .modulo(let l, let r): return .modulo(replace(l), replace(r))
+    case .negate(let x): return .negate(replace(x))
+    case .integerDivide(let l, let r): return .integerDivide(replace(l), replace(r))
+    case .equal(let l, let r): return .equal(replace(l), replace(r))
+    case .notEqual(let l, let r): return .notEqual(replace(l), replace(r))
+    case .lessThan(let l, let r): return .lessThan(replace(l), replace(r))
+    case .lessOrEqual(let l, let r): return .lessOrEqual(replace(l), replace(r))
+    case .greaterThan(let l, let r): return .greaterThan(replace(l), replace(r))
+    case .greaterOrEqual(let l, let r): return .greaterOrEqual(replace(l), replace(r))
+    case .and(let l, let r): return .and(replace(l), replace(r))
+    case .or(let l, let r): return .or(replace(l), replace(r))
+    case .not(let x): return .not(replace(x))
+    case .ifThenElse(let c, let t, let e): return .ifThenElse(replace(c), replace(t), replace(e))
+    case .setLiteral(let es): return .setLiteral(es.map(replace))
+    case .in(let e, let s): return .in(replace(e), replace(s))
+    case .subset(let a, let b): return .subset(replace(a), replace(b))
+    case .union(let a, let b): return .union(replace(a), replace(b))
+    case .intersection(let a, let b): return .intersection(replace(a), replace(b))
+    case .setDifference(let a, let b): return .setDifference(replace(a), replace(b))
+    case .cardinality(let s): return .cardinality(replace(s))
+    case .setFilter(let s, let p): return .setFilter(replace(s), replace(p))
+    case .setMap(let e, let s): return .setMap(replace(e), replace(s))
+    case .powerSet(let s): return .powerSet(replace(s))
+    case .unionAll(let s): return .unionAll(replace(s))
+    case .tupleLiteral(let es): return .tupleLiteral(es.map(replace))
+    case .tupleAccess(let t, let i): return .tupleAccess(replace(t), i)
+    case .tupleLength(let t): return .tupleLength(replace(t))
+    case .tupleAppend(let t, let e): return .tupleAppend(replace(t), replace(e))
+    case .tupleConcatenate(let a, let b): return .tupleConcatenate(replace(a), replace(b))
+    case .recordLiteral(let fs): return .recordLiteral(fs.mapValues(replace))
+    case .recordAccess(let r, let f): return .recordAccess(replace(r), f)
+    case .domain(let f): return .domain(replace(f))
+    case .functionLiteral(let d, let body): return .functionLiteral(replace(d), replace(body))
+    case .functionApply(let f, let x): return .functionApply(replace(f), replace(x))
+    case .except(let f, let x, let e): return .except(replace(f), replace(x), replace(e))
+    case .caseExpr(let ps, let fb): return .caseExpr(ps.map(replace), fb.map(replace))
+    case .forAll(let s, let p): return .forAll(replace(s), replace(p))
+    case .exists(let s, let p): return .exists(replace(s), replace(p))
+    case .choose(let s, let p): return .choose(replace(s), replace(p))
+    }
+
+    func replace(_ expr: StateExpr) -> StateExpr { replaceVarInState(from, with: to, in: expr) }
 }

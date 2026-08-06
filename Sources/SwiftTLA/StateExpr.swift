@@ -84,7 +84,7 @@ public indirect enum StateExpr: Hashable, Codable, Sendable, CustomStringConvert
         case .intersection(let a, let b): return "(\(a) \\cap \(b))"
         case .setDifference(let a, let b): return "(\(a) \\ \(b))"
         case .cardinality(let s): return "Cardinality(\(s))"
-        case .setFilter(let s, let p): return "{x \\in \(s) : \(p)}"
+        case .setFilter(let s, let p): return "{x \\in \(s) : \(p)}".replacing("_x", with: "x")
         case .setMap(let e, let s): return "{\(e) : x \\in \(s)}"
         case .powerSet(let s): return "SUBSET \(s)"
         case .unionAll(let s): return "UNION \(s)"
@@ -98,7 +98,7 @@ public indirect enum StateExpr: Hashable, Codable, Sendable, CustomStringConvert
             return "[\(entries.joined(separator: ", "))]"
         case .recordAccess(let r, let f): return "\(r).\(f)"
         case .domain(let f): return "DOMAIN \(f)"
-        case .functionLiteral(let d, let e): return "[x \\in \(d) |-> \(e)]"
+        case .functionLiteral(let d, let e): return "[x \\in \(d) |-> \(e)]\n".replacing("_x", with: "x")
         case .functionApply(let f, let x): return "\(f)[\(x)]"
         case .except(let f, let x, let e): return "[\(f) EXCEPT ![\(x)] = \(e)]"
         case .caseExpr(let pairs, let other):
@@ -107,9 +107,9 @@ public indirect enum StateExpr: Hashable, Codable, Sendable, CustomStringConvert
             }.joined(separator: " [] ")
             if let o = other { return "CASE \(cases) [] OTHER -> \(o)" }
             return "CASE \(cases)"
-        case .forAll(let s, let p): return "\\A x \\in \(s) : \(p)"
-        case .exists(let s, let p): return "\\E x \\in \(s) : \(p)"
-        case .choose(let s, let p): return "CHOOSE x \\in \(s) : \(p)"
+        case .forAll(let s, let p): return "\\A x \\in \(s) : \(p)".replacing("_x", with: "x")
+        case .exists(let s, let p): return "\\E x \\in \(s) : \(p)".replacing("_x", with: "x")
+        case .choose(let s, let p): return "CHOOSE x \\in \(s) : \(p)".replacing("_x", with: "x")
         case .enabledAction(let a): return "ENABLED \(a)"
         }
     }

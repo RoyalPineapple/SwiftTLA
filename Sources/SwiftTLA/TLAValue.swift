@@ -5,6 +5,7 @@ public enum TLAValue: Hashable, Codable, Sendable, CustomStringConvertible {
     case set(Set<TLAValue>)
     case tuple([TLAValue])
     case record([String: TLAValue])
+    case function([TLAValue: TLAValue])
     case constant(String)
 
     public var description: String {
@@ -19,6 +20,9 @@ public enum TLAValue: Hashable, Codable, Sendable, CustomStringConvertible {
         case .record(let r):
             let fields = r.sorted(by: { $0.key < $1.key }).map { "\($0.key) |-> \($0.value)" }
             return "[\(fields.joined(separator: ", "))]"
+        case .function(let mapping):
+            let entries = mapping.sorted(by: { $0.key < $1.key }).map { "\($0.key) :> \($0.value)" }
+            return "[\(entries.joined(separator: ", "))]"
         case .constant(let name): return name
         }
     }
@@ -65,6 +69,9 @@ extension TLAValue: Comparable {
         case (.record(let a), .record(let b)): return a.count < b.count
         case (.record, _): return false
         case (_, .record): return true
+        case (.function(let a), .function(let b)): return a.count < b.count
+        case (.function, _): return false
+        case (_, .function): return true
         case (.constant(let a), .constant(let b)): return a < b
         }
     }

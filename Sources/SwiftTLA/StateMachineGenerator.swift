@@ -114,6 +114,7 @@ public struct StateMachineGenerator {
         case .set: return "[]"
         case .tuple: return "[]"
         case .record: return "[:]"
+        case .function: return "[:]"
         case .constant(let n): return n
         }
     }
