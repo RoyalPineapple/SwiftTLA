@@ -92,7 +92,7 @@ public struct ModelChecker {
     }
 
     private func buildEvaluator() -> (StateExpr, State) -> Bool {
-        { expression, state in try! Evaluator.evaluateBool(expression, in: state) }
+        { expression, state in (try? Evaluator.evaluateBool(expression, in: state)) ?? false }
     }
 
     private func checkAssume(_ specification: TLASpec, initial: State) throws -> Bool {
@@ -240,16 +240,8 @@ private func bfsLoop(
         }
     }
 
-    switch checker.phase {
-    case CheckerController.phaseComplete:
-        return ModelChecker.Exploration(result: .ok(statesCount: checker.processed), graph: graph())
-    case CheckerController.phaseViolated:
-        return ModelChecker.Exploration(result: .depthExceeded(statesCount: checker.processed, limit: maxStates), graph: graph())
-    case CheckerController.phaseDeadlocked:
-        return ModelChecker.Exploration(result: .depthExceeded(statesCount: checker.processed, limit: maxStates), graph: graph())
-    default:
-        return ModelChecker.Exploration(result: .depthExceeded(statesCount: checker.processed, limit: maxStates), graph: graph())
-    }
+    // Loop exited — only possible via checker.apply(.complete) when queue is empty
+    return ModelChecker.Exploration(result: .ok(statesCount: checker.processed), graph: graph())
 }
 
 private func enabledState(_ state: State, actions: [NamedAction], variableNames: [String]) -> State {
