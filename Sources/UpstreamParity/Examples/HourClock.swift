@@ -8,20 +8,17 @@ extension Example {
         upstreamCfg: "specifications/SpecifyingSystems/HourClock/HourClock.cfg",
         expectedDistinct: 12,
         expectedResult: "success",
-        spec: {
-            let hr = Var<Int>("hr", value: 1)
-            return TLASpec("HourClock") {
-                Extends("Naturals")
-                Variable(hr, in: 1...12)
-                Action("HCnxt") {
-                    (hr != 12) && hr.becomes(hr + 1) ||
-                    (hr == 12) && hr.becomes(1)
-                }
-                Invariant("HCini") { hr >= 1 && hr <= 12 }
+        spec: TLASpec("HourClock") {
+            Extends("Naturals")
+            let hr = Var<Int>("hr")
+            Variable(hr, in: 1...12)
+            Action("HCnxt") {
+                (hr != 12 && hr.becomes(hr + 1)) ||
+                (hr == 12 && hr.becomes(1))
             }
-        }(),
-        notes: "Upstream SPECIFICATION HC; export uses Spec. TLC = 12.",
+            Invariant("HCini") { hr >= 1 && hr <= 12 }
+        },
+        notes: "Pure DSL: zero Swift computation. Var<T> + builders only. TLC = 12.",
         matchesUpstreamTLC: true
     )
-
 }

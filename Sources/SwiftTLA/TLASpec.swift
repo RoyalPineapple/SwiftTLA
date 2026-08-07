@@ -302,6 +302,18 @@ public enum ActionBuilder {
 }
 
 @discardableResult
+public func Variable(_ name: String, _ initial: some TLAValueConvertible) -> VarDecl {
+    VarDecl(name, initial.tlaValue)
+}
+
+@discardableResult
+public func Variable(_ name: String, in values: some Sequence<some TLAValueConvertible>) -> VarDecl {
+    let set = Set(values.map(\.tlaValue))
+    let stateSet: StateExpr = .setLiteral(set.map { .value($0) })
+    return VarDecl(name, .set(set), initialSet: stateSet)
+}
+
+@discardableResult
 public func Variable<T>(_ ref: Var<T>, _ initial: some TLAValueConvertible) -> VarDecl {
     VarDecl(ref.name, initial.tlaValue)
 }
