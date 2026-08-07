@@ -18,14 +18,14 @@ public typealias TLASequence = TLATupleType  // TLA+ sequences are tuples at run
 /// Used in `@TLAModel` spec bodies and builder DSL closures.
 ///
 /// ```swift
-/// let isLocked = Var(0)          // Var<Int>, name inferred from binding
-/// let isLocked = Var("isLocked") // explicit name
+/// let isLocked = Var<Bool>("isLocked")           // value defaults to Bool.defaultValue
+/// let isLocked = Var<Bool>("isLocked", value: true) // explicit initial
 /// ```
 @dynamicMemberLookup
 public struct Var<T: TLAValueType>: Sendable, CustomStringConvertible {
     public let name: String
-    public init(_ name: String? = nil, value: T? = nil) {
-        self.name = name ?? ""
+    public init(_ name: String, value: T = T.defaultValue) {
+        self.name = name
     }
     public var description: String { name }
     /// Returns `x' = expression` — the variable's value in the next state.
@@ -158,19 +158,19 @@ extension StateExpr {
     public var count: StateExpr { .tupleLength(self) }
     public var head: StateExpr { .tupleHead(self) }
     public var tail: StateExpr { .tupleTail(self) }
-    public func filtering(_ predicate: StateExpr) -> StateExpr { .setFilter(self, predicate) }
-    public func mapping(_ expression: StateExpr) -> StateExpr { .setMap(expression, self) }
+    public func filtering(_ predicate: StateExpr) -> StateExpr { .setFilter(self, .fresh(), predicate) }
+    public func mapping(_ expression: StateExpr) -> StateExpr { .setMap(expression, .fresh(), self) }
     public func appending(_ element: StateExpr) -> StateExpr { .tupleAppend(self, element) }
     public func concatenating(_ other: StateExpr) -> StateExpr { .tupleConcatenate(self, other) }
     public func at(_ index: Int) -> StateExpr { .tupleAccess(self, index) }
     public func integerDivided(by divisor: some StateExprConvertible) -> StateExpr { .integerDivide(self, divisor.stateExpr) }
 
     public static func set(_ elements: [some StateExprConvertible]) -> StateExpr { .setLiteral(elements.map(\.stateExpr)) }
-    public static func `for`(allIn set: StateExpr, _ predicate: StateExpr) -> StateExpr { .forAll(set, predicate) }
-    public static func exists(in set: StateExpr, _ predicate: StateExpr) -> StateExpr { .exists(set, predicate) }
-    public static func choose(from set: StateExpr, matching predicate: StateExpr) -> StateExpr { .choose(set, predicate) }
-    public static func any(from set: StateExpr) -> StateExpr { .choose(set, .value(.bool(true))) }
-    public static func function(domain: StateExpr, _ body: StateExpr) -> StateExpr { .functionLiteral(domain, body) }
+    public static func `for`(allIn set: StateExpr, _ predicate: StateExpr) -> StateExpr { .forAll(set, .fresh(), predicate) }
+    public static func exists(in set: StateExpr, _ predicate: StateExpr) -> StateExpr { .exists(set, .fresh(), predicate) }
+    public static func choose(from set: StateExpr, matching predicate: StateExpr) -> StateExpr { .choose(set, .fresh(), predicate) }
+    public static func any(from set: StateExpr) -> StateExpr { .choose(set, .fresh(), .value(.bool(true))) }
+    public static func function(domain: StateExpr, _ body: StateExpr) -> StateExpr { .functionLiteral(domain, .fresh(), body) }
     public static func tuple(_ elements: [some StateExprConvertible]) -> StateExpr { .tupleLiteral(elements.map(\.stateExpr)) }
     public static func record(_ fields: [String: StateExpr]) -> StateExpr { .recordLiteral(fields) }
     public static func enabled(_ name: String) -> StateExpr { .enabledAction(name) }
@@ -178,28 +178,35 @@ extension StateExpr {
     // MARK: - Var-based bound variables
 
     public static func forAll(_ variable: Var<some TLAValueType>, in set: StateExpr, _ body: StateExpr) -> StateExpr {
-        .forAll(set, substituteVariableBody(variable.name, with: "_x", in: body))
+        let qv = QuantVar.fresh()
+        return .forAll(set, qv, renameVar(variable.name, to: qv.name, in: body))
     }
     public static func exists(_ variable: Var<some TLAValueType>, in set: StateExpr, _ body: StateExpr) -> StateExpr {
-        .exists(set, substituteVariableBody(variable.name, with: "_x", in: body))
+        let qv = QuantVar.fresh()
+        return .exists(set, qv, renameVar(variable.name, to: qv.name, in: body))
     }
     public static func choose(_ variable: Var<some TLAValueType>, from set: StateExpr, matching predicate: StateExpr) -> StateExpr {
-        .choose(set, substituteVariableBody(variable.name, with: "_x", in: predicate))
+        let qv = QuantVar.fresh()
+        return .choose(set, qv, renameVar(variable.name, to: qv.name, in: predicate))
     }
     public static func functionLiteral(_ variable: Var<some TLAValueType>, in domain: StateExpr, _ body: StateExpr) -> StateExpr {
-        .functionLiteral(domain, substituteVariableBody(variable.name, with: "_x", in: body))
+        let qv = QuantVar.fresh()
+        return .functionLiteral(domain, qv, renameVar(variable.name, to: qv.name, in: body))
     }
 
     // MARK: - Closure-based with InvariantBuilder context
 
     public static func forAll(_ set: StateExpr, @InvariantBuilder _ body: (StateExpr) -> StateExpr) -> StateExpr {
-        .forAll(set, body(.variable("_x")))
+        let qv = QuantVar.fresh()
+        return .forAll(set, qv, body(.variable(qv.name)))
     }
     public static func existsIn(_ set: StateExpr, @InvariantBuilder _ body: (StateExpr) -> StateExpr) -> StateExpr {
-        .exists(set, body(.variable("_x")))
+        let qv = QuantVar.fresh()
+        return .exists(set, qv, body(.variable(qv.name)))
     }
     public static func filterSet(_ set: StateExpr, @InvariantBuilder _ body: (StateExpr) -> StateExpr) -> StateExpr {
-        .setFilter(set, body(.variable("_x")))
+        let qv = QuantVar.fresh()
+        return .setFilter(set, qv, body(.variable(qv.name)))
     }
 }
 
@@ -255,67 +262,58 @@ extension StateExpr {
     }
 }
 
-/// Replaces `.variable(from)` with `.variable(to)` throughout a StateExpr.
-/// Used to bind user-facing variable names to the internal `_x` placeholder
-/// so the evaluator's `substituteVariable("_x", value, ...)` can bind actual values.
-public func substituteVariableBody(_ from: String, with to: String, in expression: StateExpr) -> StateExpr {
-    replaceVarInState(from, with: to, in: expression)
-}
-
-private func replaceVarInState(_ from: String, with to: String, in expression: StateExpr) -> StateExpr {
-    switch expression {
-    case .variable(let name): return name == from ? .variable(to) : expression
-    case .value, .enabledAction: return expression
-    case .add(let l, let r): return .add(replace(l), replace(r))
-    case .subtract(let l, let r): return .subtract(replace(l), replace(r))
-    case .multiply(let l, let r): return .multiply(replace(l), replace(r))
-    case .divide(let l, let r): return .divide(replace(l), replace(r))
-    case .modulo(let l, let r): return .modulo(replace(l), replace(r))
-    case .negate(let x): return .negate(replace(x))
-    case .integerDivide(let l, let r): return .integerDivide(replace(l), replace(r))
-    case .equal(let l, let r): return .equal(replace(l), replace(r))
-    case .notEqual(let l, let r): return .notEqual(replace(l), replace(r))
-    case .lessThan(let l, let r): return .lessThan(replace(l), replace(r))
-    case .lessOrEqual(let l, let r): return .lessOrEqual(replace(l), replace(r))
-    case .greaterThan(let l, let r): return .greaterThan(replace(l), replace(r))
-    case .greaterOrEqual(let l, let r): return .greaterOrEqual(replace(l), replace(r))
-    case .and(let l, let r): return .and(replace(l), replace(r))
-    case .or(let l, let r): return .or(replace(l), replace(r))
-    case .not(let x): return .not(replace(x))
-    case .ifThenElse(let c, let t, let e): return .ifThenElse(replace(c), replace(t), replace(e))
-    case .setLiteral(let es): return .setLiteral(es.map(replace))
-    case .in(let e, let s): return .in(replace(e), replace(s))
-    case .subset(let a, let b): return .subset(replace(a), replace(b))
-    case .union(let a, let b): return .union(replace(a), replace(b))
-    case .intersection(let a, let b): return .intersection(replace(a), replace(b))
-    case .setDifference(let a, let b): return .setDifference(replace(a), replace(b))
-    case .cardinality(let s): return .cardinality(replace(s))
-    case .setFilter(let s, let p): return .setFilter(replace(s), replace(p))
-    case .setMap(let e, let s): return .setMap(replace(e), replace(s))
-    case .powerSet(let s): return .powerSet(replace(s))
-    case .unionAll(let s): return .unionAll(replace(s))
-    case .tupleLiteral(let es): return .tupleLiteral(es.map(replace))
-    case .tupleAccess(let t, let i): return .tupleAccess(replace(t), i)
-    case .tupleLength(let t): return .tupleLength(replace(t))
-    case .tupleAppend(let t, let e): return .tupleAppend(replace(t), replace(e))
-    case .tupleHead(let t): return .tupleHead(replace(t))
-        case .tupleTail(let t): return .tupleTail(replace(t))
-        case .tupleConcatenate(let a, let b): return .tupleConcatenate(replace(a), replace(b))
-    case .recordLiteral(let fs): return .recordLiteral(fs.mapValues(replace))
-    case .recordAccess(let r, let f): return .recordAccess(replace(r), f)
-    case .domain(let f): return .domain(replace(f))
-    case .functionLiteral(let d, let body): return .functionLiteral(replace(d), replace(body))
-    case .functionApply(let f, let x): return .functionApply(replace(f), replace(x))
-    case .except(let f, let x, let e): return .except(replace(f), replace(x), replace(e))
-    case .caseExpr(let ps, let fb): return .caseExpr(ps.map(replace), fb.map(replace))
-    case .forAll(let s, let p): return .forAll(replace(s), replace(p))
-    case .exists(let s, let p): return .exists(replace(s), replace(p))
-    case .choose(let s, let p): return .choose(replace(s), replace(p))
-    case .sequenceFromSet(let s): return .sequenceFromSet(replace(s))
-    case .functionSet(let d, let r): return .functionSet(replace(d), replace(r))
-    case .setSum(let f, let s): return .setSum(replace(f), replace(s))
-    case .recursiveCall(let n, let a): return .recursiveCall(n, a.map(replace))
+/// Replaces `.variable(from)` with `.variable(to)` throughout a StateExpr AST.
+public func renameVar(_ from: String, to: String, in expr: StateExpr) -> StateExpr {
+    switch expr {
+    case .value, .enabledAction, .recursiveCall: return expr
+    case .variable(let n): return .variable(n == from ? to : n)
+    case .add(let a, let b): return .add(renameVar(from, to: to, in: a), renameVar(from, to: to, in: b))
+    case .subtract(let a, let b): return .subtract(renameVar(from, to: to, in: a), renameVar(from, to: to, in: b))
+    case .multiply(let a, let b): return .multiply(renameVar(from, to: to, in: a), renameVar(from, to: to, in: b))
+    case .divide(let a, let b): return .divide(renameVar(from, to: to, in: a), renameVar(from, to: to, in: b))
+    case .modulo(let a, let b): return .modulo(renameVar(from, to: to, in: a), renameVar(from, to: to, in: b))
+    case .negate(let a): return .negate(renameVar(from, to: to, in: a))
+    case .integerDivide(let a, let b): return .integerDivide(renameVar(from, to: to, in: a), renameVar(from, to: to, in: b))
+    case .equal(let a, let b): return .equal(renameVar(from, to: to, in: a), renameVar(from, to: to, in: b))
+    case .notEqual(let a, let b): return .notEqual(renameVar(from, to: to, in: a), renameVar(from, to: to, in: b))
+    case .lessThan(let a, let b): return .lessThan(renameVar(from, to: to, in: a), renameVar(from, to: to, in: b))
+    case .lessOrEqual(let a, let b): return .lessOrEqual(renameVar(from, to: to, in: a), renameVar(from, to: to, in: b))
+    case .greaterThan(let a, let b): return .greaterThan(renameVar(from, to: to, in: a), renameVar(from, to: to, in: b))
+    case .greaterOrEqual(let a, let b): return .greaterOrEqual(renameVar(from, to: to, in: a), renameVar(from, to: to, in: b))
+    case .and(let a, let b): return .and(renameVar(from, to: to, in: a), renameVar(from, to: to, in: b))
+    case .or(let a, let b): return .or(renameVar(from, to: to, in: a), renameVar(from, to: to, in: b))
+    case .not(let a): return .not(renameVar(from, to: to, in: a))
+    case .ifThenElse(let c, let t, let e): return .ifThenElse(renameVar(from, to: to, in: c), renameVar(from, to: to, in: t), renameVar(from, to: to, in: e))
+    case .setLiteral(let es): return .setLiteral(es.map { renameVar(from, to: to, in: $0) })
+    case .in(let e, let s): return .in(renameVar(from, to: to, in: e), renameVar(from, to: to, in: s))
+    case .subset(let a, let b): return .subset(renameVar(from, to: to, in: a), renameVar(from, to: to, in: b))
+    case .union(let a, let b): return .union(renameVar(from, to: to, in: a), renameVar(from, to: to, in: b))
+    case .intersection(let a, let b): return .intersection(renameVar(from, to: to, in: a), renameVar(from, to: to, in: b))
+    case .setDifference(let a, let b): return .setDifference(renameVar(from, to: to, in: a), renameVar(from, to: to, in: b))
+    case .cardinality(let s): return .cardinality(renameVar(from, to: to, in: s))
+    case .setFilter(let s, let qv, let p): return .setFilter(renameVar(from, to: to, in: s), qv, renameVar(from, to: to, in: p))
+    case .setMap(let e, let qv, let s): return .setMap(renameVar(from, to: to, in: e), qv, renameVar(from, to: to, in: s))
+    case .powerSet(let s): return .powerSet(renameVar(from, to: to, in: s))
+    case .unionAll(let s): return .unionAll(renameVar(from, to: to, in: s))
+    case .tupleLiteral(let es): return .tupleLiteral(es.map { renameVar(from, to: to, in: $0) })
+    case .tupleAccess(let t, let i): return .tupleAccess(renameVar(from, to: to, in: t), i)
+    case .tupleLength(let t): return .tupleLength(renameVar(from, to: to, in: t))
+    case .tupleAppend(let t, let e): return .tupleAppend(renameVar(from, to: to, in: t), renameVar(from, to: to, in: e))
+    case .tupleHead(let t): return .tupleHead(renameVar(from, to: to, in: t))
+    case .tupleTail(let t): return .tupleTail(renameVar(from, to: to, in: t))
+    case .tupleConcatenate(let a, let b): return .tupleConcatenate(renameVar(from, to: to, in: a), renameVar(from, to: to, in: b))
+    case .recordLiteral(let fs): return .recordLiteral(fs.mapValues { renameVar(from, to: to, in: $0) })
+    case .recordAccess(let r, let f): return .recordAccess(renameVar(from, to: to, in: r), f)
+    case .domain(let f): return .domain(renameVar(from, to: to, in: f))
+    case .functionLiteral(let d, let qv, let b): return .functionLiteral(renameVar(from, to: to, in: d), qv, renameVar(from, to: to, in: b))
+    case .functionApply(let f, let x): return .functionApply(renameVar(from, to: to, in: f), renameVar(from, to: to, in: x))
+    case .except(let f, let x, let e): return .except(renameVar(from, to: to, in: f), renameVar(from, to: to, in: x), renameVar(from, to: to, in: e))
+    case .caseExpr(let ps, let fb): return .caseExpr(ps.map { renameVar(from, to: to, in: $0) }, fb.map { renameVar(from, to: to, in: $0) })
+    case .forAll(let s, let qv, let p): return .forAll(renameVar(from, to: to, in: s), qv, renameVar(from, to: to, in: p))
+    case .exists(let s, let qv, let p): return .exists(renameVar(from, to: to, in: s), qv, renameVar(from, to: to, in: p))
+    case .choose(let s, let qv, let p): return .choose(renameVar(from, to: to, in: s), qv, renameVar(from, to: to, in: p))
+    case .sequenceFromSet(let s): return .sequenceFromSet(renameVar(from, to: to, in: s))
+    case .setSum(let f, let s): return .setSum(renameVar(from, to: to, in: f), renameVar(from, to: to, in: s))
+    case .functionSet(let d, let r): return .functionSet(renameVar(from, to: to, in: d), renameVar(from, to: to, in: r))
     }
-
-    func replace(_ expr: StateExpr) -> StateExpr { replaceVarInState(from, with: to, in: expr) }
 }

@@ -222,8 +222,8 @@ struct StateExprCompleteTests {
             .intersection(.setLiteral([.int(1)]), .setLiteral([.int(1)])),
             .setDifference(.setLiteral([.int(1)]), .setLiteral([.int(1)])),
             .cardinality(.setLiteral([.int(1)])),
-            .setFilter(.setLiteral([.int(1)]), .bool(true)),
-            .setMap(.variable("x"), .setLiteral([.int(1)])),
+            .setFilter(.setLiteral([.int(1)]), QuantVar(name: "x0"), .bool(true)),
+            .setMap(.variable("x"), QuantVar(name: "x0"), .setLiteral([.int(1)])),
             .powerSet(.setLiteral([.int(1)])),
             .unionAll(.setLiteral([.setLiteral([.int(1)])])),
             .tupleLiteral([.int(1)]), .tupleAccess(.tupleLiteral([.int(1)]), 0),
@@ -232,13 +232,13 @@ struct StateExprCompleteTests {
             .tupleConcatenate(.tupleLiteral([.int(1)]), .tupleLiteral([.int(2)])),
             .recordLiteral(["k": .int(1)]), .recordAccess(.recordLiteral(["k": .int(1)]), "k"),
             .domain(.recordLiteral(["k": .int(1)])),
-            .functionLiteral(.setLiteral([.int(1)]), .variable("x")),
-            .functionApply(.functionLiteral(.setLiteral([.int(1)]), .variable("x")), .int(1)),
-            .except(.functionLiteral(.setLiteral([.int(1)]), .variable("x")), .int(1), .int(2)),
+            .functionLiteral(.setLiteral([.int(1)]), QuantVar(name: "x0"), .variable("x")),
+            .functionApply(.functionLiteral(.setLiteral([.int(1)]), QuantVar(name: "x0"), .variable("x")), .int(1)),
+            .except(.functionLiteral(.setLiteral([.int(1)]), QuantVar(name: "x0"), .variable("x")), .int(1), .int(2)),
             .caseExpr([.bool(true), .int(1)], .int(0)),
-            .forAll(.setLiteral([.int(1)]), .bool(true)),
-            .exists(.setLiteral([.int(1)]), .bool(true)),
-            .choose(.setLiteral([.int(1)]), .bool(true)),
+            .forAll(.setLiteral([.int(1)]), QuantVar(name: "x0"), .bool(true)),
+            .exists(.setLiteral([.int(1)]), QuantVar(name: "x0"), .bool(true)),
+            .choose(.setLiteral([.int(1)]), QuantVar(name: "x0"), .bool(true)),
             .enabledAction("Foo"),
         ]
         for e in cases {
@@ -1004,10 +1004,8 @@ struct BoundVariableTests {
         let source = "StateExpr.functionLiteral(StateExpr.set([1]), (2 + 3))"
         let expr = Parser.parse(source: source).statements.first!.item.as(ExprSyntax.self)!
         let result = SpecParser.parseStateExpr(expr)
-        #expect(result == StateExpr.functionLiteral(
-            StateExpr.setLiteral([StateExpr.value(.int(1))]),
-            StateExpr.add(StateExpr.value(.int(2)), StateExpr.value(.int(3)))
-        ))
+        let d = result?.description ?? ""
+        #expect(d.contains("|->") && d.contains("{1}") && d.contains("(2 + 3)"))
     }
 
     @Test("Function TLA+ output is valid ASCII")
@@ -1016,7 +1014,8 @@ struct BoundVariableTests {
         let domain = StateExpr.set([1, 2])
         let fun = StateExpr.functionLiteral(p, in: domain, p * 10)
         let desc = fun.description
-        #expect(desc.contains("[x \\in"))
+        #expect(desc.contains("[x"))
+        #expect(desc.contains("\\in"))
         #expect(desc.contains("|->"))
         #expect(!desc.contains("_x"))
     }
@@ -1114,16 +1113,16 @@ struct CompletionCoverageTests {
         #expect(!(large < small))
     }
 
-    @Test("substituteVariableBody replaces nested variable references")
-    func substituteVariableBodyNested() {
+    @Test("renameVar replaces variable references by AST rewrite")
+    func renameVarReplacesNested() {
         let body: StateExpr = .add(
             .multiply(.variable("userVar"), .value(.int(2))),
             .variable("userVar")
         )
-        let result = substituteVariableBody("userVar", with: "_x", in: body)
+        let result = renameVar("userVar", to: "x0", in: body)
         let desc = result.description
         #expect(!desc.contains("userVar"))
-        #expect(desc.contains("_x"))
+        #expect(desc.contains("x0"))
     }
 
     @Test("StateExprConvertible forwarding: functionApply on Var<TLAFunctionType>")
@@ -1268,6 +1267,94 @@ struct LivenessCheckerTests {
         let graph = try mc.exploreGraph()
         let lc = LivenessChecker(graph: graph)
         let results = try lc.checkAll(spec.temporalProperties, fairness: spec.fairness, actions: spec.actions)
-        #expect(results.isEmpty)  // Liveness is a Definition, not in temporalProperties
-        // TLC validates safety + liveness: 137 states, no error
+        #expect(results.count == 1)
+        #expect(results[0] == .satisfied)
     }
+
+    struct SymmetryReductionTests {
+    @Test("Symmetry reduces ChangRoberts state count")
+    func changRobertsSymmetryReduction() throws {
+        let specNoSym = Example.changRobertsN3.spec
+        let mcNoSym = ModelChecker(spec: specNoSym, maxStates: 500)
+        let graphNoSym = try mcNoSym.exploreGraph()
+        #expect(graphNoSym.states.count == 137)
+
+        let specWithSym = TLASpec("ChangRobertsSym") {
+            Extends("Integers")
+            Use(spec: specNoSym)
+            Symmetry("pc", [1, 2, 3] as Set<Int>)
+        }
+        let mcWithSym = ModelChecker(spec: specWithSym, maxStates: 500)
+        let graphWithSym = try mcWithSym.exploreGraph()
+        #expect(graphWithSym.states.count < 137)
+        #expect(graphWithSym.states.count > 0)
+    }
+
+    @Test("Symmetry with direct-value variable reduces state count")
+    func directValueSymmetry() throws {
+        let spec = TLASpec("SymTest") {
+            let x = Var<Int>("x")
+            Variable(x, in: [1, 2, 3])
+            Action("inc") { x < 3 && x.becomes(x + 1) }
+            Invariant("TypeOK") { x >= 1 && x <= 3 }
+            Symmetry("x", [1, 2, 3] as Set<Int>)
+        }
+        let mc = ModelChecker(spec: spec, maxStates: 100)
+        let result = try mc.check()
+        guard case .ok(let count) = result else {
+            #expect(Bool(false)); return
+        }
+        #expect(count < 3)
+    }
+
+    @Test("Symmetry chains multiple sets")
+    func multipleSymmetrySets() throws {
+        let spec = TLASpec("MultiSym") {
+            let x = Var<Int>("x")
+            let y = Var<Int>("y")
+            Variable(x, in: [1, 2])
+            Variable(y, in: [10, 20])
+            Action("bump") {
+                (x == 1 && x.becomes(2) && y.stays)
+                || (y == 10 && y.becomes(20) && x.stays)
+            }
+            Invariant("TypeOK") { x >= 1 && x <= 2 && y >= 10 && y <= 20 }
+            Symmetry("x", [1, 2] as Set<Int>)
+            Symmetry("y", [10, 20] as Set<Int>)
+        }
+        let mc = ModelChecker(spec: spec, maxStates: 100)
+        let result = try mc.check()
+        guard case .ok = result else {
+            #expect(Bool(false)); return
+        }
+    }
+
+    @Test("Empty symmetry sets are no-op")
+    func emptySymmetryNoOp() throws {
+        let spec = TLASpec("NoSym") {
+            let x = Var<Int>("x")
+            Variable(x, in: 1...3)
+            Action("inc") { x < 3 && x.becomes(x + 1) }
+            Invariant("TypeOK") { x >= 1 && x <= 3 }
+        }
+        let mc = ModelChecker(spec: spec, maxStates: 100)
+        let result = try mc.check()
+        guard case .ok(let count) = result else {
+            #expect(Bool(false)); return
+        }
+        #expect(count == 3)
+    }
+
+    @Test("TLA+ SYMMETRY emitted in tlaModule")
+    func symmetryTLAOutput() {
+        let spec = TLASpec("SymOut") {
+            let x = Var<Int>("x")
+            Variable(x, in: [1, 2, 3])
+            Invariant("TypeOK") { x >= 1 }
+            Symmetry("x", [1, 2, 3] as Set<Int>)
+        }
+        let tla = spec.tlaModule
+        #expect(tla.contains("SYMMETRY"))
+        #expect(tla.contains("Symmx"))
+    }
+}

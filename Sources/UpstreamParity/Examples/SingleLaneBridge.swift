@@ -53,7 +53,7 @@ private func singleLaneBridgeSpec() -> TLASpec {
 
         DefineRecursive("SeqFromSet", params: ["S"]) {
             let s = StateExpr.variable("S")
-            let chosen = StateExpr.choose(s, StateExpr.value(.bool(true)))
+            let chosen = StateExpr.choose(from: s, matching: StateExpr.value(.bool(true)))
             StateExpr.ifThenElse(
                 StateExpr.equal(StateExpr.setLiteral([]), s),
                 StateExpr.tupleLiteral([]),
@@ -71,8 +71,7 @@ private func singleLaneBridgeSpec() -> TLASpec {
 
         Invariant("Invariants") {
             let l = StateExpr.variable("Location")
-            let x = StateExpr.variable("_x")
-            let carsInBridge = StateExpr.filterSet(carsSet) { _ in inBridge(l.applying(x)) }
+            let carsInBridge = StateExpr.filterSet(carsSet) { x in inBridge(l.applying(x)) }
 
             // No two cars at same bridge position
             for a in allCars {
@@ -100,9 +99,8 @@ private func singleLaneBridgeSpec() -> TLASpec {
             let carName: String = { if case .string(let s) = car { return s }; return "\(car)" }()
             let l = StateExpr.variable("Location")
             let w = StateExpr.variable("WaitingBeforeBridge")
-            let x = StateExpr.variable("_x")
             let nl: StateExpr = .ifThenElse(isRight(c), rMove(l.applying(c)), lMove(l.applying(c)))
-            let inBrSet = StateExpr.filterSet(carsSet) { _ in inBridge(l.applying(x)) }
+            let inBrSet = StateExpr.filterSet(carsSet) { x in inBridge(l.applying(x)) }
             let isInBridge = c.isIn(inBrSet)
             let leavingBridge = (isRight(c) && nl == eb + 1) || (!isRight(c) && nl == sb - 1)
 
@@ -121,15 +119,15 @@ private func singleLaneBridgeSpec() -> TLASpec {
 
             Action("MoveInside_\(carName)") {
                 .and(.guard_(isInBridge
-                    && StateExpr.forAll(carsSet) { _ in StateExpr.notEqual(l.applying(x), nl) }),
+                    &&                     StateExpr.forAll(carsSet) { x in StateExpr.notEqual(l.applying(x), nl) }),
                 changeLoc)
             }
 
             let h = w.head
-            let sameDir = StateExpr.forAll(inBrSet) { _ in
+            let sameDir = StateExpr.forAll(inBrSet) { x in
                 StateExpr.equal(isRight(x), isRight(c))
             }
-            let noCollision = StateExpr.forAll(carsSet) { _ in
+            let noCollision = StateExpr.forAll(carsSet) { x in
                 StateExpr.notEqual(l.applying(x), nl)
             }
 

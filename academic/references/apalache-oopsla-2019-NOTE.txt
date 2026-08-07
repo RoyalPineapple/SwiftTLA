@@ -1,0 +1,5 @@
+TLA+ Model Checking Made Symbolic
+Konnov, Kukovec, Tran — OOPSLA 2019 (PACMPL Vol 3), DOI: 10.1145/3360549
+Could not find a freely accessible PDF. Behind ACM paywall.
+The follow-up "Made Faster" (TACAS 2023) and "Type Inference" (2020) 
+papers (downloaded in this directory) cover the key technical content.

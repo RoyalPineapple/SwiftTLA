@@ -142,24 +142,24 @@ extension StateExpr {
             guard case .set(let sv) = try ev(s) else { throw tm("cardinality", got: try ev(s)) }
             return .int(sv.count)
 
-        case .setFilter(let s, let p):
+        case .setFilter(let s, let qv, let p):
             guard case .set(let sv) = try ev(s) else { throw tm("set filter", got: try ev(s)) }
             var result = Set<TLAValue>()
             for elem in sv {
                 var boundState = state
-                boundState["_x"] = elem
-                let exprWithVar = Self.substituteVariable("_x", elem, in: p)
+                boundState[qv.name] = elem
+                let exprWithVar = Self.substituteVariable(qv.name, elem, in: p)
                 if case .bool(true) = try ev(exprWithVar) {
                     result.insert(elem)
                 }
             }
             return .set(result)
 
-        case .setMap(let e, let s):
+        case .setMap(let e, let qv, let s):
             guard case .set(let sv) = try ev(s) else { throw tm("set map", got: try ev(s)) }
             var result = Set<TLAValue>()
             for elem in sv {
-                let exprWithVar = Self.substituteVariable("_x", elem, in: e)
+                let exprWithVar = Self.substituteVariable(qv.name, elem, in: e)
                 result.insert(try ev(exprWithVar))
             }
             return .set(result)
@@ -235,13 +235,13 @@ extension StateExpr {
             default: throw tm("DOMAIN", got: value)
             }
 
-        case .functionLiteral(let domain, let body):
+        case .functionLiteral(let domain, let qv, let body):
             guard case .set(let domainSet) = try ev(domain) else {
                 throw tm("function domain", got: try ev(domain))
             }
             var mapping: [TLAValue: TLAValue] = [:]
             for element in domainSet {
-                let substituted = Self.substituteVariable("_x", element, in: body)
+                let substituted = Self.substituteVariable(qv.name, element, in: body)
                 mapping[element] = try ev(substituted)
             }
             return .function(mapping)
@@ -279,30 +279,30 @@ extension StateExpr {
                 throw tm("EXCEPT", got: functionValue)
             }
 
-        case .forAll(let set, let predicate):
+        case .forAll(let set, let qv, let predicate):
             guard case .set(let sv) = try ev(set) else { throw tm("∀", got: try ev(set)) }
             for elem in sv {
-                let substituted = Self.substituteVariable("_x", elem, in: predicate)
+                let substituted = Self.substituteVariable(qv.name, elem, in: predicate)
                 if case .bool(false) = try ev(substituted) {
                     return .bool(false)
                 }
             }
             return .bool(true)
 
-        case .exists(let set, let predicate):
+        case .exists(let set, let qv, let predicate):
             guard case .set(let sv) = try ev(set) else { throw tm("∃", got: try ev(set)) }
             for elem in sv {
-                let substituted = Self.substituteVariable("_x", elem, in: predicate)
+                let substituted = Self.substituteVariable(qv.name, elem, in: predicate)
                 if case .bool(true) = try ev(substituted) {
                     return .bool(true)
                 }
             }
             return .bool(false)
 
-        case .choose(let set, let predicate):
+        case .choose(let set, let qv, let predicate):
             guard case .set(let sv) = try ev(set) else { throw tm("CHOOSE", got: try ev(set)) }
             for elem in sv {
-                let substituted = Self.substituteVariable("_x", elem, in: predicate)
+                let substituted = Self.substituteVariable(qv.name, elem, in: predicate)
                 if case .bool(true) = try ev(substituted) {
                     return elem
                 }
@@ -435,8 +435,8 @@ extension StateExpr {
         case .intersection(let a, let b): return .intersection(sub(a), sub(b))
         case .setDifference(let a, let b): return .setDifference(sub(a), sub(b))
         case .cardinality(let s): return .cardinality(sub(s))
-        case .setFilter(let s, let p): return .setFilter(sub(s), sub(p))
-        case .setMap(let e, let s): return .setMap(sub(e), sub(s))
+        case .setFilter(let s, let qv, let p): return .setFilter(sub(s), qv, sub(p))
+        case .setMap(let e, let qv, let s): return .setMap(sub(e), qv, sub(s))
         case .powerSet(let s): return .powerSet(sub(s))
         case .unionAll(let s): return .unionAll(sub(s))
         case .tupleLiteral(let es): return .tupleLiteral(es.map(sub))
@@ -449,13 +449,13 @@ extension StateExpr {
         case .recordLiteral(let fs): return .recordLiteral(fs.mapValues(sub))
         case .recordAccess(let r, let f): return .recordAccess(sub(r), f)
         case .domain(let f): return .domain(sub(f))
-        case .functionLiteral(let d, let body): return .functionLiteral(sub(d), sub(body))
+        case .functionLiteral(let d, let qv, let body): return .functionLiteral(sub(d), qv, sub(body))
         case .functionApply(let f, let x): return .functionApply(sub(f), sub(x))
         case .except(let f, let x, let e): return .except(sub(f), sub(x), sub(e))
         case .caseExpr(let ps, let fb): return .caseExpr(ps.map(sub), fb.map(sub))
-        case .forAll(let s, let p): return .forAll(sub(s), sub(p))
-        case .exists(let s, let p): return .exists(sub(s), sub(p))
-        case .choose(let s, let p): return .choose(sub(s), sub(p))
+        case .forAll(let s, let qv, let p): return .forAll(sub(s), qv, sub(p))
+        case .exists(let s, let qv, let p): return .exists(sub(s), qv, sub(p))
+        case .choose(let s, let qv, let p): return .choose(sub(s), qv, sub(p))
         case .sequenceFromSet(let s): return .sequenceFromSet(sub(s))
         case .setSum(let f, let s): return .setSum(sub(f), sub(s))
         case .functionSet(let d, let r): return .functionSet(sub(d), sub(r))

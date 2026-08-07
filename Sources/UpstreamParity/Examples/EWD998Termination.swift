@@ -36,8 +36,8 @@ private func ewd998Spec() -> TLASpec {
     }
     genActive(0, [])
 
-    let stateC: StateExpr = StateExpr.forAll(nodeSet,
-        StateExpr.variable("pending").applying(StateExpr.variable("_x")) <= 3)
+    let stateC: StateExpr = StateExpr.forAll(nodeSet) { x in
+        StateExpr.variable("pending").applying(x) <= 3 }
 
     return TLASpec("AsyncTerminationDetection") {
         Extends("Naturals")
@@ -63,9 +63,8 @@ private func ewd998Spec() -> TLASpec {
             let t = StateExpr.variable("terminationDetected")
             let a = StateExpr.variable("active")
             let p = StateExpr.variable("pending")
-            let termBody: StateExpr = StateExpr.not(a.applying(StateExpr.variable("_x")))
-                && StateExpr.equal(p.applying(StateExpr.variable("_x")), 0)
-            let terminated: StateExpr = StateExpr.forAll(nodeSet, termBody)
+            let terminated: StateExpr = StateExpr.forAll(nodeSet) { x in
+                StateExpr.not(a.applying(x)) && StateExpr.equal(p.applying(x), 0) }
             StateExpr.ifThenElse(t, terminated, trueE)
         }
 
@@ -74,9 +73,8 @@ private func ewd998Spec() -> TLASpec {
                 let a = StateExpr.variable("active")
                 let p = StateExpr.variable("pending")
                 let t = StateExpr.variable("terminationDetected")
-                let termBody: StateExpr = StateExpr.not(a.applying(StateExpr.variable("_x")))
-                    && StateExpr.equal(p.applying(StateExpr.variable("_x")), 0)
-                let terminated: StateExpr = StateExpr.forAll(nodeSet, termBody)
+                let terminated: StateExpr = StateExpr.forAll(nodeSet) { x in
+                    StateExpr.not(a.applying(x)) && StateExpr.equal(p.applying(x), 0) }
 
                 return a.applying(i)
                     && active.becomes(a.updated(at: i, to: falseE))
@@ -113,9 +111,8 @@ private func ewd998Spec() -> TLASpec {
         Action("DetectTermination") {
             let a = StateExpr.variable("active")
             let p = StateExpr.variable("pending")
-            let termBody: StateExpr = StateExpr.not(a.applying(StateExpr.variable("_x")))
-                && StateExpr.equal(p.applying(StateExpr.variable("_x")), 0)
-            let terminated: StateExpr = StateExpr.forAll(nodeSet, termBody)
+            let terminated: StateExpr = StateExpr.forAll(nodeSet) { x in
+                StateExpr.not(a.applying(x)) && StateExpr.equal(p.applying(x), 0) }
 
             terminated
                 && terminationDetected.becomes(trueE)

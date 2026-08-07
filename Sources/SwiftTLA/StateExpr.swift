@@ -1,3 +1,16 @@
+public struct QuantVar: Hashable, Sendable, CustomStringConvertible {
+    public let name: String
+    public var description: String { name }
+    public init(name: String) { self.name = name }
+
+    public static func fresh() -> QuantVar {
+        defer { _counter += 1 }
+        return QuantVar(name: "x\(_counter)")
+    }
+    public static func resetCounter() { _counter = 0 }
+    private nonisolated(unsafe) static var _counter = 0
+}
+
 public indirect enum StateExpr: Hashable, Sendable, CustomStringConvertible {
     case value(TLAValue)
     case variable(String)
@@ -30,8 +43,8 @@ public indirect enum StateExpr: Hashable, Sendable, CustomStringConvertible {
     case intersection(StateExpr, StateExpr)
     case setDifference(StateExpr, StateExpr)
     case cardinality(StateExpr)
-    case setFilter(StateExpr, StateExpr)
-    case setMap(StateExpr, StateExpr)
+    case setFilter(StateExpr, QuantVar, StateExpr)
+    case setMap(StateExpr, QuantVar, StateExpr)
     case powerSet(StateExpr)
     case unionAll(StateExpr)
 
@@ -46,14 +59,14 @@ public indirect enum StateExpr: Hashable, Sendable, CustomStringConvertible {
     case recordLiteral([String: StateExpr])
     case recordAccess(StateExpr, String)
     case domain(StateExpr)
-    case functionLiteral(StateExpr, StateExpr)
+    case functionLiteral(StateExpr, QuantVar, StateExpr)
     case functionApply(StateExpr, StateExpr)
     case except(StateExpr, StateExpr, StateExpr)
     case caseExpr([StateExpr], StateExpr?)
 
-    case forAll(StateExpr, StateExpr)
-    case exists(StateExpr, StateExpr)
-    case choose(StateExpr, StateExpr)
+    case forAll(StateExpr, QuantVar, StateExpr)
+    case exists(StateExpr, QuantVar, StateExpr)
+    case choose(StateExpr, QuantVar, StateExpr)
     case enabledAction(String)
 
     case sequenceFromSet(StateExpr)
@@ -92,8 +105,8 @@ public indirect enum StateExpr: Hashable, Sendable, CustomStringConvertible {
         case .intersection(let a, let b): return "(\(a) \\cap \(b))"
         case .setDifference(let a, let b): return "(\(a) \\ \(b))"
         case .cardinality(let s): return "Cardinality(\(s))"
-        case .setFilter(let s, let p): return "{x \\in \(s) : \(p)}".replacing("_x", with: "x")
-        case .setMap(let e, let s): return "{\(e) : x \\in \(s)}"
+        case .setFilter(let s, let qv, let p): return "{\(qv) \\in \(s) : \(p)}"
+        case .setMap(let e, let qv, let s): return "{\(e) : \(qv) \\in \(s)}"
         case .powerSet(let s): return "SUBSET \(s)"
         case .unionAll(let s): return "UNION \(s)"
         case .tupleLiteral(let elems): return "<<\(elems.map(\.description).joined(separator: ", "))>>"
@@ -108,7 +121,7 @@ public indirect enum StateExpr: Hashable, Sendable, CustomStringConvertible {
             return "[\(entries.joined(separator: ", "))]"
         case .recordAccess(let r, let f): return "(\(r)).\(f)"
         case .domain(let f): return "DOMAIN \(f)"
-        case .functionLiteral(let d, let e): return "[x \\in \(d) |-> \(e)]".replacing("_x", with: "x")
+        case .functionLiteral(let d, let qv, let e): return "[\(qv) \\in \(d) |-> \(e)]"
         case .functionApply(let f, let x): return "\(f)[\(x)]"
         case .except(let f, let x, let e):
             // Functions need ![key]; records accept !["field"] in TLC.
@@ -120,9 +133,9 @@ public indirect enum StateExpr: Hashable, Sendable, CustomStringConvertible {
             }.joined(separator: " [] ")
             if let o = other { return "CASE \(cases) [] OTHER -> \(o)" }
             return "CASE \(cases)"
-        case .forAll(let s, let p): return "\\A x \\in \(s) : \(p)".replacing("_x", with: "x")
-        case .exists(let s, let p): return "\\E x \\in \(s) : \(p)".replacing("_x", with: "x")
-        case .choose(let s, let p): return "CHOOSE x \\in \(s) : \(p)".replacing("_x", with: "x")
+        case .forAll(let s, let qv, let p): return "\\A \(qv) \\in \(s) : \(p)"
+        case .exists(let s, let qv, let p): return "\\E \(qv) \\in \(s) : \(p)"
+        case .choose(let s, let qv, let p): return "CHOOSE \(qv) \\in \(s) : \(p)"
         case .enabledAction(let a): return "ENABLED \(a)"
         case .sequenceFromSet(let s): return "SeqFromSet(\(s))"
         case .setSum(let f, let s): return "Sum(\(f), \(s))"

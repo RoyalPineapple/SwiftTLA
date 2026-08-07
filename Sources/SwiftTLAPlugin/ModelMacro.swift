@@ -34,7 +34,9 @@ public struct ModelMacro: MemberMacro, ExtensionMacro {
             throw SimpleError("Could not find 'TLASpec' builder in '\(typeName)'")
         }
 
-        let parsed = SpecParser.parseSpecClosure(closure)
+        let rewritten = rewriteVarNames(in: closure)
+
+        let parsed = SpecParser.parseSpecClosure(rewritten)
         if parsed.variables.isEmpty { throw SimpleError("No variables in spec") }
 
         let spec = TLASpec(
@@ -58,7 +60,11 @@ public struct ModelMacro: MemberMacro, ExtensionMacro {
         case .ok: break
         }
 
-        return [DeclSyntax(stringLiteral: "public static var runtime: SpecRuntime { SpecRuntime(spec: spec) }")]
+        return [
+            DeclSyntax(stringLiteral: "public static var runtime: SpecRuntime { SpecRuntime(spec: spec) }"),
+            DeclSyntax(stringLiteral: Self.generateKeyEnum(variables: parsed.variables)),
+            DeclSyntax(stringLiteral: Self.generateStateStruct(variables: parsed.variables)),
+        ]
     }
 
     private static func findSpecClosure(in members: MemberBlockItemListSyntax) -> ClosureExprSyntax? {
@@ -95,5 +101,143 @@ public struct ModelMacro: MemberMacro, ExtensionMacro {
     struct SimpleError: Error, CustomStringConvertible {
         let description: String
         init(_ description: String) { self.description = description }
+    }
+
+    // MARK: - Var name injection
+
+    /// Rewrites `let x = Var<T>()` → `let x = Var<T>("x")` inside the spec closure,
+    /// so the DSL parser sees the binding name as the variable name.
+    static func rewriteVarNames(in closure: ClosureExprSyntax) -> ClosureExprSyntax {
+        var newStatements: [CodeBlockItemSyntax] = []
+        for item in closure.statements {
+            newStatements.append(rewriteVarBinding(in: item))
+        }
+        return closure.with(\.statements, CodeBlockItemListSyntax(newStatements))
+    }
+
+    private static func rewriteVarBinding(in item: CodeBlockItemSyntax) -> CodeBlockItemSyntax {
+        guard case .decl(let decl) = item.item,
+              let varDecl = decl.as(VariableDeclSyntax.self)
+        else { return item }
+
+        var bindingsChanged = false
+        var newBindings: [PatternBindingSyntax] = []
+        for binding in varDecl.bindings {
+            guard let patternName = binding.pattern.as(IdentifierPatternSyntax.self)?.identifier.text,
+                  let initializer = binding.initializer,
+                  let fc = initializer.value.as(FunctionCallExprSyntax.self)
+            else { newBindings.append(binding); continue }
+
+            let callee = fc.calledExpression
+            guard callee.as(DeclReferenceExprSyntax.self)?.baseName.text == "Var"
+               || callee.as(GenericSpecializationExprSyntax.self)?.expression.as(DeclReferenceExprSyntax.self)?.baseName.text == "Var"
+            else { newBindings.append(binding); continue }
+
+            // Already has a string argument — skip
+            let hasStringArg = fc.arguments.contains { arg in
+                arg.label == nil && arg.expression.is(StringLiteralExprSyntax.self)
+            }
+            if hasStringArg { newBindings.append(binding); continue }
+
+            let nameArg = LabeledExprSyntax(
+                expression: StringLiteralExprSyntax(content: patternName)
+            )
+            var newArgs = fc.arguments
+            // Insert at position 0 (before `value:` if present)
+            // If args start with a `value:` label, insert before. Otherwise append.
+            if let firstArg = newArgs.first, firstArg.label?.text == "value" {
+                newArgs.insert(nameArg, at: newArgs.startIndex)
+            } else {
+                newArgs.insert(nameArg, at: newArgs.startIndex)
+            }
+
+            let newFC = fc.with(\.arguments, newArgs)
+            let newInit = initializer.with(\.value, ExprSyntax(newFC))
+            let newBinding = binding.with(\.initializer, newInit)
+            newBindings.append(newBinding)
+            bindingsChanged = true
+        }
+
+        guard bindingsChanged else { return item }
+        let newDecl = varDecl.with(\.bindings, PatternBindingListSyntax(newBindings))
+        return item.with(\.item, .decl(DeclSyntax(newDecl)))
+    }
+
+    static func swiftType(for initial: TLAValue) -> String {
+        switch initial {
+        case .int:     return "Int"
+        case .bool:    return "Bool"
+        case .string:  return "String"
+        case .set:     return "Set<Int>"
+        case .tuple:   return "[TLAValue]"
+        case .record:  return "[String: TLAValue]"
+        case .function: return "[TLAValue: TLAValue]"
+        case .constant: return "String"
+        }
+    }
+
+    static func tlaValueConstructor(for initial: TLAValue, value: String) -> String {
+        switch initial {
+        case .int:     return ".int(\(value))"
+        case .bool:    return ".bool(\(value))"
+        case .string:  return ".string(\(value))"
+        case .set:     return ".set(Set(\(value).map { .int($0) }))"
+        case .tuple:   return ".tuple(\(value))"
+        case .record:  return ".record(\(value))"
+        case .function: return ".function(\(value))"
+        case .constant: return ".constant(\(value))"
+        }
+    }
+
+    static func tlaValueExtractor(for initial: TLAValue) -> String {
+        switch initial {
+        case .int:     return "intValue"
+        case .bool:    return "boolValue"
+        case .string:  return "stringValue"
+        case .set:     return "intSetValue"
+        case .tuple:   return "tupleValue"
+        case .record:  return "recordValue"
+        case .function: return "functionValue"
+        case .constant: return "stringValue"
+        }
+    }
+
+    static func generateKeyEnum(variables: [(name: String, initial: TLAValue, initialSet: StateExpr?)]) -> String {
+        let cases = variables.map { "        case \($0.name)" }.joined(separator: "\n")
+        return """
+        public enum Key: String, CaseIterable {
+        \(cases)
+        }
+        """
+    }
+
+    static func generateStateStruct(variables: [(name: String, initial: TLAValue, initialSet: StateExpr?)]) -> String {
+        let fields = variables.map { v in
+            "        public var \(v.name): \(swiftType(for: v.initial))"
+        }.joined(separator: "\n")
+
+        let initAssignments = variables.map { v in
+            "            self.\(v.name) = dict[Key.\(v.name).rawValue]!.\(tlaValueExtractor(for: v.initial))"
+        }.joined(separator: "\n")
+
+        let dictAssignments = variables.map { v in
+            "            d[Key.\(v.name).rawValue] = \(tlaValueConstructor(for: v.initial, value: v.name))"
+        }.joined(separator: "\n")
+
+        return """
+        public struct State {
+        \(fields)
+
+            public init(from dict: [String: TLAValue]) {
+        \(initAssignments)
+            }
+
+            public var asDictionary: [String: TLAValue] {
+                var d: [String: TLAValue] = [:]
+        \(dictAssignments)
+                return d
+            }
+        }
+        """
     }
 }

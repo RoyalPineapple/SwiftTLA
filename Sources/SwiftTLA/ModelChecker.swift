@@ -74,7 +74,8 @@ public struct ModelChecker {
             invariants: substituted.invariants,
             checkDeadlock: substituted.checkDeadlock,
             specificationName: substituted.name,
-            maxStates: self.maxStates
+            maxStates: self.maxStates,
+            symmetrySets: substituted.symmetrySets
         )
     }
 
@@ -159,21 +160,32 @@ private func bfs(
     invariants: [NamedInvariant],
     checkDeadlock: Bool,
     specificationName: String,
-    maxStates: Int
+    maxStates: Int,
+    symmetrySets: [SymmetrySet] = []
 ) throws -> ModelChecker.Exploration {
-    var queue = seeds.map(\.1)
-    var stateToID = Dictionary(
-        seeds.map { (canonicalKey($0.1), $0.0) },
-        uniquingKeysWith: { existing, _ in existing }
-    )
-    var idToState = Dictionary(
-        seeds.map { ($0.0, $0.1) },
-        uniquingKeysWith: { existing, _ in existing }
-    )
-    var visited = Set(seeds.map { canonicalKey($0.1) })
+    func canonicalKey(_ state: State) -> State {
+        symmetrySets.reduce(state) { $1.canonicalize($0) }
+    }
+
+    var queue: [State] = []
+    var stateToID: [State: StateGraph.StateID] = [:]
+    var idToState: [StateGraph.StateID: State] = [:]
+    var visited = Set<State>()
+    var nextID = 0
+
+    for (_, seed) in seeds {
+        let key = canonicalKey(seed)
+        guard !visited.contains(key) else { continue }
+        visited.insert(key)
+        let id = StateGraph.StateID(nextID)
+        stateToID[key] = id
+        idToState[id] = seed
+        queue.append(seed)
+        nextID += 1
+    }
+
     var transitions: [StateGraph.StateID: [StateGraph.Transition]] = [:]
     var predecessors: [State: (State, String)] = [:]
-    var nextID = seeds.count
     var head = 0
     var processed = 0
 
@@ -283,9 +295,6 @@ private func bfs(
         graph: graph()
     )
 }
-
-/// Identity key — no silent symmetry (fragment v1).
-private func canonicalKey(_ state: State) -> State { state }
 
 private func enabledState(
     _ state: State,

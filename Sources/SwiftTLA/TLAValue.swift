@@ -61,6 +61,17 @@ extension TLAValue: ExpressibleByBooleanLiteral {
     public init(booleanLiteral value: Bool) { self = .bool(value) }
 }
 
+extension TLAValue {
+    public var intValue: Int { if case .int(let n) = self { return n }; return 0 }
+    public var boolValue: Bool { if case .bool(let b) = self { return b }; return false }
+    public var stringValue: String { if case .string(let s) = self { return s }; return "" }
+    public var setValue: Set<TLAValue> { if case .set(let s) = self { return s }; return [] }
+    public var intSetValue: Set<Int> { Set(setValue.compactMap { if case .int(let n) = $0 { return n }; return nil }) }
+    public var tupleValue: [TLAValue] { if case .tuple(let t) = self { return t }; return [] }
+    public var recordValue: [String: TLAValue] { if case .record(let r) = self { return r }; return [:] }
+    public var functionValue: [TLAValue: TLAValue] { if case .function(let f) = self { return f }; return [:] }
+}
+
 extension TLAValue: Comparable {
     public static func < (lhs: TLAValue, rhs: TLAValue) -> Bool {
         switch (lhs, rhs) {

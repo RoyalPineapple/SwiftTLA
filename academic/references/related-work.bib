@@ -1,0 +1,302 @@
+% Related Work References for SwiftTLA
+% Categories: TLA+ ecosystem, DSL/embedded DSL, model checking implementations,
+% compile-time verification, oracle-based validation, self-verifying systems
+
+% === TLA+ FOUNDATIONS ===
+
+@inproceedings{lamport1994tla,
+  author    = {Leslie Lamport},
+  title     = {The Temporal Logic of Actions},
+  journal   = {ACM Transactions on Programming Languages and Systems},
+  volume    = {16},
+  number    = {3},
+  pages     = {872--923},
+  year      = {1994},
+  doi       = {10.1145/177492.177726}
+}
+
+@book{lamport2002specifying,
+  author    = {Leslie Lamport},
+  title     = {Specifying Systems: The TLA+ Language and Tools for Hardware and Software Engineers},
+  publisher = {Addison-Wesley},
+  year      = {2002}
+}
+
+@article{lamport2009pluscal,
+  author    = {Leslie Lamport},
+  title     = {The {PlusCal} Algorithm Language},
+  journal   = {Theoretical Aspects of Computing -- ICTAC 2009},
+  series    = {Lecture Notes in Computer Science},
+  volume    = {5684},
+  pages     = {36--60},
+  year      = {2009},
+  doi       = {10.1007/978-3-642-03466-4_2}
+}
+
+% === TLA+ TOOLS & MODEL CHECKING ===
+
+@article{yu1999tlc,
+  author    = {Yuan Yu and Panagiotis Manolios and Leslie Lamport},
+  title     = {Model Checking {TLA+} Specifications},
+  booktitle = {Proceedings of the 10th IFIP WG 10.5 Advanced Research Working Conference on Correct Hardware Design and Verification Methods (CHARME)},
+  series    = {Lecture Notes in Computer Science},
+  volume    = {1703},
+  pages     = {54--66},
+  year      = {1999},
+  doi       = {10.1007/3-540-48153-2_6}
+}
+
+@inproceedings{konnov2019apalache,
+  author    = {Igor Konnov and Jure Kukovec and Thanh-Hai Tran},
+  title     = {{TLA+} Model Checking Made Symbolic},
+  journal   = {Proceedings of the ACM on Programming Languages},
+  volume    = {3},
+  number    = {OOPSLA},
+  pages     = {123:1--123:30},
+  year      = {2019},
+  doi       = {10.1145/3360549}
+}
+
+@article{kuppe2019toolbox,
+  author    = {Markus Alexander Kuppe and Leslie Lamport and Daniel Ricketts},
+  title     = {The {TLA+} Toolbox},
+  journal   = {Electronic Proceedings in Theoretical Computer Science},
+  volume    = {310},
+  pages     = {50--62},
+  year      = {2019},
+  doi       = {10.4204/EPTCS.310.6}
+}
+
+@inproceedings{leuschel2008prob,
+  author    = {Michael Leuschel and Michael Butler},
+  title     = {{ProB}: An Automated Analysis Toolset for the {B} Method},
+  journal   = {International Journal on Software Tools for Technology Transfer},
+  volume    = {10},
+  number    = {2},
+  pages     = {185--203},
+  year      = {2008},
+  doi       = {10.1007/s10009-007-0064-8}
+}
+
+% NOTE: ProB also supports TLA+ model checking, though primarily a B-method tool.
+
+% === TLA+ -> CODE COMPILATION ===
+
+@inproceedings{hackett2023pgo,
+  author    = {Finn Hackett and Shayan Hosseini and Renato Costa and Matthew Do and Ivan Beschastnikh},
+  title     = {Compiling Distributed System Models with {PGo}},
+  journal   = {Proceedings of the ACM on Programming Languages},
+  volume    = {7},
+  number    = {OOPSLA1},
+  pages     = {141:1--141:30},
+  year      = {2023},
+  doi       = {10.1145/3586033}
+}
+
+@inproceedings{hackett2025tracelinking,
+  author    = {Finn Hackett and Ivan Beschastnikh},
+  title     = {{TraceLinking}: Linking Implementations with Their Verified Designs},
+  journal   = {Proceedings of the ACM on Programming Languages},
+  volume    = {9},
+  number    = {OOPSLA1},
+  year      = {2025},
+  doi       = {10.1145/3704864}
+}
+
+% NOTE: PGo compiles Modular PlusCal to both TLA+ and Go. TraceLinking connects
+% implementation traces back to TLA+ states. Closest prior work to SwiftTLA's
+% single-source-two-backend approach, but goes the opposite direction
+% (spec-first, code-generated) rather than code-is-spec.
+
+@mastersthesis{do2019corresponding,
+  author    = {Matthew N. Do},
+  title     = {Corresponding Formal Specifications with Distributed Systems},
+  school    = {University of British Columbia},
+  year      = {2019}
+}
+
+% NOTE: Proposes compiling PlusCal/TLA+ to Go. No runtime checker, no self-proof.
+
+% === EMBEDDED DSLs FOR FORMAL METHODS ===
+
+@inproceedings{cuinat2020specedit,
+  author    = {Romain Cuinat and Ciprian Teodorov},
+  title     = {{SpecEdit}: Projectional Editing for {TLA+} Specifications},
+  booktitle = {2020 IEEE Workshop on Formal Integrated Development Environment (F-IDE)},
+  year      = {2020},
+  doi       = {10.1109/F-IDE50904.2020.00008}
+}
+
+% NOTE: Projectional editor for TLA+, not a DSL or runtime checker.
+
+@inproceedings{newcombe2015amazon,
+  author    = {Chris Newcombe and Tim Rath and Fan Zhang and Bogdan Munteanu and Marc Brooker and Michael Deardeuff},
+  title     = {How {Amazon Web Services} Uses Formal Methods},
+  journal   = {Communications of the ACM},
+  volume    = {58},
+  number    = {4},
+  pages     = {66--73},
+  year      = {2015},
+  doi       = {10.1145/2699417}
+}
+
+% NOTE: Documents AWS's use of TLA+ at production scale. Key industry adoption
+% reference. Uses standard TLA+/TLC workflow, no embedded DSL.
+
+@article{howard2023cosmosdb,
+  author    = {Heidi Howard and Markus A. Kuppe and Dharma Shukla and Ailidani Ailijiang and Murat Demirbas},
+  title     = {Understanding Inconsistency in {Azure Cosmos DB} with {TLA+}},
+  booktitle = {2023 IEEE/ACM 45th International Conference on Software Engineering (ICSE)},
+  year      = {2023},
+  doi       = {10.1109/ICSE48619.2023.00143}
+}
+
+@inproceedings{howard2025ccf,
+  author    = {Heidi Howard and Markus A. Kuppe and Edward Ashton and Antoine Chamayou and Sylvan Clebsch and Manuel Costa and Cedric Fournet and Matthew A. Johnson and Christoph M. Kirsch and Matthew J. Parkinson and Kapil Vaswani and Santiago Zanella-B{\'e}guelin},
+  title     = {Smart Casual Verification of the Confidential Consortium Framework},
+  booktitle = {19th USENIX Symposium on Operating Systems Design and Implementation (OSDI)},
+  year      = {2025}
+}
+
+% === COMPILE-TIME VERIFICATION / MACROS ===
+
+@phdthesis{scherer2021compilation,
+  author    = {Oscar Scherer},
+  title     = {Engineering of Reliable and Secure Software via Customizable Integrated Compilation Systems},
+  school    = {Universit{\`a} della Svizzera Italiana},
+  year      = {2021}
+}
+
+% NOTE: Discusses compile-time analysis in Swift/Rust. SwiftTLA pushes this
+% further by embedding full model checking in the compiler via macros.
+
+% === SELF-VERIFYING SYSTEMS / BOOTSTRAPPING ===
+
+@inproceedings{kumar2014cakeML,
+  author    = {Ramana Kumar and Magnus O. Myreen and Michael Norrish and Scott Owens},
+  title     = {{CakeML}: A Verified Implementation of {ML}},
+  booktitle = {Proceedings of the 41st ACM SIGPLAN-SIGACT Symposium on Principles of Programming Languages (POPL)},
+  pages     = {179--191},
+  year      = {2014},
+  doi       = {10.1145/2535838.2535841}
+}
+
+% NOTE: CakeML is a verified ML compiler in HOL4. Self-verification of language tools.
+% Similar spirit (tool verifies itself) but in theorem-prover world, not model checking.
+
+@inproceedings{davis2009milawa,
+  author    = {Jared Davis and Magnus O. Myreen},
+  title     = {The Reflective {Milawa} Theorem Prover is Sound (Down to the Machine Code that Runs it)},
+  journal   = {Journal of Automated Reasoning},
+  volume    = {55},
+  pages     = {117--183},
+  year      = {2015},
+  doi       = {10.1007/s10817-015-9324-6}
+}
+
+% NOTE: Self-verifying theorem prover. Related in spirit to SwiftTLA's self-proof
+% bootstrap but in the proof-assistant domain rather than model checking.
+
+@inproceedings{kuppe2024tlcSafety,
+  author    = {Markus Alexander Kuppe},
+  title     = {The {TLC} Safety Checking Algorithm (TLA+ Specification)},
+  howpublished = {\url{https://github.com/tlaplus/Examples/tree/master/specifications/TLCSafetyChecking}},
+  year      = {2024}
+}
+
+% NOTE: A TLA+ specification of TLC's own safety checking algorithm in the
+% official tlaplus/Examples repository. Models the checker but does not
+% implement it in a host language or provide oracle parity.
+
+% === DIFFERENTIAL / ORACLE-BASED TESTING OF VERIFICATION TOOLS ===
+
+@inproceedings{kaindlstorfer2024interrogation,
+  author    = {Dominik Kaindlstorfer and Artem Isychev and Valentin W{\"u}stholz and Christoph Csallner and Michael Pradel},
+  title     = {Interrogation Testing of Program Analyzers for Soundness and Precision Issues},
+  booktitle = {Proceedings of the 39th IEEE/ACM International Conference on Automated Software Engineering (ASE)},
+  year      = {2024},
+  doi       = {10.1145/3691620.3695516}
+}
+
+% NOTE: Differential testing of program analyzers. Oracle-based validation of
+% verification tools is a known technique, but SwiftTLA's use of TLC as an oracle
+% for validating a new model checker implementation is novel in the TLA+ ecosystem.
+
+@inproceedings{klimis2026compilomorphic,
+  author    = {Vasileios Klimis},
+  title     = {Compilomorphic Fuzzing: Turning a Compiler Against Itself},
+  booktitle = {Proceedings of the 34th ACM International Conference on the Foundations of Software Engineering (FSE)},
+  year      = {2026}
+}
+
+% NOTE: Uses compiler self-reference for validation. Related to SwiftTLA's
+% self-proof approach (checker modelled in TLA+, checked by TLC).
+
+% === SWIFT MACROS / METAPROGRAMMING ===
+
+% NOTE: Swift macro system (SE-0382, SE-0389, SE-0394) introduced in Swift 5.9
+% provides the mechanism for @TLAModel's compile-time model checking.
+% Key references:
+%   - SE-0382: Expression Macros
+%   - SE-0389: Attached Macros
+%   - SE-0394: Package Manager Support for Custom Macros
+
+@misc{swiftMacros2023,
+  author    = {{Apple Inc.}},
+  title     = {Swift Macros (Swift Evolution Proposals)},
+  howpublished = {\url{https://github.com/apple/swift-evolution}},
+  year      = {2023}
+}
+
+% === EMBEDDED DSLs FOR VERIFICATION (GENERAL) ===
+
+@inproceedings{leino2010dafny,
+  author    = {K. Rustan M. Leino},
+  title     = {{Dafny}: An Automatic Program Verifier for Functional Correctness},
+  booktitle = {Proceedings of the 16th International Conference on Logic for Programming, Artificial Intelligence, and Reasoning (LPAR)},
+  series    = {Lecture Notes in Computer Science},
+  volume    = {6355},
+  pages     = {348--370},
+  year      = {2010},
+  doi       = {10.1007/978-3-642-17511-4_20}
+}
+
+% NOTE: Dafny embeds verification in a general-purpose language, but uses
+% deductive verification (SMT), not model checking. No oracle parity.
+
+% === ADDITIONAL TLA+ ECOSYSTEM ===
+
+@inproceedings{kukovec2020typeinference,
+  author    = {Jure Kukovec and Igor Konnov},
+  title     = {Type Inference for {TLA+} in {Apalache}},
+  booktitle = {TLA+ Community Event 2020},
+  year      = {2020}
+}
+
+@article{tran2023symbolic,
+  author    = {Thanh-Hai Tran},
+  title     = {Symbolic Verification of {TLA+} Specifications with Applications to Distributed Algorithms},
+  school    = {TU Wien},
+  year      = {2023}
+}
+
+@inproceedings{kuppe2023teaching,
+  author    = {Markus A. Kuppe},
+  title     = {Teaching {TLA+} to Engineers at {Microsoft}},
+  booktitle = {Formal Methods Teaching Workshop (FMTea)},
+  series    = {Lecture Notes in Computer Science},
+  year      = {2023},
+  doi       = {10.1007/978-3-031-27534-0_6}
+}
+
+% === TLA+ SPECIFICATION CORPUS ===
+
+@misc{tlaplusExamples,
+  author    = {{TLA+ Community}},
+  title     = {{TLA+ Examples}},
+  howpublished = {\url{https://github.com/tlaplus/Examples}},
+  year      = {2024}
+}
+
+% NOTE: 27 of these examples are ported to SwiftTLA's DSL with TLC parity.
+% This corpus serves as the benchmark suite for SwiftTLA's oracle validation.

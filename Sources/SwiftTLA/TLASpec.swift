@@ -57,8 +57,9 @@ public struct TLASpec: Sendable {
     public let recursiveFuncs: [RecursiveFunc]
     public var runtimeFuncs: [String: @Sendable ([TLAValue]) -> TLAValue] = [:]
     public var runtimeFuncBodies: [String] = []
+    public let symmetrySets: [SymmetrySet]
 
-    public init(name: String, variables: [NamedVar], constants: [String: TLAValue] = [:], actions: [NamedAction], invariants: [NamedInvariant], temporalProperties: [NamedTemporal] = [], fairness: [FairnessCondition] = [], assume: StateExpr? = nil, checkDeadlock: Bool = false, definitions: [String] = [], theorems: [String] = [], extendsModules: String = "Integers", constraint: StateExpr? = nil, recursiveDefs: [String] = [], recursiveFuncs: [RecursiveFunc] = []) {
+    public init(name: String, variables: [NamedVar], constants: [String: TLAValue] = [:], actions: [NamedAction], invariants: [NamedInvariant], temporalProperties: [NamedTemporal] = [], fairness: [FairnessCondition] = [], assume: StateExpr? = nil, checkDeadlock: Bool = false, definitions: [String] = [], theorems: [String] = [], extendsModules: String = "Integers", constraint: StateExpr? = nil, recursiveDefs: [String] = [], recursiveFuncs: [RecursiveFunc] = [], symmetrySets: [SymmetrySet] = []) {
         self.name = name
         self.variables = variables
         self.constants = constants
@@ -74,6 +75,7 @@ public struct TLASpec: Sendable {
         self.constraint = constraint
         self.recursiveDefs = recursiveDefs
         self.recursiveFuncs = recursiveFuncs
+        self.symmetrySets = symmetrySets
     }
 
     public var description: String {
@@ -113,7 +115,8 @@ public struct TLASpec: Sendable {
             extendsModules: self.extendsModules,
             constraint: { if let a = self.constraint, let b = other.constraint { return .and(a, b) }; return self.constraint ?? other.constraint }(),
             recursiveDefs: self.recursiveDefs + other.recursiveDefs,
-            recursiveFuncs: self.recursiveFuncs + other.recursiveFuncs
+            recursiveFuncs: self.recursiveFuncs + other.recursiveFuncs,
+            symmetrySets: self.symmetrySets + other.symmetrySets
         )
     }
 
@@ -134,7 +137,8 @@ public struct TLASpec: Sendable {
             extendsModules: self.extendsModules,
             constraint: self.constraint,
             recursiveDefs: self.recursiveDefs,
-            recursiveFuncs: self.recursiveFuncs
+            recursiveFuncs: self.recursiveFuncs,
+            symmetrySets: self.symmetrySets
         )
     }
 }
@@ -272,6 +276,7 @@ public enum SpecBuilder {
     public static func buildExpression(_ expr: RecursiveDecl) -> [SpecComponent] { [expr] }
     public static func buildExpression(_ expr: RecursiveFuncDecl) -> [SpecComponent] { [expr] }
     public static func buildExpression(_ expr: RuntimeFuncDecl) -> [SpecComponent] { [expr] }
+    public static func buildExpression(_ expr: SymmetrySetDecl) -> [SpecComponent] { [expr] }
     public static func buildOptional(_ component: [SpecComponent]?) -> [SpecComponent] { component ?? [] }
     public static func buildEither(first: [SpecComponent]) -> [SpecComponent] { first }
     public static func buildEither(second: [SpecComponent]) -> [SpecComponent] { second }
@@ -409,27 +414,74 @@ public struct SymmetrySet: Hashable, Sendable, CustomStringConvertible {
 
     func canonicalize(_ state: [String: TLAValue]) -> [String: TLAValue] {
         let sorted = values.sorted { $0.description < $1.description }
-        let present = sorted.filter { value in
-            state.values.contains(value)
-        }
+        let present = sorted.filter { val in stateContains(state, val) }
         guard !present.isEmpty else { return state }
 
+        let canonical = sorted[0]
         let mapping: [TLAValue: TLAValue] = Dictionary(uniqueKeysWithValues:
-            zip(present, sorted.prefix(present.count))
+            present.map { ($0, canonical) }
         )
 
-        return state.mapValues { val in
-            if let canonical = mapping[val] { return canonical }
-            if case .set(let s) = val {
-                var newSet = Set<TLAValue>()
-                for elem in s {
-                    newSet.insert(mapping[elem] ?? elem)
-                }
-                return .set(newSet)
-            }
-            return val
-        }
+        return state.mapValues { applyMapping($0, mapping) }
     }
+}
+
+private func valueContains(_ val: TLAValue, _ target: TLAValue) -> Bool {
+    if val == target { return true }
+    switch val {
+    case .set(let s):
+        return s.contains(where: { valueContains($0, target) })
+    case .function(let f):
+        for (k, v) in f {
+            if valueContains(k, target) || valueContains(v, target) { return true }
+        }
+        return false
+    case .tuple(let t):
+        return t.contains(where: { valueContains($0, target) })
+    case .record(let r):
+        return r.values.contains(where: { valueContains($0, target) })
+    default:
+        return false
+    }
+}
+
+private func stateContains(_ state: [String: TLAValue], _ target: TLAValue) -> Bool {
+    state.values.contains(where: { valueContains($0, target) })
+}
+
+private func applyMapping(_ val: TLAValue, _ mapping: [TLAValue: TLAValue]) -> TLAValue {
+    if let canonical = mapping[val] { return canonical }
+    switch val {
+    case .set(let s):
+        return .set(Set(s.map { applyMapping($0, mapping) }))
+    case .function(let f):
+        var newFunc: [TLAValue: TLAValue] = [:]
+        for (k, v) in f {
+            let newKey = applyMapping(k, mapping)
+            let newVal = applyMapping(v, mapping)
+            newFunc[newKey] = newVal
+        }
+        return .function(newFunc)
+    case .tuple(let elements):
+        return .tuple(elements.map { applyMapping($0, mapping) })
+    case .record(let fields):
+        return .record(fields.mapValues { applyMapping($0, mapping) })
+    default:
+        return val
+    }
+}
+
+public struct SymmetrySetDecl: SpecComponent {
+    public let variableName: String
+    public let values: Set<TLAValue>
+    init(_ variableName: String, _ values: Set<TLAValue>) {
+        self.variableName = variableName
+        self.values = values
+    }
+}
+
+public func Symmetry(_ variableName: String, _ values: Set<some TLAValueConvertible>) -> SymmetrySetDecl {
+    SymmetrySetDecl(variableName, Set(values.map(\.tlaValue)))
 }
 
 public func Constant(_ name: String, _ value: some TLAValueConvertible) -> ConstantDecl {
@@ -508,6 +560,7 @@ extension TLASpec {
         var useSpecs: [TLASpec] = []
         var runtimeFuncCollector: [String: @Sendable ([TLAValue]) -> TLAValue] = [:]
         var runtimeFuncBodiesCollector: [String] = []
+        var symmetrySets: [SymmetrySet] = []
 
         for comp in components {
             if let v = comp as? VarDecl { variables.append(NamedVar(name: v.name, initial: v.initial, initialSet: v.initialSet, initExpr: v.initExpr)) }
@@ -544,6 +597,9 @@ extension TLASpec {
                 runtimeFuncBodiesCollector.append(rtf.tlaBody)
                 runtimeFuncBodies.append(rtf.tlaBody)
             }
+            else if let s = comp as? SymmetrySetDecl {
+                symmetrySets.append(SymmetrySet(variableName: s.variableName, values: s.values))
+            }
         }
 
         // Apply Use(spec) — compose used specs into this one
@@ -557,6 +613,7 @@ extension TLASpec {
             recursiveFuncs += used.recursiveFuncs
             if let c = used.constraint { constraint = constraint.map { .and($0, c) } ?? c }
             if let a = used.assume { assumes = assumes.map { .and($0, a) } ?? a }
+            symmetrySets += used.symmetrySets
         }
 
         // Auto-UNCHANGED: push into OR branches so TLC sees complete assignments
@@ -582,6 +639,7 @@ extension TLASpec {
         self.recursiveFuncs = recursiveFuncs
         self.runtimeFuncs = runtimeFuncCollector
         self.runtimeFuncBodies = runtimeFuncBodiesCollector
+        self.symmetrySets = symmetrySets
     }
 }
 
@@ -613,7 +671,8 @@ public func substituteConstants(_ spec: TLASpec) -> TLASpec {
         extendsModules: spec.extendsModules,
         constraint: spec.constraint.map { substituteInState($0, constants: constants) },
         recursiveDefs: spec.recursiveDefs,
-        recursiveFuncs: spec.recursiveFuncs
+        recursiveFuncs: spec.recursiveFuncs,
+        symmetrySets: spec.symmetrySets
     )
 }
 
@@ -652,8 +711,8 @@ private func substituteInState(_ expr: StateExpr, constants: [String: TLAValue])
     case .intersection(let a, let b): return .intersection(substituteInState(a, constants: constants), substituteInState(b, constants: constants))
     case .setDifference(let a, let b): return .setDifference(substituteInState(a, constants: constants), substituteInState(b, constants: constants))
     case .cardinality(let a): return .cardinality(substituteInState(a, constants: constants))
-    case .setFilter(let a, let b): return .setFilter(substituteInState(a, constants: constants), substituteInState(b, constants: constants))
-    case .setMap(let a, let b): return .setMap(substituteInState(a, constants: constants), substituteInState(b, constants: constants))
+    case .setFilter(let a, let qv, let b): return .setFilter(substituteInState(a, constants: constants), qv, substituteInState(b, constants: constants))
+    case .setMap(let a, let qv, let b): return .setMap(substituteInState(a, constants: constants), qv, substituteInState(b, constants: constants))
     case .powerSet(let a): return .powerSet(substituteInState(a, constants: constants))
     case .unionAll(let a): return .unionAll(substituteInState(a, constants: constants))
     case .tupleLiteral(let elems): return .tupleLiteral(elems.map { substituteInState($0, constants: constants) })
@@ -666,13 +725,13 @@ private func substituteInState(_ expr: StateExpr, constants: [String: TLAValue])
     case .recordLiteral(let fields): return .recordLiteral(fields.mapValues { substituteInState($0, constants: constants) })
     case .recordAccess(let a, let f): return .recordAccess(substituteInState(a, constants: constants), f)
     case .domain(let a): return .domain(substituteInState(a, constants: constants))
-    case .functionLiteral(let a, let b): return .functionLiteral(substituteInState(a, constants: constants), substituteInState(b, constants: constants))
+    case .functionLiteral(let a, let qv, let b): return .functionLiteral(substituteInState(a, constants: constants), qv, substituteInState(b, constants: constants))
     case .functionApply(let a, let b): return .functionApply(substituteInState(a, constants: constants), substituteInState(b, constants: constants))
     case .except(let a, let b, let c): return .except(substituteInState(a, constants: constants), substituteInState(b, constants: constants), substituteInState(c, constants: constants))
     case .caseExpr(let pairs, let other): return .caseExpr(pairs.map { substituteInState($0, constants: constants) }, other.map { substituteInState($0, constants: constants) })
-    case .forAll(let a, let b): return .forAll(substituteInState(a, constants: constants), substituteInState(b, constants: constants))
-    case .exists(let a, let b): return .exists(substituteInState(a, constants: constants), substituteInState(b, constants: constants))
-     case .choose(let a, let b): return .choose(substituteInState(a, constants: constants), substituteInState(b, constants: constants))
+    case .forAll(let a, let qv, let b): return .forAll(substituteInState(a, constants: constants), qv, substituteInState(b, constants: constants))
+    case .exists(let a, let qv, let b): return .exists(substituteInState(a, constants: constants), qv, substituteInState(b, constants: constants))
+     case .choose(let a, let qv, let b): return .choose(substituteInState(a, constants: constants), qv, substituteInState(b, constants: constants))
      case .enabledAction: return expr
      case .sequenceFromSet(let s): return .sequenceFromSet(substituteInState(s, constants: constants))
      case .functionSet(let d, let r): return .functionSet(substituteInState(d, constants: constants), substituteInState(r, constants: constants))

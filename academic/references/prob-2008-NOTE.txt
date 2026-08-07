@@ -1,0 +1,4 @@
+Prob: An Automated Analysis Toolset for the B Method
+Leuschel & Butler, STTT 2008, DOI: 10.1007/s10009-007-0064-8
+Could not find a freely accessible PDF. Behind Springer paywall.
+Author page: https://eprints.soton.ac.uk/266101/

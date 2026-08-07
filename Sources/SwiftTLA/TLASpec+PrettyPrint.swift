@@ -22,6 +22,13 @@ extension TLASpec {
             lines.append("")
         }
 
+        for sym in symmetrySets {
+            let sortedVals = Array(sym.values).sorted(by: { $0.description < $1.description })
+            let valList = sortedVals.map(\.description).joined(separator: ", ")
+            lines.append("SYMMETRY Symm\(sym.variableName) == {\(valList)}")
+        }
+        if !symmetrySets.isEmpty { lines.append("") }
+
         if let assume = assume {
             lines.append("ASSUME \(assume)")
             lines.append("")

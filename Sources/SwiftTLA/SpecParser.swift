@@ -309,7 +309,7 @@ public enum SpecParser {
         guard let (variableName, assignment) = parseBecomesArgument(guarded.call) else { return nil }
 
         let action: ActionExpr
-        if case .choose(let chosenSet, _) = assignment {
+        if case .choose(let chosenSet, _, _) = assignment {
             action = .chooseAction(variableName, chosenSet)
         } else {
             action = .assign(variableName, assignment)
@@ -433,8 +433,8 @@ public enum SpecParser {
         case .subtracting:  return parseBinaryMethod(base: baseExpression, argument: firstArgument, combine: { .setDifference($0, $1) })
         case .isSubset:     return parseBinaryMethod(base: baseExpression, argument: firstArgument, combine: { .subset($0, $1) })
         case .applying:     return parseBinaryMethod(base: baseExpression, argument: firstArgument, combine: { .functionApply($0, $1) })
-        case .filtering:    return parseBinaryMethod(base: baseExpression, argument: firstArgument, combine: { .setFilter($0, $1) })
-        case .mapping:      return parseBinaryMethod(base: baseExpression, argument: firstArgument, combine: { .setMap($1, $0) })
+        case .filtering:    return parseBinaryMethod(base: baseExpression, argument: firstArgument, combine: { .setFilter($0, .fresh(), $1) })
+        case .mapping:      return parseBinaryMethod(base: baseExpression, argument: firstArgument, combine: { .setMap($1, .fresh(), $0) })
         case .appending:    return parseBinaryMethod(base: baseExpression, argument: firstArgument, combine: { .tupleAppend($0, $1) })
         case .concatenating: return parseBinaryMethod(base: baseExpression, argument: firstArgument, combine: { .tupleConcatenate($0, $1) })
         case .integerDivided: return parseBinaryMethod(base: baseExpression, argument: firstArgument, combine: { .integerDivide($0, $1) })
@@ -528,33 +528,33 @@ public enum SpecParser {
                   let domain = parseStateExpr(arguments[0].expression),
                   let body = parseStateExpr(arguments[1].expression)
             else { return nil }
-            return .functionLiteral(domain, body)
+            return .functionLiteral(domain, .fresh(), body)
 
         case "for":
             guard arguments.count >= 2,
                   let setExpr = parseStateExpr(arguments[0].expression),
                   let predicate = parseStateExpr(arguments[1].expression)
             else { return nil }
-            return .forAll(setExpr, predicate)
+            return .forAll(setExpr, .fresh(), predicate)
 
         case "exists":
             guard arguments.count >= 2,
                   let setExpr = parseStateExpr(arguments[0].expression),
                   let predicate = parseStateExpr(arguments[1].expression)
             else { return nil }
-            return .exists(setExpr, predicate)
+            return .exists(setExpr, .fresh(), predicate)
 
         case "choose":
             guard arguments.count >= 2,
                   let setExpr = parseStateExpr(arguments[0].expression),
                   let predicate = parseStateExpr(arguments[1].expression)
             else { return nil }
-            return .choose(setExpr, predicate)
+            return .choose(setExpr, .fresh(), predicate)
 
         case "any":
             guard let setExpr = arguments.first.flatMap({ parseStateExpr($0.expression) })
             else { return nil }
-            return .choose(setExpr, .value(.bool(true)))
+            return .choose(setExpr, .fresh(), .value(.bool(true)))
 
         case "firstMatch":
             var flatPairs: [StateExpr] = []
@@ -582,7 +582,7 @@ public enum SpecParser {
                   let domain = parseStateExpr(arguments[0].expression),
                   let body = parseStateExpr(arguments[1].expression)
             else { return nil }
-            return .functionLiteral(domain, body)
+            return .functionLiteral(domain, .fresh(), body)
 
         default:
             return nil

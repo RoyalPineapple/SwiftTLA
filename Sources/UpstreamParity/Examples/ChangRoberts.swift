@@ -150,7 +150,9 @@ extension Example {
                 WeakFairness("n0_\(i)")
                 WeakFairness("n1_\(i)")
             }
-            Definition("Liveness == (\\E n \\in {1, 2, 3} : (state[n] = \"cand\")) => <>(\\E n \\in {1, 2, 3} : (state[n] = \"won\"))")
+            LeadsTo("Liveness",
+                StateExpr.existsIn(nodeSet) { n in processState.applying(n) == "cand" },
+                StateExpr.existsIn(nodeSet) { n in processState.applying(n) == "won" })
         }
     }
 
