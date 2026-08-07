@@ -50,7 +50,7 @@ static func changRobertsSpec() -> TLASpec {
             Extends("Integers")
 
             Variable(initiator, in: initFuncs)
-            Variable(computed: processState, stateExpr)
+            Variable(computed: processState) { stateExpr }
             Variable(pc, TLAValue.function([.int(1):"n0", .int(2):"n0", .int(3):"n0"]))
             Variable(msgs, TLAValue.function([
                 .int(1):.set([]), .int(2):.set([]), .int(3):.set([])]))

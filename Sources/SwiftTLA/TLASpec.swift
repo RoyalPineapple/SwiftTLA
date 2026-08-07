@@ -326,8 +326,8 @@ public func StrongFairness(_ action: String) -> FairnessDecl {
 }
 
 @discardableResult
-public func Variable<T>(computed ref: Var<T>, _ expr: StateExpr) -> VarDecl {
-    VarDecl(ref.name, initExpr: expr)
+public func Variable<T>(computed ref: Var<T>, @InvariantBuilder _ body: () -> StateExpr) -> VarDecl {
+    VarDecl(ref.name, initExpr: body())
 }
 
 public struct DeadlockDecl: SpecComponent { public init() {} }
