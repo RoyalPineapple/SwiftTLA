@@ -12,7 +12,7 @@ public struct SpecRuntime {
     }
 
     public func initialStates() -> [[String: TLAValue]] {
-        return computeInitialStateMaps(spec)
+        return computeInitialStates(spec)
     }
 
     public func apply(actionName: String, to state: [String: TLAValue]) throws -> [String: TLAValue] {
@@ -69,29 +69,5 @@ public struct SpecRuntime {
         case actionNotFound(String)
         case actionNotEnabled(String)
         case invariantNotFound(String)
-    }
-
-    private func computeInitialStateMaps(_ spec: TLASpec) -> [[String: TLAValue]] {
-        let substituted = substituteConstants(spec)
-        let base = Dictionary(uniqueKeysWithValues: substituted.variables.map { ($0.name, $0.initial) })
-        let nondeterministic = substituted.variables.filter { v in
-            guard v.initialSet != nil else { return false }
-            if case .set = v.initial { return true }
-            return false
-        }
-        var states: [[String: TLAValue]] = nondeterministic.reduce([base]) { states, variable in
-            guard case .set(let values) = variable.initial else { return states }
-            let sorted = TLAValue.sorted(values)
-            return states.flatMap { state in sorted.map { state.merging([variable.name: $0]) { _, new in new } } }
-        }
-        for variable in substituted.variables where variable.initExpr != nil {
-            states = states.compactMap { state in
-                guard let val = try? Evaluator.evaluate(variable.initExpr!, in: state) else { return nil }
-                var s = state
-                s[variable.name] = val
-                return s
-            }
-        }
-        return states
     }
 }

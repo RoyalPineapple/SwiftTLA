@@ -291,6 +291,32 @@ public func Variable<T>(_ ref: Var<T>, in values: some Sequence<some TLAValueCon
     return VarDecl(ref.name, .set(set), initialSet: stateSet)
 }
 
+// MARK: - Shared initial state computation
+
+public func computeInitialStates(_ spec: TLASpec) -> [[String: TLAValue]] {
+    let substituted = substituteConstants(spec)
+    let base = Dictionary(uniqueKeysWithValues: substituted.variables.map { ($0.name, $0.initial) })
+    let nondeterministic = substituted.variables.filter { v in
+        guard v.initialSet != nil else { return false }
+        if case .set = v.initial { return true }
+        return false
+    }
+    var states: [[String: TLAValue]] = nondeterministic.reduce([base]) { states, variable in
+        guard case .set(let values) = variable.initial else { return states }
+        let sorted = TLAValue.sorted(values)
+        return states.flatMap { state in sorted.map { state.merging([variable.name: $0]) { _, new in new } } }
+    }
+    for variable in substituted.variables where variable.initExpr != nil {
+        states = states.compactMap { state in
+            guard let val = try? Evaluator.evaluate(variable.initExpr!, in: state) else { return nil }
+            var s = state
+            s[variable.name] = val
+            return s
+        }
+    }
+    return states
+}
+
 @discardableResult
 public func Action(_ name: String, @ActionBuilder _ body: () -> ActionExpr) -> ActionDecl {
     ActionDecl(name, body())
@@ -490,7 +516,9 @@ public func substituteConstants(_ spec: TLASpec) -> TLASpec {
         constants: [:],
         actions: acts,
         invariants: invs,
-        temporalProperties: spec.temporalProperties,
+         temporalProperties: spec.temporalProperties.map { t in
+            NamedTemporal(name: t.name, expr: substituteInTemporal(t.expr, constants: constants))
+         },
         fairness: spec.fairness,
         assume: spec.assume.map { substituteInState($0, constants: constants) },
         checkDeadlock: spec.checkDeadlock,
@@ -602,6 +630,16 @@ public func explicitUnchanged(_ e: ActionExpr) -> Set<String> {
 }
 
 /// Joint nondeterministic init: two variables from a constrained cross-product.
+private func substituteInTemporal(_ expr: TemporalExpr, constants: [String: TLAValue]) -> TemporalExpr {
+    switch expr {
+    case .always(let s): return .always(substituteInState(s, constants: constants))
+    case .eventually(let s): return .eventually(substituteInState(s, constants: constants))
+    case .alwaysEventually(let s): return .alwaysEventually(substituteInState(s, constants: constants))
+    case .eventuallyAlways(let s): return .eventuallyAlways(substituteInState(s, constants: constants))
+    case .leadsTo(let a, let b): return .leadsTo(substituteInState(a, constants: constants), substituteInState(b, constants: constants))
+    }
+}
+
 /// Deprecated — use two separate Variable() declarations with StateExpr constraints instead.
 @available(*, deprecated, message: "Use two separate Variable() declarations")
 public func Variable<T, U>(_ ref1: Var<T>, _ ref2: Var<U>, in range: ClosedRange<Int>, where predicate: (Int, Int) -> Bool) -> VarDecl {

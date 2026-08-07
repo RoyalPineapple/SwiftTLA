@@ -64,30 +64,6 @@ public struct ModelChecker {
         )
     }
 
-    private func computeInitialStates(_ specification: TLASpec) -> [State] {
-        let base = Dictionary(uniqueKeysWithValues: specification.variables.map { ($0.name, $0.initial) })
-        let nondeterministic = specification.variables.filter { v in
-            guard v.initialSet != nil else { return false }
-            if case .set = v.initial { return true }
-            return false
-        }
-        var states: [State] = nondeterministic.reduce([base]) { states, variable in
-            guard case .set(let values) = variable.initial else { return states }
-            let sorted = TLAValue.sorted(values)
-            return states.flatMap { state in sorted.map { state.merging([variable.name: $0]) { _, new in new } } }
-        }
-        // Apply initExpr computations after nondeterministic expansion
-        for variable in specification.variables where variable.initExpr != nil {
-            states = states.compactMap { state in
-                guard let val = try? Evaluator.evaluate(variable.initExpr!, in: state) else { return nil }
-                var s = state
-                s[variable.name] = val
-                return s
-            }
-        }
-        return states
-    }
-
     private func buildExpander(
         _ actions: [NamedAction],
         variableNames: [String],
