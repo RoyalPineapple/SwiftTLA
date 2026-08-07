@@ -116,6 +116,9 @@ static func changRobertsSpec() -> TLASpec {
                     }
                 }
             }
+            LeadsTo("Liveness",
+                StateExpr.existsIn(nodeSet) { StateExpr.equal(processState.applying($0), StateExpr.value(.string("cand"))) },
+                StateExpr.existsIn(nodeSet) { StateExpr.equal(processState.applying($0), StateExpr.value(.string("won"))) })
         }
     }
 

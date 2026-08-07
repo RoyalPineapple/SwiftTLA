@@ -1182,3 +1182,81 @@ struct CompletionCoverageTests {
         #expect(next["programCounter"] != nil)
     }
 }
+
+struct LivenessCheckerTests {
+    @Test("SCC decomposition works on HourClock (12 states, 1 SCC)")
+    func hourClockSCC() throws {
+        let hr = Var<Int>("hr", value: 0)
+        let spec = TLASpec("HourClock") {
+            Variable(hr, in: 1...12)
+            Action("tick") { (hr < 12 && hr.becomes(hr + 1)) || (hr == 12 && hr.becomes(1)) }
+        }
+        let graph = try ModelChecker(spec: spec, maxStates: 20).exploreGraph()
+        let lc = LivenessChecker(graph: graph)
+        let sccs = lc.computeSCCs()
+        #expect(sccs.count == 1)
+        #expect(sccs[0].count == 12)
+    }
+
+    @Test("Terminal SCC detection works")
+    func terminalSCC() throws {
+        let hr = Var<Int>("hr", value: 0)
+        let spec = TLASpec("HourClock") {
+            Variable(hr, in: 1...12)
+            Action("tick") { (hr < 12 && hr.becomes(hr + 1)) || (hr == 12 && hr.becomes(1)) }
+        }
+        let graph = try ModelChecker(spec: spec, maxStates: 20).exploreGraph()
+        let lc = LivenessChecker(graph: graph)
+        let sccs = lc.computeSCCs()
+        let terminals = lc.terminalSCCs(from: sccs)
+        #expect(terminals.count == 1)
+    }
+
+    @Test("checkEventually: satisfied when property holds in SCC")
+    func eventuallySatisfied() throws {
+        let hr = Var<Int>("hr", value: 0)
+        let spec = TLASpec("HourClock") {
+            Variable(hr, in: 1...12)
+            Action("tick") { (hr < 12 && hr.becomes(hr + 1)) || (hr == 12 && hr.becomes(1)) }
+        }
+        let graph = try ModelChecker(spec: spec, maxStates: 20).exploreGraph()
+        let lc = LivenessChecker(graph: graph)
+        let sccs = lc.computeSCCs()
+        let terminals = lc.terminalSCCs(from: sccs)
+        let eventually12: StateExpr = .equal(.variable("hr"), .value(.int(12)))
+        let result = try lc.checkEventually(eventually12, fairSCCs: terminals)
+        #expect(result == .satisfied)
+    }
+
+    @Test("checkEventually: violated when property never holds")
+    func eventuallyViolated() throws {
+        let hr = Var<Int>("hr", value: 0)
+        let spec = TLASpec("HourClock") {
+            Variable(hr, in: 1...12)
+            Action("tick") { (hr < 12 && hr.becomes(hr + 1)) || (hr == 12 && hr.becomes(1)) }
+        }
+        let graph = try ModelChecker(spec: spec, maxStates: 20).exploreGraph()
+        let lc = LivenessChecker(graph: graph)
+        let sccs = lc.computeSCCs()
+        let terminals = lc.terminalSCCs(from: sccs)
+        let eventually13: StateExpr = .equal(.variable("hr"), .value(.int(13)))
+        let result = try lc.checkEventually(eventually13, fairSCCs: terminals)
+        if case .violated = result { } else { #expect(Bool(false)) }
+    }
+}
+
+    @Test("ChangRoberts liveness: cand ~> won holds")
+    func changRobertsLiveness() throws {
+        let spec = Example.changRobertsN3.spec
+        let mc = ModelChecker(spec: spec, maxStates: 500)
+        let graph = try mc.exploreGraph()
+        let lc = LivenessChecker(graph: graph)
+
+        // Verify temporal property exists
+        #expect(spec.temporalProperties.count == 1)
+        #expect(spec.temporalProperties[0].name == "Liveness")
+
+        let results = try lc.checkAll(spec.temporalProperties, fairness: spec.fairness, actions: spec.actions)
+        #expect(results.count == 1)
+        #expect(results[0] == .satisfied)
+    }
