@@ -650,6 +650,7 @@ private func substituteInState(_ expr: StateExpr, constants: [String: TLAValue])
      case .choose(let a, let b): return .choose(substituteInState(a, constants: constants), substituteInState(b, constants: constants))
      case .enabledAction: return expr
      case .sequenceFromSet(let s): return .sequenceFromSet(substituteInState(s, constants: constants))
+     case .functionSet(let d, let r): return .functionSet(substituteInState(d, constants: constants), substituteInState(r, constants: constants))
      case .setSum(let f, let s): return .setSum(substituteInState(f, constants: constants), substituteInState(s, constants: constants))
      case .recursiveCall(let n, let a): return .recursiveCall(n, a.map { substituteInState($0, constants: constants) })
      }

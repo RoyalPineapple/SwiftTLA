@@ -58,6 +58,7 @@ public indirect enum StateExpr: Hashable, Sendable, CustomStringConvertible {
 
     case sequenceFromSet(StateExpr)
     case setSum(StateExpr, StateExpr)
+    case functionSet(StateExpr, StateExpr)
 
     case recursiveCall(String, [StateExpr])
 
@@ -125,6 +126,7 @@ public indirect enum StateExpr: Hashable, Sendable, CustomStringConvertible {
         case .enabledAction(let a): return "ENABLED \(a)"
         case .sequenceFromSet(let s): return "SeqFromSet(\(s))"
         case .setSum(let f, let s): return "Sum(\(f), \(s))"
+        case .functionSet(let d, let r): return "[\(d) -> \(r)]"
         case .recursiveCall(let n, let a): return "\(n)(\(a.map(\.description).joined(separator: ", ")))"
         }
     }

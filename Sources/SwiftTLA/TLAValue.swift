@@ -92,6 +92,23 @@ extension TLAValue: Comparable {
     public static func sorted(_ values: Set<TLAValue>) -> [TLAValue] {
         Array(values).sorted()
     }
+
+    public static func functionSet(domain: Set<TLAValue>, range: Set<TLAValue>) -> Set<TLAValue> {
+        let domainArr = domain.sorted()
+        let rangeArr = range.sorted()
+        var result = Set<TLAValue>()
+        func build(_ idx: Int, _ cur: [(TLAValue, TLAValue)]) {
+            if idx == domainArr.count {
+                result.insert(.function(Dictionary(uniqueKeysWithValues: cur)))
+                return
+            }
+            for r in rangeArr {
+                build(idx + 1, cur + [(domainArr[idx], r)])
+            }
+        }
+        if !domainArr.isEmpty { build(0, []) } else { result.insert(.function([:])) }
+        return result
+    }
 }
 
 extension TLAValue: ExpressibleByStringLiteral {

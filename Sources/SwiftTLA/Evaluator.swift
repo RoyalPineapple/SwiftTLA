@@ -291,6 +291,24 @@ public enum Evaluator {
             }
             return .int(total)
 
+        case .functionSet(let domain, let range):
+            guard case .set(let domainSet) = try evaluate(domain, in: state) else { throw typeMismatch("functionSet domain", got: try evaluate(domain, in: state)) }
+            guard case .set(let rangeSet) = try evaluate(range, in: state) else { throw typeMismatch("functionSet range", got: try evaluate(range, in: state)) }
+            let domainArr = domainSet.sorted()
+            let rangeArr = rangeSet.sorted()
+            var result = Set<TLAValue>()
+            func build(_ idx: Int, _ cur: [(TLAValue, TLAValue)]) {
+                if idx == domainArr.count {
+                    result.insert(.function(Dictionary(uniqueKeysWithValues: cur)))
+                    return
+                }
+                for r in rangeArr {
+                    build(idx + 1, cur + [(domainArr[idx], r)])
+                }
+            }
+            if !domainArr.isEmpty { build(0, []) } else { result.insert(.function([:])) }
+            return .set(result)
+
         case .caseExpr(let pairs, let other):
             for i in stride(from: 0, to: pairs.count, by: 2) {
                 if case .bool(true) = try evaluate(pairs[i], in: state) {
@@ -405,6 +423,7 @@ public enum Evaluator {
         case .choose(let s, let p): return .choose(sub(s), sub(p))
         case .sequenceFromSet(let s): return .sequenceFromSet(sub(s))
         case .setSum(let f, let s): return .setSum(sub(f), sub(s))
+        case .functionSet(let d, let r): return .functionSet(sub(d), sub(r))
         case .recursiveCall(let n, let a): return .recursiveCall(n, a.map(sub))
         }
 

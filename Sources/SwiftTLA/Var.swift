@@ -312,6 +312,7 @@ private func replaceVarInState(_ from: String, with to: String, in expression: S
     case .exists(let s, let p): return .exists(replace(s), replace(p))
     case .choose(let s, let p): return .choose(replace(s), replace(p))
     case .sequenceFromSet(let s): return .sequenceFromSet(replace(s))
+    case .functionSet(let d, let r): return .functionSet(replace(d), replace(r))
     case .setSum(let f, let s): return .setSum(replace(f), replace(s))
     case .recursiveCall(let n, let a): return .recursiveCall(n, a.map(replace))
     }

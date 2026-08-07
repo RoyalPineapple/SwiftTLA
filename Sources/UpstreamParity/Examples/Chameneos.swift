@@ -27,16 +27,9 @@ private func chameneosSpec() -> TLASpec {
     let numMeetings = Var<Int>("numMeetings")
 
     let colors: [TLAValue] = [.string("blue"), .string("red"), .string("yellow")]
-    var initialFuncs = Set<TLAValue>()
-    func genChameneos(_ next: Int, _ current: [(Int, TLAValue)]) {
-        if next > M {
-            let f = TLAValue.function(Dictionary(uniqueKeysWithValues: current.map { (.int($0.0), .tuple([$0.1, .int(0)])) }))
-            initialFuncs.insert(f)
-        } else {
-            for c in colors { genChameneos(next + 1, current + [(next, c)]) }
-        }
-    }
-    genChameneos(1, [])
+    let ids: Set<TLAValue> = [.int(1), .int(2), .int(3), .int(4)]
+    let colorRange = Set(colors.map { TLAValue.tuple([$0, .int(0)]) })
+    let allFuncs = TLAValue.functionSet(domain: ids, range: colorRange)
 
     return TLASpec("Chameneos") {
         Extends("Integers")
@@ -55,7 +48,7 @@ private func chameneosSpec() -> TLASpec {
             )
         }
 
-        Variable(chameneoses, in: initialFuncs)
+        Variable(chameneoses, in: allFuncs)
         Variable(meetingPlace, 0)
         Variable(numMeetings, 0)
 
