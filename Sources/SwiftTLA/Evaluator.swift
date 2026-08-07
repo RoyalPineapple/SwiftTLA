@@ -15,7 +15,15 @@ public enum EvalError: Error, CustomStringConvertible {
 }
 
 public enum Evaluator {
-    public static func evaluate(_ expr: StateExpr, in state: [String: TLAValue]) throws -> TLAValue {
+    private enum RecursiveFunction: String {
+        case sum = "Sum"
+        case seqFromSet = "SeqFromSet"
+    }
+
+    public typealias RuntimeFunc = @Sendable ([TLAValue]) -> TLAValue
+
+    public static func evaluate(_ expr: StateExpr, in state: [String: TLAValue],
+                                 runtimeFuncs: [String: RuntimeFunc] = [:]) throws -> TLAValue {
         switch expr {
         case .value(let v): return v
         case .variable(let name):
@@ -291,8 +299,18 @@ public enum Evaluator {
             throw typeMismatch("CASE: no branch matched")
 
         case .recursiveCall(let name, let args):
-            // First try builtin patterns for efficiency
-            if name == "Sum", args.count == 2 {
+            // Runtime Swift function
+            if let impl = runtimeFuncs[name] {
+                let evald = try args.map { try evaluate($0, in: state, runtimeFuncs: runtimeFuncs) }
+                return impl(evald)
+            }
+            // Builtin patterns
+            guard let builtin = RecursiveFunction(rawValue: name) else {
+                throw typeMismatch("Unknown recursive function: \(name)")
+            }
+            switch builtin {
+            case .sum:
+                guard args.count == 2 else { throw typeMismatch("Sum requires 2 args") }
                 let fval = try evaluate(args[0], in: state)
                 let sval = try evaluate(args[1], in: state)
                 guard case .function(let mapping) = fval else { throw typeMismatch("Sum function", got: fval) }
@@ -303,19 +321,18 @@ public enum Evaluator {
                     total += n
                 }
                 return .int(total)
-            }
-            if name == "SeqFromSet", args.count == 1 {
+            case .seqFromSet:
+                guard args.count == 1 else { throw typeMismatch("SeqFromSet requires 1 arg") }
                 guard case .set(let sv) = try evaluate(args[0], in: state) else { throw typeMismatch("SeqFromSet", got: try evaluate(args[0], in: state)) }
                 return .tuple(sv.sorted())
             }
-            // Generic recursive evaluation via depth-limited substitution
-            throw typeMismatch("Unknown recursive function: \(name)")
         }
     }
 
-    public static func evaluateBool(_ expr: StateExpr, in state: [String: TLAValue]) throws -> Bool {
-        guard case .bool(let b) = try evaluate(expr, in: state) else {
-            throw EvalError.typeMismatch("Expected boolean expression, got \(try evaluate(expr, in: state))")
+    public static func evaluateBool(_ expr: StateExpr, in state: [String: TLAValue],
+                                     runtimeFuncs: [String: RuntimeFunc] = [:]) throws -> Bool {
+        guard case .bool(let b) = try evaluate(expr, in: state, runtimeFuncs: runtimeFuncs) else {
+            throw EvalError.typeMismatch("Expected boolean expression, got \(try evaluate(expr, in: state, runtimeFuncs: runtimeFuncs))")
         }
         return b
     }

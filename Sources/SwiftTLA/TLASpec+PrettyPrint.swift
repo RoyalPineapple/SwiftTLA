@@ -48,6 +48,11 @@ extension TLASpec {
             lines.append("")
         }
 
+        for body in runtimeFuncBodies {
+            lines.append(body)
+            lines.append("")
+        }
+
         let varsDef = "vars == \(varsTuple)"
         if varNames.count > 1 { lines.append(varsDef); lines.append("") }
 
@@ -112,17 +117,6 @@ extension TLASpec {
 
         lines.append("====")
         return lines.joined(separator: "\n") + "\n"
-    }
-
-    public var base64JSON: String {
-        let encoder = JSONEncoder()
-        guard let data = try? encoder.encode(self) else { return "" }
-        return data.base64EncodedString()
-    }
-
-    public     static func decode(base64: String) -> TLASpec {
-        let d = Data(base64Encoded: base64)!
-        return try! JSONDecoder().decode(TLASpec.self, from: d)
     }
 }
 

@@ -54,8 +54,8 @@ public struct ModelChecker {
         return try bfs(
             seeds: seeds,
             variableNames: variableNames,
-            expand: buildExpander(actions, variableNames: variableNames, constraint: substituted.constraint),
-            evaluate: buildEvaluator(),
+            expand: buildExpander(actions, variableNames: variableNames, constraint: substituted.constraint, runtimeFuncs: substituted.runtimeFuncs),
+            evaluate: buildEvaluator(runtimeFuncs: substituted.runtimeFuncs),
             actions: actions,
             invariants: substituted.invariants,
             checkDeadlock: substituted.checkDeadlock,
@@ -67,7 +67,8 @@ public struct ModelChecker {
     private func buildExpander(
         _ actions: [NamedAction],
         variableNames: [String],
-        constraint: StateExpr? = nil
+        constraint: StateExpr? = nil,
+        runtimeFuncs: [String: Evaluator.RuntimeFunc] = [:]
     ) -> (State) throws -> [(String, State)] {
         { state in
             var result: [(String, State)] = []
@@ -83,20 +84,20 @@ public struct ModelChecker {
             }
             if let c = constraint {
                 result = try result.filter {
-                    try Evaluator.evaluateBool(c, in: $0.1)
+                    try Evaluator.evaluateBool(c, in: $0.1, runtimeFuncs: runtimeFuncs)
                 }
             }
             return result
         }
     }
 
-    private func buildEvaluator() -> (StateExpr, State) throws -> Bool {
-        { expression, state in try Evaluator.evaluateBool(expression, in: state) }
+    private func buildEvaluator(runtimeFuncs: [String: Evaluator.RuntimeFunc] = [:]) -> (StateExpr, State) throws -> Bool {
+        { expression, state in try Evaluator.evaluateBool(expression, in: state, runtimeFuncs: runtimeFuncs) }
     }
 
     private func checkAssume(_ specification: TLASpec, initial: State) throws -> Bool {
         guard let assume = specification.assume else { return true }
-        return try Evaluator.evaluateBool(assume, in: initial)
+        return try Evaluator.evaluateBool(assume, in: initial, runtimeFuncs: specification.runtimeFuncs)
     }
 
     private func emptyExploration(

@@ -39,7 +39,7 @@ public struct NamedInvariant: Codable, Sendable, CustomStringConvertible, Equata
     public var description: String { "\(name): \(body)" }
 }
 
-public struct TLASpec: Codable, Sendable, CustomStringConvertible, Equatable {
+public struct TLASpec: Sendable {
     public let name: String
     public let variables: [NamedVar]
     public let constants: [String: TLAValue]
@@ -55,6 +55,8 @@ public struct TLASpec: Codable, Sendable, CustomStringConvertible, Equatable {
     public let constraint: StateExpr?
     public let recursiveDefs: [String]
     public let recursiveFuncs: [RecursiveFunc]
+    public var runtimeFuncs: [String: @Sendable ([TLAValue]) -> TLAValue] = [:]
+    public var runtimeFuncBodies: [String] = []
 
     public init(name: String, variables: [NamedVar], constants: [String: TLAValue] = [:], actions: [NamedAction], invariants: [NamedInvariant], temporalProperties: [NamedTemporal] = [], fairness: [FairnessCondition] = [], assume: StateExpr? = nil, checkDeadlock: Bool = false, definitions: [String] = [], theorems: [String] = [], extendsModules: String = "Integers", constraint: StateExpr? = nil, recursiveDefs: [String] = [], recursiveFuncs: [RecursiveFunc] = []) {
         self.name = name
@@ -227,6 +229,22 @@ public struct RecursiveFuncDecl: SpecComponent, Equatable {
     init(_ funcDef: RecursiveFunc) { self.funcDef = funcDef }
 }
 
+/// Runtime recursive function — evaluated by calling actual Swift closure.
+public struct RuntimeFuncDecl: SpecComponent {
+    public let name: String
+    public let tlaBody: String  // TLA+ output
+    public let implementation: @Sendable ([TLAValue]) -> TLAValue
+    public init(name: String, tlaBody: String, implementation: @escaping @Sendable ([TLAValue]) -> TLAValue) {
+        self.name = name; self.tlaBody = tlaBody; self.implementation = implementation
+    }
+}
+
+extension RuntimeFuncDecl: Equatable {
+    public static func == (lhs: RuntimeFuncDecl, rhs: RuntimeFuncDecl) -> Bool {
+        lhs.name == rhs.name && lhs.tlaBody == rhs.tlaBody
+    }
+}
+
 @resultBuilder
 public enum SpecBuilder {
     public static func buildBlock(_ components: [SpecComponent]...) -> [SpecComponent] { components.flatMap { $0 } }
@@ -244,6 +262,7 @@ public enum SpecBuilder {
     public static func buildExpression(_ expr: ConstraintDecl) -> [SpecComponent] { [expr] }
     public static func buildExpression(_ expr: RecursiveDecl) -> [SpecComponent] { [expr] }
     public static func buildExpression(_ expr: RecursiveFuncDecl) -> [SpecComponent] { [expr] }
+    public static func buildExpression(_ expr: RuntimeFuncDecl) -> [SpecComponent] { [expr] }
     public static func buildOptional(_ component: [SpecComponent]?) -> [SpecComponent] { component ?? [] }
     public static func buildEither(first: [SpecComponent]) -> [SpecComponent] { first }
     public static func buildEither(second: [SpecComponent]) -> [SpecComponent] { second }
@@ -432,6 +451,10 @@ public func DefineRecursive(_ name: String, params: [String], @InvariantBuilder 
     RecursiveFuncDecl(RecursiveFunc(name: name, params: params, body: body()))
 }
 
+public func RuntimeFunc(_ name: String, tlaBody: String, _ implementation: @escaping @Sendable ([TLAValue]) -> TLAValue) -> RuntimeFuncDecl {
+    RuntimeFuncDecl(name: name, tlaBody: tlaBody, implementation: implementation)
+}
+
 extension TLASpec {
     public init(_ name: String, @SpecBuilder _ builder: () -> [SpecComponent]) {
         let components = builder()
@@ -449,6 +472,8 @@ extension TLASpec {
         var constraint: StateExpr?
         var recursiveDefs: [String] = []
         var recursiveFuncs: [RecursiveFunc] = []
+        var runtimeFuncCollector: [String: @Sendable ([TLAValue]) -> TLAValue] = [:]
+        var runtimeFuncBodiesCollector: [String] = []
 
         for comp in components {
             if let v = comp as? VarDecl { variables.append(NamedVar(name: v.name, initial: v.initial, initialSet: v.initialSet, initExpr: v.initExpr)) }
@@ -473,6 +498,11 @@ extension TLASpec {
             else if let c = comp as? ConstraintDecl { constraint = constraint.map { .and($0, c.body) } ?? c.body }
             else if let r = comp as? RecursiveDecl { recursiveDefs.append(r.tlaText) }
             else if let rf = comp as? RecursiveFuncDecl { recursiveFuncs.append(rf.funcDef) }
+            else if let rtf = comp as? RuntimeFuncDecl {
+                runtimeFuncCollector[rtf.name] = rtf.implementation
+                runtimeFuncBodiesCollector.append(rtf.tlaBody)
+                runtimeFuncBodies.append(rtf.tlaBody)
+            }
         }
 
         // Auto-UNCHANGED: push into OR branches so TLC sees complete assignments
@@ -496,6 +526,8 @@ extension TLASpec {
         self.constraint = constraint
         self.recursiveDefs = recursiveDefs
         self.recursiveFuncs = recursiveFuncs
+        self.runtimeFuncs = runtimeFuncCollector
+        self.runtimeFuncBodies = runtimeFuncBodiesCollector
     }
 }
 
