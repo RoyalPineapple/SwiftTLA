@@ -110,3 +110,63 @@ After you write the port:
 2. `swift test --filter UpstreamParity` — the ModelChecker count must match `expectedDistinct`.
 3. `make parity` — the TLC count must match.
 4. Add the entry to `Example.all` at the top of `Example.swift`.
+
+## Key porting patterns
+
+### Action structure
+
+Match the upstream action structure exactly. If the upstream has named per-instance
+actions (for example, `Loop(p)`, `Think(p)`, `Eat(p)` with `Next == \E self : ...`), create
+named actions in a `for` loop — do not inline everything into one `existsAction`.
+
+```swift
+Action("Loop_\(p)") {
+    pc.value == loop
+    && (passLeft || passRight || keepForks)
+    && (goEat || stayLoop || goThink)
+}
+```
+
+### UNCHANGED
+
+Do not add manual UNCHANGED inside action branches. Let `completeAction` handle
+missing variable assignments. Only assign the variables that change in each branch.
+If a branch does not change a variable, do not mention it — `completeAction` adds
+the necessary UNCHANGED per disjunct.
+
+### ExistsAction vs named actions
+
+Use `existsAction` only for simple nondeterministic choices (for example,
+`\E p \in Prisoner` in a single-action spec). If the upstream uses `\E` with named
+sub-actions, prefer per-instance named actions.
+
+### Records in functions
+
+Access record fields with `StateExpr.recordAccess(func.applying(key), "field")`.
+
+```swift
+let hld = StateExpr.recordAccess(forks.value.applying(p), "holder")
+let lc = StateExpr.recordAccess(forks.value.applying(p), "clean")
+```
+
+### Constants and TLC parity
+
+Wrap constant values in `Constant()` to emit `CONSTANTS` / `ASSUME` in the TLA+ output.
+The parity script automatically copies `ASSUME` lines as `CONSTANT` assignments in the `.cfg`.
+
+### Invariant names
+
+The parity script detects these invariants: `TypeOK`, `TypeInvariant`, `VictoryOK`,
+`ExclusiveAccess`, `SumMet`, `HCini`. Use one of these names when possible.
+Add new invariant names to the script if needed.
+
+### InvariantBuilder limitations
+
+The `InvariantBuilder` does not support `for` loops or `var` declarations.
+Unroll loops for NP ≤ 5. Use `let` bindings for intermediate expressions.
+
+```swift
+Invariant("TypeOK") {
+    typeOkLine(1) && typeOkLine(2) && typeOkLine(3)
+}
+```
