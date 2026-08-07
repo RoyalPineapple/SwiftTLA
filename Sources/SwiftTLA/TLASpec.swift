@@ -241,7 +241,6 @@ public enum SpecBuilder {
     public static func buildExpression(_ expr: AssumeDecl) -> [SpecComponent] { [expr] }
     public static func buildExpression(_ expr: ExtendsDecl) -> [SpecComponent] { [expr] }
     public static func buildExpression(_ expr: DeadlockDecl) -> [SpecComponent] { [expr] }
-    public static func buildExpression(_ expr: ComputedInitDecl) -> [SpecComponent] { [expr] }
     public static func buildExpression(_ expr: ConstraintDecl) -> [SpecComponent] { [expr] }
     public static func buildExpression(_ expr: RecursiveDecl) -> [SpecComponent] { [expr] }
     public static func buildExpression(_ expr: RecursiveFuncDecl) -> [SpecComponent] { [expr] }
@@ -332,28 +331,6 @@ public func Variable<T>(computed ref: Var<T>, @InvariantBuilder _ body: () -> St
 
 public struct DeadlockDecl: SpecComponent { init() {} }
 public func DeadlockCheck() -> DeadlockDecl { DeadlockDecl() }
-
-public struct ComputedInitDecl: SpecComponent {
-    public let name: String
-    public let computation: ([String: TLAValue]) -> TLAValue
-    init(_ name: String, _ computation: @escaping ([String: TLAValue]) -> TLAValue) {
-        self.name = name; self.computation = computation
-    }
-}
-
-@discardableResult
-public func ComputedVariable<T>(_ ref: Var<T>, _ computation: @escaping ([String: TLAValue]) -> TLAValue) -> ComputedInitDecl {
-    ComputedInitDecl(ref.name, computation)
-}
-
-public struct SymmetryDecl: SpecComponent {
-    public let variableName: String
-    init(_ variableName: String) { self.variableName = variableName }
-}
-
-public func Symmetry(_ variableName: String) -> SymmetryDecl {
-    SymmetryDecl(variableName)
-}
 
 public struct SymmetrySet: Hashable, Codable, Sendable, CustomStringConvertible {
     public let variableName: String
