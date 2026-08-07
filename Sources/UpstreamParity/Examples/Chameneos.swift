@@ -41,12 +41,19 @@ private func chameneosSpec() -> TLASpec {
     return TLASpec("Chameneos") {
         Extends("Integers")
 
-        Recursive("""
-RECURSIVE Sum(_, _)
-Sum(f, S) == IF S = {} THEN 0
-                       ELSE LET x == CHOOSE x \\in S : TRUE
-                            IN  f[x] + Sum(f, S \\ {x})
-""")
+        DefineRecursive("Sum", params: ["f", "S"]) {
+            let s = StateExpr.variable("S")
+            let f = StateExpr.variable("f")
+            let x = StateExpr.any(from: s)
+            StateExpr.ifThenElse(
+                StateExpr.equal(StateExpr.setLiteral([]), s),
+                .value(.int(0)),
+                StateExpr.functionApply(f, x) + StateExpr.recursiveCall("Sum", [
+                    f,
+                    StateExpr.setDifference(s, StateExpr.setLiteral([x]))
+                ])
+            )
+        }
 
         Variable(chameneoses, in: initialFuncs)
         Variable(meetingPlace, 0)
