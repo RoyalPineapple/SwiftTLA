@@ -182,7 +182,10 @@ public struct ConstantDecl: SpecComponent {
 
 public struct DefinitionDecl: SpecComponent, Equatable {
     public let tlaText: String
-    init(_ tlaText: String) { self.tlaText = tlaText }
+    public let name: String?
+    public let body: StateExpr?
+    init(_ tlaText: String) { self.tlaText = tlaText; self.name = nil; self.body = nil }
+    init(name: String, body: StateExpr) { self.tlaText = ""; self.name = name; self.body = body }
 }
 
 public struct TheoremDecl: SpecComponent, Equatable {
@@ -419,8 +422,16 @@ public func Definition(_ tlaText: String) -> DefinitionDecl {
     DefinitionDecl(tlaText)
 }
 
+public func Definition(_ name: String, @InvariantBuilder _ body: () -> StateExpr) -> DefinitionDecl {
+    DefinitionDecl(name: name, body: body())
+}
+
 public func Theorem(_ tlaText: String) -> TheoremDecl {
     TheoremDecl(tlaText)
+}
+
+public func Theorem(name: String, @InvariantBuilder always: () -> StateExpr) -> TheoremDecl {
+    TheoremDecl(name: name, state: always())
 }
 
 public func Theorem(name: String, always state: StateExpr) -> TheoremDecl {
@@ -482,7 +493,13 @@ extension TLASpec {
             else if let t = comp as? TemporalDecl { temporalProperties.append(NamedTemporal(name: t.name, expr: t.expr)) }
             else if let f = comp as? FairnessDecl { fairness.append(f.condition) }
             else if let c = comp as? ConstantDecl { constants[c.name] = c.value }
-            else if let d = comp as? DefinitionDecl { definitions.append(d.tlaText) }
+            else if let d = comp as? DefinitionDecl {
+                if let name = d.name, let body = d.body {
+                    definitions.append("\(name) == \(body)")
+                } else {
+                    definitions.append(d.tlaText)
+                }
+            }
             else if let th = comp as? TheoremDecl {
                 if !th.tlaText.isEmpty {
                     theorems.append(th.tlaText)
