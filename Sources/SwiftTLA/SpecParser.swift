@@ -611,4 +611,115 @@ public enum SpecParser {
             return .recordAccess(selfExpr, propertyName)
         }
     }
+
+    // MARK: - Unified spec builder parser
+
+    public struct ParsedSpecComponents {
+        public var variables: [(name: String, initial: TLAValue, initialSet: StateExpr?)] = []
+        public var actions: [(name: String, body: ActionExpr)] = []
+        public var invariants: [(name: String, body: StateExpr)] = []
+        public var temporal: [(name: String, expr: TemporalExpr)] = []
+        public var fairness: [FairnessCondition] = []
+        public var constants: [String: TLAValue] = [:]
+    }
+
+    public static func parseSpecClosure(_ closure: ClosureExprSyntax) -> ParsedSpecComponents {
+        var result = ParsedSpecComponents()
+        for statement in closure.statements {
+            guard case .expr(let expression) = statement.item else { continue }
+            if let fc = expression.as(FunctionCallExprSyntax.self) {
+                parseBuilderCall(fc, into: &result)
+            }
+        }
+        return result
+    }
+
+    private static func parseBuilderCall(_ call: FunctionCallExprSyntax, into result: inout ParsedSpecComponents) {
+        guard let name = call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text else { return }
+
+        switch name {
+        case "Variable":
+            parseVariableDecl(call, into: &result)
+        case "Action":
+            if let actionName = extractStringArg(call, index: 0),
+               let body = call.trailingClosure.flatMap(parseActionFrom) {
+                result.actions.append((actionName, body))
+            }
+        case "Invariant":
+            if let invName = extractStringArg(call, index: 0),
+               let body = call.trailingClosure.flatMap(parseInvariantFrom) {
+                result.invariants.append((invName, body))
+            }
+        case "Constant":
+            parseConstantDecl(call, into: &result)
+        case "LeadsTo", "Eventually", "AlwaysEventually", "EventuallyAlways":
+            if let expr = parseTemporal(ExprSyntax(call)) {
+                result.temporal.append((name, expr))
+            }
+        case "WeakFairness", "StrongFairness":
+            if let fc = parseFairnessExpr(ExprSyntax(call)) {
+                result.fairness.append(fc)
+            }
+        default:
+            break
+        }
+    }
+
+    private static func extractStringArg(_ call: FunctionCallExprSyntax, index: Int) -> String? {
+        let args = Array(call.arguments)
+        guard index < args.count else { return nil }
+        return args[index].expression.as(StringLiteralExprSyntax.self)?
+            .segments.first?.as(StringSegmentSyntax.self)?.content.text
+    }
+
+    private static func parseVariableDecl(_ call: FunctionCallExprSyntax, into result: inout ParsedSpecComponents) {
+        let args = Array(call.arguments)
+        guard let firstName = args.first?.expression.as(DeclReferenceExprSyntax.self)?.baseName.text
+            ?? args.first?.expression.as(MemberAccessExprSyntax.self)?.declName.baseName.text
+        else { return }
+
+        // Variable(name, in: set)
+        if args.count >= 2 {
+            let label = args[1].label?.text
+            if label == "in" {
+                if let setExpr = parseStateExpr(args[1].expression) {
+                    result.variables.append((firstName, .set([]), setExpr))
+                    return
+                }
+            }
+        }
+
+        // Variable(name, value)
+        if args.count >= 2 {
+            let valExpr = args[1].expression
+            if let intVal = valExpr.as(IntegerLiteralExprSyntax.self) {
+                result.variables.append((firstName, .int(Int(intVal.literal.text) ?? 0), nil))
+                return
+            }
+            if let boolVal = valExpr.as(BooleanLiteralExprSyntax.self) {
+                result.variables.append((firstName, .bool(boolVal.literal.text == "true"), nil))
+                return
+            }
+        }
+
+        // Variable(name, initializerExpr) — fallback
+        if args.count >= 2 {
+            let initial: TLAValue = .int(0)
+            result.variables.append((firstName, initial, nil))
+        }
+    }
+
+    private static func parseConstantDecl(_ call: FunctionCallExprSyntax, into result: inout ParsedSpecComponents) {
+        let args = Array(call.arguments)
+        guard args.count >= 2,
+              let name = extractStringArg(call, index: 0)
+        else { return }
+        if let intVal = args[1].expression.as(IntegerLiteralExprSyntax.self) {
+            result.constants[name] = .int(Int(intVal.literal.text) ?? 0)
+        } else if let boolVal = args[1].expression.as(BooleanLiteralExprSyntax.self) {
+            result.constants[name] = .bool(boolVal.literal.text == "true")
+        } else if args[1].expression.as(StringLiteralExprSyntax.self) != nil {
+            result.constants[name] = .string(extractStringArg(call, index: 1) ?? "")
+        }
+    }
 }
