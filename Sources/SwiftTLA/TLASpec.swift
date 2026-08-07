@@ -348,7 +348,7 @@ public func computeInitialStates(_ spec: TLASpec) -> [[String: TLAValue]] {
     }
     for variable in substituted.variables where variable.initExpr != nil {
         states = states.compactMap { state in
-            guard let val = try? variable.initExpr!.evaluate(in: state) else { return nil }
+            guard let val = try? Evaluator.evaluate(variable.initExpr!, in: state) else { return nil }
             var s = state
             s[variable.name] = val
             return s

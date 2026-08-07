@@ -38,7 +38,7 @@ public struct SpecRuntime {
         guard let inv = invariants.first(where: { $0.name == invariantName }) else {
             throw RuntimeError.invariantNotFound(invariantName)
         }
-        return try inv.body.evaluateBool(in: state, runtimeFuncs: spec.runtimeFuncs, recursiveFuncs: spec.recursiveFuncs)
+        return try Evaluator.evaluateBool(inv.body, in: state, runtimeFuncs: spec.runtimeFuncs, recursiveFuncs: spec.recursiveFuncs)
     }
 
     public func step(_ actionName: String, from state: [String: TLAValue]) throws -> StepResult {
@@ -49,7 +49,7 @@ public struct SpecRuntime {
         let next = try apply(actionName: actionName, to: state)
         var violations: [String] = []
         for inv in invariants {
-            if !(try inv.body.evaluateBool(in: next, runtimeFuncs: spec.runtimeFuncs, recursiveFuncs: spec.recursiveFuncs)) {
+            if !(try Evaluator.evaluateBool(inv.body, in: next, runtimeFuncs: spec.runtimeFuncs, recursiveFuncs: spec.recursiveFuncs)) {
                 violations.append(inv.name)
             }
         }

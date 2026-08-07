@@ -249,7 +249,7 @@ struct StateExprCompleteTests {
     @Test("StateExpr evaluates correctly in state")
     func evaluatesInState() throws {
         let e: StateExpr = .add(.variable("x"), .int(1))
-        let v = try e.evaluate(in: ["x": .int(5)])
+        let v = try Evaluator.evaluate(e, in: ["x": .int(5)])
         #expect(v == .int(6))
     }
 }
@@ -270,7 +270,7 @@ struct TLAValueTests {
     func functionApplyLookup() throws {
         let v: TLAValue = .function([.int(1): .string("one")])
         let state: [String: TLAValue] = ["f": v, "k": .int(1)]
-        let result = try StateExpr.functionApply(.variable("f"), .variable("k")).evaluate(in: state)
+        let result = try Evaluator.evaluate(.functionApply(.variable("f"), .variable("k")), in: state)
         #expect(result == .string("one"))
     }
 }
@@ -834,7 +834,7 @@ struct BoundVariableTests {
         let p = Var<Int>("p")
         let domain = StateExpr.set([1, 2, 3])
         let fun = StateExpr.functionLiteral(p, in: domain, p * 2)
-        let result = try! fun.evaluate(in: [:])
+        let result = try! Evaluator.evaluate(fun, in: [:])
         guard case .function(let mapping) = result else {
             #expect(Bool(false))
             return
@@ -850,7 +850,7 @@ struct BoundVariableTests {
         let domain = StateExpr.set([1, 2])
         let fun = StateExpr.functionLiteral(p, in: domain, p * 10)
         let apply = StateExpr.functionApply(fun, .value(.int(2)))
-        let result = try apply.evaluate(in: [:])
+        let result = try Evaluator.evaluate(apply, in: [:])
         #expect(result == .int(20))
     }
 
@@ -860,7 +860,7 @@ struct BoundVariableTests {
         let domain = StateExpr.set([1, 2])
         let fun = StateExpr.functionLiteral(p, in: domain, p * 10)
         let updated = StateExpr.except(fun, .value(.int(1)), .value(.int(99)))
-        let result = try updated.evaluate(in: [:])
+        let result = try Evaluator.evaluate(updated, in: [:])
         guard case .function(let mapping) = result else {
             #expect(Bool(false))
             return
@@ -878,7 +878,7 @@ struct BoundVariableTests {
             StateExpr.except(fun, .value(.int(1)), .value(.int(10))),
             .value(.int(2)), .value(.int(20))
         )
-        let result = try expr.evaluate(in: [:])
+        let result = try Evaluator.evaluate(expr, in: [:])
         guard case .function(let mapping) = result else {
             #expect(Bool(false))
             return
@@ -892,7 +892,7 @@ struct BoundVariableTests {
         let p = Var<Int>("p")
         let domain = StateExpr.set([1, 2, 3])
         let predicate = StateExpr.forAll(p, in: domain, StateExpr.greaterThan(p.stateExpr, StateExpr.value(.int(0))))
-        let result = try predicate.evaluateBool(in: [:])
+        let result = try Evaluator.evaluateBool(predicate, in: [:])
         #expect(result)
     }
 
@@ -901,7 +901,7 @@ struct BoundVariableTests {
         let p = Var<Int>("p")
         let domain = StateExpr.set([1, 2, 3])
         let predicate = StateExpr.exists(p, in: domain, StateExpr.equal(p.stateExpr, StateExpr.value(.int(2))))
-        let result = try predicate.evaluateBool(in: [:])
+        let result = try Evaluator.evaluateBool(predicate, in: [:])
         #expect(result)
     }
 
@@ -1082,8 +1082,9 @@ struct CompletionCoverageTests {
 
     @Test("RecursiveFunction builtins evaluate correctly")
     func recursiveBuiltins() throws {
-        let result = try StateExpr.recursiveCall("SeqFromSet", [.value(.set([.int(3), .int(1), .int(2)]))])
-            .evaluate(in: [:])
+        let result = try Evaluator.evaluate(
+            .recursiveCall("SeqFromSet", [.value(.set([.int(3), .int(1), .int(2)]))]),
+            in: [:])
         #expect(result == .tuple([.int(1), .int(2), .int(3)]))
     }
 
@@ -1102,8 +1103,9 @@ struct CompletionCoverageTests {
             )
         )
         let fn = RecursiveFunc(name: "SfS", params: ["S"], body: body)
-        let result = try StateExpr.recursiveCall("SfS", [.value(.set([.int(3), .int(1), .int(2)]))])
-            .evaluate(in: [:], recursiveFuncs: [fn])
+        let result = try Evaluator.evaluate(
+            .recursiveCall("SfS", [.value(.set([.int(3), .int(1), .int(2)]))]),
+            in: [:], recursiveFuncs: [fn])
         #expect(result == .tuple([.int(1), .int(2), .int(3)]))
     }
 
