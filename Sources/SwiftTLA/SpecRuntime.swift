@@ -1,4 +1,4 @@
-public struct SpecRuntime {
+public struct SpecRuntime: Sendable {
     public let spec: TLASpec
     private let varNames: [String]
     private let actions: [NamedAction]
@@ -12,7 +12,7 @@ public struct SpecRuntime {
     }
 
     public func initialStates() -> [[String: TLAValue]] {
-        return computeInitialStates(spec)
+        computeInitialStates(spec)
     }
 
     public func apply(actionName: String, to state: [String: TLAValue]) throws -> [String: TLAValue] {

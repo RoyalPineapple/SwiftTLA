@@ -10,6 +10,6 @@ struct SimpleError: Error, CustomStringConvertible {
 @main
 struct SwiftTLAPlugin: CompilerPlugin {
     let providingMacros: [Macro.Type] = [
-        ModelMacro.self,
+        ModelMacro.self
     ]
 }

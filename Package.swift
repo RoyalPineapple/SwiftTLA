@@ -5,7 +5,7 @@ import CompilerPluginSupport
 
 let settings: [SwiftSetting] = [
     .enableExperimentalFeature("StrictConcurrency"),
-    .unsafeFlags(["-warnings-as-errors"]),
+    .unsafeFlags(["-warnings-as-errors"])
 ]
 
 let package = Package(
@@ -15,16 +15,16 @@ let package = Package(
         .library(name: "SwiftTLA", targets: ["SwiftTLA"]),
         .library(name: "SwiftTLAMacros", targets: ["SwiftTLAMacros"]),
         .library(name: "SwiftTLAModels", targets: ["SwiftTLAModels"]),
-        .library(name: "UpstreamParity", targets: ["UpstreamParity"]),
+        .library(name: "UpstreamParity", targets: ["UpstreamParity"])
     ],
     dependencies: [
-        .package(url: "https://github.com/swiftlang/swift-syntax", from: "600.0.0"),
+        .package(url: "https://github.com/swiftlang/swift-syntax", from: "600.0.0")
     ],
     targets: [
         .target(name: "SwiftTLA", dependencies: [
             .product(name: "SwiftParser", package: "swift-syntax"),
             .product(name: "SwiftBasicFormat", package: "swift-syntax"),
-            .product(name: "SwiftSyntaxBuilder", package: "swift-syntax"),
+            .product(name: "SwiftSyntaxBuilder", package: "swift-syntax")
         ], swiftSettings: settings),
         .target(name: "SwiftTLAMacros", dependencies: ["SwiftTLA", "SwiftTLAPlugin"]),
         .macro(name: "SwiftTLAPlugin", dependencies: [
@@ -33,7 +33,7 @@ let package = Package(
             .product(name: "SwiftSyntax", package: "swift-syntax"),
             .product(name: "SwiftSyntaxMacros", package: "swift-syntax"),
             .product(name: "SwiftDiagnostics", package: "swift-syntax"),
-            .product(name: "SwiftParser", package: "swift-syntax"),
+            .product(name: "SwiftParser", package: "swift-syntax")
         ]),
         .target(name: "SwiftTLAModels", dependencies: ["SwiftTLA", "SwiftTLAMacros"], swiftSettings: settings),
         .target(name: "UpstreamParity", dependencies: ["SwiftTLA"], swiftSettings: settings),
@@ -42,7 +42,7 @@ let package = Package(
             "SwiftTLA",
             "SwiftTLAModels",
             "SwiftTLAMacros",
-            "UpstreamParity",
-        ], swiftSettings: settings),
+            "UpstreamParity"
+        ], swiftSettings: settings)
     ]
 )

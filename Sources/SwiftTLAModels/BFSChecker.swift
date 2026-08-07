@@ -8,9 +8,9 @@ import SwiftTLAMacros
 public struct BFSChecker {
     public static var spec: TLASpec {
         TLASpec("BFSChecker") {
-            let phase = Var("phase", value: 0)
-            let processed = Var("processed", value: 0)
-            let queued = Var("queued", value: 1)
+            let phase = Var<Int>("phase")
+            let processed = Var<Int>("processed")
+            let queued = Var<Int>("queued", value: 1)
             Variable(phase, 0)
             Variable(processed, 0)
             Variable(queued, 1)

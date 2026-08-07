@@ -20,11 +20,11 @@ static func ewd840Spec() -> TLASpec {
         let colorOpts: [TLAValue] = [.string("white"), .string("black")]
         var activeFuncs: [TLAValue] = []
         for a0 in boolOpts { for a1 in boolOpts { for a2 in boolOpts {
-            activeFuncs.append(.function([.int(0):a0,.int(1):a1,.int(2):a2]))
+            activeFuncs.append(.function([.int(0): a0, .int(1): a1, .int(2): a2]))
         }}}
         var colorFuncs: [TLAValue] = []
         for c0 in colorOpts { for c1 in colorOpts { for c2 in colorOpts {
-            colorFuncs.append(.function([.int(0):c0,.int(1):c1,.int(2):c2]))
+            colorFuncs.append(.function([.int(0): c0, .int(1): c1, .int(2): c2]))
         }}}
 
         let active = Var<TLAFunctionType>("active")
@@ -82,6 +82,5 @@ static func ewd840Spec() -> TLASpec {
             }
         }
     }
-
 
 }

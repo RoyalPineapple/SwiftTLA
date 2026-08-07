@@ -67,11 +67,11 @@ struct ExamplePage: View {
 }
 
 extension HourClock { static var tla: String { spec.tlaModule } }
-extension DieHard   { static var tla: String { spec.tlaModule } }
+extension DieHard { static var tla: String { spec.tlaModule } }
 extension CoffeeCan { static var tla: String { spec.tlaModule } }
 extension MovingCat { static var tla: String { spec.tlaModule } }
-extension Majority  { static var tla: String { spec.tlaModule } }
-extension SumsEven  { static var tla: String { spec.tlaModule } }
+extension Majority { static var tla: String { spec.tlaModule } }
+extension SumsEven { static var tla: String { spec.tlaModule } }
 extension Allocator { static var tla: String { spec.tlaModule } }
 
 struct CodeView: View {

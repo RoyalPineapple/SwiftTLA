@@ -27,6 +27,6 @@ public enum Examples {
         .init(name: "Paxos", spec: Paxos.spec, expectedStates: 0, source: "specifications/Paxos", about: "Simplified consensus sketch (not full Paxos)."),
         .init(name: "Bakery", spec: Bakery.spec, expectedStates: 0, source: "specifications/Bakery-Boulangerie", about: "Lamport mutual exclusion sketch."),
         .init(name: "DiningPhilosophers", spec: DiningPhilosophers.spec, expectedStates: 0, source: "specifications/DiningPhilosophers", about: "Resource acquisition sketch."),
-        .init(name: "Allocator", spec: Allocator.spec, expectedStates: 400, source: "specifications/allocator", about: "SimpleAllocator (Merz): 3 clients, 2 resources."),
+        .init(name: "Allocator", spec: Allocator.spec, expectedStates: 400, source: "specifications/allocator", about: "SimpleAllocator (Merz): 3 clients, 2 resources.")
     ]
 }

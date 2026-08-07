@@ -7,16 +7,16 @@ let package = Package(
     name: "Examples",
     platforms: [.macOS(.v14)],
     dependencies: [
-        .package(path: "../"),
+        .package(path: "../")
     ],
     targets: [
         .executableTarget(
             name: "Examples",
             dependencies: [
                 .product(name: "SwiftTLA", package: "SwiftTLA"),
-                .product(name: "UpstreamParity", package: "SwiftTLA"),
+                .product(name: "UpstreamParity", package: "SwiftTLA")
             ],
             path: "Sources/ExamplesCLI"
-        ),
+        )
     ]
 )

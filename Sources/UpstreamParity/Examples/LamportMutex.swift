@@ -36,16 +36,16 @@ private func lamportMutexSpec() -> TLASpec {
     let relMsg: StateExpr = .recordLiteral(["type": .value(.string("rel")), "clock": .value(.int(0))])
 
     let dict: [TLAValue: TLAValue] = [
-        .int(1): TLAValue.function([.int(1):0, .int(2):0]),
-        .int(2): TLAValue.function([.int(1):0, .int(2):0])]
+        .int(1): TLAValue.function([.int(1): 0, .int(2): 0]),
+        .int(2): TLAValue.function([.int(1): 0, .int(2): 0])]
     return TLASpec("LamportMutex") {
         Extends("Integers")
-        Variable(clock, TLAValue.function([.int(1):1, .int(2):1]))
+        Variable(clock, TLAValue.function([.int(1): 1, .int(2): 1]))
         Variable(req, TLAValue.function(dict))
-        Variable(ack, TLAValue.function([.int(1):TLAValue.set([]), .int(2):TLAValue.set([])]))
+        Variable(ack, TLAValue.function([.int(1): TLAValue.set([]), .int(2): TLAValue.set([])]))
         Variable(network, TLAValue.function([
-            .int(1): TLAValue.function([.int(2):TLAValue.tuple([])]),
-            .int(2): TLAValue.function([.int(1):TLAValue.tuple([])])]))
+            .int(1): TLAValue.function([.int(2): TLAValue.tuple([])]),
+            .int(2): TLAValue.function([.int(1): TLAValue.tuple([])])]))
         Variable(crit, TLAValue.set([]))
 
         Invariant("Mutex") { crit.cardinality <= 1 }

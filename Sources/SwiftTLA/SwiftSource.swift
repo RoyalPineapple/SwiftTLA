@@ -13,8 +13,7 @@ extension TLASpec {
         for (k, v) in constants.sorted(by: { $0.key < $1.key }) { lines.append("            Constant(\"\(k)\", \(v.swiftLiteral))") }
         for v in variables {
             let initStr: String
-            if let s = v.initialSet { initStr = "in: \(s.swiftSource)" }
-            else { initStr = "\(v.initial.swiftLiteral)" }
+            if let s = v.initialSet { initStr = "in: \(s.swiftSource)" } else { initStr = "\(v.initial.swiftLiteral)" }
             lines.append("            Variable(Var<Int>(\"\(v.name)\"), \(initStr))")
         }
         for a in actions { lines.append("            Action(\"\(a.name)\") { \(a.body.swiftSource) }") }
@@ -35,7 +34,7 @@ extension TLAValue {
         case .string(let s): return "\"\(s)\""
         case .set(let s): return "StateExpr.set([\(s.map(\.swiftLiteral).joined(separator: ", "))])"
         case .tuple(let t): return "StateExpr.tuple([\(t.map(\.swiftLiteral).joined(separator: ", "))])"
-        case .record(let r): return "StateExpr.record([\(r.sorted(by: {$0.key<$1.key}).map {"\"\($0.key)\": \($0.value.swiftLiteral)"}.joined(separator: ", "))])"
+        case .record(let r): return "StateExpr.record([\(r.sorted(by: { $0.key<$1.key }).map { "\"\($0.key)\": \($0.value.swiftLiteral)" }.joined(separator: ", "))])"
         case .function: return "StateExpr.function(domain: StateExpr.set([]), 0)"  // placeholder
         case .constant(let n): return "TLAValue.constant(\"\(n)\")"
         }

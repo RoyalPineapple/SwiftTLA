@@ -161,4 +161,3 @@ extension StateExpr: ExpressibleByBooleanLiteral {
 extension StateExpr: ExpressibleByStringLiteral {
     public init(stringLiteral value: String) { self = .value(.string(value)) }
 }
-

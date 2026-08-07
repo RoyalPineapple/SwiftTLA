@@ -31,13 +31,13 @@ private func ewd998Spec() -> TLASpec {
 
     var activeInits = Set<TLAValue>()
     func genActive(_ i: Int, _ cur: [(Int, TLAValue)]) {
-        if i >= N { activeInits.insert(.function(Dictionary(uniqueKeysWithValues: cur.map { (.int($0.0), $0.1) }))) }
-        else { genActive(i+1, cur+[(i,.bool(true))]); genActive(i+1, cur+[(i,.bool(false))]) }
+        if i >= N { activeInits.insert(.function(Dictionary(uniqueKeysWithValues: cur.map { (.int($0.0), $0.1) }))) } else { genActive(i+1, cur+[(i, .bool(true))]); genActive(i+1, cur+[(i, .bool(false))]) }
     }
     genActive(0, [])
 
-    let stateC: StateExpr = StateExpr.forAll(nodeSet) { x in
-        StateExpr.variable("pending").applying(x) <= 3 }
+    let stateC = StateExpr.forAll(nodeSet) { x in
+        StateExpr.variable("pending").applying(x) <= 3
+    }
 
     return TLASpec("AsyncTerminationDetection") {
         Extends("Naturals")
@@ -63,8 +63,9 @@ private func ewd998Spec() -> TLASpec {
             let t = StateExpr.variable("terminationDetected")
             let a = StateExpr.variable("active")
             let p = StateExpr.variable("pending")
-            let terminated: StateExpr = StateExpr.forAll(nodeSet) { x in
-                StateExpr.not(a.applying(x)) && StateExpr.equal(p.applying(x), 0) }
+            let terminated = StateExpr.forAll(nodeSet) { x in
+                StateExpr.not(a.applying(x)) && StateExpr.equal(p.applying(x), 0)
+            }
             StateExpr.ifThenElse(t, terminated, trueE)
         }
 
@@ -73,8 +74,9 @@ private func ewd998Spec() -> TLASpec {
                 let a = StateExpr.variable("active")
                 let p = StateExpr.variable("pending")
                 let t = StateExpr.variable("terminationDetected")
-                let terminated: StateExpr = StateExpr.forAll(nodeSet) { x in
-                    StateExpr.not(a.applying(x)) && StateExpr.equal(p.applying(x), 0) }
+                let terminated = StateExpr.forAll(nodeSet) { x in
+                    StateExpr.not(a.applying(x)) && StateExpr.equal(p.applying(x), 0)
+                }
 
                 return a.applying(i)
                     && active.becomes(a.updated(at: i, to: falseE))
@@ -111,8 +113,9 @@ private func ewd998Spec() -> TLASpec {
         Action("DetectTermination") {
             let a = StateExpr.variable("active")
             let p = StateExpr.variable("pending")
-            let terminated: StateExpr = StateExpr.forAll(nodeSet) { x in
-                StateExpr.not(a.applying(x)) && StateExpr.equal(p.applying(x), 0) }
+            let terminated = StateExpr.forAll(nodeSet) { x in
+                StateExpr.not(a.applying(x)) && StateExpr.equal(p.applying(x), 0)
+            }
 
             terminated
                 && terminationDetected.becomes(trueE)

@@ -23,8 +23,7 @@ public struct LivenessChecker {
             currentIndex += 1; stack.append(v); onStack.insert(v)
             let successors = graph.transitions[v]?.map(\.target) ?? []
             for w in successors {
-                if indices[w] == nil { strongConnect(w); lowlinks[v] = min(lowlinks[v]!, lowlinks[w]!) }
-                else if onStack.contains(w) { lowlinks[v] = min(lowlinks[v]!, indices[w]!) }
+                if indices[w] == nil { strongConnect(w); lowlinks[v] = min(lowlinks[v]!, lowlinks[w]!) } else if onStack.contains(w) { lowlinks[v] = min(lowlinks[v]!, indices[w]!) }
             }
             if lowlinks[v] == indices[v] {
                 var scc = Set<StateGraph.StateID>()
@@ -41,8 +40,8 @@ public struct LivenessChecker {
 
     public func terminalSCCs(from sccs: [Set<StateGraph.StateID>]) -> [Set<StateGraph.StateID>] {
         let nodeToSCC: [StateGraph.StateID: Int] = Dictionary(uniqueKeysWithValues:
-            sccs.enumerated().flatMap { (idx, scc) in scc.map { ($0, idx) } })
-        return sccs.enumerated().compactMap { (idx, scc) in
+            sccs.enumerated().flatMap { idx, scc in scc.map { ($0, idx) } })
+        return sccs.enumerated().compactMap { idx, scc in
             let hasExternalEdge = scc.contains { node in
                 let targets = graph.transitions[node]?.map(\.target) ?? []
                 return targets.contains { nodeToSCC[$0] != idx }

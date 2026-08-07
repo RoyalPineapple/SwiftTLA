@@ -85,4 +85,3 @@ func catSpec(boxes: Int) -> TLASpec {
             }
         }
     }
-

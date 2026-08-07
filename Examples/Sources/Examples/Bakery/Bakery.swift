@@ -17,7 +17,7 @@ public struct Bakery {
 
             // Process 1
             Action("P1_Flag") { (pc1 == 0) && flag1.becomes(1) && pc1.becomes(1) }
-            Action("P1_Num")  { (pc1 == 1) && num1.becomes(1).when(num2 == 0) && flag1.becomes(0) && pc1.becomes(4) }
+            Action("P1_Num") { (pc1 == 1) && num1.becomes(1).when(num2 == 0) && flag1.becomes(0) && pc1.becomes(4) }
             Action("P1_Num2") { (pc1 == 1) && num1.becomes(num2 + 1).when(num2 > 0) && flag1.becomes(0) && pc1.becomes(4) }
             Action("P1_WaitF2") { (pc1 == 4) && (flag2 == 1) && pc1.becomes(5) }
             Action("P1_CheckN2") { (pc1 == 4) && (flag2 == 0) && (num2 == 0 && pc1.becomes(6) || num2 > 0 && (num1 < num2 || (num1 == num2 && 1 < 2)) && pc1.becomes(6)) }
@@ -28,7 +28,7 @@ public struct Bakery {
 
             // Process 2
             Action("P2_Flag") { (pc2 == 0) && flag2.becomes(1) && pc2.becomes(1) }
-            Action("P2_Num")  { (pc2 == 1) && num2.becomes(1).when(num1 == 0) && flag2.becomes(0) && pc2.becomes(4) }
+            Action("P2_Num") { (pc2 == 1) && num2.becomes(1).when(num1 == 0) && flag2.becomes(0) && pc2.becomes(4) }
             Action("P2_Num2") { (pc2 == 1) && num2.becomes(num1 + 1).when(num1 > 0) && flag2.becomes(0) && pc2.becomes(4) }
             Action("P2_WaitF1") { (pc2 == 4) && (flag1 == 1) && pc2.becomes(5) }
             Action("P2_CheckN1") { (pc2 == 4) && (flag1 == 0) && (num1 == 0 && pc2.becomes(6) || num1 > 0 && (num2 < num1 || (num2 == num1 && 2 < 1)) && pc2.becomes(6)) }

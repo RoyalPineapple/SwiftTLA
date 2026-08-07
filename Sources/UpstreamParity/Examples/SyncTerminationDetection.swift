@@ -19,7 +19,7 @@ static func syncTDSpec() -> TLASpec {
         let boolOpts: [TLAValue] = [.bool(false), .bool(true)]
         var activeFuncs: [TLAValue] = []
         for a0 in boolOpts { for a1 in boolOpts { for a2 in boolOpts {
-            activeFuncs.append(.function([.int(0):a0,.int(1):a1,.int(2):a2]))
+            activeFuncs.append(.function([.int(0): a0, .int(1): a1, .int(2): a2]))
         }}}
 
         let active = Var<TLAFunctionType>("active")
@@ -72,6 +72,5 @@ static func syncTDSpec() -> TLASpec {
             }
         }
     }
-
 
 }

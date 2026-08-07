@@ -26,12 +26,12 @@ extension Example {
         let bools: [TLAValue] = [.bool(false), .bool(true)]
         var initFuncs: [TLAValue] = []
         for i1 in bools { for i2 in bools { for i3 in bools {
-            initFuncs.append(.function([.int(1):i1, .int(2):i2, .int(3):i3]))
+            initFuncs.append(.function([.int(1): i1, .int(2): i2, .int(3): i3]))
         }}}
 
         let p = Var<Int>("p")
         let nodeSet = StateExpr.set([1, 2, 3])
-        let stateExpr: StateExpr = StateExpr.functionLiteral(p, in: nodeSet,
+        let stateExpr = StateExpr.functionLiteral(p, in: nodeSet,
             StateExpr.if(
                 StateExpr.equal(
                     StateExpr.functionApply(StateExpr.variable("initiator"),
@@ -51,9 +51,9 @@ extension Example {
 
             Variable(initiator, in: initFuncs)
             Variable(computed: processState) { stateExpr }
-            Variable(pc, TLAValue.function([.int(1):"n0", .int(2):"n0", .int(3):"n0"]))
+            Variable(pc, TLAValue.function([.int(1): "n0", .int(2): "n0", .int(3): "n0"]))
             Variable(msgs, TLAValue.function([
-                .int(1):.set([]), .int(2):.set([]), .int(3):.set([])]))
+                .int(1): .set([]), .int(2): .set([]), .int(3): .set([])]))
 
             Invariant("NoFalseWinner") {
                 !(processState.applying(1) == "won" && initiator.applying(1) == false)

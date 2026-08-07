@@ -18,12 +18,12 @@ public struct DiningPhilosophers {
             // P0 tries to eat: needs both forks
             Action("P0_TakeFork0") { (p0state == 0) && (fork0 == 0) && fork0.becomes(1) }
             Action("P0_TakeFork1") { (p0state == 0) && (fork0 == 1) && (fork1 == 0) && fork1.becomes(1) && p0state.becomes(2) }
-            Action("P0_Eat")       { (p0state == 2) && p0state.becomes(0) && fork0.becomes(0) && fork1.becomes(0) }
+            Action("P0_Eat") { (p0state == 2) && p0state.becomes(0) && fork0.becomes(0) && fork1.becomes(0) }
 
             // P1 tries to eat
             Action("P1_TakeFork1") { (p1state == 0) && (fork1 == 0) && fork1.becomes(2) }
             Action("P1_TakeFork0") { (p1state == 0) && (fork1 == 2) && (fork0 == 0) && fork0.becomes(2) && p1state.becomes(2) }
-            Action("P1_Eat")       { (p1state == 2) && p1state.becomes(0) && fork0.becomes(0) && fork1.becomes(0) }
+            Action("P1_Eat") { (p1state == 2) && p1state.becomes(0) && fork0.becomes(0) && fork1.becomes(0) }
 
             // Deadlock detection: both hungry with one fork each
             Invariant("NoDeadlock") {

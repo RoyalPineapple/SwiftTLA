@@ -19,14 +19,14 @@ static func simpleAllocatorSpec() -> TLASpec {
         let nonemptySubsets: [TLAValue] = [
             .set([.string("r1")]),
             .set([.string("r2")]),
-            .set([.string("r1"), .string("r2")]),
+            .set([.string("r1"), .string("r2")])
         ]
         let unsat = Var<TLAFunctionType>("unsat")
         let alloc = Var<TLAFunctionType>("alloc")
         let emptyFun = TLAValue.function([
             .string("c1"): .set([]),
             .string("c2"): .set([]),
-            .string("c3"): .set([]),
+            .string("c3"): .set([])
         ])
 
         func allocOf(_ c: String) -> StateExpr {
@@ -36,7 +36,7 @@ static func simpleAllocatorSpec() -> TLASpec {
             .functionApply(.variable("unsat"), .value(.string(c)))
         }
         let resources: StateExpr = .setLiteral([
-            .value(.string("r1")), .value(.string("r2")),
+            .value(.string("r1")), .value(.string("r2"))
         ])
         let available = resources.subtracting(
             allocOf("c1").union(allocOf("c2")).union(allocOf("c3"))

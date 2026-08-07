@@ -558,7 +558,7 @@ public enum SpecParser {
 
         case "firstMatch":
             var flatPairs: [StateExpr] = []
-            var fallbackExpr: StateExpr? = nil
+            var fallbackExpr: StateExpr?
             for argument in arguments {
                 if argument.label?.text == "fallback" {
                     fallbackExpr = parseStateExpr(argument.expression)

@@ -37,26 +37,49 @@ struct ConstructorTests {
     }
 }
 
-// MARK: - Key enum generation
+// MARK: - Variables enum generation
 
-struct KeyEnumGenerationTests {
+struct VariablesEnumGenerationTests {
     @Test func singleVariable() {
         let vars = [(name: "count", initial: TLAValue.int(0), initialSet: nil as StateExpr?)]
-        let result = ModelMacro.generateKeyEnum(variables: vars)
+        let result = ModelMacro.generateVariablesEnum(variables: vars)
         #expect(result.contains("case count"))
-        #expect(result.contains("enum Key: String, CaseIterable"))
+        #expect(result.contains("enum Variables: String, CaseIterable"))
     }
 
     @Test func multipleVariables() {
         let vars = [
             (name: "phase", initial: TLAValue.int(0), initialSet: nil as StateExpr?),
             (name: "queued", initial: TLAValue.set([]), initialSet: nil as StateExpr?),
-            (name: "inFlight", initial: TLAValue.set([]), initialSet: nil as StateExpr?),
+            (name: "inFlight", initial: TLAValue.set([]), initialSet: nil as StateExpr?)
         ]
-        let result = ModelMacro.generateKeyEnum(variables: vars)
+        let result = ModelMacro.generateVariablesEnum(variables: vars)
         #expect(result.contains("case phase"))
         #expect(result.contains("case queued"))
         #expect(result.contains("case inFlight"))
+    }
+}
+
+// MARK: - Actions enum generation
+
+struct ActionsEnumGenerationTests {
+    @Test func singleAction() {
+        let actions = [(name: "Enqueue", body: ActionExpr.unchanged("x"))]
+        let result = ModelMacro.generateActionsEnum(actions: actions)
+        #expect(result.contains("case Enqueue"))
+        #expect(result.contains("enum Actions: String, CaseIterable"))
+    }
+
+    @Test func multipleActions() {
+        let actions = [
+            (name: "Enqueue", body: ActionExpr.unchanged("x")),
+            (name: "Dequeue", body: ActionExpr.unchanged("x")),
+            (name: "Drain", body: ActionExpr.unchanged("x"))
+        ]
+        let result = ModelMacro.generateActionsEnum(actions: actions)
+        #expect(result.contains("case Enqueue"))
+        #expect(result.contains("case Dequeue"))
+        #expect(result.contains("case Drain"))
     }
 }
 
@@ -66,7 +89,7 @@ struct StateStructGenerationTests {
     @Test func generatesStructWithFields() {
         let vars = [
             (name: "phase", initial: TLAValue.int(0), initialSet: nil as StateExpr?),
-            (name: "done", initial: TLAValue.bool(false), initialSet: nil as StateExpr?),
+            (name: "done", initial: TLAValue.bool(false), initialSet: nil as StateExpr?)
         ]
         let result = ModelMacro.generateStateStruct(variables: vars)
         #expect(result.contains("public struct State"))
@@ -77,23 +100,23 @@ struct StateStructGenerationTests {
     @Test func generatesInitFromDict() {
         let vars = [
             (name: "phase", initial: TLAValue.int(0), initialSet: nil as StateExpr?),
-            (name: "queued", initial: TLAValue.set([]), initialSet: nil as StateExpr?),
+            (name: "queued", initial: TLAValue.set([]), initialSet: nil as StateExpr?)
         ]
         let result = ModelMacro.generateStateStruct(variables: vars)
         #expect(result.contains("public init(from dict: [String: TLAValue])"))
-        #expect(result.contains("self.phase = dict[Key.phase.rawValue]!.intValue"))
-        #expect(result.contains("self.queued = dict[Key.queued.rawValue]!.intSetValue"))
+        #expect(result.contains("self.phase = dict[Variables.phase.rawValue]!.intValue"))
+        #expect(result.contains("self.queued = dict[Variables.queued.rawValue]!.intSetValue"))
     }
 
     @Test func generatesAsDictionary() {
         let vars = [
             (name: "phase", initial: TLAValue.int(0), initialSet: nil as StateExpr?),
-            (name: "done", initial: TLAValue.bool(false), initialSet: nil as StateExpr?),
+            (name: "done", initial: TLAValue.bool(false), initialSet: nil as StateExpr?)
         ]
         let result = ModelMacro.generateStateStruct(variables: vars)
         #expect(result.contains("var asDictionary: [String: TLAValue]"))
-        #expect(result.contains("d[Key.phase.rawValue] = .int(phase)"))
-        #expect(result.contains("d[Key.done.rawValue] = .bool(done)"))
+        #expect(result.contains("d[Variables.phase.rawValue] = .int(phase)"))
+        #expect(result.contains("d[Variables.done.rawValue] = .bool(done)"))
     }
 }
 
@@ -138,7 +161,7 @@ struct VarNameInjectionTests {
         let result = ModelMacro.rewriteVarNames(in: closure)
         let rewritten = result.statements.description
         #expect(rewritten.contains(#""explicit""#))
-        #expect(!rewritten.contains(#""phase""#))   // not injected
+        #expect(!rewritten.contains(#""phase""#))
     }
 
     @Test func handlesSetType() {

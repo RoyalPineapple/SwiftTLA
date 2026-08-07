@@ -229,7 +229,7 @@ struct StateExprStaticCallTests {
         #expect(result == StateExpr.caseExpr(
             [
                 StateExpr.equal(.variable("x"), .value(.int(0))), .value(.int(10)),
-                StateExpr.equal(.variable("x"), .value(.int(1))), .value(.int(20)),
+                StateExpr.equal(.variable("x"), .value(.int(1))), .value(.int(20))
             ],
             .value(.int(99))
         ))

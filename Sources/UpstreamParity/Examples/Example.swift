@@ -38,6 +38,7 @@ public enum Example {
         hourClock,
         hourClock2,
         lamportMutexN2,
+        paxosSmall,
         prisonerN3,
         prisoners4,
         simpleAllocator,
@@ -46,6 +47,6 @@ public enum Example {
         tCommit,
         teachingSimpleN2,
         teachingSimpleN3,
-        twoPhase,
+        twoPhase
     ]
 }

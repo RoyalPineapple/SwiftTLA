@@ -18,14 +18,14 @@ public typealias TLASequence = TLATupleType  // TLA+ sequences are tuples at run
 /// Used in `@TLAModel` spec bodies and builder DSL closures.
 ///
 /// ```swift
-/// let isLocked = Var<Bool>("isLocked")           // value defaults to Bool.defaultValue
-/// let isLocked = Var<Bool>("isLocked", value: true) // explicit initial
+/// let isLocked = Var<Bool>()              // name injected by @TLAModel macro
+/// let isLocked = Var<Bool>(value: true)   // name injected, explicit initial
 /// ```
 @dynamicMemberLookup
 public struct Var<T: TLAValueType>: Sendable, CustomStringConvertible {
     public let name: String
-    public init(_ name: String, value: T = T.defaultValue) {
-        self.name = name
+    public init(_ name: String? = nil, value: T = T.defaultValue) {
+        self.name = name ?? ""
     }
     public var description: String { name }
     /// Returns `x' = expression` — the variable's value in the next state.

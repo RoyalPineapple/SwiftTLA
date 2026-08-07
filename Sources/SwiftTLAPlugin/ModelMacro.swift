@@ -62,7 +62,8 @@ public struct ModelMacro: MemberMacro, ExtensionMacro {
 
         return [
             DeclSyntax(stringLiteral: "public static var runtime: SpecRuntime { SpecRuntime(spec: spec) }"),
-            DeclSyntax(stringLiteral: Self.generateKeyEnum(variables: parsed.variables)),
+            DeclSyntax(stringLiteral: Self.generateVariablesEnum(variables: parsed.variables)),
+            DeclSyntax(stringLiteral: Self.generateActionsEnum(actions: parsed.actions)),
             DeclSyntax(stringLiteral: Self.generateStateStruct(variables: parsed.variables)),
         ]
     }
@@ -202,10 +203,19 @@ public struct ModelMacro: MemberMacro, ExtensionMacro {
         }
     }
 
-    static func generateKeyEnum(variables: [(name: String, initial: TLAValue, initialSet: StateExpr?)]) -> String {
+    static func generateVariablesEnum(variables: [(name: String, initial: TLAValue, initialSet: StateExpr?)]) -> String {
         let cases = variables.map { "        case \($0.name)" }.joined(separator: "\n")
         return """
-        public enum Key: String, CaseIterable {
+        public enum Variables: String, CaseIterable {
+        \(cases)
+        }
+        """
+    }
+
+    static func generateActionsEnum(actions: [(name: String, body: ActionExpr)]) -> String {
+        let cases = actions.map { "        case \($0.name) = \"\($0.name)\"" }.joined(separator: "\n")
+        return """
+        public enum Actions: String, CaseIterable {
         \(cases)
         }
         """
@@ -217,11 +227,11 @@ public struct ModelMacro: MemberMacro, ExtensionMacro {
         }.joined(separator: "\n")
 
         let initAssignments = variables.map { v in
-            "            self.\(v.name) = dict[Key.\(v.name).rawValue]!.\(tlaValueExtractor(for: v.initial))"
+            "            self.\(v.name) = dict[Variables.\(v.name).rawValue]!.\(tlaValueExtractor(for: v.initial))"
         }.joined(separator: "\n")
 
         let dictAssignments = variables.map { v in
-            "            d[Key.\(v.name).rawValue] = \(tlaValueConstructor(for: v.initial, value: v.name))"
+            "            d[Variables.\(v.name).rawValue] = \(tlaValueConstructor(for: v.initial, value: v.name))"
         }.joined(separator: "\n")
 
         return """

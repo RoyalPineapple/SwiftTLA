@@ -13,7 +13,7 @@ struct VarOperatorMatrix {
         ("+", 3, "(x + 3)"),
         ("-", 1, "(x - 1)"),
         ("*", 2, "(x * 2)"),
-        ("%", 5, "(x % 5)"),
+        ("%", 5, "(x % 5)")
     ])
     func arithmetic(_ op: String, _ val: Int, _ expected: String) {
         let x = Var<Int>("x", value: 1)
@@ -32,10 +32,10 @@ struct VarOperatorMatrix {
         ("==", 0, "(x = 0)"),
         ("==", 1, "(x = 1)"),
         ("!=", 0, "(x /= 0)"),
-        ("<",  5, "(x < 5)"),
+        ("<", 5, "(x < 5)"),
         ("<=", 5, "(x <= 5)"),
-        (">",  0, "(x > 0)"),
-        (">=", 1, "(x >= 1)"),
+        (">", 0, "(x > 0)"),
+        (">=", 1, "(x >= 1)")
     ])
     func comparison(_ op: String, _ val: Int, _ expected: String) {
         let x = Var<Int>("x", value: 1)
@@ -57,7 +57,7 @@ struct VarOperatorMatrix {
         ("guardTrue", 1),
         ("guardFalse", 0),
         ("orBranches", 2),
-        ("twoVars", 1),
+        ("twoVars", 1)
     ] as [(String, Int)])
     func actionMatrix(_ variant: String, _ expected: Int) throws {
         let s: [String: TLAValue] = ["x": .int(0), "y": .int(0)]
@@ -75,24 +75,24 @@ struct VarOperatorMatrix {
     }
 
     @Test("StateExpr cases", arguments: [
-        ("valueInt",    "42"),
-        ("valueBool",   "TRUE"),
+        ("valueInt", "42"),
+        ("valueBool", "TRUE"),
         ("valueString", "\"hi\""),
-        ("variable",    "x"),
-        ("add",         "(1 + 2)"),
-        ("subtract",   "(5 - 3)"),
-        ("multiply",   "(2 * 3)"),
-        ("modulo",     "(7 % 3)"),
-        ("negate",     "(-1)"),
-        ("equal",      "(1 = 1)"),
-        ("notEqual",   "(1 /= 2)"),
-        ("lessThan",   "(1 < 2)"),
-        ("greaterThan","(2 > 1)"),
+        ("variable", "x"),
+        ("add", "(1 + 2)"),
+        ("subtract", "(5 - 3)"),
+        ("multiply", "(2 * 3)"),
+        ("modulo", "(7 % 3)"),
+        ("negate", "(-1)"),
+        ("equal", "(1 = 1)"),
+        ("notEqual", "(1 /= 2)"),
+        ("lessThan", "(1 < 2)"),
+        ("greaterThan", "(2 > 1)"),
         ("setLiteral", "{1, 2}"),
-        ("inSet",      "(1 \\in {1, 2})"),
-        ("tupleLiteral","<<1, 2>>"),
-        ("ifThen",     "(IF TRUE THEN 1 ELSE 2)"),
-        ("enabled",    "ENABLED Tick"),
+        ("inSet", "(1 \\in {1, 2})"),
+        ("tupleLiteral", "<<1, 2>>"),
+        ("ifThen", "(IF TRUE THEN 1 ELSE 2)"),
+        ("enabled", "ENABLED Tick")
     ] as [(String, String)])
     func stateExprMatrix(_ caseName: String, _ expected: String) {
         let e: StateExpr
@@ -239,7 +239,7 @@ struct StateExprCompleteTests {
             .forAll(.setLiteral([.int(1)]), QuantVar(name: "x0"), .bool(true)),
             .exists(.setLiteral([.int(1)]), QuantVar(name: "x0"), .bool(true)),
             .choose(.setLiteral([.int(1)]), QuantVar(name: "x0"), .bool(true)),
-            .enabledAction("Foo"),
+            .enabledAction("Foo")
         ]
         for e in cases {
             #expect(!e.description.isEmpty, "\(e) has no description")
@@ -260,7 +260,7 @@ struct TLAValueTests {
     @Test("Every TLAValue case has a description", arguments: [
         TLAValue.int(1), .bool(true), .string("hi"),
         .set([.int(1)]), .tuple([.int(1)]), .record(["k": .int(1)]),
-        .constant("N"),
+        .constant("N")
     ] as [TLAValue])
     func descriptions(_ v: TLAValue) {
         #expect(!v.description.isEmpty)
@@ -283,7 +283,7 @@ struct ActionExprCompleteTests {
         ("unchanged", ActionExpr.unchanged("x"), 1),
         ("simpleAnd", ActionExpr.and(.assign("x", .int(1)), .assign("y", .int(2))), 1),
         ("or", ActionExpr.or(.assign("x", .int(1)), .assign("x", .int(2))), 2),
-        ("guarded", ActionExpr.and(.guard_(.equal(.variable("x"), .int(0))), .assign("x", .int(1))), 1),
+        ("guarded", ActionExpr.and(.guard_(.equal(.variable("x"), .int(0))), .assign("x", .int(1))), 1)
     ] as [(String, ActionExpr, Int)])
     func enumerate(_ name: String, _ a: ActionExpr, _ expected: Int) throws {
         let s: [String: TLAValue] = ["x": .int(0), "y": .int(0)]
@@ -353,7 +353,6 @@ struct ModelCheckerMatrix {
         // Processes 3 states, discovers 4 (successors of last processed also stored)
         #expect(graph.states.count >= 3 && graph.states.count <= 4)
     }
-
 
     @Test func deadlockNotDetectedWhenFlagFalse() throws {
         let x = Var<Int>("x", value: 0)
@@ -554,7 +553,6 @@ struct GoldenTests {
         #expect(count == 48)
     }
 
-
     @Test("Deadlock detected with DeadlockCheck()")
     func deadlock() throws {
         let x = Var<Int>("x", value: 0)
@@ -564,8 +562,7 @@ struct GoldenTests {
             DeadlockCheck()
         }
         let r = try ModelChecker(spec: spec, maxStates: 100).check()
-        if case .deadlocked(let s) = r { #expect(s["x"] == .int(1)) }
-        else { #expect(Bool(false)) }
+        if case .deadlocked(let s) = r { #expect(s["x"] == .int(1)) } else { #expect(Bool(false)) }
     }
 
     @Test("Majority Boyer-Moore shape explores")

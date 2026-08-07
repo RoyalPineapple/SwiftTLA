@@ -98,8 +98,8 @@ public struct TLASpec: Sendable {
     }
 
     public func extending(_ other: TLASpec, prefix: String? = nil) -> TLASpec {
-        let prefixedName = prefix.map { "\($0)!\(self.name)" } ?? self.name
-        let otherVars = other.variables.filter { v in !self.variables.contains(where: { $0.name == v.name }) }
+        let prefixedName = prefix.map { "\($0)!\(name)" } ?? self.name
+        let otherVars = other.variables.filter { v in !variables.contains(where: { $0.name == v.name }) }
         return TLASpec(
             name: prefixedName,
             variables: self.variables + otherVars,
@@ -108,12 +108,12 @@ public struct TLASpec: Sendable {
             invariants: self.invariants + other.invariants,
             temporalProperties: self.temporalProperties + other.temporalProperties,
             fairness: self.fairness + other.fairness,
-            assume: { if let a = self.assume, let b = other.assume { return .and(a, b) }; return self.assume ?? other.assume }(),
+            assume: { if let a = assume, let b = other.assume { return .and(a, b) }; return assume ?? other.assume }(),
             checkDeadlock: self.checkDeadlock || other.checkDeadlock,
             definitions: self.definitions + other.definitions,
             theorems: self.theorems + other.theorems,
             extendsModules: self.extendsModules,
-            constraint: { if let a = self.constraint, let b = other.constraint { return .and(a, b) }; return self.constraint ?? other.constraint }(),
+            constraint: { if let a = constraint, let b = other.constraint { return .and(a, b) }; return constraint ?? other.constraint }(),
             recursiveDefs: self.recursiveDefs + other.recursiveDefs,
             recursiveFuncs: self.recursiveFuncs + other.recursiveFuncs,
             symmetrySets: self.symmetrySets + other.symmetrySets
@@ -563,20 +563,13 @@ extension TLASpec {
         var symmetrySets: [SymmetrySet] = []
 
         for comp in components {
-            if let v = comp as? VarDecl { variables.append(NamedVar(name: v.name, initial: v.initial, initialSet: v.initialSet, initExpr: v.initExpr)) }
-            else if let a = comp as? ActionDecl { actions.append(NamedAction(name: a.name, body: a.body)) }
-            else if let i = comp as? InvDecl { invariants.append(NamedInvariant(name: i.name, body: i.body)) }
-            else if let t = comp as? TemporalDecl { temporalProperties.append(NamedTemporal(name: t.name, expr: t.expr)) }
-            else if let f = comp as? FairnessDecl { fairness.append(f.condition) }
-            else if let c = comp as? ConstantDecl { constants[c.name] = c.value }
-            else if let d = comp as? DefinitionDecl {
+            if let v = comp as? VarDecl { variables.append(NamedVar(name: v.name, initial: v.initial, initialSet: v.initialSet, initExpr: v.initExpr)) } else if let a = comp as? ActionDecl { actions.append(NamedAction(name: a.name, body: a.body)) } else if let i = comp as? InvDecl { invariants.append(NamedInvariant(name: i.name, body: i.body)) } else if let t = comp as? TemporalDecl { temporalProperties.append(NamedTemporal(name: t.name, expr: t.expr)) } else if let f = comp as? FairnessDecl { fairness.append(f.condition) } else if let c = comp as? ConstantDecl { constants[c.name] = c.value } else if let d = comp as? DefinitionDecl {
                 if let name = d.name, let body = d.body {
                     definitions.append("\(name) == \(body)")
                 } else {
                     definitions.append(d.tlaText)
                 }
-            }
-            else if let th = comp as? TheoremDecl {
+            } else if let th = comp as? TheoremDecl {
                 if !th.tlaText.isEmpty {
                     theorems.append(th.tlaText)
                 } else if let name = th.name, let body = th.temporalBody {
@@ -584,20 +577,11 @@ extension TLASpec {
                 } else if let name = th.name, let body = th.stateBody {
                     theorems.append("\(name) == Spec => [](\(body))")
                 }
-            }
-            else if let a = comp as? AssumeDecl { assumes = assumes.map { .and($0, a.expr) } ?? a.expr }
-            else if let e = comp as? ExtendsDecl { extendsMods = e.modules }
-            else if comp is DeadlockDecl { deadlockFlag = true }
-            else if let c = comp as? ConstraintDecl { constraint = constraint.map { .and($0, c.body) } ?? c.body }
-            else if let r = comp as? RecursiveDecl { recursiveDefs.append(r.tlaText) }
-            else if let rf = comp as? RecursiveFuncDecl { recursiveFuncs.append(rf.funcDef) }
-            else if let u = comp as? UseDecl { useSpecs.append(u.spec) }
-            else if let rtf = comp as? RuntimeFuncDecl {
+            } else if let a = comp as? AssumeDecl { assumes = assumes.map { .and($0, a.expr) } ?? a.expr } else if let e = comp as? ExtendsDecl { extendsMods = e.modules } else if comp is DeadlockDecl { deadlockFlag = true } else if let c = comp as? ConstraintDecl { constraint = constraint.map { .and($0, c.body) } ?? c.body } else if let r = comp as? RecursiveDecl { recursiveDefs.append(r.tlaText) } else if let rf = comp as? RecursiveFuncDecl { recursiveFuncs.append(rf.funcDef) } else if let u = comp as? UseDecl { useSpecs.append(u.spec) } else if let rtf = comp as? RuntimeFuncDecl {
                 runtimeFuncCollector[rtf.name] = rtf.implementation
                 runtimeFuncBodiesCollector.append(rtf.tlaBody)
                 runtimeFuncBodies.append(rtf.tlaBody)
-            }
-            else if let s = comp as? SymmetrySetDecl {
+            } else if let s = comp as? SymmetrySetDecl {
                 symmetrySets.append(SymmetrySet(variableName: s.variableName, values: s.values))
             }
         }
@@ -792,5 +776,5 @@ private func substituteInTemporal(_ expr: TemporalExpr, constants: [String: TLAV
 /// Deprecated — use two separate Variable() declarations with StateExpr constraints instead.
 @available(*, deprecated, message: "Use two separate Variable() declarations")
 public func Variable<T, U>(_ ref1: Var<T>, _ ref2: Var<U>, in range: ClosedRange<Int>, where predicate: (Int, Int) -> Bool) -> VarDecl {
-    return VarDecl("\(ref1.name)+\(ref2.name)", .tuple([]))
+    VarDecl("\(ref1.name)+\(ref2.name)", .tuple([]))
 }
