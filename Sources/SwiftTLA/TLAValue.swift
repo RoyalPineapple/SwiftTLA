@@ -8,29 +8,33 @@ public enum TLAValue: Hashable, Codable, Sendable, CustomStringConvertible {
     case function([TLAValue: TLAValue])
     case constant(String)
 
-    public var description: String {
+    public var description: String { _tlaForm() }
+
+    private func _tlaForm(_ depth: Int = 0) -> String {
+        let xs = "__tla_fn_\(depth)"
         switch self {
         case .int(let n): return "\(n)"
         case .bool(let b): return b ? "TRUE" : "FALSE"
         case .string(let s): return "\"\(s)\""
         case .set(let s):
-            return "{\(s.map(\.description).sorted().joined(separator: ", "))}"
+            return "{\(s.map { $0._tlaForm(depth) }.sorted().joined(separator: ", "))}"
         case .tuple(let t):
-            return "<<\(t.map(\.description).joined(separator: ", "))>>"
+            return "<<\(t.map { $0._tlaForm(depth) }.joined(separator: ", "))>>"
         case .record(let r):
-            let fields = r.sorted(by: { $0.key < $1.key }).map { "\($0.key) |-> \($0.value)" }
+            let fields = r.sorted(by: { $0.key < $1.key }).map { "\($0.key) |-> \($0.value._tlaForm(depth))" }
             return "[\(fields.joined(separator: ", "))]"
         case .function(let mapping):
             let sorted = mapping.sorted(by: { $0.key < $1.key })
-            if sorted.isEmpty { return "[x \\in {} |-> TRUE]" }
+            let innerDepth = depth + 1
+            if sorted.isEmpty { return "[\(xs) \\in {} |-> TRUE]" }
             let values = Set(sorted.map(\.value))
             if values.count == 1, let v = values.first {
-                let domain = "{\(sorted.map { "\($0.key)" }.joined(separator: ", "))}"
-                return "[x \\in \(domain) |-> \(v)]"
+                let domain = "{\(sorted.map { "\($0.key._tlaForm(innerDepth))" }.joined(separator: ", "))}"
+                return "[\(xs) \\in \(domain) |-> \(v._tlaForm(innerDepth))]"
             }
-            let domain = "{\(sorted.map { "\($0.key)" }.joined(separator: ", "))}"
-            let body = sorted.map { "(x = \($0.key)) -> \($0.value)" }.joined(separator: " [] ")
-            return "[x \\in \(domain) |-> CASE \(body)]"
+            let domain = "{\(sorted.map { "\($0.key._tlaForm(innerDepth))" }.joined(separator: ", "))}"
+            let body = sorted.map { "(\(xs) = \($0.key._tlaForm(innerDepth))) -> \($0.value._tlaForm(innerDepth))" }.joined(separator: " [] ")
+            return "[\(xs) \\in \(domain) |-> CASE \(body)]"
 
         case .constant(let name): return name
         }

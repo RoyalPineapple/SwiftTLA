@@ -52,8 +52,10 @@ public struct TLASpec: Codable, Sendable, CustomStringConvertible, Equatable {
     public let definitions: [String]
     public let theorems: [String]
     public let extendsModules: String
+    public let constraint: StateExpr?
+    public let recursiveDefs: [String]
 
-    public init(name: String, variables: [NamedVar], constants: [String: TLAValue] = [:], actions: [NamedAction], invariants: [NamedInvariant], temporalProperties: [NamedTemporal] = [], fairness: [FairnessCondition] = [], assume: StateExpr? = nil, checkDeadlock: Bool = false, definitions: [String] = [], theorems: [String] = [], extendsModules: String = "Integers") {
+    public init(name: String, variables: [NamedVar], constants: [String: TLAValue] = [:], actions: [NamedAction], invariants: [NamedInvariant], temporalProperties: [NamedTemporal] = [], fairness: [FairnessCondition] = [], assume: StateExpr? = nil, checkDeadlock: Bool = false, definitions: [String] = [], theorems: [String] = [], extendsModules: String = "Integers", constraint: StateExpr? = nil, recursiveDefs: [String] = []) {
         self.name = name
         self.variables = variables
         self.constants = constants
@@ -66,6 +68,8 @@ public struct TLASpec: Codable, Sendable, CustomStringConvertible, Equatable {
         self.definitions = definitions
         self.theorems = theorems
         self.extendsModules = extendsModules
+        self.constraint = constraint
+        self.recursiveDefs = recursiveDefs
     }
 
     public var description: String {
@@ -102,7 +106,9 @@ public struct TLASpec: Codable, Sendable, CustomStringConvertible, Equatable {
             checkDeadlock: self.checkDeadlock || other.checkDeadlock,
             definitions: self.definitions + other.definitions,
             theorems: self.theorems + other.theorems,
-            extendsModules: self.extendsModules
+            extendsModules: self.extendsModules,
+            constraint: { if let a = self.constraint, let b = other.constraint { return .and(a, b) }; return self.constraint ?? other.constraint }(),
+            recursiveDefs: self.recursiveDefs + other.recursiveDefs
         )
     }
 
@@ -120,7 +126,9 @@ public struct TLASpec: Codable, Sendable, CustomStringConvertible, Equatable {
             checkDeadlock: self.checkDeadlock,
             definitions: self.definitions,
             theorems: self.theorems,
-            extendsModules: self.extendsModules
+            extendsModules: self.extendsModules,
+            constraint: self.constraint,
+            recursiveDefs: self.recursiveDefs
         )
     }
 }
@@ -191,6 +199,16 @@ public struct ExtendsDecl: SpecComponent, Equatable {
     public init(_ modules: String) { self.modules = modules }
 }
 
+public struct ConstraintDecl: SpecComponent, Equatable {
+    public let body: StateExpr
+    public init(_ body: StateExpr) { self.body = body }
+}
+
+public struct RecursiveDecl: SpecComponent, Equatable {
+    public let tlaText: String
+    public init(_ tlaText: String) { self.tlaText = tlaText }
+}
+
 @resultBuilder
 public enum SpecBuilder {
     public static func buildBlock(_ components: [SpecComponent]...) -> [SpecComponent] { components.flatMap { $0 } }
@@ -206,6 +224,8 @@ public enum SpecBuilder {
     public static func buildExpression(_ expr: ExtendsDecl) -> [SpecComponent] { [expr] }
     public static func buildExpression(_ expr: DeadlockDecl) -> [SpecComponent] { [expr] }
     public static func buildExpression(_ expr: ComputedInitDecl) -> [SpecComponent] { [expr] }
+    public static func buildExpression(_ expr: ConstraintDecl) -> [SpecComponent] { [expr] }
+    public static func buildExpression(_ expr: RecursiveDecl) -> [SpecComponent] { [expr] }
     public static func buildOptional(_ component: [SpecComponent]?) -> [SpecComponent] { component ?? [] }
     public static func buildEither(first: [SpecComponent]) -> [SpecComponent] { first }
     public static func buildEither(second: [SpecComponent]) -> [SpecComponent] { second }
@@ -374,6 +394,14 @@ public func Extends(_ modules: String) -> ExtendsDecl {
     ExtendsDecl(modules)
 }
 
+public func Constraint(_ expr: some StateExprConvertible) -> ConstraintDecl {
+    ConstraintDecl(expr.stateExpr)
+}
+
+public func Recursive(_ tlaText: String) -> RecursiveDecl {
+    RecursiveDecl(tlaText)
+}
+
 extension TLASpec {
     public init(_ name: String, @SpecBuilder _ builder: () -> [SpecComponent]) {
         let components = builder()
@@ -388,6 +416,8 @@ extension TLASpec {
         var assumes: StateExpr?
         var extendsMods = "Integers"
         var deadlockFlag = false
+        var constraint: StateExpr?
+        var recursiveDefs: [String] = []
 
         for comp in components {
             if let v = comp as? VarDecl { variables.append(NamedVar(name: v.name, initial: v.initial, initialSet: v.initialSet, initExpr: v.initExpr)) }
@@ -409,6 +439,8 @@ extension TLASpec {
             else if let a = comp as? AssumeDecl { assumes = assumes.map { .and($0, a.expr) } ?? a.expr }
             else if let e = comp as? ExtendsDecl { extendsMods = e.modules }
             else if comp is DeadlockDecl { deadlockFlag = true }
+            else if let c = comp as? ConstraintDecl { constraint = constraint.map { .and($0, c.body) } ?? c.body }
+            else if let r = comp as? RecursiveDecl { recursiveDefs.append(r.tlaText) }
         }
 
         // Auto-UNCHANGED: push into OR branches so TLC sees complete assignments
@@ -429,6 +461,8 @@ extension TLASpec {
         self.definitions = definitions
         self.theorems = theorems
         self.extendsModules = extendsMods
+        self.constraint = constraint
+        self.recursiveDefs = recursiveDefs
     }
 }
 
@@ -451,11 +485,13 @@ public func substituteConstants(_ spec: TLASpec) -> TLASpec {
         invariants: invs,
         temporalProperties: spec.temporalProperties,
         fairness: spec.fairness,
-        assume: spec.assume,
+        assume: spec.assume.map { substituteInState($0, constants: constants) },
         checkDeadlock: spec.checkDeadlock,
         definitions: spec.definitions,
         theorems: spec.theorems,
-        extendsModules: spec.extendsModules
+        extendsModules: spec.extendsModules,
+        constraint: spec.constraint.map { substituteInState($0, constants: constants) },
+        recursiveDefs: spec.recursiveDefs
     )
 }
 
@@ -514,9 +550,11 @@ private func substituteInState(_ expr: StateExpr, constants: [String: TLAValue])
     case .caseExpr(let pairs, let other): return .caseExpr(pairs.map { substituteInState($0, constants: constants) }, other.map { substituteInState($0, constants: constants) })
     case .forAll(let a, let b): return .forAll(substituteInState(a, constants: constants), substituteInState(b, constants: constants))
     case .exists(let a, let b): return .exists(substituteInState(a, constants: constants), substituteInState(b, constants: constants))
-    case .choose(let a, let b): return .choose(substituteInState(a, constants: constants), substituteInState(b, constants: constants))
-    case .enabledAction: return expr
-    }
+     case .choose(let a, let b): return .choose(substituteInState(a, constants: constants), substituteInState(b, constants: constants))
+     case .enabledAction: return expr
+     case .sequenceFromSet(let s): return .sequenceFromSet(substituteInState(s, constants: constants))
+     case .setSum(let f, let s): return .setSum(substituteInState(f, constants: constants), substituteInState(s, constants: constants))
+     }
 }
 
 private func substituteInAction(_ expr: ActionExpr, constants: [String: TLAValue]) -> ActionExpr {
@@ -527,6 +565,7 @@ private func substituteInAction(_ expr: ActionExpr, constants: [String: TLAValue
     case .chooseAction(let v, let s): return .chooseAction(v, substituteInState(s, constants: constants))
     case .and(let a, let b): return .and(substituteInAction(a, constants: constants), substituteInAction(b, constants: constants))
     case .or(let a, let b): return .or(substituteInAction(a, constants: constants), substituteInAction(b, constants: constants))
+    case .existsAction(let v, let s, let b): return .existsAction(v, substituteInState(s, constants: constants), substituteInAction(b, constants: constants))
     }
 }
 
@@ -536,6 +575,7 @@ public func assignedVars(_ e: ActionExpr) -> Set<String> {
     case .unchanged, .guard_: return []
     case .and(let a, let b): return assignedVars(a).union(assignedVars(b))
     case .or(let a, let b): return assignedVars(a).union(assignedVars(b))
+    case .existsAction(_, _, let b): return assignedVars(b)
     }
 }
 
@@ -544,6 +584,7 @@ public func explicitUnchanged(_ e: ActionExpr) -> Set<String> {
     case .unchanged(let v): return [v]
     case .and(let a, let b): return explicitUnchanged(a).union(explicitUnchanged(b))
     case .or(let a, let b): return explicitUnchanged(a).intersection(explicitUnchanged(b))
+    case .existsAction: return []
     default: return []
     }
 }

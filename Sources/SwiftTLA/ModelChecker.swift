@@ -62,7 +62,7 @@ public struct ModelChecker {
         return try bfs(
             seeds: seeds,
             variableNames: variableNames,
-            expand: buildExpander(actions, variableNames: variableNames),
+            expand: buildExpander(actions, variableNames: variableNames, constraint: substituted.constraint),
             evaluate: buildEvaluator(),
             actions: actions,
             invariants: substituted.invariants,
@@ -98,7 +98,8 @@ public struct ModelChecker {
 
     private func buildExpander(
         _ actions: [NamedAction],
-        variableNames: [String]
+        variableNames: [String],
+        constraint: StateExpr? = nil
     ) -> (State) throws -> [(String, State)] {
         { state in
             var result: [(String, State)] = []
@@ -110,6 +111,11 @@ public struct ModelChecker {
                     result.append(contentsOf: successors.map { (action.name, $0) })
                 } catch {
                     throw CheckerEvalError.action(action.name, error)
+                }
+            }
+            if let c = constraint {
+                result = try result.filter {
+                    try Evaluator.evaluateBool(c, in: $0.1)
                 }
             }
             return result

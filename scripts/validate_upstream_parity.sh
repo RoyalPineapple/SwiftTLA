@@ -61,9 +61,14 @@ check_swift_port() {
   {
     echo "SPECIFICATION Spec"
     echo "CHECK_DEADLOCK FALSE"
+    # Copy CONSTANT assignments from .tla file (ASSUME lines)
+    grep '^ASSUME .* = ' "$name_tla" | sed 's/ASSUME /CONSTANT /' || true
     grep -q '^HCini ==' "$name_tla" && echo "INVARIANT HCini"
     grep -q '^TypeOK ==' "$name_tla" && echo "INVARIANT TypeOK"
     grep -q '^TypeInvariant ==' "$name_tla" && echo "INVARIANT TypeInvariant"
+    grep -q '^VictoryOK ==' "$name_tla" && echo "INVARIANT VictoryOK"
+    grep -q '^SumMet ==' "$name_tla" && echo "INVARIANT SumMet"
+    grep -q '^StateConstraint ==' "$name_tla" && echo "CONSTRAINT StateConstraint"
   } > "$cfg"
 
   local cr count result

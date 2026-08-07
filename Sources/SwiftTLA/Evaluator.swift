@@ -266,6 +266,21 @@ public enum Evaluator {
             if let val = state["_enabled_\(name)"], case .bool(let b) = val { return .bool(b) }
             return .bool(false)
 
+        case .sequenceFromSet(let s):
+            guard case .set(let sv) = try evaluate(s, in: state) else { throw typeMismatch("SeqFromSet", got: try evaluate(s, in: state)) }
+            return .tuple(sv.sorted())
+
+        case .setSum(let f, let s):
+            guard case .set(let sv) = try evaluate(s, in: state) else { throw typeMismatch("Sum set", got: try evaluate(s, in: state)) }
+            let fval = try evaluate(f, in: state)
+            guard case .function(let mapping) = fval else { throw typeMismatch("Sum function", got: fval) }
+            var total = 0
+            for elem in sv {
+                guard let val = mapping[elem], case .int(let n) = val else { throw typeMismatch("Sum value", got: mapping[elem] ?? .bool(false)) }
+                total += n
+            }
+            return .int(total)
+
         case .caseExpr(let pairs, let other):
             for i in stride(from: 0, to: pairs.count, by: 2) {
                 if case .bool(true) = try evaluate(pairs[i], in: state) {
@@ -282,6 +297,10 @@ public enum Evaluator {
             throw EvalError.typeMismatch("Expected boolean expression, got \(try evaluate(expr, in: state))")
         }
         return b
+    }
+
+    public static func subExpr(_ expr: StateExpr, name: String, value: TLAValue) -> StateExpr {
+        substituteVariable(name, value, in: expr)
     }
 
     private static func substituteVariable(_ name: String, _ value: TLAValue, in expr: StateExpr) -> StateExpr {
@@ -334,6 +353,8 @@ public enum Evaluator {
         case .forAll(let s, let p): return .forAll(sub(s), sub(p))
         case .exists(let s, let p): return .exists(sub(s), sub(p))
         case .choose(let s, let p): return .choose(sub(s), sub(p))
+        case .sequenceFromSet(let s): return .sequenceFromSet(sub(s))
+        case .setSum(let f, let s): return .setSum(sub(f), sub(s))
         }
 
         func sub(_ e: StateExpr) -> StateExpr { substituteVariable(name, value, in: e) }

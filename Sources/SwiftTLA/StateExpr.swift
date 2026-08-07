@@ -56,6 +56,9 @@ public indirect enum StateExpr: Hashable, Codable, Sendable, CustomStringConvert
     case choose(StateExpr, StateExpr)
     case enabledAction(String)
 
+    case sequenceFromSet(StateExpr)
+    case setSum(StateExpr, StateExpr)
+
     public var description: String {
         switch self {
         case .value(let v): return v.description
@@ -100,9 +103,9 @@ public indirect enum StateExpr: Hashable, Codable, Sendable, CustomStringConvert
         case .recordLiteral(let fields):
             let entries = fields.sorted(by: { $0.key < $1.key }).map { "\($0.key) |-> \($0.value)" }
             return "[\(entries.joined(separator: ", "))]"
-        case .recordAccess(let r, let f): return "\(r).\(f)"
+        case .recordAccess(let r, let f): return "(\(r)).\(f)"
         case .domain(let f): return "DOMAIN \(f)"
-        case .functionLiteral(let d, let e): return "[x \\in \(d) |-> \(e)]\n".replacing("_x", with: "x")
+        case .functionLiteral(let d, let e): return "[x \\in \(d) |-> \(e)]".replacing("_x", with: "x")
         case .functionApply(let f, let x): return "\(f)[\(x)]"
         case .except(let f, let x, let e):
             // Functions need ![key]; records accept !["field"] in TLC.
@@ -118,6 +121,8 @@ public indirect enum StateExpr: Hashable, Codable, Sendable, CustomStringConvert
         case .exists(let s, let p): return "\\E x \\in \(s) : \(p)".replacing("_x", with: "x")
         case .choose(let s, let p): return "CHOOSE x \\in \(s) : \(p)".replacing("_x", with: "x")
         case .enabledAction(let a): return "ENABLED \(a)"
+        case .sequenceFromSet(let s): return "SeqFromSet(\(s))"
+        case .setSum(let f, let s): return "Sum(\(f), \(s))"
         }
     }
 }

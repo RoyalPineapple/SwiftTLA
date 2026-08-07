@@ -51,6 +51,7 @@ extension ActionExpr {
         case .chooseAction(let v, let s): return "ActionExpr.choose(\"\(v)\", from: \(s.swiftSource))"
         case .and(let a, let b): return "\(a.swiftSource) && \(b.swiftSource)"
         case .or(let a, let b): return "\(a.swiftSource) || \(b.swiftSource)"
+        case .existsAction(let v, let s, let b): return "ActionExpr.exists(\"\(v)\", from: \(s.swiftSource)) { _ in \(b.swiftSource) }"
         }
     }
 }

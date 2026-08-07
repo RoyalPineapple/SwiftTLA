@@ -25,10 +25,25 @@ public enum ActionEnumerator {
         oldState: [String: TLAValue],
         varNames: [String]
     ) throws -> [[String: TLAValue]] {
+        let existsBindings = extractExistsActions(action)
+        if !existsBindings.isEmpty {
+            let (v, s, body) = existsBindings[0]
+            guard case .set(let sv) = try Evaluator.evaluate(s, in: oldState) else {
+                throw ActionError.invalidActionForm("\\E set must be a set")
+            }
+            var results: [[String: TLAValue]] = []
+            for elem in sv {
+                var rest = body
+                rest = substituteVarInAction(v, elem, rest)
+                let disjuncts = distOr(rest)
+                let inner = try disjuncts.flatMap { try processDisjunct($0, oldState: oldState, varNames: varNames) }
+                results.append(contentsOf: inner)
+            }
+            return results
+        }
+
         let chooseAssignments = try extractChooseActions(action)
         if !chooseAssignments.isEmpty {
-            // Cartesian product: each CHOOSE binds in an environment that
-            // already includes earlier choose bindings (set expr may depend on them).
             var partials: [[String: TLAValue]] = [[:]]
             for (varName, setExpr) in chooseAssignments {
                 var next: [[String: TLAValue]] = []
@@ -117,7 +132,15 @@ public enum ActionEnumerator {
         case .and(let a, let b):
             return try extractChooseActions(a) + extractChooseActions(b)
         case .or: return []
-        case .assign, .unchanged, .guard_: return []
+        case .assign, .unchanged, .guard_, .existsAction: return []
+        }
+    }
+
+    private static func extractExistsActions(_ action: ActionExpr) -> [(String, StateExpr, ActionExpr)] {
+        switch action {
+        case .existsAction(let v, let s, let b): return [(v, s, b)]
+        case .and(let a, let b): return extractExistsActions(a) + extractExistsActions(b)
+        case .assign, .unchanged, .guard_, .chooseAction, .or: return []
         }
     }
 
@@ -129,7 +152,7 @@ public enum ActionEnumerator {
             return ([name: .variable(name)], [])
         case .guard_(let expr):
             return ([:], [expr])
-        case .chooseAction:
+        case .chooseAction, .existsAction:
             return ([:], [])
         case .and(let a, let b):
             let (lhsAssign, lhsGuards) = try extractAssignments(a)
@@ -140,6 +163,25 @@ public enum ActionEnumerator {
             return (lhsAssign.merging(rhsAssign) { $1 }, lhsGuards + rhsGuards)
         case .or:
             return ([:], [])
+        }
+    }
+
+    private static func substituteVarInAction(_ name: String, _ value: TLAValue, _ action: ActionExpr) -> ActionExpr {
+        switch action {
+        case .assign(let v, let e):
+            return .assign(v, Evaluator.subExpr(e, name: name, value: value))
+        case .unchanged(let v):
+            return .unchanged(v)
+        case .guard_(let e):
+            return .guard_(Evaluator.subExpr(e, name: name, value: value))
+        case .chooseAction(let v, let s):
+            return .chooseAction(v, Evaluator.subExpr(s, name: name, value: value))
+        case .existsAction(let v, let s, let b):
+            return .existsAction(v, Evaluator.subExpr(s, name: name, value: value), substituteVarInAction(name, value, b))
+        case .and(let a, let b):
+            return .and(substituteVarInAction(name, value, a), substituteVarInAction(name, value, b))
+        case .or(let a, let b):
+            return .or(substituteVarInAction(name, value, a), substituteVarInAction(name, value, b))
         }
     }
 }

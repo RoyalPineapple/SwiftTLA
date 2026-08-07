@@ -35,6 +35,11 @@ extension TLASpec {
             lines.append("")
         }
 
+        for rec in recursiveDefs {
+            lines.append(rec)
+            lines.append("")
+        }
+
         let varsDef = "vars == \(varsTuple)"
         if varNames.count > 1 { lines.append(varsDef); lines.append("") }
 
@@ -42,6 +47,11 @@ extension TLASpec {
             lines.append("\(inv.name) == \(inv.body)")
         }
         if !invariants.isEmpty { lines.append("") }
+
+        if let constraint = constraint {
+            lines.append("StateConstraint == \(constraint)")
+            lines.append("")
+        }
 
         let inits = variables.map { v -> String in
             if let s = v.initialSet { return "\(v.name) \\in \(s)" }

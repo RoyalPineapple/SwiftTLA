@@ -193,6 +193,11 @@ extension StateExpr {
 
 extension ActionExpr {
     public static func choose(_ variable: String, from set: StateExpr) -> ActionExpr { .chooseAction(variable, set) }
+
+    public static func exists(_ name: String, from set: some StateExprConvertible,
+                              _ body: (StateExpr) -> ActionExpr) -> ActionExpr {
+        .existsAction(name, set.stateExpr, body(.variable(name)))
+    }
 }
 
 extension StateExpr {
@@ -279,6 +284,8 @@ private func replaceVarInState(_ from: String, with to: String, in expression: S
     case .forAll(let s, let p): return .forAll(replace(s), replace(p))
     case .exists(let s, let p): return .exists(replace(s), replace(p))
     case .choose(let s, let p): return .choose(replace(s), replace(p))
+    case .sequenceFromSet(let s): return .sequenceFromSet(replace(s))
+    case .setSum(let f, let s): return .setSum(replace(f), replace(s))
     }
 
     func replace(_ expr: StateExpr) -> StateExpr { replaceVarInState(from, with: to, in: expr) }

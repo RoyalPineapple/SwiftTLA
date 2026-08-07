@@ -2,6 +2,7 @@ import SwiftTLA
 
 // Lamport's distributed mutual-exclusion algorithm.
 // N=2 processes, maxClock=2. Uses nested functions, Head/Tail, @ self-ref.
+// Port: 1:1 translation. Mutex safety. 19 states.
 // Upstream: specifications/lamport_mutex/LamportMutex.tla
 
 extension Example {
@@ -10,11 +11,11 @@ extension Example {
         upstreamSpec: "lamport_mutex",
         upstreamModule: "specifications/lamport_mutex/LamportMutex.tla",
         upstreamCfg: "specifications/lamport_mutex/MCLamportMutex.cfg",
-        expectedDistinct: 0,
+        expectedDistinct: 19,
         expectedResult: "success",
         spec: lamportMutexSpec(),
-        notes: "N=2, maxClock=2. Nested functions + sequences + @ self-ref.",
-        matchesUpstreamTLC: false
+        notes: "N=2, maxClock=2. Nested functions + sequences + @ self-ref. Constraint bounds clocks.",
+        matchesUpstreamTLC: true
     )
 }
 
@@ -34,12 +35,13 @@ private func lamportMutexSpec() -> TLASpec {
     let ackMsg: StateExpr = .recordLiteral(["type": .value(.string("ack")), "clock": .value(.int(0))])
     let relMsg: StateExpr = .recordLiteral(["type": .value(.string("rel")), "clock": .value(.int(0))])
 
+    let dict: [TLAValue: TLAValue] = [
+        .int(1): TLAValue.function([.int(1):0, .int(2):0]),
+        .int(2): TLAValue.function([.int(1):0, .int(2):0])]
     return TLASpec("LamportMutex") {
         Extends("Integers")
         Variable(clock, TLAValue.function([.int(1):1, .int(2):1]))
-        Variable(req, TLAValue.function([
-            .int(1): TLAValue.function([.int(1):0, .int(2):0]),
-            .int(2): TLAValue.function([.int(1):0, .int(2):0])]))
+        Variable(req, TLAValue.function(dict))
         Variable(ack, TLAValue.function([.int(1):TLAValue.set([]), .int(2):TLAValue.set([])]))
         Variable(network, TLAValue.function([
             .int(1): TLAValue.function([.int(2):TLAValue.tuple([])]),
@@ -47,7 +49,7 @@ private func lamportMutexSpec() -> TLASpec {
         Variable(crit, TLAValue.set([]))
 
         Invariant("Mutex") { crit.cardinality <= 1 }
-        Invariant("ClockBound") { clock.applying(1) <= 2 && clock.applying(2) <= 2 }
+        Constraint(clock.applying(1) <= 2 && clock.applying(2) <= 2)
 
         for p in nodes {
             let q = p == 1 ? 2 : 1
