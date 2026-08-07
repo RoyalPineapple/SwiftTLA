@@ -1,3 +1,0 @@
-# DieHard
-
-https://github.com/tlaplus/Examples/tree/master/specifications/DieHard

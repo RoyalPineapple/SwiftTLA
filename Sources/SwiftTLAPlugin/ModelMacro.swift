@@ -35,7 +35,6 @@ public struct ModelMacro: MemberMacro, ExtensionMacro {
         }
 
         let rewritten = rewriteVarNames(in: closure)
-
         let parsed = SpecParser.parseSpecClosure(rewritten)
         if parsed.variables.isEmpty { throw SimpleError("No variables in spec") }
 
@@ -61,10 +60,14 @@ public struct ModelMacro: MemberMacro, ExtensionMacro {
         }
 
         return [
-            DeclSyntax(stringLiteral: "public static var runtime: SpecRuntime { SpecRuntime(spec: spec) }"),
+            DeclSyntax(stringLiteral: "private var _state: State = State(from: Self.runtime.initialStates().first!)"),
             DeclSyntax(stringLiteral: Self.generateVariablesEnum(variables: parsed.variables)),
             DeclSyntax(stringLiteral: Self.generateActionsEnum(actions: parsed.actions)),
             DeclSyntax(stringLiteral: Self.generateStateStruct(variables: parsed.variables)),
+            DeclSyntax(stringLiteral: Self.generateVariableProperties(variables: parsed.variables)),
+            DeclSyntax(stringLiteral: Self.generateActionMethods(actions: parsed.actions)),
+            DeclSyntax(stringLiteral: Self.generateApplyHelper()),
+            DeclSyntax(stringLiteral: "public static var runtime: SpecRuntime { SpecRuntime(spec: spec) }"),
         ]
     }
 
@@ -106,8 +109,6 @@ public struct ModelMacro: MemberMacro, ExtensionMacro {
 
     // MARK: - Var name injection
 
-    /// Rewrites `let x = Var<T>()` → `let x = Var<T>("x")` inside the spec closure,
-    /// so the DSL parser sees the binding name as the variable name.
     static func rewriteVarNames(in closure: ClosureExprSyntax) -> ClosureExprSyntax {
         var newStatements: [CodeBlockItemSyntax] = []
         for item in closure.statements {
@@ -134,7 +135,6 @@ public struct ModelMacro: MemberMacro, ExtensionMacro {
                || callee.as(GenericSpecializationExprSyntax.self)?.expression.as(DeclReferenceExprSyntax.self)?.baseName.text == "Var"
             else { newBindings.append(binding); continue }
 
-            // Already has a string argument — skip
             let hasStringArg = fc.arguments.contains { arg in
                 arg.label == nil && arg.expression.is(StringLiteralExprSyntax.self)
             }
@@ -144,8 +144,6 @@ public struct ModelMacro: MemberMacro, ExtensionMacro {
                 expression: StringLiteralExprSyntax(content: patternName)
             )
             var newArgs = fc.arguments
-            // Insert at position 0 (before `value:` if present)
-            // If args start with a `value:` label, insert before. Otherwise append.
             if let firstArg = newArgs.first, firstArg.label?.text == "value" {
                 newArgs.insert(nameArg, at: newArgs.startIndex)
             } else {
@@ -163,6 +161,8 @@ public struct ModelMacro: MemberMacro, ExtensionMacro {
         let newDecl = varDecl.with(\.bindings, PatternBindingListSyntax(newBindings))
         return item.with(\.item, .decl(DeclSyntax(newDecl)))
     }
+
+    // MARK: - Type mapping helpers
 
     static func swiftType(for initial: TLAValue) -> String {
         switch initial {
@@ -202,6 +202,8 @@ public struct ModelMacro: MemberMacro, ExtensionMacro {
         case .constant: return "stringValue"
         }
     }
+
+    // MARK: - Code generation
 
     static func generateVariablesEnum(variables: [(name: String, initial: TLAValue, initialSet: StateExpr?)]) -> String {
         let cases = variables.map { "        case \($0.name)" }.joined(separator: "\n")
@@ -248,6 +250,31 @@ public struct ModelMacro: MemberMacro, ExtensionMacro {
                 return d
             }
         }
+        """
+    }
+
+    static func generateVariableProperties(variables: [(name: String, initial: TLAValue, initialSet: StateExpr?)]) -> String {
+        variables.map { v in
+            "        public var \(v.name): \(swiftType(for: v.initial)) { _state.\(v.name) }"
+        }.joined(separator: "\n")
+    }
+
+    static func generateActionMethods(actions: [(name: String, body: ActionExpr)]) -> String {
+        actions.map { a in
+            """
+                public mutating func apply\(a.name)() {
+                    _state = _apply(.\(a.name))
+                }
+            """
+        }.joined(separator: "\n")
+    }
+
+    static func generateApplyHelper() -> String {
+        """
+            private func _apply(_ action: Actions) -> State {
+                let next = try! Self.runtime.apply(actionName: action.rawValue, to: _state.asDictionary)
+                return State(from: next)
+            }
         """
     }
 }
