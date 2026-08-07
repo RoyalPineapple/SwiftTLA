@@ -62,12 +62,17 @@ public actor Central {
     }
 
     // Bridge — maps CBManagerState ⇔ model phase
-    private let central: CBCentralManager
-    public  var state: CBManagerState { ... }   // derived from _state.phase
+    public enum Phase: Int {
+        case unknown = 0, resetting, unsupported, unauthorized, poweredOff, poweredOn, scanning
+    }
+    public var phase: Phase { Phase(rawValue: _state.phase)! }
 
-    public func ready() async throws { ... }    // suspends until poweredOn, applies spec transition
+    private let central: CBCentralManager
+
+    public func ready() async throws { ... }    // suspends until poweredOn
     public func scanForPeripherals(withServices services: [CBUUID]?) async throws {
         try await ready()
+        applyToPoweredOn()                      // proven: only fires when poweredOn
         applyStartScan()                        // proven: only fires when poweredOn + not scanning
         central.scanForPeripherals(withServices: services, options: nil)
     }
@@ -158,8 +163,14 @@ public actor Peripheral {
     }
 
     // Bridge
+    public enum Phase: Int {
+        case disconnected = 0, connecting, connected,
+             discoveringServices, servicesDiscovered,
+             discoveringChars, ready, disconnecting
+    }
+    public var phase: Phase { Phase(rawValue: _state.phase)! }
+
     public let device: CBPeripheral
-    public var state: CBPeripheralState { ... }
 
     public func connect() async throws { applyConnect(); device.connect() }
     public func discoverServices(_ uuids: [CBUUID]?) async throws {
@@ -199,3 +210,50 @@ The developer writes normal CoreBluetooth code.  The `@TLAModel` annotations
 prove at compile time that state transitions are never violated — no scan
 before powered on, no read before services discovered, no state retained after
 disconnect.
+
+---
+
+## Distribution
+
+```
+SwiftTLA (core)              ← DSL, ModelChecker, SpecRuntime
+  ├── SwiftTLAMacros         ← @TLAModel macro declaration
+  └── SwiftTLAPlugin         ← macro implementation
+
+SwiftTLAVerified             ← separate package, depends on SwiftTLA
+  ├── Queue, Retry, Continuation
+  ├── Central, Peripheral    ← CoreBluetooth wrappers (macOS + iOS)
+  └── CaptureSession         ← AVFoundation wrapper (iOS)
+```
+
+```swift
+// Package.swift — SwiftTLAVerified
+products: [.library(name: "SwiftTLAVerified", targets: ["SwiftTLAVerified"])],
+targets: [.target(name: "SwiftTLAVerified",
+                  dependencies: ["SwiftTLA", "SwiftTLAMacros"])]
+```
+
+The user adds two packages:
+
+```swift
+// Package.swift of their app
+dependencies: [
+    .package(url: "https://github.com/RoyalPineapple/SwiftTLA", from: "1.0.0"),
+    .package(url: "https://github.com/RoyalPineapple/SwiftTLA-verified", from: "1.0.0"),
+]
+```
+
+```swift
+import SwiftTLAVerified
+
+let central = Central()
+try await central.ready()
+for try await device in await central.scan() {
+    let p = Peripheral(device: device)
+    try await p.connect()
+    let data = try await p.readValue(for: char)
+}
+```
+
+No `@TLAModel` in user code.  No TLA+ visible.  The verification already
+happened when the `SwiftTLAVerified` package was built.

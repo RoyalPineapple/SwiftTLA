@@ -59,16 +59,56 @@ public struct ModelMacro: MemberMacro, ExtensionMacro {
         case .ok: break
         }
 
-        return [
-            DeclSyntax(stringLiteral: "private var _state: State = State(from: Self.runtime.initialStates().first!)"),
-            DeclSyntax(stringLiteral: Self.generateVariablesEnum(variables: parsed.variables)),
-            DeclSyntax(stringLiteral: Self.generateActionsEnum(actions: parsed.actions)),
-            DeclSyntax(stringLiteral: Self.generateStateStruct(variables: parsed.variables)),
-            DeclSyntax(stringLiteral: Self.generateVariableProperties(variables: parsed.variables)),
-            DeclSyntax(stringLiteral: Self.generateActionMethods(actions: parsed.actions)),
-            DeclSyntax(stringLiteral: Self.generateApplyHelper()),
-            DeclSyntax(stringLiteral: "public static var runtime: SpecRuntime { SpecRuntime(spec: spec) }"),
-        ]
+        return generateMembers(variables: parsed.variables, actions: parsed.actions)
+    }
+
+    static func generateMembers(
+        variables: [(name: String, initial: TLAValue, initialSet: StateExpr?)],
+        actions: [(name: String, body: ActionExpr)]
+    ) -> [DeclSyntax] {
+        var decls: [DeclSyntax] = []
+
+        // _state field
+        decls.append(DeclSyntax(
+            VariableDeclSyntax(
+                modifiers: [DeclModifierSyntax(name: .keyword(.private))],
+                bindingSpecifier: .keyword(.var),
+                bindings: [PatternBindingSyntax(
+                    pattern: IdentifierPatternSyntax(identifier: "_state"),
+                    typeAnnotation: TypeAnnotationSyntax(type: IdentifierTypeSyntax(name: "State")),
+                    initializer: InitializerClauseSyntax(value: ExprSyntax(stringLiteral: "State(from: Self.runtime.initialStates().first!)"))
+                )]
+            )
+        ))
+
+        // Variables enum
+        decls.append(DeclSyntax(generateVariablesEnum(variables: variables)))
+        // Actions enum
+        decls.append(DeclSyntax(generateActionsEnum(actions: actions)))
+        // State struct
+        decls.append(DeclSyntax(generateStateStruct(variables: variables)))
+        // Variable properties
+        decls.append(contentsOf: generateVariableProperties(variables: variables).map(DeclSyntax.init))
+        // Action methods
+        decls.append(contentsOf: generateActionMethods(actions: actions).map(DeclSyntax.init))
+        // _apply helper
+        decls.append(DeclSyntax(generateApplyHelper()))
+        // runtime accessor
+        decls.append(DeclSyntax(
+            VariableDeclSyntax(
+                modifiers: [DeclModifierSyntax(name: .keyword(.public)), DeclModifierSyntax(name: .keyword(.static))],
+                bindingSpecifier: .keyword(.var),
+                bindings: [PatternBindingSyntax(
+                    pattern: IdentifierPatternSyntax(identifier: "runtime"),
+                    typeAnnotation: TypeAnnotationSyntax(type: IdentifierTypeSyntax(name: "SpecRuntime")),
+                    accessorBlock: AccessorBlockSyntax(accessors: .getter([
+                        "SpecRuntime(spec: spec)"
+                    ]))
+                )]
+            )
+        ))
+
+        return decls
     }
 
     private static func findSpecClosure(in members: MemberBlockItemListSyntax) -> ClosureExprSyntax? {
@@ -162,7 +202,7 @@ public struct ModelMacro: MemberMacro, ExtensionMacro {
         return item.with(\.item, .decl(DeclSyntax(newDecl)))
     }
 
-    // MARK: - Type mapping helpers
+    // MARK: - Type mapping
 
     static func swiftType(for initial: TLAValue) -> String {
         switch initial {
@@ -174,19 +214,6 @@ public struct ModelMacro: MemberMacro, ExtensionMacro {
         case .record:  return "[String: TLAValue]"
         case .function: return "[TLAValue: TLAValue]"
         case .constant: return "String"
-        }
-    }
-
-    static func tlaValueConstructor(for initial: TLAValue, value: String) -> String {
-        switch initial {
-        case .int:     return ".int(\(value))"
-        case .bool:    return ".bool(\(value))"
-        case .string:  return ".string(\(value))"
-        case .set:     return ".set(Set(\(value).map { .int($0) }))"
-        case .tuple:   return ".tuple(\(value))"
-        case .record:  return ".record(\(value))"
-        case .function: return ".function(\(value))"
-        case .constant: return ".constant(\(value))"
         }
     }
 
@@ -203,78 +230,174 @@ public struct ModelMacro: MemberMacro, ExtensionMacro {
         }
     }
 
-    // MARK: - Code generation
+    // MARK: - SwiftSyntax Code Generation
 
-    static func generateVariablesEnum(variables: [(name: String, initial: TLAValue, initialSet: StateExpr?)]) -> String {
-        let cases = variables.map { "        case \($0.name)" }.joined(separator: "\n")
-        return """
-        public enum Variables: String, CaseIterable {
-        \(cases)
-        }
-        """
-    }
-
-    static func generateActionsEnum(actions: [(name: String, body: ActionExpr)]) -> String {
-        let cases = actions.map { "        case \($0.name) = \"\($0.name)\"" }.joined(separator: "\n")
-        return """
-        public enum Actions: String, CaseIterable {
-        \(cases)
-        }
-        """
-    }
-
-    static func generateStateStruct(variables: [(name: String, initial: TLAValue, initialSet: StateExpr?)]) -> String {
-        let fields = variables.map { v in
-            "        public var \(v.name): \(swiftType(for: v.initial))"
-        }.joined(separator: "\n")
-
-        let initAssignments = variables.map { v in
-            "            self.\(v.name) = dict[Variables.\(v.name).rawValue]!.\(tlaValueExtractor(for: v.initial))"
-        }.joined(separator: "\n")
-
-        let dictAssignments = variables.map { v in
-            "            d[Variables.\(v.name).rawValue] = \(tlaValueConstructor(for: v.initial, value: v.name))"
-        }.joined(separator: "\n")
-
-        return """
-        public struct State {
-        \(fields)
-
-            public init(from dict: [String: TLAValue]) {
-        \(initAssignments)
-            }
-
-            public var asDictionary: [String: TLAValue] {
-                var d: [String: TLAValue] = [:]
-        \(dictAssignments)
-                return d
-            }
-        }
-        """
-    }
-
-    static func generateVariableProperties(variables: [(name: String, initial: TLAValue, initialSet: StateExpr?)]) -> String {
-        variables.map { v in
-            "        public var \(v.name): \(swiftType(for: v.initial)) { _state.\(v.name) }"
-        }.joined(separator: "\n")
-    }
-
-    static func generateActionMethods(actions: [(name: String, body: ActionExpr)]) -> String {
-        actions.map { a in
-            """
-                public mutating func apply\(a.name)() {
-                    _state = _apply(.\(a.name))
+    static func generateVariablesEnum(variables: [(name: String, initial: TLAValue, initialSet: StateExpr?)]) -> EnumDeclSyntax {
+        EnumDeclSyntax(
+            modifiers: [DeclModifierSyntax(name: .keyword(.public))],
+            name: "Variables",
+            inheritanceClause: InheritanceClauseSyntax {
+                InheritedTypeListSyntax {
+                    InheritedTypeSyntax(type: IdentifierTypeSyntax(name: "String"))
+                    InheritedTypeSyntax(type: IdentifierTypeSyntax(name: "CaseIterable"))
                 }
-            """
-        }.joined(separator: "\n")
+            },
+            memberBlock: MemberBlockSyntax {
+                for v in variables {
+                    EnumCaseDeclSyntax {
+                        EnumCaseElementSyntax(name: .identifier(v.name))
+                    }
+                }
+            }
+        )
     }
 
-    static func generateApplyHelper() -> String {
-        """
-            private func _apply(_ action: Actions) -> State {
-                let next = try! Self.runtime.apply(actionName: action.rawValue, to: _state.asDictionary)
-                return State(from: next)
+    static func generateActionsEnum(actions: [(name: String, body: ActionExpr)]) -> EnumDeclSyntax {
+        EnumDeclSyntax(
+            modifiers: [DeclModifierSyntax(name: .keyword(.public))],
+            name: "Actions",
+            inheritanceClause: InheritanceClauseSyntax {
+                InheritedTypeListSyntax {
+                    InheritedTypeSyntax(type: IdentifierTypeSyntax(name: "String"))
+                    InheritedTypeSyntax(type: IdentifierTypeSyntax(name: "CaseIterable"))
+                }
+            },
+            memberBlock: MemberBlockSyntax {
+                for a in actions {
+                    EnumCaseDeclSyntax {
+                        EnumCaseElementSyntax(
+                            name: .identifier(a.name),
+                            rawValue: InitializerClauseSyntax(
+                                value: StringLiteralExprSyntax(content: a.name)
+                            )
+                        )
+                    }
+                }
             }
-        """
+        )
+    }
+
+    static func generateStateStruct(variables: [(name: String, initial: TLAValue, initialSet: StateExpr?)]) -> StructDeclSyntax {
+        StructDeclSyntax(
+            modifiers: [DeclModifierSyntax(name: .keyword(.public))],
+            name: "State",
+            memberBlock: MemberBlockSyntax {
+                // Fields
+                for v in variables {
+                    VariableDeclSyntax(
+                        modifiers: [DeclModifierSyntax(name: .keyword(.public))],
+                        bindingSpecifier: .keyword(.var),
+                        bindings: [PatternBindingSyntax(
+                            pattern: IdentifierPatternSyntax(identifier: .identifier(v.name)),
+                            typeAnnotation: TypeAnnotationSyntax(type: IdentifierTypeSyntax(name: .identifier(swiftType(for: v.initial))))
+                        )]
+                    )
+                }
+                // init(from:)
+                InitializerDeclSyntax(
+                    modifiers: [DeclModifierSyntax(name: .keyword(.public))],
+                    signature: FunctionSignatureSyntax(
+                        parameterClause: FunctionParameterClauseSyntax {
+                            FunctionParameterSyntax(
+                                firstName: "from",
+                                secondName: "dict",
+                                type: TypeSyntax(stringLiteral: "[String: TLAValue]")
+                            )
+                        }
+                    ),
+                    body: CodeBlockSyntax {
+                        for v in variables {
+                            ExprSyntax(stringLiteral: "self.\(v.name) = dict[Variables.\(v.name).rawValue]!.\(tlaValueExtractor(for: v.initial))")
+                        }
+                    }
+                )
+                // asDictionary
+                VariableDeclSyntax(
+                    modifiers: [DeclModifierSyntax(name: .keyword(.public))],
+                    bindingSpecifier: .keyword(.var),
+                    bindings: [PatternBindingSyntax(
+                        pattern: IdentifierPatternSyntax(identifier: "asDictionary"),
+                        typeAnnotation: TypeAnnotationSyntax(type: TypeSyntax(stringLiteral: "[String: TLAValue]")),
+                        accessorBlock: AccessorBlockSyntax(accessors: .getter(
+                            CodeBlockItemListSyntax {
+                                DeclSyntax(stringLiteral: "var d: [String: TLAValue] = [:]")
+                                for v in variables {
+                                    ExprSyntax(stringLiteral: "d[Variables.\(v.name).rawValue] = \(tlaValueHelper(v))")
+                                }
+                                StmtSyntax(stringLiteral: "return d")
+                            }
+                        ))
+                    )]
+                )
+            }
+        )
+    }
+
+    static func tlaValueHelper(_ v: (name: String, initial: TLAValue, initialSet: StateExpr?)) -> String {
+        switch v.initial {
+        case .int:     return ".int(\(v.name))"
+        case .bool:    return ".bool(\(v.name))"
+        case .string:  return ".string(\(v.name))"
+        case .set:     return ".set(Set(\(v.name).map { .int($0) }))"
+        case .tuple:   return ".tuple(\(v.name))"
+        case .record:  return ".record(\(v.name))"
+        case .function: return ".function(\(v.name))"
+        case .constant: return ".constant(\(v.name))"
+        }
+    }
+
+    static func generateVariableProperties(variables: [(name: String, initial: TLAValue, initialSet: StateExpr?)]) -> [VariableDeclSyntax] {
+        variables.map { v in
+            VariableDeclSyntax(
+                modifiers: [DeclModifierSyntax(name: .keyword(.public))],
+                bindingSpecifier: .keyword(.var),
+                bindings: [PatternBindingSyntax(
+                    pattern: IdentifierPatternSyntax(identifier: .identifier(v.name)),
+                    typeAnnotation: TypeAnnotationSyntax(type: IdentifierTypeSyntax(name: .identifier(swiftType(for: v.initial)))),
+                    accessorBlock: AccessorBlockSyntax(accessors: .getter(
+                        CodeBlockItemListSyntax {
+                            ExprSyntax(stringLiteral: "_state.\(v.name)")
+                        }
+                    ))
+                )]
+            )
+        }
+    }
+
+    static func generateActionMethods(actions: [(name: String, body: ActionExpr)]) -> [FunctionDeclSyntax] {
+        actions.map { a in
+            FunctionDeclSyntax(
+                modifiers: [
+                    DeclModifierSyntax(name: .keyword(.public)),
+                    DeclModifierSyntax(name: .keyword(.mutating))
+                ],
+                name: .identifier("apply\(a.name)"),
+                signature: FunctionSignatureSyntax(
+                    parameterClause: FunctionParameterClauseSyntax(parameters: [])
+                ),
+                body: CodeBlockSyntax { ExprSyntax(stringLiteral: "_state = _apply(.\(a.name))") }
+            )
+        }
+    }
+
+    static func generateApplyHelper() -> FunctionDeclSyntax {
+        FunctionDeclSyntax(
+            modifiers: [DeclModifierSyntax(name: .keyword(.private))],
+            name: "_apply",
+            signature: FunctionSignatureSyntax(
+                parameterClause: FunctionParameterClauseSyntax {
+                    FunctionParameterSyntax(
+                        firstName: "_",
+                        secondName: "action",
+                        type: IdentifierTypeSyntax(name: "Actions")
+                    )
+                },
+                returnClause: ReturnClauseSyntax(type: IdentifierTypeSyntax(name: "State"))
+            ),
+            body: CodeBlockSyntax {
+                "let next = try! Self.runtime.apply(actionName: action.rawValue, to: _state.asDictionary)"
+                "return State(from: next)"
+            }
+        )
     }
 }

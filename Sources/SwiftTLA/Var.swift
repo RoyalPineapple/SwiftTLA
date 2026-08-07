@@ -34,7 +34,16 @@ public struct Var<T: TLAValueType>: Sendable, CustomStringConvertible {
     /// Returns `UNCHANGED x` — the variable stays the same in the next state.
     public var stays: ActionExpr { .unchanged(name) }
 
-    public subscript(dynamicMember field: String) -> StateExpr { .recordAccess(.variable(name), field) }
+    public subscript(dynamicMember field: String) -> StateExpr {
+        let v = StateExpr.variable(name)
+        switch field {
+        case "cardinality": return .cardinality(v)
+        default: return .recordAccess(v, field)
+        }
+    }
+
+    public var isEmpty: StateExpr { .equal(.cardinality(.variable(name)), .value(.int(0))) }
+    public var cardinality: StateExpr { .cardinality(.variable(name)) }
 }
 
 /// Attaches a guard condition to an action.

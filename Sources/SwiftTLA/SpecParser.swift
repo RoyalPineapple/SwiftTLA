@@ -700,12 +700,33 @@ public enum SpecParser {
                 result.variables.append((firstName, .bool(boolVal.literal.text == "true"), nil))
                 return
             }
+            // TLAValue.set([]), TLAValue.tuple([]), etc.
+            if let fc = valExpr.as(FunctionCallExprSyntax.self),
+               let memberAccess = fc.calledExpression.as(MemberAccessExprSyntax.self),
+               let base = memberAccess.base?.as(DeclReferenceExprSyntax.self),
+               base.baseName.text == "TLAValue" {
+                let name = memberAccess.declName.baseName.text
+                if let parsed = parseTLAValueConstructor(name: name, call: fc) {
+                    result.variables.append((firstName, parsed, nil))
+                    return
+                }
+            }
         }
 
         // Variable(name, initializerExpr) — fallback
         if args.count >= 2 {
             let initial: TLAValue = .int(0)
             result.variables.append((firstName, initial, nil))
+        }
+    }
+
+    private static func parseTLAValueConstructor(name: String, call: FunctionCallExprSyntax) -> TLAValue? {
+        switch name {
+        case "set":     return .set([])
+        case "tuple":   return .tuple([])
+        case "record":  return .record([:])
+        case "function": return .function([:])
+        default:        return nil
         }
     }
 
