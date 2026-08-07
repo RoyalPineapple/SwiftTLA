@@ -15,7 +15,6 @@ let package = Package(
         .library(name: "SwiftTLA", targets: ["SwiftTLA"]),
         .library(name: "SwiftTLAMacros", targets: ["SwiftTLAMacros"]),
         .library(name: "SwiftTLAModels", targets: ["SwiftTLAModels"]),
-        .library(name: "SwiftTLAUI", targets: ["SwiftTLAUI"]),
         .library(name: "UpstreamParity", targets: ["UpstreamParity"]),
     ],
     dependencies: [
@@ -37,7 +36,6 @@ let package = Package(
             .product(name: "SwiftParser", package: "swift-syntax"),
         ]),
         .target(name: "SwiftTLAModels", dependencies: ["SwiftTLA", "SwiftTLAMacros"], swiftSettings: settings),
-        .target(name: "SwiftTLAUI", dependencies: ["SwiftTLA"]),
         .target(name: "UpstreamParity", dependencies: ["SwiftTLA"], swiftSettings: settings),
         .executableTarget(name: "tlc-validate", dependencies: ["SwiftTLA", "UpstreamParity"], path: "Sources/TLCValidate"),
         .testTarget(name: "SwiftTLATests", dependencies: [

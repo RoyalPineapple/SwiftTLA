@@ -27,14 +27,6 @@ public struct ModelChecker {
         try compose(checker, user).check()
     }
 
-    public static func checkComposed<M: TLAModelType>(
-        checker: TLASpec = .bfsChecker(maxStates: 20),
-        user: M.Type,
-        maxStates: Int = 10_000
-    ) throws -> CheckResult {
-        try checkComposed(checker: checker, user: user.spec, maxStates: maxStates)
-    }
-
     private typealias State = [String: TLAValue]
 
     fileprivate struct Exploration {

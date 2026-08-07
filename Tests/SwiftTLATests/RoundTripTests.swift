@@ -683,22 +683,6 @@ struct CheckerSelfProofTests {
         #expect(tla.contains("picked"))
     }
 
-    @Test("CheckerController machine steps to complete")
-    func checkerControllerTransitions() {
-        var machine = CheckerController(phase: 0, processed: 0, queued: 2, limit: 2)
-        #expect(machine.isExploring)
-        let names = Set(machine.availableTransitions.map(\.rawValue))
-        #expect(names.contains("stepDiscover"))
-        #expect(names.contains("stepNoNew"))
-        machine.apply(.stepNoNew)
-        #expect(machine.processed == 1 && machine.queued == 2)
-        machine.apply(.stepNoNew)
-        #expect(machine.processed == 2)
-        #expect(machine.availableTransitions.contains(where: { $0 == .complete }))
-        machine.apply(.complete)
-        #expect(machine.isComplete)
-    }
-
     @Test("Bootstrap composition: bfsChecker ⋊ user")
     func checkerComposition() throws {
         let counter = Var<Int>("counter", value: 0)
