@@ -59,6 +59,8 @@ public indirect enum StateExpr: Hashable, Codable, Sendable, CustomStringConvert
     case sequenceFromSet(StateExpr)
     case setSum(StateExpr, StateExpr)
 
+    case recursiveCall(String, [StateExpr])
+
     public var description: String {
         switch self {
         case .value(let v): return v.description
@@ -123,6 +125,7 @@ public indirect enum StateExpr: Hashable, Codable, Sendable, CustomStringConvert
         case .enabledAction(let a): return "ENABLED \(a)"
         case .sequenceFromSet(let s): return "SeqFromSet(\(s))"
         case .setSum(let f, let s): return "Sum(\(f), \(s))"
+        case .recursiveCall(let n, let a): return "\(n)(\(a.map(\.description).joined(separator: ", ")))"
         }
     }
 }

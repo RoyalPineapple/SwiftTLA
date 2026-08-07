@@ -40,6 +40,13 @@ extension TLASpec {
             lines.append("")
         }
 
+        for rf in recursiveFuncs {
+            let params = rf.params.joined(separator: ", ")
+            lines.append("RECURSIVE \(rf.name)(\(params))")
+            lines.append("\(rf.name)(\(params)) == \(rf.body)")
+            lines.append("")
+        }
+
         let varsDef = "vars == \(varsTuple)"
         if varNames.count > 1 { lines.append(varsDef); lines.append("") }
 

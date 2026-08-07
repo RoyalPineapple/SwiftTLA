@@ -54,8 +54,9 @@ public struct TLASpec: Codable, Sendable, CustomStringConvertible, Equatable {
     public let extendsModules: String
     public let constraint: StateExpr?
     public let recursiveDefs: [String]
+    public let recursiveFuncs: [RecursiveFunc]
 
-    public init(name: String, variables: [NamedVar], constants: [String: TLAValue] = [:], actions: [NamedAction], invariants: [NamedInvariant], temporalProperties: [NamedTemporal] = [], fairness: [FairnessCondition] = [], assume: StateExpr? = nil, checkDeadlock: Bool = false, definitions: [String] = [], theorems: [String] = [], extendsModules: String = "Integers", constraint: StateExpr? = nil, recursiveDefs: [String] = []) {
+    public init(name: String, variables: [NamedVar], constants: [String: TLAValue] = [:], actions: [NamedAction], invariants: [NamedInvariant], temporalProperties: [NamedTemporal] = [], fairness: [FairnessCondition] = [], assume: StateExpr? = nil, checkDeadlock: Bool = false, definitions: [String] = [], theorems: [String] = [], extendsModules: String = "Integers", constraint: StateExpr? = nil, recursiveDefs: [String] = [], recursiveFuncs: [RecursiveFunc] = []) {
         self.name = name
         self.variables = variables
         self.constants = constants
@@ -70,6 +71,7 @@ public struct TLASpec: Codable, Sendable, CustomStringConvertible, Equatable {
         self.extendsModules = extendsModules
         self.constraint = constraint
         self.recursiveDefs = recursiveDefs
+        self.recursiveFuncs = recursiveFuncs
     }
 
     public var description: String {
@@ -108,7 +110,8 @@ public struct TLASpec: Codable, Sendable, CustomStringConvertible, Equatable {
             theorems: self.theorems + other.theorems,
             extendsModules: self.extendsModules,
             constraint: { if let a = self.constraint, let b = other.constraint { return .and(a, b) }; return self.constraint ?? other.constraint }(),
-            recursiveDefs: self.recursiveDefs + other.recursiveDefs
+            recursiveDefs: self.recursiveDefs + other.recursiveDefs,
+            recursiveFuncs: self.recursiveFuncs + other.recursiveFuncs
         )
     }
 
@@ -128,7 +131,8 @@ public struct TLASpec: Codable, Sendable, CustomStringConvertible, Equatable {
             theorems: self.theorems,
             extendsModules: self.extendsModules,
             constraint: self.constraint,
-            recursiveDefs: self.recursiveDefs
+            recursiveDefs: self.recursiveDefs,
+            recursiveFuncs: self.recursiveFuncs
         )
     }
 }
@@ -209,6 +213,20 @@ public struct RecursiveDecl: SpecComponent, Equatable {
     public init(_ tlaText: String) { self.tlaText = tlaText }
 }
 
+public struct RecursiveFunc: Codable, Sendable, Equatable {
+    public let name: String
+    public let params: [String]
+    public let body: StateExpr
+    public init(name: String, params: [String], body: StateExpr) {
+        self.name = name; self.params = params; self.body = body
+    }
+}
+
+public struct RecursiveFuncDecl: SpecComponent, Equatable {
+    public let funcDef: RecursiveFunc
+    public init(_ funcDef: RecursiveFunc) { self.funcDef = funcDef }
+}
+
 @resultBuilder
 public enum SpecBuilder {
     public static func buildBlock(_ components: [SpecComponent]...) -> [SpecComponent] { components.flatMap { $0 } }
@@ -226,6 +244,7 @@ public enum SpecBuilder {
     public static func buildExpression(_ expr: ComputedInitDecl) -> [SpecComponent] { [expr] }
     public static func buildExpression(_ expr: ConstraintDecl) -> [SpecComponent] { [expr] }
     public static func buildExpression(_ expr: RecursiveDecl) -> [SpecComponent] { [expr] }
+    public static func buildExpression(_ expr: RecursiveFuncDecl) -> [SpecComponent] { [expr] }
     public static func buildOptional(_ component: [SpecComponent]?) -> [SpecComponent] { component ?? [] }
     public static func buildEither(first: [SpecComponent]) -> [SpecComponent] { first }
     public static func buildEither(second: [SpecComponent]) -> [SpecComponent] { second }
@@ -406,6 +425,10 @@ public func Recursive(_ tlaText: String) -> RecursiveDecl {
     RecursiveDecl(tlaText)
 }
 
+public func DefineRecursive(_ name: String, params: [String], body: StateExpr) -> RecursiveFuncDecl {
+    RecursiveFuncDecl(RecursiveFunc(name: name, params: params, body: body))
+}
+
 extension TLASpec {
     public init(_ name: String, @SpecBuilder _ builder: () -> [SpecComponent]) {
         let components = builder()
@@ -422,6 +445,7 @@ extension TLASpec {
         var deadlockFlag = false
         var constraint: StateExpr?
         var recursiveDefs: [String] = []
+        var recursiveFuncs: [RecursiveFunc] = []
 
         for comp in components {
             if let v = comp as? VarDecl { variables.append(NamedVar(name: v.name, initial: v.initial, initialSet: v.initialSet, initExpr: v.initExpr)) }
@@ -445,6 +469,7 @@ extension TLASpec {
             else if comp is DeadlockDecl { deadlockFlag = true }
             else if let c = comp as? ConstraintDecl { constraint = constraint.map { .and($0, c.body) } ?? c.body }
             else if let r = comp as? RecursiveDecl { recursiveDefs.append(r.tlaText) }
+            else if let rf = comp as? RecursiveFuncDecl { recursiveFuncs.append(rf.funcDef) }
         }
 
         // Auto-UNCHANGED: push into OR branches so TLC sees complete assignments
@@ -467,6 +492,7 @@ extension TLASpec {
         self.extendsModules = extendsMods
         self.constraint = constraint
         self.recursiveDefs = recursiveDefs
+        self.recursiveFuncs = recursiveFuncs
     }
 }
 
@@ -495,7 +521,8 @@ public func substituteConstants(_ spec: TLASpec) -> TLASpec {
         theorems: spec.theorems,
         extendsModules: spec.extendsModules,
         constraint: spec.constraint.map { substituteInState($0, constants: constants) },
-        recursiveDefs: spec.recursiveDefs
+        recursiveDefs: spec.recursiveDefs,
+        recursiveFuncs: spec.recursiveFuncs
     )
 }
 
@@ -558,6 +585,7 @@ private func substituteInState(_ expr: StateExpr, constants: [String: TLAValue])
      case .enabledAction: return expr
      case .sequenceFromSet(let s): return .sequenceFromSet(substituteInState(s, constants: constants))
      case .setSum(let f, let s): return .setSum(substituteInState(f, constants: constants), substituteInState(s, constants: constants))
+     case .recursiveCall(let n, let a): return .recursiveCall(n, a.map { substituteInState($0, constants: constants) })
      }
 }
 

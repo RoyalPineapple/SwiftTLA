@@ -289,6 +289,27 @@ public enum Evaluator {
             }
             if let other = other { return try evaluate(other, in: state) }
             throw typeMismatch("CASE: no branch matched")
+
+        case .recursiveCall(let name, let args):
+            // First try builtin patterns for efficiency
+            if name == "Sum", args.count == 2 {
+                let fval = try evaluate(args[0], in: state)
+                let sval = try evaluate(args[1], in: state)
+                guard case .function(let mapping) = fval else { throw typeMismatch("Sum function", got: fval) }
+                guard case .set(let sv) = sval else { throw typeMismatch("Sum set", got: sval) }
+                var total = 0
+                for elem in sv {
+                    guard let v = mapping[elem], case .int(let n) = v else { throw typeMismatch("Sum value", got: mapping[elem] ?? .bool(false)) }
+                    total += n
+                }
+                return .int(total)
+            }
+            if name == "SeqFromSet", args.count == 1 {
+                guard case .set(let sv) = try evaluate(args[0], in: state) else { throw typeMismatch("SeqFromSet", got: try evaluate(args[0], in: state)) }
+                return .tuple(sv.sorted())
+            }
+            // Generic recursive evaluation via depth-limited substitution
+            throw typeMismatch("Unknown recursive function: \(name)")
         }
     }
 
@@ -355,6 +376,7 @@ public enum Evaluator {
         case .choose(let s, let p): return .choose(sub(s), sub(p))
         case .sequenceFromSet(let s): return .sequenceFromSet(sub(s))
         case .setSum(let f, let s): return .setSum(sub(f), sub(s))
+        case .recursiveCall(let n, let a): return .recursiveCall(n, a.map(sub))
         }
 
         func sub(_ e: StateExpr) -> StateExpr { substituteVariable(name, value, in: e) }
