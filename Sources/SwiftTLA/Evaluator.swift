@@ -23,7 +23,9 @@ public enum Evaluator {
     public typealias RuntimeFunc = @Sendable ([TLAValue]) -> TLAValue
 
     public static func evaluate(_ expr: StateExpr, in state: [String: TLAValue],
-                                 runtimeFuncs: [String: RuntimeFunc] = [:]) throws -> TLAValue {
+                                 runtimeFuncs: [String: RuntimeFunc] = [:],
+                                 recursiveFuncs: [RecursiveFunc] = [],
+                                 depth: Int = 1000) throws -> TLAValue {
         switch expr {
         case .value(let v): return v
         case .variable(let name):
@@ -301,8 +303,17 @@ public enum Evaluator {
         case .recursiveCall(let name, let args):
             // Runtime Swift function
             if let impl = runtimeFuncs[name] {
-                let evald = try args.map { try evaluate($0, in: state, runtimeFuncs: runtimeFuncs) }
+                let evald = try args.map { try evaluate($0, in: state, runtimeFuncs: runtimeFuncs, recursiveFuncs: recursiveFuncs) }
                 return impl(evald)
+            }
+            // DSL-defined recursive function
+            if let def = recursiveFuncs.first(where: { $0.name == name }) {
+                let evald = try args.map { try evaluate($0, in: state, runtimeFuncs: runtimeFuncs, recursiveFuncs: recursiveFuncs) }
+                var body = def.body
+                for (i, param) in def.params.enumerated() where i < evald.count {
+                    body = substituteVariable(param, evald[i], in: body)
+                }
+                return try evaluateRec(body, in: state, runtimeFuncs: runtimeFuncs, recursiveFuncs: recursiveFuncs, depth: depth - 1)
             }
             // Builtin patterns
             guard let builtin = RecursiveFunction(rawValue: name) else {
@@ -330,9 +341,10 @@ public enum Evaluator {
     }
 
     public static func evaluateBool(_ expr: StateExpr, in state: [String: TLAValue],
-                                     runtimeFuncs: [String: RuntimeFunc] = [:]) throws -> Bool {
-        guard case .bool(let b) = try evaluate(expr, in: state, runtimeFuncs: runtimeFuncs) else {
-            throw EvalError.typeMismatch("Expected boolean expression, got \(try evaluate(expr, in: state, runtimeFuncs: runtimeFuncs))")
+                                     runtimeFuncs: [String: RuntimeFunc] = [:],
+                                     recursiveFuncs: [RecursiveFunc] = []) throws -> Bool {
+        guard case .bool(let b) = try evaluate(expr, in: state, runtimeFuncs: runtimeFuncs, recursiveFuncs: recursiveFuncs) else {
+            throw EvalError.typeMismatch("Expected boolean expression, got \(try evaluate(expr, in: state, runtimeFuncs: runtimeFuncs, recursiveFuncs: recursiveFuncs))")
         }
         return b
     }
@@ -426,6 +438,14 @@ public enum Evaluator {
             throw typeMismatch("comparison", got: try evaluate(a, in: state), try evaluate(b, in: state))
         }
         return .bool(op(na, nb))
+    }
+
+    private static func evaluateRec(_ expr: StateExpr, in state: [String: TLAValue],
+                                     runtimeFuncs: [String: RuntimeFunc],
+                                     recursiveFuncs: [RecursiveFunc],
+                                     depth: Int) throws -> TLAValue {
+        guard depth > 0 else { throw EvalError.typeMismatch("Recursion depth exceeded") }
+        return try evaluate(expr, in: state, runtimeFuncs: runtimeFuncs, recursiveFuncs: recursiveFuncs)
     }
 
     private static func typeMismatch(_ op: String, got: TLAValue...) -> EvalError {

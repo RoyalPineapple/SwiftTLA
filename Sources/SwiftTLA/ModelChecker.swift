@@ -54,8 +54,8 @@ public struct ModelChecker {
         return try bfs(
             seeds: seeds,
             variableNames: variableNames,
-            expand: buildExpander(actions, variableNames: variableNames, constraint: substituted.constraint, runtimeFuncs: substituted.runtimeFuncs),
-            evaluate: buildEvaluator(runtimeFuncs: substituted.runtimeFuncs),
+            expand: buildExpander(actions, variableNames: variableNames, constraint: substituted.constraint, runtimeFuncs: substituted.runtimeFuncs, recursiveFuncs: substituted.recursiveFuncs),
+            evaluate: buildEvaluator(runtimeFuncs: substituted.runtimeFuncs, recursiveFuncs: substituted.recursiveFuncs),
             actions: actions,
             invariants: substituted.invariants,
             checkDeadlock: substituted.checkDeadlock,
@@ -68,7 +68,8 @@ public struct ModelChecker {
         _ actions: [NamedAction],
         variableNames: [String],
         constraint: StateExpr? = nil,
-        runtimeFuncs: [String: Evaluator.RuntimeFunc] = [:]
+        runtimeFuncs: [String: Evaluator.RuntimeFunc] = [:],
+        recursiveFuncs: [RecursiveFunc] = []
     ) -> (State) throws -> [(String, State)] {
         { state in
             var result: [(String, State)] = []
@@ -84,20 +85,20 @@ public struct ModelChecker {
             }
             if let c = constraint {
                 result = try result.filter {
-                    try Evaluator.evaluateBool(c, in: $0.1, runtimeFuncs: runtimeFuncs)
+                    try Evaluator.evaluateBool(c, in: $0.1, runtimeFuncs: runtimeFuncs, recursiveFuncs: recursiveFuncs)
                 }
             }
             return result
         }
     }
 
-    private func buildEvaluator(runtimeFuncs: [String: Evaluator.RuntimeFunc] = [:]) -> (StateExpr, State) throws -> Bool {
-        { expression, state in try Evaluator.evaluateBool(expression, in: state, runtimeFuncs: runtimeFuncs) }
+    private func buildEvaluator(runtimeFuncs: [String: Evaluator.RuntimeFunc] = [:], recursiveFuncs: [RecursiveFunc] = []) -> (StateExpr, State) throws -> Bool {
+        { expression, state in try Evaluator.evaluateBool(expression, in: state, runtimeFuncs: runtimeFuncs, recursiveFuncs: recursiveFuncs) }
     }
 
     private func checkAssume(_ specification: TLASpec, initial: State) throws -> Bool {
         guard let assume = specification.assume else { return true }
-        return try Evaluator.evaluateBool(assume, in: initial, runtimeFuncs: specification.runtimeFuncs)
+        return try Evaluator.evaluateBool(assume, in: initial, runtimeFuncs: specification.runtimeFuncs, recursiveFuncs: specification.recursiveFuncs)
     }
 
     private func emptyExploration(
