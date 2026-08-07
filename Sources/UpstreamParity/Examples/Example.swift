@@ -32,6 +32,7 @@ public enum Example {
         coffeeCanMax100,
         coffeeCanMax5,
         dieHardTypeOK,
+        diningPhilosophersNP5,
         ewd840,
         hourClock,
         hourClock2,

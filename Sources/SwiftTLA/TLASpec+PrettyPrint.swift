@@ -144,6 +144,8 @@ private func distributeActionOr(_ action: ActionExpr) -> [ActionExpr] {
         let lhs = distributeActionOr(a)
         let rhs = distributeActionOr(b)
         return lhs.flatMap { l in rhs.map { r in .and(l, r) } }
+    case .existsAction(let v, let s, let b):
+        return distributeActionOr(b).map { .existsAction(v, s, $0) }
     default:
         return [action]
     }
