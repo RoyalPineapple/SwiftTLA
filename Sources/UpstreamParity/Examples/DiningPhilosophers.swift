@@ -128,23 +128,25 @@ private func diningPhilosophersSpec() -> TLASpec {
 
             let forkBranch: ActionExpr = .or(passLeft, .or(passRight, .guard_(keepGuards)))
             let pcBranch: ActionExpr = .or(goEat, .or(stayLoopPc, goThinkPc))
-            let loopBody: ActionExpr = .and(.guard_(StateExpr.equal(StateExpr.variable("pc").applying(pE), loop)),
-                .and(forkBranch, pcBranch))
 
-            ActionDecl("Loop_\(p)", loopBody)
-
-            // Think
-            ActionDecl("Think_\(p)", .and(.guard_(StateExpr.equal(StateExpr.variable("pc").applying(pE), think)),
-                .and(.assign("hungry", hSe.updated(at: pE, to: trueE)),
-                    .assign("pc", StateExpr.variable("pc").updated(at: pE, to: loop)))))
-
-            // Eat
-            ActionDecl("Eat_\(p)", .and(.guard_(StateExpr.equal(StateExpr.variable("pc").applying(pE), eat)),
-                .and(.assign("hungry", hSe.updated(at: pE, to: falseE)),
-                    .and(.assign("pc", StateExpr.variable("pc").updated(at: pE, to: loop)),
-                        .assign("forks", StateExpr.variable("forks")
-                            .updated(at: lf, to: StateExpr.recordLiteral(["holder": hld, "clean": falseE]))
-                            .updated(at: rf, to: StateExpr.recordLiteral(["holder": hrd, "clean": falseE])))))))
+            Action("Loop_\(p)") {
+                StateExpr.variable("pc").applying(pE) == loop
+                && forkBranch
+                && pcBranch
+            }
+            Action("Think_\(p)") {
+                StateExpr.variable("pc").applying(pE) == think
+                && hungry.becomes(hSe.updated(at: pE, to: trueE))
+                && pc.becomes(StateExpr.variable("pc").updated(at: pE, to: loop))
+            }
+            Action("Eat_\(p)") {
+                StateExpr.variable("pc").applying(pE) == eat
+                && hungry.becomes(hSe.updated(at: pE, to: falseE))
+                && pc.becomes(StateExpr.variable("pc").updated(at: pE, to: loop))
+                && forks.becomes(StateExpr.variable("forks")
+                    .updated(at: lf, to: StateExpr.recordLiteral(["holder": hld, "clean": falseE]))
+                    .updated(at: rf, to: StateExpr.recordLiteral(["holder": hrd, "clean": falseE])))
+            }
         }
     }
 }

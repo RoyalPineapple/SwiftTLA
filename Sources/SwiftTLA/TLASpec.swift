@@ -144,43 +144,43 @@ public struct VarDecl: SpecComponent {
     public let initial: TLAValue
     public let initialSet: StateExpr?
     public let initExpr: StateExpr?
-    public init(_ name: String, _ initial: TLAValue) { self.name = name; self.initial = initial; self.initialSet = nil; self.initExpr = nil }
-    public init(_ name: String, _ initial: TLAValue, initialSet: StateExpr?) { self.name = name; self.initial = initial; self.initialSet = initialSet; self.initExpr = nil }
-    public init(_ name: String, initExpr: StateExpr) { self.name = name; self.initial = .int(0); self.initialSet = nil; self.initExpr = initExpr }
+    init(_ name: String, _ initial: TLAValue) { self.name = name; self.initial = initial; self.initialSet = nil; self.initExpr = nil }
+    init(_ name: String, _ initial: TLAValue, initialSet: StateExpr?) { self.name = name; self.initial = initial; self.initialSet = initialSet; self.initExpr = nil }
+    init(_ name: String, initExpr: StateExpr) { self.name = name; self.initial = .int(0); self.initialSet = nil; self.initExpr = initExpr }
 }
 
 public struct ActionDecl: SpecComponent {
     public let name: String
     public let body: ActionExpr
-    public init(_ name: String, _ body: ActionExpr) { self.name = name; self.body = body }
+    init(_ name: String, _ body: ActionExpr) { self.name = name; self.body = body }
 }
 
 public struct InvDecl: SpecComponent {
     public let name: String
     public let body: StateExpr
-    public init(_ name: String, _ body: StateExpr) { self.name = name; self.body = body }
+    init(_ name: String, _ body: StateExpr) { self.name = name; self.body = body }
 }
 
 public struct TemporalDecl: SpecComponent {
     public let name: String
     public let expr: TemporalExpr
-    public init(_ name: String, _ expr: TemporalExpr) { self.name = name; self.expr = expr }
+    init(_ name: String, _ expr: TemporalExpr) { self.name = name; self.expr = expr }
 }
 
 public struct FairnessDecl: SpecComponent {
     public let condition: FairnessCondition
-    public init(_ condition: FairnessCondition) { self.condition = condition }
+    init(_ condition: FairnessCondition) { self.condition = condition }
 }
 
 public struct ConstantDecl: SpecComponent {
     public let name: String
     public let value: TLAValue
-    public init(_ name: String, _ value: TLAValue) { self.name = name; self.value = value }
+    init(_ name: String, _ value: TLAValue) { self.name = name; self.value = value }
 }
 
 public struct DefinitionDecl: SpecComponent, Equatable {
     public let tlaText: String
-    public init(_ tlaText: String) { self.tlaText = tlaText }
+    init(_ tlaText: String) { self.tlaText = tlaText }
 }
 
 public struct TheoremDecl: SpecComponent, Equatable {
@@ -188,29 +188,29 @@ public struct TheoremDecl: SpecComponent, Equatable {
     public let name: String?
     public let temporalBody: TemporalExpr?
     public let stateBody: StateExpr?
-    public init(_ tlaText: String) { self.tlaText = tlaText; self.name = nil; self.temporalBody = nil; self.stateBody = nil }
-    public init(name: String, temporal: TemporalExpr) { self.tlaText = ""; self.name = name; self.temporalBody = temporal; self.stateBody = nil }
-    public init(name: String, state: StateExpr) { self.tlaText = ""; self.name = name; self.temporalBody = nil; self.stateBody = state }
+    init(_ tlaText: String) { self.tlaText = tlaText; self.name = nil; self.temporalBody = nil; self.stateBody = nil }
+    init(name: String, temporal: TemporalExpr) { self.tlaText = ""; self.name = name; self.temporalBody = temporal; self.stateBody = nil }
+    init(name: String, state: StateExpr) { self.tlaText = ""; self.name = name; self.temporalBody = nil; self.stateBody = state }
 }
 
 public struct AssumeDecl: SpecComponent, Equatable {
     public let expr: StateExpr
-    public init(_ expr: StateExpr) { self.expr = expr }
+    init(_ expr: StateExpr) { self.expr = expr }
 }
 
 public struct ExtendsDecl: SpecComponent, Equatable {
     public let modules: String
-    public init(_ modules: String) { self.modules = modules }
+    init(_ modules: String) { self.modules = modules }
 }
 
 public struct ConstraintDecl: SpecComponent, Equatable {
     public let body: StateExpr
-    public init(_ body: StateExpr) { self.body = body }
+    init(_ body: StateExpr) { self.body = body }
 }
 
 public struct RecursiveDecl: SpecComponent, Equatable {
     public let tlaText: String
-    public init(_ tlaText: String) { self.tlaText = tlaText }
+    init(_ tlaText: String) { self.tlaText = tlaText }
 }
 
 public struct RecursiveFunc: Codable, Sendable, Equatable {
@@ -224,7 +224,7 @@ public struct RecursiveFunc: Codable, Sendable, Equatable {
 
 public struct RecursiveFuncDecl: SpecComponent, Equatable {
     public let funcDef: RecursiveFunc
-    public init(_ funcDef: RecursiveFunc) { self.funcDef = funcDef }
+    init(_ funcDef: RecursiveFunc) { self.funcDef = funcDef }
 }
 
 @resultBuilder
@@ -330,13 +330,13 @@ public func Variable<T>(computed ref: Var<T>, @InvariantBuilder _ body: () -> St
     VarDecl(ref.name, initExpr: body())
 }
 
-public struct DeadlockDecl: SpecComponent { public init() {} }
+public struct DeadlockDecl: SpecComponent { init() {} }
 public func DeadlockCheck() -> DeadlockDecl { DeadlockDecl() }
 
 public struct ComputedInitDecl: SpecComponent {
     public let name: String
     public let computation: ([String: TLAValue]) -> TLAValue
-    public init(_ name: String, _ computation: @escaping ([String: TLAValue]) -> TLAValue) {
+    init(_ name: String, _ computation: @escaping ([String: TLAValue]) -> TLAValue) {
         self.name = name; self.computation = computation
     }
 }
@@ -348,7 +348,7 @@ public func ComputedVariable<T>(_ ref: Var<T>, _ computation: @escaping ([String
 
 public struct SymmetryDecl: SpecComponent {
     public let variableName: String
-    public init(_ variableName: String) { self.variableName = variableName }
+    init(_ variableName: String) { self.variableName = variableName }
 }
 
 public func Symmetry(_ variableName: String) -> SymmetryDecl {

@@ -114,14 +114,16 @@ private func singleLaneBridgeSpec() -> TLASpec {
                     .unchanged("WaitingBeforeBridge")))
             let changeLoc: ActionExpr = .or(changeLocWithQ, changeLocNoQ)
 
-            ActionDecl("MoveOutside_\(carName)", .and(
-                .guard_(StateExpr.not(inBridge(nl)) && StateExpr.notEqual(nl, l.applying(c))),
-                changeLoc))
+            Action("MoveOutside_\(carName)") {
+                .and(.guard_(StateExpr.not(inBridge(nl)) && StateExpr.notEqual(nl, l.applying(c))),
+                changeLoc)
+            }
 
-            ActionDecl("MoveInside_\(carName)", .and(
-                .guard_(isInBridge
+            Action("MoveInside_\(carName)") {
+                .and(.guard_(isInBridge
                     && StateExpr.forAll(carsSet) { _ in StateExpr.notEqual(l.applying(x), nl) }),
-                changeLoc))
+                changeLoc)
+            }
 
             let h = w.head
             let sameDir = StateExpr.forAll(inBrSet) { _ in
@@ -141,7 +143,9 @@ private func singleLaneBridgeSpec() -> TLASpec {
                     .assign("WaitingBeforeBridge", w.tail)))
             let enterBridge: ActionExpr = .or(enterBridge1, enterBridge2)
 
-            ActionDecl("Enter_\(carName)", .and(.guard_(w.count > 0 && h == c), enterBridge))
+            Action("Enter_\(carName)") {
+                .and(.guard_(w.count > 0 && h == c), enterBridge)
+            }
         }
     }
 }
