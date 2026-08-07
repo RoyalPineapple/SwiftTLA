@@ -39,6 +39,7 @@ public enum Example {
         hourClock2,
         lamportMutexN2,
         prisonerN3,
+        prisoners4,
         simpleAllocator,
         singleLaneBridge,
         syncTD,
