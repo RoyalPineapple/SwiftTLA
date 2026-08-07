@@ -68,7 +68,7 @@ public struct ModelChecker {
         _ actions: [NamedAction],
         variableNames: [String],
         constraint: StateExpr? = nil,
-        runtimeFuncs: [String: Evaluator.RuntimeFunc] = [:],
+        runtimeFuncs: [String: StateExpr.RuntimeFunc] = [:],
         recursiveFuncs: [RecursiveFunc] = []
     ) -> (State) throws -> [(String, State)] {
         { state in
@@ -85,20 +85,20 @@ public struct ModelChecker {
             }
             if let c = constraint {
                 result = try result.filter {
-                    try Evaluator.evaluateBool(c, in: $0.1, runtimeFuncs: runtimeFuncs, recursiveFuncs: recursiveFuncs)
+                    try c.evaluateBool(in: $0.1, runtimeFuncs: runtimeFuncs, recursiveFuncs: recursiveFuncs)
                 }
             }
             return result
         }
     }
 
-    private func buildEvaluator(runtimeFuncs: [String: Evaluator.RuntimeFunc] = [:], recursiveFuncs: [RecursiveFunc] = []) -> (StateExpr, State) throws -> Bool {
-        { expression, state in try Evaluator.evaluateBool(expression, in: state, runtimeFuncs: runtimeFuncs, recursiveFuncs: recursiveFuncs) }
+    private func buildEvaluator(runtimeFuncs: [String: StateExpr.RuntimeFunc] = [:], recursiveFuncs: [RecursiveFunc] = []) -> (StateExpr, State) throws -> Bool {
+        { expression, state in try expression.evaluateBool(in: state, runtimeFuncs: runtimeFuncs, recursiveFuncs: recursiveFuncs) }
     }
 
     private func checkAssume(_ specification: TLASpec, initial: State) throws -> Bool {
         guard let assume = specification.assume else { return true }
-        return try Evaluator.evaluateBool(assume, in: initial, runtimeFuncs: specification.runtimeFuncs, recursiveFuncs: specification.recursiveFuncs)
+        return try assume.evaluateBool(in: initial, runtimeFuncs: specification.runtimeFuncs, recursiveFuncs: specification.recursiveFuncs)
     }
 
     private func emptyExploration(
