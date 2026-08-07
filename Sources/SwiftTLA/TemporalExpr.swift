@@ -1,4 +1,4 @@
-public enum TemporalExpr: Hashable, Codable, Sendable, CustomStringConvertible {
+public enum TemporalExpr: Hashable, Sendable, CustomStringConvertible {
     case always(StateExpr)
     case eventually(StateExpr)
     case alwaysEventually(StateExpr)
@@ -22,7 +22,7 @@ extension StateExprConvertible {
     }
 }
 
-public enum FairnessCondition: Hashable, Codable, Sendable, CustomStringConvertible {
+public enum FairnessCondition: Hashable, Sendable, CustomStringConvertible {
     case weakFairness(String)
     case strongFairness(String)
 

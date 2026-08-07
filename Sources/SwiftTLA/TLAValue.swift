@@ -1,4 +1,4 @@
-public enum TLAValue: Hashable, Codable, Sendable, CustomStringConvertible {
+public enum TLAValue: Hashable, Sendable, CustomStringConvertible {
     case int(Int)
     case bool(Bool)
     case string(String)

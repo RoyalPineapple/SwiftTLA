@@ -246,12 +246,11 @@ struct StateExprCompleteTests {
         }
     }
 
-    @Test("Every StateExpr case rounds trips through Codable")
-    func allCasesCodable() throws {
-        let e: StateExpr = .equal(.add(.variable("x"), .int(1)), .int(5))
-        let data = try JSONEncoder().encode(e)
-        let decoded = try JSONDecoder().decode(StateExpr.self, from: data)
-        #expect(decoded.description == e.description)
+    @Test("StateExpr evaluates correctly in state")
+    func evaluatesInState() throws {
+        let e: StateExpr = .add(.variable("x"), .int(1))
+        let v = try Evaluator.evaluate(e, in: ["x": .int(5)])
+        #expect(v == .int(6))
     }
 }
 
@@ -267,12 +266,12 @@ struct TLAValueTests {
         #expect(!v.description.isEmpty)
     }
 
-    @Test("TLAValue rounds trips via Codable")  
-    func codable() throws {
-        let v: TLAValue = .set([.int(1), .bool(true), .string("hi")])
-        let data = try JSONEncoder().encode(v)
-        let d = try JSONDecoder().decode(TLAValue.self, from: data)
-        #expect(d.description == v.description)
+    @Test("TLAValue function apply lookup")
+    func functionApplyLookup() throws {
+        let v: TLAValue = .function([.int(1): .string("one")])
+        let state: [String: TLAValue] = ["f": v, "k": .int(1)]
+        let result = try Evaluator.evaluate(.functionApply(.variable("f"), .variable("k")), in: state)
+        #expect(result == .string("one"))
     }
 }
 
@@ -1081,14 +1080,12 @@ struct CompletionCoverageTests {
         }
     }
 
-    @Test("TLAValue.function Codable round-trip")
-    func functionCodable() throws {
-        let original = TLAValue.function([.int(1): "one", .int(2): "two"])
-        let encoder = JSONEncoder()
-        let data = try encoder.encode(original)
-        let decoder = JSONDecoder()
-        let decoded = try decoder.decode(TLAValue.self, from: data)
-        #expect(original == decoded)
+    @Test("RecursiveFunction builtins evaluate correctly")
+    func recursiveBuiltins() throws {
+        let result = try Evaluator.evaluate(
+            .recursiveCall("SeqFromSet", [.value(.set([.int(3), .int(1), .int(2)]))]),
+            in: [:])
+        #expect(result == .tuple([.int(1), .int(2), .int(3)]))
     }
 
     @Test("TLAValue.function Comparable ordering")

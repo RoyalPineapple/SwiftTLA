@@ -1,4 +1,4 @@
-public struct NamedVar: Codable, Sendable, CustomStringConvertible, Equatable {
+public struct NamedVar: Sendable, CustomStringConvertible, Equatable {
     public let name: String
     public let initial: TLAValue
     public let initialSet: StateExpr?
@@ -12,7 +12,7 @@ public struct NamedVar: Codable, Sendable, CustomStringConvertible, Equatable {
     }
 }
 
-public struct NamedAction: Codable, Sendable, CustomStringConvertible, Equatable {
+public struct NamedAction: Sendable, CustomStringConvertible, Equatable {
     public let name: String
     public let body: ActionExpr
     public init(name: String, body: ActionExpr) {
@@ -22,14 +22,14 @@ public struct NamedAction: Codable, Sendable, CustomStringConvertible, Equatable
     public var description: String { "\(name): \(body)" }
 }
 
-public struct NamedTemporal: Codable, Sendable, CustomStringConvertible, Equatable {
+public struct NamedTemporal: Sendable, CustomStringConvertible, Equatable {
     public let name: String
     public let expr: TemporalExpr
     public init(name: String, expr: TemporalExpr) { self.name = name; self.expr = expr }
     public var description: String { "\(name): \(expr)" }
 }
 
-public struct NamedInvariant: Codable, Sendable, CustomStringConvertible, Equatable {
+public struct NamedInvariant: Sendable, CustomStringConvertible, Equatable {
     public let name: String
     public let body: StateExpr
     public init(name: String, body: StateExpr) {
@@ -215,7 +215,7 @@ public struct RecursiveDecl: SpecComponent, Equatable {
     init(_ tlaText: String) { self.tlaText = tlaText }
 }
 
-public struct RecursiveFunc: Codable, Sendable, Equatable {
+public struct RecursiveFunc: Sendable, Equatable {
     public let name: String
     public let params: [String]
     public let body: StateExpr
@@ -377,7 +377,7 @@ public func Variable<T>(computed ref: Var<T>, @InvariantBuilder _ body: () -> St
 public struct DeadlockDecl: SpecComponent { init() {} }
 public func DeadlockCheck() -> DeadlockDecl { DeadlockDecl() }
 
-public struct SymmetrySet: Hashable, Codable, Sendable, CustomStringConvertible {
+public struct SymmetrySet: Hashable, Sendable, CustomStringConvertible {
     public let variableName: String
     public let values: Set<TLAValue>
     public init(variableName: String, values: Set<TLAValue>) {

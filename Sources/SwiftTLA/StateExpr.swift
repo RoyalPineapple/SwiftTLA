@@ -1,4 +1,4 @@
-public indirect enum StateExpr: Hashable, Codable, Sendable, CustomStringConvertible {
+public indirect enum StateExpr: Hashable, Sendable, CustomStringConvertible {
     case value(TLAValue)
     case variable(String)
 

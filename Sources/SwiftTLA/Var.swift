@@ -22,7 +22,7 @@ public typealias TLASequence = TLATupleType  // TLA+ sequences are tuples at run
 /// let isLocked = Var("isLocked") // explicit name
 /// ```
 @dynamicMemberLookup
-public struct Var<T: TLAValueType>: Codable, Sendable, CustomStringConvertible {
+public struct Var<T: TLAValueType>: Sendable, CustomStringConvertible {
     public let name: String
     public init(_ name: String? = nil, value: T? = nil) {
         self.name = name ?? ""

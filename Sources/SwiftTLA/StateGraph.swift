@@ -1,7 +1,7 @@
-public struct StateGraph: Codable, Sendable {
+public struct StateGraph: Sendable {
     public let specName: String
     public let variableNames: [String]
-    public struct Transition: Codable, Sendable {
+    public struct Transition: Sendable {
         public let action: String
         public let target: StateID
         public init(action: String, target: StateID) {
@@ -24,7 +24,7 @@ public struct StateGraph: Codable, Sendable {
         self.states = states
     }
 
-    public struct StateID: Hashable, Codable, Sendable, CustomStringConvertible {
+    public struct StateID: Hashable, Sendable, CustomStringConvertible {
         public let id: Int
         public init(_ id: Int) { self.id = id }
         public var description: String { "s\(id)" }

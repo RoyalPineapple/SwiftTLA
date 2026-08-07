@@ -1,4 +1,4 @@
-public indirect enum ActionExpr: Hashable, Codable, Sendable, CustomStringConvertible {
+public indirect enum ActionExpr: Hashable, Sendable, CustomStringConvertible {
     case assign(String, StateExpr)
     case unchanged(String)
     case guard_(StateExpr)
