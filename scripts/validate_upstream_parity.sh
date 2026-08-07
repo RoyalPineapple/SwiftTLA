@@ -73,6 +73,11 @@ check_swift_port() {
     grep -q '^Invariants ==' "$name_tla" && echo "INVARIANT Invariants"
     grep -q '^SumMet ==' "$name_tla" && echo "INVARIANT SumMet"
     grep -q '^StateConstraint ==' "$name_tla" && echo "CONSTRAINT StateConstraint"
+    # Detect temporal properties (contain ~> or [] or <>) and emit PROPERTY
+    while IFS= read -r line; do
+      prop_name=$(echo "$line" | sed 's/ ==.*//')
+      echo "PROPERTY $prop_name"
+    done < <(grep -E '^[A-Za-z]+ == .*(~>|\[\]|<>|\\leadsto)' "$name_tla" || true)
   } > "$cfg"
 
   local cr count result
