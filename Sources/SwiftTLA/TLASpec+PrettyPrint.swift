@@ -130,7 +130,7 @@ extension TLASpec {
 /// Without distribution, `assignedVars` unions all branches and a variable
 /// assigned in only one arm is treated as assigned in every arm (TLC error).
 public func completeAction(_ e: ActionExpr, allVars: [String]) -> ActionExpr {
-    let branches = distributeActionOr(e)
+    let branches = distributeOr(e)
     let completed: [ActionExpr] = branches.map { branch in
         let assigned = assignedVars(branch)
         let explicit = explicitUnchanged(branch)
@@ -144,18 +144,18 @@ public func completeAction(_ e: ActionExpr, allVars: [String]) -> ActionExpr {
     return completed.dropFirst().reduce(first) { .or($0, $1) }
 }
 
-private func distributeActionOr(_ action: ActionExpr) -> [ActionExpr] {
+func distributeOr(_ action: ActionExpr) -> [ActionExpr] {
     switch action {
     case .or(let a, let b):
-        return distributeActionOr(a) + distributeActionOr(b)
+        return distributeOr(a) + distributeOr(b)
     case .and(let a, let b):
-        let lhs = distributeActionOr(a)
-        let rhs = distributeActionOr(b)
+        let lhs = distributeOr(a)
+        let rhs = distributeOr(b)
         return lhs.flatMap { l in rhs.map { r in .and(l, r) } }
     case .ifElse(let c, let t, let e):
-        return distributeActionOr(.and(.guard_(c), t)) + distributeActionOr(.and(.guard_(StateExpr.not(c)), e))
+        return distributeOr(.and(.guard_(c), t)) + distributeOr(.and(.guard_(StateExpr.not(c)), e))
     case .existsAction(let v, let s, let b):
-        return distributeActionOr(b).map { .existsAction(v, s, $0) }
+        return distributeOr(b).map { .existsAction(v, s, $0) }
     default:
         return [action]
     }

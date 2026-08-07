@@ -16,7 +16,7 @@ public enum ActionEnumerator {
         from oldState: [String: TLAValue],
         varNames: [String]
     ) throws -> [[String: TLAValue]] {
-        let disjuncts = distOr(action)
+        let disjuncts = distributeOr(action)
         return try disjuncts.flatMap { try processDisjunct($0, oldState: oldState, varNames: varNames) }
     }
 
@@ -35,7 +35,7 @@ public enum ActionEnumerator {
             for elem in sv {
                 var rest = body
                 rest = substituteVarInAction(v, elem, rest)
-                let disjuncts = distOr(rest)
+                let disjuncts = distributeOr(rest)
                 let inner = try disjuncts.flatMap { try processDisjunct($0, oldState: oldState, varNames: varNames) }
                 results.append(contentsOf: inner)
             }
@@ -111,23 +111,6 @@ public enum ActionEnumerator {
             }
         }
         return newState
-    }
-
-    private static func distOr(_ action: ActionExpr) -> [ActionExpr] {
-        switch action {
-        case .or(let a, let b):
-            return distOr(a) + distOr(b)
-        case .and(let a, let b):
-            let lhs = distOr(a)
-            let rhs = distOr(b)
-            return lhs.flatMap { l in rhs.map { r in .and(l, r) } }
-        case .ifElse(let c, let t, let e):
-            let thenB = distOr(.and(.guard_(c), t))
-            let elseB = distOr(.and(.guard_(StateExpr.not(c)), e))
-            return thenB + elseB
-        default:
-            return [action]
-        }
     }
 
     private static func extractChooseActions(_ action: ActionExpr) throws -> [(String, StateExpr)] {
