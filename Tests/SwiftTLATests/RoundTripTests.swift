@@ -1088,6 +1088,27 @@ struct CompletionCoverageTests {
         #expect(result == .tuple([.int(1), .int(2), .int(3)]))
     }
 
+    @Test("DefineRecursive DSL body evaluates with depth tracking")
+    func recursiveDSLEval() throws {
+        let body: StateExpr = .ifThenElse(
+            .equal(.setLiteral([]), .variable("S")),
+            .tupleLiteral([]),
+            .tupleAppend(
+                .tupleLiteral([.any(from: .variable("S"))]),
+                .recursiveCall("SfS", [
+                    .setDifference(.variable("S"),
+                        .setLiteral([.any(from: .variable("S"))])
+                    )
+                ])
+            )
+        )
+        let fn = RecursiveFunc(name: "SfS", params: ["S"], body: body)
+        let result = try Evaluator.evaluate(
+            .recursiveCall("SfS", [.value(.set([.int(3), .int(1), .int(2)]))]),
+            in: [:], recursiveFuncs: [fn])
+        #expect(result == .tuple([.int(1), .int(2), .int(3)]))
+    }
+
     @Test("TLAValue.function Comparable ordering")
     func functionComparable() {
         let small = TLAValue.function([.int(1): "a"])

@@ -25,7 +25,7 @@ public enum Evaluator {
     public static func evaluate(_ expr: StateExpr, in state: [String: TLAValue],
                                  runtimeFuncs: [String: RuntimeFunc] = [:],
                                  recursiveFuncs: [RecursiveFunc] = [],
-                                 depth: Int = 1000) throws -> TLAValue {
+                                 maxDepth: Int = 1000) throws -> TLAValue {
         switch expr {
         case .value(let v): return v
         case .variable(let name):
@@ -313,7 +313,7 @@ public enum Evaluator {
                 for (i, param) in def.params.enumerated() where i < evald.count {
                     body = substituteVariable(param, evald[i], in: body)
                 }
-                return try evaluateRec(body, in: state, runtimeFuncs: runtimeFuncs, recursiveFuncs: recursiveFuncs, depth: depth - 1)
+                return try evaluateRec(body, in: state, runtimeFuncs: runtimeFuncs, recursiveFuncs: recursiveFuncs, maxDepth: maxDepth - 1)
             }
             // Builtin patterns
             guard let builtin = RecursiveFunction(rawValue: name) else {
@@ -443,8 +443,8 @@ public enum Evaluator {
     private static func evaluateRec(_ expr: StateExpr, in state: [String: TLAValue],
                                      runtimeFuncs: [String: RuntimeFunc],
                                      recursiveFuncs: [RecursiveFunc],
-                                     depth: Int) throws -> TLAValue {
-        guard depth > 0 else { throw EvalError.typeMismatch("Recursion depth exceeded") }
+                                     maxDepth: Int) throws -> TLAValue {
+        guard maxDepth > 0 else { throw EvalError.typeMismatch("Recursion depth exceeded") }
         return try evaluate(expr, in: state, runtimeFuncs: runtimeFuncs, recursiveFuncs: recursiveFuncs)
     }
 

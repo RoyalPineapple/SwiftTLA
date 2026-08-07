@@ -35,6 +35,13 @@ Every known set of identifiers uses a `String`-backed enum:
 
 No bare string literals in pattern-matching switches.
 
+## Type safety rule: no bare-string-keyed collections
+
+`[String: TLAValue]` is the core state representation but raw strings as keys
+are fragile — a typo in a variable name is a silent bug. Every string key must
+be derived from a typed source (`Var<T>.name`, `RecursiveFunc.name`, etc.),
+never written as a bare string literal.
+
 ## Construct rule: one way to build
 
 There is exactly one builder function per construct type. Internal `*Decl` structs have
