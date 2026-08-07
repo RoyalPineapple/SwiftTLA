@@ -208,6 +208,11 @@ public struct ExtendsDecl: SpecComponent, Equatable {
     init(_ modules: String) { self.modules = modules }
 }
 
+public struct UseDecl: SpecComponent {
+    public let spec: TLASpec
+    init(_ spec: TLASpec) { self.spec = spec }
+}
+
 public struct ConstraintDecl: SpecComponent, Equatable {
     public let body: StateExpr
     init(_ body: StateExpr) { self.body = body }
@@ -261,6 +266,7 @@ public enum SpecBuilder {
     public static func buildExpression(_ expr: TheoremDecl) -> [SpecComponent] { [expr] }
     public static func buildExpression(_ expr: AssumeDecl) -> [SpecComponent] { [expr] }
     public static func buildExpression(_ expr: ExtendsDecl) -> [SpecComponent] { [expr] }
+    public static func buildExpression(_ expr: UseDecl) -> [SpecComponent] { [expr] }
     public static func buildExpression(_ expr: DeadlockDecl) -> [SpecComponent] { [expr] }
     public static func buildExpression(_ expr: ConstraintDecl) -> [SpecComponent] { [expr] }
     public static func buildExpression(_ expr: RecursiveDecl) -> [SpecComponent] { [expr] }
@@ -470,6 +476,10 @@ public func Recursive(_ tlaText: String) -> RecursiveDecl {
     RecursiveDecl(tlaText)
 }
 
+public func Use(spec: TLASpec) -> UseDecl {
+    UseDecl(spec)
+}
+
 public func DefineRecursive(_ name: String, params: [String], @InvariantBuilder body: () -> StateExpr) -> RecursiveFuncDecl {
     RecursiveFuncDecl(RecursiveFunc(name: name, params: params, body: body()))
 }
@@ -495,6 +505,7 @@ extension TLASpec {
         var constraint: StateExpr?
         var recursiveDefs: [String] = []
         var recursiveFuncs: [RecursiveFunc] = []
+        var useSpecs: [TLASpec] = []
         var runtimeFuncCollector: [String: @Sendable ([TLAValue]) -> TLAValue] = [:]
         var runtimeFuncBodiesCollector: [String] = []
 
@@ -527,11 +538,25 @@ extension TLASpec {
             else if let c = comp as? ConstraintDecl { constraint = constraint.map { .and($0, c.body) } ?? c.body }
             else if let r = comp as? RecursiveDecl { recursiveDefs.append(r.tlaText) }
             else if let rf = comp as? RecursiveFuncDecl { recursiveFuncs.append(rf.funcDef) }
+            else if let u = comp as? UseDecl { useSpecs.append(u.spec) }
             else if let rtf = comp as? RuntimeFuncDecl {
                 runtimeFuncCollector[rtf.name] = rtf.implementation
                 runtimeFuncBodiesCollector.append(rtf.tlaBody)
                 runtimeFuncBodies.append(rtf.tlaBody)
             }
+        }
+
+        // Apply Use(spec) — compose used specs into this one
+        for used in useSpecs {
+            variables += used.variables
+            actions += used.actions
+            invariants += used.invariants
+            constants.merge(used.constants) { $1 }
+            definitions += used.definitions
+            recursiveDefs += used.recursiveDefs
+            recursiveFuncs += used.recursiveFuncs
+            if let c = used.constraint { constraint = constraint.map { .and($0, c) } ?? c }
+            if let a = used.assume { assumes = assumes.map { .and($0, a) } ?? a }
         }
 
         // Auto-UNCHANGED: push into OR branches so TLC sees complete assignments
