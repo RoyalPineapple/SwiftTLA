@@ -28,7 +28,7 @@ defined fragment, with TLC as the external oracle.
 | **Actions — and/or** | ✓ | `&&` / `||` in `Action { }` builder |
 | **Actions — IF/THEN/ELSE** | ✓ | `ActionExpr.ifElse(cond, then:, else:)` |
 | **Actions — `\E x \in S`** | ✓ | `existsAction` + `ActionExpr.exists(name, from:) { _ in }` |
-| **Actions — `\E` SUBSET** | — | Need subset enumeration in enumerator |
+| **Actions — `\E` SUBSET** | ✓ | `ActionExpr.existsSubset(name, of:) { _ in }` via `powerSet` |
 | **CHOOSE** | ✓ | Cartesian product for multi-choose |
 | **`\A` over sets** | ✓ | `forAll(set) { _ in }` builder; `StateExpr.forAll(set, body)` |
 | **`\E` over sets** | ✓ | `existsIn(set) { _ in }` builder |
@@ -37,7 +37,7 @@ defined fragment, with TLC as the external oracle.
 | **Functions — EXCEPT** | ✓ | `f.updated(at: key, to: val)`; nested; `@` self-ref |
 | **Functions — domain** | ✓ | `.domain` |
 | **Functions — literal** | ✓ | `functionLiteral(var, in: domain, body)`; `TLAValue.function(dict)` |
-| **Records — access** | ✓ | `StateExpr.recordAccess(expr, "field")` |
+| **Records — access** | ✓ | `StateExpr.recordAccess(expr, "field")`; `@dynamicMemberLookup` on `Var` for shorthand `msg.type` |
 | **Records — literal** | ✓ | `StateExpr.recordLiteral(["field": expr])` |
 | **Sequences — Head/Tail** | ✓ | `.head`, `.tail` |
 | **Sequences — Append** | ✓ | `.appending(e)` |
@@ -66,8 +66,8 @@ defined fragment, with TLC as the external oracle.
 | **PlusCal** | — | Port post-translation TLA+ (like DiningPhilosophers) |
 | **Refinement mappings** | — | Not in v1 scope |
 | **Symmetry reduction** | ~ | `SymmetryDecl` exists; not active |
-| **LET in actions** | ~ | Swift `let` in `Action { }` builder works for StateExpr; no ActionExpr-level LET |
-| **Record field shorthand** | — | `msg.type` via `@dynamicMemberLookup` on StateExpr in builders |
+| **LET in actions** | ✓ | Swift `let` in `Action { }` builder for StateExpr; no ActionExpr-level LET needed |
+| **Record field shorthand** | ✓ | `@dynamicMemberLookup` on `Var` — `msg.type` works in builders |
 | **Export** | ✓ | `.tlaModule` SANY/TLC-runnable |
 
 ## Port inventory

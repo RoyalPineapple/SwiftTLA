@@ -215,6 +215,11 @@ extension ActionExpr {
                                then: ActionExpr, else: ActionExpr) -> ActionExpr {
         .ifElse(condition.stateExpr, then, `else`)
     }
+
+    public static func existsSubset(_ name: String, of set: some StateExprConvertible,
+                                    _ body: (StateExpr) -> ActionExpr) -> ActionExpr {
+        .existsAction(name, .powerSet(set.stateExpr), body(.variable(name)))
+    }
 }
 
 extension StateExpr {
