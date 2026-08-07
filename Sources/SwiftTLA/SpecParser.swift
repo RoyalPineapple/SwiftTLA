@@ -101,6 +101,19 @@ public enum SpecParser {
         return actions.dropFirst().reduce(actions[0]) { .and($0, $1) }
     }
 
+    public static func parseInvariantFrom(_ closure: ClosureExprSyntax) -> StateExpr? {
+        parseStateExprFrom(closure)
+    }
+
+    private static func parseStateExprFrom(_ closure: ClosureExprSyntax) -> StateExpr? {
+        let exprs = closure.statements.compactMap { statement -> StateExpr? in
+            guard case .expr(let inner) = statement.item else { return nil }
+            return parseStateExpr(inner)
+        }
+        if exprs.isEmpty { return .value(.bool(true)) }
+        return exprs.dropFirst().reduce(exprs[0]) { .and($0, $1) }
+    }
+
     /// Parses a single action expression (one step in a transition).
     /// Handles: guard conditions, assignments, unchanged, OR/AND between actions.
     public static func parseSingleAction(_ expression: ExprSyntax) -> ActionExpr? {
@@ -320,50 +333,78 @@ public enum SpecParser {
 
     // MARK: - Temporal properties
 
+    private enum TemporalMethod: String {
+        case leadsTo
+        case always
+        case eventually
+        case alwaysEventually
+        case eventuallyAlways
+    }
+
     public static func parseTemporal(_ expression: ExprSyntax) -> TemporalExpr? {
         guard let functionCall = expression.as(FunctionCallExprSyntax.self),
               let memberRef = functionCall.calledExpression.as(MemberAccessExprSyntax.self)
         else { return nil }
 
-        let method = memberRef.declName.baseName.text
         let firstArgument = functionCall.arguments.first.flatMap { parseStateExpr($0.expression) }
 
+        guard let method = TemporalMethod(rawValue: memberRef.declName.baseName.text) else { return nil }
+
         switch method {
-        case "leadsTo":
+        case .leadsTo:
             let source = parseStateExpr(memberRef.base) ?? .value(.bool(true))
             return firstArgument.map { .leadsTo(source, $0) }
-        case "always":           return firstArgument.map { .always($0) }
-        case "eventually":       return firstArgument.map { .eventually($0) }
-        case "alwaysEventually":  return firstArgument.map { .alwaysEventually($0) }
-        case "eventuallyAlways":  return firstArgument.map { .eventuallyAlways($0) }
-        default: return nil
+        case .always:           return firstArgument.map { .always($0) }
+        case .eventually:       return firstArgument.map { .eventually($0) }
+        case .alwaysEventually:  return firstArgument.map { .alwaysEventually($0) }
+        case .eventuallyAlways:  return firstArgument.map { .eventuallyAlways($0) }
         }
     }
 
     // MARK: - Fairness conditions
+
+    private enum FairnessMethod: String {
+        case weakFairness
+        case strongFairness
+    }
 
     public static func parseFairnessExpr(_ expression: ExprSyntax) -> FairnessCondition? {
         guard let functionCall = expression.as(FunctionCallExprSyntax.self),
               let memberRef = functionCall.calledExpression.as(MemberAccessExprSyntax.self)
         else { return nil }
 
-        let method = memberRef.declName.baseName.text
         let name = functionCall.arguments.first?.expression
             .as(StringLiteralExprSyntax.self)?
             .segments.description
             .replacingOccurrences(of: "\"", with: "")
             ?? ""
 
+        guard let method = FairnessMethod(rawValue: memberRef.declName.baseName.text) else { return nil }
+
         switch method {
-        case "weakFairness":   return .weakFairness(name)
-        case "strongFairness": return .strongFairness(name)
-        default: return nil
+        case .weakFairness:   return .weakFairness(name)
+        case .strongFairness: return .strongFairness(name)
         }
     }
 
     // MARK: - Method calls on state expressions
 
-    /// Parses method calls like `x.isIn(someSet)`, `x.union(other)`, `x.at(3)`, etc.
+    private enum StateMethod: String {
+        case isIn
+        case union
+        case intersection
+        case subtracting
+        case isSubset
+        case applying
+        case filtering
+        case mapping
+        case appending
+        case concatenating
+        case integerDivided
+        case updated
+        case at
+    }
+
     private static func parseMethodCall(_ functionCall: FunctionCallExprSyntax) -> StateExpr? {
         guard let memberAccess = functionCall.calledExpression.as(MemberAccessExprSyntax.self)
         else { return nil }
@@ -372,37 +413,8 @@ public enum SpecParser {
         let firstArgument = functionCall.arguments.first?.expression
         let baseExpression = memberAccess.base
 
-        switch methodName {
-        case "isIn":         return parseBinaryMethod(base: baseExpression, argument: firstArgument, combine: { .in($0, $1) })
-        case "union":        return parseBinaryMethod(base: baseExpression, argument: firstArgument, combine: { .union($0, $1) })
-        case "intersection":  return parseBinaryMethod(base: baseExpression, argument: firstArgument, combine: { .intersection($0, $1) })
-        case "subtracting":  return parseBinaryMethod(base: baseExpression, argument: firstArgument, combine: { .setDifference($0, $1) })
-        case "isSubset":     return parseBinaryMethod(base: baseExpression, argument: firstArgument, combine: { .subset($0, $1) })
-        case "applying":     return parseBinaryMethod(base: baseExpression, argument: firstArgument, combine: { .functionApply($0, $1) })
-        case "filtering":    return parseBinaryMethod(base: baseExpression, argument: firstArgument, combine: { .setFilter($0, $1) })
-        case "mapping":      return parseBinaryMethod(base: baseExpression, argument: firstArgument, combine: { .setMap($1, $0) })
-        case "appending":    return parseBinaryMethod(base: baseExpression, argument: firstArgument, combine: { .tupleAppend($0, $1) })
-        case "concatenating": return parseBinaryMethod(base: baseExpression, argument: firstArgument, combine: { .tupleConcatenate($0, $1) })
-        case "integerDivided": return parseBinaryMethod(base: baseExpression, argument: firstArgument, combine: { .integerDivide($0, $1) })
-        case "updated":
-            guard let baseExpression,
-                  let selfExpr = parseStateExpr(baseExpression)
-            else { return nil }
-            let allArguments = Array(functionCall.arguments)
-            guard allArguments.count >= 2,
-                  let keyExpr = parseStateExpr(allArguments[0].expression),
-                  let valueExpr = parseStateExpr(allArguments[1].expression)
-            else { return nil }
-            return .except(selfExpr, keyExpr, valueExpr)
-        case "at":
-            guard let baseExpression,
-                  let selfExpr = parseStateExpr(baseExpression),
-                  let index = functionCall.arguments.first?.expression
-                    .as(IntegerLiteralExprSyntax.self)
-                    .flatMap({ Int($0.literal.text) })
-            else { return nil }
-            return .tupleAccess(selfExpr, index)
-        default:
+        guard let method = StateMethod(rawValue: methodName) else {
+            // Check for static StateExpr calls
             if let referenceBase = memberAccess.base?.as(DeclReferenceExprSyntax.self),
                referenceBase.baseName.text == "StateExpr" {
                 return parseStaticCall(
@@ -412,6 +424,38 @@ public enum SpecParser {
                 )
             }
             return nil
+        }
+
+        switch method {
+        case .isIn:         return parseBinaryMethod(base: baseExpression, argument: firstArgument, combine: { .in($0, $1) })
+        case .union:        return parseBinaryMethod(base: baseExpression, argument: firstArgument, combine: { .union($0, $1) })
+        case .intersection:  return parseBinaryMethod(base: baseExpression, argument: firstArgument, combine: { .intersection($0, $1) })
+        case .subtracting:  return parseBinaryMethod(base: baseExpression, argument: firstArgument, combine: { .setDifference($0, $1) })
+        case .isSubset:     return parseBinaryMethod(base: baseExpression, argument: firstArgument, combine: { .subset($0, $1) })
+        case .applying:     return parseBinaryMethod(base: baseExpression, argument: firstArgument, combine: { .functionApply($0, $1) })
+        case .filtering:    return parseBinaryMethod(base: baseExpression, argument: firstArgument, combine: { .setFilter($0, $1) })
+        case .mapping:      return parseBinaryMethod(base: baseExpression, argument: firstArgument, combine: { .setMap($1, $0) })
+        case .appending:    return parseBinaryMethod(base: baseExpression, argument: firstArgument, combine: { .tupleAppend($0, $1) })
+        case .concatenating: return parseBinaryMethod(base: baseExpression, argument: firstArgument, combine: { .tupleConcatenate($0, $1) })
+        case .integerDivided: return parseBinaryMethod(base: baseExpression, argument: firstArgument, combine: { .integerDivide($0, $1) })
+        case .updated:
+            guard let baseExpression,
+                  let selfExpr = parseStateExpr(baseExpression)
+            else { return nil }
+            let allArguments = Array(functionCall.arguments)
+            guard allArguments.count >= 2,
+                  let keyExpr = parseStateExpr(allArguments[0].expression),
+                  let valueExpr = parseStateExpr(allArguments[1].expression)
+            else { return nil }
+            return .except(selfExpr, keyExpr, valueExpr)
+        case .at:
+            guard let baseExpression,
+                  let selfExpr = parseStateExpr(baseExpression),
+                  let index = functionCall.arguments.first?.expression
+                    .as(IntegerLiteralExprSyntax.self)
+                    .flatMap({ Int($0.literal.text) })
+            else { return nil }
+            return .tupleAccess(selfExpr, index)
         }
     }
 

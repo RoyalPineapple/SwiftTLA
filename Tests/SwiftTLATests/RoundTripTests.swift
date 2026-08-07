@@ -609,70 +609,50 @@ struct GoldenTests {
     }
 }
 
-// MARK: - StateMachineGenerator: proves macro output is correct
+// MARK: - SpecRuntime: thin interpreter over ActionEnumerator/Evaluator
 
-struct GeneratorTests {
-    @Test("Generates struct declaration with TLAMachine conformance")
-    func structDecl() throws {
+struct RuntimeTests {
+    @Test("Runtime applies action and produces new state")
+    func applyAction() throws {
         let hr = Var<Int>("hr", value: 1)
         let spec = TLASpec("HourClock") { Variable(hr, 1); Action("Tick") { hr.becomes(hr + 1).when(hr < 12) || (hr == 12 && hr.becomes(1)) } }
-        let graph = try ModelChecker(spec: spec, maxStates: 100).exploreGraph()
-        let code = try StateMachineGenerator(graph: graph).generate()
-        #expect(code.contains("struct HourClock"))
-        #expect(code.contains("Equatable"))
-        #expect(code.contains("Hashable"))
-        #expect(code.contains("TLAMachine"))
-        #expect(code.contains("var hr: Int"))
-        #expect(code.contains("init(hr: Int)"))
-        #expect(code.contains("static let initial"))
-        #expect(code.contains("enum Transition"))
-        #expect(code.contains("case tick"))
-        #expect(code.contains("var transitions: [(action: Transition, target: Self)]"))
-        #expect(code.contains("var availableTransitions: [Transition]"))
-        #expect(code.contains("mutating func apply"))
+        let rt = SpecRuntime(spec: spec)
+        let state = rt.initialStates().first!
+        let next = try rt.apply(actionName: "Tick", to: state)
+        #expect(next["hr"] == .int(2))
     }
 
-    @Test("Generated initial has correct value")
-    func correctInitial() throws {
+    @Test("Runtime checks invariants")
+    func checkInvariant() throws {
         let hr = Var<Int>("hr", value: 1)
-        let spec = TLASpec("HourClock") { Variable(hr, 1); Action("Tick") { hr.becomes(hr + 1).when(hr < 3) } }
-        let graph = try ModelChecker(spec: spec, maxStates: 100).exploreGraph()
-        let code = try StateMachineGenerator(graph: graph).generate()
-        #expect(code.contains("static let initial = HourClock(hr: 1)"))
+        let spec = TLASpec("HourClock") { Variable(hr, 1); Action("Tick") { hr.becomes(hr + 1).when(hr < 12) || (hr == 12 && hr.becomes(1)) }; Invariant("Positive") { hr > 0 } }
+        let rt = SpecRuntime(spec: spec)
+        let state = rt.initialStates().first!
+        #expect(try rt.check("Positive", in: state) == true)
     }
 
-    @Test("Generates transitions for all states")
-    func allStateTransitions() throws {
+    @Test("Runtime lists available actions")
+    func availableActions() throws {
         let hr = Var<Int>("hr", value: 1)
-        let spec = TLASpec("HourClock") { Variable(hr, 1); Action("Tick") { hr.becomes(hr + 1).when(hr < 3) || (hr == 3 && hr.becomes(1)) } }
-        let graph = try ModelChecker(spec: spec, maxStates: 100).exploreGraph()
-        let code = try StateMachineGenerator(graph: graph).generate()
-        #expect(code.contains("case (1):"))
-        #expect(code.contains("case (2):"))
-        #expect(code.contains("case (3):"))
-        #expect(code.contains("Self(hr: 1)"))
-        #expect(code.contains("Self(hr: 2)"))
-        #expect(code.contains("Self(hr: 3)"))
+        let spec = TLASpec("HourClock") { Variable(hr, 1); Action("Tick") { hr.becomes(hr + 1).when(hr < 12) || (hr == 12 && hr.becomes(1)) } }
+        let rt = SpecRuntime(spec: spec)
+        let state = rt.initialStates().first!
+        let available = rt.availableActions(in: state)
+        #expect(available.contains("Tick"))
     }
 
-    @Test("Reserved keyword action gets prefixed")
-    func reservedKeywordAction() throws {
-        let x = Var<Int>("x", value: 0)
-        let spec = TLASpec("Test") { Variable(x, 0); Action("Next") { x.becomes(1).when(x == 0) } }
-        let graph = try ModelChecker(spec: spec, maxStates: 100).exploreGraph()
-        let code = try StateMachineGenerator(graph: graph).generate()
-        #expect(code.contains("case action_next"))  // "Next" -> "next" is keyword -> "action_next"
-    }
-
-    @Test("Multi-variable spec generates correct init")
-    func multiVarInit() throws {
-        let big = Var<Int>("big", value: 0); let small = Var<Int>("small", value: 0)
-        let spec = TLASpec("Test") { Variable(big, 0); Variable(small, 0); Action("FB") { big.becomes(5) } }
-        let graph = try ModelChecker(spec: spec, maxStates: 100).exploreGraph()
-        let code = try StateMachineGenerator(graph: graph).generate()
-        #expect(code.contains("var big: Int"))
-        #expect(code.contains("var small: Int"))
-        #expect(code.contains("init(big: Int"))  // includes small: Int on next line
+    @Test("Runtime step validates + applies")
+    func step() throws {
+        let hr = Var<Int>("hr", value: 1)
+        let spec = TLASpec("HourClock") { Variable(hr, 1); Action("Tick") { hr.becomes(hr + 1).when(hr < 12) || (hr == 12 && hr.becomes(1)) } }
+        let rt = SpecRuntime(spec: spec)
+        let state = rt.initialStates().first!
+        let result = try rt.step("Tick", from: state)
+        if case .ok(let next) = result {
+            #expect(next["hr"] == .int(2))
+        } else {
+            #expect(Bool(false))
+        }
     }
 }
 
@@ -738,21 +718,25 @@ struct CheckerSelfProofTests {
         #expect(graph.variableNames.contains("counter"))
     }
 
-    @Test("BFSChecker @TLAModel generates StateMachine")
-    func bfsCheckerModelMachine() {
-        let m = BFSChecker.StateMachine.initial
-        #expect(m.phase == 0)
-        #expect(m.processed == 0)
-        #expect(m.queued == 1)
-        #expect(!m.availableTransitions.isEmpty)
+    @Test("BFSChecker @TLAModel exposes SpecRuntime")
+    func bfsCheckerRuntime() throws {
+        let rt = BFSChecker.runtime
+        let state = rt.initialStates().first!
+        #expect(state["phase"] == .int(0))
+        let next = try rt.apply(actionName: "StepDiscover", to: state)
+        #expect(next["processed"] == .int(1))
     }
 
-    @Test("checkComposed with TLAModelType (matched bounds)")
-    func checkComposedModelType() throws {
-        // Same bound on both sides — mismatched limits make the product unsat.
+    @Test("checkComposed works with plain TLASpec")
+    func checkComposedSpec() throws {
+        let s1 = TLASpec("A") {
+            let x = Var<Int>("x", value: 0)
+            Variable(x, 0)
+            Action("inc") { x.becomes(x + 1).when(x < 2) }
+        }
         let result = try ModelChecker.checkComposed(
-            checker: BFSChecker.spec,
-            user: BFSChecker.self,
+            checker: TLASpec.bfsChecker(maxStates: 10),
+            user: s1,
             maxStates: 500
         )
         #expect({ if case .ok = result { true } else { false } }())
@@ -1181,8 +1165,8 @@ struct CompletionCoverageTests {
         }
     }
 
-    @Test("StateMachineGenerator handles function-typed variable correctly")
-    func functionTypeGeneration() throws {
+    @Test("SpecRuntime handles function-typed variable correctly")
+    func functionTypeRuntime() throws {
         let programCounter = Var<TLAFunctionType>("programCounter")
         let spec = TLASpec("FuncGen") {
             Variable(programCounter, TLAValue.function([:]))
@@ -1193,11 +1177,9 @@ struct CompletionCoverageTests {
                 programCounter.becomes(fun).when(programCounter.domain.cardinality == 0)
             }
         }
-        let graph = try ModelChecker(spec: spec, maxStates: 10).exploreGraph()
-        let generator = StateMachineGenerator(graph: graph)
-        let code = try generator.generate()
-        #expect(code.contains("var programCounter: [TLAValue: TLAValue]"))
-        #expect(code.contains("struct FuncGen"))
-        #expect(code.contains("TLAMachine"))
+        let rt = SpecRuntime(spec: spec)
+        let state = rt.initialStates().first!
+        let next = try rt.apply(actionName: "init", to: state)
+        #expect(next["programCounter"] != nil)
     }
 }
