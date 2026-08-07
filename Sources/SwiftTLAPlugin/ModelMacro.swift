@@ -54,6 +54,7 @@ public struct ModelMacro: MemberMacro, ExtensionMacro {
         case .error(let msg): throw SimpleError("Checker error: \(msg)")
         case .deadlocked(let s): throw SimpleError("Deadlock at: \(s)")
         case .depthExceeded(let c, let l): throw SimpleError("Depth exceeded: \(c)/\(l)")
+        case .livenessViolated(let msg): throw SimpleError("Liveness violated: \(msg)")
         case .ok: break
         }
 

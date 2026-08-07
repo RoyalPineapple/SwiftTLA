@@ -14,6 +14,20 @@ public struct ModelChecker {
     public func check() throws -> CheckResult { try explore().result }
     public func exploreGraph() throws -> StateGraph { try explore().graph }
 
+    public func checkLiveness() throws -> CheckResult {
+        let exploration = try explore()
+        guard case .ok = exploration.result else { return exploration.result }
+        guard !self.spec.temporalProperties.isEmpty else { return .ok(statesCount: exploration.graph.states.count) }
+
+        let graph = exploration.graph
+        let lc = LivenessChecker(graph: graph)
+        let results = try lc.checkAll(self.spec.temporalProperties, fairness: self.spec.fairness, actions: self.spec.actions)
+        for r in results {
+            if case .violated(let msg, _) = r { return .livenessViolated(msg) }
+        }
+        return .ok(statesCount: exploration.graph.states.count)
+    }
+
     /// Compose checker lifecycle ⋊ user and explore (bootstrap entry point).
     public static func compose(_ checker: TLASpec, _ user: TLASpec) -> ModelChecker {
         ModelChecker(spec: checker.extending(user))
@@ -312,6 +326,7 @@ public enum CheckResult: CustomStringConvertible {
     case invariantViolated(invariant: String, state: [String: TLAValue], trace: [TraceStep])
     case depthExceeded(statesCount: Int, limit: Int)
     case deadlocked(state: [String: TLAValue])
+    case livenessViolated(String)
     case error(String)
 
     public var description: String {
@@ -325,6 +340,7 @@ public enum CheckResult: CustomStringConvertible {
         case .depthExceeded(let count, let l):
             return "DEPTH EXCEEDED — explored " + String(count) + " state(s) before hitting limit of " + String(l)
         case .deadlocked(let s): return "DEADLOCK detected at " + formatState(s)
+        case .livenessViolated(let msg): return "LIVENESS VIOLATED: " + msg
         case .error(let message): return "ERROR: " + message
         }
     }
