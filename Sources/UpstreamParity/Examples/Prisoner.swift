@@ -61,9 +61,9 @@ private func prisonerSpec() -> TLASpec {
                 && a.isIn(StateExpr.set([trueE, falseE]))
                 && l.isIn(StateExpr.set([lightOff, lightOn]))
                 && h.isSubset(of: pSet)
-                && s.applying(StateExpr.value(.string("Alice"))).isIn(rng02)
-                && s.applying(StateExpr.value(.string("Bob"))).isIn(rng02)
-                && s.applying(StateExpr.value(.string("Eve"))).isIn(rng02)
+            for p in ["Alice", "Bob", "Eve"] {
+                s.applying(StateExpr.value(.string(p))).isIn(rng02)
+            }
         }
 
         Invariant("VictoryOK") {

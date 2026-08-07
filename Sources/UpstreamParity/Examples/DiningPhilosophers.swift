@@ -84,14 +84,13 @@ private func diningPhilosophersSpec() -> TLASpec {
         Variable(hungry, hungryInit)
 
         Invariant("TypeOK") {
-            typeOkLine(1) && typeOkLine(2) && typeOkLine(3) && typeOkLine(4) && typeOkLine(5)
+            for i in 1...NP { typeOkLine(i) }
         }
 
         Invariant("ExclusiveAccess") {
-            exclusiveLine(1, 2) && exclusiveLine(1, 3) && exclusiveLine(1, 4) && exclusiveLine(1, 5)
-            && exclusiveLine(2, 3) && exclusiveLine(2, 4) && exclusiveLine(2, 5)
-            && exclusiveLine(3, 4) && exclusiveLine(3, 5)
-            && exclusiveLine(4, 5)
+            for i in 1...NP {
+                for j in 1...NP where i != j { exclusiveLine(i, j) }
+            }
         }
 
         for p in 1...NP {

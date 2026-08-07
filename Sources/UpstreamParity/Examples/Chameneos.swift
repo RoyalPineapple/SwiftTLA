@@ -60,19 +60,11 @@ Sum(f, S) == IF S = {} THEN 0
             let rng = StateExpr.set((0...N).map { StateExpr.value(.int($0)) })
             let ids0 = StateExpr.set((0...M).map { StateExpr.value(.int($0)) })
 
-            let i1 = StateExpr.value(.int(1))
-            let i2 = StateExpr.value(.int(2))
-            let i3 = StateExpr.value(.int(3))
-            let i4 = StateExpr.value(.int(4))
-
-            c.applying(i1).at(1).isIn(colorsAndFaded)
-            c.applying(i1).at(2).isIn(rng)
-            c.applying(i2).at(1).isIn(colorsAndFaded)
-            c.applying(i2).at(2).isIn(rng)
-            c.applying(i3).at(1).isIn(colorsAndFaded)
-            c.applying(i3).at(2).isIn(rng)
-            c.applying(i4).at(1).isIn(colorsAndFaded)
-            c.applying(i4).at(2).isIn(rng)
+            for i in 1...M {
+                let ci = StateExpr.value(.int(i))
+                c.applying(ci).at(1).isIn(colorsAndFaded)
+                c.applying(ci).at(2).isIn(rng)
+            }
             m.isIn(ids0)
         }
 

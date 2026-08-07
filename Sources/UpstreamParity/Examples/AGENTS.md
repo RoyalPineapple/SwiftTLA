@@ -160,13 +160,13 @@ The parity script detects these invariants: `TypeOK`, `TypeInvariant`, `VictoryO
 `ExclusiveAccess`, `SumMet`, `HCini`. Use one of these names when possible.
 Add new invariant names to the script if needed.
 
-### InvariantBuilder limitations
+### InvariantBuilder
 
-The `InvariantBuilder` does not support `for` loops or `var` declarations.
-Unroll loops for NP ≤ 5. Use `let` bindings for intermediate expressions.
+Supports `for` loops (via `buildArray`) and `let` bindings.
+Use loops freely instead of unrolling.
 
 ```swift
 Invariant("TypeOK") {
-    typeOkLine(1) && typeOkLine(2) && typeOkLine(3)
+    for i in 1...NP { typeOkLine(i) }
 }
 ```

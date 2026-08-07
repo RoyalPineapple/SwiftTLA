@@ -242,6 +242,10 @@ public enum InvariantBuilder {
     public static func buildOptional(_ component: StateExpr?) -> StateExpr { component ?? .value(.bool(true)) }
     public static func buildEither(first: StateExpr) -> StateExpr { first }
     public static func buildEither(second: StateExpr) -> StateExpr { second }
+    public static func buildArray(_ components: [StateExpr]) -> StateExpr {
+        if components.isEmpty { return .value(.bool(true)) }
+        return components.dropFirst().reduce(components[0]) { .and($0, $1) }
+    }
 }
 
 @resultBuilder
