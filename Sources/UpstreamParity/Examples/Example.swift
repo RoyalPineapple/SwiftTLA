@@ -34,6 +34,7 @@ public enum Example {
         dieHardTypeOK,
         diningPhilosophersNP5,
         ewd840,
+        ewd998,
         hourClock,
         hourClock2,
         lamportMutexN2,
