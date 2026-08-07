@@ -9,11 +9,11 @@ extension Example {
         expectedDistinct: 137,
         expectedResult: "success",
         spec: changRobertsSpec(),
-        notes: "N=3, Id=i. 137 states matching upstream. CHOOSE per-value expansion.",
+        notes: "N=3, Id=i. 137 states matching upstream. Combined n0/n1 per-node actions.",
         matchesUpstreamTLC: true
     )
 
-static func changRobertsSpec() -> TLASpec {
+    static func changRobertsSpec() -> TLASpec {
         let N = 3
         let nodes = Array(1...N)
         func successor(_ i: Int) -> Int { i == N ? 1 : i + 1 }
@@ -64,58 +64,93 @@ static func changRobertsSpec() -> TLASpec {
             for i in nodes {
                 let s = successor(i)
 
-                Action("n0_\(i)_send") {
-                    pc.applying(i) == "n0" && initiator.applying(i) == true
-                    && msgs.becomes(msgs.updated(at: s,
-                        to: msgs.applying(s).union(StateExpr.singleton(i))))
-                    && pc.becomes(pc.updated(at: i, to: "n1"))
-                    && initiator.stays && processState.stays
+                Action("n0_\(i)") {
+                    let send = pc.applying(i) == "n0" && initiator.applying(i) == true
+                        && msgs.becomes(msgs.updated(at: s,
+                            to: msgs.applying(s).union(StateExpr.singleton(i))))
+                        && pc.becomes(pc.updated(at: i, to: "n1"))
+                        && initiator.stays && processState.stays
+
+                    let skip = pc.applying(i) == "n0" && initiator.applying(i) == false
+                        && pc.becomes(pc.updated(at: i, to: "n1"))
+                        && initiator.stays && processState.stays && msgs.stays
+
+                    return send || skip
                 }
 
-                Action("n0_\(i)_skip") {
-                    pc.applying(i) == "n0" && initiator.applying(i) == false
-                    && pc.becomes(pc.updated(at: i, to: "n1"))
-                    && initiator.stays && processState.stays && msgs.stays
+                Action("n1_\(i)") {
+                    var branches: [ActionExpr] = []
+                    for picked in nodes {
+                        branches.append(
+                            pc.applying(i) == "n1"
+                                && processState.applying(i) == "lost"
+                                && guardContains(i, picked)
+                                && msgs.becomes(
+                                    msgs.updated(at: i,
+                                        to: msgs.applying(i).subtracting(
+                                            StateExpr.singleton(picked)))
+                                         .updated(at: s,
+                                        to: msgs.applying(s).union(
+                                            StateExpr.singleton(picked))))
+                                && initiator.stays
+                                && processState.stays
+                                && pc.stays
+                        )
+
+                        branches.append(
+                            pc.applying(i) == "n1"
+                                && processState.applying(i) == "cand"
+                                && guardContains(i, picked)
+                                && picked < i
+                                && msgs.becomes(
+                                    msgs.updated(at: i,
+                                        to: msgs.applying(i).subtracting(
+                                            StateExpr.singleton(picked)))
+                                         .updated(at: s,
+                                        to: msgs.applying(s).union(
+                                            StateExpr.singleton(picked))))
+                                && processState.becomes(
+                                    processState.updated(at: i, to: "lost"))
+                                && initiator.stays
+                                && pc.stays
+                        )
+
+                        branches.append(
+                            pc.applying(i) == "n1"
+                                && processState.applying(i) == "cand"
+                                && guardContains(i, picked)
+                                && picked > i
+                                && msgs.becomes(
+                                    msgs.updated(at: i,
+                                        to: msgs.applying(i).subtracting(
+                                            StateExpr.singleton(picked))))
+                                && initiator.stays
+                                && processState.stays
+                                && pc.stays
+                        )
+
+                        branches.append(
+                            pc.applying(i) == "n1"
+                                && processState.applying(i) == "cand"
+                                && guardContains(i, picked)
+                                && picked == i
+                                && msgs.becomes(
+                                    msgs.updated(at: i,
+                                        to: msgs.applying(i).subtracting(
+                                            StateExpr.singleton(picked))))
+                                && processState.becomes(
+                                    processState.updated(at: i, to: "won"))
+                                && initiator.stays
+                                && pc.stays
+                        )
+                    }
+                    return branches.dropFirst().reduce(branches[0]) { $0 || $1 }
                 }
 
-                for picked in nodes {
-                    Action("n1_\(i)_fwd\(picked)") {
-                        pc.applying(i) == "n1" && processState.applying(i) == "lost"
-                        && guardContains(i, picked)
-                        && msgs.becomes(
-                            msgs.updated(at: i, to: msgs.applying(i).subtracting(StateExpr.singleton(picked)))
-                                 .updated(at: s, to: msgs.applying(s).union(StateExpr.singleton(picked))))
-                        && initiator.stays && processState.stays && pc.stays
-                    }
-
-                    Action("n1_\(i)_lose\(picked)") {
-                        pc.applying(i) == "n1" && processState.applying(i) == "cand"
-                        && guardContains(i, picked) && picked < i
-                        && msgs.becomes(
-                            msgs.updated(at: i, to: msgs.applying(i).subtracting(StateExpr.singleton(picked)))
-                                 .updated(at: s, to: msgs.applying(s).union(StateExpr.singleton(picked))))
-                        && processState.becomes(processState.updated(at: i, to: "lost"))
-                        && initiator.stays && pc.stays
-                    }
-
-                    Action("n1_\(i)_skip\(picked)") {
-                        pc.applying(i) == "n1" && processState.applying(i) == "cand"
-                        && guardContains(i, picked) && picked > i
-                        && msgs.becomes(
-                            msgs.updated(at: i, to: msgs.applying(i).subtracting(StateExpr.singleton(picked))))
-                        && initiator.stays && processState.stays && pc.stays
-                    }
-
-                    Action("n1_\(i)_win\(picked)") {
-                        pc.applying(i) == "n1" && processState.applying(i) == "cand"
-                        && guardContains(i, picked) && picked == i
-                        && msgs.becomes(
-                            msgs.updated(at: i, to: msgs.applying(i).subtracting(StateExpr.singleton(picked))))
-                        && processState.becomes(processState.updated(at: i, to: "won"))
-                        && initiator.stays && pc.stays
-                    }
-                }
+                WeakFairness("n0_\(i)")
+                WeakFairness("n1_\(i)")
             }
+            Definition("Liveness == (\\E n \\in {1, 2, 3} : (state[n] = \"cand\")) => <>(\\E n \\in {1, 2, 3} : (state[n] = \"won\"))")
         }
     }
 

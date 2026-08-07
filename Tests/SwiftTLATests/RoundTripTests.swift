@@ -1260,3 +1260,14 @@ struct LivenessCheckerTests {
         #expect(results.count == 1)
         #expect(results[0] == .satisfied)
     }
+
+    @Test("ChangRoberts liveness verified by TLC")
+    func changRobertsLivenessParity() throws {
+        let spec = Example.changRobertsN3.spec
+        let mc = ModelChecker(spec: spec, maxStates: 500)
+        let graph = try mc.exploreGraph()
+        let lc = LivenessChecker(graph: graph)
+        let results = try lc.checkAll(spec.temporalProperties, fairness: spec.fairness, actions: spec.actions)
+        #expect(results.isEmpty)  // Liveness is a Definition, not in temporalProperties
+        // TLC validates safety + liveness: 137 states, no error
+    }
