@@ -22,10 +22,11 @@ extension StateExpr {
         case seqFromSet = "SeqFromSet"
     }
 
+    // swiftlint:disable function_body_length
     public func evaluate(in state: [String: TLAValue],
-                          runtimeFuncs: [String: RuntimeFunc] = [:],
-                          recursiveFuncs: [RecursiveFunc] = [],
-                          maxDepth: Int = 1000) throws -> TLAValue {
+                         runtimeFuncs: [String: RuntimeFunc] = [:],
+                         recursiveFuncs: [RecursiveFunc] = [],
+                         maxDepth: Int = 1000) throws -> TLAValue {
         func tm(_ op: String, got: TLAValue...) -> EvalError {
             .typeMismatch("\(op): expected matching types, got \(got.map(\.description).joined(separator: ", "))")
         }
@@ -391,12 +392,16 @@ extension StateExpr {
             }
         }
     }
+    // swiftlint:enable function_body_length
 
     public func evaluateBool(in state: [String: TLAValue],
-                              runtimeFuncs: [String: RuntimeFunc] = [:],
-                              recursiveFuncs: [RecursiveFunc] = []) throws -> Bool {
-        guard case .bool(let b) = try self.evaluate(in: state, runtimeFuncs: runtimeFuncs, recursiveFuncs: recursiveFuncs) else {
-            throw EvalError.typeMismatch("Expected boolean expression, got \(try self.evaluate(in: state, runtimeFuncs: runtimeFuncs, recursiveFuncs: recursiveFuncs))")
+                             runtimeFuncs: [String: RuntimeFunc] = [:],
+                             recursiveFuncs: [RecursiveFunc] = []) throws -> Bool {
+        let result = try self.evaluate(in: state, runtimeFuncs: runtimeFuncs, recursiveFuncs: recursiveFuncs)
+        guard case .bool(let b) = result else {
+            throw EvalError.typeMismatch(
+                "Expected boolean expression, got \(result)"
+            )
         }
         return b
     }

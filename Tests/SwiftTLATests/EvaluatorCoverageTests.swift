@@ -7,7 +7,7 @@ struct EvaluatorCoverage {
         "s": .set([.int(1), .int(2), .int(3)]),
         "t": .tuple([.int(1), .int(2), .int(3)]),
         "f": .function([.int(1): .string("a"), .int(2): .string("b")]),
-        "r": .record(["a": .int(1), "b": .int(2)]),
+        "r": .record(["a": .int(1), "b": .int(2)])
     ]
 
     @Test("leaf — value and variable")
@@ -65,7 +65,8 @@ struct EvaluatorCoverage {
         #expect(try StateExpr.tupleAppend(.variable("t"), .int(4)).evaluate(in: state) == .tuple([.int(1), .int(2), .int(3), .int(4)]))
         #expect(try StateExpr.tupleHead(.variable("t")).evaluate(in: state) == .int(1))
         #expect(try StateExpr.tupleTail(.variable("t")).evaluate(in: state) == .tuple([.int(2), .int(3)]))
-        #expect(try StateExpr.tupleConcatenate(.variable("t"), .tupleLiteral([.int(4)])).evaluate(in: state) == .tuple([.int(1), .int(2), .int(3), .int(4)]))
+        let tc = try StateExpr.tupleConcatenate(.variable("t"), .tupleLiteral([.int(4)])).evaluate(in: state)
+        #expect(tc == .tuple([.int(1), .int(2), .int(3), .int(4)]))
     }
 
     @Test("records — literal, access")
@@ -89,7 +90,12 @@ struct EvaluatorCoverage {
     @Test("builtins — sequenceFromSet, setSum, functionSet")
     func builtins() throws {
         #expect(try StateExpr.sequenceFromSet(.setLiteral([.int(3), .int(1)])).evaluate(in: [:]) == .tuple([.int(1), .int(3)]))
-        #expect(try StateExpr.setSum(.functionLiteral(.setLiteral([.int(1), .int(2)]), .variable("_x")), .setLiteral([.int(1), .int(2)])).evaluate(in: [:]) == .int(3))
-        #expect(try StateExpr.functionSet(.setLiteral([.int(1)]), .setLiteral([.int(2)])).evaluate(in: [:]) == .set([.function([.int(1): .int(2)])]))
+        let sum = try StateExpr.setSum(
+            .functionLiteral(.setLiteral([.int(1), .int(2)]), .variable("_x")),
+            .setLiteral([.int(1), .int(2)])
+        ).evaluate(in: [:])
+        #expect(sum == .int(3))
+        let fset = try StateExpr.functionSet(.setLiteral([.int(1)]), .setLiteral([.int(2)])).evaluate(in: [:])
+        #expect(fset == .set([.function([.int(1): .int(2)])]))
     }
 }

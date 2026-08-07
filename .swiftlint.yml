@@ -108,6 +108,15 @@ identifier_name:
     - DeadlockCheck
     - Symmetry
     - Constant
+    - Definition
+    - Theorem
+    - Assume
+    - Extends
+    - Constraint
+    - Recursive
+    - Use
+    - DefineRecursive
+    - RuntimeFunc
     - ∈
     - ⊆
     - ∪
