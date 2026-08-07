@@ -27,7 +27,7 @@ public enum ActionEnumerator {
     ) throws -> [[String: TLAValue]] {
         // Handle LET bindings: evaluate value, substitute into body
         if case .define(let name, let valueExpr, let body) = action {
-            let val = try Evaluator.evaluate(valueExpr, in: oldState)
+            let val = try valueExpr.evaluate(in: oldState)
             let substituted = substituteVarInAction(name, val, body)
             let disjuncts = distributeOr(substituted)
             return try disjuncts.flatMap { try processDisjunct($0, oldState: oldState, varNames: varNames) }
@@ -36,7 +36,7 @@ public enum ActionEnumerator {
         let existsBindings = extractExistsActions(action)
         if !existsBindings.isEmpty {
             let (v, s, body) = existsBindings[0]
-            guard case .set(let sv) = try Evaluator.evaluate(s, in: oldState) else {
+            guard case .set(let sv) = try s.evaluate(in: oldState) else {
                 throw ActionError.invalidActionForm("\\E set must be a set")
             }
             var results: [[String: TLAValue]] = []
@@ -57,7 +57,7 @@ public enum ActionEnumerator {
                 var next: [[String: TLAValue]] = []
                 for partial in partials {
                     let env = oldState.merging(partial) { _, new in new }
-                    guard case .set(let sv) = try Evaluator.evaluate(setExpr, in: env) else {
+                    guard case .set(let sv) = try setExpr.evaluate(in: env) else {
                         throw ActionError.invalidActionForm("CHOOSE set for \(varName) must be a set")
                     }
                     for elem in sv {
@@ -86,15 +86,13 @@ public enum ActionEnumerator {
         }
 
         let (assignments, guards) = try extractAssignments(action)
-        guard try Evaluator.evaluateBool(
-            guards.reduce(StateExpr.value(.bool(true))) { .and($0, $1) },
-            in: oldState
-        ) else { return [] }
+        let guardExpr = guards.reduce(StateExpr.value(.bool(true))) { .and($0, $1) }
+        guard try guardExpr.evaluateBool(in: oldState) else { return [] }
 
         var newState = oldState
         for varName in varNames {
             if let rhs = assignments[varName] {
-                newState[varName] = try Evaluator.evaluate(rhs, in: oldState)
+                newState[varName] = try rhs.evaluate(in: oldState)
             }
         }
         return [newState]
@@ -107,15 +105,13 @@ public enum ActionEnumerator {
         skip: Set<String>
     ) throws -> [String: TLAValue]? {
         let (assignments, guards) = try extractAssignments(action)
-        guard try Evaluator.evaluateBool(
-            guards.reduce(StateExpr.value(.bool(true))) { .and($0, $1) },
-            in: oldState
-        ) else { return nil }
+        let guardExpr = guards.reduce(StateExpr.value(.bool(true))) { .and($0, $1) }
+        guard try guardExpr.evaluateBool(in: oldState) else { return nil }
 
         var newState = oldState
         for varName in varNames where !skip.contains(varName) {
             if let rhs = assignments[varName] {
-                newState[varName] = try Evaluator.evaluate(rhs, in: oldState)
+                newState[varName] = try rhs.evaluate(in: oldState)
             }
         }
         return newState
@@ -163,25 +159,25 @@ public enum ActionEnumerator {
     private static func substituteVarInAction(_ name: String, _ value: TLAValue, _ action: ActionExpr) -> ActionExpr {
         switch action {
         case .assign(let v, let e):
-            return .assign(v, Evaluator.subExpr(e, name: name, value: value))
+            return .assign(v, StateExpr.substituteVariable(name, value, in: e))
         case .unchanged(let v):
             return .unchanged(v)
         case .guard_(let e):
-            return .guard_(Evaluator.subExpr(e, name: name, value: value))
+            return .guard_(StateExpr.substituteVariable(name, value, in: e))
         case .chooseAction(let v, let s):
-            return .chooseAction(v, Evaluator.subExpr(s, name: name, value: value))
+            return .chooseAction(v, StateExpr.substituteVariable(name, value, in: s))
         case .existsAction(let v, let s, let b):
-            return .existsAction(v, Evaluator.subExpr(s, name: name, value: value), substituteVarInAction(name, value, b))
+            return .existsAction(v, StateExpr.substituteVariable(name, value, in: s), substituteVarInAction(name, value, b))
         case .and(let a, let b):
             return .and(substituteVarInAction(name, value, a), substituteVarInAction(name, value, b))
         case .or(let a, let b):
             return .or(substituteVarInAction(name, value, a), substituteVarInAction(name, value, b))
         case .ifElse(let c, let t, let e):
-            return .ifElse(Evaluator.subExpr(c, name: name, value: value),
+            return .ifElse(StateExpr.substituteVariable(name, value, in: c),
                            substituteVarInAction(name, value, t),
                            substituteVarInAction(name, value, e))
         case .define(let v, let exp, let body):
-            return .define(v, Evaluator.subExpr(exp, name: name, value: value),
+            return .define(v, StateExpr.substituteVariable(name, value, in: exp),
                               substituteVarInAction(name, value, body))
         }
     }

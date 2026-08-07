@@ -14,19 +14,19 @@ public enum EvalError: Error, CustomStringConvertible {
     }
 }
 
-public enum Evaluator {
+extension StateExpr {
+    public typealias RuntimeFunc = @Sendable ([TLAValue]) -> TLAValue
+
     private enum RecursiveFunction: String {
         case sum = "Sum"
         case seqFromSet = "SeqFromSet"
     }
 
-    public typealias RuntimeFunc = @Sendable ([TLAValue]) -> TLAValue
-
-    public static func evaluate(_ expr: StateExpr, in state: [String: TLAValue],
-                                 runtimeFuncs: [String: RuntimeFunc] = [:],
-                                 recursiveFuncs: [RecursiveFunc] = [],
-                                 maxDepth: Int = 1000) throws -> TLAValue {
-        switch expr {
+    public func evaluate(in state: [String: TLAValue],
+                          runtimeFuncs: [String: RuntimeFunc] = [:],
+                          recursiveFuncs: [RecursiveFunc] = [],
+                          maxDepth: Int = 1000) throws -> TLAValue {
+        switch self {
         case .value(let v): return v
         case .variable(let name):
             guard let val = state[name] else { throw EvalError.undefinedVariable(name) }
@@ -40,95 +40,95 @@ public enum Evaluator {
         case .negate(let a): return try intUnary(a, -, in: state)
         case .integerDivide(let a, let b): return try intOp(a, b, { guard $1 != 0 else { throw EvalError.divisionByZero }; return $0 / $1 }, in: state)
 
-        case .equal(let a, let b): return .bool(try evaluate(a, in: state) == evaluate(b, in: state))
-        case .notEqual(let a, let b): return .bool(try evaluate(a, in: state) != evaluate(b, in: state))
+        case .equal(let a, let b): return .bool(try a.evaluate(in: state) == b.evaluate(in: state))
+        case .notEqual(let a, let b): return .bool(try a.evaluate(in: state) != b.evaluate(in: state))
         case .lessThan(let a, let b): return try intCmp(a, b, <, in: state)
         case .lessOrEqual(let a, let b): return try intCmp(a, b, <=, in: state)
         case .greaterThan(let a, let b): return try intCmp(a, b, >, in: state)
         case .greaterOrEqual(let a, let b): return try intCmp(a, b, >=, in: state)
 
         case .and(let a, let b):
-            guard case .bool(let ba) = try evaluate(a, in: state) else { throw typeMismatch("∧", got: try evaluate(a, in: state)) }
+            guard case .bool(let ba) = try a.evaluate(in: state) else { throw typeMismatch("∧", got: try a.evaluate(in: state)) }
             if !ba { return .bool(false) }
-            guard case .bool(let bb) = try evaluate(b, in: state) else { throw typeMismatch("∧", got: try evaluate(b, in: state)) }
+            guard case .bool(let bb) = try b.evaluate(in: state) else { throw typeMismatch("∧", got: try b.evaluate(in: state)) }
             return .bool(bb)
 
         case .or(let a, let b):
-            guard case .bool(let ba) = try evaluate(a, in: state) else { throw typeMismatch("∨", got: try evaluate(a, in: state)) }
+            guard case .bool(let ba) = try a.evaluate(in: state) else { throw typeMismatch("∨", got: try a.evaluate(in: state)) }
             if ba { return .bool(true) }
-            guard case .bool(let bb) = try evaluate(b, in: state) else { throw typeMismatch("∨", got: try evaluate(b, in: state)) }
+            guard case .bool(let bb) = try b.evaluate(in: state) else { throw typeMismatch("∨", got: try b.evaluate(in: state)) }
             return .bool(bb)
 
         case .not(let a):
-            guard case .bool(let ba) = try evaluate(a, in: state) else { throw typeMismatch("¬", got: try evaluate(a, in: state)) }
+            guard case .bool(let ba) = try a.evaluate(in: state) else { throw typeMismatch("¬", got: try a.evaluate(in: state)) }
             return .bool(!ba)
 
         case .ifThenElse(let c, let t, let f):
-            guard case .bool(let bc) = try evaluate(c, in: state) else { throw typeMismatch("IF", got: try evaluate(c, in: state)) }
-            return try evaluate(bc ? t : f, in: state)
+            guard case .bool(let bc) = try c.evaluate(in: state) else { throw typeMismatch("IF", got: try c.evaluate(in: state)) }
+            return try (bc ? t : f).evaluate(in: state)
 
         case .setLiteral(let elements):
             var result = Set<TLAValue>()
-            for e in elements { result.insert(try evaluate(e, in: state)) }
+            for e in elements { result.insert(try e.evaluate(in: state)) }
             return .set(result)
 
         case .in(let elem, let s):
-            let v = try evaluate(elem, in: state)
-            guard case .set(let sv) = try evaluate(s, in: state) else { throw typeMismatch("∈", got: try evaluate(s, in: state)) }
+            let v = try elem.evaluate(in: state)
+            guard case .set(let sv) = try s.evaluate(in: state) else { throw typeMismatch("∈", got: try s.evaluate(in: state)) }
             return .bool(sv.contains(v))
 
         case .subset(let a, let b):
-            guard case .set(let sa) = try evaluate(a, in: state), case .set(let sb) = try evaluate(b, in: state) else {
-                throw typeMismatch("⊆", got: try evaluate(a, in: state), try evaluate(b, in: state))
+            guard case .set(let sa) = try a.evaluate(in: state), case .set(let sb) = try b.evaluate(in: state) else {
+                throw typeMismatch("⊆", got: try a.evaluate(in: state), try b.evaluate(in: state))
             }
             return .bool(sa.isSubset(of: sb))
 
         case .union(let a, let b):
-            guard case .set(let sa) = try evaluate(a, in: state), case .set(let sb) = try evaluate(b, in: state) else {
-                throw typeMismatch("∪", got: try evaluate(a, in: state), try evaluate(b, in: state))
+            guard case .set(let sa) = try a.evaluate(in: state), case .set(let sb) = try b.evaluate(in: state) else {
+                throw typeMismatch("∪", got: try a.evaluate(in: state), try b.evaluate(in: state))
             }
             return .set(sa.union(sb))
 
         case .intersection(let a, let b):
-            guard case .set(let sa) = try evaluate(a, in: state), case .set(let sb) = try evaluate(b, in: state) else {
-                throw typeMismatch("∩", got: try evaluate(a, in: state), try evaluate(b, in: state))
+            guard case .set(let sa) = try a.evaluate(in: state), case .set(let sb) = try b.evaluate(in: state) else {
+                throw typeMismatch("∩", got: try a.evaluate(in: state), try b.evaluate(in: state))
             }
             return .set(sa.intersection(sb))
 
         case .setDifference(let a, let b):
-            guard case .set(let sa) = try evaluate(a, in: state), case .set(let sb) = try evaluate(b, in: state) else {
-                throw typeMismatch("∖", got: try evaluate(a, in: state), try evaluate(b, in: state))
+            guard case .set(let sa) = try a.evaluate(in: state), case .set(let sb) = try b.evaluate(in: state) else {
+                throw typeMismatch("∖", got: try a.evaluate(in: state), try b.evaluate(in: state))
             }
             return .set(sa.subtracting(sb))
 
         case .cardinality(let s):
-            guard case .set(let sv) = try evaluate(s, in: state) else { throw typeMismatch("cardinality", got: try evaluate(s, in: state)) }
+            guard case .set(let sv) = try s.evaluate(in: state) else { throw typeMismatch("cardinality", got: try s.evaluate(in: state)) }
             return .int(sv.count)
 
         case .setFilter(let s, let p):
-            guard case .set(let sv) = try evaluate(s, in: state) else { throw typeMismatch("set filter", got: try evaluate(s, in: state)) }
+            guard case .set(let sv) = try s.evaluate(in: state) else { throw typeMismatch("set filter", got: try s.evaluate(in: state)) }
             var result = Set<TLAValue>()
             for elem in sv {
                 var boundState = state
                 boundState["_x"] = elem
-                let exprWithVar = substituteVariable("_x", elem, in: p)
-                if case .bool(true) = try evaluate(exprWithVar, in: state) {
+                let exprWithVar = Self.substituteVariable("_x", elem, in: p)
+                if case .bool(true) = try exprWithVar.evaluate(in: state) {
                     result.insert(elem)
                 }
             }
             return .set(result)
 
         case .setMap(let e, let s):
-            guard case .set(let sv) = try evaluate(s, in: state) else { throw typeMismatch("set map", got: try evaluate(s, in: state)) }
+            guard case .set(let sv) = try s.evaluate(in: state) else { throw typeMismatch("set map", got: try s.evaluate(in: state)) }
             var result = Set<TLAValue>()
             for elem in sv {
-                let exprWithVar = substituteVariable("_x", elem, in: e)
-                result.insert(try evaluate(exprWithVar, in: state))
+                let exprWithVar = Self.substituteVariable("_x", elem, in: e)
+                result.insert(try exprWithVar.evaluate(in: state))
             }
             return .set(result)
 
         case .powerSet(let s):
-            guard case .set(let sv) = try evaluate(s, in: state) else { throw typeMismatch("SUBSET", got: try evaluate(s, in: state)) }
+            guard case .set(let sv) = try s.evaluate(in: state) else { throw typeMismatch("SUBSET", got: try s.evaluate(in: state)) }
             let elems = Array(sv)
             var result = Set<TLAValue>()
             for mask in 0..<(1 << elems.count) {
@@ -141,7 +141,7 @@ public enum Evaluator {
             return .set(result)
 
         case .unionAll(let s):
-            guard case .set(let sv) = try evaluate(s, in: state) else { throw typeMismatch("UNION", got: try evaluate(s, in: state)) }
+            guard case .set(let sv) = try s.evaluate(in: state) else { throw typeMismatch("UNION", got: try s.evaluate(in: state)) }
             var result = Set<TLAValue>()
             for elem in sv {
                 guard case .set(let inner) = elem else { throw typeMismatch("UNION element not a set", got: elem) }
@@ -150,48 +150,48 @@ public enum Evaluator {
             return .set(result)
 
         case .tupleLiteral(let elements):
-            return .tuple(try elements.map { try evaluate($0, in: state) })
+            return .tuple(try elements.map { try $0.evaluate(in: state) })
 
         case .tupleAccess(let t, let index):
-            guard case .tuple(let tv) = try evaluate(t, in: state) else { throw typeMismatch("tuple access", got: try evaluate(t, in: state)) }
+            guard case .tuple(let tv) = try t.evaluate(in: state) else { throw typeMismatch("tuple access", got: try t.evaluate(in: state)) }
             guard index >= 1, index <= tv.count else { throw EvalError.indexOutOfBounds(index, tv.count) }
             return tv[index - 1]
 
         case .tupleLength(let t):
-            guard case .tuple(let tv) = try evaluate(t, in: state) else { throw typeMismatch("Len", got: try evaluate(t, in: state)) }
+            guard case .tuple(let tv) = try t.evaluate(in: state) else { throw typeMismatch("Len", got: try t.evaluate(in: state)) }
             return .int(tv.count)
 
         case .tupleAppend(let t, let e):
-            guard case .tuple(var tv) = try evaluate(t, in: state) else { throw typeMismatch("Append", got: try evaluate(t, in: state)) }
-            tv.append(try evaluate(e, in: state))
+            guard case .tuple(var tv) = try t.evaluate(in: state) else { throw typeMismatch("Append", got: try t.evaluate(in: state)) }
+            tv.append(try e.evaluate(in: state))
             return .tuple(tv)
 
         case .tupleHead(let t):
-            guard case .tuple(let tv) = try evaluate(t, in: state) else { throw typeMismatch("Head", got: try evaluate(t, in: state)) }
+            guard case .tuple(let tv) = try t.evaluate(in: state) else { throw typeMismatch("Head", got: try t.evaluate(in: state)) }
             guard !tv.isEmpty else { throw typeMismatch("Head of empty sequence") }
             return tv[0]
         case .tupleTail(let t):
-            guard case .tuple(let tv) = try evaluate(t, in: state) else { throw typeMismatch("Tail", got: try evaluate(t, in: state)) }
+            guard case .tuple(let tv) = try t.evaluate(in: state) else { throw typeMismatch("Tail", got: try t.evaluate(in: state)) }
             guard !tv.isEmpty else { throw typeMismatch("Tail of empty sequence") }
             return .tuple(Array(tv.dropFirst()))
         case .tupleConcatenate(let a, let b):
-            guard case .tuple(let ta) = try evaluate(a, in: state), case .tuple(let tb) = try evaluate(b, in: state) else {
-                throw typeMismatch("tuple concat", got: try evaluate(a, in: state), try evaluate(b, in: state))
+            guard case .tuple(let ta) = try a.evaluate(in: state), case .tuple(let tb) = try b.evaluate(in: state) else {
+                throw typeMismatch("tuple concat", got: try a.evaluate(in: state), try b.evaluate(in: state))
             }
             return .tuple(ta + tb)
 
         case .recordLiteral(let fields):
             var result: [String: TLAValue] = [:]
-            for (key, expr) in fields { result[key] = try evaluate(expr, in: state) }
+            for (key, expr) in fields { result[key] = try expr.evaluate(in: state) }
             return .record(result)
 
         case .recordAccess(let r, let field):
-            guard case .record(let rv) = try evaluate(r, in: state) else { throw typeMismatch("record access", got: try evaluate(r, in: state)) }
+            guard case .record(let rv) = try r.evaluate(in: state) else { throw typeMismatch("record access", got: try r.evaluate(in: state)) }
             guard let val = rv[field] else { throw typeMismatch("record field '\(field)' not found") }
             return val
 
         case .domain(let f):
-            let value = try evaluate(f, in: state)
+            let value = try f.evaluate(in: state)
             switch value {
             case .function(let mapping): return .set(Set(mapping.keys))
             case .record(let record): return .set(Set(record.keys.map { .string($0) }))
@@ -199,19 +199,19 @@ public enum Evaluator {
             }
 
         case .functionLiteral(let domain, let body):
-            guard case .set(let domainSet) = try evaluate(domain, in: state) else {
-                throw typeMismatch("function domain", got: try evaluate(domain, in: state))
+            guard case .set(let domainSet) = try domain.evaluate(in: state) else {
+                throw typeMismatch("function domain", got: try domain.evaluate(in: state))
             }
             var mapping: [TLAValue: TLAValue] = [:]
             for element in domainSet {
-                let substituted = substituteVariable("_x", element, in: body)
-                mapping[element] = try evaluate(substituted, in: state)
+                let substituted = Self.substituteVariable("_x", element, in: body)
+                mapping[element] = try substituted.evaluate(in: state)
             }
             return .function(mapping)
 
         case .functionApply(let function, let argument):
-            let functionValue = try evaluate(function, in: state)
-            let key = try evaluate(argument, in: state)
+            let functionValue = try function.evaluate(in: state)
+            let key = try argument.evaluate(in: state)
             switch functionValue {
             case .function(let mapping):
                 guard let result = mapping[key] else {
@@ -228,9 +228,9 @@ public enum Evaluator {
             }
 
         case .except(let function, let keyExpr, let valueExpr):
-            let functionValue = try evaluate(function, in: state)
-            let key = try evaluate(keyExpr, in: state)
-            let newValue = try evaluate(valueExpr, in: state)
+            let functionValue = try function.evaluate(in: state)
+            let key = try keyExpr.evaluate(in: state)
+            let newValue = try valueExpr.evaluate(in: state)
             switch functionValue {
             case .function(var mapping):
                 mapping[key] = newValue
@@ -243,30 +243,30 @@ public enum Evaluator {
             }
 
         case .forAll(let set, let predicate):
-            guard case .set(let sv) = try evaluate(set, in: state) else { throw typeMismatch("∀", got: try evaluate(set, in: state)) }
+            guard case .set(let sv) = try set.evaluate(in: state) else { throw typeMismatch("∀", got: try set.evaluate(in: state)) }
             for elem in sv {
-                let substituted = substituteVariable("_x", elem, in: predicate)
-                if case .bool(false) = try evaluate(substituted, in: state) {
+                let substituted = Self.substituteVariable("_x", elem, in: predicate)
+                if case .bool(false) = try substituted.evaluate(in: state) {
                     return .bool(false)
                 }
             }
             return .bool(true)
 
         case .exists(let set, let predicate):
-            guard case .set(let sv) = try evaluate(set, in: state) else { throw typeMismatch("∃", got: try evaluate(set, in: state)) }
+            guard case .set(let sv) = try set.evaluate(in: state) else { throw typeMismatch("∃", got: try set.evaluate(in: state)) }
             for elem in sv {
-                let substituted = substituteVariable("_x", elem, in: predicate)
-                if case .bool(true) = try evaluate(substituted, in: state) {
+                let substituted = Self.substituteVariable("_x", elem, in: predicate)
+                if case .bool(true) = try substituted.evaluate(in: state) {
                     return .bool(true)
                 }
             }
             return .bool(false)
 
         case .choose(let set, let predicate):
-            guard case .set(let sv) = try evaluate(set, in: state) else { throw typeMismatch("CHOOSE", got: try evaluate(set, in: state)) }
+            guard case .set(let sv) = try set.evaluate(in: state) else { throw typeMismatch("CHOOSE", got: try set.evaluate(in: state)) }
             for elem in sv {
-                let substituted = substituteVariable("_x", elem, in: predicate)
-                if case .bool(true) = try evaluate(substituted, in: state) {
+                let substituted = Self.substituteVariable("_x", elem, in: predicate)
+                if case .bool(true) = try substituted.evaluate(in: state) {
                     return elem
                 }
             }
@@ -277,12 +277,12 @@ public enum Evaluator {
             return .bool(false)
 
         case .sequenceFromSet(let s):
-            guard case .set(let sv) = try evaluate(s, in: state) else { throw typeMismatch("SeqFromSet", got: try evaluate(s, in: state)) }
+            guard case .set(let sv) = try s.evaluate(in: state) else { throw typeMismatch("SeqFromSet", got: try s.evaluate(in: state)) }
             return .tuple(sv.sorted())
 
         case .setSum(let f, let s):
-            guard case .set(let sv) = try evaluate(s, in: state) else { throw typeMismatch("Sum set", got: try evaluate(s, in: state)) }
-            let fval = try evaluate(f, in: state)
+            guard case .set(let sv) = try s.evaluate(in: state) else { throw typeMismatch("Sum set", got: try s.evaluate(in: state)) }
+            let fval = try f.evaluate(in: state)
             guard case .function(let mapping) = fval else { throw typeMismatch("Sum function", got: fval) }
             var total = 0
             for elem in sv {
@@ -292,8 +292,8 @@ public enum Evaluator {
             return .int(total)
 
         case .functionSet(let domain, let range):
-            guard case .set(let domainSet) = try evaluate(domain, in: state) else { throw typeMismatch("functionSet domain", got: try evaluate(domain, in: state)) }
-            guard case .set(let rangeSet) = try evaluate(range, in: state) else { throw typeMismatch("functionSet range", got: try evaluate(range, in: state)) }
+            guard case .set(let domainSet) = try domain.evaluate(in: state) else { throw typeMismatch("functionSet domain", got: try domain.evaluate(in: state)) }
+            guard case .set(let rangeSet) = try range.evaluate(in: state) else { throw typeMismatch("functionSet range", got: try range.evaluate(in: state)) }
             let domainArr = domainSet.sorted()
             let rangeArr = rangeSet.sorted()
             var result = Set<TLAValue>()
@@ -311,37 +311,34 @@ public enum Evaluator {
 
         case .caseExpr(let pairs, let other):
             for i in stride(from: 0, to: pairs.count, by: 2) {
-                if case .bool(true) = try evaluate(pairs[i], in: state) {
-                    return try evaluate(pairs[i + 1], in: state)
+                if case .bool(true) = try pairs[i].evaluate(in: state) {
+                    return try pairs[i + 1].evaluate(in: state)
                 }
             }
-            if let other = other { return try evaluate(other, in: state) }
+            if let other = other { return try other.evaluate(in: state) }
             throw typeMismatch("CASE: no branch matched")
 
         case .recursiveCall(let name, let args):
-            // Runtime Swift function
             if let impl = runtimeFuncs[name] {
-                let evald = try args.map { try evaluate($0, in: state, runtimeFuncs: runtimeFuncs, recursiveFuncs: recursiveFuncs) }
+                let evald = try args.map { try $0.evaluate(in: state, runtimeFuncs: runtimeFuncs, recursiveFuncs: recursiveFuncs) }
                 return impl(evald)
             }
-            // DSL-defined recursive function
             if let def = recursiveFuncs.first(where: { $0.name == name }) {
-                let evald = try args.map { try evaluate($0, in: state, runtimeFuncs: runtimeFuncs, recursiveFuncs: recursiveFuncs) }
+                let evald = try args.map { try $0.evaluate(in: state, runtimeFuncs: runtimeFuncs, recursiveFuncs: recursiveFuncs) }
                 var body = def.body
                 for (i, param) in def.params.enumerated() where i < evald.count {
-                    body = substituteVariable(param, evald[i], in: body)
+                    body = Self.substituteVariable(param, evald[i], in: body)
                 }
                 return try evaluateRec(body, in: state, runtimeFuncs: runtimeFuncs, recursiveFuncs: recursiveFuncs, maxDepth: maxDepth - 1)
             }
-            // Builtin patterns
             guard let builtin = RecursiveFunction(rawValue: name) else {
                 throw typeMismatch("Unknown recursive function: \(name)")
             }
             switch builtin {
             case .sum:
                 guard args.count == 2 else { throw typeMismatch("Sum requires 2 args") }
-                let fval = try evaluate(args[0], in: state)
-                let sval = try evaluate(args[1], in: state)
+                let fval = try args[0].evaluate(in: state)
+                let sval = try args[1].evaluate(in: state)
                 guard case .function(let mapping) = fval else { throw typeMismatch("Sum function", got: fval) }
                 guard case .set(let sv) = sval else { throw typeMismatch("Sum set", got: sval) }
                 var total = 0
@@ -352,26 +349,22 @@ public enum Evaluator {
                 return .int(total)
             case .seqFromSet:
                 guard args.count == 1 else { throw typeMismatch("SeqFromSet requires 1 arg") }
-                guard case .set(let sv) = try evaluate(args[0], in: state) else { throw typeMismatch("SeqFromSet", got: try evaluate(args[0], in: state)) }
+                guard case .set(let sv) = try args[0].evaluate(in: state) else { throw typeMismatch("SeqFromSet", got: try args[0].evaluate(in: state)) }
                 return .tuple(sv.sorted())
             }
         }
     }
 
-    public static func evaluateBool(_ expr: StateExpr, in state: [String: TLAValue],
-                                     runtimeFuncs: [String: RuntimeFunc] = [:],
-                                     recursiveFuncs: [RecursiveFunc] = []) throws -> Bool {
-        guard case .bool(let b) = try evaluate(expr, in: state, runtimeFuncs: runtimeFuncs, recursiveFuncs: recursiveFuncs) else {
-            throw EvalError.typeMismatch("Expected boolean expression, got \(try evaluate(expr, in: state, runtimeFuncs: runtimeFuncs, recursiveFuncs: recursiveFuncs))")
+    public func evaluateBool(in state: [String: TLAValue],
+                              runtimeFuncs: [String: RuntimeFunc] = [:],
+                              recursiveFuncs: [RecursiveFunc] = []) throws -> Bool {
+        guard case .bool(let b) = try self.evaluate(in: state, runtimeFuncs: runtimeFuncs, recursiveFuncs: recursiveFuncs) else {
+            throw EvalError.typeMismatch("Expected boolean expression, got \(try self.evaluate(in: state, runtimeFuncs: runtimeFuncs, recursiveFuncs: recursiveFuncs))")
         }
         return b
     }
 
-    public static func subExpr(_ expr: StateExpr, name: String, value: TLAValue) -> StateExpr {
-        substituteVariable(name, value, in: expr)
-    }
-
-    private static func substituteVariable(_ name: String, _ value: TLAValue, in expr: StateExpr) -> StateExpr {
+    public static func substituteVariable(_ name: String, _ value: TLAValue, in expr: StateExpr) -> StateExpr {
         switch expr {
         case .variable(let n) where n == name: return .value(value)
         case .variable: return expr
@@ -427,10 +420,10 @@ public enum Evaluator {
         case .recursiveCall(let n, let a): return .recursiveCall(n, a.map(sub))
         }
 
-        func sub(_ e: StateExpr) -> StateExpr { substituteVariable(name, value, in: e) }
+        func sub(_ e: StateExpr) -> StateExpr { Self.substituteVariable(name, value, in: e) }
     }
 
-    private static func tlaValueToString(_ v: TLAValue) -> String {
+    private func tlaValueToString(_ v: TLAValue) -> String {
         switch v {
         case .int(let n): return "\(n)"
         case .string(let s): return s
@@ -440,34 +433,34 @@ public enum Evaluator {
         }
     }
 
-    private static func intOp(_ a: StateExpr, _ b: StateExpr, _ op: (Int, Int) throws -> Int, in state: [String: TLAValue]) throws -> TLAValue {
-        guard case .int(let na) = try evaluate(a, in: state), case .int(let nb) = try evaluate(b, in: state) else {
-            throw typeMismatch("arithmetic", got: try evaluate(a, in: state), try evaluate(b, in: state))
+    private func intOp(_ a: StateExpr, _ b: StateExpr, _ op: (Int, Int) throws -> Int, in state: [String: TLAValue]) throws -> TLAValue {
+        guard case .int(let na) = try a.evaluate(in: state), case .int(let nb) = try b.evaluate(in: state) else {
+            throw typeMismatch("arithmetic", got: try a.evaluate(in: state), try b.evaluate(in: state))
         }
         return .int(try op(na, nb))
     }
 
-    private static func intUnary(_ a: StateExpr, _ op: (Int) -> Int, in state: [String: TLAValue]) throws -> TLAValue {
-        guard case .int(let n) = try evaluate(a, in: state) else { throw typeMismatch("unary", got: try evaluate(a, in: state)) }
+    private func intUnary(_ a: StateExpr, _ op: (Int) -> Int, in state: [String: TLAValue]) throws -> TLAValue {
+        guard case .int(let n) = try a.evaluate(in: state) else { throw typeMismatch("unary", got: try a.evaluate(in: state)) }
         return .int(op(n))
     }
 
-    private static func intCmp(_ a: StateExpr, _ b: StateExpr, _ op: (Int, Int) -> Bool, in state: [String: TLAValue]) throws -> TLAValue {
-        guard case .int(let na) = try evaluate(a, in: state), case .int(let nb) = try evaluate(b, in: state) else {
-            throw typeMismatch("comparison", got: try evaluate(a, in: state), try evaluate(b, in: state))
+    private func intCmp(_ a: StateExpr, _ b: StateExpr, _ op: (Int, Int) -> Bool, in state: [String: TLAValue]) throws -> TLAValue {
+        guard case .int(let na) = try a.evaluate(in: state), case .int(let nb) = try b.evaluate(in: state) else {
+            throw typeMismatch("comparison", got: try a.evaluate(in: state), try b.evaluate(in: state))
         }
         return .bool(op(na, nb))
     }
 
-    private static func evaluateRec(_ expr: StateExpr, in state: [String: TLAValue],
-                                     runtimeFuncs: [String: RuntimeFunc],
-                                     recursiveFuncs: [RecursiveFunc],
-                                     maxDepth: Int) throws -> TLAValue {
+    private func evaluateRec(_ expr: StateExpr, in state: [String: TLAValue],
+                              runtimeFuncs: [String: RuntimeFunc],
+                              recursiveFuncs: [RecursiveFunc],
+                              maxDepth: Int) throws -> TLAValue {
         guard maxDepth > 0 else { throw EvalError.typeMismatch("Recursion depth exceeded") }
-        return try evaluate(expr, in: state, runtimeFuncs: runtimeFuncs, recursiveFuncs: recursiveFuncs)
+        return try expr.evaluate(in: state, runtimeFuncs: runtimeFuncs, recursiveFuncs: recursiveFuncs)
     }
 
-    private static func typeMismatch(_ op: String, got: TLAValue...) -> EvalError {
+    private func typeMismatch(_ op: String, got: TLAValue...) -> EvalError {
         .typeMismatch("\(op): expected matching types, got \(got.map(\.description).joined(separator: ", "))")
     }
 }
