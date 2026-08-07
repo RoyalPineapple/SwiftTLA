@@ -121,6 +121,10 @@ public enum ActionEnumerator {
             let lhs = distOr(a)
             let rhs = distOr(b)
             return lhs.flatMap { l in rhs.map { r in .and(l, r) } }
+        case .ifElse(let c, let t, let e):
+            let thenB = distOr(.and(.guard_(c), t))
+            let elseB = distOr(.and(.guard_(StateExpr.not(c)), e))
+            return thenB + elseB
         default:
             return [action]
         }
@@ -131,8 +135,7 @@ public enum ActionEnumerator {
         case .chooseAction(let v, let s): return [(v, s)]
         case .and(let a, let b):
             return try extractChooseActions(a) + extractChooseActions(b)
-        case .or: return []
-        case .assign, .unchanged, .guard_, .existsAction: return []
+        case .or, .ifElse, .assign, .unchanged, .guard_, .existsAction: return []
         }
     }
 
@@ -140,7 +143,7 @@ public enum ActionEnumerator {
         switch action {
         case .existsAction(let v, let s, let b): return [(v, s, b)]
         case .and(let a, let b): return extractExistsActions(a) + extractExistsActions(b)
-        case .assign, .unchanged, .guard_, .chooseAction, .or: return []
+        case .assign, .unchanged, .guard_, .chooseAction, .or, .ifElse: return []
         }
     }
 
@@ -152,7 +155,7 @@ public enum ActionEnumerator {
             return ([name: .variable(name)], [])
         case .guard_(let expr):
             return ([:], [expr])
-        case .chooseAction, .existsAction:
+        case .chooseAction, .existsAction, .ifElse:
             return ([:], [])
         case .and(let a, let b):
             let (lhsAssign, lhsGuards) = try extractAssignments(a)
@@ -182,6 +185,10 @@ public enum ActionEnumerator {
             return .and(substituteVarInAction(name, value, a), substituteVarInAction(name, value, b))
         case .or(let a, let b):
             return .or(substituteVarInAction(name, value, a), substituteVarInAction(name, value, b))
+        case .ifElse(let c, let t, let e):
+            return .ifElse(Evaluator.subExpr(c, name: name, value: value),
+                           substituteVarInAction(name, value, t),
+                           substituteVarInAction(name, value, e))
         }
     }
 }

@@ -41,8 +41,9 @@ extension TLASpec {
         }
 
         for rf in recursiveFuncs {
+            let underscores = rf.params.map { _ in "_" }.joined(separator: ", ")
             let params = rf.params.joined(separator: ", ")
-            lines.append("RECURSIVE \(rf.name)(\(params))")
+            lines.append("RECURSIVE \(rf.name)(\(underscores))")
             lines.append("\(rf.name)(\(params)) == \(rf.body)")
             lines.append("")
         }
@@ -151,6 +152,8 @@ private func distributeActionOr(_ action: ActionExpr) -> [ActionExpr] {
         let lhs = distributeActionOr(a)
         let rhs = distributeActionOr(b)
         return lhs.flatMap { l in rhs.map { r in .and(l, r) } }
+    case .ifElse(let c, let t, let e):
+        return distributeActionOr(.and(.guard_(c), t)) + distributeActionOr(.and(.guard_(StateExpr.not(c)), e))
     case .existsAction(let v, let s, let b):
         return distributeActionOr(b).map { .existsAction(v, s, $0) }
     default:

@@ -69,6 +69,7 @@ check_swift_port() {
     grep -q '^VictoryOK ==' "$name_tla" && echo "INVARIANT VictoryOK"
     grep -q '^ExclusiveAccess ==' "$name_tla" && echo "INVARIANT ExclusiveAccess"
     grep -q '^Safe ==' "$name_tla" && echo "INVARIANT Safe"
+    grep -q '^Invariants ==' "$name_tla" && echo "INVARIANT Invariants"
     grep -q '^SumMet ==' "$name_tla" && echo "INVARIANT SumMet"
     grep -q '^StateConstraint ==' "$name_tla" && echo "CONSTRAINT StateConstraint"
   } > "$cfg"

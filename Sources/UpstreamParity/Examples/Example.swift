@@ -40,6 +40,7 @@ public enum Example {
         lamportMutexN2,
         prisonerN3,
         simpleAllocator,
+        singleLaneBridge,
         syncTD,
         tCommit,
         teachingSimpleN2,

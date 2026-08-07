@@ -175,7 +175,7 @@ extension StateExpr {
     public static func record(_ fields: [String: StateExpr]) -> StateExpr { .recordLiteral(fields) }
     public static func enabled(_ name: String) -> StateExpr { .enabledAction(name) }
 
-    // MARK: - Bound variables
+    // MARK: - Var-based bound variables
 
     public static func forAll(_ variable: Var<some TLAValueType>, in set: StateExpr, _ body: StateExpr) -> StateExpr {
         .forAll(set, substituteVariableBody(variable.name, with: "_x", in: body))
@@ -189,6 +189,18 @@ extension StateExpr {
     public static func functionLiteral(_ variable: Var<some TLAValueType>, in domain: StateExpr, _ body: StateExpr) -> StateExpr {
         .functionLiteral(domain, substituteVariableBody(variable.name, with: "_x", in: body))
     }
+
+    // MARK: - Closure-based with InvariantBuilder context
+
+    public static func forAll(_ set: StateExpr, @InvariantBuilder _ body: (StateExpr) -> StateExpr) -> StateExpr {
+        .forAll(set, body(.variable("_x")))
+    }
+    public static func existsIn(_ set: StateExpr, @InvariantBuilder _ body: (StateExpr) -> StateExpr) -> StateExpr {
+        .exists(set, body(.variable("_x")))
+    }
+    public static func filterSet(_ set: StateExpr, @InvariantBuilder _ body: (StateExpr) -> StateExpr) -> StateExpr {
+        .setFilter(set, body(.variable("_x")))
+    }
 }
 
 extension ActionExpr {
@@ -197,6 +209,11 @@ extension ActionExpr {
     public static func exists(_ name: String, from set: some StateExprConvertible,
                               _ body: (StateExpr) -> ActionExpr) -> ActionExpr {
         .existsAction(name, set.stateExpr, body(.variable(name)))
+    }
+
+    public static func ifElse(_ condition: some StateExprConvertible,
+                               then: ActionExpr, else: ActionExpr) -> ActionExpr {
+        .ifElse(condition.stateExpr, then, `else`)
     }
 }
 

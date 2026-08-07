@@ -425,8 +425,8 @@ public func Recursive(_ tlaText: String) -> RecursiveDecl {
     RecursiveDecl(tlaText)
 }
 
-public func DefineRecursive(_ name: String, params: [String], body: StateExpr) -> RecursiveFuncDecl {
-    RecursiveFuncDecl(RecursiveFunc(name: name, params: params, body: body))
+public func DefineRecursive(_ name: String, params: [String], @InvariantBuilder body: () -> StateExpr) -> RecursiveFuncDecl {
+    RecursiveFuncDecl(RecursiveFunc(name: name, params: params, body: body()))
 }
 
 extension TLASpec {
@@ -597,6 +597,7 @@ private func substituteInAction(_ expr: ActionExpr, constants: [String: TLAValue
     case .chooseAction(let v, let s): return .chooseAction(v, substituteInState(s, constants: constants))
     case .and(let a, let b): return .and(substituteInAction(a, constants: constants), substituteInAction(b, constants: constants))
     case .or(let a, let b): return .or(substituteInAction(a, constants: constants), substituteInAction(b, constants: constants))
+    case .ifElse(let c, let t, let e): return .ifElse(substituteInState(c, constants: constants), substituteInAction(t, constants: constants), substituteInAction(e, constants: constants))
     case .existsAction(let v, let s, let b): return .existsAction(v, substituteInState(s, constants: constants), substituteInAction(b, constants: constants))
     }
 }
@@ -607,6 +608,7 @@ public func assignedVars(_ e: ActionExpr) -> Set<String> {
     case .unchanged, .guard_: return []
     case .and(let a, let b): return assignedVars(a).union(assignedVars(b))
     case .or(let a, let b): return assignedVars(a).union(assignedVars(b))
+    case .ifElse(_, let t, let e): return assignedVars(t).union(assignedVars(e))
     case .existsAction(_, _, let b): return assignedVars(b)
     }
 }
@@ -616,6 +618,7 @@ public func explicitUnchanged(_ e: ActionExpr) -> Set<String> {
     case .unchanged(let v): return [v]
     case .and(let a, let b): return explicitUnchanged(a).union(explicitUnchanged(b))
     case .or(let a, let b): return explicitUnchanged(a).intersection(explicitUnchanged(b))
+    case .ifElse: return []
     case .existsAction: return []
     default: return []
     }
