@@ -220,6 +220,11 @@ extension ActionExpr {
                                     _ body: (StateExpr) -> ActionExpr) -> ActionExpr {
         .existsAction(name, .powerSet(set.stateExpr), body(.variable(name)))
     }
+
+    public static func define(_ name: String, as value: some StateExprConvertible,
+                               in body: ActionExpr) -> ActionExpr {
+        .define(name, value.stateExpr, body)
+    }
 }
 
 extension StateExpr {

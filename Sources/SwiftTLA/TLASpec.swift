@@ -652,6 +652,7 @@ private func substituteInAction(_ expr: ActionExpr, constants: [String: TLAValue
     case .and(let a, let b): return .and(substituteInAction(a, constants: constants), substituteInAction(b, constants: constants))
     case .or(let a, let b): return .or(substituteInAction(a, constants: constants), substituteInAction(b, constants: constants))
     case .ifElse(let c, let t, let e): return .ifElse(substituteInState(c, constants: constants), substituteInAction(t, constants: constants), substituteInAction(e, constants: constants))
+    case .define(let v, let exp, let body): return .define(v, substituteInState(exp, constants: constants), substituteInAction(body, constants: constants))
     case .existsAction(let v, let s, let b): return .existsAction(v, substituteInState(s, constants: constants), substituteInAction(b, constants: constants))
     }
 }
@@ -663,6 +664,7 @@ public func assignedVars(_ e: ActionExpr) -> Set<String> {
     case .and(let a, let b): return assignedVars(a).union(assignedVars(b))
     case .or(let a, let b): return assignedVars(a).union(assignedVars(b))
     case .ifElse(_, let t, let e): return assignedVars(t).union(assignedVars(e))
+    case .define(_, _, let b): return assignedVars(b)
     case .existsAction(_, _, let b): return assignedVars(b)
     }
 }
@@ -673,6 +675,7 @@ public func explicitUnchanged(_ e: ActionExpr) -> Set<String> {
     case .and(let a, let b): return explicitUnchanged(a).union(explicitUnchanged(b))
     case .or(let a, let b): return explicitUnchanged(a).intersection(explicitUnchanged(b))
     case .ifElse: return []
+    case .define: return []
     case .existsAction: return []
     default: return []
     }

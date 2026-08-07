@@ -148,6 +148,8 @@ func distributeOr(_ action: ActionExpr) -> [ActionExpr] {
         return lhs.flatMap { l in rhs.map { r in .and(l, r) } }
     case .ifElse(let c, let t, let e):
         return distributeOr(.and(.guard_(c), t)) + distributeOr(.and(.guard_(StateExpr.not(c)), e))
+    case .define(_, _, let b):
+        return distributeOr(b)
     case .existsAction(let v, let s, let b):
         return distributeOr(b).map { .existsAction(v, s, $0) }
     default:

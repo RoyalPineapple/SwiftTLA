@@ -25,6 +25,14 @@ public enum ActionEnumerator {
         oldState: [String: TLAValue],
         varNames: [String]
     ) throws -> [[String: TLAValue]] {
+        // Handle LET bindings: evaluate value, substitute into body
+        if case .define(let name, let valueExpr, let body) = action {
+            let val = try Evaluator.evaluate(valueExpr, in: oldState)
+            let substituted = substituteVarInAction(name, val, body)
+            let disjuncts = distributeOr(substituted)
+            return try disjuncts.flatMap { try processDisjunct($0, oldState: oldState, varNames: varNames) }
+        }
+
         let existsBindings = extractExistsActions(action)
         if !existsBindings.isEmpty {
             let (v, s, body) = existsBindings[0]
@@ -118,7 +126,7 @@ public enum ActionEnumerator {
         case .chooseAction(let v, let s): return [(v, s)]
         case .and(let a, let b):
             return try extractChooseActions(a) + extractChooseActions(b)
-        case .or, .ifElse, .assign, .unchanged, .guard_, .existsAction: return []
+        case .or, .ifElse, .define, .assign, .unchanged, .guard_, .existsAction: return []
         }
     }
 
@@ -126,7 +134,7 @@ public enum ActionEnumerator {
         switch action {
         case .existsAction(let v, let s, let b): return [(v, s, b)]
         case .and(let a, let b): return extractExistsActions(a) + extractExistsActions(b)
-        case .assign, .unchanged, .guard_, .chooseAction, .or, .ifElse: return []
+        case .assign, .unchanged, .guard_, .chooseAction, .or, .ifElse, .define: return []
         }
     }
 
@@ -138,7 +146,7 @@ public enum ActionEnumerator {
             return ([name: .variable(name)], [])
         case .guard_(let expr):
             return ([:], [expr])
-        case .chooseAction, .existsAction, .ifElse:
+        case .chooseAction, .existsAction, .ifElse, .define:
             return ([:], [])
         case .and(let a, let b):
             let (lhsAssign, lhsGuards) = try extractAssignments(a)
@@ -172,6 +180,9 @@ public enum ActionEnumerator {
             return .ifElse(Evaluator.subExpr(c, name: name, value: value),
                            substituteVarInAction(name, value, t),
                            substituteVarInAction(name, value, e))
+        case .define(let v, let exp, let body):
+            return .define(v, Evaluator.subExpr(exp, name: name, value: value),
+                              substituteVarInAction(name, value, body))
         }
     }
 }

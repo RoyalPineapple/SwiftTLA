@@ -5,6 +5,7 @@ public indirect enum ActionExpr: Hashable, Sendable, CustomStringConvertible {
     case chooseAction(String, StateExpr)
     case existsAction(String, StateExpr, ActionExpr)
     case ifElse(StateExpr, ActionExpr, ActionExpr)
+    case define(String, StateExpr, ActionExpr)
     case and(ActionExpr, ActionExpr)
     case or(ActionExpr, ActionExpr)
 
@@ -15,6 +16,7 @@ public indirect enum ActionExpr: Hashable, Sendable, CustomStringConvertible {
         case .guard_(let e): return "\(e)"
         case .chooseAction(let v, let s): return "\(v)' \\in \(s)"
         case .existsAction(let v, let s, let b): return "\\E \(v) \\in \(s): \(b)"
+        case .define(let v, let e, let b): return "LET \(v) == \(e) IN \(b)"
         case .ifElse(let c, let t, let e): return "IF \(c) THEN (\(t)) ELSE (\(e))"
         case .and(let a, let b): return "(\(a) /\\ \(b))"
         case .or(let a, let b): return "(\(a) \\/ \(b))"
