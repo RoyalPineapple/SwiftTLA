@@ -2,15 +2,11 @@ import SwiftTLA
 import SwiftTLAMacros
 import CoreBluetooth
 
-/// A verified CoreBluetooth central manager.  Proves at compile time that
-/// you never scan or connect unless Bluetooth is powered on.
-@TLAModel
+@TLAActor
 public actor Central: NSObject, CBCentralManagerDelegate {
     public static var spec: TLASpec {
         TLASpec("Central") {
             let phase = Var<Int>("phase")
-                // 0=unknown, 1=resetting, 2=unsupported,
-                // 3=unauthorized, 4=poweredOff, 5=poweredOn, 6=scanning
             Variable(phase, 0)
 
             Action("toPoweredOn")    { (phase == 0 || phase == 1 || phase == 4) && phase.becomes(5) }
@@ -20,17 +16,12 @@ public actor Central: NSObject, CBCentralManagerDelegate {
             Action("toResetting")    { (phase == 4 || phase == 5) && phase.becomes(1) }
             Action("startScan")      { phase == 5 && phase.becomes(6) }
             Action("stopScan")       { phase == 6 && phase.becomes(5) }
-
-            Invariant("noScanWithoutPower") { true }  // structural: startScan guards on phase==5
         }
     }
-
-    // ── BRIDGE ──
 
     public enum Phase: Int {
         case unknown = 0, resetting, unsupported, unauthorized, poweredOff, poweredOn, scanning
     }
-
     public var phase: Phase { Phase(rawValue: _state.phase)! }
     public var isReady: Bool { phase == .poweredOn }
 
@@ -50,14 +41,14 @@ public actor Central: NSObject, CBCentralManagerDelegate {
     }
 
     public func scanForPeripherals(withServices services: [CBUUID]?) async throws {
-        try await ready()            // awaits poweredOn
-        applyToPoweredOn()           // proven: transitions to poweredOn
-        applyStartScan()             // proven: only fires from poweredOn
+        try await ready()
+        toPoweredOn()
+        startScan()
         central.scanForPeripherals(withServices: services, options: nil)
     }
 
-    public func stopScan() {
-        applyStopScan()
+    public func stop() {
+        stopScan()
         central.stopScan()
     }
 
@@ -66,20 +57,23 @@ public actor Central: NSObject, CBCentralManagerDelegate {
         central.connect(peripheral, options: nil)
     }
 
-    // MARK: - CBCentralManagerDelegate
+    nonisolated public func centralManagerDidUpdateState(_ central: CBCentralManager) {
+        let newState = central.state
+        Task { await self.updateState(newState) }
+    }
 
-    public func centralManagerDidUpdateState(_ central: CBCentralManager) {
-        switch central.state {
-        case .poweredOn:  applyToPoweredOn()
-        case .poweredOff: applyToPoweredOff()
-        case .unsupported: applyToUnsupported()
-        case .unauthorized: applyToUnauthorized()
-        case .resetting:  applyToResetting()
+    private func updateState(_ cbState: CBManagerState) {
+        switch cbState {
+        case .poweredOn:  toPoweredOn()
+        case .poweredOff: toPoweredOff()
+        case .unsupported: toUnsupported()
+        case .unauthorized: toUnauthorized()
+        case .resetting:  toResetting()
         case .unknown:    break
         @unknown default: break
         }
-        if central.state == .poweredOn {
-            readyContinuation?.resume()
+        if cbState == .poweredOn, let c = readyContinuation {
+            c.resume()
             readyContinuation = nil
         }
     }

@@ -6,31 +6,26 @@ import SwiftDiagnostics
 import SwiftParser
 import SwiftTLA
 
-public struct ModelMacro: MemberMacro, ExtensionMacro {
-    public static func expansion(
-        of node: AttributeSyntax,
-        attachedTo declaration: some DeclGroupSyntax,
-        providingExtensionsOf type: some TypeSyntaxProtocol,
-        conformingTo protocols: [TypeSyntax],
-        in context: some MacroExpansionContext
-    ) throws -> [ExtensionDeclSyntax] {
-        guard let ext = ("""
-            extension \(type.trimmed): TLAModelType {}
-            """ as DeclSyntax).as(ExtensionDeclSyntax.self) else { return [] }
-        return [ext]
-    }
+// MARK: - Shared parsing and verification
 
-    public static func expansion(
-        of node: AttributeSyntax,
-        providingMembersOf declaration: some DeclGroupSyntax,
-        in context: some MacroExpansionContext
-    ) throws -> [DeclSyntax] {
-        guard let structDecl = declaration.as(StructDeclSyntax.self) else {
-            throw SimpleError("@TLAModel on structs only")
+struct MacroExpander {
+    let isActor: Bool
+
+    func parseAndVerify(_ declaration: some DeclGroupSyntax) throws -> (
+        typeName: String, variables: [(String, TLAValue, StateExpr?)], actions: [(String, ActionExpr)]
+    ) {
+        let typeName: String
+        let memberList: MemberBlockItemListSyntax
+
+        if isActor, let a = declaration.as(ActorDeclSyntax.self) {
+            typeName = a.name.text; memberList = a.memberBlock.members
+        } else if let s = declaration.as(StructDeclSyntax.self) {
+            typeName = s.name.text; memberList = s.memberBlock.members
+        } else {
+            throw SimpleError(isActor ? "@TLAActor on actors only" : "@TLAModel on structs only")
         }
-        let typeName = structDecl.name.text
 
-        guard let closure = findSpecClosure(in: structDecl.memberBlock.members) else {
+        guard let closure = Self.findSpec(in: memberList) else {
             throw SimpleError("Could not find 'TLASpec' builder in '\(typeName)'")
         }
 
@@ -59,16 +54,15 @@ public struct ModelMacro: MemberMacro, ExtensionMacro {
         case .ok: break
         }
 
-        return generateMembers(variables: parsed.variables, actions: parsed.actions)
+        return (typeName, parsed.variables, parsed.actions)
     }
 
-    static func generateMembers(
+    func generateMembers(
         variables: [(name: String, initial: TLAValue, initialSet: StateExpr?)],
         actions: [(name: String, body: ActionExpr)]
     ) -> [DeclSyntax] {
         var decls: [DeclSyntax] = []
 
-        // _state field
         decls.append(DeclSyntax(
             VariableDeclSyntax(
                 modifiers: [DeclModifierSyntax(name: .keyword(.private))],
@@ -81,19 +75,12 @@ public struct ModelMacro: MemberMacro, ExtensionMacro {
             )
         ))
 
-        // Variables enum
-        decls.append(DeclSyntax(generateVariablesEnum(variables: variables)))
-        // Actions enum
-        decls.append(DeclSyntax(generateActionsEnum(actions: actions)))
-        // State struct
-        decls.append(DeclSyntax(generateStateStruct(variables: variables)))
-        // Variable properties
-        decls.append(contentsOf: generateVariableProperties(variables: variables).map(DeclSyntax.init))
-        // Action methods
+        decls.append(DeclSyntax(Self.generateVariablesEnum(variables: variables)))
+        decls.append(DeclSyntax(Self.generateActionsEnum(actions: actions)))
+        decls.append(DeclSyntax(Self.generateStateStruct(variables: variables)))
+        decls.append(contentsOf: Self.generateVariableProperties(variables: variables).map(DeclSyntax.init))
         decls.append(contentsOf: generateActionMethods(actions: actions).map(DeclSyntax.init))
-        // _apply helper
         decls.append(DeclSyntax(generateApplyHelper()))
-        // runtime accessor
         decls.append(DeclSyntax(
             VariableDeclSyntax(
                 modifiers: [DeclModifierSyntax(name: .keyword(.public)), DeclModifierSyntax(name: .keyword(.static))],
@@ -101,9 +88,9 @@ public struct ModelMacro: MemberMacro, ExtensionMacro {
                 bindings: [PatternBindingSyntax(
                     pattern: IdentifierPatternSyntax(identifier: "runtime"),
                     typeAnnotation: TypeAnnotationSyntax(type: IdentifierTypeSyntax(name: "SpecRuntime")),
-                    accessorBlock: AccessorBlockSyntax(accessors: .getter([
-                        "SpecRuntime(spec: spec)"
-                    ]))
+                    accessorBlock: AccessorBlockSyntax(accessors: .getter(
+                        CodeBlockItemListSyntax { ExprSyntax(stringLiteral: "SpecRuntime(spec: spec)") }
+                    ))
                 )]
             )
         ))
@@ -111,45 +98,9 @@ public struct ModelMacro: MemberMacro, ExtensionMacro {
         return decls
     }
 
-    private static func findSpecClosure(in members: MemberBlockItemListSyntax) -> ClosureExprSyntax? {
-        for member in members {
-            guard let varDecl = member.decl.as(VariableDeclSyntax.self),
-                  let binding = varDecl.bindings.first,
-                  binding.pattern.as(IdentifierPatternSyntax.self)?.identifier.text == "spec"
-            else { continue }
-
-            if let closure = binding.accessorBlock?.accessors.as(CodeBlockItemListSyntax.self) {
-                for stmt in closure {
-                    if case .expr(let e) = stmt.item,
-                       let fc = e.as(FunctionCallExprSyntax.self),
-                       fc.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "TLASpec" {
-                        return (fc.trailingClosure ?? fc.arguments.last?.expression.as(ClosureExprSyntax.self))
-                    }
-                }
-            }
-            if let accessors = binding.accessorBlock?.accessors.as(AccessorDeclListSyntax.self) {
-                for acc in accessors where acc.accessorSpecifier.tokenKind == .keyword(.get) {
-                    for stmt in acc.body?.statements ?? [] {
-                        if case .expr(let e) = stmt.item,
-                           let fc = e.as(FunctionCallExprSyntax.self),
-                           fc.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "TLASpec" {
-                            return (fc.trailingClosure ?? fc.arguments.last?.expression.as(ClosureExprSyntax.self))
-                        }
-                    }
-                }
-            }
-        }
-        return nil
-    }
-
-    struct SimpleError: Error, CustomStringConvertible {
-        let description: String
-        init(_ description: String) { self.description = description }
-    }
-
     // MARK: - Var name injection
 
-    static func rewriteVarNames(in closure: ClosureExprSyntax) -> ClosureExprSyntax {
+    private func rewriteVarNames(in closure: ClosureExprSyntax) -> ClosureExprSyntax {
         var newStatements: [CodeBlockItemSyntax] = []
         for item in closure.statements {
             newStatements.append(rewriteVarBinding(in: item))
@@ -157,7 +108,7 @@ public struct ModelMacro: MemberMacro, ExtensionMacro {
         return closure.with(\.statements, CodeBlockItemListSyntax(newStatements))
     }
 
-    private static func rewriteVarBinding(in item: CodeBlockItemSyntax) -> CodeBlockItemSyntax {
+    private func rewriteVarBinding(in item: CodeBlockItemSyntax) -> CodeBlockItemSyntax {
         guard case .decl(let decl) = item.item,
               let varDecl = decl.as(VariableDeclSyntax.self)
         else { return item }
@@ -202,35 +153,7 @@ public struct ModelMacro: MemberMacro, ExtensionMacro {
         return item.with(\.item, .decl(DeclSyntax(newDecl)))
     }
 
-    // MARK: - Type mapping
-
-    static func swiftType(for initial: TLAValue) -> String {
-        switch initial {
-        case .int:     return "Int"
-        case .bool:    return "Bool"
-        case .string:  return "String"
-        case .set:     return "Set<Int>"
-        case .tuple:   return "[TLAValue]"
-        case .record:  return "[String: TLAValue]"
-        case .function: return "[TLAValue: TLAValue]"
-        case .constant: return "String"
-        }
-    }
-
-    static func tlaValueExtractor(for initial: TLAValue) -> String {
-        switch initial {
-        case .int:     return "intValue"
-        case .bool:    return "boolValue"
-        case .string:  return "stringValue"
-        case .set:     return "intSetValue"
-        case .tuple:   return "tupleValue"
-        case .record:  return "recordValue"
-        case .function: return "functionValue"
-        case .constant: return "stringValue"
-        }
-    }
-
-    // MARK: - SwiftSyntax Code Generation
+    // MARK: - Code generation
 
     static func generateVariablesEnum(variables: [(name: String, initial: TLAValue, initialSet: StateExpr?)]) -> EnumDeclSyntax {
         EnumDeclSyntax(
@@ -244,9 +167,7 @@ public struct ModelMacro: MemberMacro, ExtensionMacro {
             },
             memberBlock: MemberBlockSyntax {
                 for v in variables {
-                    EnumCaseDeclSyntax {
-                        EnumCaseElementSyntax(name: .identifier(v.name))
-                    }
+                    EnumCaseDeclSyntax { EnumCaseElementSyntax(name: .identifier(v.name)) }
                 }
             }
         )
@@ -267,9 +188,7 @@ public struct ModelMacro: MemberMacro, ExtensionMacro {
                     EnumCaseDeclSyntax {
                         EnumCaseElementSyntax(
                             name: .identifier(a.name),
-                            rawValue: InitializerClauseSyntax(
-                                value: StringLiteralExprSyntax(content: a.name)
-                            )
+                            rawValue: InitializerClauseSyntax(value: StringLiteralExprSyntax(content: a.name))
                         )
                     }
                 }
@@ -282,7 +201,6 @@ public struct ModelMacro: MemberMacro, ExtensionMacro {
             modifiers: [DeclModifierSyntax(name: .keyword(.public))],
             name: "State",
             memberBlock: MemberBlockSyntax {
-                // Fields
                 for v in variables {
                     VariableDeclSyntax(
                         modifiers: [DeclModifierSyntax(name: .keyword(.public))],
@@ -293,25 +211,22 @@ public struct ModelMacro: MemberMacro, ExtensionMacro {
                         )]
                     )
                 }
-                // init(from:)
                 InitializerDeclSyntax(
                     modifiers: [DeclModifierSyntax(name: .keyword(.public))],
                     signature: FunctionSignatureSyntax(
                         parameterClause: FunctionParameterClauseSyntax {
                             FunctionParameterSyntax(
-                                firstName: "from",
-                                secondName: "dict",
+                                firstName: "from", secondName: "dict",
                                 type: TypeSyntax(stringLiteral: "[String: TLAValue]")
                             )
                         }
                     ),
                     body: CodeBlockSyntax {
                         for v in variables {
-                            ExprSyntax(stringLiteral: "self.\(v.name) = dict[Variables.\(v.name).rawValue]!.\(tlaValueExtractor(for: v.initial))")
+                            ExprSyntax(stringLiteral: "self.\(v.name) = dict[Variables.\(v.name).rawValue]!.\(extractor(for: v.initial))")
                         }
                     }
                 )
-                // asDictionary
                 VariableDeclSyntax(
                     modifiers: [DeclModifierSyntax(name: .keyword(.public))],
                     bindingSpecifier: .keyword(.var),
@@ -322,7 +237,7 @@ public struct ModelMacro: MemberMacro, ExtensionMacro {
                             CodeBlockItemListSyntax {
                                 DeclSyntax(stringLiteral: "var d: [String: TLAValue] = [:]")
                                 for v in variables {
-                                    ExprSyntax(stringLiteral: "d[Variables.\(v.name).rawValue] = \(tlaValueHelper(v))")
+                                    ExprSyntax(stringLiteral: "d[Variables.\(v.name).rawValue] = \(constructor(for: v.initial, value: v.name))")
                                 }
                                 StmtSyntax(stringLiteral: "return d")
                             }
@@ -331,19 +246,6 @@ public struct ModelMacro: MemberMacro, ExtensionMacro {
                 )
             }
         )
-    }
-
-    static func tlaValueHelper(_ v: (name: String, initial: TLAValue, initialSet: StateExpr?)) -> String {
-        switch v.initial {
-        case .int:     return ".int(\(v.name))"
-        case .bool:    return ".bool(\(v.name))"
-        case .string:  return ".string(\(v.name))"
-        case .set:     return ".set(Set(\(v.name).map { .int($0) }))"
-        case .tuple:   return ".tuple(\(v.name))"
-        case .record:  return ".record(\(v.name))"
-        case .function: return ".function(\(v.name))"
-        case .constant: return ".constant(\(v.name))"
-        }
     }
 
     static func generateVariableProperties(variables: [(name: String, initial: TLAValue, initialSet: StateExpr?)]) -> [VariableDeclSyntax] {
@@ -355,49 +257,146 @@ public struct ModelMacro: MemberMacro, ExtensionMacro {
                     pattern: IdentifierPatternSyntax(identifier: .identifier(v.name)),
                     typeAnnotation: TypeAnnotationSyntax(type: IdentifierTypeSyntax(name: .identifier(swiftType(for: v.initial)))),
                     accessorBlock: AccessorBlockSyntax(accessors: .getter(
-                        CodeBlockItemListSyntax {
-                            ExprSyntax(stringLiteral: "_state.\(v.name)")
-                        }
+                        CodeBlockItemListSyntax { ExprSyntax(stringLiteral: "_state.\(v.name)") }
                     ))
                 )]
             )
         }
     }
 
-    static func generateActionMethods(actions: [(name: String, body: ActionExpr)]) -> [FunctionDeclSyntax] {
+    func generateActionMethods(actions: [(name: String, body: ActionExpr)]) -> [FunctionDeclSyntax] {
         actions.map { a in
             FunctionDeclSyntax(
-                modifiers: [
-                    DeclModifierSyntax(name: .keyword(.public)),
-                    DeclModifierSyntax(name: .keyword(.mutating))
-                ],
-                name: .identifier("apply\(a.name)"),
-                signature: FunctionSignatureSyntax(
-                    parameterClause: FunctionParameterClauseSyntax(parameters: [])
-                ),
+                modifiers: isActor
+                    ? [DeclModifierSyntax(name: .keyword(.public))]
+                    : [DeclModifierSyntax(name: .keyword(.public)), DeclModifierSyntax(name: .keyword(.mutating))],
+                name: isActor ? .identifier(a.name) : .identifier("apply\(a.name)"),
+                signature: FunctionSignatureSyntax(parameterClause: FunctionParameterClauseSyntax(parameters: [])),
                 body: CodeBlockSyntax { ExprSyntax(stringLiteral: "_state = _apply(.\(a.name))") }
             )
         }
     }
 
-    static func generateApplyHelper() -> FunctionDeclSyntax {
+    func generateApplyHelper() -> FunctionDeclSyntax {
         FunctionDeclSyntax(
             modifiers: [DeclModifierSyntax(name: .keyword(.private))],
             name: "_apply",
             signature: FunctionSignatureSyntax(
                 parameterClause: FunctionParameterClauseSyntax {
                     FunctionParameterSyntax(
-                        firstName: "_",
-                        secondName: "action",
+                        firstName: "_", secondName: "action",
                         type: IdentifierTypeSyntax(name: "Actions")
                     )
                 },
                 returnClause: ReturnClauseSyntax(type: IdentifierTypeSyntax(name: "State"))
             ),
             body: CodeBlockSyntax {
-                "let next = try! Self.runtime.apply(actionName: action.rawValue, to: _state.asDictionary)"
-                "return State(from: next)"
+                ExprSyntax(stringLiteral: "let next = try! Self.runtime.apply(actionName: action.rawValue, to: _state.asDictionary)")
+                StmtSyntax(stringLiteral: "return State(from: next)")
             }
         )
+    }
+
+    // MARK: - Helpers
+
+    static func findSpec(in members: MemberBlockItemListSyntax) -> ClosureExprSyntax? {
+        for member in members {
+            guard let varDecl = member.decl.as(VariableDeclSyntax.self),
+                  let binding = varDecl.bindings.first,
+                  binding.pattern.as(IdentifierPatternSyntax.self)?.identifier.text == "spec"
+            else { continue }
+
+            if let closure = binding.accessorBlock?.accessors.as(CodeBlockItemListSyntax.self) {
+                for stmt in closure {
+                    if case .expr(let e) = stmt.item,
+                       let fc = e.as(FunctionCallExprSyntax.self),
+                       fc.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "TLASpec" {
+                        return fc.trailingClosure ?? fc.arguments.last?.expression.as(ClosureExprSyntax.self)
+                    }
+                }
+            }
+            if let accessors = binding.accessorBlock?.accessors.as(AccessorDeclListSyntax.self) {
+                for acc in accessors where acc.accessorSpecifier.tokenKind == .keyword(.get) {
+                    for stmt in acc.body?.statements ?? [] {
+                        if case .expr(let e) = stmt.item,
+                           let fc = e.as(FunctionCallExprSyntax.self),
+                           fc.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "TLASpec" {
+                            return fc.trailingClosure ?? fc.arguments.last?.expression.as(ClosureExprSyntax.self)
+                        }
+                    }
+                }
+            }
+        }
+        return nil
+    }
+
+    static func swiftType(for initial: TLAValue) -> String {
+        switch initial {
+        case .int: "Int"; case .bool: "Bool"; case .string: "String"
+        case .set: "Set<Int>"; case .tuple: "[TLAValue]"
+        case .record: "[String: TLAValue]"; case .function: "[TLAValue: TLAValue]"
+        case .constant: "String"
+        }
+    }
+
+    static func extractor(for initial: TLAValue) -> String {
+        switch initial {
+        case .int: "intValue"; case .bool: "boolValue"; case .string: "stringValue"
+        case .set: "intSetValue"; case .tuple: "tupleValue"
+        case .record: "recordValue"; case .function: "functionValue"
+        case .constant: "stringValue"
+        }
+    }
+
+    static func constructor(for initial: TLAValue, value: String) -> String {
+        switch initial {
+        case .int: ".int(\(value))"; case .bool: ".bool(\(value))"; case .string: ".string(\(value))"
+        case .set: ".set(Set(\(value).map { .int($0) }))"; case .tuple: ".tuple(\(value))"
+        case .record: ".record(\(value))"; case .function: ".function(\(value))"
+        case .constant: ".constant(\(value))"
+        }
+    }
+}
+
+struct SimpleError: Error, CustomStringConvertible {
+    let description: String
+    init(_ description: String) { self.description = description }
+}
+
+// MARK: - Macros
+
+public struct ModelMacro: MemberMacro, ExtensionMacro {
+    public static func expansion(of node: AttributeSyntax, attachedTo declaration: some DeclGroupSyntax,
+                                  providingExtensionsOf type: some TypeSyntaxProtocol, conformingTo protocols: [TypeSyntax],
+                                  in context: some MacroExpansionContext) throws -> [ExtensionDeclSyntax] {
+        guard let ext = ("""
+            extension \(type.trimmed): TLAModelType {}
+            """ as DeclSyntax).as(ExtensionDeclSyntax.self) else { return [] }
+        return [ext]
+    }
+
+    public static func expansion(of node: AttributeSyntax, providingMembersOf declaration: some DeclGroupSyntax,
+                                  in context: some MacroExpansionContext) throws -> [DeclSyntax] {
+        let expander = MacroExpander(isActor: false)
+        let parsed = try expander.parseAndVerify(declaration)
+        return expander.generateMembers(variables: parsed.variables, actions: parsed.actions)
+    }
+}
+
+public struct TLAActorMacro: MemberMacro, ExtensionMacro {
+    public static func expansion(of node: AttributeSyntax, attachedTo declaration: some DeclGroupSyntax,
+                                  providingExtensionsOf type: some TypeSyntaxProtocol, conformingTo protocols: [TypeSyntax],
+                                  in context: some MacroExpansionContext) throws -> [ExtensionDeclSyntax] {
+        guard let ext = ("""
+            extension \(type.trimmed): TLAModelType {}
+            """ as DeclSyntax).as(ExtensionDeclSyntax.self) else { return [] }
+        return [ext]
+    }
+
+    public static func expansion(of node: AttributeSyntax, providingMembersOf declaration: some DeclGroupSyntax,
+                                  in context: some MacroExpansionContext) throws -> [DeclSyntax] {
+        let expander = MacroExpander(isActor: true)
+        let parsed = try expander.parseAndVerify(declaration)
+        return expander.generateMembers(variables: parsed.variables, actions: parsed.actions)
     }
 }

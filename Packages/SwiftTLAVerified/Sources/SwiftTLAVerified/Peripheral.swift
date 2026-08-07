@@ -85,17 +85,17 @@ public actor Peripheral: NSObject, CBPeripheralDelegate {
 
     // MARK: - CBPeripheralDelegate
 
-    public func peripheral(_ peripheral: CBPeripheral, didDiscoverServices error: (any Error)?) {
-        applyDidDiscoverServices()
+    nonisolated public func peripheral(_ peripheral: CBPeripheral, didDiscoverServices error: (any Error)?) {
+        Task { await self.applyDidDiscoverServices() }
     }
 
-    public func peripheral(_ peripheral: CBPeripheral, didDiscoverCharacteristicsFor service: CBService, error: (any Error)?) {
-        applyDidDiscoverChars()
+    nonisolated public func peripheral(_ peripheral: CBPeripheral, didDiscoverCharacteristicsFor service: CBService, error: (any Error)?) {
+        Task { await self.applyDidDiscoverChars() }
     }
 
-    public func peripheral(_ peripheral: CBPeripheral, didUpdateValueFor characteristic: CBCharacteristic, error: (any Error)?) {
+    nonisolated public func peripheral(_ peripheral: CBPeripheral, didUpdateValueFor characteristic: CBCharacteristic, error: (any Error)?) {
     }
 
-    public func peripheral(_ peripheral: CBPeripheral, didWriteValueFor characteristic: CBCharacteristic, error: (any Error)?) {
+    nonisolated public func peripheral(_ peripheral: CBPeripheral, didWriteValueFor characteristic: CBCharacteristic, error: (any Error)?) {
     }
 }
