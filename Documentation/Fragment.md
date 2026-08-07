@@ -1,7 +1,18 @@
 # SwiftTLA language fragment (B v1)
 
-SwiftTLA aims at **TLA+-compatible finite-state safety checking** for a
-defined fragment, with TLC as the external oracle.
+## Core guarantee
+
+SwiftTLA produces a **single AST** from the DSL. That AST feeds two paths:
+
+```
+DSL → StateExpr/ActionExpr AST
+        ├── SpecRuntime     (runs as Swift code)
+        └── .tlaModule       (TLC validates against upstream)
+```
+
+**TLC parity proves runtime correctness.** If TLC finds N states and our
+ModelChecker finds N states, the Swift runtime is behaviorally identical
+to the TLA+ specification.
 
 ## DSL philosophy
 
