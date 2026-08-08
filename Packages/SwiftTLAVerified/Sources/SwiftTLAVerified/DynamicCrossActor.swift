@@ -17,7 +17,6 @@ public actor DynamicCrossActor {
             Variable(pPhase3, 0)
             Variable(pPhase4, 0)
 
-            // Central: 0=unknown 1=resetting 2=unsupported 3=unauthorized 4=poweredOff 5=poweredOn 6=scanning
             Action("cToPoweredOn")   { (cPhase == 0 || cPhase == 1 ||
                                         cPhase == 4) && cPhase.becomes(5) }
             Action("cToPoweredOff")  { (cPhase == 0 || cPhase == 1 ||
@@ -28,8 +27,6 @@ public actor DynamicCrossActor {
             Action("cStartScan")     { cPhase == 5 && cPhase.becomes(6) }
             Action("cStopScan")      { cPhase == 6 && cPhase.becomes(5) }
 
-            // Peripheral slots 1-4, unrolled (parser can't yet resolve loop vars in action bodies)
-            // Slot 1
             Action("p1_beginConnect")         { pPhase1 == 0 && pPhase1.becomes(1) }
             Action("p1_finishConnect")        { pPhase1 == 1 && pPhase1.becomes(2) }
             Action("p1_failConnect")          { pPhase1 == 1 && pPhase1.becomes(0) }
@@ -39,7 +36,7 @@ public actor DynamicCrossActor {
             Action("p1_finishDiscover")       { pPhase1 == 3 && pPhase1.becomes(4) }
             Action("p1_beginDiscoverChars")   { pPhase1 == 4 && pPhase1.becomes(5) }
             Action("p1_finishDiscoverChars")  { pPhase1 == 5 && pPhase1.becomes(6) }
-            // Slot 2
+
             Action("p2_beginConnect")         { pPhase2 == 0 && pPhase2.becomes(1) }
             Action("p2_finishConnect")        { pPhase2 == 1 && pPhase2.becomes(2) }
             Action("p2_failConnect")          { pPhase2 == 1 && pPhase2.becomes(0) }
@@ -49,7 +46,7 @@ public actor DynamicCrossActor {
             Action("p2_finishDiscover")       { pPhase2 == 3 && pPhase2.becomes(4) }
             Action("p2_beginDiscoverChars")   { pPhase2 == 4 && pPhase2.becomes(5) }
             Action("p2_finishDiscoverChars")  { pPhase2 == 5 && pPhase2.becomes(6) }
-            // Slot 3
+
             Action("p3_beginConnect")         { pPhase3 == 0 && pPhase3.becomes(1) }
             Action("p3_finishConnect")        { pPhase3 == 1 && pPhase3.becomes(2) }
             Action("p3_failConnect")          { pPhase3 == 1 && pPhase3.becomes(0) }
@@ -59,7 +56,7 @@ public actor DynamicCrossActor {
             Action("p3_finishDiscover")       { pPhase3 == 3 && pPhase3.becomes(4) }
             Action("p3_beginDiscoverChars")   { pPhase3 == 4 && pPhase3.becomes(5) }
             Action("p3_finishDiscoverChars")  { pPhase3 == 5 && pPhase3.becomes(6) }
-            // Slot 4
+
             Action("p4_beginConnect")         { pPhase4 == 0 && pPhase4.becomes(1) }
             Action("p4_finishConnect")        { pPhase4 == 1 && pPhase4.becomes(2) }
             Action("p4_failConnect")          { pPhase4 == 1 && pPhase4.becomes(0) }
@@ -82,8 +79,8 @@ public actor DynamicCrossActor {
             }
 
             // Per-peripheral independence: proving invariants for one slot under
-            // any central phase proves them for all.  The state space for N=4 is
-            // ~28k states, verified at compile time.  N→∞ implied by independence.
+            // any central phase proves them for all.
         }
     }
 }
+
