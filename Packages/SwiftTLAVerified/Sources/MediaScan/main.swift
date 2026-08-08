@@ -46,7 +46,7 @@ struct CameraApp: App {
             }
             .background(.black)
             .frame(minWidth: 640, minHeight: 520)
-            .task { await model.start() }
+            .task { model._ready() }
         }
     }
 
@@ -294,20 +294,21 @@ final class CameraModel {
     private var movieOutput: AVCaptureMovieFileOutput?
     private let recordDelegate = RecordingDelegate()
 
-    func start() async {
-        guard let device = AVCaptureDevice.default(for: .video) else {
-            print("No camera"); return
-        }
-        do {
-            try await capture.configure(device: device)
-            let sess = await capture.session
-            let mo = AVCaptureMovieFileOutput()
-            sess.addOutput(mo)
-            movieOutput = mo
-            try await capture.start()
-            _ready()
-        } catch {
-            print("Camera error: \(error)")
+    func onReady() {
+        Task {
+            guard let device = AVCaptureDevice.default(for: .video) else {
+                print("No camera"); return
+            }
+            do {
+                try await capture.configure(device: device)
+                let sess = await capture.session
+                let mo = AVCaptureMovieFileOutput()
+                sess.addOutput(mo)
+                movieOutput = mo
+                try await capture.start()
+            } catch {
+                print("Camera error: \(error)")
+            }
         }
     }
 
@@ -324,26 +325,23 @@ final class CameraModel {
         }
     }
 
-    func toggleRecording() {
-        if phase == 2 {
-            movieOutput?.stopRecording()
-            if let url = recordedURL { roll.append(.video(url)) }
-            recordedURL = nil
-            _stop()
-        } else if let mo = movieOutput {
-            recordedURL = FileManager.default.temporaryDirectory
-                .appendingPathComponent("recording-\(UUID().uuidString).mov")
-            mo.startRecording(to: recordedURL!, recordingDelegate: recordDelegate)
-            _record()
-        }
+    func onRecord() {
+        guard let mo = movieOutput else { return }
+        recordedURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("recording-\(UUID().uuidString).mov")
+        mo.startRecording(to: recordedURL!, recordingDelegate: recordDelegate)
     }
 
-    func playRecording(url: URL? = nil) {
-        let u = url ?? recordedURL
-        guard let u, phase == 1 else { return }
+    func onStop() {
+        movieOutput?.stopRecording()
+        if let url = recordedURL { roll.append(.video(url)) }
+        recordedURL = nil
+    }
+
+    func onPlay() {
+        guard let u = recordedURL else { return }
         let player = AVPlayer(url: u)
         currentPlayer = player
-        _play()
         player.play()
         NotificationCenter.default.addObserver(forName: .AVPlayerItemDidPlayToEndTime,
                                                object: player.currentItem, queue: .main) { [weak self] _ in
@@ -351,9 +349,33 @@ final class CameraModel {
         }
     }
 
+    func onLive() {
+        currentPlayer?.pause()
+        currentPlayer = nil
+    }
+
+    func toggleRecording() {
+        if phase == 2 { _stop() }
+        else if phase == 1 { _record() }
+    }
+
+    func playRecording(url: URL? = nil) {
+        recordedURL = url ?? recordedURL
+        if phase == 1 { _play() }
+    }
+
     func delete(_ item: RollItem) {
         roll.removeAll { $0.id == item.id }
         if case .video(let url) = item { try? FileManager.default.removeItem(at: url) }
+    }
+
+    func isSelected(_ item: RollItem) -> Bool {
+        switch item {
+        case .photo(let data):
+            return selectedPhoto.map { $0 == data } ?? false
+        case .video(let url):
+            return recordedURL.map { $0 == url } ?? false
+        }
     }
 }
 

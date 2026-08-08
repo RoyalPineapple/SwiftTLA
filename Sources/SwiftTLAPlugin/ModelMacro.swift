@@ -364,10 +364,12 @@ struct MacroExpander {
         actions: [(name: String, body: ActionExpr)]
     ) -> [FunctionDeclSyntax] {
         actions.map { a in
+            let callbackName = "on" + a.name.dropFirst().prefix(1).capitalized + a.name.dropFirst(2)
             var bodyExprs: [ExprSyntax] = [ExprSyntax(stringLiteral: "_state = _apply(.\(a.name))")]
             for v in variables {
                 bodyExprs.append(ExprSyntax(stringLiteral: "\(v.name) = _state.\(v.name)"))
             }
+            bodyExprs.append(ExprSyntax(stringLiteral: "\(callbackName)()"))
             return FunctionDeclSyntax(
                 modifiers: [DeclModifierSyntax(name: .keyword(.public))],
                 name: .identifier(a.name),
@@ -387,6 +389,43 @@ struct MacroExpander {
         case .set(let v): "[\(v.map(String.init).joined(separator: ", "))]"
         default: "0"
         }
+    }
+
+    func generateCallbackProtocol(typeName: String, actions: [(String, ActionExpr)]) throws -> [DeclSyntax] {
+        let protoName = "\(typeName)Actions"
+        var callbackDecls: [String] = []
+        var defaultDecls: [String] = []
+
+        for a in actions {
+            let callbackName = "on" + a.0.dropFirst().prefix(1).capitalized + a.0.dropFirst(2)
+            callbackDecls.append("func \(callbackName)()")
+            defaultDecls.append("""
+                func \(callbackName)() {
+                    runtimeWarning("\(typeName).\(callbackName)() not overridden")
+                }
+                """)
+        }
+
+        let protoCode = """
+            protocol \(protoName) {
+                \(callbackDecls.joined(separator: "\n    "))
+            }
+            """
+        let extCode = """
+            extension \(protoName) {
+                \(defaultDecls.joined(separator: "\n    "))
+            }
+            """
+
+        let conformanceCode = """
+            extension \(typeName): \(protoName) {}
+            """
+
+        return [
+            DeclSyntax(stringLiteral: protoCode),
+            DeclSyntax(stringLiteral: extCode),
+            DeclSyntax(stringLiteral: conformanceCode)
+        ]
     }
 
     // MARK: - Helpers

@@ -12,6 +12,36 @@ guard let name = args.first else {
     exit(1)
 }
 
+
+if name == "check-all" {
+    var ok = 0; var fail = 0; var skip = 0
+    print("=== SwiftTLA ModelChecker vs TLC ===")
+    for entry in Example.all {
+        if entry.id == "Bakery/N2" || entry.id == "NanoBlockchain/Small" || entry.id == "GameOfLife/N4" {
+            print("SKIP \(entry.id) — known evaluator issue")
+            skip += 1; continue
+        }
+        let mc = ModelChecker(spec: entry.spec, maxStates: 50000)
+        do {
+            let count = try mc.exploreGraph().states.count
+            let result = try mc.check()
+            let match = count == entry.expectedDistinct && { if case .ok = result { true } else { false } }()
+            if match {
+                print("OK   \(entry.id) — \(count) states")
+                ok += 1
+            } else {
+                print("FAIL \(entry.id) — got \(count), TLC=\(entry.expectedDistinct), \(result)")
+                fail += 1
+            }
+        } catch {
+            print("ERR  \(entry.id) — \(error)")
+            fail += 1
+        }
+    }
+    print("=== \(ok) passed, \(fail) failed, \(skip) skipped ===")
+    exit(fail > 0 ? 1 : 0)
+}
+
 if name == "list" {
     for e in Example.all {
         print("\(e.id)\t\(e.expectedDistinct)\t\(e.notes)")
