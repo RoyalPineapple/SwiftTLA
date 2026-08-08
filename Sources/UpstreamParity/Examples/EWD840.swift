@@ -47,7 +47,7 @@ static func ewd840Spec() -> TLASpec {
             Action("InitiateProbe") {
                 tpos == 0 && (tcolor == "black" || colorOf(0) == "black")
                 && tpos.becomes(N - 1) && tcolor.becomes("white")
-                && color.becomes(Expr(.except(color, 0, "white")))
+                && color.becomes(color.updated(at: 0, to: "white"))
                 && active.stays
             }
 
@@ -56,8 +56,12 @@ static func ewd840Spec() -> TLASpec {
                     tpos == i
                     && (activeOf(i) == false || colorOf(i) == "black" || tcolor == "black")
                     && tpos.becomes(i - 1)
-                    && tcolor.becomes(Expr(.ifThenElse(colorOf(i) == "black", then: "black", else: tcolor))
-                    && color.becomes(Expr(.except(color, i, "white")))
+                    && tcolor.becomes(Expr(.ifThenElse(
+                        colorOf(i) == "black",
+                        "black",
+                        tcolor.stateExpr
+                    )))
+                         && color.becomes(color.updated(at: i, to: "white"))
                     && active.stays
                 }
             }
@@ -66,10 +70,12 @@ static func ewd840Spec() -> TLASpec {
                 for j in nodes where j != i {
                     Action("SendMsg_\(i)_to_\(j)") {
                         activeOf(i) == true
-                        && active.becomes(Expr(.except(active, j, true)))
-                        && color.becomes(Expr(.ifThenElse(j > i,
-                            then: color.updated(at: i, to: "black"),
-                            else: color))
+                        && active.becomes(active.updated(at: j, to: true))
+                        && color.becomes(Expr(.ifThenElse(
+                            j > i,
+                            color.updated(at: i, to: "black").stateExpr,
+                            color.stateExpr
+                        )))
                         && tpos.stays && tcolor.stays
                     }
                 }

@@ -28,23 +28,14 @@ extension Example {
                 }
                 Action("Send") {
                     st.rdy == st.ack && (
-                        st.becomes(Expr(StateExpr.except(
-                            StateExpr.except(.variable("st"), .value(.string("val")), "d1"),
-                            .value(.string("rdy")), 1 - st.rdy
-                        ))))
-                        || st.becomes(Expr(StateExpr.except(
-                            StateExpr.except(.variable("st"), .value(.string("val")), "d2"),
-                            .value(.string("rdy")), 1 - st.rdy
-                        ))))
-                        || st.becomes(Expr(StateExpr.except(
-                            StateExpr.except(.variable("st"), .value(.string("val")), "d3"),
-                            .value(.string("rdy")), 1 - st.rdy
-                        ))))
+                        st.becomes(st.updated(at: "val", to: "d1").updated(at: "rdy", to: StateExpr.subtract(.int(1), st.rdy)))
+                        || st.becomes(st.updated(at: "val", to: "d2").updated(at: "rdy", to: StateExpr.subtract(.int(1), st.rdy)))
+                        || st.becomes(st.updated(at: "val", to: "d3").updated(at: "rdy", to: StateExpr.subtract(.int(1), st.rdy)))
                     )
                 }
                 Action("Rcv") {
                     st.rdy != st.ack
-                        && st.becomes(Expr(.except(st, "ack", 1 - st.ack)))
+                        && st.becomes(st.updated(at: "ack", to: StateExpr.subtract(.int(1), st.ack)))
                 }
             }
         }(),
