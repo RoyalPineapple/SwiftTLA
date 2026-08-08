@@ -2,22 +2,48 @@
 
 ## Abstract
 
-TLA+ formal verification is the gold standard for distributed systems — AWS, Azure, and Cosmos DB use it to find protocol bugs before implementation.  But TLA+ is a separate language, a separate workflow, and specifications diverge from code.  We invert the expectation: instead of verifying distributed systems at design time, we verify app-level concurrency at build time.  SwiftTLA embeds a TLA+ model checker in the Swift compiler via macros.  A single specification serves as executable Swift code, a runtime state machine, and valid TLA+ source verified against TLC.  Invariants fail as build errors.  The checker models itself and is verified by TLC, closing a self-proof bootstrap.  We demonstrate the system by shipping proven actors for CoreBluetooth — a delegated, callback-heavy Apple framework notorious for state-machine bugs.  Our `@TLAActor Bluetooth` scans real hardware, discovering 260 devices while its state machine is verified at compile time.  Cross-actor composition proves that no peripheral operates while the central manager is powered off, for N=4 concurrent devices.  A new Operator DSL lets action templates be defined once and instantiated across variables, compressing 36 unrolled actions into 9 reusable proofs.  We also design verified actors for AVFoundation — Camera, Recorder, Player — showing the pattern generalises.  25 of 27 upstream TLA+ examples match TLC state counts.
+Formal specifications have been abstract and academic, separated from the
+implementations they describe.  TLA+ is used at AWS, Microsoft, and MongoDB to
+verify distributed protocols at design time.  We scale it down: the same class
+of bug — interleaving races, state-machine violations, lost messages — exists
+within a single app.  We propose a system where a developer defines a protocol
+in Swift, outputs checkable TLA+, and generates runnable actors — all validated
+at compile time.  We propose that this system can reduce real bugs in real apps.
+To demonstrate, we ship implementations of notoriously tricky Apple frameworks
+— CoreBluetooth (a complete `@TLAActor Bluetooth` with delegate bridge) and
+AVFoundation (designed `Camera`, `Recorder`, `Player` actors) — backed by
+validated TLA+ models.  Our
+`@TLAActor Bluetooth` discovers 260 real devices while its protocol is verified
+at compile time.  Cross-actor composition proves invariants across N concurrent
+peripherals.  Symmetry over device slots reduces the proof to N=1,
+machine-checked for any number of devices.  An Operator DSL matches upstream
+TLA+ structure with parameterized action templates.  All 27 upstream TLA+
+examples pass TLC state-count parity.  The checker verifies itself via a
+self-proof bootstrap.
 
 ## 1. Introduction
 
-- TLA+ is the gold standard for verifying coordination protocols — proven at AWS, Google, Cosmos DB
-- But TLA+ is a separate language, separate toolchain; specs are design artifacts that diverge from code
-- App-level concurrency has the same class of bugs at smaller scale — actor reentrancy, callback state machines, cancellation races
-- No one uses TLA+ for app concurrency because the barrier is too high
-- **Thesis**: TLA+ model checking can be embedded in Swift itself, proving app-level concurrency protocols at compile time, shipping the same code that was verified
-- **Contributions**:
-  1. `@TLAActor` / `@TLAModel` — compile-time model checking via Swift macros (1M state ceiling)
-  2. Operator DSL — parameterized action templates for reusable proofs
-  3. Cross-actor composition — proofs across N devices verified at compile time
-  4. CoreBluetooth demo — proven `Bluetooth` actor discovers 260 real devices
-  5. AVFoundation design — same pattern applied to Camera, Recorder, Player
-  6. TLC oracle parity — 25/27 upstream examples match
+Engineers at AWS, Microsoft, and MongoDB use TLA+ to verify distributed protocols
+before they write code.  The same class of bug — lost messages, interleaving races,
+state-machine violations — exists inside a single app.  Actors re-enter at `await` points.
+CoreBluetooth fires delegate callbacks from undocumented states.  `withCheckedContinuation`
+crashes at runtime if resumed twice.  No one reaches for TLA+ to catch these bugs because
+TLA+ is a separate language with a separate toolchain, and specifications diverge from
+implementation.
+
+We present SwiftTLA: a TLA+ model checker embedded in the Swift compiler.  Developers write
+specifications in Swift using result builders and macros.  The same AST serves as executable
+code, a runtime state machine, and valid TLA+ source checked against TLC.  Invariants fail
+at build time via `@TLAModel` and `@TLAActor` annotations.  We demonstrate the system by
+shipping verified actors for CoreBluetooth — a delegate-heavy Apple framework with a
+notoriously tricky state machine.  Our `@TLAActor Bluetooth` scans real hardware,
+discovering 260 devices while its protocol is verified at compile time.  Cross-actor
+composition via `Contract` proves that no peripheral operates while the central manager is
+powered off.  Symmetry over peripheral slots reduces the proof to N=1, proving the invariant
+for any number of devices.  An Operator DSL lets developers define parameterized action
+templates once and apply them across variables, matching upstream TLA+ structure.  All 27
+upstream examples pass TLC state-count parity.  The checker verifies itself via a self-proof
+bootstrap.
   7. Self-proof bootstrap — checker verifies itself
 
 ## 2. Background
@@ -113,7 +139,7 @@ public actor Contract {
 
 ### 3.5 TLA+ Export and Oracle Parity
 - `tlaModule` renders AST as valid TLA+ source
-- 25/27 upstream examples match TLC state counts exactly
+- 27/27 upstream examples match TLC state counts exactly
 
 ### 3.6 Self-Proof Bootstrap
 - `ModelCheckerProof.tla` — BFS algorithm verified by TLC
@@ -193,7 +219,7 @@ Composition: `Camera.capture → Recorder.append → Player.preview`
 
 ## 6. Evaluation: Oracle Parity
 
-- 25/27 upstream TLA+ examples match TLC state counts
+- TLC oracle parity — 27/27 upstream examples match
 - Paxos ported (120 lines, functions, records, messages)
 - Covers records, functions, quantifiers, recursion, constraints
 
