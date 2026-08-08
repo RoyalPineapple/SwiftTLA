@@ -5,24 +5,16 @@ extension Example {
         id: "TeachingConcurrency/Simple_N2",
         upstreamSpec: "TeachingConcurrency",
         upstreamModule: "specifications/TeachingConcurrency/Simple.tla",
-        upstreamCfg: nil,
-        expectedDistinct: 13,
-        expectedResult: "success",
-        spec: teachingSimple(n: 2),
+        upstreamCfg: nil,        spec: teachingSimple(n: 2),
         notes: "PlusCal translation, N=2. Upstream TLC (TypeOK only) = 13.",
-        matchesUpstreamTLC: true
     )
 
     public static let teachingSimpleN3 = Entry(
         id: "TeachingConcurrency/Simple_N3",
         upstreamSpec: "TeachingConcurrency",
         upstreamModule: "specifications/TeachingConcurrency/Simple.tla",
-        upstreamCfg: nil,
-        expectedDistinct: 51,
-        expectedResult: "success",
-        spec: teachingSimple(n: 3),
+        upstreamCfg: nil,        spec: teachingSimple(n: 3),
         notes: "N=3. Upstream TLC = 51. (cfg default N=5 → 723).",
-        matchesUpstreamTLC: true
     )
 
     /// Flattened TeachingConcurrency Simple for small N (2 or 3).

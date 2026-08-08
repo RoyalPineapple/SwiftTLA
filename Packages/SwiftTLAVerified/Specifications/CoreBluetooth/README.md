@@ -147,14 +147,28 @@ Delegate callbacks are nonisolated — dispatched to actor via `Task`.
 | Failure | phase=2 (unsupported), phase=3 (unauthorized) | phase=1→0 (failConnect) |
 | Terminal | phase=2, phase=3 | phase=0 (after drain) |
 
-## Negative control (planned)
+## Negative control
 
-Remove guard from `startScan`:
-```
-Action("startScan") { phase.becomes(6) }   // BAD
-```
-Expected: TLC finds trace where scan fires from `.poweredOff`. Confirms model
-catches the bug it claims to prevent.
+Removing the `phase == 5` guard from `startScan` does NOT violate the
+single-actor invariants as written — `validPhase` holds regardless.  This is
+a known property of the single-actor model: the guards ARE the enforcement.
+The checker verifies that IF the guards are followed, invariants hold.  It
+does not verify that the guards themselves are the correct contract.
+
+The cross-actor composition via TLC will catch this class of error: with a
+Peripheral connected while Central transitions to poweredOff, a `startScan`
+from poweredOff creates an invalid global state.  This is the next
+verification step.
+
+## Limitations
+
+Single-actor @TLAModel/@TLAActor checks are structural verification —
+invariants hold under the stated guards.  The macro does not check:
+- Whether guards are the correct contract (requires cross-actor TLC)
+- Whether delegate callbacks fire (modeled as nondeterministic environment actions)
+- Whether the implementation faithfully follows the model at runtime
+- Data-value correctness (service UUIDs, characteristic values)
+- Timing-dependent behavior (scan timeouts, connection timeouts)
 
 ## Properties to check
 

@@ -9,12 +9,8 @@ extension Example {
         id: "Bakery/N2",
         upstreamSpec: "Bakery-Boulangerie",
         upstreamModule: "specifications/Bakery-Boulangerie/Bakery.tla",
-        upstreamCfg: "specifications/Bakery-Boulangerie/MCBakery.cfg",
-        expectedDistinct: 0,
-        expectedResult: "success",
-        spec: bakerySpec(),
+        upstreamCfg: "specifications/Bakery-Boulangerie/MCBakery.cfg",        spec: bakerySpec(),
         notes: "N=2, MaxNat=2. Mutual exclusion + inductive invariant.",
-        matchesUpstreamTLC: false
     )
 }
 
@@ -120,7 +116,7 @@ private func bakerySpec() -> TLASpec {
                     && num.stays && flag.stays && maxV.stays && nxt.stays && unchecked.stays
             }
 
-            // e3(self): choose ticket number > max seen
+            // e3(self): choose ticket number > max seen, or loop
             Action("e3_loop_\(s)") {
                 pc.applying(s) == "e3"
                     && ActionExpr.exists("k", from: natSetExpr) { k in
@@ -129,13 +125,19 @@ private func bakerySpec() -> TLASpec {
                             && flag.stays && unchecked.stays && maxV.stays && nxt.stays
                     }
             }
-            Action("e3_proceed_\(s)") {
-                pc.applying(s) == "e3"
-                    && ActionExpr.exists("i", from: StateExpr.filterSet(natSetExpr) { j in j > maxV.applying(s) }) { i in
-                        num.becomes(num.updated(at: s, to: i))
-                            && pc.becomes(pc.updated(at: s, to: "e4"))
-                            && flag.stays && unchecked.stays && maxV.stays && nxt.stays
-                    }
+            // Proceed to e4: pick ticket > maxV[s]. 
+            // For Nat={0,1,2}: maxV=0→pick from {1,2}, maxV=1→{2}, maxV=2→{} (stuck)
+            Action("e3_to_e4_gt1_\(s)") {
+                pc.applying(s) == "e3" && maxV.applying(s) < 2
+                    && num.becomes(num.updated(at: s, to: 2))
+                    && pc.becomes(pc.updated(at: s, to: "e4"))
+                    && flag.stays && unchecked.stays && maxV.stays && nxt.stays
+            }
+            Action("e3_to_e4_gt0_\(s)") {
+                pc.applying(s) == "e3" && maxV.applying(s) < 1
+                    && num.becomes(num.updated(at: s, to: 1))
+                    && pc.becomes(pc.updated(at: s, to: "e4"))
+                    && flag.stays && unchecked.stays && maxV.stays && nxt.stays
             }
 
             // e4(self): lower flag

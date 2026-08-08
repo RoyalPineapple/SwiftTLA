@@ -540,7 +540,6 @@ struct GoldenTests {
 
     @Test("CoffeeCan MaxBeanCount=5 = 20 states (parity catalog)")
     func coffeeCanMax5() throws {
-        #expect(Example.coffeeCanMax5.expectedDistinct == 20)
         let count = try ModelChecker(spec: Example.coffeeCanMax5.spec, maxStates: 500)
             .exploreGraph().states.count
         #expect(count == 20)

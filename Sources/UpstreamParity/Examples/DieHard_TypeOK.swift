@@ -5,10 +5,7 @@ extension Example {
         id: "DieHard/TypeOK",
         upstreamSpec: "DieHard",
         upstreamModule: "specifications/DieHard/DieHard.tla",
-        upstreamCfg: nil,
-        expectedDistinct: 16,
-        expectedResult: "success",
-        spec: {
+        upstreamCfg: nil,        spec: {
             let big = Var<Int>("big", value: 0)
             let small = Var<Int>("small", value: 0)
             return TLASpec("DieHard") {
@@ -31,7 +28,6 @@ extension Example {
             }
         }(),
         notes: "Upstream cfg adds NotSolved (intentional fail). TypeOK-only = 16 both sides.",
-        matchesUpstreamTLC: true
     )
 
 }

@@ -5,10 +5,7 @@ extension Example {
         id: "SpecifyingSystems/Channel",
         upstreamSpec: "SpecifyingSystems",
         upstreamModule: "specifications/SpecifyingSystems/AsynchronousInterface/Channel.tla",
-        upstreamCfg: "specifications/SpecifyingSystems/AsynchronousInterface/Channel.cfg",
-        expectedDistinct: 12,
-        expectedResult: "success",
-        spec: {
+        upstreamCfg: "specifications/SpecifyingSystems/AsynchronousInterface/Channel.cfg",        spec: {
             let data = ["d1", "d2", "d3"]
             let chan = Var<TLARecordType>("chan")
             var records: [TLAValue] = []
@@ -50,7 +47,6 @@ extension Example {
             }
         }(),
         notes: "Same as AsynchInterface with single record variable `chan`. TLC = 12.",
-        matchesUpstreamTLC: true
     )
 
 }

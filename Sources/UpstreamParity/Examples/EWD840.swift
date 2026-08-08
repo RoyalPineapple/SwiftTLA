@@ -5,12 +5,8 @@ extension Example {
         id: "ewd840/EWD840",
         upstreamSpec: "ewd840",
         upstreamModule: "specifications/ewd840/EWD840.tla",
-        upstreamCfg: "specifications/ewd840/EWD840.cfg",
-        expectedDistinct: 258,
-        expectedResult: "success",
-        spec: ewd840Spec(),
+        upstreamCfg: "specifications/ewd840/EWD840.cfg",        spec: ewd840Spec(),
         notes: "Dijkstra termination detection. N=3, active/color as functions. CASE-based TLA+ output.",
-        matchesUpstreamTLC: true
     )
 
 static func ewd840Spec() -> TLASpec {

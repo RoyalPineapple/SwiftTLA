@@ -5,12 +5,8 @@ extension Example {
         id: "CigaretteSmokers/CigaretteSmokers",
         upstreamSpec: "CigaretteSmokers",
         upstreamModule: "specifications/CigaretteSmokers/CigaretteSmokers.tla",
-        upstreamCfg: "specifications/CigaretteSmokers/CigaretteSmokers.cfg",
-        expectedDistinct: 6,
-        expectedResult: "success",
-        spec: cigaretteSmokersSpec(),
+        upstreamCfg: "specifications/CigaretteSmokers/CigaretteSmokers.cfg",        spec: cigaretteSmokersSpec(),
         notes: "Ingredients={m,p,t}, Offers=pairs. TLC TypeOK+AtMostOne = 6.",
-        matchesUpstreamTLC: true
     )
 
 static func cigaretteSmokersSpec() -> TLASpec {

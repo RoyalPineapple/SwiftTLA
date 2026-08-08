@@ -131,6 +131,26 @@ public struct LivenessChecker {
         return .satisfied
     }
 
+    public func checkAlwaysEventually(_ predicate: StateExpr, fairSCCs: [Set<StateGraph.StateID>]) throws -> TemporalResult {
+        // []<>P: every fair terminal SCC must contain at least one state where P holds.
+        // Since SCCs are strongly connected, if P holds once you can reach it from any path.
+        return try checkEventually(predicate, fairSCCs: fairSCCs)
+    }
+
+    public func checkEventuallyAlways(_ predicate: StateExpr, fairSCCs: [Set<StateGraph.StateID>]) throws -> TemporalResult {
+        // <>[]P: all fair terminal SCCs must consist entirely of states where P holds.
+        for scc in fairSCCs {
+            for state in scc {
+                guard let values = graph.states[state] else { continue }
+                let holds = try predicate.evaluateBool(in: values)
+                if !holds {
+                    return .violated("<>[]P: state \(state) in fair terminal SCC does not satisfy predicate", trace: [state])
+                }
+            }
+        }
+        return .satisfied
+    }
+
     public func checkAll(_ properties: [NamedTemporal], fairness: [FairnessCondition],
                           actions: [NamedAction]) throws -> [TemporalResult] {
         let allSCCs = computeSCCs()
@@ -138,11 +158,11 @@ public struct LivenessChecker {
         let fairs = fairTerminalSCCs(terminals, fairness: fairness, actions: actions)
         return try properties.map { prop in
             switch prop.expr {
-            case .always(let p): return try checkAlways(p, fairSCCs: fairs)
-            case .eventually(let p): return try checkEventually(p, fairSCCs: fairs)
-            case .leadsTo(let a, let b): return try checkLeadsTo(a, b, fairSCCs: fairs)
-            case .alwaysEventually, .eventuallyAlways:
-                return .violated("Unsupported temporal operator", trace: [])
+            case .always(let p):          return try checkAlways(p, fairSCCs: fairs)
+            case .eventually(let p):      return try checkEventually(p, fairSCCs: fairs)
+            case .leadsTo(let a, let b):  return try checkLeadsTo(a, b, fairSCCs: fairs)
+            case .alwaysEventually(let p): return try checkAlwaysEventually(p, fairSCCs: fairs)
+            case .eventuallyAlways(let p): return try checkEventuallyAlways(p, fairSCCs: fairs)
             }
         }
     }

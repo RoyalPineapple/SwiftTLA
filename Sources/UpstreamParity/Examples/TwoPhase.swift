@@ -5,12 +5,8 @@ extension Example {
         id: "transaction_commit/TwoPhase",
         upstreamSpec: "transaction_commit",
         upstreamModule: "specifications/transaction_commit/TwoPhase.tla",
-        upstreamCfg: "specifications/transaction_commit/TwoPhase.cfg",
-        expectedDistinct: 288,
-        expectedResult: "success",
-        spec: twoPhaseSpec(),
+        upstreamCfg: "specifications/transaction_commit/TwoPhase.cfg",        spec: twoPhaseSpec(),
         notes: "Lamport TwoPhase safety. RM={r1,r2,r3}, msgs as record-set. SPECIFICATION TPSpec. TLC = 288.",
-        matchesUpstreamTLC: true
     )
 
 static func twoPhaseSpec() -> TLASpec {

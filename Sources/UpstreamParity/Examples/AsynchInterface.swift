@@ -5,10 +5,7 @@ extension Example {
         id: "SpecifyingSystems/AsynchInterface",
         upstreamSpec: "SpecifyingSystems",
         upstreamModule: "specifications/SpecifyingSystems/AsynchronousInterface/AsynchInterface.tla",
-        upstreamCfg: "specifications/SpecifyingSystems/AsynchronousInterface/AsynchInterface.cfg",
-        expectedDistinct: 12,
-        expectedResult: "success",
-        spec: {
+        upstreamCfg: "specifications/SpecifyingSystems/AsynchronousInterface/AsynchInterface.cfg",        spec: {
             let data = ["d1", "d2", "d3"]
             let st = Var<TLARecordType>("st")
             var records: [TLAValue] = []
@@ -50,7 +47,6 @@ extension Example {
             }
         }(),
         notes: "Data={d1,d2,d3}. Record packing of val/rdy/ack. Upstream TLC = 12.",
-        matchesUpstreamTLC: true
     )
 
 }

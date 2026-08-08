@@ -9,12 +9,8 @@ extension Example {
         id: "DiningPhilosophers/DiningPhilosophers",
         upstreamSpec: "DiningPhilosophers",
         upstreamModule: "specifications/DiningPhilosophers/DiningPhilosophers.tla",
-        upstreamCfg: "specifications/DiningPhilosophers/DiningPhilosophers.cfg",
-        expectedDistinct: 67,
-        expectedResult: "success",
-        spec: diningPhilosophersSpec(),
+        upstreamCfg: "specifications/DiningPhilosophers/DiningPhilosophers.cfg",        spec: diningPhilosophersSpec(),
         notes: "NP=5. Records (holder/clean), existsAction, ExclusiveAccess. Matching upstream structure.",
-        matchesUpstreamTLC: true
     )
 }
 

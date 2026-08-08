@@ -31,8 +31,7 @@ extension Example {
         expectedDistinct: <N>,
         expectedResult: "success",
         spec: <name>Spec(),
-        notes: "<note>",
-        matchesUpstreamTLC: true
+        notes: "<note>"
     )
 }
 ```

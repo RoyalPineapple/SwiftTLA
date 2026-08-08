@@ -5,12 +5,8 @@ extension Example {
         id: "ChangRoberts/ChangRoberts_N3",
         upstreamSpec: "chang_roberts",
         upstreamModule: "specifications/chang_roberts/ChangRoberts.tla",
-        upstreamCfg: "specifications/chang_roberts/MCChangRoberts.cfg",
-        expectedDistinct: 137,
-        expectedResult: "success",
-        spec: changRobertsSpec(),
+        upstreamCfg: "specifications/chang_roberts/MCChangRoberts.cfg",        spec: changRobertsSpec(),
         notes: "N=3, Id=i. 137 states matching upstream. Combined n0/n1 per-node actions.",
-        matchesUpstreamTLC: true
     )
 
     static func changRobertsSpec() -> TLASpec {

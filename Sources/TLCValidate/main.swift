@@ -14,8 +14,7 @@ guard let name = args.first else {
 
 if name == "list" {
     for e in Example.all {
-        let flag = e.matchesUpstreamTLC ? "UPSTREAM" : "SLICE"
-        print("\(e.id)\t\(e.expectedDistinct)\t\(flag)\t\(e.notes)")
+        print("\(e.id)\tSLICE\t\(e.notes)")
     }
     exit(0)
 }

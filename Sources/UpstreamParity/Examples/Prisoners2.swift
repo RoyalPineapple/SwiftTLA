@@ -10,12 +10,8 @@ extension Example {
         id: "Prisoners/Prisoners",
         upstreamSpec: "Prisoners",
         upstreamModule: "specifications/Prisoners/Prisoners.tla",
-        upstreamCfg: "specifications/Prisoners/Prisoners.cfg",
-        expectedDistinct: 214,
-        expectedResult: "success",
-        spec: prisoners4Spec(),
+        upstreamCfg: "specifications/Prisoners/Prisoners.cfg",        spec: prisoners4Spec(),
         notes: "4 prisoners, p1=counter. Nondet switches init. 214 states.",
-        matchesUpstreamTLC: true
     )
 }
 

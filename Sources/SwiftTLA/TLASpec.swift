@@ -379,6 +379,10 @@ public func Eventually(_ name: String, _ expr: StateExpr) -> TemporalDecl {
     TemporalDecl(name, .eventually(expr))
 }
 
+public func Always(_ name: String, _ expr: StateExpr) -> TemporalDecl {
+    TemporalDecl(name, .always(expr))
+}
+
 public func AlwaysEventually(_ name: String, _ expr: StateExpr) -> TemporalDecl {
     TemporalDecl(name, .alwaysEventually(expr))
 }

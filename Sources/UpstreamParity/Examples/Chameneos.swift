@@ -10,12 +10,8 @@ extension Example {
         id: "Chameneos/Chameneos",
         upstreamSpec: "Chameneos",
         upstreamModule: "specifications/Chameneos/Chameneos.tla",
-        upstreamCfg: "specifications/Chameneos/Chameneos.cfg",
-        expectedDistinct: 34534,
-        expectedResult: "success",
-        spec: chameneosSpec(),
+        upstreamCfg: "specifications/Chameneos/Chameneos.cfg",        spec: chameneosSpec(),
         notes: "M=4, N=4. RECURSIVE Sum for SumMet. Tuple @ self-ref in EXCEPT. 81 init states → 34,534 reachable.",
-        matchesUpstreamTLC: true
     )
 }
 

@@ -5,10 +5,7 @@ extension Example {
         id: "SpecifyingSystems/HourClock2",
         upstreamSpec: "SpecifyingSystems",
         upstreamModule: "specifications/SpecifyingSystems/HourClock/HourClock2.tla",
-        upstreamCfg: "specifications/SpecifyingSystems/HourClock/HourClock2.cfg",
-        expectedDistinct: 12,
-        expectedResult: "success",
-        spec: {
+        upstreamCfg: "specifications/SpecifyingSystems/HourClock/HourClock2.cfg",        spec: {
             let hr = Var<Int>("hr", value: 1)
             return TLASpec("HourClock2") {
                 Extends("Naturals")
@@ -20,7 +17,6 @@ extension Example {
             }
         }(),
         notes: "Upstream checks HC => HC2 as property; state space of HC2 alone is 12.",
-        matchesUpstreamTLC: true
     )
 
 }

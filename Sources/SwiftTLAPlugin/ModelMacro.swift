@@ -43,7 +43,7 @@ struct MacroExpander {
             fairness: parsed.fairness
         )
 
-        let result = try ModelChecker(spec: spec, maxStates: 10_000).check()
+        let result = try ModelChecker(spec: spec, maxStates: 1_000_000).check()
         switch result {
         case .invariantViolated(let inv, _, let trace):
             throw SimpleError("Invariant '\(inv)' violated:\n\(trace.map(String.init(describing:)).joined(separator: "\n"))")

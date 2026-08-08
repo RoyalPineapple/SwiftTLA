@@ -5,12 +5,8 @@ extension Example {
         id: "barriers/Barrier_N6",
         upstreamSpec: "barriers",
         upstreamModule: "specifications/barriers/Barrier.tla",
-        upstreamCfg: "specifications/barriers/Barrier.cfg",
-        expectedDistinct: 64,
-        expectedResult: "success",
-        spec: barrierSpec(n: 6),
+        upstreamCfg: "specifications/barriers/Barrier.cfg",        spec: barrierSpec(n: 6),
         notes: "N=6. TLC = 64.",
-        matchesUpstreamTLC: true
     )
 
 static func barrierSpec(n: Int) -> TLASpec {

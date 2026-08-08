@@ -652,7 +652,7 @@ public enum SpecParser {
             }
         case "Constant":
             parseConstantDecl(call, into: &result)
-        case "LeadsTo", "Eventually", "AlwaysEventually", "EventuallyAlways":
+        case "LeadsTo", "Eventually", "Always", "AlwaysEventually", "EventuallyAlways":
             if let expr = parseTemporal(ExprSyntax(call)) {
                 result.temporal.append((name, expr))
             }

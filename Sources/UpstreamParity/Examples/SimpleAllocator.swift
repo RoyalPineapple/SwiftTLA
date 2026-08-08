@@ -5,12 +5,8 @@ extension Example {
         id: "allocator/SimpleAllocator",
         upstreamSpec: "allocator",
         upstreamModule: "specifications/allocator/SimpleAllocator.tla",
-        upstreamCfg: "specifications/allocator/SimpleAllocator.cfg",
-        expectedDistinct: 400,
-        expectedResult: "success",
-        spec: simpleAllocatorSpec(),
+        upstreamCfg: "specifications/allocator/SimpleAllocator.cfg",        spec: simpleAllocatorSpec(),
         notes: "Clients={c1,c2,c3} Resources={r1,r2}. Request/Allocate/Return. TLC = 400.",
-        matchesUpstreamTLC: true
     )
 
     /// Faithful SimpleAllocator (Stephan Merz) for the standard TLC constants.

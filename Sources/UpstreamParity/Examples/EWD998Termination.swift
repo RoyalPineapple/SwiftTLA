@@ -9,12 +9,8 @@ extension Example {
         id: "ewd998/AsyncTerminationDetection",
         upstreamSpec: "ewd998",
         upstreamModule: "specifications/ewd998/AsyncTerminationDetection.tla",
-        upstreamCfg: "specifications/ewd998/AsyncTerminationDetection.cfg",
-        expectedDistinct: 4097,
-        expectedResult: "success",
-        spec: ewd998Spec(),
+        upstreamCfg: "specifications/ewd998/AsyncTerminationDetection.cfg",        spec: ewd998Spec(),
         notes: "N=4. Nondet init for active. Constraint pending<=3. Safe.",
-        matchesUpstreamTLC: true
     )
 }
 

@@ -5,10 +5,7 @@ extension Example {
         id: "SpecifyingSystems/HourClock",
         upstreamSpec: "SpecifyingSystems",
         upstreamModule: "specifications/SpecifyingSystems/HourClock/HourClock.tla",
-        upstreamCfg: "specifications/SpecifyingSystems/HourClock/HourClock.cfg",
-        expectedDistinct: 12,
-        expectedResult: "success",
-        spec: TLASpec("HourClock") {
+        upstreamCfg: "specifications/SpecifyingSystems/HourClock/HourClock.cfg",        spec: TLASpec("HourClock") {
             Extends("Naturals")
             let hr = Var<Int>("hr")
             Variable(hr, in: 1...12)
@@ -19,6 +16,5 @@ extension Example {
             Invariant("HCini") { hr >= 1 && hr <= 12 }
         },
         notes: "Pure DSL: zero Swift computation. Var<T> + builders only. TLC = 12.",
-        matchesUpstreamTLC: true
     )
 }

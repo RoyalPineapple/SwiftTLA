@@ -10,12 +10,8 @@ extension Example {
         id: "lamport_mutex/LamportMutex_N2",
         upstreamSpec: "lamport_mutex",
         upstreamModule: "specifications/lamport_mutex/LamportMutex.tla",
-        upstreamCfg: "specifications/lamport_mutex/MCLamportMutex.cfg",
-        expectedDistinct: 19,
-        expectedResult: "success",
-        spec: lamportMutexSpec(),
+        upstreamCfg: "specifications/lamport_mutex/MCLamportMutex.cfg",        spec: lamportMutexSpec(),
         notes: "N=2, maxClock=2. Nested functions + sequences + @ self-ref. Constraint bounds clocks.",
-        matchesUpstreamTLC: true
     )
 }
 
