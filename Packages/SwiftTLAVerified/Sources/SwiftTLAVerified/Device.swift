@@ -1,12 +1,12 @@
 import Foundation
 import CoreBluetooth
+import SwiftTLA
+import SwiftTLAMacros
 
 private final class DeviceDelegate: NSObject, CBPeripheralDelegate {
     weak var actor: Device?
     func peripheral(_ p: CBPeripheral, didDiscoverServices e: (any Error)?) {
-        if let e { actor?.servicesCont?.resume(throwing: e) }
-        else { actor?.servicesCont?.resume(returning: p.services ?? []) }
-        actor?.servicesCont = nil
+        Task { await actor?.didDiscoverServices(e) }
     }
 }
 
@@ -58,5 +58,12 @@ public actor Device {
             self.servicesCont = c
             self.peripheral.discoverServices(uuids)
         }
+    }
+
+    func didDiscoverServices(_ e: (any Error)?) {
+        finishDiscover()
+        if let e { servicesCont?.resume(throwing: e) }
+        else { servicesCont?.resume(returning: peripheral.services ?? []) }
+        servicesCont = nil
     }
 }
