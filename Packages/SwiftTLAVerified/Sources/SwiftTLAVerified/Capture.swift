@@ -2,9 +2,16 @@ import SwiftTLA
 import SwiftTLAMacros
 import AVFoundation
 
+private final class CaptureVideoDelegate: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate {
+    let continuation: AsyncStream<CMSampleBuffer>.Continuation
+    init(continuation: AsyncStream<CMSampleBuffer>.Continuation) { self.continuation = continuation }
+    func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer,
+                       from connection: AVCaptureConnection) { continuation.yield(sampleBuffer) }
+}
+
 public enum Media {
 
-    private final class CaptureDelegate: NSObject, AVCapturePhotoCaptureDelegate {
+    private final class CapturePhotoDelegate: NSObject, AVCapturePhotoCaptureDelegate {
         weak var actor: Capture?
         func photoOutput(_ output: AVCapturePhotoOutput,
                          didFinishProcessingPhoto photo: AVCapturePhoto,
@@ -29,7 +36,7 @@ public enum Media {
         }
 
         public let session = AVCaptureSession()
-        private let delegate = CaptureDelegate()
+        private let delegate = CapturePhotoDelegate()
         private let photoOutput = AVCapturePhotoOutput()
         private var photoCont: CheckedContinuation<Data, Error>?
 
@@ -62,6 +69,17 @@ public enum Media {
                 self.photoCont = c
                 let settings = AVCapturePhotoSettings()
                 photoOutput.capturePhoto(with: settings, delegate: delegate)
+            }
+        }
+
+        public func stream() -> AsyncStream<CMSampleBuffer> {
+            AsyncStream { continuation in
+                let videoOutput = AVCaptureVideoDataOutput()
+                videoOutput.setSampleBufferDelegate(
+                    CaptureVideoDelegate(continuation: continuation),
+                    queue: DispatchQueue(label: "video")
+                )
+                session.addOutput(videoOutput)
             }
         }
 
