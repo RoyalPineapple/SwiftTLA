@@ -73,7 +73,8 @@ public enum Media {
         }
 
         public func stream() -> AsyncStream<CMSampleBuffer> {
-            AsyncStream { continuation in
+            guard _state.phase == 2 else { return AsyncStream { $0.finish() } }
+            return AsyncStream { continuation in
                 let videoOutput = AVCaptureVideoDataOutput()
                 videoOutput.setSampleBufferDelegate(
                     CaptureVideoDelegate(continuation: continuation),
