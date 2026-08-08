@@ -24,11 +24,13 @@ let package = Package(
         ),
         .executableTarget(
             name: "BLEScan",
-            dependencies: ["SwiftTLAVerified"]
+            dependencies: ["SwiftTLAVerified"],
+            linkerSettings: [.unsafeFlags(["-Xlinker", "-ObjC"])]
         ),
         .executableTarget(
             name: "MediaScan",
-            dependencies: ["SwiftTLAVerified"]
+            dependencies: ["SwiftTLAVerified"],
+            linkerSettings: [.unsafeFlags(["-Xlinker", "-ObjC"])]
         ),
     ]
 )

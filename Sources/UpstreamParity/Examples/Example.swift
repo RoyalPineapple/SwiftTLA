@@ -20,6 +20,7 @@ public enum Example {
     public static let all: [Entry] = [
         asynchInterface,
         gameOfLife,
+        nanoBlockchain,
         
         bakeryN2,
         barrierN6,

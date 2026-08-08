@@ -3,56 +3,76 @@ import SwiftUI
 import AVFoundation
 
 @main
-struct CameraApp: App {
-    @StateObject private var model = CameraModel()
+struct CameraApp {
+    static func main() {
+        let app = NSApplication.shared
+        app.setActivationPolicy(.regular)
 
-    var body: some Scene {
-        WindowGroup {
-            VStack(spacing: 0) {
-                ZStack {
-                    if model.mode == .playback, let player = model.currentPlayer {
-                        VideoPlayerView(player: player)
-                    } else {
-                        CameraPreviewView(session: model.capture.session)
-                    }
-
-                    if let image = model.snapshotImage {
-                        Image(nsImage: image)
-                            .resizable().scaledToFit()
-                            .transition(.opacity)
-                    }
-                }
-                .aspectRatio(4/3, contentMode: .fit)
-
-                HStack(spacing: 12) {
-                    Button(model.mode == .recording ? "Stop" : "Record") {
-                        model.toggleRecording()
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .tint(model.mode == .recording ? .red : .accentColor)
-
-                    Button("Snapshot") {
-                        Task { await model.takeSnapshot() }
-                    }
-                    .buttonStyle(.bordered)
-                    .disabled(model.mode != .live)
-
-                    Button("Play") {
-                        model.playRecording()
-                    }
-                    .buttonStyle(.bordered)
-                    .disabled(model.recordedURL == nil || model.mode != .live)
-
-                    Button("Live") {
-                        model.showLive()
-                    }
-                    .buttonStyle(.bordered)
-                    .disabled(model.mode == .live)
-                }
-                .padding()
-            }
+        let model = CameraModel()
+        let contentView = CameraContentView(model: model)
             .frame(minWidth: 480, minHeight: 400)
-            .task { await model.start() }
+
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 720, height: 540),
+            styleMask: [.titled, .closable, .resizable],
+            backing: .buffered, defer: false)
+        window.title = "Camera — Media.Capture @TLAActor"
+        window.center()
+        window.contentView = NSHostingView(rootView: contentView)
+        window.makeKeyAndOrderFront(nil)
+
+        Task { await model.start() }
+
+        app.run()
+    }
+}
+
+struct CameraContentView: View {
+    @ObservedObject var model: CameraModel
+
+    var body: some View {
+        VStack(spacing: 0) {
+            ZStack {
+                if model.mode == .playback, let player = model.currentPlayer {
+                    VideoPlayerView(player: player)
+                } else {
+                    CameraPreviewView(session: model.capture.session)
+                }
+
+                if let image = model.snapshotImage {
+                    Image(nsImage: image)
+                        .resizable().scaledToFit()
+                        .transition(.opacity)
+                }
+            }
+            .aspectRatio(4/3, contentMode: .fit)
+
+            HStack(spacing: 12) {
+                Button(model.mode == .recording ? "Stop" : "Record") {
+                    model.toggleRecording()
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(model.mode == .recording ? .red : .accentColor)
+
+                Button("Snapshot") {
+                    Task { await model.takeSnapshot() }
+                }
+                .buttonStyle(.bordered)
+                .disabled(model.mode != .live)
+
+                Button("Play") {
+                    model.playRecording()
+                }
+                .buttonStyle(.bordered)
+                .disabled(model.recordedURL == nil || model.mode != .live)
+
+                Button("Live") {
+                    model.showLive()
+                }
+                .buttonStyle(.bordered)
+                .disabled(model.mode == .live)
+            }
+            .padding()
         }
     }
 }
@@ -132,6 +152,7 @@ final class CameraModel: ObservableObject {
         do {
             try await capture.configure(device: device)
             try await capture.start()
+            print("Camera active")
         } catch {
             print("Camera error: \(error)")
         }
