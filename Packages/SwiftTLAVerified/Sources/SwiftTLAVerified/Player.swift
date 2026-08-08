@@ -4,7 +4,7 @@ import AVFoundation
 
 extension Media {
 
-    @TLAActor @MainActor
+    @TLAActor
     public actor Player {
         public static var spec: TLASpec {
             TLASpec("Player") {
