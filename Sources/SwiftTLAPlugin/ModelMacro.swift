@@ -29,8 +29,9 @@ struct MacroExpander {
             throw SimpleError("Could not find 'TLASpec' builder in '\(typeName)'")
         }
 
+        let phases = Self.collectEnumPhases(from: memberList)
         let rewritten = rewriteVarNames(in: closure)
-        let parsed = SpecParser.parseSpecClosure(rewritten)
+        let parsed = SpecParser.parseSpecClosure(rewritten, phases: phases)
         if parsed.variables.isEmpty { throw SimpleError("No variables in spec") }
 
         let spec = TLASpec(
@@ -122,8 +123,10 @@ struct MacroExpander {
             else { newBindings.append(binding); continue }
 
             let callee = fc.calledExpression
-            guard callee.as(DeclReferenceExprSyntax.self)?.baseName.text == "Var"
-               || callee.as(GenericSpecializationExprSyntax.self)?.expression.as(DeclReferenceExprSyntax.self)?.baseName.text == "Var"
+            let isVar = callee.as(DeclReferenceExprSyntax.self)?.baseName.text == "Var"
+                     || callee.as(GenericSpecializationExprSyntax.self)?.expression.as(DeclReferenceExprSyntax.self)?.baseName.text == "Var"
+            let isValue = callee.as(DeclReferenceExprSyntax.self)?.baseName.text == "Value"
+            guard isVar || isValue
             else { newBindings.append(binding); continue }
 
             let hasStringArg = fc.arguments.contains { arg in
@@ -329,6 +332,35 @@ struct MacroExpander {
             }
         }
         return nil
+    }
+
+    /// Collect `enum Foo: Int { case a, b = 5, c }` → `["a": 0, "b": 5, "c": 6]`.
+    /// Also handles `enum Foo: String` where case names ARE the raw values.
+    static func collectEnumPhases(from members: MemberBlockItemListSyntax) -> [String: Int] {
+        var result: [String: Int] = [:]
+        for member in members {
+            guard let enumDecl = member.decl.as(EnumDeclSyntax.self) else { continue }
+            guard let inheritance = enumDecl.inheritanceClause,
+                  inheritance.inheritedTypes.count == 1,
+                  inheritance.inheritedTypes.first?.type.as(IdentifierTypeSyntax.self)?.name.text == "Int"
+            else { continue }
+
+            var idx = 0
+            for caseMember in enumDecl.memberBlock.members {
+                guard let caseDecl = caseMember.decl.as(EnumCaseDeclSyntax.self) else { continue }
+                for element in caseDecl.elements {
+                    if let raw = element.rawValue?.value.as(IntegerLiteralExprSyntax.self),
+                       let val = Int(raw.literal.text) {
+                        result[element.name.text] = val
+                        idx = val + 1
+                    } else {
+                        result[element.name.text] = idx
+                        idx += 1
+                    }
+                }
+            }
+        }
+        return result
     }
 
     static func swiftType(for initial: TLAValue) -> String {

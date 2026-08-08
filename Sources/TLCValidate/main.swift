@@ -14,7 +14,7 @@ guard let name = args.first else {
 
 if name == "list" {
     for e in Example.all {
-        print("\(e.id)\tSLICE\t\(e.notes)")
+        print("\(e.id)\t\(e.expectedDistinct)\t\(e.notes)")
     }
     exit(0)
 }

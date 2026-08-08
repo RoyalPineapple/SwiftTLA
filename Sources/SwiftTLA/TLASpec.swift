@@ -184,6 +184,8 @@ public struct ConstantDecl: SpecComponent {
     init(_ name: String, _ value: TLAValue) { self.name = name; self.value = value }
 }
 
+public struct NamedValueDecl: Equatable, Sendable { public let name: String; public let value: TLAValue }
+
 public struct DefinitionDecl: SpecComponent, Equatable {
     public let tlaText: String
     public let name: String?
@@ -277,6 +279,7 @@ public enum SpecBuilder {
     public static func buildExpression(_ expr: RecursiveFuncDecl) -> [SpecComponent] { [expr] }
     public static func buildExpression(_ expr: RuntimeFuncDecl) -> [SpecComponent] { [expr] }
     public static func buildExpression(_ expr: SymmetrySetDecl) -> [SpecComponent] { [expr] }
+    public static func buildExpression(_ expr: NamedValueDecl) -> [SpecComponent] { [] }
     public static func buildOptional(_ component: [SpecComponent]?) -> [SpecComponent] { component ?? [] }
     public static func buildEither(first: [SpecComponent]) -> [SpecComponent] { first }
     public static func buildEither(second: [SpecComponent]) -> [SpecComponent] { second }
@@ -490,6 +493,12 @@ public func Symmetry(_ variableName: String, _ values: Set<some TLAValueConverti
 
 public func Constant(_ name: String, _ value: some TLAValueConvertible) -> ConstantDecl {
     ConstantDecl(name, value.tlaValue)
+}
+
+/// Register a named value constant for use in spec expressions.
+/// `Value("poweredOn", 5)` makes `poweredOn` resolve to 5 in spec expressions.
+public func Value(_ name: String, _ value: some TLAValueConvertible) -> NamedValueDecl {
+    NamedValueDecl(name: name, value: value.tlaValue)
 }
 
 public func Definition(_ tlaText: String) -> DefinitionDecl {

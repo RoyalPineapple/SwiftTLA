@@ -9,7 +9,9 @@ extension Example {
         id: "Bakery/N2",
         upstreamSpec: "Bakery-Boulangerie",
         upstreamModule: "specifications/Bakery-Boulangerie/Bakery.tla",
-        upstreamCfg: "specifications/Bakery-Boulangerie/MCBakery.cfg",        spec: bakerySpec(),
+        upstreamCfg: "specifications/Bakery-Boulangerie/MCBakery.cfg",
+        expectedDistinct: 0,
+        spec: bakerySpec(),
         notes: "N=2, MaxNat=2. Mutual exclusion + inductive invariant.",
     )
 }

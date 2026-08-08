@@ -5,7 +5,9 @@ extension Example {
         id: "SpecifyingSystems/AsynchInterface",
         upstreamSpec: "SpecifyingSystems",
         upstreamModule: "specifications/SpecifyingSystems/AsynchronousInterface/AsynchInterface.tla",
-        upstreamCfg: "specifications/SpecifyingSystems/AsynchronousInterface/AsynchInterface.cfg",        spec: {
+        upstreamCfg: "specifications/SpecifyingSystems/AsynchronousInterface/AsynchInterface.cfg",
+        expectedDistinct: 12,
+        spec: {
             let data = ["d1", "d2", "d3"]
             let st = Var<TLARecordType>("st")
             var records: [TLAValue] = []

@@ -10,7 +10,9 @@ extension Example {
         id: "Prisoners_Single_Switch/Prisoner",
         upstreamSpec: "Prisoners_Single_Switch",
         upstreamModule: "specifications/Prisoners_Single_Switch/Prisoner.tla",
-        upstreamCfg: "specifications/Prisoners_Single_Switch/Prisoner.cfg",        spec: prisonerSpec(),
+        upstreamCfg: "specifications/Prisoners_Single_Switch/Prisoner.cfg",
+        expectedDistinct: 16,
+        spec: prisonerSpec(),
         notes: "N=3, Light_Unknown=FALSE. 3 initial counter choices via Variable(in:).",
     )
 }

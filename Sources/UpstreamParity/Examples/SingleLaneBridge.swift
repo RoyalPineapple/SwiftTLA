@@ -9,7 +9,9 @@ extension Example {
         id: "SingleLaneBridge/MC",
         upstreamSpec: "SingleLaneBridge",
         upstreamModule: "specifications/SingleLaneBridge/SingleLaneBridge.tla",
-        upstreamCfg: "specifications/SingleLaneBridge/MC.cfg",        spec: singleLaneBridgeSpec(),
+        upstreamCfg: "specifications/SingleLaneBridge/MC.cfg",
+        expectedDistinct: 3605,
+        spec: singleLaneBridgeSpec(),
         notes: "2R+2L, bridge {4,5}. forAll/filterSet builders, ifElse. 3605 states.",
     )
 }

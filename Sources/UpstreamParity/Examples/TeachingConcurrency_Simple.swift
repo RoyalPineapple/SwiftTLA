@@ -5,7 +5,9 @@ extension Example {
         id: "TeachingConcurrency/Simple_N2",
         upstreamSpec: "TeachingConcurrency",
         upstreamModule: "specifications/TeachingConcurrency/Simple.tla",
-        upstreamCfg: nil,        spec: teachingSimple(n: 2),
+        upstreamCfg: nil,
+        expectedDistinct: 51,
+        spec: teachingSimple(n: 2),
         notes: "PlusCal translation, N=2. Upstream TLC (TypeOK only) = 13.",
     )
 

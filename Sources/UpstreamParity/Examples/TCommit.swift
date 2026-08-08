@@ -5,7 +5,9 @@ extension Example {
         id: "transaction_commit/TCommit",
         upstreamSpec: "transaction_commit",
         upstreamModule: "specifications/transaction_commit/TCommit.tla",
-        upstreamCfg: "specifications/transaction_commit/TCommit.cfg",        spec: tCommitSpec(),
+        upstreamCfg: "specifications/transaction_commit/TCommit.cfg",
+        expectedDistinct: 34,
+        spec: tCommitSpec(),
         notes: "Lamport TCommit. SPECIFICATION TCSpec. TLC = 34.",
     )
 

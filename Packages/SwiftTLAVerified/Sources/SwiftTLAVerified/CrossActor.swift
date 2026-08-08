@@ -6,8 +6,6 @@ import SwiftTLAMacros
 @TLAActor
 public actor CrossActor {
     public static var spec: TLASpec {
-        // Phases: unknown=0 resetting=1 unsupported=2 unauthorized=3 poweredOff=4 poweredOn=5 scanning=6
-        // Peripheral: disconnected=0 connecting=1 connected=2 discoveringServices=3 servicesDiscovered=4 discoveringChars=5 ready=6 disconnecting=7
         TLASpec("CrossActor") {
             let cPhase = Var<Int>("cPhase")
             let pPhase1 = Var<Int>("pPhase1")
@@ -19,7 +17,7 @@ public actor CrossActor {
             Variable(pPhase2, 0)
             Variable(pPhase3, 0)
 
-            // Central: 0=unknown,1=resetting,2=unsupported,3=unauthorized,4=poweredOff,5=poweredOn,6=scanning
+            // Central phases
             Action("cToPoweredOn")  { (cPhase == 0 || cPhase == 1 || cPhase == 4) && cPhase.becomes(5) }
             Action("cToPoweredOff") { (cPhase == 0 || cPhase == 1 || cPhase == 5) && cPhase.becomes(4) }
             Action("cToUnsupported") { cPhase == 0 && cPhase.becomes(2) }
@@ -28,8 +26,6 @@ public actor CrossActor {
             Action("cStartScan")    { cPhase == 5 && cPhase.becomes(6) }
             Action("cStopScan")     { cPhase == 6 && cPhase.becomes(5) }
 
-            // Peripheral: 0=disconnected,1=connecting,2=connected,3=discoveringServices,
-            // 4=servicesDiscovered,5=discoveringChars,6=ready,7=disconnecting
             for i in 1...3 {
                 let pVar = [pPhase1, pPhase2, pPhase3][i-1]
                 Action("p\(i)_beginConnect")  { pVar == 0 && pVar.becomes(1) }

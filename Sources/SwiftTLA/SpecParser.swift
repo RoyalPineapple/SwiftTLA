@@ -8,9 +8,12 @@ public enum SpecParser {
 
     // MARK: - State expressions
 
+    /// Local constants collected during parsing (for `Value` / `let` bindings).
+    nonisolated(unsafe) private static var _constants: [String: TLAValue] = [:]
+
     /// Parses any Swift expression that represents a state-level value (no primes, no assignments).
     /// Returns nil if the expression cannot be interpreted as a state expression.
-    public static func parseStateExpr(_ expression: ExprSyntax?) -> StateExpr? {
+    public static func parseStateExpr(_ expression: ExprSyntax?, localConstants: [String: TLAValue] = [:]) -> StateExpr? {
         guard let expression else { return nil }
 
         if let integerLiteral = expression.as(IntegerLiteralExprSyntax.self) {
@@ -24,7 +27,9 @@ public enum SpecParser {
             return .value(.string(text))
         }
         if let variableReference = expression.as(DeclReferenceExprSyntax.self) {
-            return .variable(variableReference.baseName.text)
+            let name = variableReference.baseName.text
+            if let resolved = localConstants[name] { return .value(resolved) }
+            return .variable(name)
         }
         if let functionCall = expression.as(FunctionCallExprSyntax.self) {
             return parseMethodCall(functionCall)
@@ -92,7 +97,7 @@ public enum SpecParser {
     // MARK: - Action parsing
 
     /// Parses a closure body containing action expressions (connected by implicit AND).
-    public static func parseActionFrom(_ closure: ClosureExprSyntax) -> ActionExpr? {
+    public static func parseActionFrom(_ closure: ClosureExprSyntax, localConstants: [String: TLAValue] = [:]) -> ActionExpr? {
         let actions = closure.statements.compactMap { statement -> ActionExpr? in
             guard case .expr(let inner) = statement.item else { return nil }
             return parseSingleAction(inner)
@@ -621,10 +626,13 @@ public enum SpecParser {
         public var temporal: [(name: String, expr: TemporalExpr)] = []
         public var fairness: [FairnessCondition] = []
         public var constants: [String: TLAValue] = [:]
+        /// Local named values (from NamedValue declarations, resolved in expressions)
+        public var localConstants: [String: TLAValue] = [:]
     }
 
-    public static func parseSpecClosure(_ closure: ClosureExprSyntax) -> ParsedSpecComponents {
+     public static func parseSpecClosure(_ closure: ClosureExprSyntax, phases: [String: Int] = [:]) -> ParsedSpecComponents {
         var result = ParsedSpecComponents()
+        _ = phases
         for statement in closure.statements {
             guard case .expr(let expression) = statement.item else { continue }
             if let fc = expression.as(FunctionCallExprSyntax.self) {
@@ -642,7 +650,7 @@ public enum SpecParser {
             parseVariableDecl(call, into: &result)
         case "Action":
             if let actionName = extractStringArg(call, index: 0),
-               let body = call.trailingClosure.flatMap(parseActionFrom) {
+                let body = call.trailingClosure.flatMap({ parseActionFrom($0) }) {
                 result.actions.append((actionName, body))
             }
         case "Invariant":
@@ -660,6 +668,9 @@ public enum SpecParser {
             if let fc = parseFairnessExpr(ExprSyntax(call)) {
                 result.fairness.append(fc)
             }
+        case "Value":
+            if let name = extractStringArg(call, index: 0),
+               parseNamedValueConstant(call, name: name, into: &result) { }
         default:
             break
         }
@@ -742,5 +753,18 @@ public enum SpecParser {
         } else if args[1].expression.as(StringLiteralExprSyntax.self) != nil {
             result.constants[name] = .string(extractStringArg(call, index: 1) ?? "")
         }
+    }
+
+    /// Parse `NamedValue("poweredOn", 5)` → register in localConstants
+    private static func parseNamedValueConstant(_ call: FunctionCallExprSyntax, name: String, into result: inout ParsedSpecComponents) -> Bool {
+        let args = Array(call.arguments)
+        guard args.count >= 2 else { return false }
+        if let intVal = args[1].expression.as(IntegerLiteralExprSyntax.self), let v = Int(intVal.literal.text) {
+            result.localConstants[name] = .int(v); return true
+        }
+        if let boolVal = args[1].expression.as(BooleanLiteralExprSyntax.self) {
+            result.localConstants[name] = .bool(boolVal.literal.text == "true"); return true
+        }
+        return false
     }
 }

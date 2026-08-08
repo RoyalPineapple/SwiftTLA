@@ -5,7 +5,9 @@ extension Example {
         id: "DieHard/TypeOK",
         upstreamSpec: "DieHard",
         upstreamModule: "specifications/DieHard/DieHard.tla",
-        upstreamCfg: nil,        spec: {
+        upstreamCfg: nil,
+        expectedDistinct: 16,
+        spec: {
             let big = Var<Int>("big", value: 0)
             let small = Var<Int>("small", value: 0)
             return TLASpec("DieHard") {

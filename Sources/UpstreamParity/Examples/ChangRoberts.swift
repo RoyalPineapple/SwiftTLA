@@ -5,7 +5,9 @@ extension Example {
         id: "ChangRoberts/ChangRoberts_N3",
         upstreamSpec: "chang_roberts",
         upstreamModule: "specifications/chang_roberts/ChangRoberts.tla",
-        upstreamCfg: "specifications/chang_roberts/MCChangRoberts.cfg",        spec: changRobertsSpec(),
+        upstreamCfg: "specifications/chang_roberts/MCChangRoberts.cfg",
+        expectedDistinct: 137,
+        spec: changRobertsSpec(),
         notes: "N=3, Id=i. 137 states matching upstream. Combined n0/n1 per-node actions.",
     )
 

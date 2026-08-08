@@ -8,7 +8,9 @@ extension Example {
         id: "Paxos/Small",
         upstreamSpec: "Paxos",
         upstreamModule: "specifications/Paxos/Paxos.tla",
-        upstreamCfg: "specifications/Paxos/MCPaxos.cfg",        spec: paxosSpec(),
+        upstreamCfg: "specifications/Paxos/MCPaxos.cfg",
+        expectedDistinct: 81,
+        spec: paxosSpec(),
         notes: "1 acceptor, 1 value, 2 ballots. Phase1a/b + Phase2a/b.",
     )
 }

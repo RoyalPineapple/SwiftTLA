@@ -5,18 +5,17 @@ extension Example {
         id: "SpecifyingSystems/HourClock2",
         upstreamSpec: "SpecifyingSystems",
         upstreamModule: "specifications/SpecifyingSystems/HourClock/HourClock2.tla",
-        upstreamCfg: "specifications/SpecifyingSystems/HourClock/HourClock2.cfg",        spec: {
+        upstreamCfg: "specifications/SpecifyingSystems/HourClock/HourClock2.cfg",
+        expectedDistinct: 12,
+        spec: TLASpec("HourClock2") {
+            Extends("Naturals")
             let hr = Var<Int>("hr", value: 1)
-            return TLASpec("HourClock2") {
-                Extends("Naturals")
-                Variable(hr, in: 1...12)
-                Action("HCnxt2") {
-                    hr.becomes((hr % 12) + 1)
-                }
-                Invariant("HCini") { hr >= 1 && hr <= 12 }
+            Variable(hr, in: 1...12)
+            Action("HCnxt2") {
+                hr.becomes((hr % 12) + 1)
             }
-        }(),
+            Invariant("HCini") { hr >= 1 && hr <= 12 }
+        },
         notes: "Upstream checks HC => HC2 as property; state space of HC2 alone is 12.",
     )
-
 }

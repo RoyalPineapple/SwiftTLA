@@ -5,7 +5,9 @@ extension Example {
         id: "ewd840/SyncTerminationDetection",
         upstreamSpec: "ewd840",
         upstreamModule: "specifications/ewd840/SyncTerminationDetection.tla",
-        upstreamCfg: "specifications/ewd840/SyncTerminationDetection.cfg",        spec: syncTDSpec(),
+        upstreamCfg: "specifications/ewd840/SyncTerminationDetection.cfg",
+        expectedDistinct: 9,
+        spec: syncTDSpec(),
         notes: "Abstract termination detection. N=3, active as function, terminationDetected boolean. TLC = ?",
     )
 

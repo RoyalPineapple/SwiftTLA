@@ -3,18 +3,13 @@ import SwiftTLA
 import UpstreamParity
 
 struct UpstreamParityTests {
-    @Test("Every Example: ModelChecker explores without error")
-    func modelCheckerRuns() throws {
+    @Test("ModelChecker state count matches TLC-verified expected")
+    func modelCheckerMatchesExpected() throws {
         for entry in Example.all {
             let count = try ModelChecker(spec: entry.spec, maxStates: 50_000).exploreGraph().states.count
+            #expect(count == entry.expectedDistinct, "\(entry.id): ModelChecker got \(count), TLC expected \(entry.expectedDistinct)")
             let result = try ModelChecker(spec: entry.spec, maxStates: 50_000).check()
-            if case .invariantViolated(let inv, _, _) = result {
-                Issue.record("\(entry.id): \(count) states, INVARIANT VIOLATED '\(inv)'")
-            } else if case .ok = result {
-                // TLC parity validated by scripts/validate_upstream_parity.sh
-            } else {
-                Issue.record("\(entry.id): unexpected result \(result)")
-            }
+            #expect({ if case .ok = result { true } else { false } }(), "\(entry.id): \(result)")
         }
     }
 

@@ -5,7 +5,9 @@ extension Example {
         id: "SpecifyingSystems/HourClock",
         upstreamSpec: "SpecifyingSystems",
         upstreamModule: "specifications/SpecifyingSystems/HourClock/HourClock.tla",
-        upstreamCfg: "specifications/SpecifyingSystems/HourClock/HourClock.cfg",        spec: TLASpec("HourClock") {
+        upstreamCfg: "specifications/SpecifyingSystems/HourClock/HourClock.cfg",
+        expectedDistinct: 12,
+        spec: TLASpec("HourClock") {
             Extends("Naturals")
             let hr = Var<Int>("hr")
             Variable(hr, in: 1...12)
