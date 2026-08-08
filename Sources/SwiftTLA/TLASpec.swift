@@ -199,11 +199,14 @@ public func Operator(_ name: String, param: Var<some TLAValueType>, @ActionBuild
 }
 
 public struct OpUse: SpecComponent {
-    public let op: String; public let param: String; public let varName: String
-    init(_ o: String, _ p: String, _ v: String) { op = o; param = p; varName = v }
+    public let op: String; public let param: String; public let varName: String; public let value: TLAValue?
+    init(_ o: String, _ p: String, _ v: String, _ val: TLAValue? = nil) { op = o; param = p; varName = v; value = val }
 }
 public func UseOp(_ operatorName: String, with variable: Var<some TLAValueType>) -> OpUse {
     OpUse(operatorName, "", variable.name)
+}
+public func UseOp(_ operatorName: String, value: some TLAValueConvertible) -> OpUse {
+    OpUse(operatorName, "", "", value.tlaValue)
 }
 
 public struct DefinitionDecl: SpecComponent, Equatable {
@@ -652,8 +655,16 @@ extension TLASpec {
                 // collected in pass 1
             } else if let u = comp as? OpUse {
                 if let op = operators[u.op] {
-                    let body = renameVar(op.params[0], to: u.varName, in: op.body)
-                    actions.append(NamedAction(name: "\(u.op)_\(u.varName)", body: body))
+                    let body: ActionExpr
+                    let name: String
+                    if let val = u.value {
+                        body = substituteActionVar(op.params[0], with: val, in: op.body)
+                        name = "\(u.op)_\(val)"
+                    } else {
+                        body = renameVar(op.params[0], to: u.varName, in: op.body)
+                        name = "\(u.op)_\(u.varName)"
+                    }
+                    actions.append(NamedAction(name: name, body: body))
                 }
             }
         }
@@ -732,6 +743,20 @@ public func substituteConstants(_ spec: TLASpec) -> TLASpec {
          symmetrySets: spec.symmetrySets,
          symmetryGroups: spec.symmetryGroups
     )
+}
+
+private func substituteActionVar(_ name: String, with value: TLAValue, in expr: ActionExpr) -> ActionExpr {
+    switch expr {
+    case .assign(let v, let e): return .assign(v, StateExpr.substituteVariable(name, value, in: e))
+    case .unchanged: return expr
+    case .guard_(let e): return .guard_(StateExpr.substituteVariable(name, value, in: e))
+    case .chooseAction(let v, let s): return .chooseAction(v, StateExpr.substituteVariable(name, value, in: s))
+    case .existsAction(let v, let s, let b): return .existsAction(v, StateExpr.substituteVariable(name, value, in: s), substituteActionVar(name, with: value, in: b))
+    case .ifElse(let c, let t, let e): return .ifElse(StateExpr.substituteVariable(name, value, in: c), substituteActionVar(name, with: value, in: t), substituteActionVar(name, with: value, in: e))
+    case .define(let v, let exp, let b): return .define(v, StateExpr.substituteVariable(name, value, in: exp), substituteActionVar(name, with: value, in: b))
+    case .and(let a, let b): return .and(substituteActionVar(name, with: value, in: a), substituteActionVar(name, with: value, in: b))
+    case .or(let a, let b): return .or(substituteActionVar(name, with: value, in: a), substituteActionVar(name, with: value, in: b))
+    }
 }
 
 private func substituteInValue(_ value: TLAValue, constants: [String: TLAValue]) -> TLAValue {

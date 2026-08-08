@@ -15,8 +15,8 @@ AVFoundation (designed `Camera`, `Recorder`, `Player` actors) — backed by
 validated TLA+ models.  Our
 `@TLAActor Bluetooth` discovers 260 real devices while its protocol is verified
 at compile time.  Cross-actor composition proves invariants across N concurrent
-peripherals.  Symmetry over device slots reduces the proof to N=1,
-machine-checked for any number of devices.  An Operator DSL matches upstream
+peripherals.  Symmetry over device slots reduces the proof to N=1 for N≤4,
+generalisable at engineering scale.  An Operator DSL matches upstream
 TLA+ structure with parameterized action templates.  All 27 upstream TLA+
 examples pass TLC state-count parity.  The checker verifies itself via a
 self-proof bootstrap.

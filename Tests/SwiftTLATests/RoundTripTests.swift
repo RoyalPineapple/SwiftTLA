@@ -19,10 +19,10 @@ struct VarOperatorMatrix {
         let x = Var<Int>("x", value: 1)
         let result: String
         switch op {
-        case "+": result = (x + val).description
-        case "-": result = (x - val).description
-        case "*": result = (x * val).description
-        case "%": result = (x % val).description
+        case "+": result = (x + val).raw.description
+        case "-": result = (x - val).raw.description
+        case "*": result = (x * val).raw.description
+        case "%": result = (x % val).raw.description
         default: result = ""
         }
         #expect(result == expected)
@@ -829,7 +829,7 @@ struct BoundVariableTests {
     func functionLiteralWithBoundVar() {
         let p = Var<Int>("p")
         let domain = StateExpr.set([1, 2, 3])
-        let fun = StateExpr.functionLiteral(p, in: domain, p * 2)
+        let fun = StateExpr.functionLiteral(p, in: domain, (p * 2).raw)
         let result = try! fun.evaluate(in: [:])
         guard case .function(let mapping) = result else {
             #expect(Bool(false))
@@ -844,7 +844,7 @@ struct BoundVariableTests {
     func functionApply() throws {
         let p = Var<Int>("p")
         let domain = StateExpr.set([1, 2])
-        let fun = StateExpr.functionLiteral(p, in: domain, p * 10)
+        let fun = StateExpr.functionLiteral(p, in: domain, (p * 10).raw)
         let apply = StateExpr.functionApply(fun, .value(.int(2)))
         let result = try apply.evaluate(in: [:])
         #expect(result == .int(20))
@@ -854,7 +854,7 @@ struct BoundVariableTests {
     func functionExcept() throws {
         let p = Var<Int>("p")
         let domain = StateExpr.set([1, 2])
-        let fun = StateExpr.functionLiteral(p, in: domain, p * 10)
+        let fun = StateExpr.functionLiteral(p, in: domain, (p * 10).raw)
         let updated = StateExpr.except(fun, .value(.int(1)), .value(.int(99)))
         let result = try updated.evaluate(in: [:])
         guard case .function(let mapping) = result else {
@@ -926,7 +926,7 @@ struct BoundVariableTests {
         let spec = TLASpec("FuncTest") {
             Variable(clock, TLAValue.function([:]))
             Action("init") {
-                let fun = StateExpr.functionLiteral(p, in: domain, p * 10)
+                let fun = StateExpr.functionLiteral(p, in: domain, (p * 10).raw)
                 clock.becomes(fun).when(clock.domain.cardinality == 0)
             }
         }
@@ -1008,7 +1008,7 @@ struct BoundVariableTests {
     func functionTLAOutput() {
         let p = Var<Int>("p")
         let domain = StateExpr.set([1, 2])
-        let fun = StateExpr.functionLiteral(p, in: domain, p * 10)
+        let fun = StateExpr.functionLiteral(p, in: domain, (p * 10).raw)
         let desc = fun.description
         #expect(desc.contains("[x"))
         #expect(desc.contains("\\in"))
@@ -1136,7 +1136,7 @@ struct CompletionCoverageTests {
         let selfProcess = Var<Int>("self")
         let result = pc.updated(at: selfProcess, to: "done")
         let expected: StateExpr = .except(.variable("pc"), .variable("self"), .value(.string("done")))
-        #expect(result == expected)
+        #expect(result.raw == expected)
     }
 
     @Test("Function-typed variable works end-to-end in ModelChecker")

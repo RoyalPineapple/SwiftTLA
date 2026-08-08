@@ -91,6 +91,9 @@ extension Expr where T == TLAFunctionType {
     public func updated(at key: some StateExprConvertible, to value: some StateExprConvertible) -> Expr<T> {
         Expr(.except(raw, key.stateExpr, value.stateExpr))
     }
+    public func applying(_ key: some StateExprConvertible) -> StateExpr {
+        .functionApply(raw, key.stateExpr)
+    }
 }
 
 extension Var where T == TLARecordType {
@@ -131,3 +134,4 @@ extension Expr where T == String {
 public func +(_ lhs: Expr<Int>, _ rhs: Int) -> Expr<Int> { Expr(.add(lhs.raw, .int(rhs))) }
 public func -(_ lhs: Int, _ rhs: Var<Int>) -> Expr<Int> { Expr(.subtract(.int(lhs), rhs.stateExpr)) }
 public func +(_ lhs: Expr<Int>, _ rhs: Var<Int>) -> Expr<Int> { Expr(.add(lhs.raw, rhs.stateExpr)) }
+public func %(_ lhs: Expr<Int>, _ rhs: Int) -> Expr<Int> { Expr(.modulo(lhs.raw, .int(rhs))) }

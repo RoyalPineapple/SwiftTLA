@@ -10,7 +10,7 @@ extension Example {
         upstreamSpec: "Bakery-Boulangerie",
         upstreamModule: "specifications/Bakery-Boulangerie/Bakery.tla",
         upstreamCfg: "specifications/Bakery-Boulangerie/MCBakery.cfg",
-        expectedDistinct: 2303,  // TLC verified; Swift ModelChecker has evaluator divergence (FIXME)
+        expectedDistinct: 2303,  // TLC-verified. Swift ModelChecker has known evaluator divergence (FIXME)
         spec: bakerySpec(),
         notes: "N=2, MaxNat=2. Mutual exclusion + inductive invariant.",
     )
@@ -214,14 +214,7 @@ private func bakerySpec() -> TLASpec {
             }
         }
 
-        LeadsTo("DeadlockFree",
-            StateExpr.exists(in: procSetExpr, StateExpr.equal(pc.applying(StateExpr.variable("x")), "e1")),
-            StateExpr.exists(in: procSetExpr, StateExpr.equal(pc.applying(StateExpr.variable("x")), "cs")))
-        LeadsTo("StarvationFree_1",
-            pc.applying(1) == "e1",
-            pc.applying(1) == "cs")
-        LeadsTo("StarvationFree_2",
-            pc.applying(2) == "e1",
-            pc.applying(2) == "cs")
+        // Liveness requires WF fairness on all actions (not included in this model).
+        // Upstream cfg has *PROPERTIES DeadlockFree StarvationFree — commented out.
     }
 }
