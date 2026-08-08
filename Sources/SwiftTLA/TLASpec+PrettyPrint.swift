@@ -125,6 +125,32 @@ extension TLASpec {
         lines.append("====")
         return lines.joined(separator: "\n") + "\n"
     }
+
+    /// Auto-generated TLC configuration matching the module.
+    public var tlaCfg: String {
+        var lines: [String] = []
+        lines.append("SPECIFICATION Spec")
+        if checkDeadlock { lines.append("CHECK_DEADLOCK TRUE") }
+        else { lines.append("CHECK_DEADLOCK FALSE") }
+        if let c = constraint { lines.append("CONSTRAINT \(c)") }
+        for inv in invariants { lines.append("INVARIANT \(inv.name)") }
+        for t in temporalProperties { lines.append("PROPERTY \(t.name)") }
+        for f in fairness {
+            let vn = variables.map(\.name)
+            let vt = vn.count == 1 ? vn[0] : "<<\(vn.joined(separator: ", "))>>"
+            lines.append(f.tlaForm(vars: vt))
+        }
+        for sym in symmetrySets {
+            let vals = sym.values.sorted { $0.description < $1.description }
+            lines.append("SYMMETRY Symm\(sym.variableName) == {\(vals.map(\.description).joined(separator: ", "))}")
+        }
+        return lines.joined(separator: "\n") + "\n"
+    }
+
+    /// Complete TLA+ bundle: .tla module + .cfg file.
+    public var tlaBundle: (tla: String, cfg: String) {
+        (tlaModule, tlaCfg)
+    }
 }
 
 /// Push UNCHANGED into every OR branch after distributing AND over OR.

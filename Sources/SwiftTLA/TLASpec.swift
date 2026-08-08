@@ -2,9 +2,10 @@ public struct NamedVar: Sendable, CustomStringConvertible, Equatable {
     public let name: String
     public let initial: TLAValue
     public let initialSet: StateExpr?
-    public let initExpr: StateExpr?  // computed from other initial vars
-    public init(name: String, initial: TLAValue, initialSet: StateExpr? = nil, initExpr: StateExpr? = nil) {
-        self.name = name; self.initial = initial; self.initialSet = initialSet; self.initExpr = initExpr
+    public let initExpr: StateExpr?
+    public let lazySet: StateExpr?  // lazy range for on-demand init
+    public init(name: String, initial: TLAValue, initialSet: StateExpr? = nil, initExpr: StateExpr? = nil, lazySet: StateExpr? = nil) {
+        self.name = name; self.initial = initial; self.initialSet = initialSet; self.initExpr = initExpr; self.lazySet = lazySet
     }
     public var description: String {
         if let s = initialSet { return "\(name) \\in \(s)" }
@@ -154,9 +155,11 @@ public struct VarDecl: SpecComponent {
     public let initial: TLAValue
     public let initialSet: StateExpr?
     public let initExpr: StateExpr?
-    init(_ name: String, _ initial: TLAValue) { self.name = name; self.initial = initial; self.initialSet = nil; self.initExpr = nil }
-    init(_ name: String, _ initial: TLAValue, initialSet: StateExpr?) { self.name = name; self.initial = initial; self.initialSet = initialSet; self.initExpr = nil }
-    init(_ name: String, initExpr: StateExpr) { self.name = name; self.initial = .int(0); self.initialSet = nil; self.initExpr = initExpr }
+    public let lazySet: StateExpr?
+    init(_ name: String, _ initial: TLAValue) { self.name = name; self.initial = initial; self.initialSet = nil; self.initExpr = nil; self.lazySet = nil }
+    init(_ name: String, _ initial: TLAValue, initialSet: StateExpr?) { self.name = name; self.initial = initial; self.initialSet = initialSet; self.initExpr = nil; self.lazySet = nil }
+    init(_ name: String, initExpr: StateExpr) { self.name = name; self.initial = .int(0); self.initialSet = nil; self.initExpr = initExpr; self.lazySet = nil }
+    init(_ name: String, lazySet: StateExpr) { self.name = name; self.initial = .int(0); self.initialSet = nil; self.initExpr = nil; self.lazySet = lazySet }
 }
 
 public struct ActionDecl: SpecComponent {
@@ -381,6 +384,12 @@ public func Variable<T>(_ ref: Var<T>, in values: some Sequence<some TLAValueCon
     let set = Set(values.map(\.tlaValue))
     let stateSet: StateExpr = .setLiteral(set.map { .value($0) })
     return VarDecl(ref.name, .set(set), initialSet: stateSet)
+}
+
+/// Lazy init: range evaluated on-demand during BFS. With symmetry, only one value needed.
+@discardableResult
+public func Variable(from name: String, _ range: StateExpr) -> VarDecl {
+    VarDecl(name, lazySet: range)
 }
 
 // MARK: - Shared initial state computation
@@ -641,7 +650,7 @@ extension TLASpec {
         }
 
         for comp in components {
-            if let v = comp as? VarDecl { variables.append(NamedVar(name: v.name, initial: v.initial, initialSet: v.initialSet, initExpr: v.initExpr)) } else if let a = comp as? ActionDecl { actions.append(NamedAction(name: a.name, body: a.body)) } else if let i = comp as? InvDecl { invariants.append(NamedInvariant(name: i.name, body: i.body)) } else if let t = comp as? TemporalDecl { temporalProperties.append(NamedTemporal(name: t.name, expr: t.expr)) } else if let f = comp as? FairnessDecl { fairness.append(f.condition) } else if let c = comp as? ConstantDecl { constants[c.name] = c.value } else if let d = comp as? DefinitionDecl {
+            if let v = comp as? VarDecl { variables.append(NamedVar(name: v.name, initial: v.initial, initialSet: v.initialSet, initExpr: v.initExpr, lazySet: v.lazySet)) } else if let a = comp as? ActionDecl { actions.append(NamedAction(name: a.name, body: a.body)) } else if let i = comp as? InvDecl { invariants.append(NamedInvariant(name: i.name, body: i.body)) } else if let t = comp as? TemporalDecl { temporalProperties.append(NamedTemporal(name: t.name, expr: t.expr)) } else if let f = comp as? FairnessDecl { fairness.append(f.condition) } else if let c = comp as? ConstantDecl { constants[c.name] = c.value } else if let d = comp as? DefinitionDecl {
                 if let name = d.name, let body = d.body {
                     definitions.append("\(name) == \(body)")
                 } else {
@@ -731,7 +740,7 @@ extension TLASpec {
 public func substituteConstants(_ spec: TLASpec) -> TLASpec {
     let constants = spec.constants
     let vars = spec.variables.map { v in
-        NamedVar(name: v.name, initial: substituteInValue(v.initial, constants: constants), initialSet: v.initialSet, initExpr: v.initExpr)
+        NamedVar(name: v.name, initial: substituteInValue(v.initial, constants: constants), initialSet: v.initialSet, initExpr: v.initExpr, lazySet: v.lazySet)
     }
     let acts = spec.actions.map { a in
         NamedAction(name: a.name, body: substituteInAction(a.body, constants: constants))

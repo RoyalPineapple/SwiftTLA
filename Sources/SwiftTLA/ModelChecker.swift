@@ -56,6 +56,30 @@ public struct ModelChecker {
             : substituted.actions
 
         let initialStates = computeInitialStates(substituted)
+        
+        // If no eager initial states, try lazy ranges — pick one representative
+        if initialStates.isEmpty {
+            let lazyVars = substituted.variables.filter { $0.lazySet != nil }
+            if !lazyVars.isEmpty {
+                var base: State = [:]
+                for v in substituted.variables { base[v.name] = v.initial }
+                for lv in lazyVars {
+                    if let range = lv.lazySet,
+                       case .set(let values) = try? range.evaluate(in: base),
+                       let first = values.first {
+                        base[lv.name] = first
+                    }
+                }
+                let seeds = [(StateGraph.StateID(0), base)]
+                return try bfs(seeds: seeds, variableNames: variableNames,
+                    expand: buildExpander(actions, variableNames: variableNames, constraint: substituted.constraint, runtimeFuncs: substituted.runtimeFuncs, recursiveFuncs: substituted.recursiveFuncs),
+                    evaluate: buildEvaluator(runtimeFuncs: substituted.runtimeFuncs, recursiveFuncs: substituted.recursiveFuncs),
+                    actions: actions, invariants: substituted.invariants, checkDeadlock: substituted.checkDeadlock,
+                    specificationName: substituted.name, maxStates: self.maxStates,
+                    symmetrySets: substituted.symmetrySets)
+            }
+        }
+
         guard !initialStates.isEmpty else {
             return emptyExploration(substituted, variableNames: variableNames, result: .error("No initial states"))
         }

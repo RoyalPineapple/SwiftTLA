@@ -42,6 +42,28 @@ if name == "check-all" {
     exit(fail > 0 ? 1 : 0)
 }
 
+
+if name == "bundle" {
+    guard let id = args.count >= 2 ? args[1] : nil else { exit(1) }
+    guard let entry = Example.all.first(where: { $0.id == id }) else { exit(1) }
+    let b = entry.spec.tlaBundle
+    print("=== TLA ===")
+    print(b.tla)
+    print("=== CFG ===")
+    print(b.cfg)
+    exit(0)
+}
+
+
+if name == "test-lazy" {
+    // Test lazy init with Game of Life
+    let spec = Example.gameOfLife.spec
+    let mc = ModelChecker(spec: spec, maxStates: 100)
+    do { let r = try mc.check(); print("OK: \(r)") }
+    catch { print("ERR: \(error)") }
+    exit(0)
+}
+
 if name == "list" {
     for e in Example.all {
         print("\(e.id)\t\(e.expectedDistinct)\t\(e.notes)")

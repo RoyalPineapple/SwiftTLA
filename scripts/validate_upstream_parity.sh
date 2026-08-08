@@ -58,27 +58,8 @@ check_swift_port() {
   cfg="$TMP/${mod}.cfg"
   cp "$raw" "$name_tla"
 
-  {
-    echo "SPECIFICATION Spec"
-    echo "CHECK_DEADLOCK FALSE"
-    # Copy CONSTANT assignments from .tla file (ASSUME lines)
-    grep '^ASSUME .* = ' "$name_tla" | sed 's/ASSUME /CONSTANT /' || true
-    grep -q '^HCini ==' "$name_tla" && echo "INVARIANT HCini"
-    grep -q '^TypeOK ==' "$name_tla" && echo "INVARIANT TypeOK"
-    grep -q '^TypeInvariant ==' "$name_tla" && echo "INVARIANT TypeInvariant"
-    grep -q '^VictoryOK ==' "$name_tla" && echo "INVARIANT VictoryOK"
-    grep -q '^ExclusiveAccess ==' "$name_tla" && echo "INVARIANT ExclusiveAccess"
-    grep -q '^Safe ==' "$name_tla" && echo "INVARIANT Safe"
-    grep -q '^CountInvariant ==' "$name_tla" && echo "INVARIANT CountInvariant"
-    grep -q '^Invariants ==' "$name_tla" && echo "INVARIANT Invariants"
-    grep -q '^SumMet ==' "$name_tla" && echo "INVARIANT SumMet"
-    grep -q '^StateConstraint ==' "$name_tla" && echo "CONSTRAINT StateConstraint"
-    # Detect temporal properties (contain ~> or [] or <>) and emit PROPERTY
-    while IFS= read -r line; do
-      prop_name=$(echo "$line" | sed 's/ ==.*//')
-      echo "PROPERTY $prop_name"
-    done < <(grep -E '^[A-Za-z]+ == .*(~>|\[\]|<>|\\leadsto)' "$name_tla" || true)
-  } > "$cfg"
+  # Use spec's own tlaBundle for .cfg
+  swift run tlc-validate bundle "$id" 2>/dev/null | awk '/=== CFG ===/{flag=1; next} flag{print}' > "$cfg"
 
   local cr count result
   cr=$(tlc_count "$name_tla" "$cfg")
