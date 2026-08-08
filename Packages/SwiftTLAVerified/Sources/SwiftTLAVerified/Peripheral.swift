@@ -27,7 +27,9 @@ public actor Peripheral: NSObject, CBPeripheralDelegate {
             Action("finishDiscoverChars") { phase == 5 && phase.becomes(6)
                                              && charsDiscovered.becomes(true) }
 
-            Invariant("resetOnDisconnect") { (phase != 0) || (!servicesDiscovered && !charsDiscovered) }
+            Invariant("validPhase")          { phase >= 0 && phase <= 7 }
+            Invariant("resetOnDisconnect")    { (phase != 0) || (!servicesDiscovered && !charsDiscovered) }
+            Invariant("readyImpliesDiscovered") { (phase != 6) || (servicesDiscovered && charsDiscovered) }
         }
     }
 

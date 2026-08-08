@@ -46,6 +46,7 @@ public struct Var<T: TLAValueType>: Sendable, CustomStringConvertible {
     public var cardinality: StateExpr { .cardinality(.variable(name)) }
 }
 
+
 /// Attaches a guard condition to an action.
 /// `x.becomes(1).when(x == 0)` produces `(x == 0) /\ x' = 1`.
 extension ActionExpr {
@@ -152,6 +153,9 @@ public func <= <L: StateExprConvertible, R: StateExprConvertible>(lhs: L, rhs: R
 public func >  <L: StateExprConvertible, R: StateExprConvertible>(lhs: L, rhs: R) -> StateExpr { .greaterThan(lhs.stateExpr, rhs.stateExpr) }
 public func >= <L: StateExprConvertible, R: StateExprConvertible>(lhs: L, rhs: R) -> StateExpr { .greaterOrEqual(lhs.stateExpr, rhs.stateExpr) }
 
+public func && <L: StateExprConvertible, R: StateExprConvertible>(lhs: L, rhs: R) -> StateExpr { .and(lhs.stateExpr, rhs.stateExpr) }
+public func || <L: StateExprConvertible, R: StateExprConvertible>(lhs: L, rhs: R) -> StateExpr { .or(lhs.stateExpr, rhs.stateExpr) }
+
 extension StateExpr {
     public func isIn(_ set: some StateExprConvertible) -> StateExpr { .in(self, set.stateExpr) }
     public func union(_ other: some StateExprConvertible) -> StateExpr { .union(self, other.stateExpr) }
@@ -175,11 +179,26 @@ extension StateExpr {
     public func integerDivided(by divisor: some StateExprConvertible) -> StateExpr { .integerDivide(self, divisor.stateExpr) }
 
     public static func set(_ elements: [some StateExprConvertible]) -> StateExpr { .setLiteral(elements.map(\.stateExpr)) }
-    public static func `for`(allIn set: StateExpr, _ predicate: StateExpr) -> StateExpr { .forAll(set, .fresh(), predicate) }
-    public static func exists(in set: StateExpr, _ predicate: StateExpr) -> StateExpr { .exists(set, .fresh(), predicate) }
-    public static func choose(from set: StateExpr, matching predicate: StateExpr) -> StateExpr { .choose(set, .fresh(), predicate) }
-    public static func any(from set: StateExpr) -> StateExpr { .choose(set, .fresh(), .value(.bool(true))) }
-    public static func function(domain: StateExpr, _ body: StateExpr) -> StateExpr { .functionLiteral(domain, .fresh(), body) }
+    public static func `for`(allIn set: StateExpr, _ predicate: StateExpr) -> StateExpr {
+        let qv = QuantVar.fresh()
+        return .forAll(set, qv, renameVar("x", to: qv.name, in: predicate))
+    }
+    public static func exists(in set: StateExpr, _ predicate: StateExpr) -> StateExpr {
+        let qv = QuantVar.fresh()
+        return .exists(set, qv, renameVar("x", to: qv.name, in: predicate))
+    }
+    public static func choose(from set: StateExpr, matching predicate: StateExpr) -> StateExpr {
+        let qv = QuantVar.fresh()
+        return .choose(set, qv, renameVar("x", to: qv.name, in: predicate))
+    }
+    public static func any(from set: StateExpr) -> StateExpr {
+        let qv = QuantVar.fresh()
+        return .choose(set, qv, .value(.bool(true)))
+    }
+    public static func function(domain: StateExpr, _ body: StateExpr) -> StateExpr {
+        let qv = QuantVar.fresh()
+        return .functionLiteral(domain, qv, renameVar("x", to: qv.name, in: body))
+    }
     public static func tuple(_ elements: [some StateExprConvertible]) -> StateExpr { .tupleLiteral(elements.map(\.stateExpr)) }
     public static func record(_ fields: [String: StateExpr]) -> StateExpr { .recordLiteral(fields) }
     public static func enabled(_ name: String) -> StateExpr { .enabledAction(name) }

@@ -16,6 +16,12 @@ public actor Central: NSObject, CBCentralManagerDelegate {
             Action("toResetting")    { (phase == 4 || phase == 5) && phase.becomes(1) }
             Action("startScan")      { phase == 5 && phase.becomes(6) }
             Action("stopScan")       { phase == 6 && phase.becomes(5) }
+
+            Invariant("validPhase") { phase >= 0 && phase <= 6 }
+            // All other invariants are structural — guards on actions prevent
+            // transitions from invalid states.  Cross-actor invariants
+            // (e.g. no Peripheral connected while Central poweredOff) are
+            // verified by TLC composition.
         }
     }
 
