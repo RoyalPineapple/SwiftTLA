@@ -1,148 +1,221 @@
-# SwiftTLA: Model Checking in the Swift Compiler
+# SwiftTLA: Compile-Time Model Checking for Swift Concurrency
 
 ## Abstract
 
-Swift structured concurrency provides data-race safety but cannot verify coordination protocols — handoffs, retries, cancellation, queue drain. TLA+ can verify these protocols, but it is a separate language with a separate workflow, and specifications diverge from code. We present SwiftTLA: a TLA+ model checker embedded in Swift as a DSL and compiler macro. A single AST serves as executable Swift code, a runtime model checker, and valid TLA+ source verified against TLC. Invariants fail at build time via `@TLAModel`. The checker itself is modeled in TLA+ and verified by TLC, closing a self-proof bootstrap. 25 of 27 upstream TLA+ examples match TLC state counts exactly, establishing oracle parity. To demonstrate the system's value, we build a library of verified coordination types — `VerifiedQueue`, `VerifiedHandoff`, `VerifiedRetry`, `VerifiedTaskGroup`, `VerifiedContinuation`, `VerifiedPipeline` — each carrying a compile-time proof of its protocol invariants. The types are Sendable, compose with actors and tasks, and require no knowledge of TLA+ to use. The result is a tool that makes formal verification of concurrency protocols produce usable, shipable artifacts.
+TLA+ formal verification is the gold standard for distributed systems — AWS, Azure, and Cosmos DB use it to find protocol bugs before implementation.  But TLA+ is a separate language, a separate workflow, and specifications diverge from code.  We invert the expectation: instead of verifying distributed systems at design time, we verify app-level concurrency at build time.  SwiftTLA embeds a TLA+ model checker in the Swift compiler via macros.  A single specification serves as executable Swift code, a runtime state machine, and valid TLA+ source verified against TLC.  Invariants fail as build errors.  The checker models itself and is verified by TLC, closing a self-proof bootstrap.  We demonstrate the system by shipping proven actors for CoreBluetooth — a delegated, callback-heavy Apple framework notorious for state-machine bugs.  Our `@TLAActor Bluetooth` scans real hardware, discovering 260 devices while its state machine is verified at compile time.  Cross-actor composition proves that no peripheral operates while the central manager is powered off, for N=4 concurrent devices.  A new Operator DSL lets action templates be defined once and instantiated across variables, compressing 36 unrolled actions into 9 reusable proofs.  We also design verified actors for AVFoundation — Camera, Recorder, Player — showing the pattern generalises.  25 of 27 upstream TLA+ examples match TLC state counts.
 
 ## 1. Introduction
 
-- Swift concurrency gives you data-race safety. It does not give you protocol safety.
-- Coordination bugs — dropped handoffs, duplicate retries, leaked tasks, orphaned continuations — are the Heisenbugs of modern Swift
-- TLA+ is the gold standard for verifying such protocols, used at AWS, Google, Cosmos DB
-- But TLA+ is a separate language, separate toolchain; specs diverge; no one uses it for app-level concurrency
-- **Thesis**: TLA+ model checking can be embedded in Swift itself — same language, same build, same developer — producing verified, reusable artifacts
-- **Contributions**: (1) an embedded TLA+ DSL with runtime checking, (2) compile-time verification via `@TLAModel` macro, (3) TLC oracle parity for correctness, (4) self-proof bootstrap, (5) a library of proven coordination types demonstrating the system produces real value
+- TLA+ is the gold standard for verifying coordination protocols — proven at AWS, Google, Cosmos DB
+- But TLA+ is a separate language, separate toolchain; specs are design artifacts that diverge from code
+- App-level concurrency has the same class of bugs at smaller scale — actor reentrancy, callback state machines, cancellation races
+- No one uses TLA+ for app concurrency because the barrier is too high
+- **Thesis**: TLA+ model checking can be embedded in Swift itself, proving app-level concurrency protocols at compile time, shipping the same code that was verified
+- **Contributions**:
+  1. `@TLAActor` / `@TLAModel` — compile-time model checking via Swift macros (1M state ceiling)
+  2. Operator DSL — parameterized action templates for reusable proofs
+  3. Cross-actor composition — proofs across N devices verified at compile time
+  4. CoreBluetooth demo — proven `Bluetooth` actor discovers 260 real devices
+  5. AVFoundation design — same pattern applied to Camera, Recorder, Player
+  6. TLC oracle parity — 25/27 upstream examples match
+  7. Self-proof bootstrap — checker verifies itself
 
 ## 2. Background
 
 ### 2.1 TLA+ and Model Checking
 - TLA, TLC, invariants, temporal properties, explicit-state BFS
-- PlusCal: transpiler to TLA+, separate language, no runtime
+- PlusCal: transpiler, separate language
+- TLA+ in industry: AWS, Cosmos DB, CCF — design-time only
 
-### 2.2 Swift Structured Concurrency
-- Actors, `Sendable`, task groups, `async`/`await`, `withCheckedContinuation`
-- What the compiler checks: data races
-- What it cannot: handoff ordering, retry deduplication, cancellation drainage, continuation liveness
+### 2.2 What TLA+ Can't Do Today
+- No integration into a mainstream programming language
+- Specifications are separate artifacts that diverge from implementation
+- No compile-time checking of protocol invariants
+- No single pipeline from proof → code → verification
 
-### 2.3 Related Work
-- **TLA+ tools**: Apalache (symbolic), ProB, Quint (friendlier syntax, Apalache backend), FizzBee (Python-like) — all separate languages, separate workflows
-- **TLA+ in industry**: AWS, Cosmos DB, CCF — separate specification phase, dedicated teams
-- **Embedded verification**: Dafny (SMT, not model checking), CakeML (theorem proving)
-- **Compile-time checking**: Swift macros, Rust proc macros — no prior model checking at compile time
-- **Self-verifying tools**: Milawa, CakeML — theorem provers, not model checkers
+### 2.3 Swift Concurrency's Blind Spot
+- Actors prevent data races — they don't prevent protocol bugs
+- `withCheckedContinuation` — must resume exactly once, runtime crash if wrong
+- Delegate-based frameworks (CoreBluetooth, AVFoundation) have undocumented state machines
+- Reentrancy at `await` points is invisible to the compiler
 
-## 3. SwiftTLA Design
+### 2.4 Related Work
+- **TLA+ ecosystem**: Apalache, ProB, Quint, FizzBee — all separate languages
+- **Embedded verification**: Dafny (SMT, not model checking)
+- **Compile-time macros**: no prior model checking in a compiler macro
+- **Self-verifying tools**: CakeML, Milawa — theorem provers, not model checkers
 
-### 3.1 Single AST, Three Roles
+## 3. Design
+
+### 3.1 Architecture
 
 ```
-Swift DSL → AST → Swift Runtime (ModelChecker BFS)
-                → TLA+ Export  (.tlaModule)
-                → @TLAModel    (compile-time BFS, fail build on violation)
+Swift DSL → AST → ModelChecker (runtime BFS)
+                → .tlaModule (TLC parity)
+                → @TLAModel / @TLAActor (compile-time BFS)
 ```
 
-- 51 `StateExpr` cases, 8 `ActionExpr` cases, 8 `TLAValue` cases
+- 51 StateExpr cases, 8 ActionExpr cases
 - Result builders for spec, action, invariant, temporal
-- One source, no translation, no drift between spec and implementation
+- One source, three backends, no drift
 
-### 3.2 Swift Runtime Checker
-- Plain BFS, `ActionEnumerator` expands transitions, `Evaluator` interprets expressions
-- Safety: invariants checked on every state
-- Liveness: SCC-based (Tarjan) with fairness filtering
-
-### 3.3 TLA+ Export and Oracle Parity
-- `tlaModule` renders AST as valid TLA+/SANY source
-- Auto-UNCHANGED for unassigned variables
-- TLC state count equivalence across 25/27 upstream examples as continuous regression
-
-### 3.4 Compile-Time Verification
-- `@TLAModel` macro: BFS in the Swift compiler (maxStates=10,000)
-- Invariant violation → compile error with counterexample trace
-- Model checking enters the developer's normal workflow
-
-### 3.5 Self-Proof Bootstrap
-- `ModelCheckerProof.tla`: TLA+ specification of the BFS checker, verified by TLC
-- `BFSChecker.swift`: checker implementation verified at compile time by `@TLAModel`
-- The checker verifies itself
-
-## 4. Evaluation: Verified Coordination Types
-
-> SwiftTLA produces value. We demonstrate this with a library of proven coordination types. Each type encodes a common concurrency protocol. Each carries a compile-time proof. Each is used with zero knowledge of TLA+.
-
-### 4.1 The Types
-
-| Type | Protocol | Invariant |
-|------|----------|-----------|
-| `VerifiedQueue<T>` | Bounded queue with cancellation drain | Every enqueued value dequeued; no overflow; drain delivers all |
-| `VerifiedHandoff<T>` | Actor-to-actor value transfer | Every send has exactly one receive; no duplicate; no loss |
-| `VerifiedRetry<T>` | Async operation with backoff | Exactly-once; bounded attempts; no retry after cancellation |
-| `VerifiedTaskGroup` | Task group lifecycle | All added tasks complete or cancel; no orphans; clean teardown |
-| `VerifiedContinuation<T>` | Callback-to-async bridge | Resumed exactly once on all paths; never leaked |
-| `VerifiedPipeline<I,O>` | Two-stage with backpressure | Bounded memory; clean shutdown propagates; no dropped work |
-
-### 4.2 Usage
+### 3.2 @TLAActor — Proven State Machines for Actors
 
 ```swift
-actor ImageProcessor {
-    let buffer = VerifiedQueue<Frame>(capacity: 8)
-    let upload = VerifiedRetry<Data>(maxAttempts: 3)
-
-    func process(_ frame: Frame) async throws {
-        await buffer.enqueue(frame)       // ← proved: no overflow
-        let data = render(frame)
-        try await upload.execute {        // ← proved: exactly-once
-            try await post(url, body: data)
+@TLAActor
+public actor Bluetooth {
+    public static var spec: TLASpec {
+        TLASpec("Bluetooth") {
+            let phase = Var<Int>("phase")
+            Action("startScan")  { phase == 5 && phase.becomes(6) }
+            Action("stopScan")   { phase == 6 && phase.becomes(5) }
+            Invariant("validPhase") { phase >= 0 && phase <= 6 }
         }
     }
 }
 ```
 
-### 4.3 Verification Results
+- Macro generates: `State` struct, `Variables`/`Actions` enums, `apply*` methods
+- Delegate bridge pattern: `CameraDelegate` (NSObject) → actor (isolated)
+- Hand-written bridge methods: `scan()` calls `startScan()` (generated) + `central.scanForPeripherals(...)` (hardware)
 
-| Type | States (Macro) | Invariants Checked | Compile Time | TLC State Count (Composition) |
-|------|---------------|--------------------|--------------|-------------------------------|
-| VerifiedQueue | 1,247 | 4 | 0.8s | — |
-| VerifiedHandoff | 892 | 3 | 0.6s | — |
-| VerifiedRetry | 1,856 | 4 | 1.2s | — |
-| VerifiedTaskGroup | 3,421 | 5 | 2.1s | — |
-| VerifiedContinuation | 68 | 3 | 0.1s | — |
-| Pipeline(Q→H→R) | — | — | — | 28,143 |
+### 3.3 Operators — Parameterized Action Templates
 
-### 4.4 Violation Traces
-- For each type, show the counterexample when the invariant is weakened
-- Example: `VerifiedContinuation` without the "resumed on all paths" invariant → trace showing the continuation dropped on an error branch
+```swift
+let anyPhase = Var<Int>("anyPhase")
+Operator("beginConnect", param: anyPhase) { anyPhase == 0 && anyPhase.becomes(1) }
 
-## 5. Evaluation: Oracle Parity
+for p in [pPhase1, pPhase2, pPhase3, pPhase4] {
+    UseOp("beginConnect", with: p)
+}
+```
 
-- 25/27 upstream TLA+ examples pass TLC state count parity
-- Covers records, functions, quantifiers, recursion, nondeterministic init, constraints
-- The parity suite runs as continuous regression on every change
+- 9 templates × 4 slots = 36 actions, one proof
+- `renameVar` handles ActionExpr substitution
+- Two-pass spec construction: collect operators, expand uses
 
-## 6. Evaluation: Self-Proof
+### 3.4 Cross-Actor Composition
 
-- TLC confirms `ModelCheckerProof.tla` — the checker is sound and complete
-- `@TLAModel` confirms `BFSChecker` invariants at compile time
-- The pipeline that verifies the types is itself verified
+```swift
+// Four cross-actor invariants, N=4 peripherals
+Invariant("noPeripheralWithoutPower") {
+    for p in [...] { (cPhase == poweredOn) || (p == disconnected) || (p == disconnecting) }
+}
+Invariant("noScanWhileConnecting")     { ... }
+Invariant("poweredOffDisconnects")     { ... }
+Invariant("resettingDisconnects")      { ... }
+```
+
+- Verified at compile time, ~28k states
+- Per-peripheral independence: proof for one slot proves all
+- TLC for N beyond compile-time ceiling
+
+### 3.5 TLA+ Export and Oracle Parity
+- `tlaModule` renders AST as valid TLA+ source
+- 25/27 upstream examples match TLC state counts exactly
+
+### 3.6 Self-Proof Bootstrap
+- `ModelCheckerProof.tla` — BFS algorithm verified by TLC
+- `BFSChecker.swift` — checker implementation verified by `@TLAModel`
+
+## 4. Evaluation: CoreBluetooth Demo
+
+### 4.1 Proven Actors for a Hard Framework
+
+CoreBluetooth is delegate-heavy, callback-driven, and has an undocumented state machine.  Every iOS developer has shipped code that calls `scanForPeripherals` while the central manager is `.poweredOff`.
+
+We ship two `@TLAActor` types:
+
+| Type | Wraps | States | Invariants |
+|------|-------|--------|------------|
+| `Bluetooth` | CBCentralManager | 7 | validPhase |
+| `Device` | CBPeripheral | 4 | validPhase, readyImpliesDiscovered |
+
+### 4.2 The Delegate Bridge
+
+```swift
+private final class BleDelegate: NSObject, CBCentralManagerDelegate {
+    weak var actor: Bluetooth?
+    func centralManagerDidUpdateState(_ c: CBCentralManager) {
+        Task { await actor?.updateState(c.state) }
+    }
+}
+```
+
+### 4.3 The Developer Experience
+
+```swift
+import SwiftTLAVerified
+
+let ble = Bluetooth()               // @TLAActor, proven at compile time
+try await ble.ready()               // awaits poweredOn
+for await device in ble.scan() {    // proven: only scans from poweredOn
+    print(device.name)
+}
+```
+
+### 4.4 Real-World Discovery
+
+```
+$ swift run ble-scan
+Bluetooth (@TLAActor, proven at compile time)
+Ready! Scanning for 10 seconds...
+
+[1] Bedroom
+[2] Living room
+[3] Govee_H6076_0E29
+...
+Done. 260 unique device(s).
+```
+
+260 real Bluetooth devices discovered by code with a compile-time proof.
+
+### 4.5 Cross-Actor Verification
+
+`DynamicCrossActor` proves for N=4 concurrent peripherals at compile time:
+- `noPeripheralWithoutPower` — no peripheral active while central poweredOff
+- `noScanWhileConnecting` — no scan while any peripheral connecting
+- `poweredOffDisconnects` — poweredOff ⇒ all peripherals disconnected
+- `resettingDisconnects` — resetting ⇒ no peripheral ready
+
+## 5. AVFoundation (Design)
+
+Same delegate-bridge pattern applied to Apple's notoriously tricky media framework:
+
+| Type | Wraps | States | Key Invariant |
+|------|-------|--------|---------------|
+| `Camera` | AVCaptureSession | 4 | no config while running |
+| `Recorder` | AVAssetWriter | 6 | must finish before dealloc |
+| `Player` | AVPlayer | 6 | no seek while loading |
+
+Composition: `Camera.capture → Recorder.append → Player.preview`
+
+## 6. Evaluation: Oracle Parity
+
+- 25/27 upstream TLA+ examples match TLC state counts
+- Paxos ported (120 lines, functions, records, messages)
+- Covers records, functions, quantifiers, recursion, constraints
 
 ## 7. Discussion
 
-### 7.1 Why SwiftTLA Matters
-- TLA+ model checking, accessible from Swift, integrated into the compiler
-- Produces verified, reusable artifacts — the types — not just verification reports
-- The user of a verified type never needs to know TLA+
-- The author of a verified type writes TLA+ in Swift, verified at build time
+### 7.1 What SwiftTLA Proves
+- TLA+ model checking can be embedded in a mainstream language
+- Single-device concurrency protocols can be formally verified at compile time
+- The same code that is verified can ship and run on real hardware
+- The pattern works for diverse Apple frameworks (CoreBluetooth, AVFoundation)
 
-### 7.2 Scope and Limitations
-- Each type verified independently under maxStates=10,000 (macro) or exhaustively (TLC)
-- Explicit-state BFS — state explosion on very large specifications
-- No refinement mappings, no PlusCal frontend
+### 7.2 Limitations
+- Explicit-state BFS — state explosion on very large specs
+- No refinement mappings
+- Delegate bridge requires hand-written dispatch
+- Operator support only at runtime, not in macro parser
 
 ### 7.3 Future Work
-- Additional coordination types: `VerifiedRouter`, `VerifiedConsensus`, `VerifiedLeaderElection`
-- Partial-order reduction for concurrent action interleavings
-- Symbolic backend (Apalache) for larger compositions
-- `DistributedActor` protocol verification
+- `ForEach` DSL for iterative spec generation
+- TLC composition for N-device scaling beyond compile-time ceiling
+- AVFoundation implementation (Camera, Recorder, Player)
+- StoreKit, CoreLocation, other delegate-heavy frameworks
 
 ## 8. Conclusion
 
-SwiftTLA embeds TLA+ model checking in the Swift compiler. A single specification serves as executable code, a runtime checker, and valid TLA+ source validated against TLC. Invariants fail at build time via `@TLAModel`. The checker verifies itself. The system produces verified coordination types — reusable, Sendable library components that carry compile-time proofs of their protocol invariants and require no knowledge of TLA+ to use. We built the formal methods so you don't have to.
+SwiftTLA brings formal verification to app-level concurrency.  A TLA+ model checker embedded in the Swift compiler proves protocol invariants at build time.  The same code ships — 260 Bluetooth devices discovered by a proven `@TLAActor`.  Cross-actor composition verifies multi-device invariants.  Operators make proofs reusable.  The pipeline works for CoreBluetooth today and AVFoundation tomorrow.  We built the formal methods so you don't have to.
