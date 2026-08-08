@@ -74,4 +74,4 @@ public enum Media {
     }
 }
 
-public enum MediaError: Error { case cannotConfigure, notConfigured, notRunning, noData }
+public enum MediaError: Error { case cannotConfigure, notConfigured, notRunning, noData, cannotFinish }

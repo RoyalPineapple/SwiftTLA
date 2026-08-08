@@ -58,7 +58,7 @@ private func ewd998Spec() -> TLASpec {
                                                 let terminated = StateExpr.forAll(nodeSet) { x in
                 StateExpr.not(active.applying(x)) && StateExpr.equal(pending.applying(x), 0)
             }
-            StateExpr.ifThenElse(t, terminated, trueE)
+            StateExpr.ifThenElse(terminationDetected.stateExpr, terminated, trueE)
         }
 
         Action("Terminate") {
@@ -68,7 +68,7 @@ private func ewd998Spec() -> TLASpec {
                 }
 
                 return active.applying(i)
-                    && active.becomes(Expr(.except(a, i, falseE)))
+                    && active.becomes(Expr(.except(active.stateExpr, i, falseE)))
                     && pending.stays
                     && terminationDetected.becomes(
                         StateExpr.ifThenElse(terminated, trueE, t))
@@ -78,7 +78,7 @@ private func ewd998Spec() -> TLASpec {
         Action("RcvMsg") {
             ActionExpr.exists("i", from: nodeSet) { i in
                                                 return pending.applying(i) > 0
-                    && active.becomes(Expr(.except(a, i, trueE)))
+                    && active.becomes(Expr(.except(active.stateExpr, i, trueE)))
                     && pending.becomes(pending.updated(at: i, to: pending.applying(i) - 1))
                     && terminationDetected.stays
             }

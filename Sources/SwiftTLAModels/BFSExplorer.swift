@@ -25,12 +25,12 @@ public enum BFSExplorer {
                 q.cardinality > 0
                     && explored.cardinality < maxExplore
                     && choose(picked, from: q)
-                    && q.becomes(
-                        q.subtracting(StateExpr.singleton(picked))
-                            .union(StateExpr.singleton(picked + 1).subtracting(visited))
-                    )
-                    && visited.becomes(Expr(.union(visited, StateExpr.singleton(picked + 1))))
-                    && explored.becomes(Expr(.union(explored, StateExpr.singleton(picked))))
+                    && q.becomes(Expr(.setDifference(
+                        q.stateExpr,
+                        StateExpr.union(StateExpr.singleton(picked.stateExpr),
+                            StateExpr.singleton(StateExpr.add(picked.stateExpr, .int(1)))))))
+                    && visited.becomes(Expr(.union(visited.stateExpr, StateExpr.singleton(StateExpr.add(picked.stateExpr, .int(1))))))
+                    && explored.becomes(Expr(.union(explored.stateExpr, StateExpr.singleton(picked.stateExpr))))
                     && ok.stays
             }
 
