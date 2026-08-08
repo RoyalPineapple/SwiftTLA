@@ -1,5 +1,26 @@
 import Foundation
 
+// MARK: - Experimental: Checkable + BFS + Verifier
+//
+// STATUS: Experimental — not used in production verification.
+// The authoritative model checker is `ModelChecker` (procedural BFS,
+// verified by 30 TLC parity tests). `@TLAModel` and `@TLAActor` use
+// `ModelChecker` for compile-time verification.
+//
+// This file contains an experimental self-hosting checker experiment:
+//   - `Checkable` protocol — abstract state machine for model checking
+//   - `BFS` — generic BFS algorithm over any Checkable
+//   - `Verifier` — checker lifecycle as a TLA+ spec (Actions, State, TLASpec)
+//   - `CheckableSpec` — TLASpec conformance via SpecRuntime
+//
+// The experiment produced a useful Checkable abstraction and demonstrated
+// that the checker lifecycle can be expressed as a TLASpec. Production use
+// requires: constant substitution, ASSUME handling, state constraints,
+// deadlock detection, recursive/runtime functions, symmetry reduction,
+// proper violation traces, and lifecycle-driven BFS (not filtered lifecycle).
+//
+// See also: Design.md § "Self-Hosting Checker" for the bootstrap problem.
+
 // MARK: - Checkable protocol
 
 public protocol Checkable {
