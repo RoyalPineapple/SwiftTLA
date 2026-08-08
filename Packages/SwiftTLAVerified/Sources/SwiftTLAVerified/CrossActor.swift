@@ -18,11 +18,16 @@ public actor CrossActor {
             Variable(pPhase3, 0)
 
             // Central: 0=unknown 1=resetting 2=unsupported 3=unauthorized 4=poweredOff 5=poweredOn 6=scanning
-            Action("cToPoweredOn")   { (cPhase == 0/*unknown*/ || cPhase == 1/*resetting*/ || cPhase == 4/*poweredOff*/) && cPhase.becomes(5/*poweredOn*/) }
-            Action("cToPoweredOff")  { (cPhase == 0/*unknown*/ || cPhase == 1/*resetting*/ || cPhase == 5/*poweredOn*/) && cPhase.becomes(4/*poweredOff*/) }
+            Action("cToPoweredOn")   { (cPhase == 0/*unknown*/
+                                       || cPhase == 1/*resetting*/
+                                       || cPhase == 4/*poweredOff*/) && cPhase.becomes(5/*poweredOn*/) }
+            Action("cToPoweredOff")  { (cPhase == 0/*unknown*/
+                                       || cPhase == 1/*resetting*/
+                                       || cPhase == 5/*poweredOn*/) && cPhase.becomes(4/*poweredOff*/) }
             Action("cToUnsupported") { cPhase == 0/*unknown*/ && cPhase.becomes(2/*unsupported*/) }
             Action("cToUnauthorized") { cPhase == 0/*unknown*/ && cPhase.becomes(3/*unauthorized*/) }
-            Action("cToResetting")   { (cPhase == 4/*poweredOff*/ || cPhase == 5/*poweredOn*/) && cPhase.becomes(1/*resetting*/) }
+            Action("cToResetting")   { (cPhase == 4/*poweredOff*/
+                                       || cPhase == 5/*poweredOn*/) && cPhase.becomes(1/*resetting*/) }
             Action("cStartScan")     { cPhase == 5/*poweredOn*/ && cPhase.becomes(6/*scanning*/) }
             Action("cStopScan")      { cPhase == 6/*scanning*/ && cPhase.becomes(5/*poweredOn*/) }
 
@@ -33,7 +38,9 @@ public actor CrossActor {
                 Action("p\(i)_beginConnect")         { pVar == 0/*disconnected*/ && pVar.becomes(1/*connecting*/) }
                 Action("p\(i)_finishConnect")        { pVar == 1/*connecting*/ && pVar.becomes(2/*connected*/) }
                 Action("p\(i)_failConnect")          { pVar == 1/*connecting*/ && pVar.becomes(0/*disconnected*/) }
-                Action("p\(i)_disconnect")           { (pVar == 2/*connected*/ || pVar == 4/*servicesDiscovered*/ || pVar == 6/*ready*/) && pVar.becomes(7/*disconnecting*/) }
+                Action("p\(i)_disconnect")           { (pVar == 2/*connected*/
+                                                       || pVar == 4/*servicesDiscovered*/
+                                                       || pVar == 6/*ready*/) && pVar.becomes(7/*disconnecting*/) }
                 Action("p\(i)_finishDisconnect")     { pVar == 7/*disconnecting*/ && pVar.becomes(0/*disconnected*/) }
                 Action("p\(i)_beginDiscover")        { pVar == 2/*connected*/ && pVar.becomes(3/*discoveringServices*/) }
                 Action("p\(i)_finishDiscover")       { pVar == 3/*discoveringServices*/ && pVar.becomes(4/*servicesDiscovered*/) }
