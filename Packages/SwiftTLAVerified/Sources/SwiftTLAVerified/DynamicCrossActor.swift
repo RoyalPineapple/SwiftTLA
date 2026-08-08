@@ -17,55 +17,38 @@ public actor DynamicCrossActor {
             Variable(pPhase3, 0)
             Variable(pPhase4, 0)
 
-            Action("cToPoweredOn")   { (cPhase == 0 || cPhase == 1 ||
-                                        cPhase == 4) && cPhase.becomes(5) }
-            Action("cToPoweredOff")  { (cPhase == 0 || cPhase == 1 ||
-                                        cPhase == 5) && cPhase.becomes(4) }
+            Action("cToPoweredOn")   { (cPhase == 0 || cPhase == 1 || cPhase == 4) && cPhase.becomes(5) }
+            Action("cToPoweredOff")  { (cPhase == 0 || cPhase == 1 || cPhase == 5) && cPhase.becomes(4) }
             Action("cToUnsupported") { cPhase == 0 && cPhase.becomes(2) }
             Action("cToUnauthorized") { cPhase == 0 && cPhase.becomes(3) }
             Action("cToResetting")   { (cPhase == 4 || cPhase == 5) && cPhase.becomes(1) }
             Action("cStartScan")     { cPhase == 5 && cPhase.becomes(6) }
             Action("cStopScan")      { cPhase == 6 && cPhase.becomes(5) }
 
-            Action("p1_beginConnect")         { pPhase1 == 0 && pPhase1.becomes(1) }
-            Action("p1_finishConnect")        { pPhase1 == 1 && pPhase1.becomes(2) }
-            Action("p1_failConnect")          { pPhase1 == 1 && pPhase1.becomes(0) }
-            Action("p1_disconnect")           { (pPhase1 == 2 || pPhase1 == 4 || pPhase1 == 6) && pPhase1.becomes(7) }
-            Action("p1_finishDisconnect")     { pPhase1 == 7 && pPhase1.becomes(0) }
-            Action("p1_beginDiscover")        { pPhase1 == 2 && pPhase1.becomes(3) }
-            Action("p1_finishDiscover")       { pPhase1 == 3 && pPhase1.becomes(4) }
-            Action("p1_beginDiscoverChars")   { pPhase1 == 4 && pPhase1.becomes(5) }
-            Action("p1_finishDiscoverChars")  { pPhase1 == 5 && pPhase1.becomes(6) }
+            // Define the peripheral transition pattern once
+            let anyPhase = Var<Int>("anyPhase")
+            Operator("beginConnect", param: anyPhase) { anyPhase == 0 && anyPhase.becomes(1) }
+            Operator("finishConnect", param: anyPhase) { anyPhase == 1 && anyPhase.becomes(2) }
+            Operator("failConnect", param: anyPhase) { anyPhase == 1 && anyPhase.becomes(0) }
+            Operator("disconnect", param: anyPhase) { (anyPhase == 2 || anyPhase == 4 || anyPhase == 6) && anyPhase.becomes(7) }
+            Operator("finishDisconnect", param: anyPhase) { anyPhase == 7 && anyPhase.becomes(0) }
+            Operator("beginDiscover", param: anyPhase) { anyPhase == 2 && anyPhase.becomes(3) }
+            Operator("finishDiscover", param: anyPhase) { anyPhase == 3 && anyPhase.becomes(4) }
+            Operator("beginDiscoverChars", param: anyPhase) { anyPhase == 4 && anyPhase.becomes(5) }
+            Operator("finishDiscoverChars", param: anyPhase) { anyPhase == 5 && anyPhase.becomes(6) }
 
-            Action("p2_beginConnect")         { pPhase2 == 0 && pPhase2.becomes(1) }
-            Action("p2_finishConnect")        { pPhase2 == 1 && pPhase2.becomes(2) }
-            Action("p2_failConnect")          { pPhase2 == 1 && pPhase2.becomes(0) }
-            Action("p2_disconnect")           { (pPhase2 == 2 || pPhase2 == 4 || pPhase2 == 6) && pPhase2.becomes(7) }
-            Action("p2_finishDisconnect")     { pPhase2 == 7 && pPhase2.becomes(0) }
-            Action("p2_beginDiscover")        { pPhase2 == 2 && pPhase2.becomes(3) }
-            Action("p2_finishDiscover")       { pPhase2 == 3 && pPhase2.becomes(4) }
-            Action("p2_beginDiscoverChars")   { pPhase2 == 4 && pPhase2.becomes(5) }
-            Action("p2_finishDiscoverChars")  { pPhase2 == 5 && pPhase2.becomes(6) }
-
-            Action("p3_beginConnect")         { pPhase3 == 0 && pPhase3.becomes(1) }
-            Action("p3_finishConnect")        { pPhase3 == 1 && pPhase3.becomes(2) }
-            Action("p3_failConnect")          { pPhase3 == 1 && pPhase3.becomes(0) }
-            Action("p3_disconnect")           { (pPhase3 == 2 || pPhase3 == 4 || pPhase3 == 6) && pPhase3.becomes(7) }
-            Action("p3_finishDisconnect")     { pPhase3 == 7 && pPhase3.becomes(0) }
-            Action("p3_beginDiscover")        { pPhase3 == 2 && pPhase3.becomes(3) }
-            Action("p3_finishDiscover")       { pPhase3 == 3 && pPhase3.becomes(4) }
-            Action("p3_beginDiscoverChars")   { pPhase3 == 4 && pPhase3.becomes(5) }
-            Action("p3_finishDiscoverChars")  { pPhase3 == 5 && pPhase3.becomes(6) }
-
-            Action("p4_beginConnect")         { pPhase4 == 0 && pPhase4.becomes(1) }
-            Action("p4_finishConnect")        { pPhase4 == 1 && pPhase4.becomes(2) }
-            Action("p4_failConnect")          { pPhase4 == 1 && pPhase4.becomes(0) }
-            Action("p4_disconnect")           { (pPhase4 == 2 || pPhase4 == 4 || pPhase4 == 6) && pPhase4.becomes(7) }
-            Action("p4_finishDisconnect")     { pPhase4 == 7 && pPhase4.becomes(0) }
-            Action("p4_beginDiscover")        { pPhase4 == 2 && pPhase4.becomes(3) }
-            Action("p4_finishDiscover")       { pPhase4 == 3 && pPhase4.becomes(4) }
-            Action("p4_beginDiscoverChars")   { pPhase4 == 4 && pPhase4.becomes(5) }
-            Action("p4_finishDiscoverChars")  { pPhase4 == 5 && pPhase4.becomes(6) }
+            // Apply to each slot
+            for p in [pPhase1, pPhase2, pPhase3, pPhase4] {
+                UseOp("beginConnect", with: p)
+                UseOp("finishConnect", with: p)
+                UseOp("failConnect", with: p)
+                UseOp("disconnect", with: p)
+                UseOp("finishDisconnect", with: p)
+                UseOp("beginDiscover", with: p)
+                UseOp("finishDiscover", with: p)
+                UseOp("beginDiscoverChars", with: p)
+                UseOp("finishDiscoverChars", with: p)
+            }
 
             Invariant("noPeripheralWithoutPower") {
                 for p in [pPhase1, pPhase2, pPhase3, pPhase4] {
@@ -77,10 +60,6 @@ public actor DynamicCrossActor {
                     (cPhase != 6) || (p != 1)
                 }
             }
-
-            // Per-peripheral independence: proving invariants for one slot under
-            // any central phase proves them for all.
         }
     }
 }
-

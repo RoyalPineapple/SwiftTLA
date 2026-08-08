@@ -35,3 +35,19 @@ extension ActionExpr {
     @discardableResult public static func || (lhs: ActionExpr, rhs: StateExpr) -> ActionExpr { .or(lhs, .guard_(rhs)) }
     @discardableResult public static func || (lhs: StateExpr, rhs: ActionExpr) -> ActionExpr { .or(.guard_(lhs), rhs) }
 }
+
+public func renameVar(_ from: String, to: String, in action: ActionExpr) -> ActionExpr {
+    func r(_ s: StateExpr) -> StateExpr { renameVar(from, to: to, in: s) }
+    func ra(_ a: ActionExpr) -> ActionExpr { renameVar(from, to: to, in: a) }
+    switch action {
+    case .assign(let v, let e): return .assign(v == from ? to : v, r(e))
+    case .unchanged(let v): return .unchanged(v == from ? to : v)
+    case .guard_(let e): return .guard_(r(e))
+    case .chooseAction(let v, let s): return .chooseAction(v == from ? to : v, r(s))
+    case .existsAction(let v, let s, let b): return .existsAction(v == from ? to : v, r(s), ra(b))
+    case .ifElse(let c, let t, let e): return .ifElse(r(c), ra(t), ra(e))
+    case .define(let v, let expr, let b): return .define(v == from ? to : v, r(expr), ra(b))
+    case .and(let a, let b): return .and(ra(a), ra(b))
+    case .or(let a, let b): return .or(ra(a), ra(b))
+    }
+}

@@ -186,6 +186,22 @@ public struct ConstantDecl: SpecComponent {
 
 public struct NamedValueDecl: Equatable, Sendable { public let name: String; public let value: TLAValue }
 
+public struct OpDecl: SpecComponent {
+    public let name: String; public let params: [String]; public let body: ActionExpr
+    init(_ n: String, _ p: [String], _ b: ActionExpr) { name = n; params = p; body = b }
+}
+public func Operator(_ name: String, param: Var<some TLAValueType>, @ActionBuilder body: () -> ActionExpr) -> OpDecl {
+    OpDecl(name, [param.name], body())
+}
+
+public struct OpUse: SpecComponent {
+    public let op: String; public let param: String; public let varName: String
+    init(_ o: String, _ p: String, _ v: String) { op = o; param = p; varName = v }
+}
+public func UseOp(_ operatorName: String, with variable: Var<some TLAValueType>) -> OpUse {
+    OpUse(operatorName, "", variable.name)
+}
+
 public struct DefinitionDecl: SpecComponent, Equatable {
     public let tlaText: String
     public let name: String?
@@ -280,6 +296,8 @@ public enum SpecBuilder {
     public static func buildExpression(_ expr: RuntimeFuncDecl) -> [SpecComponent] { [expr] }
     public static func buildExpression(_ expr: SymmetrySetDecl) -> [SpecComponent] { [expr] }
     public static func buildExpression(_ expr: NamedValueDecl) -> [SpecComponent] { [] }
+    public static func buildExpression(_ expr: OpDecl) -> [SpecComponent] { [expr] }
+    public static func buildExpression(_ expr: OpUse) -> [SpecComponent] { [expr] }
     public static func buildOptional(_ component: [SpecComponent]?) -> [SpecComponent] { component ?? [] }
     public static func buildEither(first: [SpecComponent]) -> [SpecComponent] { first }
     public static func buildEither(second: [SpecComponent]) -> [SpecComponent] { second }
@@ -580,6 +598,12 @@ extension TLASpec {
         var runtimeFuncCollector: [String: @Sendable ([TLAValue]) -> TLAValue] = [:]
         var runtimeFuncBodiesCollector: [String] = []
         var symmetrySets: [SymmetrySet] = []
+        var operators: [String: OpDecl] = [:]
+
+        // Pass 1: collect operators
+        for comp in components {
+            if let op = comp as? OpDecl { operators[op.name] = op }
+        }
 
         for comp in components {
             if let v = comp as? VarDecl { variables.append(NamedVar(name: v.name, initial: v.initial, initialSet: v.initialSet, initExpr: v.initExpr)) } else if let a = comp as? ActionDecl { actions.append(NamedAction(name: a.name, body: a.body)) } else if let i = comp as? InvDecl { invariants.append(NamedInvariant(name: i.name, body: i.body)) } else if let t = comp as? TemporalDecl { temporalProperties.append(NamedTemporal(name: t.name, expr: t.expr)) } else if let f = comp as? FairnessDecl { fairness.append(f.condition) } else if let c = comp as? ConstantDecl { constants[c.name] = c.value } else if let d = comp as? DefinitionDecl {
@@ -602,6 +626,13 @@ extension TLASpec {
                 runtimeFuncBodies.append(rtf.tlaBody)
             } else if let s = comp as? SymmetrySetDecl {
                 symmetrySets.append(SymmetrySet(variableName: s.variableName, values: s.values))
+            } else if comp is OpDecl {
+                // collected in pass 1
+            } else if let u = comp as? OpUse {
+                if let op = operators[u.op] {
+                    let body = renameVar(op.params[0], to: u.varName, in: op.body)
+                    actions.append(NamedAction(name: "\(u.op)_\(u.varName)", body: body))
+                }
             }
         }
 
