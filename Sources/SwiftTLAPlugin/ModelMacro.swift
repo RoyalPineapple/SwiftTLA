@@ -29,9 +29,8 @@ struct MacroExpander {
             throw SimpleError("Could not find 'TLASpec' builder in '\(typeName)'")
         }
 
-        let phases = Self.collectEnumPhases(from: memberList)
         let rewritten = rewriteVarNames(in: closure)
-        let parsed = SpecParser.parseSpecClosure(rewritten, phases: phases)
+        let parsed = SpecParser.parseSpecClosure(rewritten)
         if parsed.variables.isEmpty { throw SimpleError("No variables in spec") }
 
         let spec = TLASpec(

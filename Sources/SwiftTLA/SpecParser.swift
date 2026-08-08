@@ -630,26 +630,57 @@ public enum SpecParser {
         public var localConstants: [String: TLAValue] = [:]
     }
 
-     public static func parseSpecClosure(_ closure: ClosureExprSyntax, phases: [String: Int] = [:]) -> ParsedSpecComponents {
+     public static func parseSpecClosure(_ closure: ClosureExprSyntax) -> ParsedSpecComponents {
         var result = ParsedSpecComponents()
-        _ = phases
         for statement in closure.statements {
-            guard case .expr(let expression) = statement.item else { continue }
-            if let fc = expression.as(FunctionCallExprSyntax.self) {
+            if case .expr(let expression) = statement.item,
+               let fc = expression.as(FunctionCallExprSyntax.self) {
                 parseBuilderCall(fc, into: &result)
+            } else if let forStmt = statement.item.as(ForStmtSyntax.self) {
+                parseForLoop(forStmt, into: &result)
             }
         }
         return result
     }
 
-    private static func parseBuilderCall(_ call: FunctionCallExprSyntax, into result: inout ParsedSpecComponents) {
+    private static func parseForLoop(_ forStmt: ForStmtSyntax, into result: inout ParsedSpecComponents) {
+        guard let pattern = forStmt.pattern.as(IdentifierPatternSyntax.self)?.identifier.text,
+              let sequence = forStmt.sequence.as(SequenceExprSyntax.self)
+        else { return }
+
+        // Extract range: 1...N → start=1, end=N (from literal or variable)
+        let elements = Array(sequence.elements)
+        guard elements.count == 3 else { return }
+
+        // Evaluate start and end from sibling expressions
+        var start = 1, end = 3
+        if let startExpr = elements[0].as(IntegerLiteralExprSyntax.self) {
+            start = Int(startExpr.literal.text) ?? 1
+        }
+        if let endExpr = elements[2].as(IntegerLiteralExprSyntax.self) {
+            end = Int(endExpr.literal.text) ?? 3
+        }
+
+        let body = forStmt.body.statements
+        for i in start...end {
+            for bodyStmt in body {
+                guard case .expr(let expr) = bodyStmt.item,
+                      let fc = expr.as(FunctionCallExprSyntax.self)
+                else { continue }
+                parseBuilderCall(fc, into: &result, loopVar: pattern, loopValue: i)
+            }
+        }
+    }
+
+    private static func parseBuilderCall(_ call: FunctionCallExprSyntax, into result: inout ParsedSpecComponents,
+                                          loopVar: String? = nil, loopValue: Int? = nil) {
         guard let name = call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text else { return }
 
         switch name {
         case "Variable":
             parseVariableDecl(call, into: &result)
         case "Action":
-            if let actionName = extractStringArg(call, index: 0),
+            if let actionName = extractStringArg(call, index: 0, loopVar: loopVar, loopValue: loopValue),
                 let body = call.trailingClosure.flatMap({ parseActionFrom($0) }) {
                 result.actions.append((actionName, body))
             }
@@ -676,11 +707,26 @@ public enum SpecParser {
         }
     }
 
-    private static func extractStringArg(_ call: FunctionCallExprSyntax, index: Int) -> String? {
+    private static func extractStringArg(_ call: FunctionCallExprSyntax, index: Int,
+                                          loopVar: String? = nil, loopValue: Int? = nil) -> String? {
         let args = Array(call.arguments)
         guard index < args.count else { return nil }
-        return args[index].expression.as(StringLiteralExprSyntax.self)?
-            .segments.first?.as(StringSegmentSyntax.self)?.content.text
+        guard let stringLit = args[index].expression.as(StringLiteralExprSyntax.self) else { return nil }
+
+        // Build string from segments, substituting loop variable
+        var result = ""
+        for segment in stringLit.segments {
+            if let text = segment.as(StringSegmentSyntax.self)?.content.text {
+                result += text
+            } else if let expr = segment.as(ExpressionSegmentSyntax.self),
+                      let loopVar, let loopValue,
+                      let expr0 = expr.expressions.first?.expression,
+                      let declRef = expr0.as(DeclReferenceExprSyntax.self),
+                      declRef.baseName.text == loopVar {
+                result += "\(loopValue)"
+            }
+        }
+        return result
     }
 
     private static func parseVariableDecl(_ call: FunctionCallExprSyntax, into result: inout ParsedSpecComponents) {
