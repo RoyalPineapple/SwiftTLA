@@ -5,10 +5,10 @@ import Foundation
 public protocol Checkable {
     associatedtype S: Hashable
     var actions: [String] { get }
-    func initial() -> [S]
-    func enabled(in state: S) -> [String]
+    func initial() throws -> [S]
+    func enabled(in state: S) throws -> [String]
     func successors(of action: String, from state: S) throws -> [S]
-    func check(_ state: S) -> [String]
+    func check(_ state: S) throws -> [String]
 }
 
 // MARK: - Generic BFS
@@ -17,7 +17,7 @@ public enum BFS {
     public static func explore<C: Checkable>(
         _ c: C, maxStates: Int = 100_000
     ) throws -> CheckResult {
-        let initials = c.initial()
+        let initials = try c.initial()
         guard !initials.isEmpty else { return .error("No initial states") }
         var queue: [C.S] = []; var visited = Set<C.S>()
         for s in initials where !visited.contains(s) { visited.insert(s); queue.append(s) }
@@ -25,10 +25,12 @@ public enum BFS {
         while head < queue.count {
             guard explored < maxStates else { return .depthExceeded(statesCount: explored, limit: maxStates) }
             let current = queue[head]; head += 1; explored += 1
-            let violations = c.check(current)
+            let violations = try c.check(current)
             if !violations.isEmpty { return .invariantViolated(invariant: violations[0], state: [:], trace: []) }
-            for action in c.enabled(in: current) {
-                for next in try c.successors(of: action, from: current) {
+            let enabledActions = try c.enabled(in: current)
+            for action in enabledActions {
+                let successors = try c.successors(of: action, from: current)
+                for next in successors {
                     if !visited.contains(next) { visited.insert(next); queue.append(next) }
                 }
             }
@@ -54,14 +56,15 @@ public struct CheckableSpec: Checkable {
 
     public var actions: [String] { userActions.map(\.name) }
 
-    public func initial() -> [[String: TLAValue]] {
+    public func initial() throws -> [[String: TLAValue]] {
         let initials = computeInitialStates(runtime.spec)
+        guard !initials.isEmpty else { throw E.noInitialStates }
         var deduped: [[String: TLAValue]] = []; var seen = Set<[String: TLAValue]>()
         for s in initials where !seen.contains(s) { seen.insert(s); deduped.append(s) }
         return deduped
     }
 
-    public func enabled(in state: [String: TLAValue]) -> [String] {
+    public func enabled(in state: [String: TLAValue]) throws -> [String] {
         runtime.availableActions(in: state).filter { !$0.hasPrefix("_") }
     }
 
@@ -70,22 +73,22 @@ public struct CheckableSpec: Checkable {
         return try ActionEnumerator.enumerate(a.body, from: state, varNames: userVarNames)
     }
 
-    public func check(_ state: [String: TLAValue]) -> [String] {
-        invariants.compactMap { inv in
-            (try? inv.body.evaluateBool(in: state)) == false ? inv.name : nil
+    public func check(_ state: [String: TLAValue]) throws -> [String] {
+        try invariants.compactMap { inv in
+            try inv.body.evaluateBool(in: state) ? nil : inv.name
         }
     }
-    enum E: Error { case actionNotFound(String) }
+    enum E: Error { case actionNotFound(String), noInitialStates }
 }
 
-// MARK: - RuntimeChecker
+// MARK: - Verifier
 
 /// Model checker as a TLA+ spec — lifecycle Actions, State struct, baked by hand.
 ///
 /// ## Bootstrap problem
 /// This spec CANNOT be `@TLAModel`-verified because the checker IS the verifier.
-/// `@TLAModel HourClock` calls `RuntimeChecker.check()` which calls `BFS.explore()`.
-/// To verify RuntimeChecker itself, we'd need RuntimeChecker to check RuntimeChecker —
+/// `@TLAModel HourClock` calls `Verifier.check()` which calls `BFS.explore()`.
+/// To verify Verifier itself, we'd need Verifier to check Verifier —
 /// circular. The Chicken-Donaldson theorem says any verification system strong enough
 /// to verify itself must either be inconsistent or incomplete.
 ///
@@ -103,7 +106,7 @@ public struct CheckableSpec: Checkable {
 /// public static var spec: TLASpec { ... }
 /// ```
 /// We wrote it manually. Same structure, no macro dependency.
-public struct RuntimeChecker {
+public struct Verifier {
     public let spec: TLASpec
     public let maxStates: Int
 
@@ -125,7 +128,7 @@ public struct RuntimeChecker {
     }
 
     public static var lifecycle: TLASpec {
-        TLASpec("RuntimeChecker") {
+        TLASpec("Verifier") {
             let phase = Var<Int>("_phase")
             let explored = Var<Int>("_explored")
             let queued = Var<Int>("_queued")
