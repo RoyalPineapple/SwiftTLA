@@ -9,7 +9,7 @@ public macro TLAModel() = #externalMacro(module: "SwiftTLAPlugin", type: "ModelM
 public macro TLAActor() = #externalMacro(module: "SwiftTLAPlugin", type: "TLAActorMacro")
 
 @attached(member, names: arbitrary)
-@attached(extension, conformances: ObservableObject, names: arbitrary)
+@attached(extension, names: arbitrary)
 public macro TLAObservable() = #externalMacro(module: "SwiftTLAPlugin", type: "TLAObservableMacro")
 
 @attached(peer, names: arbitrary)

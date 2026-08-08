@@ -21,8 +21,10 @@ struct MacroExpander {
             typeName = a.name.text; memberList = a.memberBlock.members
         } else if let s = declaration.as(StructDeclSyntax.self) {
             typeName = s.name.text; memberList = s.memberBlock.members
+        } else if let c = declaration.as(ClassDeclSyntax.self) {
+            typeName = c.name.text; memberList = c.memberBlock.members
         } else {
-            throw SimpleError(isActor ? "@TLAActor on actors only" : "@TLAModel on structs only")
+            throw SimpleError(isActor ? "@TLAActor on actors only" : "Must be applied to a struct or class")
         }
 
         guard let closure = Self.findSpec(in: memberList) else {
@@ -522,5 +524,14 @@ public struct TLAActorMacro: MemberMacro, ExtensionMacro {
         let expander = MacroExpander(isActor: true)
         let parsed = try expander.parseAndVerify(declaration)
         return expander.generateMembers(variables: parsed.variables, actions: parsed.actions)
+    }
+}
+
+public struct TLAObservableMacro: MemberMacro {
+    public static func expansion(of node: AttributeSyntax, providingMembersOf declaration: some DeclGroupSyntax,
+                                  in context: some MacroExpansionContext) throws -> [DeclSyntax] {
+        let expander = MacroExpander(isActor: false)
+        let parsed = try expander.parseAndVerify(declaration)
+        return expander.generateObservableMembers(variables: parsed.variables, actions: parsed.actions)
     }
 }

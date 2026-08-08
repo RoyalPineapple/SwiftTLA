@@ -6,6 +6,7 @@ struct SwiftTLAPlugin: CompilerPlugin {
     let providingMacros: [Macro.Type] = [
         ModelMacro.self,
         TLAActorMacro.self,
+        TLAObservableMacro.self,
         TypedVarMacro.self,
     ]
 }

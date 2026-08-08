@@ -1,10 +1,11 @@
 import SwiftUI
 @preconcurrency import SwiftTLAVerified
 import AVFoundation
+import Observation
 
 @main
 struct CameraApp: App {
-    @StateObject private var model = CameraModel()
+    @State private var model = CameraModel()
 
     var body: some Scene {
         WindowGroup {
@@ -47,9 +48,7 @@ struct CameraApp: App {
                                 }
                             }
                             .overlay(alignment: .topTrailing) {
-                                DeleteButton {
-                                    model.delete(item)
-                                }
+                                DeleteButton { model.delete(item) }
                             }
                     }
                 }
@@ -204,6 +203,23 @@ final class PlayerNSView: NSView {
     }
 }
 
+struct DeleteButton: View {
+    let action: () -> Void
+    @State private var hovered = false
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: "xmark.circle.fill")
+                .font(.system(size: 16))
+                .foregroundStyle(.white)
+                .background(Circle().fill(.black.opacity(0.6)).frame(width: 16, height: 16))
+        }
+        .buttonStyle(.plain)
+        .opacity(hovered ? 1 : 0)
+        .onHover { hovered = $0 }
+    }
+}
+
 enum RollItem: Identifiable {
     case photo(Data)
     case video(URL)
@@ -215,17 +231,17 @@ enum RollItem: Identifiable {
     }
 }
 
-@MainActor
-final class CameraModel: ObservableObject {
+@Observable
+final class CameraModel {
     let capture = Media.Capture()
-    @Published var mode: Mode = .live
-    @Published var roll: [RollItem] = []
-    @Published var flashActive = false
-    @Published var selectedPhoto: Data?
+    var mode: Mode = .live
+    var roll: [RollItem] = []
+    var flashActive = false
+    var selectedPhoto: Data?
     var recordedURL: URL?
     var currentPlayer: AVPlayer?
-    private var movieOutput: AVCaptureMovieFileOutput?
     private let disk = DiskStore(name: "camera")
+    private var movieOutput: AVCaptureMovieFileOutput?
     private let recordDelegate = RecordingDelegate()
 
     enum Mode { case live, recording, playback }
@@ -251,8 +267,7 @@ final class CameraModel: ObservableObject {
             let data = try await capture.capturePhoto()
             roll.append(.photo(data))
             flashActive = true
-            let name = "snap-\(Int(Date().timeIntervalSince1970)).jpg"
-            try? await disk.write(name: name, data: data)
+            try? await disk.write(name: "snap-\(Int(Date().timeIntervalSince1970)).jpg", data: data)
             try? await Task.sleep(for: .milliseconds(120))
             flashActive = false
         } catch {
@@ -260,32 +275,18 @@ final class CameraModel: ObservableObject {
         }
     }
 
-    func delete(_ item: RollItem) {
-        roll.removeAll { $0.id == item.id }
-        switch item {
-        case .photo: break
-        case .video(let url): try? FileManager.default.removeItem(at: url)
-        }
-    }
-
     func toggleRecording() {
         if mode == .recording {
-            stopRecording()
+            movieOutput?.stopRecording()
+            if let url = recordedURL { roll.append(.video(url)) }
+            recordedURL = nil
+            mode = .live
         } else if let mo = movieOutput {
             recordedURL = FileManager.default.temporaryDirectory
                 .appendingPathComponent("recording-\(UUID().uuidString).mov")
             mo.startRecording(to: recordedURL!, recordingDelegate: recordDelegate)
             mode = .recording
         }
-    }
-
-    private func stopRecording() {
-        movieOutput?.stopRecording()
-        if let url = recordedURL {
-            roll.append(.video(url))
-        }
-        recordedURL = nil
-        mode = .live
     }
 
     func playRecording(url: URL? = nil) {
@@ -297,14 +298,13 @@ final class CameraModel: ObservableObject {
         player.play()
         NotificationCenter.default.addObserver(forName: .AVPlayerItemDidPlayToEndTime,
                                                object: player.currentItem, queue: .main) { [weak self] _ in
-            Task { @MainActor [weak self] in self?.showLive() }
+            self?.mode = .live
         }
     }
 
-    func showLive() {
-        currentPlayer?.pause()
-        currentPlayer = nil
-        mode = .live
+    func delete(_ item: RollItem) {
+        roll.removeAll { $0.id == item.id }
+        if case .video(let url) = item { try? FileManager.default.removeItem(at: url) }
     }
 }
 
@@ -313,22 +313,5 @@ private final class RecordingDelegate: NSObject, AVCaptureFileOutputRecordingDel
                     from _: [AVCaptureConnection], error: Error?) {
         if let error { print("Record error: \(error)") }
         else { print("Recorded: \(url.path)") }
-    }
-}
-
-struct DeleteButton: View {
-    let action: () -> Void
-    @State private var hovered = false
-
-    var body: some View {
-        Button(action: action) {
-            Image(systemName: "xmark.circle.fill")
-                .font(.system(size: 16))
-                .foregroundStyle(.white)
-                .background(Circle().fill(.black.opacity(0.6)).frame(width: 16, height: 16))
-        }
-        .buttonStyle(.plain)
-        .opacity(hovered ? 1 : 0)
-        .onHover { hovered = $0 }
     }
 }
