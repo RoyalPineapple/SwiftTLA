@@ -36,9 +36,11 @@ public struct RuntimeChecker {
     }
 
     public func check() throws -> CheckResult {
-        // Use ONLY the user spec for exploration. The checker spec is verified by @TLAModel.
-        let runtime = SpecRuntime(spec: Self.userSpec(from: composedSpec))
+        // Strip checker lifecycle variables to get the original user spec
+        let userOnly = Self.userSpec(from: composedSpec)
+        let runtime = SpecRuntime(spec: userOnly)
         let fullRuntime = SpecRuntime(spec: composedSpec)
+
         let initialStates = runtime.initialStates()
         guard !initialStates.isEmpty else { return .error("No initial states") }
 
@@ -53,6 +55,9 @@ public struct RuntimeChecker {
         }
         var exploredCount = 0
         var head = 0
+
+        let userVarNames = userOnly.variables.map(\.name)
+        let userActions = userOnly.actions
 
         while head < queue.count {
             guard exploredCount < maxStates else {
@@ -72,13 +77,16 @@ public struct RuntimeChecker {
                 }
             }
 
-            let userActions = runtime.availableActions(in: current)
+            // Enumerate ALL successors — handles nondeterministic actions
             for action in userActions {
-                let result = try runtime.step(action, from: current)
-                if case .ok(let next) = result {
-                    if !visited.contains(next) {
-                        visited.insert(next)
-                        queue.append(next)
+                guard let successors = try? ActionEnumerator.enumerate(
+                    action.body, from: current, varNames: userVarNames),
+                    !successors.isEmpty else { continue }
+
+                for nextState in successors {
+                    if !visited.contains(nextState) {
+                        visited.insert(nextState)
+                        queue.append(nextState)
                     }
                 }
             }
