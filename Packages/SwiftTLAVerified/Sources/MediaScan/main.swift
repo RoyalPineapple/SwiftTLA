@@ -1,5 +1,5 @@
 import SwiftUI
-import SwiftTLAVerified
+@preconcurrency import SwiftTLAVerified
 import AVFoundation
 
 @main
@@ -91,13 +91,26 @@ final class CapturePreviewNSView: NSView {
 struct VideoPlayerView: NSViewRepresentable {
     let player: AVPlayer
 
-    func makeNSView(context: Context) -> AVPlayerView {
-        let view = AVPlayerView()
-        view.player = player
-        view.controlsStyle = .none
-        return view
+    func makeNSView(context: Context) -> PlayerNSView {
+        PlayerNSView(player: player)
     }
-    func updateNSView(_ nsView: AVPlayerView, context: Context) {}
+    func updateNSView(_ nsView: PlayerNSView, context: Context) {}
+}
+
+final class PlayerNSView: NSView {
+    init(player: AVPlayer) {
+        super.init(frame: .zero)
+        wantsLayer = true
+        let playerLayer = AVPlayerLayer()
+        playerLayer.player = player
+        playerLayer.videoGravity = .resizeAspectFill
+        layer?.addSublayer(playerLayer)
+    }
+    required init?(coder: NSCoder) { fatalError() }
+    override func layout() {
+        super.layout()
+        (layer?.sublayers?.first as? AVPlayerLayer)?.frame = bounds
+    }
 }
 
 @MainActor
@@ -117,7 +130,7 @@ final class CameraModel: ObservableObject {
             print("No camera"); return
         }
         do {
-            try capture.configure(device: device)
+            try await capture.configure(device: device)
             try await capture.start()
         } catch {
             print("Camera error: \(error)")
@@ -182,7 +195,7 @@ final class CameraModel: ObservableObject {
 
         NotificationCenter.default.addObserver(forName: .AVPlayerItemDidPlayToEndTime,
                                                object: player.currentItem, queue: .main) { [weak self] _ in
-            self?.showLive()
+            MainActor.assumeIsolated { self?.showLive() }
         }
     }
 

@@ -19,6 +19,8 @@ public enum Example {
     }
     public static let all: [Entry] = [
         asynchInterface,
+        gameOfLife,
+        
         bakeryN2,
         barrierN6,
         catEvenBoxes,

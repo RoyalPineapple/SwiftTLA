@@ -969,7 +969,7 @@ struct BoundVariableTests {
             Action("pick") {
                 source.cardinality > 0
                 && choose(picked, from: source)
-                && source.becomes(Expr(.setDifference(source, StateExpr.singleton(picked))))
+                && source.becomes(Expr(.setDifference(source.stateExpr, StateExpr.singleton(picked.stateExpr))))
             }
         }
         if case .ok(let count) = try ModelChecker(spec: spec, maxStates: 20).check() {
@@ -1149,7 +1149,7 @@ struct CompletionCoverageTests {
             Action("process") {
                 choose(selfProcess, from: StateExpr.set([1, 2]))
                 && programCounter.applying(selfProcess) == "initial"
-                && programCounter.becomes(Expr(.except(programCounter, selfProcess, "done")))
+                && programCounter.becomes(programCounter.updated(at: selfProcess, to: "done"))
             }
         }
         if case .ok(let count) = try ModelChecker(spec: spec, maxStates: 50).check() {
