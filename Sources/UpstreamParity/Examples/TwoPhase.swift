@@ -43,7 +43,7 @@ static func twoPhaseSpec() -> TLASpec {
                 Action("RcvPrepared_\(rm)") {
                     tmState == "init"
                     && preparedMsg(rm).isIn(msgs)
-                    && tmPrepared.becomes(Expr(.union(tmPrepared, StateExpr.singleton(rm))))
+                    && tmPrepared.becomes(Expr(.union(tmPrepared.stateExpr, StateExpr.singleton(StateExpr.value(.string(rm))))))
                     && rmState.stays && tmState.stays && msgs.stays
                 }
             }
