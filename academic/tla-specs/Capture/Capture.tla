@@ -1,4 +1,4 @@
----- MODULE Camera ----
+---- MODULE Capture ----
 EXTENDS Integers
 
 VARIABLE phase

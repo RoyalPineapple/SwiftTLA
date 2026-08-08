@@ -106,7 +106,7 @@ private func lamportMutexSpec() -> TLASpec {
                         to: network.applying(p).applying(q).appending(relMsg))))
                 && req.becomes(req.updated(at: p,
                     to: req.applying(p).updated(at: p, to: 0)))
-                && ack.becomes(Expr(.except(ack, p, StateExpr.setLiteral([]))))
+                && ack.becomes(ack.updated(at: p, to: StateExpr.setLiteral([]))))
                 && clock.stays
             }
             // ReceiveRelease from q
