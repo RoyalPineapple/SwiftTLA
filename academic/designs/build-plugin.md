@@ -15,6 +15,12 @@ swift build
 
 ## How it works
 
+SPM build plugins are established Swift tooling.  swift-protobuf reads `.proto`
+files and generates Swift stubs.  SwiftGen reads asset catalogs and generates
+type-safe resource accessors.  Our ComposePlugin reads `@TLAActor` specs and
+generates composed specifications.  Same pattern: structured input → generated
+Swift source → compiled and verified.
+
 ### Package.swift
 
 ```swift
