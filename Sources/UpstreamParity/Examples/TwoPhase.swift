@@ -52,14 +52,14 @@ static func twoPhaseSpec() -> TLASpec {
                 tmState == "init"
                 && tmPrepared.cardinality == 3
                 && tmState.becomes("committed")
-                && msgs.becomes(Expr(.union(msgs, StateExpr.singleton(commitMsg()))))
+                && msgs.becomes(Expr(.union(msgs.stateExpr, StateExpr.singleton(commitMsg()))))
                 && rmState.stays && tmPrepared.stays
             }
 
             Action("TMAbort") {
                 tmState == "init"
                 && tmState.becomes("aborted")
-                && msgs.becomes(Expr(.union(msgs, StateExpr.singleton(abortMsg()))))
+                && msgs.becomes(Expr(.union(msgs.stateExpr, StateExpr.singleton(abortMsg()))))
                 && rmState.stays && tmPrepared.stays
             }
 
@@ -67,7 +67,7 @@ static func twoPhaseSpec() -> TLASpec {
                 Action("Prepare_\(rm)") {
                     rmSt(rm) == "working"
                     && rmState.becomes(Expr(.except(rmState, rm, "prepared")))
-                    && msgs.becomes(Expr(.union(msgs, StateExpr.singleton(preparedMsg(rm)))))
+                    && msgs.becomes(Expr(.union(msgs.stateExpr, StateExpr.singleton(preparedMsg(rm)))))
                     && tmState.stays && tmPrepared.stays
                 }
                 Action("Abort_\(rm)") {
