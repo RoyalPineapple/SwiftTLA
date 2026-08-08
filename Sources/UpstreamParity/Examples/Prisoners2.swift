@@ -85,7 +85,7 @@ private func prisoners4Spec() -> TLASpec {
             ActionExpr.exists("p", from: others) { p in
                 let signalA: ActionExpr = StateExpr.not(switchAUp.stateExpr) && timesSwitched.applying(p) < 2
                     && switchAUp.becomes(true)
-                    && timesSwitched.becomes(Expr(.except(timesSwitched.stateExpr, p, StateExpr.add(timesSwitched.applying(p), .int(1)))))
+                    && timesSwitched.becomes(timesSwitched.updated(at: p, to: StateExpr.add(timesSwitched.applying(p), .int(1))))
                     && switchBUp.stays && count.stays
                 let flipB: ActionExpr = StateExpr.not(StateExpr.not(switchAUp.stateExpr) && timesSwitched.applying(p) < 2)
                     && switchBUp.becomes(Expr(.not(switchBUp.stateExpr)))

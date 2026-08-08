@@ -73,23 +73,23 @@ private func bakerySpec() -> TLASpec {
             // ncs(self): non-critical section → e1
             Action("ncs_\(s)") {
                 pc.applying(s) == "ncs"
-                    && pc.becomes(Expr(.except(pc, s, "e1")))
+                    && pc.becomes(pc.updated(at: s, to: "e1"))
                     && num.stays && flag.stays && unchecked.stays && maxV.stays && nxt.stays
             }
 
             // e1(self): toggle flag OR set flag=TRUE and start e2
             Action("e1a_\(s)") {
                 pc.applying(s) == "e1"
-                    && flag.becomes(Expr(.except(flag, s, StateExpr.not(flag.applying(s)))))
-                    && pc.becomes(Expr(.except(pc, s, "e1")))
+                    && flag.becomes(flag.updated(at: s, to: StateExpr.not(flag.applying(s))))
+                    && pc.becomes(pc.updated(at: s, to: "e1"))
                     && num.stays && unchecked.stays && maxV.stays && nxt.stays
             }
             Action("e1b_\(s)") {
                 pc.applying(s) == "e1"
-                    && flag.becomes(Expr(.except(flag, s, StateExpr.value(.bool(true)))))
-                    && unchecked.becomes(Expr(.except(unchecked, s, StateExpr.setDifference(procSetExpr, StateExpr.singleton(StateExpr.int(s))))))
-                    && maxV.becomes(Expr(.except(maxV, s, 0)))
-                    && pc.becomes(Expr(.except(pc, s, "e2")))
+                    && flag.becomes(flag.updated(at: s, to: StateExpr.value(.bool(true))))
+                    && unchecked.becomes(unchecked.updated(at: s, to: StateExpr.setDifference(procSetExpr, StateExpr.singleton(StateExpr.int(s)))))
+                    && maxV.becomes(maxV.updated(at: s, to: 0))
+                    && pc.becomes(pc.updated(at: s, to: "e2"))
                     && num.stays && nxt.stays
             }
 
@@ -100,8 +100,8 @@ private func bakerySpec() -> TLASpec {
                     && StateExpr.in(StateExpr.int(other), unchecked.applying(s))
                     && unchecked.becomes(unchecked.updated(at: s,
                         to: unchecked.applying(s).subtracting(StateExpr.singleton(StateExpr.int(other)))))
-                    && maxV.becomes(Expr(.except(maxV, s, num.applying(other))))
-                    && pc.becomes(Expr(.except(pc, s, "e2")))
+                    && maxV.becomes(maxV.updated(at: s, to: num.applying(other)))
+                    && pc.becomes(pc.updated(at: s, to: "e2"))
                     && flag.stays && nxt.stays && num.stays
             }
             Action("e2_pick_le_\(s)") {
@@ -110,12 +110,12 @@ private func bakerySpec() -> TLASpec {
                     && unchecked.becomes(unchecked.updated(at: s,
                         to: unchecked.applying(s).subtracting(StateExpr.singleton(StateExpr.int(other)))))
                     && maxV.stays
-                    && pc.becomes(Expr(.except(pc, s, "e2")))
+                    && pc.becomes(pc.updated(at: s, to: "e2"))
                     && flag.stays && nxt.stays && num.stays
             }
             Action("e2_done_\(s)") {
                 pc.applying(s) == "e2" && unchecked.applying(s) == emptySet
-                    && pc.becomes(Expr(.except(pc, s, "e3")))
+                    && pc.becomes(pc.updated(at: s, to: "e3"))
                     && num.stays && flag.stays && maxV.stays && nxt.stays && unchecked.stays
             }
 
@@ -123,8 +123,8 @@ private func bakerySpec() -> TLASpec {
             Action("e3_loop_\(s)") {
                 pc.applying(s) == "e3"
                     && ActionExpr.exists("k", from: natSetExpr) { k in
-                        num.becomes(Expr(.except(num, s, k)))
-                            && pc.becomes(Expr(.except(pc, s, "e3")))
+                        num.becomes(num.updated(at: s, to: k))
+                            && pc.becomes(pc.updated(at: s, to: "e3"))
                             && flag.stays && unchecked.stays && maxV.stays && nxt.stays
                     }
             }
@@ -132,29 +132,29 @@ private func bakerySpec() -> TLASpec {
             // For Nat={0,1,2}: maxV=0→pick from {1,2}, maxV=1→{2}, maxV=2→{} (stuck)
             Action("e3_to_e4_gt1_\(s)") {
                 pc.applying(s) == "e3" && maxV.applying(s) < 2
-                    && num.becomes(Expr(.except(num, s, 2)))
-                    && pc.becomes(Expr(.except(pc, s, "e4")))
+                    && num.becomes(num.updated(at: s, to: 2))
+                    && pc.becomes(pc.updated(at: s, to: "e4"))
                     && flag.stays && unchecked.stays && maxV.stays && nxt.stays
             }
             Action("e3_to_e4_gt0_\(s)") {
                 pc.applying(s) == "e3" && maxV.applying(s) < 1
-                    && num.becomes(Expr(.except(num, s, 1)))
-                    && pc.becomes(Expr(.except(pc, s, "e4")))
+                    && num.becomes(num.updated(at: s, to: 1))
+                    && pc.becomes(pc.updated(at: s, to: "e4"))
                     && flag.stays && unchecked.stays && maxV.stays && nxt.stays
             }
 
             // e4(self): lower flag
             Action("e4a_\(s)") {
                 pc.applying(s) == "e4"
-                    && flag.becomes(Expr(.except(flag, s, StateExpr.not(flag.applying(s)))))
-                    && pc.becomes(Expr(.except(pc, s, "e4")))
+                    && flag.becomes(flag.updated(at: s, to: StateExpr.not(flag.applying(s))))
+                    && pc.becomes(pc.updated(at: s, to: "e4"))
                     && num.stays && maxV.stays && nxt.stays && unchecked.stays
             }
             Action("e4b_\(s)") {
                 pc.applying(s) == "e4"
-                    && flag.becomes(Expr(.except(flag, s, StateExpr.value(.bool(false)))))
-                    && unchecked.becomes(Expr(.except(unchecked, s, StateExpr.setDifference(procSetExpr, StateExpr.singleton(StateExpr.int(s))))))
-                    && pc.becomes(Expr(.except(pc, s, "w1")))
+                    && flag.becomes(flag.updated(at: s, to: StateExpr.value(.bool(false))))
+                    && unchecked.becomes(unchecked.updated(at: s, to: StateExpr.setDifference(procSetExpr, StateExpr.singleton(StateExpr.int(s)))))
+                    && pc.becomes(pc.updated(at: s, to: "w1"))
                     && num.stays && maxV.stays && nxt.stays
             }
 
@@ -162,15 +162,15 @@ private func bakerySpec() -> TLASpec {
             Action("w1_pick_\(s)") {
                 pc.applying(s) == "w1" && unchecked.applying(s) != emptySet
                     && ActionExpr.exists("i", from: unchecked.applying(s)) { i in
-                        nxt.becomes(Expr(.except(nxt, s, i)))
+                        nxt.becomes(nxt.updated(at: s, to: i))
                             && StateExpr.not(flag.applying(i))
-                            && pc.becomes(Expr(.except(pc, s, "w2")))
+                            && pc.becomes(pc.updated(at: s, to: "w2"))
                             && num.stays && flag.stays && unchecked.stays && maxV.stays
                     }
             }
             Action("w1_done_\(s)") {
                 pc.applying(s) == "w1" && unchecked.applying(s) == emptySet
-                    && pc.becomes(Expr(.except(pc, s, "cs")))
+                    && pc.becomes(pc.updated(at: s, to: "cs"))
                     && num.stays && flag.stays && unchecked.stays && maxV.stays && nxt.stays
             }
 
@@ -185,15 +185,15 @@ private func bakerySpec() -> TLASpec {
                 let nxtSingular = StateExpr.singleton(nxt.applying(s))
                 let newUnchecked = unchecked.applying(s).subtracting(nxtSingular)
                 guardExpr
-                    && unchecked.becomes(Expr(.except(unchecked, s, newUnchecked)))
-                    && pc.becomes(Expr(.except(pc, s, "w1")))
+                    && unchecked.becomes(unchecked.updated(at: s, to: newUnchecked))
+                    && pc.becomes(pc.updated(at: s, to: "w1"))
                     && num.stays && flag.stays && maxV.stays && nxt.stays
             }
 
             // cs(self): critical section
             Action("cs_\(s)") {
                 pc.applying(s) == "cs"
-                    && pc.becomes(Expr(.except(pc, s, "exit")))
+                    && pc.becomes(pc.updated(at: s, to: "exit"))
                     && num.stays && flag.stays && unchecked.stays && maxV.stays && nxt.stays
             }
 
@@ -201,15 +201,15 @@ private func bakerySpec() -> TLASpec {
             Action("exit_loop_\(s)") {
                 pc.applying(s) == "exit"
                     && ActionExpr.exists("k", from: natSetExpr) { k in
-                        num.becomes(Expr(.except(num, s, k)))
-                            && pc.becomes(Expr(.except(pc, s, "exit")))
+                        num.becomes(num.updated(at: s, to: k))
+                            && pc.becomes(pc.updated(at: s, to: "exit"))
                             && flag.stays && unchecked.stays && maxV.stays && nxt.stays
                     }
             }
             Action("exit_reset_\(s)") {
                 pc.applying(s) == "exit"
-                    && num.becomes(Expr(.except(num, s, 0)))
-                    && pc.becomes(Expr(.except(pc, s, "ncs")))
+                    && num.becomes(num.updated(at: s, to: 0))
+                    && pc.becomes(pc.updated(at: s, to: "ncs"))
                     && flag.stays && unchecked.stays && maxV.stays && nxt.stays
             }
         }

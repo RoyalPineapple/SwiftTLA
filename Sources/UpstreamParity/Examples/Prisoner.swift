@@ -50,7 +50,7 @@ private func prisonerSpec() -> TLASpec {
 
         Invariant("TypeOK") {
                                                 let h = StateExpr.variable("has_visited")
-            
+            let c = StateExpr.variable("count")
             c >= 1 && c <= threshold + 1
                 && announced.isIn(StateExpr.set([trueE, falseE]))
                 && light.isIn(StateExpr.set([lightOff, lightOn]))
@@ -62,12 +62,16 @@ private func prisonerSpec() -> TLASpec {
 
         Invariant("VictoryOK") {
                         let h = StateExpr.variable("has_visited")
+            let a = StateExpr.variable("announced")
             StateExpr.ifThenElse(a, StateExpr.equal(h, pSet), trueE)
         }
 
         Action("Warden") {
             ActionExpr.exists("p", from: pSet) { p in
                                                                                 let hv = StateExpr.variable("has_visited")
+                let ct = StateExpr.variable("counter")
+                let cnt = StateExpr.variable("count")
+                let l = StateExpr.variable("light")
                 let isPct = StateExpr.equal(p, ct)
 
                 let lightOnAct: ActionExpr = .and(.assign("light", lightOff),
@@ -82,7 +86,7 @@ private func prisonerSpec() -> TLASpec {
                         .unchanged("signalled")))
 
                 let sigAct: ActionExpr = .and(.assign("light", lightOn),
-                    .assign("signalled", signalled.updated(at: p, to: signalled.applying(p) + 1)))
+                    .assign("signalled", signalled.updated(at: p, to: signalled.applying(p) + 1).raw))
                 let noSigAct: ActionExpr = .and(.unchanged("light"),
                     .unchanged("signalled"))
                 let canSignal = StateExpr.equal(l, lightOff) && signalled.applying(p) < 1

@@ -28,7 +28,7 @@ func coffeeCanSpec(maxBeanCount: Int) -> TLASpec {
             Variable(can, in: cans)
             Action("PickSameColorBlack") {
                 can.black + can.white > 1 && can.black >= 2
-                    && can.becomes(Expr(.except(can, "black", can.black - 1)))
+                    && can.becomes(can.updated(at: "black", to: can.black - 1))
             }
             Action("PickSameColorWhite") {
                 can.black + can.white > 1 && can.white >= 2
@@ -46,7 +46,7 @@ func coffeeCanSpec(maxBeanCount: Int) -> TLASpec {
             }
             Action("PickDifferentColor") {
                 can.black + can.white > 1 && can.black >= 1 && can.white >= 1
-                    && can.becomes(Expr(.except(can, "black", can.black - 1)))
+                    && can.becomes(can.updated(at: "black", to: can.black - 1))
             }
             Action("Termination") {
                 can.black + can.white == 1

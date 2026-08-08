@@ -68,17 +68,17 @@ private func ewd998Spec() -> TLASpec {
                 }
 
                 return active.applying(i)
-                    && active.becomes(Expr(.except(active.stateExpr, i, falseE)))
+                    && active.becomes(active.updated(at: i, to: falseE))
                     && pending.stays
                     && terminationDetected.becomes(
-                        StateExpr.ifThenElse(terminated, trueE, t))
+                        Expr(.ifThenElse(terminated, trueE, terminationDetected.stateExpr)))
             }
         }
 
         Action("RcvMsg") {
             ActionExpr.exists("i", from: nodeSet) { i in
                                                 return pending.applying(i) > 0
-                    && active.becomes(Expr(.except(active.stateExpr, i, trueE)))
+                    && active.becomes(active.updated(at: i, to: trueE))
                     && pending.becomes(pending.updated(at: i, to: pending.applying(i) - 1))
                     && terminationDetected.stays
             }

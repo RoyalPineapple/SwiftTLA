@@ -66,23 +66,23 @@ static func twoPhaseSpec() -> TLASpec {
             for rm in rms {
                 Action("Prepare_\(rm)") {
                     rmSt(rm) == "working"
-                    && rmState.becomes(Expr(.except(rmState, rm, "prepared")))
+                    && rmState.becomes(rmState.updated(at: rm, to: "prepared"))
                     && msgs.becomes(Expr(.union(msgs.stateExpr, StateExpr.singleton(preparedMsg(rm)))))
                     && tmState.stays && tmPrepared.stays
                 }
                 Action("Abort_\(rm)") {
                     rmSt(rm) == "working"
-                    && rmState.becomes(Expr(.except(rmState, rm, "aborted")))
+                    && rmState.becomes(rmState.updated(at: rm, to: "aborted"))
                     && tmState.stays && tmPrepared.stays && msgs.stays
                 }
                 Action("RcvCommit_\(rm)") {
                     commitMsg().isIn(msgs)
-                    && rmState.becomes(Expr(.except(rmState, rm, "committed")))
+                    && rmState.becomes(rmState.updated(at: rm, to: "committed"))
                     && tmState.stays && tmPrepared.stays && msgs.stays
                 }
                 Action("RcvAbort_\(rm)") {
                     abortMsg().isIn(msgs)
-                    && rmState.becomes(Expr(.except(rmState, rm, "aborted")))
+                    && rmState.becomes(rmState.updated(at: rm, to: "aborted"))
                     && tmState.stays && tmPrepared.stays && msgs.stays
                 }
             }

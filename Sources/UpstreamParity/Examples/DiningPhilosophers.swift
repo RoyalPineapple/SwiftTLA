@@ -134,12 +134,12 @@ private func diningPhilosophersSpec() -> TLASpec {
             }
             Action("Think_\(p)") {
                 StateExpr.variable("pc").applying(pE) == think
-                && hungry.becomes(Expr(.except(hSe, pE, trueE)))
+                && hungry.becomes(hSe.updated(at: pE, to: trueE))
                 && pc.becomes(StateExpr.variable("pc").updated(at: pE, to: loop))
             }
             Action("Eat_\(p)") {
                 StateExpr.variable("pc").applying(pE) == eat
-                && hungry.becomes(Expr(.except(hSe, pE, falseE)))
+                && hungry.becomes(hSe.updated(at: pE, to: falseE))
                 && pc.becomes(StateExpr.variable("pc").updated(at: pE, to: loop))
                 && forks.becomes(StateExpr.variable("forks")
                     .updated(at: lf, to: StateExpr.recordLiteral(["holder": hld, "clean": falseE]))

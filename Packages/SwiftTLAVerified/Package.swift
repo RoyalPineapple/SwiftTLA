@@ -9,6 +9,7 @@ let package = Package(
     products: [
         .library(name: "SwiftTLAVerified", targets: ["SwiftTLAVerified"]),
         .executable(name: "ble-scan", targets: ["BLEScan"]),
+        .executable(name: "camera", targets: ["MediaScan"]),
     ],
     dependencies: [
         .package(path: "../../"),
@@ -23,6 +24,10 @@ let package = Package(
         ),
         .executableTarget(
             name: "BLEScan",
+            dependencies: ["SwiftTLAVerified"]
+        ),
+        .executableTarget(
+            name: "MediaScan",
             dependencies: ["SwiftTLAVerified"]
         ),
     ]
