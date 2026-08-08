@@ -296,7 +296,7 @@ struct MacroExpander {
                 returnClause: ReturnClauseSyntax(type: IdentifierTypeSyntax(name: "State"))
             ),
             body: CodeBlockSyntax {
-                ExprSyntax(stringLiteral: "let next = try! Self.runtime.apply(actionName: action.rawValue, to: _state.asDictionary)")
+                ExprSyntax(stringLiteral: "guard let next = try? Self.runtime.apply(actionName: action.rawValue, to: _state.asDictionary) else { return _state }")
                 StmtSyntax(stringLiteral: "return State(from: next)")
             }
         )
@@ -311,22 +311,18 @@ struct MacroExpander {
         var decls: [DeclSyntax] = []
 
         for v in variables {
-            let attr: AttributeListSyntax = [AttributeListSyntax.Element.attribute(
-                AttributeSyntax(attributeName: IdentifierTypeSyntax(name: "Published"))
-            )]
-            let publishedVar: DeclSyntax = DeclSyntax(
+            let storedVar: DeclSyntax = DeclSyntax(
                 VariableDeclSyntax(
-                    attributes: attr,
-                    modifiers: [DeclModifierSyntax(name: .keyword(.private))],
+                    modifiers: [DeclModifierSyntax(name: .keyword(.public))],
                     bindingSpecifier: .keyword(.var),
                     bindings: [PatternBindingSyntax(
-                        pattern: IdentifierPatternSyntax(identifier: "_\(raw: v.name)"),
+                        pattern: IdentifierPatternSyntax(identifier: .identifier(v.name)),
                         typeAnnotation: TypeAnnotationSyntax(type: IdentifierTypeSyntax(name: .identifier(Self.swiftType(for: v.initial)))),
                         initializer: InitializerClauseSyntax(value: ExprSyntax(stringLiteral: Self.literalExpr(for: v.initial)))
                     )]
                 )
             )
-            decls.append(publishedVar)
+            decls.append(storedVar)
         }
 
         decls.append(DeclSyntax(
@@ -344,7 +340,6 @@ struct MacroExpander {
         decls.append(DeclSyntax(Self.generateVariablesEnum(variables: variables)))
         decls.append(DeclSyntax(Self.generateActionsEnum(actions: actions)))
         decls.append(DeclSyntax(Self.generateStateStruct(variables: variables)))
-        decls.append(contentsOf: Self.generateVariableProperties(variables: variables).map(DeclSyntax.init))
         decls.append(contentsOf: generateObservableActionMethods(variables: variables, actions: actions).map(DeclSyntax.init))
         decls.append(DeclSyntax(generateApplyHelper()))
         decls.append(DeclSyntax(
@@ -371,7 +366,7 @@ struct MacroExpander {
         actions.map { a in
             var bodyExprs: [ExprSyntax] = [ExprSyntax(stringLiteral: "_state = _apply(.\(a.name))")]
             for v in variables {
-                bodyExprs.append(ExprSyntax(stringLiteral: "_\(v.name) = _state.\(v.name)"))
+                bodyExprs.append(ExprSyntax(stringLiteral: "\(v.name) = _state.\(v.name)"))
             }
             return FunctionDeclSyntax(
                 modifiers: [DeclModifierSyntax(name: .keyword(.public))],

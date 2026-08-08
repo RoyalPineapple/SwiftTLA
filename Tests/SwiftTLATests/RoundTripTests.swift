@@ -8,7 +8,7 @@ import SwiftSyntax
 
 // MARK: - Var<T> operators: full matrix
 
-struct VarOperatorMatrix {
+@Suite(.serialized) struct VarOperatorMatrix {
     @Test("Arithmetic", arguments: [
         ("+", 3, "(x + 3)"),
         ("-", 1, "(x - 1)"),
@@ -151,7 +151,7 @@ struct VarOperatorMatrix {
 
 // MARK: - ActionExpr: full variant coverage
 
-struct ActionExprMatrix {
+@Suite(.serialized) struct ActionExprMatrix {
     let s0: [String: TLAValue] = ["x": .int(0)]
     let s2: [String: TLAValue] = ["a": .int(0), "b": .int(0)]
 
@@ -200,7 +200,7 @@ struct ActionExprMatrix {
 // MARK: - StateExpr: every case tested via CaseIterable
 
 /// Every StateExpr variant must have a non-empty description and be Codable round-trippable
-struct StateExprCompleteTests {
+@Suite(.serialized) struct StateExprCompleteTests {
     @Test("Every StateExpr case has a description")
     func allCasesHaveDescriptions() {
         let cases: [StateExpr] = [
@@ -256,7 +256,7 @@ struct StateExprCompleteTests {
 
 // MARK: - TLAValue: every case
 
-struct TLAValueTests {
+@Suite(.serialized) struct TLAValueTests {
     @Test("Every TLAValue case has a description", arguments: [
         TLAValue.int(1), .bool(true), .string("hi"),
         .set([.int(1)]), .tuple([.int(1)]), .record(["k": .int(1)]),
@@ -277,7 +277,7 @@ struct TLAValueTests {
 
 // MARK: - ActionExpr: every case
 
-struct ActionExprCompleteTests {
+@Suite(.serialized) struct ActionExprCompleteTests {
     @Test("Every ActionExpr case enumerates correctly", arguments: [
         ("assign", ActionExpr.assign("x", .int(1)), 1),
         ("unchanged", ActionExpr.unchanged("x"), 1),
@@ -294,7 +294,7 @@ struct ActionExprCompleteTests {
 
 // MARK: - ModelChecker: spec pattern matrix
 
-struct ModelCheckerMatrix {
+@Suite(.serialized) struct ModelCheckerMatrix {
     @Test func singleVarLinear() throws {
         let x = Var<Int>("x", value: 0)
         let spec = TLASpec("Test") {
@@ -402,7 +402,7 @@ struct ModelCheckerMatrix {
 
 // MARK: - .tlaModule: section coverage
 
-struct TLAModuleMatrix {
+@Suite(.serialized) struct TLAModuleMatrix {
     @Test func constantsAndAssume() {
         let x = Var<Int>("x", value: 0)
         let spec = TLASpec("Test") {
@@ -464,7 +464,7 @@ struct TLAModuleMatrix {
 
 // MARK: - .swiftSource: output coverage
 
-struct SwiftSourceMatrix {
+@Suite(.serialized) struct SwiftSourceMatrix {
     @Test func roundTripStructure() {
         let x = Var<Int>("x", value: 0)
         let spec = TLASpec("Test") {
@@ -484,7 +484,7 @@ struct SwiftSourceMatrix {
 
 // MARK: - Core example parity (same shapes as Examples/)
 
-struct GoldenTests {
+@Suite(.serialized) struct GoldenTests {
     @Test("HourClock = 12 states")
     func hourClock12() throws {
         let hr = Var<Int>("hr", value: 1)
@@ -606,7 +606,7 @@ struct GoldenTests {
 
 // MARK: - SpecRuntime: thin interpreter over ActionEnumerator/Evaluator
 
-struct RuntimeTests {
+@Suite(.serialized) struct RuntimeTests {
     @Test("Runtime applies action and produces new state")
     func applyAction() throws {
         let hr = Var<Int>("hr", value: 1)
@@ -653,7 +653,7 @@ struct RuntimeTests {
 
 // MARK: - Checker self-proof: BFS invariants verified on our own checker
 
-struct CheckerSelfProofTests {
+@Suite(.serialized) struct CheckerSelfProofTests {
     @Test("BFSExplorer model-checks with sets")
     func bfsExplorer1to1() throws {
         let result = try ModelChecker(spec: BFSExplorer.spec, maxStates: 200).check()
@@ -773,7 +773,7 @@ struct CheckerSelfProofTests {
     }
 }
 
-struct EdgeCaseTests {
+@Suite(.serialized) struct EdgeCaseTests {
     @Test("3-level nested OR in AND")
     func nestedOrL3() throws {
         let a: ActionExpr = .and(
@@ -824,7 +824,7 @@ struct EdgeCaseTests {
 
 // MARK: - Phase 1-7: bound variables, functions, sequences, EXCEPT, CONSTANTS
 
-struct BoundVariableTests {
+@Suite(.serialized) struct BoundVariableTests {
     @Test("Function literal with bound variable evaluates correctly")
     func functionLiteralWithBoundVar() {
         let p = Var<Int>("p")
@@ -1019,7 +1019,7 @@ struct BoundVariableTests {
 
 // MARK: - Completion tests: UNCHANGED per-branch, CHOOSE + functionApply, Codable
 
-struct CompletionCoverageTests {
+@Suite(.serialized) struct CompletionCoverageTests {
     @Test("completeAction pushes UNCHANGED into OR branches")
     func perBranchUnchanged() {
         // OR action: only one branch assigns x, the other doesn't
@@ -1178,7 +1178,7 @@ struct CompletionCoverageTests {
     }
 }
 
-struct LivenessCheckerTests {
+@Suite(.serialized) struct LivenessCheckerTests {
     @Test("SCC decomposition works on HourClock (12 states, 1 SCC)")
     func hourClockSCC() throws {
         let hr = Var<Int>("hr", value: 0)

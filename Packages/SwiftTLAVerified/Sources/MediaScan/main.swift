@@ -1,5 +1,7 @@
 import SwiftUI
 @preconcurrency import SwiftTLAVerified
+import SwiftTLA
+import SwiftTLAMacros
 import AVFoundation
 import Observation
 
@@ -11,15 +13,29 @@ struct CameraApp: App {
         WindowGroup {
             VStack(spacing: 0) {
                 ZStack {
-                    if model.mode == .playback, let player = model.currentPlayer {
+                    if model.phase == 3, let player = model.currentPlayer {
                         VideoPlayerView(player: player)
+                            .overlay(alignment: .topTrailing) {
+                                Button {
+                                    model.currentPlayer?.pause()
+                                    model.currentPlayer = nil
+                                    model._live()
+                                } label: {
+                                    Image(systemName: "xmark.circle.fill")
+                                        .font(.title)
+                                        .foregroundStyle(.white)
+                                        .shadow(radius: 4)
+                                }
+                                .buttonStyle(.plain)
+                                .padding(12)
+                            }
                     } else {
                         CameraPreviewView(session: model.capture.session)
                     }
 
                     if let preview = model.selectedPhoto {
                         PhotoDetailView(data: preview) { model.selectedPhoto = nil }
-                    } else if model.mode == .live, model.flashActive {
+                    } else if model.phase == 1, model.flashActive {
                         Rectangle().fill(.white).transition(.opacity)
                     }
                 }
@@ -39,6 +55,7 @@ struct CameraApp: App {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 4) {
                     ForEach(model.roll) { item in
+                        let selected = model.isSelected(item)
                         ThumbnailView(item: item, size: CGSize(width: 72, height: 54))
                             .id(item.id)
                             .onTapGesture {
@@ -47,6 +64,10 @@ struct CameraApp: App {
                                 case .video(let url): model.playRecording(url: url)
                                 }
                             }
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 4)
+                                    .stroke(selected ? .yellow : .clear, lineWidth: 2)
+                            )
                             .overlay(alignment: .topTrailing) {
                                 DeleteButton { model.delete(item) }
                             }
@@ -66,29 +87,43 @@ struct CameraApp: App {
 
     var controls: some View {
         HStack(spacing: 30) {
-            Button(action: {
-                Task { await model.takeSnapshot() }
-            }) {
-                ZStack {
-                    Circle().stroke(.white, lineWidth: 4).frame(width: 64, height: 64)
-                    Circle().fill(.white).frame(width: 52, height: 52)
+            if model.phase == 3 || model.selectedPhoto != nil {
+                Button(action: {
+                    model.selectedPhoto = nil
+                    model._live()
+                }) {
+                    Image(systemName: "camera.fill")
+                        .font(.system(size: 28))
+                        .foregroundColor(.white)
+                        .frame(width: 56, height: 56)
+                        .background(Circle().fill(.white.opacity(0.15)))
                 }
-            }
-            .buttonStyle(.plain)
-            .disabled(model.mode != .live)
-
-            Button(action: { model.toggleRecording() }) {
-                ZStack {
-                    Circle().stroke(.red, lineWidth: 4).frame(width: 56, height: 56)
-                    if model.mode == .recording {
-                        RoundedRectangle(cornerRadius: 4).fill(.red).frame(width: 24, height: 24)
-                    } else {
-                        Circle().fill(.red).frame(width: 44, height: 44)
+                .buttonStyle(.plain)
+            } else {
+                Button(action: {
+                    Task { await model.takeSnapshot() }
+                }) {
+                    ZStack {
+                        Circle().stroke(.white, lineWidth: 4).frame(width: 64, height: 64)
+                        Circle().fill(.white).frame(width: 52, height: 52)
                     }
                 }
+                .buttonStyle(.plain)
+                .disabled(model.phase != 1)
+
+                Button(action: { model.toggleRecording() }) {
+                    ZStack {
+                        Circle().stroke(.red, lineWidth: 4).frame(width: 56, height: 56)
+                        if model.phase == 2 {
+                            RoundedRectangle(cornerRadius: 4).fill(.red).frame(width: 24, height: 24)
+                        } else {
+                            Circle().fill(.red).frame(width: 44, height: 44)
+                        }
+                    }
+                }
+                .buttonStyle(.plain)
+                .disabled(model.phase != 1 && model.phase != 2)
             }
-            .buttonStyle(.plain)
-            .disabled(model.mode == .playback)
         }
         .padding(.vertical, 10)
         .frame(maxWidth: .infinity)
@@ -232,9 +267,24 @@ enum RollItem: Identifiable {
 }
 
 @Observable
+@TLAObservable
 final class CameraModel {
+    static var spec: TLASpec {
+        TLASpec("CameraModel") {
+            let phase = Var<Int>("phase")
+            Variable(phase, 0)
+
+            Action("_ready")  { phase == 0 && phase.becomes(1) }
+            Action("_record") { phase == 1 && phase.becomes(2) }
+            Action("_stop")   { phase == 2 && phase.becomes(1) }
+            Action("_play")   { phase == 1 && phase.becomes(3) }
+            Action("_live")   { phase == 3 && phase.becomes(1) }
+
+            Invariant("validPhase") { phase >= 0 && phase <= 3 }
+        }
+    }
+
     let capture = Media.Capture()
-    var mode: Mode = .live
     var roll: [RollItem] = []
     var flashActive = false
     var selectedPhoto: Data?
@@ -243,8 +293,6 @@ final class CameraModel {
     private let disk = DiskStore(name: "camera")
     private var movieOutput: AVCaptureMovieFileOutput?
     private let recordDelegate = RecordingDelegate()
-
-    enum Mode { case live, recording, playback }
 
     func start() async {
         guard let device = AVCaptureDevice.default(for: .video) else {
@@ -257,6 +305,7 @@ final class CameraModel {
             sess.addOutput(mo)
             movieOutput = mo
             try await capture.start()
+            _ready()
         } catch {
             print("Camera error: \(error)")
         }
@@ -276,29 +325,29 @@ final class CameraModel {
     }
 
     func toggleRecording() {
-        if mode == .recording {
+        if phase == 2 {
             movieOutput?.stopRecording()
             if let url = recordedURL { roll.append(.video(url)) }
             recordedURL = nil
-            mode = .live
+            _stop()
         } else if let mo = movieOutput {
             recordedURL = FileManager.default.temporaryDirectory
                 .appendingPathComponent("recording-\(UUID().uuidString).mov")
             mo.startRecording(to: recordedURL!, recordingDelegate: recordDelegate)
-            mode = .recording
+            _record()
         }
     }
 
     func playRecording(url: URL? = nil) {
         let u = url ?? recordedURL
-        guard let u else { return }
+        guard let u, phase == 1 else { return }
         let player = AVPlayer(url: u)
         currentPlayer = player
-        mode = .playback
+        _play()
         player.play()
         NotificationCenter.default.addObserver(forName: .AVPlayerItemDidPlayToEndTime,
                                                object: player.currentItem, queue: .main) { [weak self] _ in
-            self?.mode = .live
+            self?._live()
         }
     }
 

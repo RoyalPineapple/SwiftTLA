@@ -1,13 +1,19 @@
+import Foundation
+
 public struct QuantVar: Hashable, Sendable, CustomStringConvertible {
     public let name: String
     public var description: String { name }
     public init(name: String) { self.name = name }
 
     public static func fresh() -> QuantVar {
-        defer { _counter += 1 }
-        return QuantVar(name: "x\(_counter)")
+        let c = _lock.withLock { () -> Int in
+            _counter += 1
+            return _counter
+        }
+        return QuantVar(name: "x\(c)")
     }
-    public static func resetCounter() { _counter = 0 }
+    public static func resetCounter() { _lock.withLock { _counter = 0 } }
+    private static let _lock = NSLock()
     private nonisolated(unsafe) static var _counter = 0
 }
 

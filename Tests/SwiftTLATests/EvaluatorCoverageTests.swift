@@ -1,7 +1,7 @@
 import SwiftTLA
 import Testing
 
-struct EvaluatorCoverage {
+@Suite(.serialized) struct EvaluatorCoverage {
     let state: [String: TLAValue] = [
         "x": .int(5), "y": .int(3), "b": .bool(true),
         "s": .set([.int(1), .int(2), .int(3)]),

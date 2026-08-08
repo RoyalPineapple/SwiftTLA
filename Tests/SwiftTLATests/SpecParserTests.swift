@@ -16,7 +16,7 @@ private func parseExpression(_ source: String) -> ExprSyntax {
 
 // MARK: - StateExpr: literals
 
-struct StateExprLiteralTests {
+@Suite(.serialized) struct StateExprLiteralTests {
     @Test func parseInts() {
         #expect(SpecParser.parseStateExpr(parseExpression("0")) == .value(.int(0)))
         #expect(SpecParser.parseStateExpr(parseExpression("42")) == .value(.int(42)))
@@ -36,7 +36,7 @@ struct StateExprLiteralTests {
 
 // MARK: - StateExpr: variables
 
-struct StateExprVariableTests {
+@Suite(.serialized) struct StateExprVariableTests {
     @Test func parseVariableReferences() {
         #expect(SpecParser.parseStateExpr(parseExpression("x")) == .variable("x"))
         #expect(SpecParser.parseStateExpr(parseExpression("count")) == .variable("count"))
@@ -46,7 +46,7 @@ struct StateExprVariableTests {
 
 // MARK: - StateExpr: arithmetic operators
 
-struct StateExprArithmeticTests {
+@Suite(.serialized) struct StateExprArithmeticTests {
     @Test func parseArithmetic() {
         #expect(SpecParser.parseStateExpr(parseExpression("x + 5")) == StateExpr.add(.variable("x"), .value(.int(5))))
         #expect(SpecParser.parseStateExpr(parseExpression("x - 3")) == StateExpr.subtract(.variable("x"), .value(.int(3))))
@@ -58,7 +58,7 @@ struct StateExprArithmeticTests {
 
 // MARK: - StateExpr: comparison operators
 
-struct StateExprComparisonTests {
+@Suite(.serialized) struct StateExprComparisonTests {
     @Test func parseComparisons() {
         let x: StateExpr = .variable("x")
         let y: StateExpr = .variable("y")
@@ -73,7 +73,7 @@ struct StateExprComparisonTests {
 
 // MARK: - StateExpr: logical and prefix operators
 
-struct StateExprLogicalPrefixTests {
+@Suite(.serialized) struct StateExprLogicalPrefixTests {
     @Test func parseLogical() {
         let x: StateExpr = .variable("x")
         let y: StateExpr = .variable("y")
@@ -94,7 +94,7 @@ struct StateExprLogicalPrefixTests {
 
 // MARK: - StateExpr: range operator
 
-struct StateExprRangeTests {
+@Suite(.serialized) struct StateExprRangeTests {
     @Test func parseRangeOperator() {
         #expect(SpecParser.parseStateExpr(parseExpression("1...3")) == StateExpr.setLiteral([.value(.int(1)), .value(.int(2)), .value(.int(3))]))
         #expect(SpecParser.parseStateExpr(parseExpression("0...2")) == StateExpr.setLiteral([.value(.int(0)), .value(.int(1)), .value(.int(2))]))
@@ -103,7 +103,7 @@ struct StateExprRangeTests {
 
 // MARK: - StateExpr: member access properties
 
-struct StateExprMemberAccessTests {
+@Suite(.serialized) struct StateExprMemberAccessTests {
     @Test func parseKnownProperties() {
         let s: StateExpr = .variable("s")
         #expect(SpecParser.parseStateExpr(parseExpression("s.cardinality")) == StateExpr.cardinality(s))
@@ -121,7 +121,7 @@ struct StateExprMemberAccessTests {
 
 // MARK: - StateExpr: method calls (binary)
 
-struct StateExprBinaryMethodTests {
+@Suite(.serialized) struct StateExprBinaryMethodTests {
     @Test func parseBinaryMethods() {
         let x: StateExpr = .variable("x")
         let s: StateExpr = .variable("s")
@@ -143,7 +143,7 @@ struct StateExprBinaryMethodTests {
 
 // MARK: - StateExpr: method calls (multi-arg)
 
-struct StateExprMultiArgMethodTests {
+@Suite(.serialized) struct StateExprMultiArgMethodTests {
     @Test func parseUpdated() {
         let f: StateExpr = .variable("f")
         #expect(SpecParser.parseStateExpr(parseExpression("f.updated(at: 0, to: 1)")) == StateExpr.except(f, .value(.int(0)), .value(.int(1))))
@@ -156,7 +156,7 @@ struct StateExprMultiArgMethodTests {
 
 // MARK: - StateExpr: static calls
 
-struct StateExprStaticCallTests {
+@Suite(.serialized) struct StateExprStaticCallTests {
     @Test func parseStaticSet() {
         #expect(SpecParser.parseStateExpr(parseExpression("StateExpr.set([1, 2, 3])")) == StateExpr.setLiteral([.value(.int(1)), .value(.int(2)), .value(.int(3))]))
     }
@@ -248,7 +248,7 @@ struct StateExprStaticCallTests {
 
 // MARK: - ActionExpr: basic assignments
 
-struct ActionExprBasicTests {
+@Suite(.serialized) struct ActionExprBasicTests {
     @Test func parseBecomes() {
         #expect(SpecParser.parseSingleAction(parseExpression("x.becomes(5)")) == ActionExpr.assign("x", .value(.int(5))))
         #expect(SpecParser.parseSingleAction(parseExpression("x.becomes(x + 1)")) == ActionExpr.assign("x", StateExpr.add(.variable("x"), .value(.int(1)))))
@@ -287,7 +287,7 @@ struct ActionExprBasicTests {
 
 // MARK: - ActionExpr: AND / OR combinations
 
-struct ActionExprCombinatorTests {
+@Suite(.serialized) struct ActionExprCombinatorTests {
     @Test func parseAndOfTwoActions() {
         #expect(SpecParser.parseSingleAction(parseExpression("x.becomes(1) && y.becomes(2)")) == ActionExpr.and(
             ActionExpr.assign("x", .value(.int(1))),
@@ -341,7 +341,7 @@ struct ActionExprCombinatorTests {
 
 // MARK: - ActionExpr: closure parsing
 
-struct ActionExprClosureTests {
+@Suite(.serialized) struct ActionExprClosureTests {
     @Test func parseEmptyClosure() {
         let closure = parseClosure("{}")
         #expect(SpecParser.parseActionFrom(closure) == ActionExpr.guard_(.value(.bool(true))))
@@ -370,7 +370,7 @@ private func parseClosure(_ source: String) -> ClosureExprSyntax {
 
 // MARK: - TemporalExpr
 
-struct TemporalExprTests {
+@Suite(.serialized) struct TemporalExprTests {
     @Test func parseLeadsTo() {
         #expect(SpecParser.parseTemporal(parseExpression("x.leadsTo(y)")) == TemporalExpr.leadsTo(.variable("x"), .variable("y")))
     }
@@ -386,7 +386,7 @@ struct TemporalExprTests {
 
 // MARK: - FairnessCondition
 
-struct FairnessConditionTests {
+@Suite(.serialized) struct FairnessConditionTests {
     @Test func parseWeakFairness() {
         #expect(SpecParser.parseFairnessExpr(parseExpression("x.weakFairness(\"Tick\")")) == FairnessCondition.weakFairness("Tick"))
     }
