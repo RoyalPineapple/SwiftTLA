@@ -46,37 +46,28 @@ private func ewd998Spec() -> TLASpec {
         Constraint(stateC)
 
         Invariant("TypeOK") {
-            let a = StateExpr.variable("active")
-            let p = StateExpr.variable("pending")
-            let t = StateExpr.variable("terminationDetected")
-            t.isIn(boolSet)
+                                                terminationDetected.isIn(boolSet)
             for i in 0..<N {
                 let ci = StateExpr.value(.int(i))
-                a.applying(ci).isIn(boolSet)
-                p.applying(ci) >= 0
+                active.applying(ci).isIn(boolSet)
+                pending.applying(ci) >= 0
             }
         }
 
         Invariant("Safe") {
-            let t = StateExpr.variable("terminationDetected")
-            let a = StateExpr.variable("active")
-            let p = StateExpr.variable("pending")
-            let terminated = StateExpr.forAll(nodeSet) { x in
-                StateExpr.not(a.applying(x)) && StateExpr.equal(p.applying(x), 0)
+                                                let terminated = StateExpr.forAll(nodeSet) { x in
+                StateExpr.not(active.applying(x)) && StateExpr.equal(pending.applying(x), 0)
             }
             StateExpr.ifThenElse(t, terminated, trueE)
         }
 
         Action("Terminate") {
             ActionExpr.exists("i", from: nodeSet) { i in
-                let a = StateExpr.variable("active")
-                let p = StateExpr.variable("pending")
-                let t = StateExpr.variable("terminationDetected")
-                let terminated = StateExpr.forAll(nodeSet) { x in
-                    StateExpr.not(a.applying(x)) && StateExpr.equal(p.applying(x), 0)
+                                                                let terminated = StateExpr.forAll(nodeSet) { x in
+                    StateExpr.not(active.applying(x)) && StateExpr.equal(pending.applying(x), 0)
                 }
 
-                return a.applying(i)
+                return active.applying(i)
                     && active.becomes(Expr(.except(a, i, falseE)))
                     && pending.stays
                     && terminationDetected.becomes(
@@ -86,11 +77,9 @@ private func ewd998Spec() -> TLASpec {
 
         Action("RcvMsg") {
             ActionExpr.exists("i", from: nodeSet) { i in
-                let a = StateExpr.variable("active")
-                let p = StateExpr.variable("pending")
-                return p.applying(i) > 0
+                                                return pending.applying(i) > 0
                     && active.becomes(Expr(.except(a, i, trueE)))
-                    && pending.becomes(p.updated(at: i, to: p.applying(i) - 1))
+                    && pending.becomes(pending.updated(at: i, to: pending.applying(i) - 1))
                     && terminationDetected.stays
             }
         }
@@ -98,10 +87,8 @@ private func ewd998Spec() -> TLASpec {
         Action("SendMsg") {
             ActionExpr.exists("i", from: nodeSet) { i in
                 ActionExpr.exists("j", from: nodeSet) { j in
-                    let a = StateExpr.variable("active")
-                    let p = StateExpr.variable("pending")
-                    return a.applying(i)
-                        && pending.becomes(p.updated(at: j, to: p.applying(j) + 1))
+                                                            return active.applying(i)
+                        && pending.becomes(pending.updated(at: j, to: pending.applying(j) + 1))
                         && active.stays
                         && terminationDetected.stays
                 }
@@ -109,10 +96,8 @@ private func ewd998Spec() -> TLASpec {
         }
 
         Action("DetectTermination") {
-            let a = StateExpr.variable("active")
-            let p = StateExpr.variable("pending")
-            let terminated = StateExpr.forAll(nodeSet) { x in
-                StateExpr.not(a.applying(x)) && StateExpr.equal(p.applying(x), 0)
+                                    let terminated = StateExpr.forAll(nodeSet) { x in
+                StateExpr.not(active.applying(x)) && StateExpr.equal(pending.applying(x), 0)
             }
 
             terminated

@@ -71,30 +71,24 @@ private func prisoners4Spec() -> TLASpec {
         }
 
         Action("CounterStep") {
-            let a = StateExpr.variable("switchAUp")
-            let c = StateExpr.variable("count")
-
             let turnOff: ActionExpr = switchAUp.becomes(false)
-                && count.becomes(c + 1)
+                && count.becomes(Expr(.add(count.stateExpr, .int(1))))
                 && switchBUp.stays
             let flipB: ActionExpr = switchAUp.stays
                 && count.stays
-                && switchBUp.becomes(Expr(.not(StateExpr.variable("switchBUp")))
+                && switchBUp.becomes(Expr(.not(switchBUp.stateExpr)))
 
-            return (a && turnOff || StateExpr.not(a) && flipB) && timesSwitched.stays
+            (switchAUp.stateExpr && turnOff || StateExpr.not(switchAUp.stateExpr) && flipB) && timesSwitched.stays
         }
 
         Action("NonCounter") {
             ActionExpr.exists("p", from: others) { p in
-                let a = StateExpr.variable("switchAUp")
-                let t = StateExpr.variable("timesSwitched")
-
-                let signalA: ActionExpr = StateExpr.not(a) && t.applying(p) < 2
+                let signalA: ActionExpr = StateExpr.not(switchAUp.stateExpr) && timesSwitched.applying(p) < 2
                     && switchAUp.becomes(true)
-                    && timesSwitched.becomes(t.updated(at: p, to: t.applying(p) + 1))
+                    && timesSwitched.becomes(Expr(.except(timesSwitched.stateExpr, p, StateExpr.add(timesSwitched.applying(p), .int(1)))))
                     && switchBUp.stays && count.stays
-                let flipB: ActionExpr = StateExpr.not(StateExpr.not(a) && t.applying(p) < 2)
-                    && switchBUp.becomes(Expr(.not(StateExpr.variable("switchBUp")))
+                let flipB: ActionExpr = StateExpr.not(StateExpr.not(switchAUp.stateExpr) && timesSwitched.applying(p) < 2)
+                    && switchBUp.becomes(Expr(.not(switchBUp.stateExpr)))
                     && switchAUp.stays && timesSwitched.stays && count.stays
 
                 return signalA || flipB

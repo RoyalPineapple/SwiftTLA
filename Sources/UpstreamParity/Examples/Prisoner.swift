@@ -49,34 +49,25 @@ private func prisonerSpec() -> TLASpec {
         Variable(hasVisited, TLAValue.set([]))
 
         Invariant("TypeOK") {
-            let c = StateExpr.variable("count")
-            let a = StateExpr.variable("announced")
-            let l = StateExpr.variable("light")
-            let h = StateExpr.variable("has_visited")
-            let s = StateExpr.variable("signalled")
-
+                                                let h = StateExpr.variable("has_visited")
+            
             c >= 1 && c <= threshold + 1
-                && a.isIn(StateExpr.set([trueE, falseE]))
-                && l.isIn(StateExpr.set([lightOff, lightOn]))
+                && announced.isIn(StateExpr.set([trueE, falseE]))
+                && light.isIn(StateExpr.set([lightOff, lightOn]))
                 && h.isSubset(of: pSet)
             for p in ["Alice", "Bob", "Eve"] {
-                s.applying(StateExpr.value(.string(p))).isIn(rng02)
+                signalled.applying(StateExpr.value(.string(p))).isIn(rng02)
             }
         }
 
         Invariant("VictoryOK") {
-            let a = StateExpr.variable("announced")
-            let h = StateExpr.variable("has_visited")
+                        let h = StateExpr.variable("has_visited")
             StateExpr.ifThenElse(a, StateExpr.equal(h, pSet), trueE)
         }
 
         Action("Warden") {
             ActionExpr.exists("p", from: pSet) { p in
-                let ct = StateExpr.variable("counter")
-                let l = StateExpr.variable("light")
-                let cnt = StateExpr.variable("count")
-                let sig = StateExpr.variable("signalled")
-                let hv = StateExpr.variable("has_visited")
+                                                                                let hv = StateExpr.variable("has_visited")
                 let isPct = StateExpr.equal(p, ct)
 
                 let lightOnAct: ActionExpr = .and(.assign("light", lightOff),
@@ -91,10 +82,10 @@ private func prisonerSpec() -> TLASpec {
                         .unchanged("signalled")))
 
                 let sigAct: ActionExpr = .and(.assign("light", lightOn),
-                    .assign("signalled", sig.updated(at: p, to: sig.applying(p) + 1)))
+                    .assign("signalled", signalled.updated(at: p, to: signalled.applying(p) + 1)))
                 let noSigAct: ActionExpr = .and(.unchanged("light"),
                     .unchanged("signalled"))
-                let canSignal = StateExpr.equal(l, lightOff) && sig.applying(p) < 1
+                let canSignal = StateExpr.equal(l, lightOff) && signalled.applying(p) < 1
                 let standardBody: ActionExpr = .and(.guard_(StateExpr.notEqual(p, ct)),
                     .and(.or(.and(.guard_(canSignal), sigAct),
                              .and(.guard_(StateExpr.not(canSignal)), noSigAct)),
