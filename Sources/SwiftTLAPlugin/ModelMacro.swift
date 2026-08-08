@@ -70,7 +70,7 @@ struct MacroExpander {
                 bindings: [PatternBindingSyntax(
                     pattern: IdentifierPatternSyntax(identifier: "_state"),
                     typeAnnotation: TypeAnnotationSyntax(type: IdentifierTypeSyntax(name: "State")),
-                    initializer: InitializerClauseSyntax(value: ExprSyntax(stringLiteral: "State(from: Self.runtime.initialStates().first!)"))
+                    initializer: InitializerClauseSyntax(value: ExprSyntax(stringLiteral: "State(from: runtime.initialStates().first!)"))
                 )]
             )
         ))
@@ -265,10 +265,11 @@ struct MacroExpander {
     }
 
     func generateActionMethods(actions: [(name: String, body: ActionExpr)]) -> [FunctionDeclSyntax] {
-        actions.map { a in
+        let visibility = isActor ? TokenSyntax.keyword(.fileprivate) : TokenSyntax.keyword(.public)
+        return actions.map { a in
             FunctionDeclSyntax(
                 modifiers: isActor
-                    ? [DeclModifierSyntax(name: .keyword(.public))]
+                    ? [DeclModifierSyntax(name: visibility)]
                     : [DeclModifierSyntax(name: .keyword(.public)), DeclModifierSyntax(name: .keyword(.mutating))],
                 name: isActor ? .identifier(a.name) : .identifier("apply\(a.name)"),
                 signature: FunctionSignatureSyntax(parameterClause: FunctionParameterClauseSyntax(parameters: [])),

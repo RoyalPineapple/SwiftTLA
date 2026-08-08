@@ -148,7 +148,7 @@ private func bakerySpec() -> TLASpec {
             Action("e4b_\(s)") {
                 pc.applying(s) == "e4"
                     && flag.becomes(flag.updated(at: s, to: StateExpr.value(.bool(false))))
-                    && unchecked.becomes(unchecked.updated(at: s, to: StateExpr.setDifference(procSetExpr, .singleton(.int(s)))))
+                    && unchecked.becomes(unchecked.updated(at: s, to: StateExpr.setDifference(procSetExpr, StateExpr.singleton(StateExpr.int(s)))))
                     && pc.becomes(pc.updated(at: s, to: "w1"))
                     && num.stays && maxV.stays && nxt.stays
             }
@@ -171,12 +171,16 @@ private func bakerySpec() -> TLASpec {
 
             // w2(self): wait until safe to proceed
             Action("w2_\(s)") {
-                pc.applying(s) == "w2"
-                    && (num.applying(nxt.applying(s)) == 0
-                        || num.applying(s) < num.applying(nxt.applying(s))
-                        || (num.applying(s) == num.applying(nxt.applying(s)) && .int(s) < nxt.applying(s)))
-                    && unchecked.becomes(unchecked.updated(at: s,
-                        to: unchecked.applying(s).subtracting(StateExpr.singleton(nxt.applying(s)))))
+                let pcAtW2 = StateExpr.equal(pc.applying(s), "w2")
+                let nxtIsZero = StateExpr.equal(num.applying(nxt.applying(s)), 0)
+                let myLessThanNxt = StateExpr.lessThan(num.applying(s), num.applying(nxt.applying(s)))
+                let tieAndSmaller = (num.applying(s) == num.applying(nxt.applying(s)))
+                                    && StateExpr.lessThan(StateExpr.value(.int(s)), nxt.applying(s))
+                let guardExpr = pcAtW2 && (nxtIsZero || myLessThanNxt || tieAndSmaller)
+                let nxtSingular = StateExpr.singleton(nxt.applying(s))
+                let newUnchecked = unchecked.applying(s).subtracting(nxtSingular)
+                guardExpr
+                    && unchecked.becomes(unchecked.updated(at: s, to: newUnchecked))
                     && pc.becomes(pc.updated(at: s, to: "w1"))
                     && num.stays && flag.stays && maxV.stays && nxt.stays
             }
@@ -206,8 +210,8 @@ private func bakerySpec() -> TLASpec {
         }
 
         LeadsTo("DeadlockFree",
-            StateExpr.exists(in: procSetExpr, pc.applying(.variable("x")) == "e1"),
-            StateExpr.exists(in: procSetExpr, pc.applying(.variable("x")) == "cs"))
+            StateExpr.exists(in: procSetExpr, StateExpr.equal(pc.applying(StateExpr.variable("x")), "e1")),
+            StateExpr.exists(in: procSetExpr, StateExpr.equal(pc.applying(StateExpr.variable("x")), "cs")))
         LeadsTo("StarvationFree_1",
             pc.applying(1) == "e1",
             pc.applying(1) == "cs")

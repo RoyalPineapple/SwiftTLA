@@ -22,8 +22,8 @@ public actor Central: NSObject, CBCentralManagerDelegate {
     public enum Phase: Int {
         case unknown = 0, resetting, unsupported, unauthorized, poweredOff, poweredOn, scanning
     }
-    public var phase: Phase { Phase(rawValue: _state.phase)! }
-    public var isReady: Bool { phase == .poweredOn }
+    public var currentPhase: Phase { Phase(rawValue: _state.phase)! }
+    public var isReady: Bool { currentPhase == .poweredOn }
 
     private var central: CBCentralManager!
     private var readyContinuation: CheckedContinuation<Void, Error>?

@@ -5,7 +5,7 @@ import UpstreamParity
 struct UpstreamParityTests {
     @Test("Every Example entry: ModelChecker count matches expectedDistinct")
     func modelCheckerMatchesCatalog() throws {
-        for entry in Example.all {
+        for entry in Example.all { if entry.id == "Bakery/N2" { let g = try ModelChecker(spec: entry.spec, maxStates: 50000).exploreGraph(); print("BAKERY_COUNT:\(g.states.count)") }; 
             let count = try ModelChecker(spec: entry.spec, maxStates: 50_000).exploreGraph().states.count
             #expect(count == entry.expectedDistinct, "\(entry.id): got \(count), expected \(entry.expectedDistinct)")
             let result = try ModelChecker(spec: entry.spec, maxStates: 50_000).check()
