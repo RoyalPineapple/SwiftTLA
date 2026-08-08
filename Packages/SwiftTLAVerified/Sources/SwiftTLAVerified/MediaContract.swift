@@ -1,44 +1,40 @@
 import SwiftTLA
-import SwiftTLAMacros
+import AVFoundation
 
-/// Cross-actor proof: composes Capture, Writer, Player via UseSpec.
-/// Variables + invariants imported.  Cross-actor guards added manually.
-/// 66 states, depth 10 (TLC-validated).
-@TLAActor
+/// Coordinator: composes Capture, Writer, Player at runtime.
+/// State machines verified individually by @TLAActor.
+/// Cross-actor invariants verified by TLC (66 states, depth 10).
 public actor MediaContract {
     public static var spec: TLASpec {
-        TLASpec("MediaContract") {
-            UseSpec("Capture")
-            UseSpec("Writer")
-            UseSpec("Player")
+        let capture = Media.Capture.spec
+        let writer = Media.Writer.spec
+        let player = Media.Player.spec
+
+        return TLASpec("MediaContract") {
+            Use(spec: capture)
+            Use(spec: writer)
+            Use(spec: player)
 
             let cPhase = Var<Int>("cPhase")
             let wPhase = Var<Int>("wPhase")
             let pPhase = Var<Int>("pPhase")
-            Action("cConfigure")  { cPhase == 0 && cPhase.becomes(1) }
-            Action("cStart")      { cPhase == 1 && cPhase.becomes(2) }
-            Action("cStop")       { (cPhase == 2 || cPhase == 3) && (wPhase != 2 && wPhase != 3) && cPhase.becomes(0) }
-            Action("cInterrupt")  { cPhase == 2 && (wPhase != 2 && wPhase != 3) && cPhase.becomes(3) }
-            Action("cResume")     { cPhase == 3 && cPhase.becomes(2) }
 
-            // Writer actions with cross-actor guards
-            Action("wConfigure")  { wPhase == 0 && wPhase.becomes(1) }
-            Action("wStart")      { wPhase == 1 && cPhase == 2 && wPhase.becomes(2) }
-            Action("wRecord")     { wPhase == 2 && wPhase.stays }
-            Action("wPause")      { wPhase == 2 && wPhase.becomes(3) }
-            Action("wResume")     { wPhase == 3 && wPhase.becomes(2) }
-            Action("wFinish")     { wPhase == 1 && wPhase.becomes(4) }
-            Action("wCancel")     { (wPhase == 2 || wPhase == 3) && wPhase.becomes(5) }
-
-            // Player actions with cross-actor guards
-            Action("pLoad")       { pPhase == 0 && pPhase.becomes(1) }
-            Action("pReady")      { pPhase == 1 && pPhase.becomes(2) }
-            Action("pPlay")       { (pPhase == 2 || pPhase == 4) && wPhase == 4 && pPhase.becomes(3) }
-            Action("pPause")      { pPhase == 3 && pPhase.becomes(4) }
-            Action("pFinish")     { pPhase == 3 && pPhase.becomes(5) }
+            Action("cStop")     { (cPhase == 2 || cPhase == 3) && (wPhase != 2 && wPhase != 3) && cPhase.becomes(0) }
+            Action("cInterrupt") { cPhase == 2 && (wPhase != 2 && wPhase != 3) && cPhase.becomes(3) }
+            Action("wStart")     { wPhase == 1 && cPhase == 2 && wPhase.becomes(2) }
+            Action("pPlay")      { (pPhase == 2 || pPhase == 4) && wPhase == 4 && pPhase.becomes(3) }
 
             Invariant("writerRequiresCapture") { (wPhase != 2 && wPhase != 3) || (cPhase == 2) }
             Invariant("playerRequiresWriter")  { (pPhase != 3) || (wPhase == 4) }
         }
+    }
+
+    public let capture = Media.Capture()
+    public let writer: Media.Writer
+    public let player: Media.Player
+
+    public init(outputURL: URL) {
+        writer = Media.Writer(url: outputURL, fileType: .mp4, outputSettings: [:])
+        player = Media.Player(url: outputURL)
     }
 }
