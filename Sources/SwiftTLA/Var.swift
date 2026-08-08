@@ -32,6 +32,14 @@ public typealias TLASequence = TLATupleType  // TLA+ sequences are tuples at run
 /// let isLocked = Var<Bool>()              // name injected by @TLAModel macro
 /// let isLocked = Var<Bool>(value: true)   // name injected, explicit initial
 /// ```
+/// Phantom-typed expression: `Expr<Int>` can only be assigned to `Var<Int>`.
+public struct Expr<T: TLAValueType>: StateExprConvertible, Sendable {
+    public let raw: StateExpr
+    public init(_ raw: StateExpr) { self.raw = raw }
+    public var stateExpr: StateExpr { raw }
+}
+
+@TypedVar
 @dynamicMemberLookup
 public struct Var<T: TLAValueType>: Sendable, CustomStringConvertible {
     public let name: String
@@ -42,6 +50,9 @@ public struct Var<T: TLAValueType>: Sendable, CustomStringConvertible {
     /// Returns `x' = expression` — the variable's value in the next state.
     @discardableResult
     public func becomes(_ expression: some StateExprConvertible) -> ActionExpr { .assign(name, expression.stateExpr) }
+    /// Type-safe assignment: `Var<Int>.becomes(5)` compiles, `Var<Int>.becomes("x")` does not.
+    @discardableResult
+    public func becomes(_ value: T) -> ActionExpr { .assign(name, .value(value.tlaValue)) }
     /// Returns `UNCHANGED x` — the variable stays the same in the next state.
     public var stays: ActionExpr { .unchanged(name) }
 
