@@ -9,36 +9,26 @@ struct BLEScanner {
 
         Task { RunLoop.current.run() }
 
-        print("Waiting for powered on...")
         try await ble.ready()
-        print("Ready! Scanning for 5 seconds...\n")
+        print("Ready! Scanning for 10 seconds...\n")
 
-        // Collect devices for 5 seconds
-        var devices: [Device] = []
+        var seen = Set<UUID>()
+        var count = 0
         let stream = await ble.scan()
-        let scanTask = Task {
-            for await device in stream { devices.append(device) }
+        let task = Task {
+            for await device in stream {
+                let id = await device.peripheral.identifier
+                if seen.insert(id).inserted {
+                    count += 1
+                    print("[\(count)] \(await device.name ?? "Unknown")")
+                }
+            }
         }
-        try await Task.sleep(for: .seconds(5))
+
+        try await Task.sleep(for: .seconds(10))
         await ble.stopScanning()
-        scanTask.cancel()
-
-        // Pick the first named device
-        guard let target = devices.first(where: { $0.name != nil }) else {
-            print("No named devices found among \(devices.count) total.")
-            exit(0)
-        }
-
-        print("\nConnecting to: \(target.name ?? "?")")
-        try await ble.connect(target)
-        print("Connected!")
-
-        print("Discovering services...")
-        let services = try await target.discoverServices()
-        for svc in services {
-            print("  Service: \(svc.uuid)")
-        }
-        print("Done. \(services.count) service(s).")
+        task.cancel()
+        print("\nDone. \(count) unique device(s).")
         exit(0)
     }
 }
