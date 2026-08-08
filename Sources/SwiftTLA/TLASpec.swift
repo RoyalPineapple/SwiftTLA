@@ -286,6 +286,12 @@ public enum SpecBuilder {
     public static func buildArray(_ components: [[SpecComponent]]) -> [SpecComponent] { components.flatMap { $0 } }
 }
 
+/// Generate DSL elements for each value in a sequence.
+/// `ForEach([pPhase1, pPhase2, pPhase3]) { p in Action(...) }`
+public func ForEach<C: Sequence>(_ values: C, @SpecBuilder _ body: (C.Element) -> [SpecComponent]) -> [SpecComponent] {
+    values.flatMap(body)
+}
+
 @resultBuilder
 public enum InvariantBuilder {
     public static func buildBlock(_ components: StateExpr...) -> StateExpr {
