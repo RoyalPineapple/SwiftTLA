@@ -3,66 +3,46 @@ import SwiftTLAVerified
 import CoreBluetooth
 
 @main
-struct BLEScannerApp {
-    static func main() {
-        let app = NSApplication.shared
-        app.setActivationPolicy(.regular)
+struct BLEScannerApp: App {
+    @StateObject private var model = BLEModel()
 
-        let model = BLEModel()
-        let contentView = BLEContentView(model: model)
-            .frame(minWidth: 400, minHeight: 300)
+    var body: some Scene {
+        WindowGroup {
+            VStack(spacing: 0) {
+                List(model.devices) { device in
+                    HStack {
+                        Circle()
+                            .fill(.blue)
+                            .frame(width: 8, height: 8)
+                        Text(device.name)
+                            .font(.body)
+                        Spacer()
+                        Text(device.id)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .monospaced()
+                            .lineLimit(1)
+                    }
+                    .padding(.vertical, 2)
+                }
 
-        let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 480, height: 400),
-            styleMask: [.titled, .closable, .resizable],
-            backing: .buffered, defer: false)
-        window.title = "BLE Scanner — @TLAActor"
-        window.center()
-        window.contentView = NSHostingView(rootView: contentView)
-        window.makeKeyAndOrderFront(nil)
-
-        Task { await model.ready() }
-
-        app.run()
-    }
-}
-
-struct BLEContentView: View {
-    @ObservedObject var model: BLEModel
-
-    var body: some View {
-        VStack(spacing: 0) {
-            List(model.devices) { device in
                 HStack {
-                    Circle()
-                        .fill(.blue)
-                        .frame(width: 8, height: 8)
-                    Text(device.name)
-                        .font(.body)
+                    Button(model.isScanning ? "Stop" : "Scan") {
+                        Task { await model.toggleScan() }
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(model.isScanning ? .red : .accentColor)
+
                     Spacer()
-                    Text(device.id)
-                        .font(.caption)
+
+                    Text("\(model.devices.count) device(s)")
                         .foregroundStyle(.secondary)
-                        .monospaced()
-                        .lineLimit(1)
+                        .font(.caption)
                 }
-                .padding(.vertical, 2)
+                .padding()
             }
-
-            HStack {
-                Button(model.isScanning ? "Stop" : "Scan") {
-                    Task { await model.toggleScan() }
-                }
-                .buttonStyle(.borderedProminent)
-                .tint(model.isScanning ? .red : .accentColor)
-
-                Spacer()
-
-                Text("\(model.devices.count) device(s)")
-                    .foregroundStyle(.secondary)
-                    .font(.caption)
-            }
-            .padding()
+            .frame(minWidth: 400, minHeight: 300)
+            .task { await model.ready() }
         }
     }
 }

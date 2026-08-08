@@ -300,6 +300,98 @@ struct MacroExpander {
         )
     }
 
+    // MARK: - Observable code generation
+
+    func generateObservableMembers(
+        variables: [(name: String, initial: TLAValue, initialSet: StateExpr?)],
+        actions: [(name: String, body: ActionExpr)]
+    ) -> [DeclSyntax] {
+        var decls: [DeclSyntax] = []
+
+        for v in variables {
+            let attr: AttributeListSyntax = [AttributeListSyntax.Element.attribute(
+                AttributeSyntax(attributeName: IdentifierTypeSyntax(name: "Published"))
+            )]
+            let publishedVar: DeclSyntax = DeclSyntax(
+                VariableDeclSyntax(
+                    attributes: attr,
+                    modifiers: [DeclModifierSyntax(name: .keyword(.private))],
+                    bindingSpecifier: .keyword(.var),
+                    bindings: [PatternBindingSyntax(
+                        pattern: IdentifierPatternSyntax(identifier: "_\(raw: v.name)"),
+                        typeAnnotation: TypeAnnotationSyntax(type: IdentifierTypeSyntax(name: .identifier(Self.swiftType(for: v.initial)))),
+                        initializer: InitializerClauseSyntax(value: ExprSyntax(stringLiteral: Self.literalExpr(for: v.initial)))
+                    )]
+                )
+            )
+            decls.append(publishedVar)
+        }
+
+        decls.append(DeclSyntax(
+            VariableDeclSyntax(
+                modifiers: [DeclModifierSyntax(name: .keyword(.private))],
+                bindingSpecifier: .keyword(.var),
+                bindings: [PatternBindingSyntax(
+                    pattern: IdentifierPatternSyntax(identifier: "_state"),
+                    typeAnnotation: TypeAnnotationSyntax(type: IdentifierTypeSyntax(name: "State")),
+                    initializer: InitializerClauseSyntax(value: ExprSyntax(stringLiteral: "State(from: runtime.initialStates().first!)"))
+                )]
+            )
+        ))
+
+        decls.append(DeclSyntax(Self.generateVariablesEnum(variables: variables)))
+        decls.append(DeclSyntax(Self.generateActionsEnum(actions: actions)))
+        decls.append(DeclSyntax(Self.generateStateStruct(variables: variables)))
+        decls.append(contentsOf: Self.generateVariableProperties(variables: variables).map(DeclSyntax.init))
+        decls.append(contentsOf: generateObservableActionMethods(variables: variables, actions: actions).map(DeclSyntax.init))
+        decls.append(DeclSyntax(generateApplyHelper()))
+        decls.append(DeclSyntax(
+            VariableDeclSyntax(
+                modifiers: [DeclModifierSyntax(name: .keyword(.public)), DeclModifierSyntax(name: .keyword(.static))],
+                bindingSpecifier: .keyword(.var),
+                bindings: [PatternBindingSyntax(
+                    pattern: IdentifierPatternSyntax(identifier: "runtime"),
+                    typeAnnotation: TypeAnnotationSyntax(type: IdentifierTypeSyntax(name: "SpecRuntime")),
+                    accessorBlock: AccessorBlockSyntax(accessors: .getter(
+                        CodeBlockItemListSyntax { ExprSyntax(stringLiteral: "SpecRuntime(spec: spec)") }
+                    ))
+                )]
+            )
+        ))
+
+        return decls
+    }
+
+    func generateObservableActionMethods(
+        variables: [(name: String, initial: TLAValue, initialSet: StateExpr?)],
+        actions: [(name: String, body: ActionExpr)]
+    ) -> [FunctionDeclSyntax] {
+        actions.map { a in
+            var bodyExprs: [ExprSyntax] = [ExprSyntax(stringLiteral: "_state = _apply(.\(a.name))")]
+            for v in variables {
+                bodyExprs.append(ExprSyntax(stringLiteral: "_\(v.name) = _state.\(v.name)"))
+            }
+            return FunctionDeclSyntax(
+                modifiers: [DeclModifierSyntax(name: .keyword(.public))],
+                name: .identifier(a.name),
+                signature: FunctionSignatureSyntax(parameterClause: FunctionParameterClauseSyntax(parameters: [])),
+                body: CodeBlockSyntax(statements: CodeBlockItemListSyntax(bodyExprs.map {
+                    CodeBlockItemSyntax(item: .expr($0))
+                }))
+            )
+        }
+    }
+
+    static func literalExpr(for initial: TLAValue) -> String {
+        switch initial {
+        case .int(let v): "\(v)"
+        case .bool(let v): "\(v)"
+        case .string(let v): "\"\(v)\""
+        case .set(let v): "[\(v.map(String.init).joined(separator: ", "))]"
+        default: "0"
+        }
+    }
+
     // MARK: - Helpers
 
     static func findSpec(in members: MemberBlockItemListSyntax) -> ClosureExprSyntax? {

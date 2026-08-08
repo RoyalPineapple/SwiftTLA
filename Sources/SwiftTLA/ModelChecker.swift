@@ -6,7 +6,7 @@ public struct ModelChecker {
     public let spec: TLASpec
     public let maxStates: Int
 
-    public init(spec: TLASpec, maxStates: Int = 10_000) {
+    public init(spec: TLASpec, maxStates: Int = 100_000) {
         self.spec = spec
         self.maxStates = maxStates
     }

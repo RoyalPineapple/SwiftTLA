@@ -10,7 +10,7 @@ extension Example {
         upstreamSpec: "NanoBlockchain",
         upstreamModule: "specifications/NanoBlockchain/Nano.tla",
         upstreamCfg: "specifications/NanoBlockchain/MCNanoSmall.cfg",
-        expectedDistinct: 7,
+        expectedDistinct: 24577,
         spec: nanoSpec(),
         notes: "2 nodes, 3 hashes. Genesis + Create + Process blocks. DefineRecursive for chain walking.",
     )
@@ -21,7 +21,8 @@ private func nanoSpec() -> TLASpec {
     let hashes = ["h1", "h2", "h3"]
     let privKeys = ["prv1", "prv2"]
     let genesisBal = 3
-    let noBlock = TLAValue.string("NoBlock")
+    let noBlock: TLAValue = .record(["block": .record(["type": .string("NoBlock")]),
+                                      "signature": .record(["data": .string("NoHash"), "signedWith": .string("NoPriv")])])
 
     let lastHash = Var<String>("lastHash")
     let distributedLedger = Var<TLAFunctionType>("distributedLedger")
