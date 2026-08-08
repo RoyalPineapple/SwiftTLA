@@ -42,7 +42,7 @@ private func paxosSpec() -> TLASpec {
     }
 
     func addMsg(_ m: StateExpr) -> ActionExpr {
-        msgs.becomes(Expr(.union(msgs, StateExpr.singleton(m))))
+        msgs.becomes(Expr(.union(msgs.stateExpr, StateExpr.singleton(m))))
     }
 
     return TLASpec("Paxos") {
