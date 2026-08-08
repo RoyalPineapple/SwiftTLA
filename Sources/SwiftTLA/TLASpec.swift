@@ -58,8 +58,9 @@ public struct TLASpec: Sendable {
     public var runtimeFuncs: [String: @Sendable ([TLAValue]) -> TLAValue] = [:]
     public var runtimeFuncBodies: [String] = []
     public let symmetrySets: [SymmetrySet]
+    public let symmetryGroups: [SymmetryVariableGroup]
 
-    public init(name: String, variables: [NamedVar], constants: [String: TLAValue] = [:], actions: [NamedAction], invariants: [NamedInvariant], temporalProperties: [NamedTemporal] = [], fairness: [FairnessCondition] = [], assume: StateExpr? = nil, checkDeadlock: Bool = false, definitions: [String] = [], theorems: [String] = [], extendsModules: String = "Integers", constraint: StateExpr? = nil, recursiveDefs: [String] = [], recursiveFuncs: [RecursiveFunc] = [], symmetrySets: [SymmetrySet] = []) {
+    public init(name: String, variables: [NamedVar], constants: [String: TLAValue] = [:], actions: [NamedAction], invariants: [NamedInvariant], temporalProperties: [NamedTemporal] = [], fairness: [FairnessCondition] = [], assume: StateExpr? = nil, checkDeadlock: Bool = false, definitions: [String] = [], theorems: [String] = [], extendsModules: String = "Integers", constraint: StateExpr? = nil, recursiveDefs: [String] = [], recursiveFuncs: [RecursiveFunc] = [], symmetrySets: [SymmetrySet] = [], symmetryGroups: [SymmetryVariableGroup] = []) {
         self.name = name
         self.variables = variables
         self.constants = constants
@@ -76,6 +77,7 @@ public struct TLASpec: Sendable {
         self.recursiveDefs = recursiveDefs
         self.recursiveFuncs = recursiveFuncs
         self.symmetrySets = symmetrySets
+        self.symmetryGroups = symmetryGroups
     }
 
     public var description: String {
@@ -116,7 +118,8 @@ public struct TLASpec: Sendable {
             constraint: { if let a = constraint, let b = other.constraint { return .and(a, b) }; return constraint ?? other.constraint }(),
             recursiveDefs: self.recursiveDefs + other.recursiveDefs,
             recursiveFuncs: self.recursiveFuncs + other.recursiveFuncs,
-            symmetrySets: self.symmetrySets + other.symmetrySets
+            symmetrySets: self.symmetrySets + other.symmetrySets,
+             symmetryGroups: self.symmetryGroups + other.symmetryGroups
         )
     }
 
@@ -138,7 +141,8 @@ public struct TLASpec: Sendable {
             constraint: self.constraint,
             recursiveDefs: self.recursiveDefs,
             recursiveFuncs: self.recursiveFuncs,
-            symmetrySets: self.symmetrySets
+            symmetrySets: self.symmetrySets,
+            symmetryGroups: self.symmetryGroups
         )
     }
 }
@@ -295,6 +299,7 @@ public enum SpecBuilder {
     public static func buildExpression(_ expr: RecursiveFuncDecl) -> [SpecComponent] { [expr] }
     public static func buildExpression(_ expr: RuntimeFuncDecl) -> [SpecComponent] { [expr] }
     public static func buildExpression(_ expr: SymmetrySetDecl) -> [SpecComponent] { [expr] }
+    public static func buildExpression(_ expr: SymmetryVariableGroupDecl) -> [SpecComponent] { [expr] }
     public static func buildExpression(_ expr: NamedValueDecl) -> [SpecComponent] { [] }
     public static func buildExpression(_ expr: OpDecl) -> [SpecComponent] { [expr] }
     public static func buildExpression(_ expr: OpUse) -> [SpecComponent] { [expr] }
@@ -515,6 +520,20 @@ public func Symmetry(_ variableName: String, _ values: Set<some TLAValueConverti
     SymmetrySetDecl(variableName, Set(values.map(\.tlaValue)))
 }
 
+public struct SymmetryVariableGroup: Hashable, Sendable { public let names: [String]; init(_ n: [String]) { names = n }
+    func canonicalize(_ state: [String: TLAValue]) -> [String: TLAValue] {
+        guard names.count > 1 else { return state }
+        var vals = names.compactMap { state[$0] }
+        guard vals.count == names.count else { return state }
+        vals.sort(by: { $0.description < $1.description })
+        var result = state
+        for (i, name) in names.enumerated() { result[name] = vals[i] }
+        return result
+    }
+}
+public struct SymmetryVariableGroupDecl: SpecComponent { public let names: [String]; init(_ n: [String]) { names = n } }
+public func SymmetryGroup(_ names: String...) -> SymmetryVariableGroupDecl { SymmetryVariableGroupDecl(names) }
+
 public func Constant(_ name: String, _ value: some TLAValueConvertible) -> ConstantDecl {
     ConstantDecl(name, value.tlaValue)
 }
@@ -598,6 +617,7 @@ extension TLASpec {
         var runtimeFuncCollector: [String: @Sendable ([TLAValue]) -> TLAValue] = [:]
         var runtimeFuncBodiesCollector: [String] = []
         var symmetrySets: [SymmetrySet] = []
+        var symmetryGroups: [SymmetryVariableGroup] = []
         var operators: [String: OpDecl] = [:]
 
         // Pass 1: collect operators
@@ -624,6 +644,8 @@ extension TLASpec {
                 runtimeFuncCollector[rtf.name] = rtf.implementation
                 runtimeFuncBodiesCollector.append(rtf.tlaBody)
                 runtimeFuncBodies.append(rtf.tlaBody)
+            } else if let s = comp as? SymmetryVariableGroupDecl {
+                symmetryGroups.append(SymmetryVariableGroup(s.names))
             } else if let s = comp as? SymmetrySetDecl {
                 symmetrySets.append(SymmetrySet(variableName: s.variableName, values: s.values))
             } else if comp is OpDecl {
@@ -674,6 +696,7 @@ extension TLASpec {
         self.runtimeFuncs = runtimeFuncCollector
         self.runtimeFuncBodies = runtimeFuncBodiesCollector
         self.symmetrySets = symmetrySets
+        self.symmetryGroups = symmetryGroups
     }
 }
 
@@ -706,7 +729,8 @@ public func substituteConstants(_ spec: TLASpec) -> TLASpec {
         constraint: spec.constraint.map { substituteInState($0, constants: constants) },
         recursiveDefs: spec.recursiveDefs,
         recursiveFuncs: spec.recursiveFuncs,
-        symmetrySets: spec.symmetrySets
+         symmetrySets: spec.symmetrySets,
+         symmetryGroups: spec.symmetryGroups
     )
 }
 

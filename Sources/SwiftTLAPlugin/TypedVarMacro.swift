@@ -2,140 +2,100 @@ import SwiftCompilerPlugin
 import SwiftSyntax
 import SwiftSyntaxBuilder
 import SwiftSyntaxMacros
-import SwiftDiagnostics
-import SwiftParser
 
-public enum TypedVarMacro: PeerMacro {
+public struct TypedVarMacro: PeerMacro {
     public static func expansion(
         of node: AttributeSyntax,
         providingPeersOf declaration: some DeclSyntaxProtocol,
         in context: some MacroExpansionContext
     ) throws -> [DeclSyntax] {
-        return [
-            DeclSyntax(stringLiteral: intVarOps),
-            DeclSyntax(stringLiteral: intExprOps),
-            DeclSyntax(stringLiteral: boolVarOps),
-            DeclSyntax(stringLiteral: boolExprOps),
-            DeclSyntax(stringLiteral: stringVarOps),
-            DeclSyntax(stringLiteral: stringExprOps),
-            DeclSyntax(stringLiteral: functionVarOps),
-            DeclSyntax(stringLiteral: functionExprOps),
-        ]
+        guard let structDecl = declaration.as(StructDeclSyntax.self),
+              let genericClause = structDecl.genericParameterClause,
+              let typeParam = genericClause.parameters.first?.name.text else {
+            return []
+        }
+        // TLAValueType conformers: Int, Bool, String, TLAFunctionType
+        switch typeParam {
+        case "T": return generateOperators(for: "Int") + generateOperators(for: "Bool") + generateOperators(for: "String") + generateFunctionOps()
+        default: return []
+        }
     }
 }
 
-private let intVarOps = """
-extension Var where T == Int {
-    public static func +(_ lhs: Var, _ rhs: Int) -> Expr<Int> { Expr(.add(lhs.stateExpr, .int(rhs))) }
-    public static func +(_ lhs: Var, _ rhs: Var) -> Expr<Int> { Expr(.add(lhs.stateExpr, rhs.stateExpr)) }
-    public static func +(_ lhs: Var, _ rhs: Expr<Int>) -> Expr<Int> { Expr(.add(lhs.stateExpr, rhs.raw)) }
-    public static func -(_ lhs: Var, _ rhs: Int) -> Expr<Int> { Expr(.subtract(lhs.stateExpr, .int(rhs))) }
-    public static func -(_ lhs: Var, _ rhs: Var) -> Expr<Int> { Expr(.subtract(lhs.stateExpr, rhs.stateExpr)) }
-    public static func -(_ lhs: Var, _ rhs: Expr<Int>) -> Expr<Int> { Expr(.subtract(lhs.stateExpr, rhs.raw)) }
-    public static func *(_ lhs: Var, _ rhs: Int) -> Expr<Int> { Expr(.multiply(lhs.stateExpr, .int(rhs))) }
-    public static func *(_ lhs: Var, _ rhs: Var) -> Expr<Int> { Expr(.multiply(lhs.stateExpr, rhs.stateExpr)) }
-    public static func *(_ lhs: Var, _ rhs: Expr<Int>) -> Expr<Int> { Expr(.multiply(lhs.stateExpr, rhs.raw)) }
-    public static func /(_ lhs: Var, _ rhs: Int) -> Expr<Int> { Expr(.divide(lhs.stateExpr, .int(rhs))) }
-    public static func /(_ lhs: Var, _ rhs: Var) -> Expr<Int> { Expr(.divide(lhs.stateExpr, rhs.stateExpr)) }
-    public static func %(_ lhs: Var, _ rhs: Int) -> Expr<Int> { Expr(.modulo(lhs.stateExpr, .int(rhs))) }
-    public static prefix func -(_ x: Var) -> Expr<Int> { Expr(.negate(x.stateExpr)) }
-
-    public static func <(_ lhs: Var, _ rhs: Int) -> StateExpr { .lessThan(lhs.stateExpr, .int(rhs)) }
-    public static func <(_ lhs: Var, _ rhs: Var) -> StateExpr { .lessThan(lhs.stateExpr, rhs.stateExpr) }
-    public static func >(_ lhs: Var, _ rhs: Int) -> StateExpr { .greaterThan(lhs.stateExpr, .int(rhs)) }
-    public static func >(_ lhs: Var, _ rhs: Var) -> StateExpr { .greaterThan(lhs.stateExpr, rhs.stateExpr) }
-    public static func <=(_ lhs: Var, _ rhs: Int) -> StateExpr { .lessOrEqual(lhs.stateExpr, .int(rhs)) }
-    public static func <=(_ lhs: Var, _ rhs: Var) -> StateExpr { .lessOrEqual(lhs.stateExpr, rhs.stateExpr) }
-    public static func >=(_ lhs: Var, _ rhs: Int) -> StateExpr { .greaterOrEqual(lhs.stateExpr, .int(rhs)) }
-    public static func >=(_ lhs: Var, _ rhs: Var) -> StateExpr { .greaterOrEqual(lhs.stateExpr, rhs.stateExpr) }
-    public static func ==(_ lhs: Var, _ rhs: Int) -> StateExpr { .equal(lhs.stateExpr, .int(rhs)) }
-    public static func ==(_ lhs: Var, _ rhs: Var) -> StateExpr { .equal(lhs.stateExpr, rhs.stateExpr) }
-    public static func !=(_ lhs: Var, _ rhs: Int) -> StateExpr { .notEqual(lhs.stateExpr, .int(rhs)) }
-    public static func !=(_ lhs: Var, _ rhs: Var) -> StateExpr { .notEqual(lhs.stateExpr, rhs.stateExpr) }
-}
-"""
-
-private let intExprOps = """
-extension Expr where T == Int {
-    public static func +(_ lhs: Expr, _ rhs: Int) -> Expr { Expr(.add(lhs.raw, .int(rhs))) }
-    public static func +(_ lhs: Expr, _ rhs: Var<Int>) -> Expr { Expr(.add(lhs.raw, rhs.stateExpr)) }
-    public static func +(_ lhs: Expr, _ rhs: Expr) -> Expr { Expr(.add(lhs.raw, rhs.raw)) }
-    public static func -(_ lhs: Expr, _ rhs: Int) -> Expr { Expr(.subtract(lhs.raw, .int(rhs))) }
-    public static func -(_ lhs: Expr, _ rhs: Var<Int>) -> Expr { Expr(.subtract(lhs.raw, rhs.stateExpr)) }
-    public static func *(_ lhs: Expr, _ rhs: Int) -> Expr { Expr(.multiply(lhs.raw, .int(rhs))) }
-    public static func *(_ lhs: Expr, _ rhs: Var<Int>) -> Expr { Expr(.multiply(lhs.raw, rhs.stateExpr)) }
-    public static func /(_ lhs: Expr, _ rhs: Int) -> Expr { Expr(.divide(lhs.raw, .int(rhs))) }
-    public static func %(_ lhs: Expr, _ rhs: Int) -> Expr { Expr(.modulo(lhs.raw, .int(rhs))) }
-
-    public static func <(_ lhs: Expr, _ rhs: Int) -> StateExpr { .lessThan(lhs.raw, .int(rhs)) }
-    public static func >(_ lhs: Expr, _ rhs: Int) -> StateExpr { .greaterThan(lhs.raw, .int(rhs)) }
-    public static func <=(_ lhs: Expr, _ rhs: Int) -> StateExpr { .lessOrEqual(lhs.raw, .int(rhs)) }
-    public static func >=(_ lhs: Expr, _ rhs: Int) -> StateExpr { .greaterOrEqual(lhs.raw, .int(rhs)) }
-    public static func ==(_ lhs: Expr, _ rhs: Int) -> StateExpr { .equal(lhs.raw, .int(rhs)) }
-    public static func !=(_ lhs: Expr, _ rhs: Int) -> StateExpr { .notEqual(lhs.raw, .int(rhs)) }
-}
-"""
-
-private let boolVarOps = """
-extension Var where T == Bool {
-    public static func && (_ lhs: Var, _ rhs: Var) -> StateExpr { .and(lhs.stateExpr, rhs.stateExpr) }
-    public static func || (_ lhs: Var, _ rhs: Var) -> StateExpr { .or(lhs.stateExpr, rhs.stateExpr) }
-    public static prefix func !(_ x: Var) -> StateExpr { .not(x.stateExpr) }
-    public static func ==(_ lhs: Var, _ rhs: Bool) -> StateExpr { .equal(lhs.stateExpr, .bool(rhs)) }
-    public static func ==(_ lhs: Var, _ rhs: Var) -> StateExpr { .equal(lhs.stateExpr, rhs.stateExpr) }
-    public static func !=(_ lhs: Var, _ rhs: Bool) -> StateExpr { .notEqual(lhs.stateExpr, .bool(rhs)) }
-    public static func !=(_ lhs: Var, _ rhs: Var) -> StateExpr { .notEqual(lhs.stateExpr, rhs.stateExpr) }
-}
-"""
-
-private let boolExprOps = """
-extension Expr where T == Bool {
-    public static func && (_ lhs: Expr, _ rhs: Var<Bool>) -> StateExpr { .and(lhs.raw, rhs.stateExpr) }
-    public static func || (_ lhs: Expr, _ rhs: Var<Bool>) -> StateExpr { .or(lhs.raw, rhs.stateExpr) }
-    public static prefix func !(_ x: Expr) -> StateExpr { .not(x.raw) }
-    public static func ==(_ lhs: Expr, _ rhs: Bool) -> StateExpr { .equal(lhs.raw, .bool(rhs)) }
-    public static func !=(_ lhs: Expr, _ rhs: Bool) -> StateExpr { .notEqual(lhs.raw, .bool(rhs)) }
-}
-"""
-
-private let stringVarOps = """
-extension Var where T == String {
-    public static func +(_ lhs: Var, _ rhs: String) -> Expr<String> { Expr(.add(lhs.stateExpr, .value(.string(rhs)))) }
-    public static func +(_ lhs: Var, _ rhs: Var) -> Expr<String> { Expr(.add(lhs.stateExpr, rhs.stateExpr)) }
-    public static func ==(_ lhs: Var, _ rhs: String) -> StateExpr { .equal(lhs.stateExpr, .value(.string(rhs))) }
-    public static func ==(_ lhs: Var, _ rhs: Var) -> StateExpr { .equal(lhs.stateExpr, rhs.stateExpr) }
-    public static func !=(_ lhs: Var, _ rhs: String) -> StateExpr { .notEqual(lhs.stateExpr, .value(.string(rhs))) }
-    public static func !=(_ lhs: Var, _ rhs: Var) -> StateExpr { .notEqual(lhs.stateExpr, rhs.stateExpr) }
-}
-"""
-
-private let stringExprOps = """
-extension Expr where T == String {
-    public static func +(_ lhs: Expr, _ rhs: String) -> Expr { Expr(.add(lhs.raw, .value(.string(rhs)))) }
-    public static func +(_ lhs: Expr, _ rhs: Var<String>) -> Expr { Expr(.add(lhs.raw, rhs.stateExpr)) }
-    public static func ==(_ lhs: Expr, _ rhs: String) -> StateExpr { .equal(lhs.raw, .value(.string(rhs))) }
-    public static func !=(_ lhs: Expr, _ rhs: String) -> StateExpr { .notEqual(lhs.raw, .value(.string(rhs))) }
-}
-"""
-
-private let functionVarOps = """
-extension Var where T == TLAFunctionType {
-    public func updated(at key: some StateExprConvertible, to value: some StateExprConvertible) -> Expr<TLAFunctionType> {
-        Expr(.except(stateExpr, key.stateExpr, value.stateExpr))
+private func generateOperators(for swiftType: String) -> [DeclSyntax] {
+    let base: [DeclSyntax]
+    switch swiftType {
+    case "Int":
+        base = intOps() + intComparisons()
+    case "Bool":
+        base = boolOps() + boolComparisons()
+    case "String":
+        base = []
+    default:
+        base = []
     }
-    public func applying(_ argument: some StateExprConvertible) -> StateExpr {
-        .functionApply(stateExpr, argument.stateExpr)
-    }
+    return wrapInExtension(base, type: swiftType)
 }
-"""
 
-private let functionExprOps = """
-extension Expr where T == TLAFunctionType {
-    public func updated(at key: some StateExprConvertible, to value: some StateExprConvertible) -> Expr {
-        Expr(.except(raw, key.stateExpr, value.stateExpr))
+private func wrapInExtension(_ decls: [DeclSyntax], type: String) -> [DeclSyntax] {
+    guard !decls.isEmpty else { return [] }
+    let ext = DeclSyntax(stringLiteral: """
+    extension Var where T == \(type) {
+        \(decls.map { $0.description }.joined(separator: "\n    "))
     }
-    public func applying(_ argument: some StateExprConvertible) -> StateExpr {
-        .functionApply(raw, argument.stateExpr)
-    }
+    """)
+    return [ext]
 }
-"""
+
+private func intOps() -> [DeclSyntax] {
+    let ops: [(String, String)] = [
+        ("+", ".add"), ("-", ".subtract"), ("*", ".multiply"), ("/", ".divide"), ("%", ".modulo"),
+    ]
+    var decls: [DeclSyntax] = []
+    for (op, state) in ops {
+        decls.append(DeclSyntax(stringLiteral: "public static func \(op)(_ lhs: Var, _ rhs: Int) -> Expr<Int> { Expr(\(state)(lhs, .int(rhs))) }"))
+        decls.append(DeclSyntax(stringLiteral: "public static func \(op)(_ lhs: Var, _ rhs: Var) -> Expr<Int> { Expr(\(state)(lhs, rhs)) }"))
+        decls.append(DeclSyntax(stringLiteral: "public static func \(op)(_ lhs: Var, _ rhs: Expr<Int>) -> Expr<Int> { Expr(\(state)(lhs, rhs.raw)) }"))
+    }
+    decls.append(DeclSyntax(stringLiteral: "public static prefix func -(_ x: Var) -> Expr<Int> { Expr(.negate(x)) }"))
+    return decls
+}
+
+private func intComparisons() -> [DeclSyntax] {
+    let cmps: [(String, String)] = [
+        ("<", ".lessThan"), (">", ".greaterThan"),
+        ("<=", ".lessOrEqual"), (">=", ".greaterOrEqual"),
+        ("==", ".equal"), ("!=", ".notEqual"),
+    ]
+    return cmps.flatMap { (op, state) in [
+        DeclSyntax(stringLiteral: "public static func \(op)(_ lhs: Var, _ rhs: Int) -> StateExpr { \(state)(lhs, .int(rhs)) }"),
+        DeclSyntax(stringLiteral: "public static func \(op)(_ lhs: Var, _ rhs: Var) -> StateExpr { \(state)(lhs, rhs) }"),
+    ]}
+}
+
+private func boolOps() -> [DeclSyntax] {
+    [
+        DeclSyntax(stringLiteral: "public static prefix func !(_ x: Var) -> Expr<Bool> { Expr(.not(x)) }"),
+        DeclSyntax(stringLiteral: "public static func &&(_ lhs: Var, _ rhs: Var) -> Expr<Bool> { Expr(.and(lhs, rhs)) }"),
+        DeclSyntax(stringLiteral: "public static func &&(_ lhs: Var, _ rhs: Expr<Bool>) -> Expr<Bool> { Expr(.and(lhs, rhs.raw)) }"),
+        DeclSyntax(stringLiteral: "public static func ||(_ lhs: Var, _ rhs: Var) -> Expr<Bool> { Expr(.or(lhs, rhs)) }"),
+        DeclSyntax(stringLiteral: "public static func ||(_ lhs: Var, _ rhs: Expr<Bool>) -> Expr<Bool> { Expr(.or(lhs, rhs.raw)) }"),
+    ]
+}
+
+private func boolComparisons() -> [DeclSyntax] {
+    [
+        DeclSyntax(stringLiteral: "public static func ==(_ lhs: Var, _ rhs: Bool) -> StateExpr { .equal(lhs, .bool(rhs)) }"),
+        DeclSyntax(stringLiteral: "public static func ==(_ lhs: Var, _ rhs: Var) -> StateExpr { .equal(lhs, rhs) }"),
+        DeclSyntax(stringLiteral: "public static func !=(_ lhs: Var, _ rhs: Bool) -> StateExpr { .notEqual(lhs, .bool(rhs)) }"),
+    ]
+}
+
+private func generateFunctionOps() -> [DeclSyntax] {
+    let decls: [DeclSyntax] = [
+        DeclSyntax(stringLiteral: "public func updated(at key: some StateExprConvertible, to value: some StateExprConvertible) -> Expr<TLAFunctionType> { Expr(.except(self, key.stateExpr, value.stateExpr)) }"),
+        DeclSyntax(stringLiteral: "public func applying(_ key: some StateExprConvertible) -> StateExpr { .functionApply(self, key.stateExpr) }"),
+        DeclSyntax(stringLiteral: "public func union(_ other: some StateExprConvertible) -> Expr<TLAFunctionType> { Expr(.union(self, other.stateExpr)) }"),
+    ]
+    return wrapInExtension(decls, type: "TLAFunctionType")
+}

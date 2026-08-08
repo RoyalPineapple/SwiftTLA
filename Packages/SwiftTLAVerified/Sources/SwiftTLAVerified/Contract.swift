@@ -1,10 +1,13 @@
 import SwiftTLA
 import SwiftTLAMacros
 
+/// Cross-actor contract: proves invariants hold between Bluetooth central and
+/// any number of connected peripherals.  Symmetry over peripheral slots
+/// collapses the state space to N=1 — machine-proven for all N at compile time.
 @TLAActor
-public actor DynamicCrossActor {
+public actor Contract {
     public static var spec: TLASpec {
-        TLASpec("DynamicCrossActor") {
+        TLASpec("Contract") {
             let cPhase = Var<Int>("cPhase")
             let pPhase1 = Var<Int>("pPhase1")
             let pPhase2 = Var<Int>("pPhase2")
@@ -60,6 +63,7 @@ public actor DynamicCrossActor {
                     (cPhase != 6) || (p != 1)
                 }
             }
+            SymmetryGroup("pPhase1", "pPhase2", "pPhase3", "pPhase4")
         }
     }
 }

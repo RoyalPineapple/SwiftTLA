@@ -75,7 +75,8 @@ public struct ModelChecker {
             checkDeadlock: substituted.checkDeadlock,
             specificationName: substituted.name,
             maxStates: self.maxStates,
-            symmetrySets: substituted.symmetrySets
+            symmetrySets: substituted.symmetrySets,
+            symmetryGroups: substituted.symmetryGroups
         )
     }
 
@@ -161,10 +162,11 @@ private func bfs(
     checkDeadlock: Bool,
     specificationName: String,
     maxStates: Int,
-    symmetrySets: [SymmetrySet] = []
+    symmetrySets: [SymmetrySet] = [],
+    symmetryGroups: [SymmetryVariableGroup] = []
 ) throws -> ModelChecker.Exploration {
     func canonicalKey(_ state: State) -> State {
-        symmetrySets.reduce(state) { $1.canonicalize($0) }
+        symmetryGroups.reduce(symmetrySets.reduce(state) { $1.canonicalize($0) }) { $1.canonicalize($0) }
     }
 
     var queue: [State] = []

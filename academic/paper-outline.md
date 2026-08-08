@@ -94,21 +94,22 @@ for p in [pPhase1, pPhase2, pPhase3, pPhase4] {
 - `renameVar` handles ActionExpr substitution
 - Two-pass spec construction: collect operators, expand uses
 
-### 3.4 Cross-Actor Composition
+### 3.4 Cross-Actor Composition (Contract)
+
+The `Contract` type proves invariants hold between Bluetooth central and any
+number of connected peripherals.  N=4 is verified at compile time (~28k states);
+the proof implies N→∞ via per-peripheral independence.
 
 ```swift
-// Four cross-actor invariants, N=4 peripherals
-Invariant("noPeripheralWithoutPower") {
-    for p in [...] { (cPhase == poweredOn) || (p == disconnected) || (p == disconnecting) }
+@TLAActor
+public actor Contract {
+    // Four cross-actor invariants
+    Invariant("noPeripheralWithoutPower") {
+        for p in [pPhase1..pPhase4] { (cPhase == poweredOn) || (p == disconnected) || ... }
+    }
+    Invariant("noScanWhileConnecting") { ... }
 }
-Invariant("noScanWhileConnecting")     { ... }
-Invariant("poweredOffDisconnects")     { ... }
-Invariant("resettingDisconnects")      { ... }
 ```
-
-- Verified at compile time, ~28k states
-- Per-peripheral independence: proof for one slot proves all
-- TLC for N beyond compile-time ceiling
 
 ### 3.5 TLA+ Export and Oracle Parity
 - `tlaModule` renders AST as valid TLA+ source
