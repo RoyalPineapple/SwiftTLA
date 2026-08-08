@@ -3,12 +3,11 @@ import SwiftTLAMacros
 
 /// Cross-actor verification: Central + N Peripherals.
 /// Proves no Peripheral is active while Central is powered off.
-/// N=3 peripherals, exhaustive within 10k state limit.
 @TLAActor
 public actor CrossActor {
-    static let N = 3
-
     public static var spec: TLASpec {
+        // Phases: unknown=0 resetting=1 unsupported=2 unauthorized=3 poweredOff=4 poweredOn=5 scanning=6
+        // Peripheral: disconnected=0 connecting=1 connected=2 discoveringServices=3 servicesDiscovered=4 discoveringChars=5 ready=6 disconnecting=7
         TLASpec("CrossActor") {
             let cPhase = Var<Int>("cPhase")
             let pPhase1 = Var<Int>("pPhase1")
@@ -20,7 +19,7 @@ public actor CrossActor {
             Variable(pPhase2, 0)
             Variable(pPhase3, 0)
 
-            // CENTRAL
+            // Central: 0=unknown,1=resetting,2=unsupported,3=unauthorized,4=poweredOff,5=poweredOn,6=scanning
             Action("cToPoweredOn")  { (cPhase == 0 || cPhase == 1 || cPhase == 4) && cPhase.becomes(5) }
             Action("cToPoweredOff") { (cPhase == 0 || cPhase == 1 || cPhase == 5) && cPhase.becomes(4) }
             Action("cToUnsupported") { cPhase == 0 && cPhase.becomes(2) }
@@ -29,8 +28,9 @@ public actor CrossActor {
             Action("cStartScan")    { cPhase == 5 && cPhase.becomes(6) }
             Action("cStopScan")     { cPhase == 6 && cPhase.becomes(5) }
 
-            // PERIPHERALS (each gets transitions)
-            for i in 1...N {
+            // Peripheral: 0=disconnected,1=connecting,2=connected,3=discoveringServices,
+            // 4=servicesDiscovered,5=discoveringChars,6=ready,7=disconnecting
+            for i in 1...3 {
                 let pVar = [pPhase1, pPhase2, pPhase3][i-1]
                 Action("p\(i)_beginConnect")  { pVar == 0 && pVar.becomes(1) }
                 Action("p\(i)_finishConnect") { pVar == 1 && pVar.becomes(2) }
@@ -43,15 +43,29 @@ public actor CrossActor {
                 Action("p\(i)_finishDiscoverChars") { pVar == 5 && pVar.becomes(6) }
             }
 
-            // CROSS-ACTOR: no peripheral active unless central poweredOn (cPhase == 5)
             Invariant("noPeripheralWithoutPower") {
-                (cPhase == 5) || (pPhase1 == 0) || (pPhase1 == 7)
+                for i in 1...3 {
+                    let pVar = [pPhase1, pPhase2, pPhase3][i-1]
+                    (cPhase == 5) || (pVar == 0) || (pVar == 7)
+                }
             }
-            Invariant("noPeripheral2WithoutPower") {
-                (cPhase == 5) || (pPhase2 == 0) || (pPhase2 == 7)
+            Invariant("noScanWhileConnecting") {
+                for i in 1...3 {
+                    let pVar = [pPhase1, pPhase2, pPhase3][i-1]
+                    (cPhase != 6) || (pVar != 1)
+                }
             }
-            Invariant("noPeripheral3WithoutPower") {
-                (cPhase == 5) || (pPhase3 == 0) || (pPhase3 == 7)
+            Invariant("poweredOffDisconnects") {
+                for i in 1...3 {
+                    let pVar = [pPhase1, pPhase2, pPhase3][i-1]
+                    (cPhase != 4) || (pVar == 0) || (pVar == 7)
+                }
+            }
+            Invariant("resettingDisconnects") {
+                for i in 1...3 {
+                    let pVar = [pPhase1, pPhase2, pPhase3][i-1]
+                    (cPhase != 1) || (pVar != 6)
+                }
             }
         }
     }

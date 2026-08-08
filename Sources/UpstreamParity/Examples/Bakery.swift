@@ -160,7 +160,7 @@ private func bakerySpec() -> TLASpec {
                 pc.applying(s) == "w1" && unchecked.applying(s) != emptySet
                     && ActionExpr.exists("i", from: unchecked.applying(s)) { i in
                         nxt.becomes(nxt.updated(at: s, to: i))
-                            && StateExpr.not(flag.applying(nxt.applying(s)))
+                            && StateExpr.not(flag.applying(i))
                             && pc.becomes(pc.updated(at: s, to: "w2"))
                             && num.stays && flag.stays && unchecked.stays && maxV.stays
                     }

@@ -4,7 +4,18 @@ public protocol TLAValueType: TLAValueConvertible {
 extension Int: TLAValueType { public static var defaultValue: Int { 0 } }
 extension Bool: TLAValueType { public static var defaultValue: Bool { false } }
 extension String: TLAValueType { public static var defaultValue: String { "" } }
+
+/// All RawRepresentable Int enums get TLAValueType support.
+extension TLAValueType where Self: RawRepresentable, Self.RawValue == Int {
+    public static var defaultValue: Self { Self(rawValue: 0)! }
+    public var tlaValue: TLAValue { .int(rawValue) }
+}
+
 extension TLAValue: TLAValueType { public static var defaultValue: TLAValue { .int(0) } }
+
+extension StateExprConvertible where Self: TLAValueType {
+    public var stateExpr: StateExpr { .value(tlaValue) }
+}
 public enum TLASetType: TLAValueType { case placeholder; public var tlaValue: TLAValue { .set([]) }; public static var defaultValue: TLASetType { .placeholder } }
 public enum TLATupleType: TLAValueType { case placeholder; public var tlaValue: TLAValue { .tuple([]) }; public static var defaultValue: TLATupleType { .placeholder } }
 public enum TLARecordType: TLAValueType { case placeholder; public var tlaValue: TLAValue { .record([:]) }; public static var defaultValue: TLARecordType { .placeholder } }
