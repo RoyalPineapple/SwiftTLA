@@ -32,30 +32,17 @@ public actor Bluetooth {
         }
     }
 
-    public var centralState: CBManagerState {
-        switch _state.phase {
-        case 0:  return .unknown
-        case 1:  return .resetting
-        case 2:  return .unsupported
-        case 3:  return .unauthorized
-        case 4:  return .poweredOff
-        case 5:  return .poweredOn
-        case 6:  return .poweredOn  // scanning = poweredOn for the framework
-        default: return .unknown
-        }
-    }
     public var isReady: Bool { _state.phase == 5 }
 
     private let delegate = BleDelegate()
-    private let central: CBCentralManager
+    private var central: CBCentralManager!
     private var readyCont: CheckedContinuation<Void, Error>?
-    private var scanStream: AsyncStream<Device>?
     private var scanCont: AsyncStream<Device>.Continuation?
 
     public init() {
         central = CBCentralManager()
-        delegate.actor = self
         central.delegate = delegate
+        delegate.actor = self
     }
 
     public func ready() async throws {
@@ -65,7 +52,6 @@ public actor Bluetooth {
 
     public func scan() -> AsyncStream<Device> {
         let (stream, cont) = AsyncStream<Device>.makeStream()
-        scanStream = stream
         scanCont = cont
         startScan()
         central.scanForPeripherals(withServices: nil, options: nil)
@@ -73,16 +59,7 @@ public actor Bluetooth {
     }
 
     public func stopScanning() {
-        stopScan()
-        central.stopScan()
-        scanCont?.finish()
-        scanCont = nil
-    }
-
-    public func connect(_ device: Device) async throws {
-        guard isReady else { throw BleError.notReady }
-        central.connect(device.peripheral, options: nil)
-        try await device.waitForConnection()
+        stopScan(); central.stopScan(); scanCont?.finish(); scanCont = nil
     }
 
     func updateState(_ s: CBManagerState) {
@@ -100,5 +77,6 @@ public actor Bluetooth {
 
     func didDiscover(_ device: Device) { scanCont?.yield(device) }
 }
+
 
 public enum BleError: Error { case notReady }
