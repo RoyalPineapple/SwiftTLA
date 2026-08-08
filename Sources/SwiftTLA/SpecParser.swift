@@ -702,6 +702,13 @@ public enum SpecParser {
         case "Value":
             if let name = extractStringArg(call, index: 0),
                parseNamedValueConstant(call, name: name, into: &result) { }
+        case "UseSpec":
+            if let name = extractStringArg(call, index: 0),
+               let spec = SpecRegistry.lookup(name) {
+                result.variables += spec.variables.map { (name: $0.name, initial: $0.initial, initialSet: $0.initialSet) }
+                result.invariants += spec.invariants.map { (name: $0.name, body: $0.body) }
+                result.actions += spec.actions.map { (name: $0.name, body: $0.body) }
+            }
         default:
             break
         }

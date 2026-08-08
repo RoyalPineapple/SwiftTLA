@@ -51,7 +51,7 @@ struct MacroExpander {
         case .deadlocked(let s): throw SimpleError("Deadlock at: \(s)")
         case .depthExceeded(let c, let l): throw SimpleError("Depth exceeded: \(c)/\(l)")
         case .livenessViolated(let msg): throw SimpleError("Liveness violated: \(msg)")
-        case .ok: break
+        case .ok: SpecRegistry.register(spec)
         }
 
         return (typeName, parsed.variables, parsed.actions)

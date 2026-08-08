@@ -198,6 +198,17 @@ public func Operator(_ name: String, param: Var<some TLAValueType>, @ActionBuild
     OpDecl(name, [param.name], body())
 }
 
+/// Spec registry for composition via UseSpec().
+public enum SpecRegistry {
+    nonisolated(unsafe) private static var store: [String: TLASpec] = [:]
+    public static func register(_ spec: TLASpec) { store[spec.name] = spec }
+    public static func lookup(_ name: String) -> TLASpec? { store[name] }
+}
+
+/// Compose a registered spec by name.  Parser handles this at compile time.
+public struct UseSpecDecl: SpecComponent { public let name: String; init(_ n: String) { name = n } }
+public func UseSpec(_ name: String) -> UseSpecDecl { UseSpecDecl(name) }
+
 public struct OpUse: SpecComponent {
     public let op: String; public let param: String; public let varName: String; public let value: TLAValue?
     init(_ o: String, _ p: String, _ v: String, _ val: TLAValue? = nil) { op = o; param = p; varName = v; value = val }
@@ -296,6 +307,7 @@ public enum SpecBuilder {
     public static func buildExpression(_ expr: AssumeDecl) -> [SpecComponent] { [expr] }
     public static func buildExpression(_ expr: ExtendsDecl) -> [SpecComponent] { [expr] }
     public static func buildExpression(_ expr: UseDecl) -> [SpecComponent] { [expr] }
+    public static func buildExpression(_ expr: UseSpecDecl) -> [SpecComponent] { [expr] }
     public static func buildExpression(_ expr: DeadlockDecl) -> [SpecComponent] { [expr] }
     public static func buildExpression(_ expr: ConstraintDecl) -> [SpecComponent] { [expr] }
     public static func buildExpression(_ expr: RecursiveDecl) -> [SpecComponent] { [expr] }
@@ -653,6 +665,11 @@ extension TLASpec {
                 symmetrySets.append(SymmetrySet(variableName: s.variableName, values: s.values))
             } else if comp is OpDecl {
                 // collected in pass 1
+            } else if let u = comp as? UseSpecDecl {
+                if let spec = SpecRegistry.lookup(u.name) {
+                    variables += spec.variables
+                    invariants += spec.invariants
+                }
             } else if let u = comp as? OpUse {
                 if let op = operators[u.op] {
                     let body: ActionExpr

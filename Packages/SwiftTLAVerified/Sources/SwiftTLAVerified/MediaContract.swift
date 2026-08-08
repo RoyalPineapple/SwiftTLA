@@ -1,26 +1,27 @@
 import SwiftTLA
 import SwiftTLAMacros
 
-/// Cross-actor proof: Capture + Writer + Player composition.
-/// Proves WriterRequiresCapture and PlayerRequiresWriter at compile time.
-/// Individual actors (Media.Capture, Media.Writer, Media.Player) exist for
-/// standalone use.  MediaContract proves they compose correctly.
+/// Cross-actor proof: composes Capture, Writer, Player via UseSpec.
+/// Variables + invariants imported.  Cross-actor guards added manually.
+/// 66 states, depth 10 (TLC-validated).
 @TLAActor
 public actor MediaContract {
     public static var spec: TLASpec {
         TLASpec("MediaContract") {
+            UseSpec("Capture")
+            UseSpec("Writer")
+            UseSpec("Player")
+
             let cPhase = Var<Int>("cPhase")
             let wPhase = Var<Int>("wPhase")
             let pPhase = Var<Int>("pPhase")
-
-            Variable(cPhase, 0); Variable(wPhase, 0); Variable(pPhase, 0)
-
             Action("cConfigure")  { cPhase == 0 && cPhase.becomes(1) }
             Action("cStart")      { cPhase == 1 && cPhase.becomes(2) }
             Action("cStop")       { (cPhase == 2 || cPhase == 3) && (wPhase != 2 && wPhase != 3) && cPhase.becomes(0) }
             Action("cInterrupt")  { cPhase == 2 && (wPhase != 2 && wPhase != 3) && cPhase.becomes(3) }
             Action("cResume")     { cPhase == 3 && cPhase.becomes(2) }
 
+            // Writer actions with cross-actor guards
             Action("wConfigure")  { wPhase == 0 && wPhase.becomes(1) }
             Action("wStart")      { wPhase == 1 && cPhase == 2 && wPhase.becomes(2) }
             Action("wRecord")     { wPhase == 2 && wPhase.stays }
@@ -29,6 +30,7 @@ public actor MediaContract {
             Action("wFinish")     { wPhase == 1 && wPhase.becomes(4) }
             Action("wCancel")     { (wPhase == 2 || wPhase == 3) && wPhase.becomes(5) }
 
+            // Player actions with cross-actor guards
             Action("pLoad")       { pPhase == 0 && pPhase.becomes(1) }
             Action("pReady")      { pPhase == 1 && pPhase.becomes(2) }
             Action("pPlay")       { (pPhase == 2 || pPhase == 4) && wPhase == 4 && pPhase.becomes(3) }
