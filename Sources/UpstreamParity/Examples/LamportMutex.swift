@@ -59,7 +59,7 @@ private func lamportMutexSpec() -> TLASpec {
                 && network.becomes(network.updated(at: p,
                     to: network.applying(p).updated(at: q,
                         to: network.applying(p).applying(q).appending(reqMsg(p)))))
-                && ack.becomes(Expr(.except(ack, p, StateExpr.setLiteral([StateExpr.value(.int(p)))])))
+                && ack.becomes(ack.updated(at: p, to: StateExpr.singleton(StateExpr.int(p))))
                 && clock.stays && crit.stays
             }
             // ReceiveRequest from q: update clock, req, network
@@ -82,7 +82,7 @@ private func lamportMutexSpec() -> TLASpec {
                 let m = network.applying(q).applying(p)
                 m.count > 0 && StateExpr.recordAccess(m.head, "type") == "ack"
                 && ack.becomes(ack.updated(at: p,
-                    to: ack.applying(p).union(StateExpr.setLiteral([StateExpr.value(.int(q))]))))
+                    to: ack.applying(p).union(StateExpr.singleton(StateExpr.int(q)))))
                 && network.becomes(network.updated(at: q,
                     to: network.applying(q).updated(at: p, to: m.tail)))
                 && clock.stays && req.stays && crit.stays
@@ -94,19 +94,19 @@ private func lamportMutexSpec() -> TLASpec {
                     || req.applying(p).applying(p) < req.applying(p).applying(q)
                     || (StateExpr.equal(req.applying(p).applying(p), req.applying(p).applying(q))
                         && p < q))
-                && crit.becomes(Expr(.union(crit, StateExpr.setLiteral([StateExpr.value(.int(p)))])))
+                && crit.becomes(crit.union(StateExpr.singleton(StateExpr.int(p))))
                 && clock.stays && req.stays && ack.stays && network.stays
             }
             // Exit critical section
             Action("Exit_\(p)") {
                 StateExpr.in(StateExpr.value(.int(p)), StateExpr.variable("crit"))
-                && crit.becomes(Expr(.setDifference(crit, StateExpr.setLiteral([StateExpr.value(.int(p)))])))
+                && crit.becomes(Expr(.setDifference(crit.stateExpr, StateExpr.singleton(StateExpr.int(p)))))
                 && network.becomes(network.updated(at: p,
                     to: network.applying(p).updated(at: q,
                         to: network.applying(p).applying(q).appending(relMsg))))
                 && req.becomes(req.updated(at: p,
                     to: req.applying(p).updated(at: p, to: 0)))
-                && ack.becomes(ack.updated(at: p, to: StateExpr.setLiteral([]))))
+                && ack.becomes(ack.updated(at: p, to: StateExpr.setLiteral([])))
                 && clock.stays
             }
             // ReceiveRelease from q
