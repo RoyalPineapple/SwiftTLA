@@ -30,8 +30,8 @@ private func gameOfLifeSpec() -> TLASpec {
 
     // The cell-update body used inside functionLiteral
     func nextValue(at p: StateExpr) -> StateExpr {
-        let x = StateExpr.tupleAccess(p, 0)
-        let y = StateExpr.tupleAccess(p, 1)
+        let x = StateExpr.tupleAccess(p, 1)
+        let y = StateExpr.tupleAccess(p, 2)
         let alive = grid.applying(p)
         var score: StateExpr = StateExpr.int(0)
         for dx in -1...1 {
@@ -58,9 +58,10 @@ private func gameOfLifeSpec() -> TLASpec {
         }
 
         // grid' = [p \in Pos |-> nextValue(p)]  — the upstream pattern
+        let pVar = Var<Int>("p")
         Action("Next") {
-            let body = nextValue(at: .variable("p"))
-            grid.becomes(StateExpr.functionLiteral(StateExpr.setLiteral(allTiles), .fresh(), body))
+            grid.becomes(StateExpr.functionLiteral(pVar, in: StateExpr.setLiteral(allTiles),
+                nextValue(at: pVar.stateExpr)))
         }
     }
 }
