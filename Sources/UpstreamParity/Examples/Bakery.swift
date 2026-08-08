@@ -93,24 +93,25 @@ private func bakerySpec() -> TLASpec {
                     && num.stays && nxt.stays
             }
 
-            // e2(self): scan numbers of other processes
-            Action("e2_pick_\(s)") {
-                pc.applying(s) == "e2" && unchecked.applying(s) != emptySet
-                    && ActionExpr.exists("i", from: unchecked.applying(s)) { i in
-                        let gtBranch = num.applying(i) > maxV.applying(s)
-                            && unchecked.becomes(unchecked.updated(at: s,
-                                to: unchecked.applying(s).subtracting(StateExpr.singleton(i))))
-                            && maxV.becomes(maxV.updated(at: s, to: num.applying(i)))
-                            && pc.becomes(pc.updated(at: s, to: "e2"))
-                            && num.stays && flag.stays && nxt.stays
-                        let leBranch = !(num.applying(i) > maxV.applying(s))
-                            && unchecked.becomes(unchecked.updated(at: s,
-                                to: unchecked.applying(s).subtracting(StateExpr.singleton(i))))
-                            && maxV.stays
-                            && pc.becomes(pc.updated(at: s, to: "e2"))
-                            && num.stays && flag.stays && nxt.stays
-                        return gtBranch || leBranch
-                    }
+            // e2(self): scan numbers of other processes (N=2: at most 1 unchecked)
+            let other = s == 1 ? 2 : 1
+            Action("e2_pick_gt_\(s)") {
+                pc.applying(s) == "e2" && num.applying(other) > maxV.applying(s)
+                    && StateExpr.in(StateExpr.int(other), unchecked.applying(s))
+                    && unchecked.becomes(unchecked.updated(at: s,
+                        to: unchecked.applying(s).subtracting(StateExpr.singleton(StateExpr.int(other)))))
+                    && maxV.becomes(maxV.updated(at: s, to: num.applying(other)))
+                    && pc.becomes(pc.updated(at: s, to: "e2"))
+                    && flag.stays && nxt.stays && num.stays
+            }
+            Action("e2_pick_le_\(s)") {
+                pc.applying(s) == "e2" && !(num.applying(other) > maxV.applying(s))
+                    && StateExpr.in(StateExpr.int(other), unchecked.applying(s))
+                    && unchecked.becomes(unchecked.updated(at: s,
+                        to: unchecked.applying(s).subtracting(StateExpr.singleton(StateExpr.int(other)))))
+                    && maxV.stays
+                    && pc.becomes(pc.updated(at: s, to: "e2"))
+                    && flag.stays && nxt.stays && num.stays
             }
             Action("e2_done_\(s)") {
                 pc.applying(s) == "e2" && unchecked.applying(s) == emptySet

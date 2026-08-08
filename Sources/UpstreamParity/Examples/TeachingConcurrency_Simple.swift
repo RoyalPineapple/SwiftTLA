@@ -16,7 +16,7 @@ extension Example {
         upstreamSpec: "TeachingConcurrency",
         upstreamModule: "specifications/TeachingConcurrency/Simple.tla",
         upstreamCfg: nil,
-        expectedDistinct: 13,
+        expectedDistinct: 51,
         spec: teachingSimple(n: 3),
         notes: "N=3. Upstream TLC = 51. (cfg default N=5 → 723).",
     )
