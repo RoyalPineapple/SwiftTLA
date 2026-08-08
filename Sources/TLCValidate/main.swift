@@ -42,6 +42,63 @@ if name == "check-all" {
     exit(fail > 0 ? 1 : 0)
 }
 
+
+if name == "debug-rc" {
+    let id = args.count >= 2 ? args[1] : "SpecifyingSystems/HourClock"
+    let entry = Example.all.first(where: { $0.id == id })!
+    let rc = RuntimeChecker(userSpec: entry.spec, maxStates: 1000)
+
+    // Print composed vs user spec actions
+    let composed = rc.composedSpec
+    let userAct = composed.actions.filter { !$0.name.hasPrefix("_") }
+    print("Composed actions: \(composed.actions.map(\.name))")
+    print("Filtered actions: \(userAct.map(\.name))")
+
+    // Check: does availableActions return _ actions?
+    let rt = SpecRuntime(spec: rc.composedSpec)
+    let inits = rt.initialStates()
+    print("Init count: \(inits.count)")
+    let acts = rt.availableActions(in: inits[0])
+    print("Available: \(acts)")
+    let userActs = acts.filter { !$0.hasPrefix("_") }
+    print("User acts: \(userActs)")
+    exit(0)
+}
+
+
+if name == "dual" {
+    let id = args.count >= 2 ? args[1] : "SpecifyingSystems/HourClock"
+    let entry = Example.all.first(where: { $0.id == id })!
+    let old = ModelChecker(spec: entry.spec, maxStates: 1000)
+    let nw = RuntimeChecker(userSpec: entry.spec, maxStates: 1000)
+    do {
+        let o = try old.check()
+        let n = try nw.check()
+        print("Old: \(o)")
+        print("New: \(n)")
+    } catch { print("ERR: \(error)") }
+    exit(0)
+}
+
+
+if name == "dual-all" {
+    var ok = 0; var fail = 0
+    for entry in Example.all {
+        if entry.id == "Bakery/N2" { continue }
+        let old = ModelChecker(spec: entry.spec, maxStates: 100000)
+        let nw = RuntimeChecker(userSpec: entry.spec, maxStates: 100000)
+        do {
+            let o = try old.check(); let n = try nw.check()
+            let oc: Int = { if case .ok(let c) = o { c }; return -1 }()
+            let nc: Int = { if case .ok(let c) = n { c }; return -1 }()
+            if oc == nc { print("OK   \(oc) \(entry.id)"); ok += 1 }
+            else { print("FAIL old=\(oc) new=\(nc) \(entry.id)"); fail += 1 }
+        } catch { print("ERR  \(entry.id): \(error)"); fail += 1 }
+    }
+    print("\(ok) ok, \(fail) fail")
+    exit(fail > 0 ? 1 : 0)
+}
+
 if name == "list" {
     for e in Example.all {
         print("\(e.id)\t\(e.expectedDistinct)\t\(e.notes)")

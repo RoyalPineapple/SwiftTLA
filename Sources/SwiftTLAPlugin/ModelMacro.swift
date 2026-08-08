@@ -325,6 +325,21 @@ struct MacroExpander {
             decls.append(storedVar)
         }
 
+        for a in actions {
+            let callbackName = "on" + a.0.dropFirst().prefix(1).capitalized + a.0.dropFirst(2)
+            let callbackVar: DeclSyntax = DeclSyntax(
+                VariableDeclSyntax(
+                    modifiers: [DeclModifierSyntax(name: .keyword(.public))],
+                    bindingSpecifier: .keyword(.var),
+                    bindings: [PatternBindingSyntax(
+                        pattern: IdentifierPatternSyntax(identifier: .identifier(callbackName)),
+                        typeAnnotation: TypeAnnotationSyntax(type: TypeSyntax(stringLiteral: "((State, State) async -> Void)?"))
+                    )]
+                )
+            )
+            decls.append(callbackVar)
+        }
+
         decls.append(DeclSyntax(
             VariableDeclSyntax(
                 modifiers: [DeclModifierSyntax(name: .keyword(.private))],
@@ -364,15 +379,18 @@ struct MacroExpander {
         actions: [(name: String, body: ActionExpr)]
     ) -> [FunctionDeclSyntax] {
         actions.map { a in
-            let callbackName = "on" + a.name.dropFirst().prefix(1).capitalized + a.name.dropFirst(2)
-            var bodyExprs: [ExprSyntax] = [ExprSyntax(stringLiteral: "_state = _apply(.\(a.name))")]
+            let callbackName = "on" + a.0.dropFirst().prefix(1).capitalized + a.0.dropFirst(2)
+            var bodyExprs: [ExprSyntax] = [
+                ExprSyntax(stringLiteral: "let from = _state"),
+                ExprSyntax(stringLiteral: "_state = _apply(.\(a.0))")
+            ]
             for v in variables {
                 bodyExprs.append(ExprSyntax(stringLiteral: "\(v.name) = _state.\(v.name)"))
             }
-            bodyExprs.append(ExprSyntax(stringLiteral: "\(callbackName)()"))
+            bodyExprs.append(ExprSyntax(stringLiteral: "Task { await \(callbackName)?(from, _state) }"))
             return FunctionDeclSyntax(
                 modifiers: [DeclModifierSyntax(name: .keyword(.public))],
-                name: .identifier(a.name),
+                name: .identifier(a.0),
                 signature: FunctionSignatureSyntax(parameterClause: FunctionParameterClauseSyntax(parameters: [])),
                 body: CodeBlockSyntax(statements: CodeBlockItemListSyntax(bodyExprs.map {
                     CodeBlockItemSyntax(item: .expr($0))

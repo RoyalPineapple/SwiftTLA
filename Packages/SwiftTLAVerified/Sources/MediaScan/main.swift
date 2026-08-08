@@ -294,21 +294,45 @@ final class CameraModel {
     private var movieOutput: AVCaptureMovieFileOutput?
     private let recordDelegate = RecordingDelegate()
 
-    func onReady() {
-        Task {
-            guard let device = AVCaptureDevice.default(for: .video) else {
-                print("No camera"); return
-            }
+    init() {
+        onReady = { [weak self] from, to in
+            guard let self, let device = AVCaptureDevice.default(for: .video) else { return }
             do {
-                try await capture.configure(device: device)
-                let sess = await capture.session
+                try await self.capture.configure(device: device)
+                let sess = await self.capture.session
                 let mo = AVCaptureMovieFileOutput()
                 sess.addOutput(mo)
-                movieOutput = mo
-                try await capture.start()
+                self.movieOutput = mo
+                try await self.capture.start()
             } catch {
                 print("Camera error: \(error)")
             }
+        }
+        onRecord = { [weak self] from, to in
+            guard let self, let mo = self.movieOutput else { return }
+            let url = FileManager.default.temporaryDirectory
+                .appendingPathComponent("recording-\(UUID().uuidString).mov")
+            self.recordedURL = url
+            mo.startRecording(to: url, recordingDelegate: self.recordDelegate)
+        }
+        onStop = { [weak self] from, to in
+            self?.movieOutput?.stopRecording()
+            if let url = self?.recordedURL { self?.roll.append(.video(url)) }
+            self?.recordedURL = nil
+        }
+        onPlay = { [weak self] from, to in
+            guard let self, let u = self.recordedURL else { return }
+            let player = AVPlayer(url: u)
+            self.currentPlayer = player
+            player.play()
+            NotificationCenter.default.addObserver(forName: .AVPlayerItemDidPlayToEndTime,
+                                                   object: player.currentItem, queue: .main) { [weak self] _ in
+                self?._live()
+            }
+        }
+        onLive = { [weak self] from, to in
+            self?.currentPlayer?.pause()
+            self?.currentPlayer = nil
         }
     }
 
@@ -323,35 +347,6 @@ final class CameraModel {
         } catch {
             print("Snapshot error: \(error)")
         }
-    }
-
-    func onRecord() {
-        guard let mo = movieOutput else { return }
-        recordedURL = FileManager.default.temporaryDirectory
-            .appendingPathComponent("recording-\(UUID().uuidString).mov")
-        mo.startRecording(to: recordedURL!, recordingDelegate: recordDelegate)
-    }
-
-    func onStop() {
-        movieOutput?.stopRecording()
-        if let url = recordedURL { roll.append(.video(url)) }
-        recordedURL = nil
-    }
-
-    func onPlay() {
-        guard let u = recordedURL else { return }
-        let player = AVPlayer(url: u)
-        currentPlayer = player
-        player.play()
-        NotificationCenter.default.addObserver(forName: .AVPlayerItemDidPlayToEndTime,
-                                               object: player.currentItem, queue: .main) { [weak self] _ in
-            self?._live()
-        }
-    }
-
-    func onLive() {
-        currentPlayer?.pause()
-        currentPlayer = nil
     }
 
     func toggleRecording() {

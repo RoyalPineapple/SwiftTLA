@@ -42,8 +42,15 @@ public struct RuntimeChecker {
         let initialStates = runtime.initialStates()
         guard !initialStates.isEmpty else { return .error("No initial states") }
 
-        var queue = initialStates
+        // Deduplicate initial states
+        var queue: [[String: TLAValue]] = []
         var visited = Set<[String: TLAValue]>()
+        for s in initialStates {
+            if !visited.contains(s) {
+                visited.insert(s)
+                queue.append(s)
+            }
+        }
         var exploredCount = 0
         var head = 0
 
