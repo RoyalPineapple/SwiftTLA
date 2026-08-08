@@ -42,7 +42,7 @@ private func paxosSpec() -> TLASpec {
     }
 
     func addMsg(_ m: StateExpr) -> ActionExpr {
-        msgs.becomes(msgs.union(StateExpr.singleton(m)))
+        msgs.becomes(Expr(.union(msgs, StateExpr.singleton(m))))
     }
 
     return TLASpec("Paxos") {
@@ -76,13 +76,13 @@ private func paxosSpec() -> TLASpec {
         // Phase 1b: acceptor responds
         Action("Phase1b_a1_0") {
             StateExpr.in(msg1a(0), msgs.stateExpr) && 0 > maxBal.applying("a1")
-                && maxBal.becomes(maxBal.updated(at: "a1", to: 0))
+                && maxBal.becomes(Expr(.except(maxBal, "a1", 0)))
                 && addMsg(msg1b(0, maxVBal.applying("a1"), maxVal.applying("a1")))
                 && maxVBal.stays && maxVal.stays
         }
         Action("Phase1b_a1_1") {
             StateExpr.in(msg1a(1), msgs.stateExpr) && 1 > maxBal.applying("a1")
-                && maxBal.becomes(maxBal.updated(at: "a1", to: 1))
+                && maxBal.becomes(Expr(.except(maxBal, "a1", 1)))
                 && addMsg(msg1b(1, maxVBal.applying("a1"), maxVal.applying("a1")))
                 && maxVBal.stays && maxVal.stays
         }
@@ -102,16 +102,16 @@ private func paxosSpec() -> TLASpec {
         // Phase 2b: acceptor votes (2 actions: ballot 0 + ballot 1)
         Action("Phase2b_a1_0") {
             StateExpr.in(msg2a(0, "v1"), msgs.stateExpr) && 0 >= maxBal.applying("a1")
-                && maxBal.becomes(maxBal.updated(at: "a1", to: 0))
-                && maxVBal.becomes(maxVBal.updated(at: "a1", to: 0))
-                && maxVal.becomes(maxVal.updated(at: "a1", to: sv("v1")))
+                && maxBal.becomes(Expr(.except(maxBal, "a1", 0)))
+                && maxVBal.becomes(Expr(.except(maxVBal, "a1", 0)))
+                && maxVal.becomes(Expr(.except(maxVal, "a1", sv("v1"))))
                 && addMsg(msg2b(0, "v1"))
         }
         Action("Phase2b_a1_1") {
             StateExpr.in(msg2a(1, "v1"), msgs.stateExpr) && 1 >= maxBal.applying("a1")
-                && maxBal.becomes(maxBal.updated(at: "a1", to: 1))
-                && maxVBal.becomes(maxVBal.updated(at: "a1", to: 1))
-                && maxVal.becomes(maxVal.updated(at: "a1", to: sv("v1")))
+                && maxBal.becomes(Expr(.except(maxBal, "a1", 1)))
+                && maxVBal.becomes(Expr(.except(maxVBal, "a1", 1)))
+                && maxVal.becomes(Expr(.except(maxVal, "a1", sv("v1"))))
                 && addMsg(msg2b(1, "v1"))
         }
     }

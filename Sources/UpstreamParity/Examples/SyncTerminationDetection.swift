@@ -44,7 +44,7 @@ static func syncTDSpec() -> TLASpec {
             for i in nodes {
                 Action("Terminate_\(i)") {
                     activeOf(i) == true
-                    && active.becomes(active.updated(at: i, to: false))
+                    && active.becomes(Expr(.except(active, i, false)))
                     && terminatedDetected.stays
                 }
             }
@@ -53,7 +53,7 @@ static func syncTDSpec() -> TLASpec {
                 for j in nodes where j != i {
                     Action("Wakeup_\(i)_to_\(j)") {
                         activeOf(i) == true
-                        && active.becomes(active.updated(at: j, to: true))
+                        && active.becomes(Expr(.except(active, j, true)))
                         && terminatedDetected.stays
                     }
                 }

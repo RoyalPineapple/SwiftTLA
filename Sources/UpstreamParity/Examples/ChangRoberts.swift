@@ -66,11 +66,11 @@ extension Example {
                     let send = pc.applying(i) == "n0" && initiator.applying(i) == true
                         && msgs.becomes(msgs.updated(at: s,
                             to: msgs.applying(s).union(StateExpr.singleton(i))))
-                        && pc.becomes(pc.updated(at: i, to: "n1"))
+                        && pc.becomes(Expr(.except(pc, i, "n1")))
                         && initiator.stays && processState.stays
 
                     let skip = pc.applying(i) == "n0" && initiator.applying(i) == false
-                        && pc.becomes(pc.updated(at: i, to: "n1"))
+                        && pc.becomes(Expr(.except(pc, i, "n1")))
                         && initiator.stays && processState.stays && msgs.stays
 
                     return send || skip

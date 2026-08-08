@@ -50,7 +50,7 @@ static func simpleAllocatorSpec() -> TLASpec {
                     let subset = StateExpr.value(sVal)
                     Action("Request_\(c)_S\(si)") {
                         unsatOf(c).cardinality == 0 && allocOf(c).cardinality == 0
-                            && unsat.becomes(unsat.updated(at: c, to: subset))
+                            && unsat.becomes(Expr(.except(unsat, c, subset)))
                     }
                     Action("Allocate_\(c)_S\(si)") {
                         subset.cardinality > 0

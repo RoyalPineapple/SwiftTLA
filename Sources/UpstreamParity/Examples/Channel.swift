@@ -28,23 +28,23 @@ extension Example {
                 }
                 Action("Send") {
                     chan.rdy == chan.ack && (
-                        chan.becomes(StateExpr.except(
+                        chan.becomes(Expr(StateExpr.except(
                             StateExpr.except(.variable("chan"), .value(.string("val")), "d1"),
                             .value(.string("rdy")), 1 - chan.rdy
-                        ))
-                        || chan.becomes(StateExpr.except(
+                        ))))
+                        || chan.becomes(Expr(StateExpr.except(
                             StateExpr.except(.variable("chan"), .value(.string("val")), "d2"),
                             .value(.string("rdy")), 1 - chan.rdy
-                        ))
-                        || chan.becomes(StateExpr.except(
+                        ))))
+                        || chan.becomes(Expr(StateExpr.except(
                             StateExpr.except(.variable("chan"), .value(.string("val")), "d3"),
                             .value(.string("rdy")), 1 - chan.rdy
-                        ))
+                        ))))
                     )
                 }
                 Action("Rcv") {
                     chan.rdy != chan.ack
-                        && chan.becomes(chan.updated(at: "ack", to: 1 - chan.ack))
+                        && chan.becomes(Expr(.except(chan, "ack", 1 - chan.ack)))
                 }
             }
         }(),

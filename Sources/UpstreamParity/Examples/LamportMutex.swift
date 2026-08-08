@@ -59,7 +59,7 @@ private func lamportMutexSpec() -> TLASpec {
                 && network.becomes(network.updated(at: p,
                     to: network.applying(p).updated(at: q,
                         to: network.applying(p).applying(q).appending(reqMsg(p)))))
-                && ack.becomes(ack.updated(at: p, to: StateExpr.setLiteral([StateExpr.value(.int(p))])))
+                && ack.becomes(Expr(.except(ack, p, StateExpr.setLiteral([StateExpr.value(.int(p)))])))
                 && clock.stays && crit.stays
             }
             // ReceiveRequest from q: update clock, req, network
@@ -94,19 +94,19 @@ private func lamportMutexSpec() -> TLASpec {
                     || req.applying(p).applying(p) < req.applying(p).applying(q)
                     || (StateExpr.equal(req.applying(p).applying(p), req.applying(p).applying(q))
                         && p < q))
-                && crit.becomes(crit.union(StateExpr.setLiteral([StateExpr.value(.int(p))])))
+                && crit.becomes(Expr(.union(crit, StateExpr.setLiteral([StateExpr.value(.int(p)))])))
                 && clock.stays && req.stays && ack.stays && network.stays
             }
             // Exit critical section
             Action("Exit_\(p)") {
                 StateExpr.in(StateExpr.value(.int(p)), StateExpr.variable("crit"))
-                && crit.becomes(crit.subtracting(StateExpr.setLiteral([StateExpr.value(.int(p))])))
+                && crit.becomes(Expr(.setDifference(crit, StateExpr.setLiteral([StateExpr.value(.int(p)))])))
                 && network.becomes(network.updated(at: p,
                     to: network.applying(p).updated(at: q,
                         to: network.applying(p).applying(q).appending(relMsg))))
                 && req.becomes(req.updated(at: p,
                     to: req.applying(p).updated(at: p, to: 0)))
-                && ack.becomes(ack.updated(at: p, to: StateExpr.setLiteral([])))
+                && ack.becomes(Expr(.except(ack, p, StateExpr.setLiteral([]))))
                 && clock.stays
             }
             // ReceiveRelease from q

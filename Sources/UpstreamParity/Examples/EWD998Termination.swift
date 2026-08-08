@@ -77,7 +77,7 @@ private func ewd998Spec() -> TLASpec {
                 }
 
                 return a.applying(i)
-                    && active.becomes(a.updated(at: i, to: falseE))
+                    && active.becomes(Expr(.except(a, i, falseE)))
                     && pending.stays
                     && terminationDetected.becomes(
                         StateExpr.ifThenElse(terminated, trueE, t))
@@ -89,7 +89,7 @@ private func ewd998Spec() -> TLASpec {
                 let a = StateExpr.variable("active")
                 let p = StateExpr.variable("pending")
                 return p.applying(i) > 0
-                    && active.becomes(a.updated(at: i, to: trueE))
+                    && active.becomes(Expr(.except(a, i, trueE)))
                     && pending.becomes(p.updated(at: i, to: p.applying(i) - 1))
                     && terminationDetected.stays
             }

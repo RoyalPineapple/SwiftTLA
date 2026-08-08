@@ -29,8 +29,8 @@ public enum BFSExplorer {
                         q.subtracting(StateExpr.singleton(picked))
                             .union(StateExpr.singleton(picked + 1).subtracting(visited))
                     )
-                    && visited.becomes(visited.union(StateExpr.singleton(picked + 1)))
-                    && explored.becomes(explored.union(StateExpr.singleton(picked)))
+                    && visited.becomes(Expr(.union(visited, StateExpr.singleton(picked + 1))))
+                    && explored.becomes(Expr(.union(explored, StateExpr.singleton(picked))))
                     && ok.stays
             }
 

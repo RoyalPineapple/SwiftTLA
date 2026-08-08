@@ -43,7 +43,7 @@ static func twoPhaseSpec() -> TLASpec {
                 Action("RcvPrepared_\(rm)") {
                     tmState == "init"
                     && preparedMsg(rm).isIn(msgs)
-                    && tmPrepared.becomes(tmPrepared.union(StateExpr.singleton(rm)))
+                    && tmPrepared.becomes(Expr(.union(tmPrepared, StateExpr.singleton(rm))))
                     && rmState.stays && tmState.stays && msgs.stays
                 }
             }
@@ -52,37 +52,37 @@ static func twoPhaseSpec() -> TLASpec {
                 tmState == "init"
                 && tmPrepared.cardinality == 3
                 && tmState.becomes("committed")
-                && msgs.becomes(msgs.union(StateExpr.singleton(commitMsg())))
+                && msgs.becomes(Expr(.union(msgs, StateExpr.singleton(commitMsg()))))
                 && rmState.stays && tmPrepared.stays
             }
 
             Action("TMAbort") {
                 tmState == "init"
                 && tmState.becomes("aborted")
-                && msgs.becomes(msgs.union(StateExpr.singleton(abortMsg())))
+                && msgs.becomes(Expr(.union(msgs, StateExpr.singleton(abortMsg()))))
                 && rmState.stays && tmPrepared.stays
             }
 
             for rm in rms {
                 Action("Prepare_\(rm)") {
                     rmSt(rm) == "working"
-                    && rmState.becomes(rmState.updated(at: rm, to: "prepared"))
-                    && msgs.becomes(msgs.union(StateExpr.singleton(preparedMsg(rm))))
+                    && rmState.becomes(Expr(.except(rmState, rm, "prepared")))
+                    && msgs.becomes(Expr(.union(msgs, StateExpr.singleton(preparedMsg(rm)))))
                     && tmState.stays && tmPrepared.stays
                 }
                 Action("Abort_\(rm)") {
                     rmSt(rm) == "working"
-                    && rmState.becomes(rmState.updated(at: rm, to: "aborted"))
+                    && rmState.becomes(Expr(.except(rmState, rm, "aborted")))
                     && tmState.stays && tmPrepared.stays && msgs.stays
                 }
                 Action("RcvCommit_\(rm)") {
                     commitMsg().isIn(msgs)
-                    && rmState.becomes(rmState.updated(at: rm, to: "committed"))
+                    && rmState.becomes(Expr(.except(rmState, rm, "committed")))
                     && tmState.stays && tmPrepared.stays && msgs.stays
                 }
                 Action("RcvAbort_\(rm)") {
                     abortMsg().isIn(msgs)
-                    && rmState.becomes(rmState.updated(at: rm, to: "aborted"))
+                    && rmState.becomes(Expr(.except(rmState, rm, "aborted")))
                     && tmState.stays && tmPrepared.stays && msgs.stays
                 }
             }

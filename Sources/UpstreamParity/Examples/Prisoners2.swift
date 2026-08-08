@@ -79,7 +79,7 @@ private func prisoners4Spec() -> TLASpec {
                 && switchBUp.stays
             let flipB: ActionExpr = switchAUp.stays
                 && count.stays
-                && switchBUp.becomes(StateExpr.not(StateExpr.variable("switchBUp")))
+                && switchBUp.becomes(Expr(.not(StateExpr.variable("switchBUp")))
 
             return (a && turnOff || StateExpr.not(a) && flipB) && timesSwitched.stays
         }
@@ -94,7 +94,7 @@ private func prisoners4Spec() -> TLASpec {
                     && timesSwitched.becomes(t.updated(at: p, to: t.applying(p) + 1))
                     && switchBUp.stays && count.stays
                 let flipB: ActionExpr = StateExpr.not(StateExpr.not(a) && t.applying(p) < 2)
-                    && switchBUp.becomes(StateExpr.not(StateExpr.variable("switchBUp")))
+                    && switchBUp.becomes(Expr(.not(StateExpr.variable("switchBUp")))
                     && switchAUp.stays && timesSwitched.stays && count.stays
 
                 return signalA || flipB

@@ -94,9 +94,6 @@ public struct Var<T: TLAValueType>: Sendable, CustomStringConvertible {
     /// Assign the value of another Var: `y0.becomes(x1)`.
     @discardableResult
     public func becomes(_ other: Var<T>) -> ActionExpr { .assign(name, other.stateExpr) }
-    /// Legacy: untyped StateExpr assignment. Prefer typed `becomes(T)` or `becomes(Expr<T>)`.
-    @discardableResult
-    public func becomes(_ expr: some StateExprConvertible) -> ActionExpr { .assign(name, expr.stateExpr) }
     /// Returns `UNCHANGED x` — the variable stays the same in the next state.
     public var stays: ActionExpr { .unchanged(name) }
 

@@ -26,19 +26,19 @@ static func tCommitSpec() -> TLASpec {
             for rm in rms {
                 Action("Prepare_\(rm)") {
                     st(rm) == "working"
-                        && rmState.becomes(rmState.updated(at: rm, to: "prepared"))
+                        && rmState.becomes(Expr(.except(rmState, rm, "prepared")))
                 }
                 Action("Commit_\(rm)") {
                     st(rm) == "prepared"
                         && (st("r1") == "prepared" || st("r1") == "committed")
                         && (st("r2") == "prepared" || st("r2") == "committed")
                         && (st("r3") == "prepared" || st("r3") == "committed")
-                        && rmState.becomes(rmState.updated(at: rm, to: "committed"))
+                        && rmState.becomes(Expr(.except(rmState, rm, "committed")))
                 }
                 Action("Abort_\(rm)") {
                     (st(rm) == "working" || st(rm) == "prepared")
                         && st("r1") != "committed" && st("r2") != "committed" && st("r3") != "committed"
-                        && rmState.becomes(rmState.updated(at: rm, to: "aborted"))
+                        && rmState.becomes(Expr(.except(rmState, rm, "aborted")))
                 }
             }
             Invariant("TCConsistent") {
