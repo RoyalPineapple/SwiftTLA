@@ -10,12 +10,12 @@ extension Media {
             TLASpec("Player") {
                 let phase = StateVar(0)
 
-                Action("_load")     { phase == 0 && phase.becomes(1) }
-                Action("_ready")    { phase == 1 && phase.becomes(2) }
-                Action("_play")     { (phase == 2 || phase == 4) && phase.becomes(3) }
-                Action("_pause")    { phase == 3 && phase.becomes(4) }
-                Action("_seek")     { (phase == 2 || phase == 3 || phase == 4) && phase.stays }
-                Action("_finish")   { phase == 3 && phase.becomes(5) }
+                Action("load")     { phase == 0 && phase.becomes(1) }
+                Action("ready")    { phase == 1 && phase.becomes(2) }
+                Action("play")     { (phase == 2 || phase == 4) && phase.becomes(3) }
+                Action("pause")    { phase == 3 && phase.becomes(4) }
+                Action("seek")     { (phase == 2 || phase == 3 || phase == 4) && phase.stays }
+                Action("finish")   { phase == 3 && phase.becomes(5) }
 
                 Invariant("validPhase") { phase >= 0 && phase <= 5 }
             }

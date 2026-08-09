@@ -25,9 +25,9 @@ extension Example {
 static func teachingSimple(n: Int) -> TLASpec {
         precondition(n == 2 || n == 3)
         if n == 2 {
-            let x0 = Var<Int>("x0", value: 0), x1 = Var<Int>("x1", value: 0)
-            let y0 = Var<Int>("y0", value: 0), y1 = Var<Int>("y1", value: 0)
-            let pc0 = Var<String>("pc0", value: "a"), pc1 = Var<String>("pc1", value: "a")
+            let x0 = Var<Int>("x0"), x1 = Var<Int>("x1")
+            let y0 = Var<Int>("y0"), y1 = Var<Int>("y1")
+            let pc0 = Var<String>("pc0"), pc1 = Var<String>("pc1")
             return TLASpec("Simple") {
                 Extends("Integers")
                 Variable(x0, 0); Variable(x1, 0)
@@ -44,9 +44,9 @@ static func teachingSimple(n: Int) -> TLASpec {
                 }
             }
         }
-        let x0 = Var<Int>("x0", value: 0), x1 = Var<Int>("x1", value: 0), x2 = Var<Int>("x2", value: 0)
-        let y0 = Var<Int>("y0", value: 0), y1 = Var<Int>("y1", value: 0), y2 = Var<Int>("y2", value: 0)
-        let pc0 = Var<String>("pc0", value: "a"), pc1 = Var<String>("pc1", value: "a"), pc2 = Var<String>("pc2", value: "a")
+        let x0 = Var<Int>("x0"), x1 = Var<Int>("x1"), x2 = Var<Int>("x2")
+        let y0 = Var<Int>("y0"), y1 = Var<Int>("y1"), y2 = Var<Int>("y2")
+        let pc0 = Var<String>("pc0"), pc1 = Var<String>("pc1"), pc2 = Var<String>("pc2")
         return TLASpec("Simple") {
             Extends("Integers")
             Variable(x0, 0); Variable(x1, 0); Variable(x2, 0)

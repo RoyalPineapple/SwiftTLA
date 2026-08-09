@@ -29,7 +29,7 @@ struct SymmetricCollectionReportTests {
 
   @Test("Ordinary verification results retain their existing shape and text")
   func ordinaryResultIsNotWrapped() throws {
-    let counter = Var<Int>("counter", value: 0)
+    let counter = Var<Int>("counter")
     let spec = TLASpec("Counter") {
       Variable(counter, 0)
     }

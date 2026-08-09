@@ -642,6 +642,8 @@ public enum SpecParser {
         case "subsets":     return .powerSet(selfExpr)
         case "domain":      return .domain(selfExpr)
         case "count":       return .tupleLength(selfExpr)
+        case "head":        return .tupleHead(selfExpr)
+        case "tail":        return .tupleTail(selfExpr)
         default:
             // Any unknown property name is treated as record field access.
             // For example, `msg.type` becomes `.recordAccess(.variable("msg"), "type")`.

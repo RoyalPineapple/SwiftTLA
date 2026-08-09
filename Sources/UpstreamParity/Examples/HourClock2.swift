@@ -9,7 +9,7 @@ extension Example {
         expectedDistinct: 12,
         spec: TLASpec("HourClock2") {
             Extends("Naturals")
-            let hr = Var<Int>("hr", value: 1)
+            let hr = Var<Int>("hr")
             Variable(hr, in: 1...12)
             Action("HCnxt2") {
                 hr.becomes((hr % 12) + 1)

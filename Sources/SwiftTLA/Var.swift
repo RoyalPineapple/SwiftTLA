@@ -86,13 +86,13 @@ public struct StateVar<T: TLAValueType>: Sendable, CustomStringConvertible {
         self.name = name ?? ""
         self.initial = initial.tlaValue
         self.constraint = constraint
-        self._handle = Var(name ?? "", value: initial)
+        self._handle = Var(name ?? "")
     }
     public init(_ explicitName: String, _ initial: T, constraint: VarConstraint? = nil) {
         self.name = explicitName
         self.initial = initial.tlaValue
         self.constraint = constraint
-        self._handle = Var(explicitName, value: initial)
+        self._handle = Var(explicitName)
     }
     public init(in range: ClosedRange<Int>, name: String? = nil) where T == Int {
         self.name = name ?? ""
@@ -133,15 +133,15 @@ public struct Var<T: TLAValueType>: Sendable, CustomStringConvertible {
     public let name: String
     public let constraint: VarConstraint?
 
-    public init(_ name: String? = nil, value: T = T.defaultValue, constraint: VarConstraint? = nil) {
+    public init(_ name: String? = nil, constraint: VarConstraint? = nil) {
         self.name = name ?? ""
         self.constraint = constraint
     }
-    public init(_ name: String? = nil, bounded range: ClosedRange<Int>, value: Int = 0) where T == Int {
+    public init(_ name: String? = nil, bounded range: ClosedRange<Int>) where T == Int {
         self.name = name ?? ""
         self.constraint = .intRange(range)
     }
-    public init(_ name: String? = nil, values: [String], value: String = "") where T == String {
+    public init(_ name: String? = nil, values: [String]) where T == String {
         self.name = name ?? ""
         self.constraint = .enumValues(values)
     }

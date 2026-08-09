@@ -27,7 +27,7 @@ static func ewd840Spec() -> TLASpec {
 
         let active = Var<TLAFunctionType>("active")
         let color = Var<TLAFunctionType>("color")
-        let tpos = Var<Int>("tpos", value: 0)
+        let tpos = Var<Int>("tpos")
         let tcolor = Var<String>("tcolor")
 
         func activeOf(_ i: Int) -> StateExpr {

@@ -18,10 +18,10 @@ public actor Device: Identifiable {
             let servicesDiscovered = StateVar(false)
 
             // 0=disconnected 1=connected 2=discovering 3=ready
-            Action("_didConnect")       { phase == 0 && phase.becomes(1) }
-            Action("_beginDiscover")    { phase == 1 && phase.becomes(2) }
-            Action("_finishDiscover")   { phase == 2 && phase.becomes(3) && servicesDiscovered.becomes(true) }
-            Action("_disconnect")       { phase == 3 && phase.becomes(0) && servicesDiscovered.becomes(false) }
+            Action("didConnect")       { phase == 0 && phase.becomes(1) }
+            Action("beginDiscover")    { phase == 1 && phase.becomes(2) }
+            Action("finishDiscover")   { phase == 2 && phase.becomes(3) && servicesDiscovered.becomes(true) }
+            Action("disconnect")       { phase == 3 && phase.becomes(0) && servicesDiscovered.becomes(false) }
 
             Invariant("validPhase")              { phase >= 0 && phase <= 3 }
             Invariant("readyImpliesDiscovered")  { (phase != 3) || servicesDiscovered }

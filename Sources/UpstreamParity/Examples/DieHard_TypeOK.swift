@@ -8,8 +8,8 @@ extension Example {
         upstreamCfg: nil,
         expectedDistinct: 16,
         spec: {
-            let big = Var<Int>("big", value: 0)
-            let small = Var<Int>("small", value: 0)
+            let big = Var<Int>("big")
+            let small = Var<Int>("small")
             return TLASpec("DieHard") {
                 Extends("Naturals")
                 Variable(big, 0)

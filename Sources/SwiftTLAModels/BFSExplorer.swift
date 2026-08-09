@@ -12,7 +12,7 @@ public enum BFSExplorer {
         let visited = Var<TLASetType>("visited")
         let explored = Var<TLASetType>("explored")
         let ok = Var<Bool>("ok")
-        let picked = Var<Int>("picked", value: 0)
+        let picked = Var<Int>("picked")
 
         return TLASpec("BFSExplorer") {
             Variable(q, TLAValue.set([.int(0)]))

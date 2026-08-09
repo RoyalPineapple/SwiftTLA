@@ -7,9 +7,9 @@ extension TLASpec {
     /// Bounded BFS lifecycle: phase, processed, queued.
     /// - phase 0 = exploring, 1 = complete, 2 = violated, 3 = deadlocked
     public static func bfsChecker(maxStates: Int = 20) -> TLASpec {
-        let phase = Var("phase", value: 0)
-        let processed = Var("processed", value: 0)
-        let queued = Var("queued", value: 1)
+        let phase = Var<Int>("phase")
+        let processed = Var<Int>("processed")
+        let queued = Var<Int>("queued")
 
         return TLASpec("BFSChecker") {
             Variable(phase, 0)

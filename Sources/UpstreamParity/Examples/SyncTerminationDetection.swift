@@ -21,7 +21,7 @@ static func syncTDSpec() -> TLASpec {
         }}}
 
         let active = Var<TLAFunctionType>("active")
-        let terminatedDetected = Var<Bool>("terminationDetected", value: false)
+        let terminatedDetected = Var<Bool>("terminationDetected")
 
         func activeOf(_ i: Int) -> StateExpr {
             StateExpr.functionApply(StateExpr.variable("active"), StateExpr.value(.int(i)))

@@ -14,12 +14,12 @@ extension Example {
 static func barrierSpec(n: Int) -> TLASpec {
         // Explicit N=6 (upstream Barrier.cfg)
         precondition(n == 6)
-        let p1 = Var<String>("pc1", value: "b0")
-        let p2 = Var<String>("pc2", value: "b0")
-        let p3 = Var<String>("pc3", value: "b0")
-        let p4 = Var<String>("pc4", value: "b0")
-        let p5 = Var<String>("pc5", value: "b0")
-        let p6 = Var<String>("pc6", value: "b0")
+        let p1 = Var<String>("pc1")
+        let p2 = Var<String>("pc2")
+        let p3 = Var<String>("pc3")
+        let p4 = Var<String>("pc4")
+        let p5 = Var<String>("pc5")
+        let p6 = Var<String>("pc6")
         return TLASpec("Barrier") {
             Extends("Integers")
             Variable(p1, "b0"); Variable(p2, "b0"); Variable(p3, "b0")

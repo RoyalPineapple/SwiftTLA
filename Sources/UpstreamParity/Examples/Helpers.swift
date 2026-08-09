@@ -60,9 +60,9 @@ func coffeeCanSpec(maxBeanCount: Int) -> TLASpec {
 
     /// Faithful Moving_Cat_Puzzle algorithm for fixed Number_Of_Boxes.
 func catSpec(boxes: Int) -> TLASpec {
-        let cat = Var<Int>("cat_box", value: 1)
-        let observed = Var<Int>("observed_box", value: 2)
-        let direction = Var<String>("direction", value: "right")
+        let cat = Var<Int>("cat_box")
+        let observed = Var<Int>("observed_box")
+        let direction = Var<String>("direction")
         return TLASpec("Cat") {
             Extends("Naturals")
             Variable(cat, in: 1...boxes)

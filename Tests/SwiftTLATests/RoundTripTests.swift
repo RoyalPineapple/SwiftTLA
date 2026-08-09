@@ -16,7 +16,7 @@ import SwiftSyntax
         ("%", 5, "(x % 5)")
     ])
     func arithmetic(_ op: String, _ val: Int, _ expected: String) {
-        let x = Var<Int>("x", value: 1)
+        let x = Var<Int>("x")
         let result: String
         switch op {
         case "+": result = (x + val).raw.description
@@ -38,7 +38,7 @@ import SwiftSyntax
         (">=", 1, "(x >= 1)")
     ])
     func comparison(_ op: String, _ val: Int, _ expected: String) {
-        let x = Var<Int>("x", value: 1)
+        let x = Var<Int>("x")
         let result: String
         switch op {
         case "==": result = (x == val).description
@@ -121,25 +121,25 @@ import SwiftSyntax
     }
 
     @Test func varVsVar() {
-        let a = Var<Int>("a", value: 1)
-        let b = Var<Int>("b", value: 2)
+        let a = Var<Int>("a")
+        let b = Var<Int>("b")
         #expect((a == b).description == "(a = b)")
         #expect((a != b).description == "(a /= b)")
         #expect((a < b).description == "(a < b)")
     }
 
     @Test func prefix() {
-        let x = Var<Int>("x", value: 1)
+        let x = Var<Int>("x")
         #expect((-x).description == "(-x)")
     }
 
     @Test func stringComparison() {
-        let s = Var<String>("s", value: "right")
+        let s = Var<String>("s")
         #expect((s == "right").description == "(s = \"right\")")
     }
 
     @Test func assignmentAndWhen() {
-        let x = Var<Int>("x", value: 0)
+        let x = Var<Int>("x")
         let a = x.becomes(1)
         #expect(a.description.contains("x' = 1"))
         let g = x.becomes(1).when(x == 0)
@@ -296,7 +296,7 @@ import SwiftSyntax
 
 @Suite(.serialized) struct ModelCheckerMatrix {
     @Test func singleVarLinear() throws {
-        let x = Var<Int>("x", value: 0)
+        let x = Var<Int>("x")
         let spec = TLASpec("Test") {
             Variable(x, 0)
             Action("inc") { x.becomes(x + 1).when(x < 3) }
@@ -306,7 +306,7 @@ import SwiftSyntax
     }
 
     @Test func singleVarCyclic() throws {
-        let x = Var<Int>("x", value: 0)
+        let x = Var<Int>("x")
         let spec = TLASpec("Test") {
             Variable(x, 0)
             Action("toggle") { x.becomes((x + 1) % 2) }
@@ -316,7 +316,7 @@ import SwiftSyntax
     }
 
     @Test func invariantHolds() throws {
-        let x = Var<Int>("x", value: 0)
+        let x = Var<Int>("x")
         let spec = TLASpec("Test") {
             Variable(x, 0)
             Action("inc") { x.becomes(x + 1).when(x < 5) }
@@ -330,7 +330,7 @@ import SwiftSyntax
     }
 
     @Test func invariantViolated() throws {
-        let x = Var<Int>("x", value: 0)
+        let x = Var<Int>("x")
         let spec = TLASpec("Test") {
             Variable(x, 0)
             Action("inc") { x.becomes(x + 1) }
@@ -344,7 +344,7 @@ import SwiftSyntax
     }
 
     @Test func maxStatesBound() throws {
-        let x = Var<Int>("x", value: 0)
+        let x = Var<Int>("x")
         let spec = TLASpec("Test") {
             Variable(x, 0)
             Action("inc") { x.becomes(x + 1) }
@@ -355,7 +355,7 @@ import SwiftSyntax
     }
 
     @Test func deadlockNotDetectedWhenFlagFalse() throws {
-        let x = Var<Int>("x", value: 0)
+        let x = Var<Int>("x")
         let spec = TLASpec("Test") {
             Variable(x, 0)
             Action("once") { x.becomes(1).when(x == 0) }
@@ -366,8 +366,8 @@ import SwiftSyntax
     }
 
     @Test func twoVarBranching() throws {
-        let a = Var<Int>("a", value: 0)
-        let b = Var<Int>("b", value: 0)
+        let a = Var<Int>("a")
+        let b = Var<Int>("b")
         let spec = TLASpec("Test") {
             Variable(a, 0); Variable(b, 0)
             Action("incA") { a.becomes(a + 1).when(a < 2) }
@@ -391,8 +391,8 @@ import SwiftSyntax
     }
 
     @Test func dieHard16() throws {
-        let big = Var<Int>("big", value: 0)
-        let small = Var<Int>("small", value: 0)
+        let big = Var<Int>("big")
+        let small = Var<Int>("small")
         let spec = TLASpec("DieHard") {
             Variable(big, 0); Variable(small, 0)
             Action("FB") { big.becomes(5) }
@@ -417,7 +417,7 @@ import SwiftSyntax
 
 @Suite(.serialized) struct TLAModuleMatrix {
     @Test func constantsAndAssume() {
-        let x = Var<Int>("x", value: 0)
+        let x = Var<Int>("x")
         let spec = TLASpec("Test") {
             Extends("Naturals")
             Constant("N", 10)
@@ -431,7 +431,7 @@ import SwiftSyntax
     }
 
     @Test func fairnessWF() {
-        let x = Var<Int>("x", value: 0)
+        let x = Var<Int>("x")
         let spec = TLASpec("Test") {
             Variable(x, 0)
             Action("Next") { x.becomes(x + 1).when(x < 3) }
@@ -467,7 +467,7 @@ import SwiftSyntax
     }
 
     @Test func theoremOutput() {
-        let x = Var<Int>("x", value: 0)
+        let x = Var<Int>("x")
         let spec = TLASpec("Test") {
             Variable(x, 0)
             Action("inc") { x.becomes(x + 1).when(x < 3) }
@@ -478,7 +478,7 @@ import SwiftSyntax
     }
 
     @Test func definitionsOutput() {
-        let x = Var<Int>("x", value: 0)
+        let x = Var<Int>("x")
         let spec = TLASpec("Test") {
             Definition("Min(m,n) == IF m < n THEN m ELSE n")
             Variable(x, 0)
@@ -489,7 +489,7 @@ import SwiftSyntax
     }
 
     @Test func extendsNaturals() {
-        let x = Var<Int>("x", value: 0)
+        let x = Var<Int>("x")
         let spec = TLASpec("Test") {
             Extends("Naturals")
             Variable(x, 0)
@@ -504,7 +504,7 @@ import SwiftSyntax
 
 @Suite(.serialized) struct SwiftSourceMatrix {
     @Test func roundTripStructure() {
-        let x = Var<Int>("x", value: 0)
+        let x = Var<Int>("x")
         let spec = TLASpec("Test") {
             Variable(x, 0)
             Action("inc") { x.becomes(x + 1).when(x < 5) }
@@ -525,7 +525,7 @@ import SwiftSyntax
 @Suite(.serialized) struct GoldenTests {
     @Test("HourClock = 12 states")
     func hourClock12() throws {
-        let hr = Var<Int>("hr", value: 1)
+        let hr = Var<Int>("hr")
         let spec = TLASpec("HourClock") {
             Variable(hr, 1)
             Action("HCnxt") {
@@ -540,7 +540,7 @@ import SwiftSyntax
 
     @Test("DieHard = 16 states")
     func dieHard16() throws {
-        let big = Var<Int>("big", value: 0); let small = Var<Int>("small", value: 0)
+        let big = Var<Int>("big"); let small = Var<Int>("small")
         let spec = TLASpec("DieHard") {
             Variable(big, 0); Variable(small, 0)
             Invariant("TypeOK") { big >= 0 && big <= 5 && small >= 0 && small <= 3 }
@@ -564,7 +564,7 @@ import SwiftSyntax
 
     @Test("Allocator = 4 states")
     func allocator4() throws {
-        let a = Var<Int>("available", value: 3); let b = Var<Int>("allocated", value: 0)
+        let a = Var<Int>("available"); let b = Var<Int>("allocated")
         let spec = TLASpec("allocator") {
             Variable(a, 3); Variable(b, 0)
             Action("Allocate") { a.becomes(a - 1).when(a > 0) && b.becomes(b + 1) }
@@ -592,7 +592,7 @@ import SwiftSyntax
 
     @Test("Deadlock detected with DeadlockCheck()")
     func deadlock() throws {
-        let x = Var<Int>("x", value: 0)
+        let x = Var<Int>("x")
         let spec = TLASpec("Test") {
             Variable(x, 0)
             Action("once") { x.becomes(1).when(x == 0) }
@@ -604,9 +604,9 @@ import SwiftSyntax
 
     @Test("Majority Boyer-Moore shape explores")
     func majority() throws {
-        let cand = Var<Int>("cand", value: 0)
-        let cnt = Var<Int>("cnt", value: 0)
-        let i = Var<Int>("i", value: 1)
+        let cand = Var<Int>("cand")
+        let cnt = Var<Int>("cnt")
+        let i = Var<Int>("i")
         let spec = TLASpec("Majority") {
             Variable(cand, 0); Variable(cnt, 0); Variable(i, 1)
             Invariant("TypeOK") {
@@ -647,7 +647,7 @@ import SwiftSyntax
 @Suite(.serialized) struct RuntimeTests {
     @Test("Runtime applies action and produces new state")
     func applyAction() throws {
-        let hr = Var<Int>("hr", value: 1)
+        let hr = Var<Int>("hr")
         let spec = TLASpec("HourClock") { Variable(hr, 1); Action("Tick") { hr.becomes(hr + 1).when(hr < 12) || (hr == 12 && hr.becomes(1)) } }
         let rt = SpecRuntime(spec: spec)
         let state = rt.initialStates().first!
@@ -657,7 +657,7 @@ import SwiftSyntax
 
     @Test("Runtime checks invariants")
     func checkInvariant() throws {
-        let hr = Var<Int>("hr", value: 1)
+        let hr = Var<Int>("hr")
         let spec = TLASpec("HourClock") { Variable(hr, 1); Action("Tick") { hr.becomes(hr + 1).when(hr < 12) || (hr == 12 && hr.becomes(1)) }; Invariant("Positive") { hr > 0 } }
         let rt = SpecRuntime(spec: spec)
         let state = rt.initialStates().first!
@@ -666,7 +666,7 @@ import SwiftSyntax
 
     @Test("Runtime lists available actions")
     func availableActions() throws {
-        let hr = Var<Int>("hr", value: 1)
+        let hr = Var<Int>("hr")
         let spec = TLASpec("HourClock") { Variable(hr, 1); Action("Tick") { hr.becomes(hr + 1).when(hr < 12) || (hr == 12 && hr.becomes(1)) } }
         let rt = SpecRuntime(spec: spec)
         let state = rt.initialStates().first!
@@ -676,7 +676,7 @@ import SwiftSyntax
 
     @Test("Runtime step validates + applies")
     func step() throws {
-        let hr = Var<Int>("hr", value: 1)
+        let hr = Var<Int>("hr")
         let spec = TLASpec("HourClock") { Variable(hr, 1); Action("Tick") { hr.becomes(hr + 1).when(hr < 12) || (hr == 12 && hr.becomes(1)) } }
         let rt = SpecRuntime(spec: spec)
         let state = rt.initialStates().first!
@@ -718,7 +718,7 @@ import SwiftSyntax
 
     @Test("Bootstrap composition: bfsChecker ⋊ user")
     func checkerComposition() throws {
-        let counter = Var<Int>("counter", value: 0)
+        let counter = Var<Int>("counter")
         let userSpec = TLASpec("Counter") {
             Variable(counter, 0)
             Action("increment") { counter.becomes(counter + 1).when(counter < 10) }
@@ -747,7 +747,7 @@ import SwiftSyntax
     @Test("checkComposed works with plain TLASpec")
     func checkComposedSpec() throws {
         let s1 = TLASpec("A") {
-            let x = Var<Int>("x", value: 0)
+            let x = Var<Int>("x")
             Variable(x, 0)
             Action("inc") { x.becomes(x + 1).when(x < 2) }
         }
@@ -761,7 +761,7 @@ import SwiftSyntax
 
     @Test("All explored states are reachable from initial")
     func reachability() throws {
-        let x = Var<Int>("x", value: 0)
+        let x = Var<Int>("x")
         let spec = TLASpec("Test") {
             Variable(x, 0)
             Action("inc") { x.becomes(x + 1).when(x < 4) }
@@ -774,7 +774,7 @@ import SwiftSyntax
 
     @Test("No transition targets unknown states")
     func noDanglingTransitions() throws {
-        let a = Var<Int>("a", value: 0); let b = Var<Int>("b", value: 0)
+        let a = Var<Int>("a"); let b = Var<Int>("b")
         let spec = TLASpec("Test") {
             Variable(a, 0); Variable(b, 0)
             Action("incA") { a.becomes(a+1).when(a<3) }
@@ -790,7 +790,7 @@ import SwiftSyntax
 
     @Test("States <= maxStates + 1 (stops after processing)")
     func maxStatesBound() throws {
-        let x = Var<Int>("x", value: 0)
+        let x = Var<Int>("x")
         let spec = TLASpec("Test") { Variable(x, 0); Action("inc") { x.becomes(x+1) } }
         let g = try ModelChecker(spec: spec, maxStates: 5).exploreGraph()
         // maxStates limits processed, last state may discover one extra
@@ -799,7 +799,7 @@ import SwiftSyntax
 
     @Test("Invariant checked on all states")
     func invariantChecked() throws {
-        let x = Var<Int>("x", value: 0)
+        let x = Var<Int>("x")
         let spec = TLASpec("Test") {
             Variable(x, 0)
             Action("inc") { x.becomes(x+1).when(x<5) }
@@ -825,7 +825,7 @@ import SwiftSyntax
 
     @Test("Deadlock when guard fails at init")
     func deadlockAtInit() throws {
-        let x = Var<Int>("x", value: 0)
+        let x = Var<Int>("x")
         let spec = TLASpec("T") { Variable(x, 0); Action("a") { x.becomes(2).when(x == 1) }; DeadlockCheck() }
         let result = try ModelChecker(spec: spec, maxStates: 100).check()
         var dead = false; if case .deadlocked = result { dead = true } else { dead = false }
@@ -834,7 +834,7 @@ import SwiftSyntax
 
     @Test("Deadlock at terminal linear state")
     func deadlockTerminal() throws {
-        let x = Var<Int>("x", value: 0)
+        let x = Var<Int>("x")
         let spec = TLASpec("T") { Variable(x, 0); Action("a") { x.becomes(x + 1).when(x < 2) }; DeadlockCheck() }
         let result = try ModelChecker(spec: spec, maxStates: 100).check()
         var val: TLAValue = .int(-1)
@@ -844,7 +844,7 @@ import SwiftSyntax
 
     @Test("No deadlock on cyclic spec")
     func noDeadlockCyclic() throws {
-        let x = Var<Int>("x", value: 0)
+        let x = Var<Int>("x")
         let spec = TLASpec("T") { Variable(x, 0); Action("a") { x.becomes((x + 1) % 2) }; DeadlockCheck() }
         let result = try ModelChecker(spec: spec, maxStates: 100).check()
         var ok = false; if case .ok = result { ok = true }
@@ -853,7 +853,7 @@ import SwiftSyntax
 
     @Test("maxStates=1 bounds state count")
     func maxStatesOne() throws {
-        let x = Var<Int>("x", value: 0)
+        let x = Var<Int>("x")
         let spec = TLASpec("T") { Variable(x, 0); Action("a") { x.becomes(x + 1) } }
         let g = try ModelChecker(spec: spec, maxStates: 1).exploreGraph()
         #expect(g.states.count <= 2)
@@ -942,7 +942,7 @@ import SwiftSyntax
     @Test("Sequence variable append and read in model checker")
     func sequenceVariableAppendRead() throws {
         let seq = Var<TLATupleType>("seq")
-        let result = Var<Int>("result", value: 0)
+        let result = Var<Int>("result")
         let spec = TLASpec("SeqTest") {
             Variable(seq, TLAValue.tuple([]))
             Variable(result, 0)
@@ -984,7 +984,7 @@ import SwiftSyntax
     @Test("CONSTANT with ASSUME generates valid TLA+ and model-checks")
     func constantModelCheck() {
         let bound = 5
-        let x = Var<Int>("x", value: 0)
+        let x = Var<Int>("x")
         let spec = TLASpec("ConstTest") {
             Constant("N", bound)
             Variable(x, 0)
@@ -999,7 +999,7 @@ import SwiftSyntax
 
     @Test("choose action produces nondeterministic assignment")
     func chooseAction() throws {
-        let picked = Var<Int>("picked", value: 0)
+        let picked = Var<Int>("picked")
         let source = Var<TLASetType>("source")
         let spec = TLASpec("ChooseTest") {
             Variable(picked, 0)
@@ -1219,7 +1219,7 @@ import SwiftSyntax
 @Suite(.serialized) struct LivenessCheckerTests {
     @Test("SCC decomposition works on HourClock (12 states, 1 SCC)")
     func hourClockSCC() throws {
-        let hr = Var<Int>("hr", value: 0)
+        let hr = Var<Int>("hr")
         let spec = TLASpec("HourClock") {
             Variable(hr, in: 1...12)
             Action("tick") { (hr < 12 && hr.becomes(hr + 1)) || (hr == 12 && hr.becomes(1)) }
@@ -1233,7 +1233,7 @@ import SwiftSyntax
 
     @Test("Terminal SCC detection works")
     func terminalSCC() throws {
-        let hr = Var<Int>("hr", value: 0)
+        let hr = Var<Int>("hr")
         let spec = TLASpec("HourClock") {
             Variable(hr, in: 1...12)
             Action("tick") { (hr < 12 && hr.becomes(hr + 1)) || (hr == 12 && hr.becomes(1)) }
@@ -1247,7 +1247,7 @@ import SwiftSyntax
 
     @Test("checkEventually: satisfied when property holds in SCC")
     func eventuallySatisfied() throws {
-        let hr = Var<Int>("hr", value: 0)
+        let hr = Var<Int>("hr")
         let spec = TLASpec("HourClock") {
             Variable(hr, in: 1...12)
             Action("tick") { (hr < 12 && hr.becomes(hr + 1)) || (hr == 12 && hr.becomes(1)) }
@@ -1263,7 +1263,7 @@ import SwiftSyntax
 
     @Test("checkEventually: violated when property never holds")
     func eventuallyViolated() throws {
-        let hr = Var<Int>("hr", value: 0)
+        let hr = Var<Int>("hr")
         let spec = TLASpec("HourClock") {
             Variable(hr, in: 1...12)
             Action("tick") { (hr < 12 && hr.becomes(hr + 1)) || (hr == 12 && hr.becomes(1)) }
@@ -1400,7 +1400,7 @@ import SwiftSyntax
 @Suite(.serialized) struct StateVarParityTests {
     @Test("StateVar spec produces same StateGraph as Var + Variable spec")
     func stateVarVsVar() throws {
-        let x = Var<Int>("x", value: 0)
+        let x = Var<Int>("x")
         let spec1 = TLASpec("Test") {
             Variable(x, 0)
             Action("inc") { x.becomes(x + 1).when(x < 5) }
@@ -1442,7 +1442,7 @@ enum Status: String, TLAValueType, StateExprConvertible {
 @Suite(.serialized) struct EnumDomainTests {
     @Test("Int-backed enum Var model-checks correctly")
     func intEnumVar() throws {
-        let mode = Var<Mode>("mode", value: Mode.idle)
+        let mode = Var<Mode>("mode")
         let spec = TLASpec("IntEnum") {
             Variable(mode, Mode.idle)
             Action("toggle") {
@@ -1470,7 +1470,7 @@ enum Status: String, TLAValueType, StateExprConvertible {
 
     @Test("String-backed enum Var model-checks correctly")
     func stringEnumVar() throws {
-        let state = Var<Status>("state", value: Status.on)
+        let state = Var<Status>("state")
         let spec = TLASpec("StringEnum") {
             Variable(state, Status.on)
             Action("toggle") {
@@ -1498,7 +1498,7 @@ enum Status: String, TLAValueType, StateExprConvertible {
 
     @Test("Int-backed enum TLA+ output uses raw values")
     func intEnumTLAOutput() {
-        let mode = Var<Mode>("mode", value: Mode.idle)
+        let mode = Var<Mode>("mode")
         let spec = TLASpec("IntEnum") {
             Variable(mode, Mode.idle)
             Action("toggle") {
@@ -1513,7 +1513,7 @@ enum Status: String, TLAValueType, StateExprConvertible {
 
     @Test("String-backed enum TLA+ output uses raw string values")
     func stringEnumTLAOutput() {
-        let state = Var<Status>("state", value: Status.on)
+        let state = Var<Status>("state")
         let spec = TLASpec("StringEnum") {
             Variable(state, Status.on)
             Action("toggle") {
@@ -1528,7 +1528,7 @@ enum Status: String, TLAValueType, StateExprConvertible {
 
     @Test("Enum values work in invariant expressions")
     func enumInInvariant() throws {
-        let mode = Var<Mode>("mode", value: Mode.idle)
+        let mode = Var<Mode>("mode")
         let spec = TLASpec("IntEnumInv") {
             Variable(mode, Mode.idle)
             Action("toggle") {
@@ -1547,7 +1547,7 @@ enum Status: String, TLAValueType, StateExprConvertible {
 
     @Test("Enum-backed spec produces valid TLA+ bundle")
     func enumBundle() {
-        let mode = Var<Mode>("mode", value: Mode.idle)
+        let mode = Var<Mode>("mode")
         let spec = TLASpec("IntEnumBundle") {
             Variable(mode, Mode.idle)
             Action("toggle") {
@@ -1564,7 +1564,7 @@ enum Status: String, TLAValueType, StateExprConvertible {
 
     @Test("Multi-state Int-backed enum explores all values")
     func multiStateIntEnum() throws {
-        let phase = Var<Mode>("phase", value: Mode.idle)
+        let phase = Var<Mode>("phase")
         let spec = TLASpec("MultiEnum") {
             Variable(phase, Mode.idle)
             Action("activate") { phase.becomes(Mode.active).when(phase == Mode.idle) }
@@ -1577,7 +1577,7 @@ enum Status: String, TLAValueType, StateExprConvertible {
 
     @Test("Enum vars work with stays expression")
     func enumStays() {
-        let phase = Var<Mode>("phase", value: Mode.idle)
+        let phase = Var<Mode>("phase")
         let spec = TLASpec("EnumStays") {
             Variable(phase, Mode.idle)
             Action("noop") {
@@ -1590,12 +1590,139 @@ enum Status: String, TLAValueType, StateExprConvertible {
 
     @Test("Enum var initial state is first case raw value")
     func enumInitialState() throws {
-        let mode = Var<Mode>("mode", value: Mode.idle)
+        let mode = Var<Mode>("mode")
         let spec = TLASpec("EnumInit") {
             Variable(mode, Mode.idle)
         }
         let states = computeInitialStates(spec)
         #expect(states.count == 1)
         #expect(states[0]["mode"] == TLAValue.int(0))
+    }
+}
+
+// MARK: - Round-trip: parse(swiftSource(expr)) == expr for every StateExpr case
+
+private extension StateExpr {
+    var normalized: StateExpr {
+        switch self {
+        case .setFilter(let s, _, let p): return .setFilter(s.normalized, QuantVar(name: "x"), p.normalized)
+        case .setMap(let e, _, let s): return .setMap(e.normalized, QuantVar(name: "x"), s.normalized)
+        case .forAll(let s, _, let p): return .forAll(s.normalized, QuantVar(name: "x"), p.normalized)
+        case .exists(let s, _, let p): return .exists(s.normalized, QuantVar(name: "x"), p.normalized)
+        case .choose(let s, _, let p): return .choose(s.normalized, QuantVar(name: "x"), p.normalized)
+        case .functionLiteral(let d, _, let b): return .functionLiteral(d.normalized, QuantVar(name: "x"), b.normalized)
+        case .add(let a, let b): return .add(a.normalized, b.normalized)
+        case .subtract(let a, let b): return .subtract(a.normalized, b.normalized)
+        case .multiply(let a, let b): return .multiply(a.normalized, b.normalized)
+        case .divide(let a, let b): return .divide(a.normalized, b.normalized)
+        case .modulo(let a, let b): return .modulo(a.normalized, b.normalized)
+        case .integerDivide(let a, let b): return .integerDivide(a.normalized, b.normalized)
+        case .negate(let a): return .negate(a.normalized)
+        case .equal(let a, let b): return .equal(a.normalized, b.normalized)
+        case .notEqual(let a, let b): return .notEqual(a.normalized, b.normalized)
+        case .lessThan(let a, let b): return .lessThan(a.normalized, b.normalized)
+        case .lessOrEqual(let a, let b): return .lessOrEqual(a.normalized, b.normalized)
+        case .greaterThan(let a, let b): return .greaterThan(a.normalized, b.normalized)
+        case .greaterOrEqual(let a, let b): return .greaterOrEqual(a.normalized, b.normalized)
+        case .and(let a, let b): return .and(a.normalized, b.normalized)
+        case .or(let a, let b): return .or(a.normalized, b.normalized)
+        case .not(let a): return .not(a.normalized)
+        case .ifThenElse(let c, let t, let e): return .ifThenElse(c.normalized, t.normalized, e.normalized)
+        case .in(let a, let b): return .in(a.normalized, b.normalized)
+        case .setLiteral(let es): return .setLiteral(es.map(\.normalized))
+        case .subset(let a, let b): return .subset(a.normalized, b.normalized)
+        case .union(let a, let b): return .union(a.normalized, b.normalized)
+        case .intersection(let a, let b): return .intersection(a.normalized, b.normalized)
+        case .setDifference(let a, let b): return .setDifference(a.normalized, b.normalized)
+        case .cardinality(let a): return .cardinality(a.normalized)
+        case .powerSet(let a): return .powerSet(a.normalized)
+        case .unionAll(let a): return .unionAll(a.normalized)
+        case .domain(let a): return .domain(a.normalized)
+        case .functionApply(let f, let a): return .functionApply(f.normalized, a.normalized)
+        case .except(let f, let k, let v): return .except(f.normalized, k.normalized, v.normalized)
+        case .tupleLiteral(let es): return .tupleLiteral(es.map(\.normalized))
+        case .tupleAccess(let t, let i): return .tupleAccess(t.normalized, i)
+        case .tupleLength(let t): return .tupleLength(t.normalized)
+        case .tupleHead(let t): return .tupleHead(t.normalized)
+        case .tupleTail(let t): return .tupleTail(t.normalized)
+        case .tupleAppend(let t, let e): return .tupleAppend(t.normalized, e.normalized)
+        case .tupleConcatenate(let a, let b): return .tupleConcatenate(a.normalized, b.normalized)
+        case .recordLiteral(let f): return .recordLiteral(f.mapValues(\.normalized))
+        case .recordAccess(let r, let f): return .recordAccess(r.normalized, f)
+        case .caseExpr(let pairs, let fallback):
+            return .caseExpr(pairs.map(\.normalized), fallback?.normalized)
+        default: return self
+        }
+    }
+}
+
+@Suite(.serialized) struct StateExprRoundTripTests {
+    private static func parseExpression(_ source: String) -> ExprSyntax {
+        SwiftParser.Parser.parse(source: source).statements.first!.item.as(ExprSyntax.self)!
+    }
+
+    @Test("Round-trip: parse(swiftSource(expr)) == expr for all parseable StateExpr cases",
+          arguments: [
+            ("value int",      StateExpr.value(.int(42))),
+            ("value bool",     StateExpr.value(.bool(true))),
+            ("value string",   StateExpr.value(.string("hi"))),
+            ("variable",       StateExpr.variable("x")),
+            ("add",            StateExpr.add(.int(1), .int(2))),
+            ("subtract",       StateExpr.subtract(.int(5), .int(3))),
+            ("multiply",       StateExpr.multiply(.int(2), .int(3))),
+            ("divide",         StateExpr.divide(.int(6), .int(2))),
+            ("modulo",         StateExpr.modulo(.int(7), .int(3))),
+            ("negate",         StateExpr.negate(.int(1))),
+            ("integerDivide",  StateExpr.integerDivide(.int(4), .int(2))),
+            ("equal",          StateExpr.equal(.int(1), .int(1))),
+            ("notEqual",       StateExpr.notEqual(.int(1), .int(2))),
+            ("lessThan",       StateExpr.lessThan(.int(1), .int(2))),
+            ("lessOrEqual",    StateExpr.lessOrEqual(.int(1), .int(2))),
+            ("greaterThan",    StateExpr.greaterThan(.int(2), .int(1))),
+            ("greaterOrEqual", StateExpr.greaterOrEqual(.int(2), .int(1))),
+            ("and",            StateExpr.and(.bool(true), .bool(false))),
+            ("or",             StateExpr.or(.bool(true), .bool(false))),
+            ("not",            StateExpr.not(.bool(true))),
+            ("ifThenElse",     StateExpr.ifThenElse(.bool(true), .int(1), .int(2))),
+            ("in",             StateExpr.in(.int(1), .setLiteral([.int(1), .int(2)]))),
+            ("setLiteral",     StateExpr.setLiteral([.int(1), .int(2)])),
+            ("subset",         StateExpr.subset(.setLiteral([.int(1)]), .setLiteral([.int(1), .int(2)]))),
+            ("union",          StateExpr.union(.setLiteral([.int(1)]), .setLiteral([.int(2)]))),
+            ("intersection",   StateExpr.intersection(.setLiteral([.int(1)]), .setLiteral([.int(1)]))),
+            ("setDifference",  StateExpr.setDifference(.setLiteral([.int(1), .int(2)]), .setLiteral([.int(2)]))),
+            ("cardinality",    StateExpr.cardinality(.setLiteral([.int(1)]))),
+            ("powerSet",       StateExpr.powerSet(.setLiteral([.int(1)]))),
+            ("unionAll",       StateExpr.unionAll(.setLiteral([.setLiteral([.int(1)])]))),
+            ("domain",         StateExpr.domain(.recordLiteral(["k": .int(1)]))),
+            ("functionApply",  StateExpr.functionApply(.variable("f"), .int(1))),
+            ("except",         StateExpr.except(.variable("f"), .int(1), .int(2))),
+            ("tupleLiteral",   StateExpr.tupleLiteral([.int(1), .int(2)])),
+            ("tupleAccess",    StateExpr.tupleAccess(.tupleLiteral([.int(10)]), 1)),
+            ("tupleLength",    StateExpr.tupleLength(.tupleLiteral([.int(1)]))),
+            ("tupleHead",      StateExpr.tupleHead(.tupleLiteral([.int(1)]))),
+            ("tupleTail",      StateExpr.tupleTail(.tupleLiteral([.int(1)]))),
+            ("tupleAppend",    StateExpr.tupleAppend(.tupleLiteral([.int(1)]), .int(2))),
+            ("tupleConcatenate", StateExpr.tupleConcatenate(.tupleLiteral([.int(1)]), .tupleLiteral([.int(2)]))),
+            ("recordLiteral",  StateExpr.recordLiteral(["k": .int(1)])),
+            ("recordAccess",   StateExpr.recordAccess(.recordLiteral(["k": .int(1)]), "k")),
+            ("setFilter",      StateExpr.setFilter(.setLiteral([.int(1)]), QuantVar(name: "x0"), .bool(true))),
+            ("setMap",         StateExpr.setMap(.variable("y"), QuantVar(name: "x0"), .setLiteral([.int(1)]))),
+            ("forAll",         StateExpr.forAll(.setLiteral([.int(1)]), QuantVar(name: "x0"), .bool(true))),
+            ("exists",         StateExpr.exists(.setLiteral([.int(1)]), QuantVar(name: "x0"), .bool(true))),
+            ("choose",         StateExpr.choose(.setLiteral([.int(1)]), QuantVar(name: "x0"), .bool(true))),
+            ("functionLiteral", StateExpr.functionLiteral(.setLiteral([.int(1)]), QuantVar(name: "x0"), .variable("z"))),
+            ("caseExpr",       StateExpr.caseExpr([.bool(true), .int(1), .bool(false), .int(2)], .int(0))),
+            ("enabledAction",  StateExpr.enabledAction("Tick")),
+          ] as [(String, StateExpr)])
+    func roundTrip(_ name: String, _ expr: StateExpr) {
+        let source = expr.swiftSource
+        #expect(!source.isEmpty, "\(name): swiftSource is empty")
+        #expect(!source.contains("\\in"), "\(name): swiftSource contains TLA+ syntax: \(source)")
+        #expect(!source.contains("<<"), "\(name): swiftSource contains TLA+ tuple syntax: \(source)")
+
+        let parsed = SpecParser.parseStateExpr(Self.parseExpression(source))
+        let parsedNormalized = parsed?.normalized
+        #expect(parsedNormalized == expr.normalized,
+                "\(name): round-trip failed.\n  source: \(source)\n  parsed: \(String(describing: parsed))\n  expected: \(expr)")
     }
 }
