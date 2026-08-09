@@ -24,8 +24,7 @@ public enum Media {
     public actor Capture {
         public static var spec: TLASpec {
             TLASpec("Capture") {
-                let phase = Var<Int>("phase")
-                Variable(phase, 0)
+                let phase = StateVar(0)
                 Action("_configure")  { phase == 0 && phase.becomes(1) }
                 Action("_start")      { phase == 1 && phase.becomes(2) }
                 Action("_stop")       { (phase == 2 || phase == 3) && phase.becomes(0) }

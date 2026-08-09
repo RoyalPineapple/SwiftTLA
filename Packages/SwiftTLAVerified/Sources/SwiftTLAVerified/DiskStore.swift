@@ -6,8 +6,7 @@ import Foundation
 public actor DiskStore {
     public static var spec: TLASpec {
         TLASpec("DiskStore") {
-            let phase = Var<Int>("phase")
-            Variable(phase, 0)
+            let phase = StateVar(0)
 
             Action("_ready")   { phase == 0 && phase.becomes(1) }
             Action("_write")   { phase == 1 && phase.stays }

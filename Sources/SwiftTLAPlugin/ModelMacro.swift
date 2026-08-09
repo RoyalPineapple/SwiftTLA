@@ -9,12 +9,23 @@ import SwiftTLA
 
 // MARK: - Shared parsing and verification
 
+struct ParsedEnumInfo {
+    let typeName: String
+    let cases: [(name: String, value: TLAValue)]
+    init(typeName: String, cases: [(String, TLAValue)]) {
+        self.typeName = typeName
+        self.cases = cases
+    }
+    var domain: Set<TLAValue> { Set(cases.map(\.value)) }
+}
+
 struct ParsedMacroModel {
     let typeName: String
-    let variables: [(String, TLAValue, StateExpr?)]
+    let variables: [(name: String, initial: TLAValue, initialSet: StateExpr?, swiftTypeName: String?)]
     let actions: [(String, ActionExpr)]
     let symmetricCollections: [SpecParser.ParsedSymmetricCollection]
     let collectionActions: [SpecParser.ParsedCollectionAction]
+    let enumInfos: [ParsedEnumInfo]
 }
 
 struct MacroExpander {
@@ -45,12 +56,26 @@ struct MacroExpander {
         }
         if parsed.variables.isEmpty { throw SimpleError("No variables in spec") }
 
+        let enumInfos = Self.collectEnumStateVars(from: memberList)
+
+        var allInvariants = parsed.invariants.map { NamedInvariant(name: $0.name, body: $0.body) }
+        for variable in parsed.variables {
+            if let swiftTypeName = variable.swiftTypeName,
+               let enumInfo = enumInfos.first(where: { $0.typeName == swiftTypeName }) {
+                let domainValues = TLAValue.sorted(enumInfo.domain)
+                let invariantName = "\(variable.name)InDomain"
+                let body = StateExpr.in(.variable(variable.name),
+                                         .setLiteral(domainValues.map { .value($0) }))
+                allInvariants.append(NamedInvariant(name: invariantName, body: body))
+            }
+        }
+
         let spec = TLASpec(
             name: typeName,
             variables: parsed.variables.map { NamedVar(name: $0.name, initial: $0.initial, initialSet: $0.initialSet) },
             constants: parsed.constants,
             actions: parsed.actions.map { NamedAction(name: $0.name, body: $0.body) },
-            invariants: parsed.invariants.map { NamedInvariant(name: $0.name, body: $0.body) },
+            invariants: allInvariants,
             temporalProperties: parsed.temporal.map { NamedTemporal(name: $0.name, expr: $0.expr) },
             fairness: parsed.fairness,
             symmetricCollections: parsed.symmetricCollections.map(\.declaration)
@@ -77,15 +102,17 @@ struct MacroExpander {
             variables: parsed.variables,
             actions: parsed.actions,
             symmetricCollections: parsed.symmetricCollections,
-            collectionActions: parsed.collectionActions
+            collectionActions: parsed.collectionActions,
+            enumInfos: enumInfos
         )
     }
 
     func generateMembers(
-        variables: [(name: String, initial: TLAValue, initialSet: StateExpr?)],
+        variables: [(name: String, initial: TLAValue, initialSet: StateExpr?, swiftTypeName: String?)],
         actions: [(name: String, body: ActionExpr)],
         symmetricCollections: [SpecParser.ParsedSymmetricCollection] = [],
-        collectionActions: [SpecParser.ParsedCollectionAction] = []
+        collectionActions: [SpecParser.ParsedCollectionAction] = [],
+        enumInfos: [ParsedEnumInfo] = []
     ) -> [DeclSyntax] {
         var decls: [DeclSyntax] = []
 
@@ -156,9 +183,49 @@ struct MacroExpander {
             else { newBindings.append(binding); continue }
 
             let callee = fc.calledExpression
-            let isVar = callee.as(DeclReferenceExprSyntax.self)?.baseName.text == "Var"
-                     || callee.as(GenericSpecializationExprSyntax.self)?.expression.as(DeclReferenceExprSyntax.self)?.baseName.text == "Var"
-            let isValue = callee.as(DeclReferenceExprSyntax.self)?.baseName.text == "Value"
+            let baseName = callee.as(DeclReferenceExprSyntax.self)?.baseName.text
+                ?? callee.as(GenericSpecializationExprSyntax.self)?.expression.as(DeclReferenceExprSyntax.self)?.baseName.text
+            let isVar = baseName == "Var"
+            let isValue = baseName == "Value"
+            let isStateVar = baseName == "StateVar"
+
+            if isStateVar {
+                if let firstArg = fc.arguments.first,
+                   let label = firstArg.label?.text,
+                   label == "in" || label == "values" {
+                    let hasNameArg = fc.arguments.contains { $0.label?.text == "name" }
+                    if hasNameArg { newBindings.append(binding); continue }
+
+                    var newArgs = fc.arguments
+                    newArgs.append(LabeledExprSyntax(
+                        label: "name",
+                        colon: .colonToken(),
+                        expression: StringLiteralExprSyntax(content: patternName)
+                    ))
+                    let newFC = fc.with(\.arguments, newArgs)
+                    let newInit = initializer.with(\.value, ExprSyntax(newFC))
+                    let newBinding = binding.with(\.initializer, newInit)
+                    newBindings.append(newBinding)
+                    bindingsChanged = true
+                } else {
+                    let hasStringArg = fc.arguments.contains { arg in
+                        arg.label == nil && arg.expression.is(StringLiteralExprSyntax.self)
+                    }
+                    if hasStringArg { newBindings.append(binding); continue }
+
+                    var newArgs = fc.arguments
+                    newArgs.insert(LabeledExprSyntax(
+                        expression: StringLiteralExprSyntax(content: patternName)
+                    ), at: newArgs.startIndex)
+                    let newFC = fc.with(\.arguments, newArgs)
+                    let newInit = initializer.with(\.value, ExprSyntax(newFC))
+                    let newBinding = binding.with(\.initializer, newInit)
+                    newBindings.append(newBinding)
+                    bindingsChanged = true
+                }
+                continue
+            }
+
             guard isVar || isValue
             else { newBindings.append(binding); continue }
 
@@ -191,7 +258,7 @@ struct MacroExpander {
 
     // MARK: - Code generation
 
-    static func generateVariablesEnum(variables: [(name: String, initial: TLAValue, initialSet: StateExpr?)]) -> EnumDeclSyntax {
+    static func generateVariablesEnum(variables: [(name: String, initial: TLAValue, initialSet: StateExpr?, swiftTypeName: String?)]) -> EnumDeclSyntax {
         EnumDeclSyntax(
             modifiers: [DeclModifierSyntax(name: .keyword(.public))],
             name: "Variables",
@@ -232,7 +299,7 @@ struct MacroExpander {
         )
     }
 
-    static func generateStateStruct(variables: [(name: String, initial: TLAValue, initialSet: StateExpr?)]) -> StructDeclSyntax {
+    static func generateStateStruct(variables: [(name: String, initial: TLAValue, initialSet: StateExpr?, swiftTypeName: String?)]) -> StructDeclSyntax {
         StructDeclSyntax(
             modifiers: [DeclModifierSyntax(name: .keyword(.public))],
             name: "State",
@@ -243,7 +310,7 @@ struct MacroExpander {
                         bindingSpecifier: .keyword(.var),
                         bindings: [PatternBindingSyntax(
                             pattern: IdentifierPatternSyntax(identifier: .identifier(v.name)),
-                            typeAnnotation: TypeAnnotationSyntax(type: IdentifierTypeSyntax(name: .identifier(swiftType(for: v.initial))))
+                            typeAnnotation: TypeAnnotationSyntax(type: IdentifierTypeSyntax(name: .identifier(v.swiftTypeName ?? swiftType(for: v.initial))))
                         )]
                     )
                 }
@@ -259,7 +326,11 @@ struct MacroExpander {
                     ),
                     body: CodeBlockSyntax {
                         for v in variables {
-                            ExprSyntax(stringLiteral: "self.\(v.name) = dict[Variables.\(v.name).rawValue]!.\(extractor(for: v.initial))")
+                            if let typeName = v.swiftTypeName {
+                                ExprSyntax(stringLiteral: "self.\(v.name) = \(typeName)(rawValue: dict[Variables.\(v.name).rawValue]!.\(extractor(for: v.initial)))!")
+                            } else {
+                                ExprSyntax(stringLiteral: "self.\(v.name) = dict[Variables.\(v.name).rawValue]!.\(extractor(for: v.initial))")
+                            }
                         }
                     }
                 )
@@ -284,14 +355,14 @@ struct MacroExpander {
         )
     }
 
-    static func generateVariableProperties(variables: [(name: String, initial: TLAValue, initialSet: StateExpr?)]) -> [VariableDeclSyntax] {
+    static func generateVariableProperties(variables: [(name: String, initial: TLAValue, initialSet: StateExpr?, swiftTypeName: String?)]) -> [VariableDeclSyntax] {
         variables.map { v in
             VariableDeclSyntax(
                 modifiers: [DeclModifierSyntax(name: .keyword(.public))],
                 bindingSpecifier: .keyword(.var),
                 bindings: [PatternBindingSyntax(
                     pattern: IdentifierPatternSyntax(identifier: .identifier(v.name)),
-                    typeAnnotation: TypeAnnotationSyntax(type: IdentifierTypeSyntax(name: .identifier(swiftType(for: v.initial)))),
+                    typeAnnotation: TypeAnnotationSyntax(type: IdentifierTypeSyntax(name: .identifier(v.swiftTypeName ?? swiftType(for: v.initial)))),
                     accessorBlock: AccessorBlockSyntax(accessors: .getter(
                         CodeBlockItemListSyntax { ExprSyntax(stringLiteral: "_state.\(v.name)") }
                     ))
@@ -434,20 +505,27 @@ struct MacroExpander {
     // MARK: - Observable code generation
 
     func generateObservableMembers(
-        variables: [(name: String, initial: TLAValue, initialSet: StateExpr?)],
+        variables: [(name: String, initial: TLAValue, initialSet: StateExpr?, swiftTypeName: String?)],
         actions: [(name: String, body: ActionExpr)]
     ) -> [DeclSyntax] {
         var decls: [DeclSyntax] = []
 
         for v in variables {
+            let typeStr = v.swiftTypeName ?? Self.swiftType(for: v.initial)
+            let initStr: String
+            if v.swiftTypeName != nil {
+                initStr = "\(typeStr)(rawValue: \(Self.literalExpr(for: v.initial)))!"
+            } else {
+                initStr = Self.literalExpr(for: v.initial)
+            }
             let storedVar: DeclSyntax = DeclSyntax(
                 VariableDeclSyntax(
                     modifiers: [DeclModifierSyntax(name: .keyword(.public))],
                     bindingSpecifier: .keyword(.var),
                     bindings: [PatternBindingSyntax(
                         pattern: IdentifierPatternSyntax(identifier: .identifier(v.name)),
-                        typeAnnotation: TypeAnnotationSyntax(type: IdentifierTypeSyntax(name: .identifier(Self.swiftType(for: v.initial)))),
-                        initializer: InitializerClauseSyntax(value: ExprSyntax(stringLiteral: Self.literalExpr(for: v.initial)))
+                        typeAnnotation: TypeAnnotationSyntax(type: IdentifierTypeSyntax(name: .identifier(typeStr))),
+                        initializer: InitializerClauseSyntax(value: ExprSyntax(stringLiteral: initStr))
                     )]
                 )
             )
@@ -504,7 +582,7 @@ struct MacroExpander {
     }
 
     func generateObservableActionMethods(
-        variables: [(name: String, initial: TLAValue, initialSet: StateExpr?)],
+        variables: [(name: String, initial: TLAValue, initialSet: StateExpr?, swiftTypeName: String?)],
         actions: [(name: String, body: ActionExpr)]
     ) -> [FunctionDeclSyntax] {
         actions.map { a in
@@ -516,7 +594,7 @@ struct MacroExpander {
             for v in variables {
                 bodyExprs.append(ExprSyntax(stringLiteral: "\(v.name) = _state.\(v.name)"))
             }
-            bodyExprs.append(ExprSyntax(stringLiteral: "Task { await \(callbackName)?(from, _state) }"))
+            bodyExprs.append(ExprSyntax(stringLiteral: "if let h = \(callbackName) { Task { await h(from, _state) } }"))
             return FunctionDeclSyntax(
                 modifiers: [DeclModifierSyntax(name: .keyword(.public))],
                 name: .identifier(a.0),
@@ -637,6 +715,53 @@ struct MacroExpander {
         return result
     }
 
+    /// Collect enums conforming to `TLAValueType` + `CaseIterable` with their case names and raw values.
+    static func collectEnumStateVars(from members: MemberBlockItemListSyntax) -> [ParsedEnumInfo] {
+        var result: [ParsedEnumInfo] = []
+        for member in members {
+            guard let enumDecl = member.decl.as(EnumDeclSyntax.self) else { continue }
+            guard let inheritance = enumDecl.inheritanceClause else { continue }
+
+            let inheritedNames = inheritance.inheritedTypes.compactMap {
+                $0.type.as(IdentifierTypeSyntax.self)?.name.text
+            }
+
+            guard inheritedNames.contains("TLAValueType") else { continue }
+
+            let intBacked = inheritedNames.contains("Int")
+            let stringBacked = inheritedNames.contains("String")
+            guard intBacked || stringBacked else { continue }
+
+            var cases: [(name: String, value: TLAValue)] = []
+            var idx = 0
+            for caseMember in enumDecl.memberBlock.members {
+                guard let caseDecl = caseMember.decl.as(EnumCaseDeclSyntax.self) else { continue }
+                for element in caseDecl.elements {
+                    let value: TLAValue
+                    if let raw = element.rawValue?.value.as(IntegerLiteralExprSyntax.self),
+                       let val = Int(raw.literal.text) {
+                        value = .int(val)
+                        idx = val + 1
+                    } else if let raw = element.rawValue?.value.as(StringLiteralExprSyntax.self) {
+                        value = .string(raw.representedLiteralValue ?? raw.segments.description)
+                    } else if intBacked {
+                        value = .int(idx)
+                        idx += 1
+                    } else {
+                        value = .string(element.name.text)
+                    }
+                    cases.append((element.name.text, value))
+                }
+            }
+
+            result.append(ParsedEnumInfo(
+                typeName: enumDecl.name.text,
+                cases: cases
+            ))
+        }
+        return result
+    }
+
     static func swiftType(for initial: TLAValue) -> String {
         switch initial {
         case .int: "Int"; case .bool: "Bool"; case .string: "String"
@@ -696,7 +821,8 @@ public struct ModelMacro: MemberMacro, ExtensionMacro {
             variables: parsed.variables,
             actions: parsed.actions,
             symmetricCollections: parsed.symmetricCollections,
-            collectionActions: parsed.collectionActions
+            collectionActions: parsed.collectionActions,
+            enumInfos: parsed.enumInfos
         )
     }
 }
@@ -725,7 +851,8 @@ public struct TLAActorMacro: MemberMacro, ExtensionMacro {
             variables: parsed.variables,
             actions: parsed.actions,
             symmetricCollections: parsed.symmetricCollections,
-            collectionActions: parsed.collectionActions
+            collectionActions: parsed.collectionActions,
+            enumInfos: parsed.enumInfos
         )
     }
 }

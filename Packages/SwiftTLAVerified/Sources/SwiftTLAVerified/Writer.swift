@@ -8,8 +8,7 @@ extension Media {
     public actor Writer {
         public static var spec: TLASpec {
             TLASpec("Writer") {
-                let phase = Var<Int>("phase")
-                Variable(phase, 0)
+                let phase = StateVar(0)
 
                 Action("_configure")  { phase == 0 && phase.becomes(1) }
                 Action("_start")      { phase == 1 && phase.becomes(2) }

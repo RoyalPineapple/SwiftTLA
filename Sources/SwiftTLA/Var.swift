@@ -11,6 +11,12 @@ extension TLAValueType where Self: RawRepresentable, Self.RawValue == Int {
     public var tlaValue: TLAValue { .int(rawValue) }
 }
 
+/// All RawRepresentable String enums get TLAValueType support.
+extension TLAValueType where Self: RawRepresentable, Self.RawValue == String {
+    public static var defaultValue: Self { Self(rawValue: "")! }
+    public var tlaValue: TLAValue { .string(rawValue) }
+}
+
 extension TLAValue: TLAValueType { public static var defaultValue: TLAValue { .int(0) } }
 
 extension StateExprConvertible where Self: TLAValueType {
@@ -65,6 +71,61 @@ public struct Expr<T: TLAValueType>: StateExprConvertible, Sendable {
     public let raw: StateExpr
     public init(_ raw: StateExpr) { self.raw = raw }
     public var stateExpr: StateExpr { raw }
+}
+
+@dynamicMemberLookup
+public struct StateVar<T: TLAValueType>: Sendable, CustomStringConvertible {
+    public let name: String
+    public let initial: TLAValue
+    public let constraint: VarConstraint?
+    private let _handle: Var<T>
+
+    public var description: String { name }
+
+    public init(_ initial: T, name: String? = nil, constraint: VarConstraint? = nil) {
+        self.name = name ?? ""
+        self.initial = initial.tlaValue
+        self.constraint = constraint
+        self._handle = Var(name ?? "", value: initial)
+    }
+    public init(_ explicitName: String, _ initial: T, constraint: VarConstraint? = nil) {
+        self.name = explicitName
+        self.initial = initial.tlaValue
+        self.constraint = constraint
+        self._handle = Var(explicitName, value: initial)
+    }
+    public init(in range: ClosedRange<Int>, name: String? = nil) where T == Int {
+        self.name = name ?? ""
+        self.initial = .int(range.lowerBound)
+        self.constraint = .intRange(range)
+        self._handle = Var(name ?? "", bounded: range)
+    }
+    public init(values: [String], name: String? = nil) where T == String {
+        self.name = name ?? ""
+        self.initial = .string(values.first ?? "")
+        self.constraint = .enumValues(values)
+        self._handle = Var(name ?? "", values: values)
+    }
+
+    @discardableResult public func becomes(_ value: T) -> ActionExpr { _handle.becomes(value) }
+    @discardableResult public func becomes(_ expr: Expr<T>) -> ActionExpr { _handle.becomes(expr) }
+    @discardableResult public func becomes(_ other: StateVar<T>) -> ActionExpr { .assign(name, other.stateExpr) }
+    @discardableResult public func becomes(_ expr: some StateExprConvertible) -> ActionExpr { _handle.becomes(expr) }
+    public var stays: ActionExpr { _handle.stays }
+    public subscript(dynamicMember field: String) -> StateExpr { _handle[dynamicMember: field] }
+    public var isEmpty: StateExpr { _handle.isEmpty }
+    public var cardinality: StateExpr { _handle.cardinality }
+}
+
+extension StateVar: StateExprConvertible {
+    public var stateExpr: StateExpr { .variable(name) }
+}
+
+extension Dictionary where Key == String, Value == TLAValue {
+    public subscript<T: TLAValueType>(_ variable: StateVar<T>) -> TLAValue? {
+        get { self[variable.name] }
+        set { self[variable.name] = newValue }
+    }
 }
 
 @dynamicMemberLookup
@@ -176,10 +237,17 @@ extension String: TLAValueConvertible { public var tlaValue: TLAValue { .string(
 
 // MARK: - Arithmetic (Var<Int> only)
 
-// MARK: - Generic operators (StateExpr level)
+// MARK: - Generic operators (StateExprConvertible level)
+
+public func + <L: StateExprConvertible, R: StateExprConvertible>(lhs: L, rhs: R) -> StateExpr { .add(lhs.stateExpr, rhs.stateExpr) }
+public func - <L: StateExprConvertible, R: StateExprConvertible>(lhs: L, rhs: R) -> StateExpr { .subtract(lhs.stateExpr, rhs.stateExpr) }
+public func * <L: StateExprConvertible, R: StateExprConvertible>(lhs: L, rhs: R) -> StateExpr { .multiply(lhs.stateExpr, rhs.stateExpr) }
+public func / <L: StateExprConvertible, R: StateExprConvertible>(lhs: L, rhs: R) -> StateExpr { .divide(lhs.stateExpr, rhs.stateExpr) }
+public func % <L: StateExprConvertible, R: StateExprConvertible>(lhs: L, rhs: R) -> StateExpr { .modulo(lhs.stateExpr, rhs.stateExpr) }
+
+// MARK: - StateExpr-level operators (for direct StateExpr use)
 
 extension StateExpr {
-    public static func + (lhs: StateExpr, rhs: StateExpr) -> StateExpr { .add(lhs, rhs) }
     public static func - (lhs: StateExpr, rhs: StateExpr) -> StateExpr { .subtract(lhs, rhs) }
     public static func * (lhs: StateExpr, rhs: StateExpr) -> StateExpr { .multiply(lhs, rhs) }
     public static func / (lhs: StateExpr, rhs: StateExpr) -> StateExpr { .divide(lhs, rhs) }

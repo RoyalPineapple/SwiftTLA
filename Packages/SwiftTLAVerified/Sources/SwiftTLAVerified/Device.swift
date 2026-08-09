@@ -14,10 +14,8 @@ private final class DeviceDelegate: NSObject, CBPeripheralDelegate {
 public actor Device: Identifiable {
     public static var spec: TLASpec {
         TLASpec("Device") {
-            let phase = Var<Int>("phase")
-            let servicesDiscovered = Var<Bool>("servicesDiscovered")
-            Variable(phase, 0)
-            Variable(servicesDiscovered, false)
+            let phase = StateVar(0)
+            let servicesDiscovered = StateVar(false)
 
             // 0=disconnected 1=connected 2=discovering 3=ready
             Action("_didConnect")       { phase == 0 && phase.becomes(1) }

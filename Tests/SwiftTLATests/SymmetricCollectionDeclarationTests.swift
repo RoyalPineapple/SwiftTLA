@@ -45,4 +45,14 @@ struct SymmetricCollectionDeclarationTests {
       #expect(values.values.filter { $0 == .int(0) }.count == 1)
     }
   }
+
+  @Test("SymmetricCollection StateVar overload produces correct name and initial")
+  func stateVarOverload() {
+    let initialState = StateVar(0, name: "phases")
+    let decl = SymmetricCollection(initialState, verificationScope: 3, elementType: Device.self)
+
+    #expect(decl.name == "phases")
+    #expect(decl.initial == .int(0))
+    #expect(decl.verificationScope == 3)
+  }
 }

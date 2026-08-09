@@ -652,7 +652,7 @@ public enum SpecParser {
     // MARK: - Unified spec builder parser
 
     public struct ParsedSpecComponents {
-        public var variables: [(name: String, initial: TLAValue, initialSet: StateExpr?)] = []
+        public var variables: [(name: String, initial: TLAValue, initialSet: StateExpr?, swiftTypeName: String?)] = []
         public var actions: [(name: String, body: ActionExpr)] = []
         public var symmetricCollections: [ParsedSymmetricCollection] = []
         public var collectionActions: [ParsedCollectionAction] = []
@@ -709,7 +709,7 @@ public enum SpecParser {
         public var description: String { message }
     }
 
-     public static func parseSpecClosure(_ closure: ClosureExprSyntax) -> ParsedSpecComponents {
+      public static func parseSpecClosure(_ closure: ClosureExprSyntax) -> ParsedSpecComponents {
         var result = ParsedSpecComponents()
         let collectionTypes = collectSymmetricCollectionTypes(in: closure)
         for statement in closure.statements {
@@ -718,6 +718,9 @@ public enum SpecParser {
                 parseBuilderCall(fc, into: &result, collectionTypes: collectionTypes)
             } else if let forStmt = statement.item.as(ForStmtSyntax.self) {
                 parseForLoop(forStmt, into: &result)
+            } else if case .decl(let decl) = statement.item,
+                      let varDecl = decl.as(VariableDeclSyntax.self) {
+                parseStateVarDecl(varDecl, into: &result)
             }
         }
         return result
@@ -750,6 +753,103 @@ public enum SpecParser {
                 parseBuilderCall(fc, into: &result, loopVar: pattern, loopValue: i)
             }
         }
+    }
+
+    /// Parses `let x = StateVar(...)` bindings into `ParsedSpecComponents.variables`.
+    /// Handles both raw `StateVar(0)` and rewrites where ModelMacro injected a string name.
+    private static func parseStateVarDecl(_ varDecl: VariableDeclSyntax, into result: inout ParsedSpecComponents) {
+        for binding in varDecl.bindings {
+            guard let patternName = binding.pattern.as(IdentifierPatternSyntax.self)?.identifier.text,
+                  let initializer = binding.initializer?.value,
+                  let fc = initializer.as(FunctionCallExprSyntax.self),
+                  let calledName = fc.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text,
+                  calledName == "StateVar"
+            else { continue }
+
+            let args = Array(fc.arguments)
+
+            if let rangeExpr = args.first(where: { $0.label?.text == "in" })?.expression {
+                let lowerBound = parseRangeLowerBound(rangeExpr)
+                result.variables.append((patternName, .int(lowerBound), nil, nil))
+                continue
+            }
+
+            if let valuesArg = args.first(where: { $0.label?.text == "values" })?.expression {
+                let firstValue = parseValuesFirst(valuesArg)
+                result.variables.append((patternName, .string(firstValue), nil, nil))
+                continue
+            }
+
+            guard !args.isEmpty else { continue }
+
+            if let stringLit = args[0].expression.as(StringLiteralExprSyntax.self) {
+                let varName = stringLit.segments.description.replacingOccurrences(of: "\"", with: "")
+                let initial: TLAValue = args.count >= 2 ? parseInitialExpr(args[1].expression) : .int(0)
+                let typeName = args.count >= 2 ? enumCaseTypeName(from: args[1].expression) : nil
+                result.variables.append((varName, initial, nil, typeName))
+            } else {
+                let initial: TLAValue = parseInitialExpr(args[0].expression)
+                let typeName = enumCaseTypeName(from: args[0].expression)
+                result.variables.append((patternName, initial, nil, typeName))
+            }
+        }
+    }
+
+    /// Extracts the lower bound from a range expression like `1...12`.
+    private static func parseRangeLowerBound(_ expression: ExprSyntax) -> Int {
+        if let seq = expression.as(SequenceExprSyntax.self) {
+            let elements = Array(seq.elements)
+            if let firstInt = elements.first?.as(IntegerLiteralExprSyntax.self),
+               let lower = Int(firstInt.literal.text) {
+                return lower
+            }
+        }
+        if let infix = expression.as(InfixOperatorExprSyntax.self),
+           let firstInt = infix.leftOperand.as(IntegerLiteralExprSyntax.self),
+           let lower = Int(firstInt.literal.text) {
+            return lower
+        }
+        return 0
+    }
+
+    /// Extracts the first string value from `["a", "b"]`.
+    private static func parseValuesFirst(_ expression: ExprSyntax) -> String {
+        if let array = expression.as(ArrayExprSyntax.self),
+           let first = array.elements.first?.expression.as(StringLiteralExprSyntax.self) {
+            return first.segments.description.replacingOccurrences(of: "\"", with: "")
+        }
+        return ""
+    }
+
+    /// Converts a Swift initializer expression to a TLAValue.
+    private static func parseInitialExpr(_ expression: ExprSyntax) -> TLAValue {
+        if let intVal = expression.as(IntegerLiteralExprSyntax.self) {
+            return .int(Int(intVal.literal.text) ?? 0)
+        }
+        if let boolVal = expression.as(BooleanLiteralExprSyntax.self) {
+            return .bool(boolVal.literal.text == "true")
+        }
+        if let stringLit = expression.as(StringLiteralExprSyntax.self) {
+            return .string(stringLit.segments.description.replacingOccurrences(of: "\"", with: ""))
+        }
+        if let fc = expression.as(FunctionCallExprSyntax.self),
+           let memberAccess = fc.calledExpression.as(MemberAccessExprSyntax.self),
+           let base = memberAccess.base?.as(DeclReferenceExprSyntax.self),
+           base.baseName.text == "TLAValue" {
+            return parseTLAValueConstructor(name: memberAccess.declName.baseName.text, call: fc) ?? .int(0)
+        }
+        return .int(0)
+    }
+
+    /// Returns the enum type name if `expression` is an enum case reference.
+    /// `.idle` → `nil` (implicit member, type unknown from this AST).
+    /// `CameraMode.idle` → `"CameraMode"` (explicit member, type known).
+    private static func enumCaseTypeName(from expression: ExprSyntax) -> String? {
+        guard let memberAccess = expression.as(MemberAccessExprSyntax.self) else { return nil }
+        if let base = memberAccess.base?.as(DeclReferenceExprSyntax.self) {
+            return base.baseName.text
+        }
+        return nil
     }
 
     private static func parseBuilderCall(
@@ -802,7 +902,7 @@ public enum SpecParser {
         case "UseSpec":
             if let name = extractStringArg(call, index: 0),
                let spec = SpecRegistry.lookup(name) {
-                result.variables += spec.variables.map { (name: $0.name, initial: $0.initial, initialSet: $0.initialSet) }
+                result.variables += spec.variables.map { (name: $0.name, initial: $0.initial, initialSet: $0.initialSet, swiftTypeName: nil) }
                 result.invariants += spec.invariants.map { (name: $0.name, body: $0.body) }
                 result.actions += spec.actions.map { (name: $0.name, body: $0.body) }
             }
@@ -1075,7 +1175,7 @@ public enum SpecParser {
             source: call.description,
             declaration: declaration
         ))
-        result.variables.append((collectionName, declaration.variable.initial, nil))
+        result.variables.append((collectionName, declaration.variable.initial, nil, nil))
     }
 
     private static func parseCollectionAction(
@@ -1599,7 +1699,7 @@ public enum SpecParser {
             let label = args[1].label?.text
             if label == "in" {
                 if let setExpr = parseStateExpr(args[1].expression) {
-                    result.variables.append((firstName, .set([]), setExpr))
+                    result.variables.append((firstName, .set([]), setExpr, nil))
                     return
                 }
             }
@@ -1609,11 +1709,11 @@ public enum SpecParser {
         if args.count >= 2 {
             let valExpr = args[1].expression
             if let intVal = valExpr.as(IntegerLiteralExprSyntax.self) {
-                result.variables.append((firstName, .int(Int(intVal.literal.text) ?? 0), nil))
+                result.variables.append((firstName, .int(Int(intVal.literal.text) ?? 0), nil, nil))
                 return
             }
             if let boolVal = valExpr.as(BooleanLiteralExprSyntax.self) {
-                result.variables.append((firstName, .bool(boolVal.literal.text == "true"), nil))
+                result.variables.append((firstName, .bool(boolVal.literal.text == "true"), nil, nil))
                 return
             }
             // TLAValue.set([]), TLAValue.tuple([]), etc.
@@ -1623,7 +1723,7 @@ public enum SpecParser {
                base.baseName.text == "TLAValue" {
                 let name = memberAccess.declName.baseName.text
                 if let parsed = parseTLAValueConstructor(name: name, call: fc) {
-                    result.variables.append((firstName, parsed, nil))
+                    result.variables.append((firstName, parsed, nil, nil))
                     return
                 }
             }
@@ -1632,7 +1732,7 @@ public enum SpecParser {
         // Variable(name, initializerExpr) — fallback
         if args.count >= 2 {
             let initial: TLAValue = .int(0)
-            result.variables.append((firstName, initial, nil))
+            result.variables.append((firstName, initial, nil, nil))
         }
     }
 
