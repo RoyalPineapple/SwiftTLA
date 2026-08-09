@@ -32,5 +32,9 @@ let package = Package(
             dependencies: ["SwiftTLAVerified"],
             linkerSettings: [.unsafeFlags(["-Xlinker", "-ObjC"])]
         ),
+        .testTarget(
+            name: "SwiftTLAVerifiedTests",
+            dependencies: ["SwiftTLAVerified"]
+        )
     ]
 )

@@ -5,27 +5,41 @@
 public struct ModelChecker {
     public let spec: TLASpec
     public let maxStates: Int
+    public let permutationProductBudget: Int
 
-    public init(spec: TLASpec, maxStates: Int = 100_000) {
+    public init(spec: TLASpec, maxStates: Int = 100_000, permutationProductBudget: Int = 100_000) {
         self.spec = spec
         self.maxStates = maxStates
+        self.permutationProductBudget = permutationProductBudget
     }
 
-    public func check() throws -> CheckResult { try explore().result }
+    public func check() throws -> CheckResult {
+        do {
+            return try explore().result
+        } catch {
+            guard !spec.symmetricCollections.isEmpty else { throw error }
+            return bounded(.error(String(describing: error)))
+        }
+    }
     public func exploreGraph() throws -> StateGraph { try explore().graph }
 
     public func checkLiveness() throws -> CheckResult {
-        let exploration = try explore()
-        guard case .ok = exploration.result else { return exploration.result }
-        guard !self.spec.temporalProperties.isEmpty else { return .ok(statesCount: exploration.graph.states.count) }
+        do {
+            let exploration = try explore()
+            guard case .ok = exploration.result.underlyingOutcome else { return exploration.result }
+            guard !self.spec.temporalProperties.isEmpty else { return exploration.result }
 
-        let graph = exploration.graph
-        let lc = LivenessChecker(graph: graph)
-        let results = try lc.checkAll(self.spec.temporalProperties, fairness: self.spec.fairness, actions: self.spec.actions)
-        for r in results {
-            if case .violated(let msg, _) = r { return .livenessViolated(msg) }
+            let graph = exploration.graph
+            let lc = LivenessChecker(graph: graph)
+            let results = try lc.checkAll(self.spec.temporalProperties, fairness: self.spec.fairness, actions: self.spec.actions)
+            for r in results {
+                if case .violated(let msg, _) = r { return bounded(.livenessViolated(msg)) }
+            }
+            return bounded(.ok(statesCount: exploration.graph.states.count))
+        } catch {
+            guard !spec.symmetricCollections.isEmpty else { throw error }
+            return bounded(.error(String(describing: error)))
         }
-        return .ok(statesCount: exploration.graph.states.count)
     }
 
     /// Compose checker lifecycle ⋊ user and explore (bootstrap entry point).
@@ -49,6 +63,13 @@ public struct ModelChecker {
     }
 
     private func explore() throws -> Exploration {
+        if let validationError = validateSymmetricCollections() {
+            return emptyExploration(
+                self.spec,
+                variableNames: self.spec.variables.map(\.name),
+                result: bounded(.error(validationError.description))
+            )
+        }
         let substituted = substituteConstants(self.spec)
         let variableNames = substituted.variables.map(\.name)
         let actions = substituted.actions.isEmpty
@@ -56,40 +77,24 @@ public struct ModelChecker {
             : substituted.actions
 
         let initialStates = computeInitialStates(substituted)
-        
-        // If no eager initial states, try lazy ranges — pick one representative
-        if initialStates.isEmpty {
-            let lazyVars = substituted.variables.filter { $0.lazySet != nil }
-            if !lazyVars.isEmpty {
-                var base: State = [:]
-                for v in substituted.variables { base[v.name] = v.initial }
-                for lv in lazyVars {
-                    if let range = lv.lazySet,
-                       case .set(let values) = try? range.evaluate(in: base),
-                       let first = values.first {
-                        base[lv.name] = first
-                    }
-                }
-                let seeds = [(StateGraph.StateID(0), base)]
-                return try bfs(seeds: seeds, variableNames: variableNames,
-                    expand: buildExpander(actions, variableNames: variableNames, constraint: substituted.constraint, runtimeFuncs: substituted.runtimeFuncs, recursiveFuncs: substituted.recursiveFuncs),
-                    evaluate: buildEvaluator(runtimeFuncs: substituted.runtimeFuncs, recursiveFuncs: substituted.recursiveFuncs),
-                    actions: actions, invariants: substituted.invariants, checkDeadlock: substituted.checkDeadlock,
-                    specificationName: substituted.name, maxStates: self.maxStates,
-                    symmetrySets: substituted.symmetrySets)
-            }
-        }
-
         guard !initialStates.isEmpty else {
-            return emptyExploration(substituted, variableNames: variableNames, result: .error("No initial states"))
+            return emptyExploration(
+                substituted,
+                variableNames: variableNames,
+                result: bounded(.error("No initial states"))
+            )
         }
 
         guard try checkAssume(substituted, initial: initialStates[0]) else {
-            return emptyExploration(substituted, variableNames: variableNames, result: .error("ASSUME failed"))
+            return emptyExploration(
+                substituted,
+                variableNames: variableNames,
+                result: bounded(.error("ASSUME failed"))
+            )
         }
 
         let seeds = initialStates.enumerated().map { (StateGraph.StateID($0.offset), $0.element) }
-        return try bfs(
+        let exploration = try bfs(
             seeds: seeds,
             variableNames: variableNames,
             expand: buildExpander(actions, variableNames: variableNames, constraint: substituted.constraint, runtimeFuncs: substituted.runtimeFuncs, recursiveFuncs: substituted.recursiveFuncs),
@@ -100,8 +105,10 @@ public struct ModelChecker {
             specificationName: substituted.name,
             maxStates: self.maxStates,
             symmetrySets: substituted.symmetrySets,
-            symmetryGroups: substituted.symmetryGroups
+            symmetryGroups: substituted.symmetryGroups,
+            symmetricCollections: substituted.symmetricCollections
         )
+        return Exploration(result: bounded(exploration.result), graph: exploration.graph)
     }
 
     private func buildExpander(
@@ -156,6 +163,19 @@ public struct ModelChecker {
             )
         )
     }
+
+    private func bounded(_ outcome: CheckResult) -> CheckResult {
+        let scopes = spec.symmetricCollections.map {
+            SymmetricCollectionScope(collectionName: $0.name, verificationScope: $0.verificationScope)
+        }
+        return scopes.isEmpty ? outcome : .bounded(scopes: scopes, outcome: outcome)
+    }
+
+    private func validateSymmetricCollections() -> SymmetricCollectionValidationError? {
+        spec.symmetricCollectionValidationError(
+            permutationProductBudget: permutationProductBudget
+        )
+    }
 }
 
 // MARK: - Plain BFS
@@ -187,10 +207,22 @@ private func bfs(
     specificationName: String,
     maxStates: Int,
     symmetrySets: [SymmetrySet] = [],
-    symmetryGroups: [SymmetryVariableGroup] = []
+    symmetryGroups: [SymmetryVariableGroup] = [],
+    symmetricCollections: [SymmetricCollectionDecl] = []
 ) throws -> ModelChecker.Exploration {
+    let symmetricCollectionGroups = symmetricCollections.map {
+        SymmetricCollectionPermutationGroup(members: $0.metadata.members)
+    }
+
     func canonicalKey(_ state: State) -> State {
-        symmetryGroups.reduce(symmetrySets.reduce(state) { $1.canonicalize($0) }) { $1.canonicalize($0) }
+        var candidates = [state]
+        for group in symmetricCollectionGroups {
+            candidates = candidates.flatMap { candidate in
+                group.mappings.map { applySymmetricMemberPermutation(candidate, mapping: $0) }
+            }
+        }
+        let canonical = candidates.min { symmetricStateEncoding($0) < symmetricStateEncoding($1) } ?? state
+        return symmetryGroups.reduce(symmetrySets.reduce(canonical) { $1.canonicalize($0) }) { $1.canonicalize($0) }
     }
 
     var queue: [State] = []
@@ -356,13 +388,24 @@ private func buildTrace(
 
 // MARK: - Results
 
-public enum CheckResult: CustomStringConvertible {
+public indirect enum CheckResult: CustomStringConvertible {
     case ok(statesCount: Int)
     case invariantViolated(invariant: String, state: [String: TLAValue], trace: [TraceStep])
     case depthExceeded(statesCount: Int, limit: Int)
     case deadlocked(state: [String: TLAValue])
     case livenessViolated(String)
     case error(String)
+    case bounded(scopes: [SymmetricCollectionScope], outcome: CheckResult)
+
+    public var underlyingOutcome: CheckResult {
+        if case .bounded(_, let outcome) = self { return outcome.underlyingOutcome }
+        return self
+    }
+
+    public var boundedScopes: [SymmetricCollectionScope] {
+        if case .bounded(let scopes, _) = self { return scopes }
+        return []
+    }
 
     public var description: String {
         switch self {
@@ -377,6 +420,9 @@ public enum CheckResult: CustomStringConvertible {
         case .deadlocked(let s): return "DEADLOCK detected at " + formatState(s)
         case .livenessViolated(let msg): return "LIVENESS VIOLATED: " + msg
         case .error(let message): return "ERROR: " + message
+        case .bounded(let scopes, let outcome):
+            return "BOUNDED VERIFICATION — " + scopes.map(\.description).joined(separator: "; ")
+                + "; this does not prove larger populations\n" + outcome.description
         }
     }
 }

@@ -1,4 +1,5 @@
 import SwiftCompilerPlugin
+import Foundation
 import SwiftSyntax
 import SwiftSyntaxBuilder
 import SwiftSyntaxMacros
@@ -8,12 +9,18 @@ import SwiftTLA
 
 // MARK: - Shared parsing and verification
 
+struct ParsedMacroModel {
+    let typeName: String
+    let variables: [(String, TLAValue, StateExpr?)]
+    let actions: [(String, ActionExpr)]
+    let symmetricCollections: [SpecParser.ParsedSymmetricCollection]
+    let collectionActions: [SpecParser.ParsedCollectionAction]
+}
+
 struct MacroExpander {
     let isActor: Bool
 
-    func parseAndVerify(_ declaration: some DeclGroupSyntax) throws -> (
-        typeName: String, variables: [(String, TLAValue, StateExpr?)], actions: [(String, ActionExpr)]
-    ) {
+    func parseAndVerify(_ declaration: some DeclGroupSyntax) throws -> ParsedMacroModel {
         let typeName: String
         let memberList: MemberBlockItemListSyntax
 
@@ -33,6 +40,9 @@ struct MacroExpander {
 
         let rewritten = rewriteVarNames(in: closure)
         let parsed = SpecParser.parseSpecClosure(rewritten)
+        if let diagnostic = parsed.diagnostics.first {
+            throw diagnostic
+        }
         if parsed.variables.isEmpty { throw SimpleError("No variables in spec") }
 
         let spec = TLASpec(
@@ -42,7 +52,8 @@ struct MacroExpander {
             actions: parsed.actions.map { NamedAction(name: $0.name, body: $0.body) },
             invariants: parsed.invariants.map { NamedInvariant(name: $0.name, body: $0.body) },
             temporalProperties: parsed.temporal.map { NamedTemporal(name: $0.name, expr: $0.expr) },
-            fairness: parsed.fairness
+            fairness: parsed.fairness,
+            symmetricCollections: parsed.symmetricCollections.map(\.declaration)
         )
 
         let result = try ModelChecker(spec: spec, maxStates: 1_000_000).check()
@@ -54,14 +65,27 @@ struct MacroExpander {
         case .depthExceeded(let c, let l): throw SimpleError("Depth exceeded: \(c)/\(l)")
         case .livenessViolated(let msg): throw SimpleError("Liveness violated: \(msg)")
         case .ok: SpecRegistry.register(spec)
+        case .bounded(_, let outcome):
+            guard case .ok = outcome else {
+                throw SimpleError("Checker error: \(outcome)")
+            }
+            SpecRegistry.register(spec)
         }
 
-        return (typeName, parsed.variables, parsed.actions)
+        return ParsedMacroModel(
+            typeName: typeName,
+            variables: parsed.variables,
+            actions: parsed.actions,
+            symmetricCollections: parsed.symmetricCollections,
+            collectionActions: parsed.collectionActions
+        )
     }
 
     func generateMembers(
         variables: [(name: String, initial: TLAValue, initialSet: StateExpr?)],
-        actions: [(name: String, body: ActionExpr)]
+        actions: [(name: String, body: ActionExpr)],
+        symmetricCollections: [SpecParser.ParsedSymmetricCollection] = [],
+        collectionActions: [SpecParser.ParsedCollectionAction] = []
     ) -> [DeclSyntax] {
         var decls: [DeclSyntax] = []
 
@@ -80,9 +104,17 @@ struct MacroExpander {
         decls.append(DeclSyntax(Self.generateVariablesEnum(variables: variables)))
         decls.append(DeclSyntax(Self.generateActionsEnum(actions: actions)))
         decls.append(DeclSyntax(Self.generateStateStruct(variables: variables)))
-        decls.append(contentsOf: Self.generateVariableProperties(variables: variables).map(DeclSyntax.init))
-        decls.append(contentsOf: generateActionMethods(actions: actions).map(DeclSyntax.init))
-        decls.append(DeclSyntax(generateApplyHelper()))
+        decls.append(contentsOf: generateCollectionRuntimeMembers(symmetricCollections))
+        let ordinaryVariables = variables.filter { variable in
+            !symmetricCollections.contains(where: { $0.name == variable.name })
+        }
+        decls.append(contentsOf: Self.generateVariableProperties(variables: ordinaryVariables).map(DeclSyntax.init))
+        decls.append(contentsOf: generateActionMethods(
+            actions: actions,
+            collectionActions: collectionActions,
+            symmetricCollections: symmetricCollections
+        ).map(DeclSyntax.init))
+        decls.append(DeclSyntax(generateApplyHelper(symmetricCollections: symmetricCollections)))
         decls.append(DeclSyntax(
             VariableDeclSyntax(
                 modifiers: [DeclModifierSyntax(name: .keyword(.public)), DeclModifierSyntax(name: .keyword(.static))],
@@ -268,10 +300,40 @@ struct MacroExpander {
         }
     }
 
-    func generateActionMethods(actions: [(name: String, body: ActionExpr)]) -> [FunctionDeclSyntax] {
+    func generateActionMethods(
+        actions: [(name: String, body: ActionExpr)],
+        collectionActions: [SpecParser.ParsedCollectionAction],
+        symmetricCollections: [SpecParser.ParsedSymmetricCollection]
+    ) -> [FunctionDeclSyntax] {
         let visibility = isActor ? TokenSyntax.keyword(.fileprivate) : TokenSyntax.keyword(.public)
         return actions.map { a in
-            FunctionDeclSyntax(
+            if let collectionAction = collectionActions.first(where: { $0.name == a.name }),
+               let collection = symmetricCollections.first(where: { $0.name == collectionAction.collectionName }) {
+                let actionNotEnabled = "SymmetricCollectionRuntimeError.actionNotEnabled(collection: \"\(collection.name)\", action: \"\(a.name)\")"
+                let liveBranches = collectionAction.runtimeBranches.map { branch in
+                    let condition = branch.guardExpressions.isEmpty
+                        ? "true"
+                        : branch.guardExpressions.map { "(\($0))" }.joined(separator: " && ")
+                    let update = branch.updateExpression.map {
+                        "try \(collection.name).update(id: id, action: \"\(a.name)\") { entry in \($0) }"
+                    } ?? ""
+                    return """
+                    if \(condition) {
+                        \(update)
+                        return
+                    }
+                    """
+                }.joined(separator: "\n")
+                let source = """
+                \(isActor ? "fileprivate" : "public mutating") func \(a.name)(id: \(collection.elementType).ID) throws {
+                    let entry = try \(collection.name).entry(for: id, action: "\(a.name)")
+                    \(liveBranches)
+                    throw \(actionNotEnabled)
+                }
+                """
+                return DeclSyntax(stringLiteral: source).as(FunctionDeclSyntax.self)!
+            }
+            return FunctionDeclSyntax(
                 modifiers: isActor
                     ? [DeclModifierSyntax(name: visibility)]
                     : [DeclModifierSyntax(name: .keyword(.public)), DeclModifierSyntax(name: .keyword(.mutating))],
@@ -282,8 +344,66 @@ struct MacroExpander {
         }
     }
 
-    func generateApplyHelper() -> FunctionDeclSyntax {
-        FunctionDeclSyntax(
+    func generateCollectionRuntimeMembers(
+        _ collections: [SpecParser.ParsedSymmetricCollection]
+    ) -> [DeclSyntax] {
+        var declarations = collections.map { collection in
+            DeclSyntax(stringLiteral: """
+            public var \(collection.name) = IdentifiedModelCollection<\(collection.elementType), \(collection.valueType)>(
+                name: \"\(collection.name)\",
+                verificationScope: \(collection.verificationScope),
+                initial: \(Self.literalExpr(for: collection.declaration.initial))
+            )
+            """)
+        }
+        guard !collections.isEmpty else { return declarations }
+        let scopes = collections.map {
+            "SymmetricCollectionScope(collectionName: \"\($0.name)\", verificationScope: \($0.verificationScope))"
+        }.joined(separator: ", ")
+        declarations.append(DeclSyntax(stringLiteral: """
+        public static let symmetricCollectionScopes: [SymmetricCollectionScope] = [\(scopes)]
+        """))
+        return declarations
+    }
+
+    func generateApplyHelper(
+        symmetricCollections: [SpecParser.ParsedSymmetricCollection] = []
+    ) -> FunctionDeclSyntax {
+        if symmetricCollections.isEmpty {
+            return FunctionDeclSyntax(
+                modifiers: [DeclModifierSyntax(name: .keyword(.private))],
+                name: "_apply",
+                signature: FunctionSignatureSyntax(
+                    parameterClause: FunctionParameterClauseSyntax {
+                        FunctionParameterSyntax(
+                            firstName: "_", secondName: "action",
+                            type: IdentifierTypeSyntax(name: "Actions")
+                        )
+                    },
+                    returnClause: ReturnClauseSyntax(type: IdentifierTypeSyntax(name: "State"))
+                ),
+                body: CodeBlockSyntax {
+                    ExprSyntax(stringLiteral: """
+                    guard let next = try? Self.runtime.apply(
+                        actionName: action.rawValue,
+                        to: _state.asDictionary
+                    ) else { return _state }
+                    """)
+                    StmtSyntax(stringLiteral: "return State(from: next)")
+                }
+            )
+        }
+        let liveStateProjection = symmetricCollections.map { collection in
+            """
+            liveState[Variables.\(collection.name).rawValue] = \(collection.name).projectedModelValue(
+                preserving: boundedState[Variables.\(collection.name).rawValue]!.functionValue.keys.sorted()
+            )
+            """
+        }.joined(separator: "\n")
+        let boundedStateRestoration = symmetricCollections.map { collection in
+            "next[Variables.\(collection.name).rawValue] = boundedState[Variables.\(collection.name).rawValue]"
+        }.joined(separator: "\n")
+        return FunctionDeclSyntax(
             modifiers: [DeclModifierSyntax(name: .keyword(.private))],
             name: "_apply",
             signature: FunctionSignatureSyntax(
@@ -296,7 +416,16 @@ struct MacroExpander {
                 returnClause: ReturnClauseSyntax(type: IdentifierTypeSyntax(name: "State"))
             ),
             body: CodeBlockSyntax {
-                ExprSyntax(stringLiteral: "guard let next = try? Self.runtime.apply(actionName: action.rawValue, to: _state.asDictionary) else { return _state }")
+                ExprSyntax(stringLiteral: """
+                let boundedState = _state.asDictionary
+                var liveState = boundedState
+                \(liveStateProjection)
+                guard var next = try? Self.runtime.apply(
+                    actionName: action.rawValue,
+                    to: liveState
+                ) else { return _state }
+                \(boundedStateRestoration)
+                """)
                 StmtSyntax(stringLiteral: "return State(from: next)")
             }
         )
@@ -556,8 +685,19 @@ public struct ModelMacro: MemberMacro, ExtensionMacro {
     public static func expansion(of node: AttributeSyntax, providingMembersOf declaration: some DeclGroupSyntax,
                                   in context: some MacroExpansionContext) throws -> [DeclSyntax] {
         let expander = MacroExpander(isActor: false)
-        let parsed = try expander.parseAndVerify(declaration)
-        return expander.generateMembers(variables: parsed.variables, actions: parsed.actions)
+        let parsed: ParsedMacroModel
+        do {
+            parsed = try expander.parseAndVerify(declaration)
+        } catch let diagnostic as SpecParser.SymmetricCollectionParseDiagnostic {
+            context.diagnose(parserDiagnostic(diagnostic, in: declaration))
+            return []
+        }
+        return expander.generateMembers(
+            variables: parsed.variables,
+            actions: parsed.actions,
+            symmetricCollections: parsed.symmetricCollections,
+            collectionActions: parsed.collectionActions
+        )
     }
 }
 
@@ -574,8 +714,19 @@ public struct TLAActorMacro: MemberMacro, ExtensionMacro {
     public static func expansion(of node: AttributeSyntax, providingMembersOf declaration: some DeclGroupSyntax,
                                   in context: some MacroExpansionContext) throws -> [DeclSyntax] {
         let expander = MacroExpander(isActor: true)
-        let parsed = try expander.parseAndVerify(declaration)
-        return expander.generateMembers(variables: parsed.variables, actions: parsed.actions)
+        let parsed: ParsedMacroModel
+        do {
+            parsed = try expander.parseAndVerify(declaration)
+        } catch let diagnostic as SpecParser.SymmetricCollectionParseDiagnostic {
+            context.diagnose(parserDiagnostic(diagnostic, in: declaration))
+            return []
+        }
+        return expander.generateMembers(
+            variables: parsed.variables,
+            actions: parsed.actions,
+            symmetricCollections: parsed.symmetricCollections,
+            collectionActions: parsed.collectionActions
+        )
     }
 }
 
@@ -583,7 +734,59 @@ public struct TLAObservableMacro: MemberMacro {
     public static func expansion(of node: AttributeSyntax, providingMembersOf declaration: some DeclGroupSyntax,
                                   in context: some MacroExpansionContext) throws -> [DeclSyntax] {
         let expander = MacroExpander(isActor: false)
-        let parsed = try expander.parseAndVerify(declaration)
+        let parsed: ParsedMacroModel
+        do {
+            parsed = try expander.parseAndVerify(declaration)
+        } catch let diagnostic as SpecParser.SymmetricCollectionParseDiagnostic {
+            context.diagnose(parserDiagnostic(diagnostic, in: declaration))
+            return []
+        }
         return expander.generateObservableMembers(variables: parsed.variables, actions: parsed.actions)
+    }
+}
+
+private struct ParserDiagnosticMessage: DiagnosticMessage {
+    let message: String
+    let diagnosticID = MessageID(domain: "SwiftTLA", id: "unsupported-spec-expression")
+    let severity: DiagnosticSeverity = .error
+}
+
+private func parserDiagnostic(
+    _ diagnostic: SpecParser.SymmetricCollectionParseDiagnostic,
+    in declaration: some DeclGroupSyntax
+) -> Diagnostic {
+    let finder = ParserDiagnosticNodeFinder(
+        source: diagnostic.source,
+        offset: diagnostic.sourceOffset
+    )
+    finder.walk(Syntax(declaration))
+    return Diagnostic(
+        node: finder.node ?? Syntax(declaration),
+        message: ParserDiagnosticMessage(message: diagnostic.message)
+    )
+}
+
+private final class ParserDiagnosticNodeFinder: SyntaxAnyVisitor {
+    let source: String
+    let offset: Int?
+    var node: Syntax?
+
+    init(source: String, offset: Int?) {
+        self.source = source.trimmingCharacters(in: .whitespacesAndNewlines)
+        self.offset = offset
+        super.init(viewMode: .sourceAccurate)
+    }
+
+    override func visitAny(_ candidate: Syntax) -> SyntaxVisitorContinueKind {
+        guard node == nil else { return .skipChildren }
+        let matchesOffset = offset.map {
+            candidate.positionAfterSkippingLeadingTrivia.utf8Offset == $0
+        } ?? false
+        let matchesSource = candidate.description.trimmingCharacters(in: .whitespacesAndNewlines) == source
+        if matchesOffset && matchesSource {
+            node = candidate
+            return .skipChildren
+        }
+        return .visitChildren
     }
 }

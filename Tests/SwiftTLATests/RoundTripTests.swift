@@ -377,6 +377,19 @@ import SwiftSyntax
         #expect(graph.states.count == 9)
     }
 
+    @Test func expressionBackedNondeterministicInit() throws {
+        let x = Var<Int>("x")
+        let spec = TLASpec("LazyInit") {
+            Variable(from: x.name, StateExpr.set([1, 2, 3]))
+            Invariant("TypeOK") { x >= 1 && x <= 3 }
+        }
+
+        let states = computeInitialStates(spec)
+        #expect(Set(states.compactMap { $0["x"] }) == Set([.int(1), .int(2), .int(3)]))
+        #expect(try ModelChecker(spec: spec).exploreGraph().states.count == 3)
+        #expect(spec.tlaModule.contains("Init == x \\in {1, 2, 3}"))
+    }
+
     @Test func dieHard16() throws {
         let big = Var<Int>("big", value: 0)
         let small = Var<Int>("small", value: 0)
@@ -426,6 +439,31 @@ import SwiftSyntax
         }
         let tla = spec.tlaModule
         #expect(tla.contains("WF_x(Next)"))  // single var → no tuple brackets
+    }
+
+    @Test func generatedCfgReferencesNamedDefinitions() {
+        let x = Var<Int>("x")
+        let spec = TLASpec("Config") {
+            Variable(x, 0)
+            Action("Next") { x.becomes(x + 1).when(x < 2) }
+            Invariant("TypeOK") { x >= 0 }
+            Constraint(x <= 2)
+            WeakFairness("Next")
+        }
+
+        #expect(spec.tlaCfg.contains("CONSTRAINT StateConstraint"))
+        #expect(!spec.tlaCfg.contains("CONSTRAINT ("))
+        #expect(!spec.tlaCfg.contains("WF_"))
+    }
+
+    @Test func generatedCfgAssignsConstants() {
+        let x = Var<Int>("x")
+        let spec = TLASpec("ConstantsConfig") {
+            Constant("N", 3)
+            Variable(x, 0)
+        }
+
+        #expect(spec.tlaCfg.contains("CONSTANT N = 3"))
     }
 
     @Test func theoremOutput() {
@@ -1341,7 +1379,7 @@ import SwiftSyntax
         #expect(count == 3)
     }
 
-    @Test("TLA+ SYMMETRY emitted in tlaModule")
+    @Test("TLA+ symmetry operator and config directive are emitted")
     func symmetryTLAOutput() {
         let spec = TLASpec("SymOut") {
             let x = Var<Int>("x")
@@ -1350,7 +1388,9 @@ import SwiftSyntax
             Symmetry("x", [1, 2, 3] as Set<Int>)
         }
         let tla = spec.tlaModule
-        #expect(tla.contains("SYMMETRY"))
+        #expect(tla.contains("EXTENDS Integers, FiniteSets, Sequences, TLC"))
+        #expect(tla.contains("Symmx == Permutations({1, 2, 3})"))
         #expect(tla.contains("Symmx"))
+        #expect(spec.tlaCfg.contains("SYMMETRY Symmx"))
     }
 }

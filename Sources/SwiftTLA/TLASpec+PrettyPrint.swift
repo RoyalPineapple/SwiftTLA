@@ -4,6 +4,7 @@ import SwiftSyntaxBuilder
 
 extension TLASpec {
     public var tlaModule: String {
+        validateSymmetricCollectionExport()
         let varNames = variables.map(\.name)
         let varsTuple = varNames.count == 1 ? varNames[0] : "<<\(varNames.joined(separator: ", "))>>"
         var lines: [String] = []
@@ -11,23 +12,35 @@ extension TLASpec {
         let modName = name.replacingOccurrences(of: " ", with: "")
         lines.append("---- MODULE \(modName) ----")
 
-        lines.append("EXTENDS \(extendsModules), FiniteSets, Sequences")
+        let symmetryModule = symmetrySets.isEmpty && symmetricCollections.isEmpty ? "" : ", TLC"
+        lines.append("EXTENDS \(extendsModules), FiniteSets, Sequences\(symmetryModule)")
         lines.append("")
 
-        if !constants.isEmpty {
-            lines.append("CONSTANTS \(constants.keys.sorted().joined(separator: ", "))")
+        let generatedMemberSymbols = symmetricCollections.flatMap { collection in
+            collection.metadata.generatedSymbols.filter { symbol in
+                collection.metadata.members.contains(.constant(symbol))
+            }
+        }
+        let allConstantSymbols = (constants.keys + generatedMemberSymbols).sorted()
+        if !allConstantSymbols.isEmpty {
+            lines.append("CONSTANTS \(allConstantSymbols.joined(separator: ", "))")
             for (name, value) in constants.sorted(by: { $0.key < $1.key }) {
                 lines.append("ASSUME \(name) = \(value)")
             }
             lines.append("")
         }
 
+        for collection in symmetricCollections {
+            let metadata = collection.metadata
+            lines.append("\(metadata.domainSymbol) == {\(metadata.members.map(\.description).joined(separator: ", "))}")
+            lines.append("\(metadata.symmetrySymbol) == Permutations(\(metadata.domainSymbol))")
+        }
         for sym in symmetrySets {
             let sortedVals = Array(sym.values).sorted(by: { $0.description < $1.description })
             let valList = sortedVals.map(\.description).joined(separator: ", ")
-            lines.append("SYMMETRY Symm\(sym.variableName) == {\(valList)}")
+            lines.append("Symm\(sym.variableName) == Permutations({\(valList)})")
         }
-        if !symmetrySets.isEmpty { lines.append("") }
+        if !symmetricCollections.isEmpty || !symmetrySets.isEmpty { lines.append("") }
 
         if let assume = assume {
             lines.append("ASSUME \(assume)")
@@ -73,7 +86,14 @@ extension TLASpec {
             lines.append("")
         }
 
+        let symmetricMetadataByName = Dictionary(
+            uniqueKeysWithValues: symmetricCollections.map { ($0.name, $0.metadata) }
+        )
         let inits = variables.map { v -> String in
+            if let metadata = symmetricMetadataByName[v.name] {
+                return "\(v.name) = [member \\in \(metadata.domainSymbol) |-> \(metadata.initial)]"
+            }
+            if let s = v.lazySet { return "\(v.name) \\in \(s)" }
             if let s = v.initialSet { return "\(v.name) \\in \(s)" }
             if let expr = v.initExpr { return "\(v.name) = \(expr)" }
             return "\(v.name) = \(v.initial)"
@@ -128,21 +148,30 @@ extension TLASpec {
 
     /// Auto-generated TLC configuration matching the module.
     public var tlaCfg: String {
+        validateSymmetricCollectionExport()
         var lines: [String] = []
         lines.append("SPECIFICATION Spec")
-        if checkDeadlock { lines.append("CHECK_DEADLOCK TRUE") }
-        else { lines.append("CHECK_DEADLOCK FALSE") }
-        if let c = constraint { lines.append("CONSTRAINT \(c)") }
+        if checkDeadlock {
+            lines.append("CHECK_DEADLOCK TRUE")
+        } else {
+            lines.append("CHECK_DEADLOCK FALSE")
+        }
+        for (name, value) in constants.sorted(by: { $0.key < $1.key }) {
+            lines.append("CONSTANT \(name) = \(value)")
+        }
+        for collection in symmetricCollections {
+            for member in collection.metadata.members {
+                lines.append("CONSTANT \(member) = \(member)")
+            }
+        }
+        if constraint != nil { lines.append("CONSTRAINT StateConstraint") }
         for inv in invariants { lines.append("INVARIANT \(inv.name)") }
         for t in temporalProperties { lines.append("PROPERTY \(t.name)") }
-        for f in fairness {
-            let vn = variables.map(\.name)
-            let vt = vn.count == 1 ? vn[0] : "<<\(vn.joined(separator: ", "))>>"
-            lines.append(f.tlaForm(vars: vt))
-        }
         for sym in symmetrySets {
-            let vals = sym.values.sorted { $0.description < $1.description }
-            lines.append("SYMMETRY Symm\(sym.variableName) == {\(vals.map(\.description).joined(separator: ", "))}")
+            lines.append("SYMMETRY Symm\(sym.variableName)")
+        }
+        for collection in symmetricCollections {
+            lines.append("SYMMETRY \(collection.metadata.symmetrySymbol)")
         }
         return lines.joined(separator: "\n") + "\n"
     }
@@ -150,6 +179,12 @@ extension TLASpec {
     /// Complete TLA+ bundle: .tla module + .cfg file.
     public var tlaBundle: (tla: String, cfg: String) {
         (tlaModule, tlaCfg)
+    }
+
+    private func validateSymmetricCollectionExport() {
+        if let error = symmetricCollectionValidationError(permutationProductBudget: .max) {
+            preconditionFailure("Cannot export symmetric collection specification: \(error)")
+        }
     }
 }
 

@@ -3,11 +3,12 @@ public struct NamedVar: Sendable, CustomStringConvertible, Equatable {
     public let initial: TLAValue
     public let initialSet: StateExpr?
     public let initExpr: StateExpr?
-    public let lazySet: StateExpr?  // lazy range for on-demand init
+    public let lazySet: StateExpr?  // expression-backed nondeterministic init
     public init(name: String, initial: TLAValue, initialSet: StateExpr? = nil, initExpr: StateExpr? = nil, lazySet: StateExpr? = nil) {
         self.name = name; self.initial = initial; self.initialSet = initialSet; self.initExpr = initExpr; self.lazySet = lazySet
     }
     public var description: String {
+        if let s = lazySet { return "\(name) \\in \(s)" }
         if let s = initialSet { return "\(name) \\in \(s)" }
         return "\(name) = \(initial)"
     }
@@ -60,8 +61,9 @@ public struct TLASpec: Sendable {
     public var runtimeFuncBodies: [String] = []
     public let symmetrySets: [SymmetrySet]
     public let symmetryGroups: [SymmetryVariableGroup]
+    public let symmetricCollections: [SymmetricCollectionDecl]
 
-    public init(name: String, variables: [NamedVar], constants: [String: TLAValue] = [:], actions: [NamedAction], invariants: [NamedInvariant], temporalProperties: [NamedTemporal] = [], fairness: [FairnessCondition] = [], assume: StateExpr? = nil, checkDeadlock: Bool = false, definitions: [String] = [], theorems: [String] = [], extendsModules: String = "Integers", constraint: StateExpr? = nil, recursiveDefs: [String] = [], recursiveFuncs: [RecursiveFunc] = [], symmetrySets: [SymmetrySet] = [], symmetryGroups: [SymmetryVariableGroup] = []) {
+    public init(name: String, variables: [NamedVar], constants: [String: TLAValue] = [:], actions: [NamedAction], invariants: [NamedInvariant], temporalProperties: [NamedTemporal] = [], fairness: [FairnessCondition] = [], assume: StateExpr? = nil, checkDeadlock: Bool = false, definitions: [String] = [], theorems: [String] = [], extendsModules: String = "Integers", constraint: StateExpr? = nil, recursiveDefs: [String] = [], recursiveFuncs: [RecursiveFunc] = [], symmetrySets: [SymmetrySet] = [], symmetryGroups: [SymmetryVariableGroup] = [], symmetricCollections: [SymmetricCollectionDecl] = []) {
         self.name = name
         self.variables = variables
         self.constants = constants
@@ -79,6 +81,7 @@ public struct TLASpec: Sendable {
         self.recursiveFuncs = recursiveFuncs
         self.symmetrySets = symmetrySets
         self.symmetryGroups = symmetryGroups
+        self.symmetricCollections = symmetricCollections
     }
 
     public var description: String {
@@ -120,7 +123,8 @@ public struct TLASpec: Sendable {
             recursiveDefs: self.recursiveDefs + other.recursiveDefs,
             recursiveFuncs: self.recursiveFuncs + other.recursiveFuncs,
             symmetrySets: self.symmetrySets + other.symmetrySets,
-             symmetryGroups: self.symmetryGroups + other.symmetryGroups
+             symmetryGroups: self.symmetryGroups + other.symmetryGroups,
+            symmetricCollections: self.symmetricCollections + other.symmetricCollections
         )
     }
 
@@ -143,7 +147,8 @@ public struct TLASpec: Sendable {
             recursiveDefs: self.recursiveDefs,
             recursiveFuncs: self.recursiveFuncs,
             symmetrySets: self.symmetrySets,
-            symmetryGroups: self.symmetryGroups
+            symmetryGroups: self.symmetryGroups,
+            symmetricCollections: self.symmetricCollections
         )
     }
 }
@@ -318,6 +323,7 @@ public enum SpecBuilder {
     public static func buildExpression(_ expr: RuntimeFuncDecl) -> [SpecComponent] { [expr] }
     public static func buildExpression(_ expr: SymmetrySetDecl) -> [SpecComponent] { [expr] }
     public static func buildExpression(_ expr: SymmetryVariableGroupDecl) -> [SpecComponent] { [expr] }
+    public static func buildExpression(_ expr: SymmetricCollectionDecl) -> [SpecComponent] { [expr] }
     public static func buildExpression(_ expr: NamedValueDecl) -> [SpecComponent] { [] }
     public static func buildExpression(_ expr: OpDecl) -> [SpecComponent] { [expr] }
     public static func buildExpression(_ expr: OpUse) -> [SpecComponent] { [expr] }
@@ -386,7 +392,8 @@ public func Variable<T>(_ ref: Var<T>, in values: some Sequence<some TLAValueCon
     return VarDecl(ref.name, .set(set), initialSet: stateSet)
 }
 
-/// Lazy init: range evaluated on-demand during BFS. With symmetry, only one value needed.
+/// Expression-backed nondeterministic init. The range is evaluated when initial
+/// states are computed instead of being materialized while building the spec.
 @discardableResult
 public func Variable(from name: String, _ range: StateExpr) -> VarDecl {
     VarDecl(name, lazySet: range)
@@ -397,15 +404,17 @@ public func Variable(from name: String, _ range: StateExpr) -> VarDecl {
 public func computeInitialStates(_ spec: TLASpec) -> [[String: TLAValue]] {
     let substituted = substituteConstants(spec)
     let base = Dictionary(uniqueKeysWithValues: substituted.variables.map { ($0.name, $0.initial) })
-    let nondeterministic = substituted.variables.filter { v in
-        guard v.initialSet != nil else { return false }
-        if case .set = v.initial { return true }
-        return false
-    }
+    let nondeterministic = substituted.variables.filter { $0.initialSet != nil || $0.lazySet != nil }
     var states: [[String: TLAValue]] = nondeterministic.reduce([base]) { states, variable in
-        guard case .set(let values) = variable.initial else { return states }
-        let sorted = TLAValue.sorted(values)
-        return states.flatMap { state in sorted.map { state.merging([variable.name: $0]) { _, new in new } } }
+        states.flatMap { state -> [[String: TLAValue]] in
+            let expression = variable.lazySet ?? variable.initialSet
+            guard let expression,
+                  case .set(let values) = try? expression.evaluate(in: state)
+            else { return [] }
+            return TLAValue.sorted(values).map {
+                state.merging([variable.name: $0]) { _, new in new }
+            }
+        }
     }
     for variable in substituted.variables where variable.initExpr != nil {
         states = states.compactMap { state in
@@ -642,6 +651,7 @@ extension TLASpec {
         var runtimeFuncBodiesCollector: [String] = []
         var symmetrySets: [SymmetrySet] = []
         var symmetryGroups: [SymmetryVariableGroup] = []
+        var symmetricCollections: [SymmetricCollectionDecl] = []
         var operators: [String: OpDecl] = [:]
 
         // Pass 1: collect operators
@@ -650,7 +660,22 @@ extension TLASpec {
         }
 
         for comp in components {
-            if let v = comp as? VarDecl { variables.append(NamedVar(name: v.name, initial: v.initial, initialSet: v.initialSet, initExpr: v.initExpr, lazySet: v.lazySet)) } else if let a = comp as? ActionDecl { actions.append(NamedAction(name: a.name, body: a.body)) } else if let i = comp as? InvDecl { invariants.append(NamedInvariant(name: i.name, body: i.body)) } else if let t = comp as? TemporalDecl { temporalProperties.append(NamedTemporal(name: t.name, expr: t.expr)) } else if let f = comp as? FairnessDecl { fairness.append(f.condition) } else if let c = comp as? ConstantDecl { constants[c.name] = c.value } else if let d = comp as? DefinitionDecl {
+            if let v = comp as? VarDecl {
+                variables.append(NamedVar(name: v.name, initial: v.initial, initialSet: v.initialSet, initExpr: v.initExpr, lazySet: v.lazySet))
+            } else if let s = comp as? SymmetricCollectionDecl {
+                variables.append(s.variable)
+                symmetricCollections.append(s)
+            } else if let a = comp as? ActionDecl {
+                actions.append(NamedAction(name: a.name, body: a.body))
+            } else if let i = comp as? InvDecl {
+                invariants.append(NamedInvariant(name: i.name, body: i.body))
+            } else if let t = comp as? TemporalDecl {
+                temporalProperties.append(NamedTemporal(name: t.name, expr: t.expr))
+            } else if let f = comp as? FairnessDecl {
+                fairness.append(f.condition)
+            } else if let c = comp as? ConstantDecl {
+                constants[c.name] = c.value
+            } else if let d = comp as? DefinitionDecl {
                 if let name = d.name, let body = d.body {
                     definitions.append("\(name) == \(body)")
                 } else {
@@ -707,6 +732,7 @@ extension TLASpec {
             if let c = used.constraint { constraint = constraint.map { .and($0, c) } ?? c }
             if let a = used.assume { assumes = assumes.map { .and($0, a) } ?? a }
             symmetrySets += used.symmetrySets
+            symmetricCollections += used.symmetricCollections
         }
 
         // Auto-UNCHANGED: push into OR branches so TLC sees complete assignments
@@ -734,13 +760,20 @@ extension TLASpec {
         self.runtimeFuncBodies = runtimeFuncBodiesCollector
         self.symmetrySets = symmetrySets
         self.symmetryGroups = symmetryGroups
+        self.symmetricCollections = symmetricCollections
     }
 }
 
 public func substituteConstants(_ spec: TLASpec) -> TLASpec {
     let constants = spec.constants
     let vars = spec.variables.map { v in
-        NamedVar(name: v.name, initial: substituteInValue(v.initial, constants: constants), initialSet: v.initialSet, initExpr: v.initExpr, lazySet: v.lazySet)
+        NamedVar(
+            name: v.name,
+            initial: substituteInValue(v.initial, constants: constants),
+            initialSet: v.initialSet.map { substituteInState($0, constants: constants) },
+            initExpr: v.initExpr.map { substituteInState($0, constants: constants) },
+            lazySet: v.lazySet.map { substituteInState($0, constants: constants) }
+        )
     }
     let acts = spec.actions.map { a in
         NamedAction(name: a.name, body: substituteInAction(a.body, constants: constants))
@@ -767,7 +800,8 @@ public func substituteConstants(_ spec: TLASpec) -> TLASpec {
         recursiveDefs: spec.recursiveDefs,
         recursiveFuncs: spec.recursiveFuncs,
          symmetrySets: spec.symmetrySets,
-         symmetryGroups: spec.symmetryGroups
+         symmetryGroups: spec.symmetryGroups,
+         symmetricCollections: spec.symmetricCollections
     )
 }
 

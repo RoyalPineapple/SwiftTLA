@@ -105,6 +105,8 @@ identifier_name:
     - EventuallyAlways
     - WeakFairness
     - StrongFairness
+    - SymmetricCollection
+    - CollectionAction
     - DeadlockCheck
     - Symmetry
     - Constant
@@ -117,6 +119,13 @@ identifier_name:
     - Use
     - DefineRecursive
     - RuntimeFunc
+    - Operator
+    - UseSpec
+    - UseOp
+    - ForEach
+    - Always
+    - SymmetryGroup
+    - Value
     - ∈
     - ⊆
     - ∪
@@ -130,6 +139,10 @@ nesting:
     warning: 2
 
 excluded:
-  - .build
   - .githooks
   - Sources/SwiftTLADemo/App.swift
+  # Build products, package checkouts, and generated sources are not authored code.
+  - "**/.build/**"
+  - "**/.swiftpm/**"
+  - "**/checkouts/**"
+  - "**/generated/**"

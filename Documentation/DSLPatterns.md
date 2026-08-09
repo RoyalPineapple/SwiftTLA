@@ -9,6 +9,62 @@ Every construct in the DSL serves **two roles**:
 There is never a raw TLA+ string where a DSL construct could express the same thing.
 The DSL body IS the implementation.
 
+## Compiler rule: verified models become executable behavior
+
+`@TLAModel` is a compile-time behavioral compiler. Swift types constrain which
+models can be constructed; the macro parses the supported DSL into the existing
+AST, runs global model checking, and emits executable state-machine or actor
+behavior only after that check succeeds. The generated runtime reuses the
+verified model's actions rather than accepting a separate implementation.
+
+## Symmetric collection rule: lower behavior, hide identity
+
+`SymmetricCollectionVar<Element, Value>` separates two identity domains.
+Runtime storage is keyed by concrete `Element.ID` values and may contain an
+arbitrary number of live entries. Verification derives exactly
+`verificationScope` opaque `.constant` model members; concrete IDs, including
+Bluetooth UUIDs, never enter `StateExpr`, `TLAValue`, generated TLA+, or TLC
+artifacts.
+
+The collection API does not add a parallel expression language. It lowers to
+established AST forms:
+
+- A selected read is function application.
+- `allSatisfy` lowers to `forAll` over the collection function domain and
+  `contains(where:)` lowers to `exists` over that domain. Both value-only
+  predicates are supported in runtime-built specifications and in `@TLAModel`
+  parsing.
+- `CollectionAction` existentially selects one opaque member. Its selected
+  update lowers to a function `EXCEPT`, leaving every unselected entry
+  unchanged. The generated runtime action instead receives an `Element.ID`,
+  evaluates the authored guard and effect against that selected live entry, and
+  preserves its peers.
+
+The selection token is intentionally opaque: it may select or update only its
+own collection within its `CollectionAction`. It cannot be compared, ordered,
+stringified, persisted, or used to observe a model member's identity. This
+identity blindness is what permits symmetry reduction.
+
+The checker canonicalizes the complete state under every permitted bijection of
+each collection's opaque members, including nested keys and values, and retains
+the deterministic minimum encoding. Collections use independent permutation
+groups and must fit the configured product budget; the checker never silently
+falls back to an unsound reduction.
+
+## Symmetric collection oracle and proof boundary
+
+The TLA+ bundle declares distinct generated constants and its CFG assigns each
+one to a TLC model value, then declares the matching `Permutations(domain)`
+symmetry operator. Do not use quoted strings as member identities: TLC model
+values are the oracle contract. A feature change must run TLC on the generated
+module/CFG at the selected scope and compare its result with the internal
+checker, alongside ordinary DSL tests.
+
+A successful run verifies only the explicitly selected finite scope. It is not
+evidence for larger or arbitrary populations, and it makes no `N → infinity`
+claim. Locality-checked parametric verification is future work; it requires a
+separate proof rather than extrapolation from bounded runs.
+
 ## Builder rule: every nested scope gets a builder
 
 | Construct | Builder | Result |

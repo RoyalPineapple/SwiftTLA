@@ -38,7 +38,12 @@ let package = Package(
             .product(name: "SwiftParser", package: "swift-syntax")
         ]),
         .target(name: "SwiftTLAModels", dependencies: ["SwiftTLA", "SwiftTLAMacros"], swiftSettings: settings),
-        .target(name: "UpstreamParity", dependencies: ["SwiftTLA"], swiftSettings: settings),
+        .target(
+            name: "UpstreamParity",
+            dependencies: ["SwiftTLA"],
+            exclude: ["Examples/AGENTS.md"],
+            swiftSettings: settings
+        ),
         .executableTarget(name: "tlc-validate", dependencies: ["SwiftTLA", "UpstreamParity"], path: "Sources/TLCValidate"),
         .testTarget(name: "SwiftTLATests", dependencies: [
             "SwiftTLA",

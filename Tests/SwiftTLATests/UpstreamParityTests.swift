@@ -7,7 +7,7 @@ struct UpstreamParityTests {
     func modelCheckerMatchesTLC() throws {
         for entry in Example.all {
             // FIXME: Bakery ModelChecker diverges from TLC — known evaluator bug
-            if entry.id == "Bakery/N2" || entry.id == "NanoBlockchain/Small" || entry.id == "GameOfLife/N4" { continue }
+            if entry.id == "Bakery/N2" || entry.id == "NanoBlockchain/Small" { continue }
 
             let mc = ModelChecker(spec: entry.spec, maxStates: 50_000)
             let count = try mc.exploreGraph().states.count
@@ -21,6 +21,17 @@ struct UpstreamParityTests {
             }
             print("✔ \(entry.id): \(count) states ✓")
         }
+    }
+
+    @Test("Game of Life function update matches TLC")
+    func gameOfLifeMatchesTLC() throws {
+        let checker = ModelChecker(spec: Example.gameOfLife.spec, maxStates: 10)
+        #expect(try checker.exploreGraph().states.count == 2)
+        guard case .ok(let count) = try checker.check() else {
+            Issue.record("Game of Life did not verify")
+            return
+        }
+        #expect(count == 2)
     }
 
     @Test("HourClock .tlaModule is TLC-shaped")

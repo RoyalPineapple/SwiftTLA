@@ -38,6 +38,9 @@ tlc_count() {
   elif echo "$out" | grep -q 'Error:'; then result="error"
   else result="unknown"
   fi
+  if [[ "$result" == "error" || "$result" == "unknown" ]]; then
+    echo "$out" | tail -20 >&2
+  fi
   echo "$count|$result"
 }
 
@@ -105,6 +108,9 @@ ensure_tools
 echo "-- Swift ports (ParityCatalog) --"
 while IFS=$'\t' read -r id expected flag notes; do
   [[ -z "$id" ]] && continue
+  if [[ -n "${SWIFTTLA_PARITY_FILTER:-}" && "$id" != *"$SWIFTTLA_PARITY_FILTER"* ]]; then
+    continue
+  fi
   check_swift_port "$id" "$expected" success
 done < <(swift run tlc-validate list 2>/dev/null | awk -F'\t' '{print $1"\t"$2"\t"$3"\t"$4}')
 

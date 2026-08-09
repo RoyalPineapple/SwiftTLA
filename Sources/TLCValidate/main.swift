@@ -8,6 +8,7 @@ guard let name = args.first else {
     Usage: tlc-validate <name>
       operators: arithmetic comparison logic sets tuples records functions casexpr choose forall
       parity:    list | <ParityCatalog id>
+      oracle:    symmetric-collections (alias: symmetric-oracle)
     """, stderr)
     exit(1)
 }
@@ -17,7 +18,7 @@ if name == "check-all" {
     var ok = 0; var fail = 0; var skip = 0
     print("=== SwiftTLA ModelChecker vs TLC ===")
     for entry in Example.all {
-        if entry.id == "Bakery/N2" || entry.id == "NanoBlockchain/Small" || entry.id == "GameOfLife/N4" {
+        if entry.id == "Bakery/N2" || entry.id == "NanoBlockchain/Small" {
             print("SKIP \(entry.id) — known evaluator issue")
             skip += 1; continue
         }
@@ -55,12 +56,21 @@ if name == "bundle" {
 }
 
 
-if name == "test-lazy" {
-    // Test lazy init with Game of Life
+if name == "test-game-of-life" || name == "test-lazy" {
     let spec = Example.gameOfLife.spec
     let mc = ModelChecker(spec: spec, maxStates: 100)
     do { let r = try mc.check(); print("OK: \(r)") }
     catch { print("ERR: \(error)") }
+    exit(0)
+}
+
+if name == "symmetric-collections" || name == "symmetric-oracle" {
+    do {
+        try runSymmetricCollectionOracle()
+    } catch {
+        fputs("Symmetric collection TLC oracle failed: \(error)\n", stderr)
+        exit(1)
+    }
     exit(0)
 }
 
@@ -191,3 +201,162 @@ default:
 }
 
 print(output, terminator: "")
+
+private struct OracleDevice: Identifiable {
+    let id: Int
+}
+
+private struct TLCExecution {
+    let status: Int32
+    let output: String
+
+    var distinctStates: Int? {
+        let expression = try? NSRegularExpression(
+            pattern: "([0-9]+) distinct states (?:found|generated)",
+            options: []
+        )
+        guard let match = expression?.firstMatch(
+            in: output,
+            options: [],
+            range: NSRange(output.startIndex..., in: output)
+        ),
+        let range = Range(match.range(at: 1), in: output)
+        else { return nil }
+        return Int(output[range])
+    }
+}
+
+private enum SymmetricCollectionOracleError: Error, CustomStringConvertible {
+    case missingTLCJar(String)
+    case missingJavaRuntime([String])
+    case missingStateCount(String)
+    case swiftTLCMismatch(scope: Int, swift: Int, tlc: Int)
+    case quotedStringControlAccepted(String)
+
+    var description: String {
+        switch self {
+        case .missingTLCJar(let path):
+            return "TLC jar not found at \(path); run scripts/setup-tlc.sh or set TLA_TOOLS_JAR."
+        case .missingJavaRuntime(let candidates):
+            let checked = candidates.joined(separator: ", ")
+            return "No executable Java runtime found for TLC. Checked \(checked); set TLC_JAVA or JAVA_HOME, "
+                + "or install the repository-configured OpenJDK 21."
+        case .missingStateCount(let output):
+            return "TLC did not report its distinct-state count:\n\(output)"
+        case .swiftTLCMismatch(let scope, let swift, let tlc):
+            return "scope \(scope): Swift checker found \(swift) orbit states but TLC found \(tlc)."
+        case .quotedStringControlAccepted(let output):
+            return "quoted-string symmetry control unexpectedly succeeded:\n\(output)"
+        }
+    }
+}
+
+private func runSymmetricCollectionOracle() throws {
+    let jarPath = ProcessInfo.processInfo.environment["TLA_TOOLS_JAR"]
+        ?? FileManager.default.currentDirectoryPath + "/.build/tla-tools/tla2tools.jar"
+    guard FileManager.default.fileExists(atPath: jarPath) else {
+        throw SymmetricCollectionOracleError.missingTLCJar(jarPath)
+    }
+
+    for scope in 2...4 {
+        let spec = symmetricOracleSpec(scope: scope)
+        let swiftStates = try ModelChecker(spec: spec).exploreGraph().states.count
+        let execution = try executeTLC(bundle: spec.tlaBundle, moduleName: spec.name, jarPath: jarPath)
+        guard let tlcStates = execution.distinctStates else {
+            throw SymmetricCollectionOracleError.missingStateCount(execution.output)
+        }
+        guard execution.status == 0, tlcStates == swiftStates else {
+            throw SymmetricCollectionOracleError.swiftTLCMismatch(
+                scope: scope,
+                swift: swiftStates,
+                tlc: tlcStates
+            )
+        }
+        print("OK   symmetric scope \(scope) — Swift/TLC \(swiftStates) orbit states")
+    }
+
+    let control = quotedStringSymmetryControl(scope: 2)
+    let execution = try executeTLC(bundle: control, moduleName: "SymmetricOracle2", jarPath: jarPath)
+    guard execution.status != 0 else {
+        throw SymmetricCollectionOracleError.quotedStringControlAccepted(execution.output)
+    }
+    print("OK   quoted-string symmetry control rejected by TLC")
+}
+
+private func symmetricOracleSpec(scope: Int) -> TLASpec {
+    let devices = SymmetricCollectionVar<OracleDevice, Int>("devices")
+    return TLASpec("SymmetricOracle\(scope)") {
+        SymmetricCollection(devices, verificationScope: scope, initial: 0)
+        CollectionAction("advance", on: devices) { member in
+            devices[member] == 0 && devices.update(member, to: 1)
+        }
+        Invariant("ValidPhase") { devices.allSatisfy { $0 == 0 || $0 == 1 } }
+    }
+}
+
+private func quotedStringSymmetryControl(scope: Int) -> (tla: String, cfg: String) {
+    let bundle = symmetricOracleSpec(scope: scope).tlaBundle
+    let members = (0..<scope).map { "DevicesMember\($0)" }
+    var tla = bundle.tla.replacingOccurrences(
+        of: "CONSTANTS \(members.joined(separator: ", "))\n",
+        with: ""
+    )
+    for member in members {
+        tla = tla.replacingOccurrences(of: member, with: "\"\(member)\"")
+    }
+    let cfg = bundle.cfg
+        .split(separator: "\n")
+        .filter { !$0.hasPrefix("CONSTANT ") }
+        .joined(separator: "\n") + "\n"
+    return (tla, cfg)
+}
+
+private func executeTLC(
+    bundle: (tla: String, cfg: String),
+    moduleName: String,
+    jarPath: String
+) throws -> TLCExecution {
+    let directory = FileManager.default.temporaryDirectory
+        .appendingPathComponent("SwiftTLA-TLC-\(UUID().uuidString)", isDirectory: true)
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: directory) }
+
+    let tlaURL = directory.appendingPathComponent("\(moduleName).tla")
+    let cfgURL = directory.appendingPathComponent("\(moduleName).cfg")
+    try bundle.tla.write(to: tlaURL, atomically: true, encoding: .utf8)
+    try bundle.cfg.write(to: cfgURL, atomically: true, encoding: .utf8)
+
+    let process = Process()
+    process.executableURL = URL(fileURLWithPath: try resolveTLCJava())
+    process.arguments = ["-cp", jarPath, "tlc2.TLC", "-nowarning", "-config", cfgURL.path, tlaURL.path]
+    process.currentDirectoryURL = directory
+    let pipe = Pipe()
+    process.standardOutput = pipe
+    process.standardError = pipe
+    try process.run()
+    process.waitUntilExit()
+    let output = String(data: pipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+    return TLCExecution(status: process.terminationStatus, output: output)
+}
+
+private func resolveTLCJava() throws -> String {
+    let environment = ProcessInfo.processInfo.environment
+    var candidates = [String]()
+    if let java = environment["TLC_JAVA"] {
+        candidates.append(java)
+    }
+    if let javaHome = environment["JAVA_HOME"] {
+        candidates.append("\(javaHome)/bin/java")
+    }
+    candidates += [
+        "/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home/bin/java",
+        "/usr/local/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home/bin/java"
+    ]
+    if let path = environment["PATH"] {
+        candidates += path.split(separator: ":").map { "\($0)/java" }
+    }
+    if let java = candidates.first(where: FileManager.default.isExecutableFile(atPath:)) {
+        return java
+    }
+    throw SymmetricCollectionOracleError.missingJavaRuntime(candidates)
+}

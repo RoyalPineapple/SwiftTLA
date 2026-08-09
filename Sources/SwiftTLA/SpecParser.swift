@@ -1,5 +1,6 @@
 import SwiftSyntax
 import SwiftParser
+import SwiftBasicFormat
 
 /// Parses SwiftSyntax AST nodes into DSL types (StateExpr, ActionExpr, etc.).
 /// Every AST pattern maps deterministically to a DSL value.
@@ -97,13 +98,21 @@ public enum SpecParser {
     // MARK: - Action parsing
 
     /// Parses a closure body containing action expressions (connected by implicit AND).
-    public static func parseActionFrom(_ closure: ClosureExprSyntax, localConstants: [String: TLAValue] = [:]) -> ActionExpr? {
-        let actions = closure.statements.compactMap { statement -> ActionExpr? in
-            guard case .expr(let inner) = statement.item else { return nil }
-            return parseSingleAction(inner)
+    public static func parseActionFrom(
+        _ closure: ClosureExprSyntax,
+        localConstants: [String: TLAValue] = [:],
+        symmetricCollections: Set<String> = []
+    ) -> ActionExpr? {
+        var actions: [ActionExpr] = []
+        for statement in closure.statements {
+            guard case .expr(let expression) = statement.item else { continue }
+            guard let action = parseSingleAction(expression, symmetricCollections: symmetricCollections) else {
+                return nil
+            }
+            actions.append(action)
         }
-        if actions.isEmpty { return .guard_(.value(.bool(true))) }
-        return actions.dropFirst().reduce(actions[0]) { .and($0, $1) }
+        guard let first = actions.first else { return .guard_(.value(.bool(true))) }
+        return actions.dropFirst().reduce(first) { .and($0, $1) }
     }
 
     public static func parseInvariantFrom(_ closure: ClosureExprSyntax) -> StateExpr? {
@@ -121,15 +130,18 @@ public enum SpecParser {
 
     /// Parses a single action expression (one step in a transition).
     /// Handles: guard conditions, assignments, unchanged, OR/AND between actions.
-    public static func parseSingleAction(_ expression: ExprSyntax) -> ActionExpr? {
+    public static func parseSingleAction(
+        _ expression: ExprSyntax,
+        symmetricCollections: Set<String> = []
+    ) -> ActionExpr? {
         if let infixOperator = expression.as(InfixOperatorExprSyntax.self) {
             let operatorText = infixOperator.operator.as(BinaryOperatorExprSyntax.self)?.operator.text
 
             if operatorText == "||" {
-                let leftResult = parseSingleAction(infixOperator.leftOperand)
-                let rightResult = parseSingleAction(infixOperator.rightOperand)
-                let leftState = parseStateExpr(infixOperator.leftOperand)
-                let rightState = parseStateExpr(infixOperator.rightOperand)
+                let leftResult = parseSingleAction(infixOperator.leftOperand, symmetricCollections: symmetricCollections)
+                let rightResult = parseSingleAction(infixOperator.rightOperand, symmetricCollections: symmetricCollections)
+                let leftState = parseInvariantExpression(infixOperator.leftOperand, symmetricCollections: symmetricCollections)
+                let rightState = parseInvariantExpression(infixOperator.rightOperand, symmetricCollections: symmetricCollections)
 
                 let leftAction = leftState == nil ? leftResult : nil
                 let rightAction = rightState == nil ? rightResult : nil
@@ -140,10 +152,10 @@ public enum SpecParser {
             }
 
             if operatorText == "&&" {
-                let leftState = parseStateExpr(infixOperator.leftOperand)
-                let rightState = parseStateExpr(infixOperator.rightOperand)
-                let leftAction = leftState == nil ? parseSingleAction(infixOperator.leftOperand) : nil
-                let rightAction = rightState == nil ? parseSingleAction(infixOperator.rightOperand) : nil
+                let leftState = parseInvariantExpression(infixOperator.leftOperand, symmetricCollections: symmetricCollections)
+                let rightState = parseInvariantExpression(infixOperator.rightOperand, symmetricCollections: symmetricCollections)
+                let leftAction = leftState == nil ? parseSingleAction(infixOperator.leftOperand, symmetricCollections: symmetricCollections) : nil
+                let rightAction = rightState == nil ? parseSingleAction(infixOperator.rightOperand, symmetricCollections: symmetricCollections) : nil
 
                 if let guardExpr = leftState, let actionExpr = rightAction { return .and(.guard_(guardExpr), actionExpr) }
                 if let actionExpr = leftAction, let guardExpr = rightState { return .and(actionExpr, .guard_(guardExpr)) }
@@ -155,23 +167,23 @@ public enum SpecParser {
             let elements = Array(sequence.elements)
             if elements.count == 3 {
                 let operatorText = elements[1].as(BinaryOperatorExprSyntax.self)?.operator.text
-                if let leftAction = parseSingleAction(elements[0]),
-                   let rightAction = parseSingleAction(elements[2]) {
+                if let leftAction = parseLeafAsAction(elements[0], symmetricCollections: symmetricCollections),
+                   let rightAction = parseLeafAsAction(elements[2], symmetricCollections: symmetricCollections) {
                     if operatorText == "||" { return .or(leftAction, rightAction) }
                     if operatorText == "&&" { return .and(leftAction, rightAction) }
                 }
             } else if elements.count > 3 {
-                return foldActionSequence(elements)
+                return foldActionSequence(elements, symmetricCollections: symmetricCollections)
             }
         }
 
         if let functionCall = expression.as(FunctionCallExprSyntax.self),
-           let becomesChain = parseBecomesChain(functionCall) {
+            let becomesChain = parseBecomesChain(functionCall, symmetricCollections: symmetricCollections) {
             return becomesChain
         }
 
         if let functionCall = expression.as(FunctionCallExprSyntax.self) {
-            if let becomesChain = parseBecomesChain(functionCall) {
+            if let becomesChain = parseBecomesChain(functionCall, symmetricCollections: symmetricCollections) {
                 return becomesChain
             }
             if let chooseAction = parseChooseCall(functionCall) {
@@ -201,7 +213,10 @@ public enum SpecParser {
 
     /// Folds a multi-element SequenceExprSyntax (5+ elements) into an ActionExpr
     /// by splitting on || (lowest precedence) then && within each group.
-    private static func foldActionSequence(_ elements: [ExprSyntax]) -> ActionExpr? {
+    private static func foldActionSequence(
+        _ elements: [ExprSyntax],
+        symmetricCollections: Set<String>
+    ) -> ActionExpr? {
         // The sequence alternates: leaf, operator, leaf, operator, leaf, ...
         // Operator positions: 1, 3, 5, ...   Leaf positions: 0, 2, 4, ...
         guard elements.count >= 3, elements.count % 2 == 1 else { return nil }
@@ -214,18 +229,18 @@ public enum SpecParser {
         }
 
         if orSplitIndices.isEmpty {
-            return foldAndGroup(elements)
+            return foldAndGroup(elements, symmetricCollections: symmetricCollections)
         }
 
         var groups: [ActionExpr] = []
         var start = 0
         for splitIndex in orSplitIndices {
-            if let group = foldAndGroup(Array(elements[start..<splitIndex])) {
+            if let group = foldAndGroup(Array(elements[start..<splitIndex]), symmetricCollections: symmetricCollections) {
                 groups.append(group)
             }
             start = splitIndex + 1
         }
-        if start < elements.count, let group = foldAndGroup(Array(elements[start...])) {
+        if start < elements.count, let group = foldAndGroup(Array(elements[start...]), symmetricCollections: symmetricCollections) {
             groups.append(group)
         }
 
@@ -234,9 +249,12 @@ public enum SpecParser {
     }
 
     /// Folds a sequence containing only && operators (or a single leaf) into an ActionExpr.
-    private static func foldAndGroup(_ elements: [ExprSyntax]) -> ActionExpr? {
+    private static func foldAndGroup(
+        _ elements: [ExprSyntax],
+        symmetricCollections: Set<String>
+    ) -> ActionExpr? {
         guard elements.count >= 1 else { return nil }
-        if elements.count == 1 { return parseLeafAsAction(elements[0]) }
+        if elements.count == 1 { return parseLeafAsAction(elements[0], symmetricCollections: symmetricCollections) }
 
         var andSplitIndices: [Int] = []
         for index in stride(from: 1, to: elements.count, by: 2) {
@@ -246,18 +264,18 @@ public enum SpecParser {
         }
 
         if andSplitIndices.isEmpty {
-            return parseAndLeaf(elements)
+            return parseAndLeaf(elements, symmetricCollections: symmetricCollections)
         }
 
         var leafActions: [ActionExpr] = []
         var start = 0
         for splitIndex in andSplitIndices {
-            if let leaf = parseAndLeaf(Array(elements[start..<splitIndex])) {
+            if let leaf = parseAndLeaf(Array(elements[start..<splitIndex]), symmetricCollections: symmetricCollections) {
                 leafActions.append(leaf)
             }
             start = splitIndex + 1
         }
-        if start < elements.count, let leaf = parseAndLeaf(Array(elements[start...])) {
+        if start < elements.count, let leaf = parseAndLeaf(Array(elements[start...]), symmetricCollections: symmetricCollections) {
             leafActions.append(leaf)
         }
 
@@ -266,21 +284,27 @@ public enum SpecParser {
     }
 
     /// Parses a leaf slice (one or more ExprSyntax elements) as an action or guard.
-    private static func parseAndLeaf(_ slice: [ExprSyntax]) -> ActionExpr? {
+    private static func parseAndLeaf(
+        _ slice: [ExprSyntax],
+        symmetricCollections: Set<String>
+    ) -> ActionExpr? {
         if slice.count == 1 {
-            return parseLeafAsAction(slice[0])
+            return parseLeafAsAction(slice[0], symmetricCollections: symmetricCollections)
         }
         let source = slice.map { $0.description }.joined()
         guard let reconstructed = SwiftParser.Parser.parse(source: source).statements.first?.item.as(ExprSyntax.self) else {
             return nil
         }
-        return parseLeafAsAction(reconstructed)
+        return parseLeafAsAction(reconstructed, symmetricCollections: symmetricCollections)
     }
 
     /// Tries to parse a single expression as either an action or a guard (state expression).
-    private static func parseLeafAsAction(_ expression: ExprSyntax) -> ActionExpr? {
-        if let action = parseSingleAction(expression) { return action }
-        if let state = parseStateExpr(expression) { return .guard_(state) }
+    private static func parseLeafAsAction(
+        _ expression: ExprSyntax,
+        symmetricCollections: Set<String>
+    ) -> ActionExpr? {
+        if let action = parseSingleAction(expression, symmetricCollections: symmetricCollections) { return action }
+        if let state = parseInvariantExpression(expression, symmetricCollections: symmetricCollections) { return .guard_(state) }
         return nil
     }
 
@@ -293,12 +317,17 @@ public enum SpecParser {
 
     /// Unwraps nested `.when(...)` calls from a `.becomes(...)` chain.
     /// `x.becomes(1).when(x < 5)` → call = `x.becomes(1)`, condition = `x < 5`
-    private static func unwrapGuards(_ functionCall: FunctionCallExprSyntax) -> GuardedAssignment {
+    private static func unwrapGuards(
+        _ functionCall: FunctionCallExprSyntax,
+        symmetricCollections: Set<String>
+    ) -> GuardedAssignment {
         if let memberAccess = functionCall.calledExpression.as(MemberAccessExprSyntax.self),
            memberAccess.declName.baseName.text == "when",
            let innerCall = memberAccess.base?.as(FunctionCallExprSyntax.self) {
-            let outerCondition = parseStateExpr(functionCall.arguments.first?.expression)
-            let inner = unwrapGuards(innerCall)
+            let outerCondition = functionCall.arguments.first.flatMap {
+                parseInvariantExpression($0.expression, symmetricCollections: symmetricCollections)
+            }
+            let inner = unwrapGuards(innerCall, symmetricCollections: symmetricCollections)
             if let outer = outerCondition, let innerCondition = inner.condition {
                 return GuardedAssignment(call: inner.call, condition: .and(outer, innerCondition))
             }
@@ -309,8 +338,11 @@ public enum SpecParser {
 
     /// Parses a `.becomes(...)` call (possibly wrapped in `.when(...)` chains).
     /// Detects whether the assignment is deterministic or nondeterministic (CHOOSE).
-    private static func parseBecomesChain(_ functionCall: FunctionCallExprSyntax) -> ActionExpr? {
-        let guarded = unwrapGuards(functionCall)
+    private static func parseBecomesChain(
+        _ functionCall: FunctionCallExprSyntax,
+        symmetricCollections: Set<String>
+    ) -> ActionExpr? {
+        let guarded = unwrapGuards(functionCall, symmetricCollections: symmetricCollections)
         guard let (variableName, assignment) = parseBecomesArgument(guarded.call) else { return nil }
 
         let action: ActionExpr
@@ -622,6 +654,9 @@ public enum SpecParser {
     public struct ParsedSpecComponents {
         public var variables: [(name: String, initial: TLAValue, initialSet: StateExpr?)] = []
         public var actions: [(name: String, body: ActionExpr)] = []
+        public var symmetricCollections: [ParsedSymmetricCollection] = []
+        public var collectionActions: [ParsedCollectionAction] = []
+        public var diagnostics: [SymmetricCollectionParseDiagnostic] = []
         public var invariants: [(name: String, body: StateExpr)] = []
         public var temporal: [(name: String, expr: TemporalExpr)] = []
         public var fairness: [FairnessCondition] = []
@@ -630,12 +665,57 @@ public enum SpecParser {
         public var localConstants: [String: TLAValue] = [:]
     }
 
+    public struct ParsedSymmetricCollection {
+        public let name: String
+        public let elementType: String
+        public let valueType: String
+        public let verificationScope: Int
+        public let source: String
+        public let declaration: SymmetricCollectionDecl
+    }
+
+    public struct ParsedCollectionAction {
+        public struct RuntimeBranch {
+            public let guardExpressions: [String]
+            public let updateExpression: String?
+        }
+
+        public let name: String
+        public let collectionName: String
+        public let body: ActionExpr
+        public let runtimeBranches: [RuntimeBranch]
+        public let source: String
+    }
+
+    public struct SymmetricCollectionParseDiagnostic: Error, CustomStringConvertible {
+        public let message: String
+        public let source: String
+        public let sourceOffset: Int?
+
+        public init(message: String, source: String, sourceOffset: Int? = nil) {
+            self.message = message
+            self.source = source
+            self.sourceOffset = sourceOffset
+        }
+
+        public init<Node: SyntaxProtocol>(message: String, source: Node) {
+            self.init(
+                message: message,
+                source: source.description,
+                sourceOffset: source.positionAfterSkippingLeadingTrivia.utf8Offset
+            )
+        }
+
+        public var description: String { message }
+    }
+
      public static func parseSpecClosure(_ closure: ClosureExprSyntax) -> ParsedSpecComponents {
         var result = ParsedSpecComponents()
+        let collectionTypes = collectSymmetricCollectionTypes(in: closure)
         for statement in closure.statements {
             if case .expr(let expression) = statement.item,
                let fc = expression.as(FunctionCallExprSyntax.self) {
-                parseBuilderCall(fc, into: &result)
+                parseBuilderCall(fc, into: &result, collectionTypes: collectionTypes)
             } else if let forStmt = statement.item.as(ForStmtSyntax.self) {
                 parseForLoop(forStmt, into: &result)
             }
@@ -672,23 +752,40 @@ public enum SpecParser {
         }
     }
 
-    private static func parseBuilderCall(_ call: FunctionCallExprSyntax, into result: inout ParsedSpecComponents,
-                                          loopVar: String? = nil, loopValue: Int? = nil) {
+    private static func parseBuilderCall(
+        _ call: FunctionCallExprSyntax,
+        into result: inout ParsedSpecComponents,
+        loopVar: String? = nil,
+        loopValue: Int? = nil,
+        collectionTypes: [String: (element: String, value: String)] = [:]
+    ) {
         guard let name = call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text else { return }
 
         switch name {
+        case "SymmetricCollection":
+            parseSymmetricCollectionDecl(call, into: &result, collectionTypes: collectionTypes)
+        case "CollectionAction":
+            parseCollectionAction(call, into: &result)
         case "Variable":
             parseVariableDecl(call, into: &result)
         case "Action":
             if let actionName = extractStringArg(call, index: 0, loopVar: loopVar, loopValue: loopValue),
-                let body = call.trailingClosure.flatMap({ parseActionFrom($0) }) {
+                let body = call.trailingClosure.flatMap({
+                    parseActionFrom(
+                        $0,
+                        symmetricCollections: Set(result.symmetricCollections.map(\.name))
+                    )
+                }) {
                 result.actions.append((actionName, body))
+            } else if let actionName = extractStringArg(call, index: 0, loopVar: loopVar, loopValue: loopValue),
+                      let closure = call.trailingClosure {
+                result.diagnostics.append(.init(
+                    message: "Action '\(actionName)' contains an unsupported action expression.",
+                    source: closure
+                ))
             }
         case "Invariant":
-            if let invName = extractStringArg(call, index: 0),
-               let body = call.trailingClosure.flatMap(parseInvariantFrom) {
-                result.invariants.append((invName, body))
-            }
+            parseInvariant(call, into: &result)
         case "Constant":
             parseConstantDecl(call, into: &result)
         case "LeadsTo", "Eventually", "Always", "AlwaysEventually", "EventuallyAlways":
@@ -714,8 +811,763 @@ public enum SpecParser {
         }
     }
 
-    private static func extractStringArg(_ call: FunctionCallExprSyntax, index: Int,
-                                          loopVar: String? = nil, loopValue: Int? = nil) -> String? {
+    private static func parseInvariant(
+        _ call: FunctionCallExprSyntax,
+        into result: inout ParsedSpecComponents
+    ) {
+        guard let name = extractStringArg(call, index: 0), let closure = call.trailingClosure else {
+            result.diagnostics.append(.init(
+                message: "Invariant declaration requires a name and a supported invariant expression.",
+                source: call.description
+            ))
+            return
+        }
+        guard let body = parseInvariantBody(
+            closure,
+            symmetricCollections: Set(result.symmetricCollections.map(\.name))
+        ) else {
+            let unsupported = unsupportedInvariantExpression(
+                in: closure,
+                symmetricCollections: Set(result.symmetricCollections.map(\.name))
+            )
+            if let unsupported {
+                result.diagnostics.append(.init(
+                    message: "Invariant '\(name)' contains an unsupported invariant expression.",
+                    source: unsupported
+                ))
+            } else {
+                result.diagnostics.append(.init(
+                    message: "Invariant '\(name)' contains an unsupported invariant expression.",
+                    source: closure
+                ))
+            }
+            return
+        }
+        result.invariants.append((name, body))
+    }
+
+    private static func parseInvariantBody(
+        _ closure: ClosureExprSyntax,
+        symmetricCollections: Set<String>
+    ) -> StateExpr? {
+        var expressions: [StateExpr] = []
+        for statement in closure.statements {
+            guard case .expr(let expression) = statement.item,
+                  let parsed = parseInvariantExpression(
+                    expression,
+                    symmetricCollections: symmetricCollections
+                  )
+            else { return nil }
+            expressions.append(parsed)
+        }
+        guard let first = expressions.first else { return nil }
+        return expressions.dropFirst().reduce(first, StateExpr.and)
+    }
+
+    private static func unsupportedInvariantExpression(
+        in closure: ClosureExprSyntax,
+        symmetricCollections: Set<String>
+    ) -> ExprSyntax? {
+        for statement in closure.statements {
+            guard case .expr(let expression) = statement.item else { continue }
+            if parseInvariantExpression(expression, symmetricCollections: symmetricCollections) == nil {
+                return expression
+            }
+        }
+        return nil
+    }
+
+    private static func parseInvariantExpression(
+        _ expression: ExprSyntax,
+        symmetricCollections: Set<String>
+    ) -> StateExpr? {
+        if let predicate = parseCollectionPredicate(
+            expression,
+            symmetricCollections: symmetricCollections
+        ) {
+            return predicate
+        }
+        if let tuple = expression.as(TupleExprSyntax.self),
+           tuple.elements.count == 1,
+           let nested = tuple.elements.first?.expression {
+            return parseInvariantExpression(nested, symmetricCollections: symmetricCollections)
+        }
+        if let infix = expression.as(InfixOperatorExprSyntax.self),
+           let operatorText = infix.operator.as(BinaryOperatorExprSyntax.self)?.operator.text,
+           let left = parseInvariantExpression(infix.leftOperand, symmetricCollections: symmetricCollections),
+           let right = parseInvariantExpression(infix.rightOperand, symmetricCollections: symmetricCollections) {
+            return parseInfixOperation(
+                leftOperand: left,
+                rightOperand: right,
+                operatorText: operatorText
+            )
+        }
+        if let sequence = expression.as(SequenceExprSyntax.self) {
+            return parseInvariantSequence(Array(sequence.elements), symmetricCollections: symmetricCollections)
+        }
+        return parseStateExpr(expression)
+    }
+
+    private static func parseInvariantSequence(
+        _ elements: [ExprSyntax],
+        symmetricCollections: Set<String>
+    ) -> StateExpr? {
+        guard elements.count >= 3, elements.count % 2 == 1 else { return nil }
+        let operatorIndices = Array(stride(from: 1, to: elements.count, by: 2))
+        let splitIndex = operatorIndices.first {
+            elements[$0].as(BinaryOperatorExprSyntax.self)?.operator.text == "||"
+        } ?? operatorIndices.first {
+            elements[$0].as(BinaryOperatorExprSyntax.self)?.operator.text == "&&"
+        } ?? operatorIndices.first
+        guard let splitIndex,
+              let operatorText = elements[splitIndex].as(BinaryOperatorExprSyntax.self)?.operator.text,
+              let left = parseInvariantElements(
+                Array(elements[0..<splitIndex]),
+                symmetricCollections: symmetricCollections
+              ),
+              let right = parseInvariantElements(
+                Array(elements[(splitIndex + 1)..<elements.count]),
+                symmetricCollections: symmetricCollections
+              )
+        else { return nil }
+        return parseInfixOperation(leftOperand: left, rightOperand: right, operatorText: operatorText)
+    }
+
+    private static func parseInvariantElements(
+        _ elements: [ExprSyntax],
+        symmetricCollections: Set<String>
+    ) -> StateExpr? {
+        if elements.count == 1 {
+            return parseInvariantExpression(elements[0], symmetricCollections: symmetricCollections)
+        }
+        return parseInvariantSequence(elements, symmetricCollections: symmetricCollections)
+    }
+
+    private static func parseCollectionPredicate(
+        _ expression: ExprSyntax,
+        symmetricCollections: Set<String>
+    ) -> StateExpr? {
+        guard let call = expression.as(FunctionCallExprSyntax.self),
+              let access = call.calledExpression.as(MemberAccessExprSyntax.self),
+              let collection = access.base?.as(DeclReferenceExprSyntax.self)?.baseName.text,
+              symmetricCollections.contains(collection),
+              let kind = CollectionPredicate(rawValue: access.declName.baseName.text),
+              let closure = call.trailingClosure
+                ?? call.arguments.first?.expression.as(ClosureExprSyntax.self),
+              let parameter = collectionPredicateParameter(in: closure)
+        else { return nil }
+
+        let member = QuantVar.fresh()
+        let rewrittenStatements = closure.statements.map { statement in
+            PredicateValueRewriter(
+                parameter: parameter,
+                replacement: "\(collection).applying(\(member.name))"
+            ).visit(statement)
+        }
+        let rewrittenClosure = closure.with(\.statements, CodeBlockItemListSyntax(rewrittenStatements))
+        guard let body = parseInvariantBody(
+            rewrittenClosure,
+            symmetricCollections: symmetricCollections
+        ) else { return nil }
+
+        let domain = StateExpr.domain(.variable(collection))
+        switch kind {
+        case .allSatisfy: return .forAll(domain, member, body)
+        case .contains: return .exists(domain, member, body)
+        }
+    }
+
+    private static func collectionPredicateParameter(in closure: ClosureExprSyntax) -> String? {
+        guard let parameters = closure.signature?.parameterClause else { return "$0" }
+        switch parameters {
+        case .simpleInput(let list):
+            guard list.count == 1 else { return nil }
+            return list.first?.name.text
+        case .parameterClause(let clause):
+            guard clause.parameters.count == 1, let parameter = clause.parameters.first else { return nil }
+            return parameter.secondName?.text ?? parameter.firstName.text
+        }
+    }
+
+    private enum CollectionPredicate: String {
+        case allSatisfy
+        case contains
+    }
+
+    private final class PredicateValueRewriter: SyntaxRewriter {
+        let parameter: String
+        let replacement: String
+        var closureDepth = 0
+
+        init(parameter: String, replacement: String) {
+            self.parameter = parameter
+            self.replacement = replacement
+        }
+
+        override func visit(_ node: ClosureExprSyntax) -> ExprSyntax {
+            if closureDepth > 0, collectionPredicateParameter(in: node) == parameter {
+                return ExprSyntax(node)
+            }
+            closureDepth += 1
+            defer { closureDepth -= 1 }
+            return super.visit(node)
+        }
+
+        override func visit(_ node: DeclReferenceExprSyntax) -> ExprSyntax {
+            guard node.baseName.text == parameter else { return super.visit(node) }
+            return ExprSyntax(stringLiteral: replacement)
+        }
+    }
+
+    private static func collectSymmetricCollectionTypes(
+        in closure: ClosureExprSyntax
+    ) -> [String: (element: String, value: String)] {
+        var types: [String: (element: String, value: String)] = [:]
+        for statement in closure.statements {
+            guard case .decl(let declaration) = statement.item,
+                  let variable = declaration.as(VariableDeclSyntax.self)
+            else { continue }
+            for binding in variable.bindings {
+                guard let name = binding.pattern.as(IdentifierPatternSyntax.self)?.identifier.text,
+                      let call = binding.initializer?.value.as(FunctionCallExprSyntax.self),
+                      let specialization = call.calledExpression.as(GenericSpecializationExprSyntax.self),
+                      specialization.expression.as(DeclReferenceExprSyntax.self)?.baseName.text == "SymmetricCollectionVar"
+                else { continue }
+                let arguments = Array(specialization.genericArgumentClause.arguments)
+                guard arguments.count == 2 else { continue }
+                types[name] = (
+                    arguments[0].argument.description.trimmingCharacters(in: .whitespacesAndNewlines),
+                    arguments[1].argument.description.trimmingCharacters(in: .whitespacesAndNewlines)
+                )
+            }
+        }
+        return types
+    }
+
+    private static func parseSymmetricCollectionDecl(
+        _ call: FunctionCallExprSyntax,
+        into result: inout ParsedSpecComponents,
+        collectionTypes: [String: (element: String, value: String)]
+    ) {
+        let arguments = Array(call.arguments)
+        guard let collectionName = arguments.first?.expression.as(DeclReferenceExprSyntax.self)?.baseName.text,
+              let types = collectionTypes[collectionName],
+              let scopeArgument = arguments.first(where: { $0.label?.text == "verificationScope" })?.expression,
+              let scopeLiteral = scopeArgument.as(IntegerLiteralExprSyntax.self),
+              let scope = Int(scopeLiteral.literal.text),
+              let initialExpression = arguments.first(where: { $0.label?.text == "initial" })?.expression,
+              let initial = parseLiteralValue(initialExpression)
+        else {
+            result.diagnostics.append(.init(
+                message: "Symmetric collections require SymmetricCollectionVar<Element, Value>, "
+                    + "a positive integer literal scope, and a literal uniform initial value.",
+                source: call.description
+            ))
+            return
+        }
+
+        let declaration = SymmetricCollectionDecl(name: collectionName, verificationScope: scope, initial: initial)
+        result.symmetricCollections.append(.init(
+            name: collectionName,
+            elementType: types.element,
+            valueType: types.value,
+            verificationScope: scope,
+            source: call.description,
+            declaration: declaration
+        ))
+        result.variables.append((collectionName, declaration.variable.initial, nil))
+    }
+
+    private static func parseCollectionAction(
+        _ call: FunctionCallExprSyntax,
+        into result: inout ParsedSpecComponents
+    ) {
+        let arguments = Array(call.arguments)
+        guard let actionName = extractStringArg(call, index: 0),
+              let collectionName = arguments.first(where: { $0.label?.text == "on" })?.expression
+                .as(DeclReferenceExprSyntax.self)?.baseName.text,
+              let closure = call.trailingClosure
+        else { return }
+
+        guard let memberName = collectionActionMemberName(in: closure) else {
+            result.diagnostics.append(.init(
+                message: "Collection action '\(actionName)' requires one named opaque member parameter.",
+                source: closure.description
+            ))
+            return
+        }
+        let member = QuantVar.fresh()
+        let diagnosticCount = result.diagnostics.count
+        validateMemberUses(
+            memberName,
+            in: closure,
+            owning: collectionName,
+            action: actionName,
+            into: &result
+        )
+        guard let actionBody = parseCollectionActionBody(
+            closure,
+            collection: collectionName,
+            member: memberName,
+            binding: member.name
+        ) else {
+            if result.diagnostics.count == diagnosticCount {
+                result.diagnostics.append(.init(
+                    message: "Collection action '\(actionName)' contains an unsupported action expression.",
+                    source: closure.description
+                ))
+            }
+            return
+        }
+        result.collectionActions.append(.init(
+            name: actionName,
+            collectionName: collectionName,
+            body: .existsAction(member.name, .domain(.variable(collectionName)), actionBody),
+            runtimeBranches: runtimeBranches(
+                in: closure,
+                collection: collectionName,
+                member: memberName,
+                runtimeVariables: Set(result.variables.map(\.name))
+            ),
+            source: call.description
+        ))
+        result.actions.append((actionName, .existsAction(
+            member.name,
+            .domain(.variable(collectionName)),
+            actionBody
+        )))
+    }
+
+    private static func collectionActionMemberName(in closure: ClosureExprSyntax) -> String? {
+        guard let parameters = closure.signature?.parameterClause else { return nil }
+        switch parameters {
+        case .simpleInput(let list):
+            return list.first?.name.text
+        case .parameterClause(let clause):
+            guard let parameter = clause.parameters.first else { return nil }
+            return parameter.secondName?.text ?? parameter.firstName.text
+        }
+    }
+
+    private static func validateMemberUses(
+        _ member: String,
+        in closure: ClosureExprSyntax,
+        owning collection: String,
+        action: String,
+        into result: inout ParsedSpecComponents
+    ) {
+        let validator = CollectionMemberUseValidator(member: member, collection: collection)
+        validator.walk(Syntax(closure))
+        for violation in validator.violations {
+            result.diagnostics.append(identityDiagnostic(
+                collection: collection, action: action, source: violation.source,
+                detail: violation.detail
+            ))
+        }
+    }
+
+    private static func identityDiagnostic(
+        collection: String,
+        action: String,
+        source: String,
+        detail: String
+    ) -> SymmetricCollectionParseDiagnostic {
+        .init(
+            message: "\(detail) for symmetric collection '\(collection)' in action '\(action)': "
+                + "member identity is opaque and may only select or update its owning collection. "
+                + "Model the distinction as member state or use a non-symmetric collection.",
+            source: source
+        )
+    }
+
+    private static func parseCollectionActionBody(
+        _ closure: ClosureExprSyntax,
+        collection: String,
+        member: String,
+        binding: String
+    ) -> ActionExpr? {
+        let actions = closure.statements.compactMap { statement -> ActionExpr? in
+            guard case .expr(let expression) = statement.item else { return nil }
+            return parseCollectionActionExpression(
+                expression,
+                collection: collection,
+                member: member,
+                binding: binding
+            )
+        }
+        guard !actions.isEmpty else { return nil }
+        return actions.dropFirst().reduce(actions[0]) { .and($0, $1) }
+    }
+
+    private static func parseCollectionActionExpression(
+        _ expression: ExprSyntax,
+        collection: String,
+        member: String,
+        binding: String
+    ) -> ActionExpr? {
+        if let tuple = expression.as(TupleExprSyntax.self),
+           tuple.elements.count == 1,
+           let nested = tuple.elements.first?.expression {
+            return parseCollectionActionExpression(
+                nested,
+                collection: collection,
+                member: member,
+                binding: binding
+            )
+        }
+        if let sequence = expression.as(SequenceExprSyntax.self),
+           let split = collectionActionSequenceSplit(Array(sequence.elements)) {
+            let left = parseCollectionActionExpression(
+                split.left,
+                collection: collection,
+                member: member,
+                binding: binding
+            )
+            let right = parseCollectionActionExpression(
+                split.right,
+                collection: collection,
+                member: member,
+                binding: binding
+            )
+            guard let left, let right else { return nil }
+            return split.operatorText == "&&" ? .and(left, right) : .or(left, right)
+        }
+        if let update = collectionUpdate(expression, collection: collection, member: member) {
+            let rewritten = CollectionReadRewriter(
+                collection: collection,
+                member: member,
+                replacement: binding
+            ).visit(update.expression)
+            guard let value = parseStateExpr(rewritten) else { return nil }
+            return .assign(collection, .except(.variable(collection), .variable(binding), value))
+        }
+        if let infix = expression.as(InfixOperatorExprSyntax.self),
+           let op = infix.operator.as(BinaryOperatorExprSyntax.self)?.operator.text,
+           let left = parseCollectionActionExpression(infix.leftOperand, collection: collection, member: member, binding: binding),
+           let right = parseCollectionActionExpression(infix.rightOperand, collection: collection, member: member, binding: binding) {
+            if op == "&&" { return .and(left, right) }
+            if op == "||" { return .or(left, right) }
+        }
+        let rewritten = CollectionReadRewriter(
+            collection: collection,
+            member: member,
+            replacement: binding
+        ).visit(expression)
+        return parseStateExpr(rewritten).map(ActionExpr.guard_)
+    }
+
+    private static func collectionActionSequenceSplit(
+        _ elements: [ExprSyntax]
+    ) -> (left: ExprSyntax, operatorText: String, right: ExprSyntax)? {
+        guard elements.count >= 3, elements.count % 2 == 1 else { return nil }
+        let operators = stride(from: 1, to: elements.count, by: 2)
+        let splitIndex = operators.first {
+            elements[$0].as(BinaryOperatorExprSyntax.self)?.operator.text == "||"
+        } ?? operators.first {
+            elements[$0].as(BinaryOperatorExprSyntax.self)?.operator.text == "&&"
+        }
+        guard let splitIndex,
+              let operatorText = elements[splitIndex].as(BinaryOperatorExprSyntax.self)?.operator.text,
+              let left = parseExpression(elements[0..<splitIndex]),
+              let right = parseExpression(elements[(splitIndex + 1)..<elements.count])
+        else { return nil }
+        return (left, operatorText, right)
+    }
+
+    private static func parseExpression(_ elements: ArraySlice<ExprSyntax>) -> ExprSyntax? {
+        let source = elements.map(\.description).joined()
+        return SwiftParser.Parser.parse(source: source).statements.first?.item.as(ExprSyntax.self)
+    }
+
+    private static func collectionUpdate(
+        _ expression: ExprSyntax,
+        collection: String,
+        member: String
+    ) -> LabeledExprSyntax? {
+        guard let call = expression.as(FunctionCallExprSyntax.self),
+              let access = call.calledExpression.as(MemberAccessExprSyntax.self),
+              access.declName.baseName.text == "update",
+              access.base?.as(DeclReferenceExprSyntax.self)?.baseName.text == collection,
+              let selector = call.arguments.first?.expression.as(DeclReferenceExprSyntax.self),
+              selector.baseName.text == member
+        else { return nil }
+        return call.arguments.first(where: { $0.label?.text == "to" })
+    }
+
+    private static func runtimeBranches(
+        in closure: ClosureExprSyntax,
+        collection: String,
+        member: String,
+        runtimeVariables: Set<String>
+    ) -> [ParsedCollectionAction.RuntimeBranch] {
+        let expressions = closure.statements.compactMap { statement -> ExprSyntax? in
+            guard case .expr(let expression) = statement.item else { return nil }
+            return expression
+        }
+        guard let first = expressions.first else { return [] }
+        return expressions.dropFirst().reduce(
+            runtimeBranches(
+                for: first,
+                collection: collection,
+                member: member,
+                runtimeVariables: runtimeVariables
+            )
+        ) { partial, expression in
+            combineRuntimeBranches(
+                partial,
+                runtimeBranches(
+                    for: expression,
+                    collection: collection,
+                    member: member,
+                    runtimeVariables: runtimeVariables
+                )
+            )
+        }
+    }
+
+    private static func runtimeBranches(
+        for expression: ExprSyntax,
+        collection: String,
+        member: String,
+        runtimeVariables: Set<String>
+    ) -> [ParsedCollectionAction.RuntimeBranch] {
+        if let tuple = expression.as(TupleExprSyntax.self),
+           tuple.elements.count == 1,
+           let nested = tuple.elements.first?.expression {
+            return runtimeBranches(
+                for: nested,
+                collection: collection,
+                member: member,
+                runtimeVariables: runtimeVariables
+            )
+        }
+        if let sequence = expression.as(SequenceExprSyntax.self),
+           let split = collectionActionSequenceSplit(Array(sequence.elements)) {
+            let left = runtimeBranches(
+                for: split.left,
+                collection: collection,
+                member: member,
+                runtimeVariables: runtimeVariables
+            )
+            let right = runtimeBranches(
+                for: split.right,
+                collection: collection,
+                member: member,
+                runtimeVariables: runtimeVariables
+            )
+            return split.operatorText == "&&"
+                ? combineRuntimeBranches(left, right)
+                : left + right
+        }
+        if let update = collectionUpdate(expression, collection: collection, member: member) {
+            let runtimeUpdate = CollectionReadRewriter(
+                collection: collection,
+                member: member,
+                replacement: "entry.value",
+                asStateExpression: false,
+                runtimeVariables: runtimeVariables
+            ).visit(update.expression).formatted().description
+            return [.init(guardExpressions: [], updateExpression: runtimeUpdate)]
+        }
+        let runtimeGuard = CollectionRuntimeGuardRewriter(
+            collection: collection,
+            member: member,
+            runtimeVariables: runtimeVariables
+        ).visit(expression).formatted().description
+        return [.init(guardExpressions: [runtimeGuard], updateExpression: nil)]
+    }
+
+    private static func combineRuntimeBranches(
+        _ left: [ParsedCollectionAction.RuntimeBranch],
+        _ right: [ParsedCollectionAction.RuntimeBranch]
+    ) -> [ParsedCollectionAction.RuntimeBranch] {
+        left.flatMap { lhs in
+            right.compactMap { rhs in
+                guard lhs.updateExpression == nil || rhs.updateExpression == nil else { return nil }
+                return .init(
+                    guardExpressions: lhs.guardExpressions + rhs.guardExpressions,
+                    updateExpression: lhs.updateExpression ?? rhs.updateExpression
+                )
+            }
+        }
+    }
+
+    private final class CollectionRuntimeGuardRewriter: SyntaxRewriter {
+        let collection: String
+        let member: String
+        let runtimeVariables: Set<String>
+
+        init(collection: String, member: String, runtimeVariables: Set<String>) {
+            self.collection = collection
+            self.member = member
+            self.runtimeVariables = runtimeVariables
+        }
+
+        override func visit(_ node: SubscriptCallExprSyntax) -> ExprSyntax {
+            guard node.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == collection,
+                  node.arguments.count == 1,
+                  node.arguments.first?.expression.as(DeclReferenceExprSyntax.self)?.baseName.text == member
+            else { return super.visit(node) }
+            return ExprSyntax(stringLiteral: "(entry.value)")
+        }
+
+        override func visit(_ node: DeclReferenceExprSyntax) -> ExprSyntax {
+            guard runtimeVariables.contains(node.baseName.text) else { return super.visit(node) }
+            return ExprSyntax(stringLiteral: "_state.\(node.baseName.text)")
+        }
+    }
+
+    private final class CollectionReadRewriter: SyntaxRewriter {
+        let collection: String
+        let member: String
+        let replacement: String
+        let asStateExpression: Bool
+        let runtimeVariables: Set<String>
+
+        init(
+            collection: String,
+            member: String,
+            replacement: String,
+            asStateExpression: Bool = true,
+            runtimeVariables: Set<String> = []
+        ) {
+            self.collection = collection
+            self.member = member
+            self.replacement = replacement
+            self.asStateExpression = asStateExpression
+            self.runtimeVariables = runtimeVariables
+        }
+
+        override func visit(_ node: SubscriptCallExprSyntax) -> ExprSyntax {
+            guard node.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == collection,
+                  node.arguments.count == 1,
+                  node.arguments.first?.expression.as(DeclReferenceExprSyntax.self)?.baseName.text == member
+            else { return super.visit(node) }
+            if asStateExpression {
+                return ExprSyntax(stringLiteral: "\(collection).applying(\(replacement))")
+            }
+            return ExprSyntax(stringLiteral: "(\(replacement)) ")
+        }
+
+        override func visit(_ node: DeclReferenceExprSyntax) -> ExprSyntax {
+            guard !asStateExpression, runtimeVariables.contains(node.baseName.text)
+            else { return super.visit(node) }
+            return ExprSyntax(stringLiteral: "_state.\(node.baseName.text)")
+        }
+    }
+
+    private final class CollectionMemberUseValidator: SyntaxVisitor {
+        struct Violation {
+            let detail: String
+            let source: String
+        }
+
+        let member: String
+        let collection: String
+        var closureDepth = 0
+        var permittedMemberOffsets: Set<Int> = []
+        var violations: [Violation] = []
+
+        init(member: String, collection: String) {
+            self.member = member
+            self.collection = collection
+            super.init(viewMode: .sourceAccurate)
+        }
+
+        override func visit(_ node: ClosureExprSyntax) -> SyntaxVisitorContinueKind {
+            closureDepth += 1
+            return .visitChildren
+        }
+
+        override func visitPost(_ node: ClosureExprSyntax) {
+            closureDepth -= 1
+        }
+
+        override func visit(_ node: MemberAccessExprSyntax) -> SyntaxVisitorContinueKind {
+            if node.base?.as(DeclReferenceExprSyntax.self)?.baseName.text == collection,
+               node.declName.baseName.text == "domain" {
+                violations.append(.init(
+                    detail: "Raw verification-domain access is unavailable",
+                    source: node.description
+                ))
+            }
+            return .visitChildren
+        }
+
+        override func visit(_ node: SubscriptCallExprSyntax) -> SyntaxVisitorContinueKind {
+            if node.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == collection,
+               let selector = node.arguments.first?.expression.as(DeclReferenceExprSyntax.self),
+               node.arguments.count == 1,
+               selector.baseName.text == member {
+                permittedMemberOffsets.insert(selector.positionAfterSkippingLeadingTrivia.utf8Offset)
+            }
+            return .visitChildren
+        }
+
+        override func visit(_ node: FunctionCallExprSyntax) -> SyntaxVisitorContinueKind {
+            if let access = node.calledExpression.as(MemberAccessExprSyntax.self),
+               access.declName.baseName.text == "update",
+               let selector = node.arguments.first?.expression.as(DeclReferenceExprSyntax.self),
+               selector.baseName.text == member {
+                permittedMemberOffsets.insert(selector.positionAfterSkippingLeadingTrivia.utf8Offset)
+                if let target = access.base?.as(DeclReferenceExprSyntax.self)?.baseName.text,
+                   target != collection {
+                    violations.append(.init(
+                        detail: "Cross-collection member use is unavailable (including '\(target)')",
+                        source: node.description
+                    ))
+                }
+            }
+            return .visitChildren
+        }
+
+        override func visit(_ node: ExpressionSegmentSyntax) -> SyntaxVisitorContinueKind {
+            if let expression = node.expressions.first?.expression.as(DeclReferenceExprSyntax.self),
+               expression.baseName.text == member {
+                violations.append(.init(
+                    detail: "String interpolation of a member token is unavailable",
+                    source: node.description
+                ))
+            }
+            return .visitChildren
+        }
+
+        override func visit(_ node: DeclReferenceExprSyntax) -> SyntaxVisitorContinueKind {
+            guard node.baseName.text == member else { return .visitChildren }
+            if closureDepth > 1 {
+                violations.append(.init(
+                    detail: "Capturing a member token in a nested closure is unavailable",
+                    source: node.description
+                ))
+            } else if !permittedMemberOffsets.contains(node.positionAfterSkippingLeadingTrivia.utf8Offset) {
+                violations.append(.init(
+                    detail: "Member identity observation or cross-collection use is unavailable",
+                    source: node.description
+                ))
+            }
+            return .visitChildren
+        }
+    }
+
+    private static func parseLiteralValue(_ expression: ExprSyntax) -> TLAValue? {
+        if let integer = expression.as(IntegerLiteralExprSyntax.self) {
+            return Int(integer.literal.text).map(TLAValue.int)
+        }
+        if let boolean = expression.as(BooleanLiteralExprSyntax.self) {
+            return .bool(boolean.literal.text == "true")
+        }
+        if let string = expression.as(StringLiteralExprSyntax.self) {
+            return .string(string.segments.description.replacingOccurrences(of: "\"", with: ""))
+        }
+        return nil
+    }
+
+    private static func extractStringArg(
+        _ call: FunctionCallExprSyntax,
+        index: Int,
+        loopVar: String? = nil,
+        loopValue: Int? = nil
+    ) -> String? {
         let args = Array(call.arguments)
         guard index < args.count else { return nil }
         guard let stringLit = args[index].expression.as(StringLiteralExprSyntax.self) else { return nil }

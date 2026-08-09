@@ -1,69 +1,162 @@
 import SwiftTLA
 import SwiftTLAMacros
 
-/// Cross-actor contract: proves invariants hold between Bluetooth central and
-/// any number of connected peripherals.  Symmetry over peripheral slots
-/// collapses the state space to N=1 — machine-proven for all N at compile time.
+public enum ContractActionError: Error, Equatable {
+    case actionNotEnabled(String)
+}
+
+/// Cross-actor Bluetooth contract with an arbitrary live `Device.ID` population.
+///
+/// The macro verifies exactly four exchangeable, opaque device-phase model
+/// members. Runtime UUIDs route live storage only and never enter the model or
+/// TLC artifacts. This bounded check does not prove arbitrary `N`; a
+/// locality-checked parametric proof would be separate future work.
 @TLAActor
 public actor Contract {
+    public static let devicePhaseVerificationScope = 4
+
     public static var spec: TLASpec {
         TLASpec("Contract") {
             let cPhase = Var<Int>("cPhase")
-            let pPhase1 = Var<Int>("pPhase1")
-            let pPhase2 = Var<Int>("pPhase2")
-            let pPhase3 = Var<Int>("pPhase3")
-            let pPhase4 = Var<Int>("pPhase4")
+            let devicePhases = SymmetricCollectionVar<Device, Int>("devicePhases")
 
             Variable(cPhase, 0)
-            Variable(pPhase1, 0)
-            Variable(pPhase2, 0)
-            Variable(pPhase3, 0)
-            Variable(pPhase4, 0)
+            /// Scope four is the explicit verification reference model, not a
+            /// cap on the runtime's identified device population.
+            SymmetricCollection(devicePhases, verificationScope: 4, initial: 0)
 
-            Action("cToPoweredOn")   { (cPhase == 0 || cPhase == 1 || cPhase == 4) && cPhase.becomes(5) }
-            Action("cToPoweredOff")  { (cPhase == 0 || cPhase == 1 || cPhase == 5) && cPhase.becomes(4) }
+            Action("cToPoweredOn") { (cPhase == 0 || cPhase == 1 || cPhase == 4) && cPhase.becomes(5) }
+            Action("cToPoweredOff") {
+                (cPhase == 0 || cPhase == 1 || cPhase == 5)
+                    && devicePhases.allSatisfy { $0 == 0 || $0 == 7 }
+                    && cPhase.becomes(4)
+            }
             Action("cToUnsupported") { cPhase == 0 && cPhase.becomes(2) }
             Action("cToUnauthorized") { cPhase == 0 && cPhase.becomes(3) }
-            Action("cToResetting")   { (cPhase == 4 || cPhase == 5) && cPhase.becomes(1) }
-            Action("cStartScan")     { cPhase == 5 && cPhase.becomes(6) }
-            Action("cStopScan")      { cPhase == 6 && cPhase.becomes(5) }
+            Action("cToResetting") {
+                (cPhase == 4 || cPhase == 5)
+                    && devicePhases.allSatisfy { $0 == 0 || $0 == 7 }
+                    && cPhase.becomes(1)
+            }
+            Action("cStartScan") {
+                cPhase == 5
+                    && devicePhases.allSatisfy { $0 == 0 || $0 == 7 }
+                    && cPhase.becomes(6)
+            }
+            Action("cStopScan") { cPhase == 6 && cPhase.becomes(5) }
 
-            // Define the peripheral transition pattern once
-            let anyPhase = Var<Int>("anyPhase")
-            Operator("beginConnect", param: anyPhase) { anyPhase == 0 && anyPhase.becomes(1) }
-            Operator("finishConnect", param: anyPhase) { anyPhase == 1 && anyPhase.becomes(2) }
-            Operator("failConnect", param: anyPhase) { anyPhase == 1 && anyPhase.becomes(0) }
-            Operator("disconnect", param: anyPhase) { (anyPhase == 2 || anyPhase == 4 || anyPhase == 6) && anyPhase.becomes(7) }
-            Operator("finishDisconnect", param: anyPhase) { anyPhase == 7 && anyPhase.becomes(0) }
-            Operator("beginDiscover", param: anyPhase) { anyPhase == 2 && anyPhase.becomes(3) }
-            Operator("finishDiscover", param: anyPhase) { anyPhase == 3 && anyPhase.becomes(4) }
-            Operator("beginDiscoverChars", param: anyPhase) { anyPhase == 4 && anyPhase.becomes(5) }
-            Operator("finishDiscoverChars", param: anyPhase) { anyPhase == 5 && anyPhase.becomes(6) }
-
-            // Apply to each slot
-            for p in [pPhase1, pPhase2, pPhase3, pPhase4] {
-                UseOp("beginConnect", with: p)
-                UseOp("finishConnect", with: p)
-                UseOp("failConnect", with: p)
-                UseOp("disconnect", with: p)
-                UseOp("finishDisconnect", with: p)
-                UseOp("beginDiscover", with: p)
-                UseOp("finishDiscover", with: p)
-                UseOp("beginDiscoverChars", with: p)
-                UseOp("finishDiscoverChars", with: p)
+            /// Verification existentially selects an opaque member; generated
+            /// runtime methods select one live entry by `Device.ID`, evaluate
+            /// the same guard, and update only that entry.
+            CollectionAction("beginConnect", on: devicePhases) { member in
+                cPhase == 5 && devicePhases[member] == 0 && devicePhases.update(member, to: 1)
+            }
+            CollectionAction("finishConnect", on: devicePhases) { member in
+                cPhase == 5 && devicePhases[member] == 1 && devicePhases.update(member, to: 2)
+            }
+            CollectionAction("failConnect", on: devicePhases) { member in
+                cPhase == 5 && devicePhases[member] == 1 && devicePhases.update(member, to: 0)
+            }
+            CollectionAction("disconnectConnected", on: devicePhases) { member in
+                cPhase == 5 && devicePhases[member] == 2 && devicePhases.update(member, to: 7)
+            }
+            CollectionAction("disconnectServices", on: devicePhases) { member in
+                cPhase == 5 && devicePhases[member] == 4 && devicePhases.update(member, to: 7)
+            }
+            CollectionAction("disconnectCharacteristics", on: devicePhases) { member in
+                cPhase == 5 && devicePhases[member] == 6 && devicePhases.update(member, to: 7)
+            }
+            CollectionAction("finishDisconnect", on: devicePhases) { member in
+                devicePhases[member] == 7 && devicePhases.update(member, to: 0)
+            }
+            CollectionAction("beginDiscover", on: devicePhases) { member in
+                cPhase == 5 && devicePhases[member] == 2 && devicePhases.update(member, to: 3)
+            }
+            CollectionAction("finishDiscover", on: devicePhases) { member in
+                cPhase == 5 && devicePhases[member] == 3 && devicePhases.update(member, to: 4)
+            }
+            CollectionAction("beginDiscoverChars", on: devicePhases) { member in
+                cPhase == 5 && devicePhases[member] == 4 && devicePhases.update(member, to: 5)
+            }
+            CollectionAction("finishDiscoverChars", on: devicePhases) { member in
+                cPhase == 5 && devicePhases[member] == 5 && devicePhases.update(member, to: 6)
             }
 
+            /// These value-only predicates quantify over every scoped opaque
+            /// member, expressing collection-wide safety at scope four.
             Invariant("noPeripheralWithoutPower") {
-                for p in [pPhase1, pPhase2, pPhase3, pPhase4] {
-                    (cPhase == 5) || (p == 0) || (p == 7)
-                }
+                devicePhases.allSatisfy { (cPhase == 5) || ($0 == 0) || ($0 == 7) }
             }
             Invariant("noScanWhileConnecting") {
-                for p in [pPhase1, pPhase2, pPhase3, pPhase4] {
-                    (cPhase != 6) || (p != 1)
-                }
+                devicePhases.allSatisfy { (cPhase != 6) || ($0 != 1) }
             }
-            SymmetryGroup("pPhase1", "pPhase2", "pPhase3", "pPhase4")
         }
+    }
+
+    public func register(_ device: Device, phase: Int = 0) {
+        devicePhases.insert(device, value: phase)
+    }
+
+    @discardableResult
+    public func unregister(id: Device.ID) -> IdentifiedModelCollection<Device, Int>.Entry? {
+        devicePhases.remove(id: id)
+    }
+
+    public func devicePhase(id: Device.ID) -> Int? {
+        devicePhases[id]
+    }
+
+    public func powerOn() {
+        cToPoweredOn()
+    }
+
+    public func connect(id: Device.ID) throws {
+        try transition(id: id, action: "beginConnect", from: [0], to: 1)
+    }
+
+    public func completeConnection(id: Device.ID) throws {
+        try transition(id: id, action: "finishConnect", from: [1], to: 2)
+    }
+
+    public func failConnection(id: Device.ID) throws {
+        try transition(id: id, action: "failConnect", from: [1], to: 0)
+    }
+
+    public func disconnect(id: Device.ID) throws {
+        try transition(id: id, action: "disconnect", from: [2, 4, 6], to: 7)
+    }
+
+    public func completeDisconnection(id: Device.ID) throws {
+        try transition(id: id, action: "finishDisconnect", from: [7], to: 0, requiresPoweredOn: false)
+    }
+
+    public func beginServiceDiscovery(id: Device.ID) throws {
+        try transition(id: id, action: "beginDiscover", from: [2], to: 3)
+    }
+
+    public func completeServiceDiscovery(id: Device.ID) throws {
+        try transition(id: id, action: "finishDiscover", from: [3], to: 4)
+    }
+
+    public func beginCharacteristicDiscovery(id: Device.ID) throws {
+        try transition(id: id, action: "beginDiscoverChars", from: [4], to: 5)
+    }
+
+    public func completeCharacteristicDiscovery(id: Device.ID) throws {
+        try transition(id: id, action: "finishDiscoverChars", from: [5], to: 6)
+    }
+
+    private func transition(
+        id: Device.ID,
+        action: String,
+        from phases: Set<Int>,
+        to phase: Int,
+        requiresPoweredOn: Bool = true
+    ) throws {
+        let entry = try devicePhases.entry(for: id, action: action)
+        guard !requiresPoweredOn || cPhase == 5, phases.contains(entry.value) else {
+            throw ContractActionError.actionNotEnabled(action)
+        }
+        try devicePhases.update(id: id, to: phase, action: action)
     }
 }

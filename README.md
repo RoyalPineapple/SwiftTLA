@@ -1,44 +1,28 @@
 # SwiftTLA
 
-Finite-state TLA+ model checking from a Swift DSL, with TLC as the oracle.
+SwiftTLA is a compile-time behavioral compiler inspired by type-level programming. Swift types constrain which models can be constructed; `@TLAModel` and `@TLAActor` macros parse the model and model-check its global behavior during compilation. A successful check generates an executable state machine or actor API from that same model.
 
-See [Documentation/Fragment.md](Documentation/Fragment.md) for the supported language fragment (B v1).
+It also exports TLA+ and a TLC configuration so bounded models can be checked against TLC as an oracle.
 
-## Pipeline
+See [Documentation/Fragment.md](Documentation/Fragment.md) for the supported language fragment and the [symmetric collections guide](Documentation/SymmetricCollections.md) for the identity and proof boundary.
 
-```
-Swift DSL  ──► TLASpec ──► ModelChecker (plain BFS) ──► StateGraph
-                  │                │
-                  │         .tlaModule → TLC oracle
-                  │
-             @TLAModel ──► check + StateMachine codegen
-                  │
-         SwiftTLAModels (BFSChecker ⋊ user) ── bootstrap composition
-```
+## Compiler pipeline
 
-## Bootstrap
-
-The checker lifecycle is a TLA model itself:
-
-```swift
-import SwiftTLA
-import SwiftTLAModels
-
-// Lifecycle spec (dynamic bound)
-let checker = TLASpec.bfsChecker(maxStates: 5)
-
-// Compose with a user spec and model-check the product
-let result = try ModelChecker.checkComposed(user: hourClockSpec)
-
-// @TLAModel BFSChecker — compile-time checked + generated StateMachine
-let machine = BFSChecker.StateMachine.initial
+```text
+Typed Swift DSL ──► TLASpec ──► compile-time model checking ──► executable model
+       │                │                    │                         │
+       │                │                    ├── failure: compiler diagnostic
+       │                │                    └── success: state machine or actor API
+       │                └── .tlaModule + .tlaCfg ──► TLC oracle
+       └── types constrain legal variables, values, and collection operations
 ```
 
-Production exploration is plain BFS. Composition is for self-proof, not a fake controller inside the loop.
+`@TLAModel` produces an executable model type and `@TLAActor` applies the same verification pipeline to an actor. The runtime behavior, the compile-time check, and the TLA+ export all derive from the authored DSL model rather than separate hand-maintained implementations.
 
 ## Usage
 
 ```swift
+import Foundation
 import SwiftTLA
 import SwiftTLAMacros
 
@@ -46,29 +30,91 @@ import SwiftTLAMacros
 public struct HourClock {
     public static var spec: TLASpec {
         TLASpec("HourClock") {
-            let hr = Var<Int>("hr", value: 1)
-            Variable(hr, 1)
+            let hour = Var<Int>("hour", value: 1)
+            Variable(hour, 1)
             Action("Tick") {
-                (hr != 12) && hr.becomes(hr + 1) ||
-                (hr == 12) && hr.becomes(1)
+                (hour != 12 && hour.becomes(hour + 1)) ||
+                (hour == 12 && hour.becomes(1))
             }
-            Invariant("Valid") { hr >= 1 && hr <= 12 }
+            Invariant("validHour") { hour >= 1 && hour <= 12 }
         }
     }
 }
 
-let machine = HourClock.StateMachine.initial
-machine.availableTransitions
+var clock = HourClock()
+clock.applyTick()
 ```
 
-## Examples
+## Symmetric collections
 
-Core ports under `Examples/` (HourClock, DieHard, CoffeeCan, MovingCat, Majority, Allocator, …).  
-Weak name-only stubs are not kept. State counts for core specs are regression-tested.
+Use a symmetric collection when individual members are exchangeable for the property being checked. Runtime devices keep their concrete `Identifiable.ID` values; the verifier uses separate opaque members derived only from `verificationScope`.
 
-## Oracle (tlaplus/Examples)
+```swift
+import Foundation
+import SwiftTLA
+import SwiftTLAMacros
 
-Upstream CI-validated specs are ground truth. See [Documentation/UpstreamParity.md](Documentation/UpstreamParity.md).
+struct Device: Identifiable {
+    let id: UUID
+}
+
+@TLAModel
+struct DeviceContract {
+    static var spec: TLASpec {
+        TLASpec("DeviceContract") {
+            let phases = SymmetricCollectionVar<Device, Int>("phases")
+            SymmetricCollection(phases, verificationScope: 4, initial: 0)
+
+            CollectionAction("beginConnect", on: phases) { member in
+                phases[member] == 0 && phases.update(member, to: 1)
+            }
+
+            Invariant("validPhase") {
+                phases.allSatisfy { phase in phase >= 0 && phase <= 1 }
+            }
+        }
+    }
+}
+
+let device = Device(id: UUID())
+var contract = DeviceContract()
+contract.phases.insert(device)
+try contract.beginConnect(id: device.id)
+```
+
+The ID routes the generated runtime action but never becomes model data. This macro example verifies the collection declaration, ID-routed action, and a nontrivial collection-wide phase invariant. `allSatisfy` quantifies the opaque verification members, so a modeled transition that produces a phase outside `0...1` fails the compile-time check. The collection member token in `CollectionAction` is opaque: it may select or update its owning collection, but it cannot be compared, stored, or otherwise used to observe member identity. Use `contains(where:)` when the property is existential rather than universal; both predicates are checked over the same finite modeled domain.
+
+### Verification boundary
+
+`verificationScope: 4` checks exactly four exchangeable model members for that run. The live runtime collection can contain a different number of concrete devices. A successful finite run does **not** prove the model for larger populations, arbitrary population sizes, or membership churn not represented in the model. Parametric verification is future work; it is not supplied by symmetric-collection reduction.
+
+Run the symmetric-collection TLC oracle after [setting up TLC](scripts/setup-tlc.sh):
+
+```bash
+./scripts/setup-tlc.sh
+swift run tlc-validate symmetric-collections
+```
+
+## Bootstrap
+
+The checker lifecycle is also represented as a TLA model:
+
+```swift
+import SwiftTLA
+import SwiftTLAModels
+
+let checker = TLASpec.bfsChecker(maxStates: 5)
+let result = try ModelChecker.checkComposed(user: hourClockSpec)
+let machine = BFSChecker.StateMachine.initial
+```
+
+Production exploration is plain BFS. Composition is for self-proof, not a controller inside the exploration loop.
+
+## Examples and oracle checks
+
+Core ports live under `Examples/` (HourClock, DieHard, CoffeeCan, MovingCat, Majority, Allocator, and more). State counts for core specifications are regression-tested.
+
+Upstream CI-validated specifications are the TLC oracle; see [Documentation/UpstreamParity.md](Documentation/UpstreamParity.md).
 
 ```bash
 ./scripts/setup-tlc.sh

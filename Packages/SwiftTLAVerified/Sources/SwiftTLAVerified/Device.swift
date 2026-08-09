@@ -11,7 +11,7 @@ private final class DeviceDelegate: NSObject, CBPeripheralDelegate {
 }
 
 @TLAActor
-public actor Device {
+public actor Device: Identifiable {
     public static var spec: TLASpec {
         TLASpec("Device") {
             let phase = Var<Int>("phase")
@@ -30,17 +30,30 @@ public actor Device {
         }
     }
 
-    public let peripheral: CBPeripheral
-    public var name: String? { peripheral.name }
+    public nonisolated let id: UUID
+    private let backingPeripheral: CBPeripheral?
+    public var peripheral: CBPeripheral {
+        guard let backingPeripheral else {
+            preconditionFailure("Identity-only devices do not have a Bluetooth peripheral")
+        }
+        return backingPeripheral
+    }
+    public var name: String? { backingPeripheral?.name }
 
     private let delegate = DeviceDelegate()
     private var connectCont: CheckedContinuation<Void, Error>?
     private var servicesCont: CheckedContinuation<[CBService], Error>?
 
     init(peripheral: CBPeripheral) {
-        self.peripheral = peripheral
+        self.id = peripheral.identifier
+        self.backingPeripheral = peripheral
         delegate.actor = self
         peripheral.delegate = delegate
+    }
+
+    init(id: UUID) {
+        self.id = id
+        self.backingPeripheral = nil
     }
 
     /// Called by Bluetooth central when connection succeeds
@@ -52,18 +65,18 @@ public actor Device {
     }
 
     public func discoverServices(_ uuids: [CBUUID]? = nil) async throws -> [CBService] {
-        guard _state.phase == 1 else { throw BleError.notReady }
+        guard _state.phase == 1, let peripheral = backingPeripheral else { throw BleError.notReady }
         _beginDiscover()
         return try await withCheckedThrowingContinuation { (c: CheckedContinuation<[CBService], Error>) in
             self.servicesCont = c
-            self.peripheral.discoverServices(uuids)
+            peripheral.discoverServices(uuids)
         }
     }
 
     func handleDiscoverServices(_ e: (any Error)?) {
         _finishDiscover()
         if let e { servicesCont?.resume(throwing: e) }
-        else { servicesCont?.resume(returning: peripheral.services ?? []) }
+        else { servicesCont?.resume(returning: backingPeripheral?.services ?? []) }
         servicesCont = nil
     }
 }
