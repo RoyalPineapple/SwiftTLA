@@ -273,11 +273,11 @@ final class CameraModel {
         TLASpec("CameraModel") {
             let phase = StateVar(0)
 
-            Action("_ready")  { phase == 0 && phase.becomes(1) }
-            Action("_record") { phase == 1 && phase.becomes(2) }
-            Action("_stop")   { phase == 2 && phase.becomes(1) }
-            Action("_play")   { phase == 1 && phase.becomes(3) }
-            Action("_live")   { phase == 3 && phase.becomes(1) }
+            Action("ready")  { phase == 0 && phase.becomes(1) }
+            Action("record") { phase == 1 && phase.becomes(2) }
+            Action("stop")   { phase == 2 && phase.becomes(1) }
+            Action("play")   { phase == 1 && phase.becomes(3) }
+            Action("live")   { phase == 3 && phase.becomes(1) }
 
             Invariant("validPhase") { phase >= 0 && phase <= 3 }
         }

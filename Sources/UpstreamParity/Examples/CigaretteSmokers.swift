@@ -14,10 +14,10 @@ extension Example {
 static func cigaretteSmokersSpec() -> TLASpec {
         // Flatten: smoking_m, smoking_p, smoking_t bools; dealer in 0..3
         // 0=empty, 1={m,p}, 2={m,t}, 3={p,t}
-        let sm = Var<Bool>("smoking_m", value: false)
-        let sp = Var<Bool>("smoking_p", value: false)
-        let st = Var<Bool>("smoking_t", value: false)
-        let dealer = Var<Int>("dealer", value: 1)
+        let sm = Var<Bool>("smoking_m")
+        let sp = Var<Bool>("smoking_p")
+        let st = Var<Bool>("smoking_t")
+        let dealer = Var<Int>("dealer")
         return TLASpec("CigaretteSmokers") {
             Extends("Integers")
             Variable(sm, false); Variable(sp, false); Variable(st, false)

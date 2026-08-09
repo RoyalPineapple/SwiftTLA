@@ -408,7 +408,7 @@ struct MacroExpander {
                 modifiers: isActor
                     ? [DeclModifierSyntax(name: visibility)]
                     : [DeclModifierSyntax(name: .keyword(.public)), DeclModifierSyntax(name: .keyword(.mutating))],
-                name: isActor ? .identifier(a.name) : .identifier("apply\(a.name)"),
+                name: isActor ? .identifier("_\(a.name)") : .identifier("apply\(a.name)"),
                 signature: FunctionSignatureSyntax(parameterClause: FunctionParameterClauseSyntax(parameters: [])),
                 body: CodeBlockSyntax { ExprSyntax(stringLiteral: "_state = _apply(.\(a.name))") }
             )
@@ -533,7 +533,7 @@ struct MacroExpander {
         }
 
         for a in actions {
-            let callbackName = "on" + a.0.dropFirst().prefix(1).capitalized + a.0.dropFirst(2)
+            let callbackName = "on" + a.0.prefix(1).capitalized + a.0.dropFirst()
             let callbackVar: DeclSyntax = DeclSyntax(
                 VariableDeclSyntax(
                     modifiers: [DeclModifierSyntax(name: .keyword(.public))],
@@ -586,7 +586,7 @@ struct MacroExpander {
         actions: [(name: String, body: ActionExpr)]
     ) -> [FunctionDeclSyntax] {
         actions.map { a in
-            let callbackName = "on" + a.0.dropFirst().prefix(1).capitalized + a.0.dropFirst(2)
+            let callbackName = "on" + a.0.prefix(1).capitalized + a.0.dropFirst()
             var bodyExprs: [ExprSyntax] = [
                 ExprSyntax(stringLiteral: "let from = _state"),
                 ExprSyntax(stringLiteral: "_state = _apply(.\(a.0))")
@@ -597,7 +597,7 @@ struct MacroExpander {
             bodyExprs.append(ExprSyntax(stringLiteral: "if let h = \(callbackName) { Task { await h(from, _state) } }"))
             return FunctionDeclSyntax(
                 modifiers: [DeclModifierSyntax(name: .keyword(.public))],
-                name: .identifier(a.0),
+                name: .identifier("_\(a.0)"),
                 signature: FunctionSignatureSyntax(parameterClause: FunctionParameterClauseSyntax(parameters: [])),
                 body: CodeBlockSyntax(statements: CodeBlockItemListSyntax(bodyExprs.map {
                     CodeBlockItemSyntax(item: .expr($0))
@@ -622,7 +622,7 @@ struct MacroExpander {
         var defaultDecls: [String] = []
 
         for a in actions {
-            let callbackName = "on" + a.0.dropFirst().prefix(1).capitalized + a.0.dropFirst(2)
+            let callbackName = "on" + a.0.prefix(1).capitalized + a.0.dropFirst()
             callbackDecls.append("func \(callbackName)()")
             defaultDecls.append("""
                 func \(callbackName)() {

@@ -25,11 +25,11 @@ public enum Media {
         public static var spec: TLASpec {
             TLASpec("Capture") {
                 let phase = StateVar(0)
-                Action("_configure")  { phase == 0 && phase.becomes(1) }
-                Action("_start")      { phase == 1 && phase.becomes(2) }
-                Action("_stop")       { (phase == 2 || phase == 3) && phase.becomes(0) }
-                Action("_interrupt")  { phase == 2 && phase.becomes(3) }
-                Action("_resume")     { phase == 3 && phase.becomes(2) }
+                Action("configure")  { phase == 0 && phase.becomes(1) }
+                Action("start")      { phase == 1 && phase.becomes(2) }
+                Action("stop")       { (phase == 2 || phase == 3) && phase.becomes(0) }
+                Action("interrupt")  { phase == 2 && phase.becomes(3) }
+                Action("resume")     { phase == 3 && phase.becomes(2) }
                 Invariant("validPhase") { phase >= 0 && phase <= 3 }
             }
         }

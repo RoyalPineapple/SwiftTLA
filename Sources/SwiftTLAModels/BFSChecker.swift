@@ -10,7 +10,7 @@ public struct BFSChecker {
         TLASpec("BFSChecker") {
             let phase = Var<Int>("phase")
             let processed = Var<Int>("processed")
-            let queued = Var<Int>("queued", value: 1)
+            let queued = Var<Int>("queued")
             Variable(phase, 0)
             Variable(processed, 0)
             Variable(queued, 1)

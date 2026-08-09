@@ -85,7 +85,7 @@ let output: String
 
 switch name {
 case "arithmetic":
-    let x = Var<Int>("x", value: 0)
+    let x = Var<Int>("x")
     output = TLASpec("arithmetic") {
         Variable(x, 0)
         Action("add") { x.becomes(x + 1).when(x < 2) }
@@ -97,7 +97,7 @@ case "arithmetic":
     }.tlaModule
 
 case "comparison":
-    let x = Var<Int>("x", value: 0)
+    let x = Var<Int>("x")
     output = TLASpec("comparison") {
         Variable(x, 0)
         Action("eq") { x.becomes(1).when(x == 0) }
@@ -107,8 +107,8 @@ case "comparison":
     }.tlaModule
 
 case "logic":
-    let a = Var<Bool>("a", value: false)
-    let b = Var<Bool>("b", value: false)
+    let a = Var<Bool>("a")
+    let b = Var<Bool>("b")
     output = TLASpec("logic") {
         Variable(a, false); Variable(b, false)
         Action("toggle") {
@@ -131,7 +131,7 @@ case "sets":
     }.tlaModule
 
 case "tuples":
-    let val = Var<Int>("val", value: 0)
+    let val = Var<Int>("val")
     output = TLASpec("tuples") {
         Variable(val, 0)
         Action("set") { val.becomes(StateExpr.tuple([1, 2]).count).when(val == 0) }
@@ -139,7 +139,7 @@ case "tuples":
     }.tlaModule
 
 case "records":
-    let r = Var<Int>("r", value: 0)
+    let r = Var<Int>("r")
     output = TLASpec("records") {
         Variable(r, 0)
         Action("set") {
@@ -148,7 +148,7 @@ case "records":
     }.tlaModule
 
 case "functions":
-    let f = Var<Int>("f", value: 0)
+    let f = Var<Int>("f")
     output = TLASpec("functions") {
         Variable(f, 0)
         Action("apply") {
@@ -157,7 +157,7 @@ case "functions":
     }.tlaModule
 
 case "casexpr":
-    let x = Var<Int>("x", value: 0)
+    let x = Var<Int>("x")
     output = TLASpec("casexpr") {
         Variable(x, 0)
         Action("classify") {
@@ -170,7 +170,7 @@ case "casexpr":
     }.tlaModule
 
 case "choose":
-    let picked = Var<Int>("picked", value: 0)
+    let picked = Var<Int>("picked")
     let q = Var<TLASetType>("q")
     output = TLASpec("choose") {
         Variable(picked, 0)
@@ -183,7 +183,7 @@ case "choose":
     }.tlaModule
 
 case "forall":
-    let ok = Var<Bool>("ok", value: false)
+    let ok = Var<Bool>("ok")
     let s = StateExpr.set([1, 2])
     output = TLASpec("forall") {
         Variable(ok, false)
