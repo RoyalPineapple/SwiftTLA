@@ -549,6 +549,41 @@ public enum SpecParser {
         }
     }
 
+    // MARK: - Shared expression structure helpers
+
+    private static func unwrapSingleElementTuple(_ expression: ExprSyntax) -> ExprSyntax {
+        if let tuple = expression.as(TupleExprSyntax.self),
+           tuple.elements.count == 1,
+           let nested = tuple.elements.first?.expression {
+            return nested
+        }
+        return expression
+    }
+
+    private struct SequenceSplit {
+        let left: [ExprSyntax]
+        let operatorText: String
+        let right: [ExprSyntax]
+    }
+
+    private static func splitSequenceElements(_ elements: [ExprSyntax]) -> SequenceSplit? {
+        guard elements.count >= 3, elements.count % 2 == 1 else { return nil }
+        let operatorIndices = Array(stride(from: 1, to: elements.count, by: 2))
+        let splitIndex = operatorIndices.first {
+            elements[$0].as(BinaryOperatorExprSyntax.self)?.operator.text == "||"
+        } ?? operatorIndices.first {
+            elements[$0].as(BinaryOperatorExprSyntax.self)?.operator.text == "&&"
+        } ?? operatorIndices.first
+        guard let splitIndex,
+              let operatorText = elements[splitIndex].as(BinaryOperatorExprSyntax.self)?.operator.text
+        else { return nil }
+        return SequenceSplit(
+            left: Array(elements[0..<splitIndex]),
+            operatorText: operatorText,
+            right: Array(elements[(splitIndex + 1)..<elements.count])
+        )
+    }
+
     // MARK: - Static calls on StateExpr
 
     /// Parses static method calls like `StateExpr.set([...])`, `StateExpr.choose(from:matching:)`, etc.
@@ -962,10 +997,9 @@ public enum SpecParser {
         ) {
             return predicate
         }
-        if let tuple = expression.as(TupleExprSyntax.self),
-           tuple.elements.count == 1,
-           let nested = tuple.elements.first?.expression {
-            return parseInvariantExpression(nested, symmetricCollections: symmetricCollections)
+        let unwrapped = unwrapSingleElementTuple(expression)
+        if unwrapped != expression {
+            return parseInvariantExpression(unwrapped, symmetricCollections: symmetricCollections)
         }
         if let infix = expression.as(InfixOperatorExprSyntax.self),
            let operatorText = infix.operator.as(BinaryOperatorExprSyntax.self)?.operator.text,
@@ -987,25 +1021,17 @@ public enum SpecParser {
         _ elements: [ExprSyntax],
         symmetricCollections: Set<String>
     ) -> StateExpr? {
-        guard elements.count >= 3, elements.count % 2 == 1 else { return nil }
-        let operatorIndices = Array(stride(from: 1, to: elements.count, by: 2))
-        let splitIndex = operatorIndices.first {
-            elements[$0].as(BinaryOperatorExprSyntax.self)?.operator.text == "||"
-        } ?? operatorIndices.first {
-            elements[$0].as(BinaryOperatorExprSyntax.self)?.operator.text == "&&"
-        } ?? operatorIndices.first
-        guard let splitIndex,
-              let operatorText = elements[splitIndex].as(BinaryOperatorExprSyntax.self)?.operator.text,
+        guard let split = splitSequenceElements(elements),
               let left = parseInvariantElements(
-                Array(elements[0..<splitIndex]),
+                split.left,
                 symmetricCollections: symmetricCollections
               ),
               let right = parseInvariantElements(
-                Array(elements[(splitIndex + 1)..<elements.count]),
+                split.right,
                 symmetricCollections: symmetricCollections
               )
         else { return nil }
-        return parseInfixOperation(leftOperand: left, rightOperand: right, operatorText: operatorText)
+        return parseInfixOperation(leftOperand: left, rightOperand: right, operatorText: split.operatorText)
     }
 
     private static func parseInvariantElements(
@@ -1280,11 +1306,10 @@ public enum SpecParser {
         member: String,
         binding: String
     ) -> ActionExpr? {
-        if let tuple = expression.as(TupleExprSyntax.self),
-           tuple.elements.count == 1,
-           let nested = tuple.elements.first?.expression {
+        let unwrapped = unwrapSingleElementTuple(expression)
+        if unwrapped != expression {
             return parseCollectionActionExpression(
-                nested,
+                unwrapped,
                 collection: collection,
                 member: member,
                 binding: binding
