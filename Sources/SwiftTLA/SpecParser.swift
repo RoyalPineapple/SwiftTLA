@@ -7,6 +7,34 @@ import SwiftBasicFormat
 /// Tests live in SpecParserTests.
 public enum SpecParser {
 
+    private enum InfixOp: String {
+        case add = "+", sub = "-", mul = "*", div = "/", mod = "%"
+        case lt = "<", le = "<=", gt = ">", ge = ">=", eq = "==", ne = "!="
+        case and = "&&", or = "||", range = "..."
+
+        func makeStateExpr(_ lhs: StateExpr, _ rhs: StateExpr) -> StateExpr? {
+            switch self {
+            case .add: return .add(lhs, rhs)
+            case .sub: return .subtract(lhs, rhs)
+            case .mul: return .multiply(lhs, rhs)
+            case .div: return .divide(lhs, rhs)
+            case .mod: return .modulo(lhs, rhs)
+            case .lt: return .lessThan(lhs, rhs)
+            case .le: return .lessOrEqual(lhs, rhs)
+            case .gt: return .greaterThan(lhs, rhs)
+            case .ge: return .greaterOrEqual(lhs, rhs)
+            case .eq: return .equal(lhs, rhs)
+            case .ne: return .notEqual(lhs, rhs)
+            case .and: return .and(lhs, rhs)
+            case .or: return .or(lhs, rhs)
+            case .range:
+                guard case .value(.int(let f)) = lhs,
+                      case .value(.int(let l)) = rhs else { return nil }
+                return .setLiteral((f...l).map { .value(.int($0)) })
+            }
+        }
+    }
+
     // MARK: - State expressions
 
     /// Local constants collected during parsing (for `Value` / `let` bindings).
@@ -71,28 +99,7 @@ public enum SpecParser {
         rightOperand: StateExpr,
         operatorText: String?
     ) -> StateExpr? {
-        switch operatorText {
-        case "+":  return .add(leftOperand, rightOperand)
-        case "-":  return .subtract(leftOperand, rightOperand)
-        case "*":  return .multiply(leftOperand, rightOperand)
-        case "/":  return .divide(leftOperand, rightOperand)
-        case "%":  return .modulo(leftOperand, rightOperand)
-        case "<":  return .lessThan(leftOperand, rightOperand)
-        case "<=": return .lessOrEqual(leftOperand, rightOperand)
-        case ">":  return .greaterThan(leftOperand, rightOperand)
-        case ">=": return .greaterOrEqual(leftOperand, rightOperand)
-        case "==": return .equal(leftOperand, rightOperand)
-        case "!=": return .notEqual(leftOperand, rightOperand)
-        case "&&": return .and(leftOperand, rightOperand)
-        case "||": return .or(leftOperand, rightOperand)
-        case "...":
-            guard case .value(.int(let first)) = leftOperand,
-                  case .value(.int(let last)) = rightOperand
-            else { return nil }
-            let rangeValues = (first...last).map { StateExpr.value(.int($0)) }
-            return .setLiteral(rangeValues)
-        default: return nil
-        }
+        operatorText.flatMap(InfixOp.init(rawValue:))?.makeStateExpr(leftOperand, rightOperand)
     }
 
     // MARK: - Action parsing
