@@ -509,6 +509,46 @@ public enum SpecParser {
         return combine(selfExpr, argumentExpr)
     }
 
+    // MARK: - DSL dispatch tables
+
+    private enum DSLStaticMethod: String, CaseIterable {
+        case set, tuple, record, `if`, enabled, function, `for`, exists, choose, any, firstMatch, singleton, functionLiteral
+
+        func build(_ args: [StateExpr]) -> StateExpr? {
+            switch self {
+            case .set:    return .setLiteral(args)
+            case .tuple:  return .tupleLiteral(args)
+            case .record: return nil  // labeled args, handled separately
+            case .if:     return args.count >= 3 ? .ifThenElse(args[0], args[1], args[2]) : nil
+            case .enabled: return nil  // string arg, handled separately
+            case .function: return args.count >= 2 ? .functionLiteral(args[0], .fresh(), args[1]) : nil
+            case .for:    return args.count >= 2 ? .forAll(args[0], .fresh(), args[1]) : nil
+            case .exists: return args.count >= 2 ? .exists(args[0], .fresh(), args[1]) : nil
+            case .choose: return args.count >= 2 ? .choose(args[0], .fresh(), args[1]) : nil
+            case .any:    return args.count >= 1 ? .choose(args[0], .fresh(), .value(.bool(true))) : nil
+            case .firstMatch: return nil  // tuple pairs, handled separately
+            case .singleton: return args.count >= 1 ? .setLiteral(args) : nil
+            case .functionLiteral: return args.count >= 2 ? .functionLiteral(args[0], .fresh(), args[1]) : nil
+            }
+        }
+    }
+
+    private enum DSLProperty: String, CaseIterable {
+        case cardinality, flattened, subsets, domain, count, head, tail
+
+        func build(_ expr: StateExpr) -> StateExpr {
+            switch self {
+            case .cardinality: return .cardinality(expr)
+            case .flattened:   return .unionAll(expr)
+            case .subsets:     return .powerSet(expr)
+            case .domain:      return .domain(expr)
+            case .count:       return .tupleLength(expr)
+            case .head:        return .tupleHead(expr)
+            case .tail:        return .tupleTail(expr)
+            }
+        }
+    }
+
     // MARK: - Static calls on StateExpr
 
     /// Parses static method calls like `StateExpr.set([...])`, `StateExpr.choose(from:matching:)`, etc.
@@ -517,24 +557,20 @@ public enum SpecParser {
         arguments: [LabeledExprSyntax],
         method: String
     ) -> StateExpr? {
-        switch method {
-        case "set":
-            let elements = arguments.first?.expression
-                .as(ArrayExprSyntax.self)?
-                .elements
-                .compactMap { parseStateExpr($0.expression) }
-                ?? []
-            return .setLiteral(elements)
+        guard let staticMethod = DSLStaticMethod(rawValue: method) else { return nil }
 
-        case "tuple":
+        switch staticMethod {
+        case .set, .tuple, .singleton:
             let elements = arguments.first?.expression
-                .as(ArrayExprSyntax.self)?
-                .elements
+                .as(ArrayExprSyntax.self)?.elements
                 .compactMap { parseStateExpr($0.expression) }
-                ?? []
-            return .tupleLiteral(elements)
-
-        case "record":
+                ?? (staticMethod == .singleton
+                    ? [arguments.first.flatMap { parseStateExpr($0.expression) }].compactMap { $0 }
+                    : [])
+            return staticMethod == .set ? .setLiteral(elements)
+                : staticMethod == .tuple ? .tupleLiteral(elements)
+                : .setLiteral(elements)
+        case .record:
             var fields: [String: StateExpr] = [:]
             for argument in arguments {
                 guard let label = argument.label?.text,
@@ -543,57 +579,14 @@ public enum SpecParser {
                 fields[label] = value
             }
             return .recordLiteral(fields)
-
-        case "if":
-            guard arguments.count >= 3,
-                  let condition = parseStateExpr(arguments[0].expression),
-                  let thenValue = parseStateExpr(arguments[1].expression),
-                  let elseValue = parseStateExpr(arguments[2].expression)
-            else { return nil }
-            return .ifThenElse(condition, thenValue, elseValue)
-
-        case "enabled":
+        case .enabled:
             let actionName = arguments.first?.expression
                 .as(StringLiteralExprSyntax.self)?
                 .segments.description
                 .replacingOccurrences(of: "\"", with: "")
                 ?? ""
             return .enabledAction(actionName)
-
-        case "function":
-            guard arguments.count >= 2,
-                  let domain = parseStateExpr(arguments[0].expression),
-                  let body = parseStateExpr(arguments[1].expression)
-            else { return nil }
-            return .functionLiteral(domain, .fresh(), body)
-
-        case "for":
-            guard arguments.count >= 2,
-                  let setExpr = parseStateExpr(arguments[0].expression),
-                  let predicate = parseStateExpr(arguments[1].expression)
-            else { return nil }
-            return .forAll(setExpr, .fresh(), predicate)
-
-        case "exists":
-            guard arguments.count >= 2,
-                  let setExpr = parseStateExpr(arguments[0].expression),
-                  let predicate = parseStateExpr(arguments[1].expression)
-            else { return nil }
-            return .exists(setExpr, .fresh(), predicate)
-
-        case "choose":
-            guard arguments.count >= 2,
-                  let setExpr = parseStateExpr(arguments[0].expression),
-                  let predicate = parseStateExpr(arguments[1].expression)
-            else { return nil }
-            return .choose(setExpr, .fresh(), predicate)
-
-        case "any":
-            guard let setExpr = arguments.first.flatMap({ parseStateExpr($0.expression) })
-            else { return nil }
-            return .choose(setExpr, .fresh(), .value(.bool(true)))
-
-        case "firstMatch":
+        case .firstMatch:
             var flatPairs: [StateExpr] = []
             var fallbackExpr: StateExpr?
             for argument in arguments {
@@ -609,20 +602,9 @@ public enum SpecParser {
                 }
             }
             return .caseExpr(flatPairs, fallbackExpr)
-
-        case "singleton":
-            guard let element = parseStateExpr(arguments.first?.expression) else { return nil }
-            return .setLiteral([element])
-
-        case "functionLiteral":
-            guard arguments.count >= 2,
-                  let domain = parseStateExpr(arguments[0].expression),
-                  let body = parseStateExpr(arguments[1].expression)
-            else { return nil }
-            return .functionLiteral(domain, .fresh(), body)
-
         default:
-            return nil
+            let exprs = arguments.compactMap { parseStateExpr($0.expression) }
+            return staticMethod.build(exprs)
         }
     }
 
@@ -636,19 +618,10 @@ public enum SpecParser {
               let selfExpr = parseStateExpr(baseExpression)
         else { return nil }
 
-        switch propertyName {
-        case "cardinality": return .cardinality(selfExpr)
-        case "flattened":   return .unionAll(selfExpr)
-        case "subsets":     return .powerSet(selfExpr)
-        case "domain":      return .domain(selfExpr)
-        case "count":       return .tupleLength(selfExpr)
-        case "head":        return .tupleHead(selfExpr)
-        case "tail":        return .tupleTail(selfExpr)
-        default:
-            // Any unknown property name is treated as record field access.
-            // For example, `msg.type` becomes `.recordAccess(.variable("msg"), "type")`.
-            return .recordAccess(selfExpr, propertyName)
+        if let property = DSLProperty(rawValue: propertyName) {
+            return property.build(selfExpr)
         }
+        return .recordAccess(selfExpr, propertyName)
     }
 
     // MARK: - Unified spec builder parser
