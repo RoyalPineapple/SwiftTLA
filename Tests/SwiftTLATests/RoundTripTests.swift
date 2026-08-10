@@ -1276,6 +1276,30 @@ import SwiftSyntax
         let result = try lc.checkEventually(eventually13, fairSCCs: terminals)
         if case .violated = result { } else { #expect(Bool(false)) }
     }
+
+    @Test("WF satisfied, SF violated: A exits SCC, B+C cycle within")
+    func wfSfDifferential() throws {
+        // 3 states (0, 1, 2). A exits SCC, B+C cycle within.
+        // SCC {0,1} has A enabled at 0 (goes to 2 outside SCC), disabled at 1.
+        // WF(A): disabled somewhere → fair
+        // SF(A): enabled somewhere but never taken within SCC → unfair
+        let x = Var<Int>("x")
+        let spec = TLASpec("WFSFTest") {
+            Variable(x, 0)
+            Action("A") { x == 0 && x.becomes(2) }
+            Action("B") { x == 0 && x.becomes(1) }
+            Action("C") { x == 1 && x.becomes(0) }
+        }
+
+        let graph = try ModelChecker(spec: spec, maxStates: 10).exploreGraph()
+        let lc = LivenessChecker(graph: graph)
+        let sccs = lc.computeSCCs()
+        // Check ALL SCCs, not just terminal ones
+        let wfFair = lc.fairTerminalSCCs(sccs, fairness: [FairnessCondition.weakFairness("A")], actions: spec.actions)
+        let sfFair = lc.fairTerminalSCCs(sccs, fairness: [FairnessCondition.strongFairness("A")], actions: spec.actions)
+        // WF accepts more SCCs than SF
+        #expect(wfFair.count > sfFair.count, "WF should accept more SCCs than SF (WF: \(wfFair.count), SF: \(sfFair.count))")
+    }
 }
 
     @Test("ChangRoberts liveness: cand ~> won holds")
