@@ -327,6 +327,10 @@ public enum SpecBuilder {
     public static func buildExpression(_ expr: NamedValueDecl) -> [SpecComponent] { [] }
     public static func buildExpression(_ expr: OpDecl) -> [SpecComponent] { [expr] }
     public static func buildExpression(_ expr: OpUse) -> [SpecComponent] { [expr] }
+    public static func buildExpression<T: TLAValueType>(_ expr: Var<T>) -> [SpecComponent] {
+        guard let initial = expr.initial else { return [] }
+        return [VarDecl(expr.name, initial)]
+    }
     public static func buildOptional(_ component: [SpecComponent]?) -> [SpecComponent] { component ?? [] }
     public static func buildEither(first: [SpecComponent]) -> [SpecComponent] { first }
     public static func buildEither(second: [SpecComponent]) -> [SpecComponent] { second }
@@ -378,6 +382,11 @@ public func Variable(_ name: String, in values: some Sequence<some TLAValueConve
     let set = Set(values.map(\.tlaValue))
     let stateSet: StateExpr = .setLiteral(set.map { .value($0) })
     return VarDecl(name, .set(set), initialSet: stateSet)
+}
+
+@discardableResult
+public func Variable<T>(_ ref: Var<T>) -> VarDecl {
+    VarDecl(ref.name, ref.initial ?? .int(0))
 }
 
 @discardableResult
