@@ -61,7 +61,7 @@ public struct SymmetricCollectionDecl: SpecComponent, Sendable {
   public var verificationScope: Int { metadata.verificationScope }
   public var initial: TLAValue { metadata.initial }
 
-  init(name: String, verificationScope: Int, initial: TLAValue) {
+  public init(name: String, verificationScope: Int, initial: TLAValue) {
     self.metadata = SymmetricCollectionMetadata(
       name: name,
       verificationScope: verificationScope,
@@ -386,3 +386,4 @@ public func CollectionAction<K: Identifiable, V: TLAValueType>(
   let token = DictMember<K>(key: .constant(mv.name))
   return ActionDecl(name, .existsAction(mv.name, .domain(.variable(collection.name)), body(token)))
 }
+
