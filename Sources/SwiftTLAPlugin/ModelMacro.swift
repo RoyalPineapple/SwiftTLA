@@ -56,16 +56,10 @@ struct MacroExpander {
         }
         if parsed.variables.isEmpty { throw SimpleError("No variables in spec") }
 
-        let collectionVarTypes = Self.collectCollectionVarTypes(in: closure)
-        let enrichedVariables: [(name: String, initial: TLAValue, initialSet: StateExpr?, swiftTypeName: String?)] = parsed.variables.map { v in
-            let swiftType = collectionVarTypes[v.name] ?? v.swiftTypeName
-            return (v.name, v.initial, v.initialSet, swiftType)
-        }
-
         let enumInfos = Self.collectEnumStateVars(from: memberList)
 
         var allInvariants = parsed.invariants.map { NamedInvariant(name: $0.name, body: $0.body) }
-        for variable in enrichedVariables {
+        for variable in parsed.variables {
             if let swiftTypeName = variable.swiftTypeName,
                let enumInfo = enumInfos.first(where: { $0.typeName == swiftTypeName }) {
                 let domainValues = TLAValue.sorted(enumInfo.domain)
@@ -78,7 +72,7 @@ struct MacroExpander {
 
         let spec = TLASpec(
             name: typeName,
-            variables: enrichedVariables.map { NamedVar(name: $0.name, initial: $0.initial, initialSet: $0.initialSet) },
+            variables: parsed.variables.map { NamedVar(name: $0.name, initial: $0.initial, initialSet: $0.initialSet) },
             constants: parsed.constants,
             actions: parsed.actions.map { NamedAction(name: $0.name, body: $0.body) },
             invariants: allInvariants,
@@ -105,7 +99,7 @@ struct MacroExpander {
 
         return ParsedMacroModel(
             typeName: typeName,
-            variables: enrichedVariables,
+            variables: parsed.variables,
             actions: parsed.actions,
             symmetricCollections: parsed.symmetricCollections,
             collectionActions: parsed.collectionActions,
@@ -194,11 +188,8 @@ struct MacroExpander {
             let isVar = baseName == "Var"
             let isValue = baseName == "Value"
             let isStateVar = baseName == "StateVar"
-            let isArrayVar = baseName == "ArrayVar"
-            let isSetVar = baseName == "SetVar"
-            let isDictVar = baseName == "DictionaryVar"
 
-            if isStateVar {
+            if isStateVar || isVar {
                 if let firstArg = fc.arguments.first,
                    let label = firstArg.label?.text,
                    label == "in" || label == "values" {
@@ -235,7 +226,7 @@ struct MacroExpander {
                 continue
             }
 
-            guard isVar || isValue || isArrayVar || isSetVar || isDictVar
+            guard isVar || isValue
             else { newBindings.append(binding); continue }
 
             let hasStringArg = fc.arguments.contains { arg in
@@ -335,9 +326,7 @@ struct MacroExpander {
                     ),
                     body: CodeBlockSyntax {
                         for v in variables {
-                            if let typeName = v.swiftTypeName, needsBridgeInit(typeName) {
-                                ExprSyntax(stringLiteral: Self.bridgedInitExpr(variable: v))
-                            } else if let typeName = v.swiftTypeName {
+                            if let typeName = v.swiftTypeName {
                                 ExprSyntax(stringLiteral: "self.\(v.name) = \(typeName)(rawValue: dict[Variables.\(v.name).rawValue]!.\(extractor(for: v.initial)))!")
                             } else {
                                 ExprSyntax(stringLiteral: "self.\(v.name) = dict[Variables.\(v.name).rawValue]!.\(extractor(for: v.initial))")
@@ -355,11 +344,7 @@ struct MacroExpander {
                             CodeBlockItemListSyntax {
                                 DeclSyntax(stringLiteral: "var d: [String: TLAValue] = [:]")
                                 for v in variables {
-                                    if let typeName = v.swiftTypeName, needsBridgeInit(typeName) {
-                                        ExprSyntax(stringLiteral: Self.bridgedAsDictExpr(variable: v))
-                                    } else {
-                                        ExprSyntax(stringLiteral: "d[Variables.\(v.name).rawValue] = \(constructor(for: v.initial, value: v.name))")
-                                    }
+                                    ExprSyntax(stringLiteral: "d[Variables.\(v.name).rawValue] = \(constructor(for: v.initial, value: v.name))")
                                 }
                                 StmtSyntax(stringLiteral: "return d")
                             }
@@ -393,13 +378,39 @@ struct MacroExpander {
     ) -> [FunctionDeclSyntax] {
         let visibility = isActor ? TokenSyntax.keyword(.fileprivate) : TokenSyntax.keyword(.public)
         return actions.map { a in
-            FunctionDeclSyntax(
+            if let collectionAction = collectionActions.first(where: { $0.name == a.name }),
+               let collection = symmetricCollections.first(where: { $0.name == collectionAction.collectionName }) {
+                let actionNotEnabled = "SymmetricCollectionRuntimeError.actionNotEnabled(collection: \"\(collection.name)\", action: \"\(a.name)\")"
+                let liveBranches = collectionAction.runtimeBranches.map { branch in
+                    let condition = branch.guardExpressions.isEmpty
+                        ? "true"
+                        : branch.guardExpressions.map { "(\($0))" }.joined(separator: " && ")
+                    let update = branch.updateExpression.map {
+                        "try \(collection.name).update(id: id, action: \"\(a.name)\") { entry in \($0) }"
+                    } ?? ""
+                    return """
+                    if \(condition) {
+                        \(update)
+                        return
+                    }
+                    """
+                }.joined(separator: "\n")
+                let source = """
+                \(isActor ? "fileprivate" : "public mutating") func \(a.name)(id: \(collection.elementType).ID) throws {
+                    let entry = try \(collection.name).entry(for: id, action: "\(a.name)")
+                    \(liveBranches)
+                    throw \(actionNotEnabled)
+                }
+                """
+                return DeclSyntax(stringLiteral: source).as(FunctionDeclSyntax.self)!
+            }
+            return FunctionDeclSyntax(
                 modifiers: isActor
                     ? [DeclModifierSyntax(name: visibility)]
                     : [DeclModifierSyntax(name: .keyword(.public)), DeclModifierSyntax(name: .keyword(.mutating))],
-                name: isActor ? .identifier("\(a.0)") : .identifier("apply\(a.0)"),
+                name: isActor ? .identifier("_\(a.name)") : .identifier("apply\(a.name)"),
                 signature: FunctionSignatureSyntax(parameterClause: FunctionParameterClauseSyntax(parameters: [])),
-                body: CodeBlockSyntax { ExprSyntax(stringLiteral: "_state = _apply(.\(a.0))") }
+                body: CodeBlockSyntax { ExprSyntax(stringLiteral: "_state = _apply(.\(a.name))") }
             )
         }
     }
@@ -502,14 +513,12 @@ struct MacroExpander {
         for v in variables {
             let typeStr = v.swiftTypeName ?? Self.swiftType(for: v.initial)
             let initStr: String
-            if let typeName = v.swiftTypeName, Self.needsBridgeInit(typeName) {
-                initStr = Self.collectionDefaultValue(for: typeName)
-            } else if v.swiftTypeName != nil {
+            if v.swiftTypeName != nil {
                 initStr = "\(typeStr)(rawValue: \(Self.literalExpr(for: v.initial)))!"
             } else {
                 initStr = Self.literalExpr(for: v.initial)
             }
-            let storedVar = DeclSyntax(
+            let storedVar: DeclSyntax = DeclSyntax(
                 VariableDeclSyntax(
                     modifiers: [DeclModifierSyntax(name: .keyword(.public))],
                     bindingSpecifier: .keyword(.var),
@@ -525,7 +534,7 @@ struct MacroExpander {
 
         for a in actions {
             let callbackName = "on" + a.0.prefix(1).capitalized + a.0.dropFirst()
-            let callbackVar = DeclSyntax(
+            let callbackVar: DeclSyntax = DeclSyntax(
                 VariableDeclSyntax(
                     modifiers: [DeclModifierSyntax(name: .keyword(.public))],
                     bindingSpecifier: .keyword(.var),
@@ -642,54 +651,6 @@ struct MacroExpander {
             DeclSyntax(stringLiteral: extCode),
             DeclSyntax(stringLiteral: conformanceCode)
         ]
-    }
-
-    // MARK: - Collection var type detection
-
-    /// Walks the spec closure AST and extracts Swift type information
-    /// from ArrayVar<T>, SetVar<T>, DictionaryVar<K,V> declarations.
-    /// Returns a mapping from variable name to Swift type string.
-    static func collectCollectionVarTypes(in closure: ClosureExprSyntax) -> [String: String] {
-        var typeMap: [String: String] = [:]
-        for statement in closure.statements {
-            guard case .decl(let decl) = statement.item,
-                  let varDecl = decl.as(VariableDeclSyntax.self)
-            else { continue }
-
-            for binding in varDecl.bindings {
-                guard let patternName = binding.pattern.as(IdentifierPatternSyntax.self)?.identifier.text,
-                      let initializer = binding.initializer?.value,
-                      let fc = initializer.as(FunctionCallExprSyntax.self),
-                      let genSpec = fc.calledExpression.as(GenericSpecializationExprSyntax.self),
-                      let baseName = genSpec.expression.as(DeclReferenceExprSyntax.self)?.baseName.text
-                else { continue }
-
-                let genericArgs = Array(genSpec.genericArgumentClause.arguments)
-
-                switch baseName {
-                case "ArrayVar":
-                    guard let firstArg = genericArgs.first else { continue }
-                    typeMap[patternName] = "[\(firstArg.argument.description.trimmingCharacters(in: .whitespacesAndNewlines))]"
-                case "SetVar":
-                    guard let firstArg = genericArgs.first else { continue }
-                    typeMap[patternName] = "Set<\(firstArg.argument.description.trimmingCharacters(in: .whitespacesAndNewlines))>"
-                case "DictionaryVar":
-                    guard genericArgs.count >= 2 else { continue }
-                    let key = genericArgs[0].argument.description.trimmingCharacters(in: .whitespacesAndNewlines)
-                    let value = genericArgs[1].argument.description.trimmingCharacters(in: .whitespacesAndNewlines)
-                    typeMap[patternName] = "[\(key): \(value)]"
-                default:
-                    break
-                }
-            }
-        }
-        return typeMap
-    }
-
-    /// Returns true if the swiftTypeName represents a collection type that needs
-    /// TLABridgeable-based conversion (not an enum/concrete type).
-    static func needsBridgeInit(_ typeName: String) -> Bool {
-        typeName.hasPrefix("[") || typeName.hasPrefix("Set<")
     }
 
     // MARK: - Helpers
@@ -826,47 +787,6 @@ struct MacroExpander {
         case .record: ".record(\(value))"; case .function: ".function(\(value))"
         case .constant: ".constant(\(value))"
         }
-    }
-
-    /// Generates the init-from-dict expression for a collection-typed variable
-    /// backed by ArrayVar or SetVar. Uses TLABridgeable for element conversion.
-    static func bridgedInitExpr(variable v: (name: String, initial: TLAValue, initialSet: StateExpr?, swiftTypeName: String?)) -> String {
-        guard let swiftType = v.swiftTypeName else {
-            return "self.\(v.name) = dict[Variables.\(v.name).rawValue]!.\(extractor(for: v.initial))"
-        }
-        let key = "dict[Variables.\(v.name).rawValue]"
-        if swiftType.hasPrefix("[") {
-            let inner = String(swiftType.dropFirst().dropLast())
-            return "self.\(v.name) = (\(key)?.tupleValue ?? []).compactMap { \(inner)(tlaValue: $0) }"
-        }
-        if swiftType.hasPrefix("Set<") {
-            let inner = String(swiftType.dropFirst(4).dropLast())
-            return "self.\(v.name) = { var s = Set<\(inner)>(); for e in \(key)?.setValue ?? [] { s.insert(\(inner)(tlaValue: e)) }; return s }()"
-        }
-        return "self.\(v.name) = dict[Variables.\(v.name).rawValue]!.\(extractor(for: v.initial))"
-    }
-
-    /// Generates the as-dictionary expression for a collection-typed variable.
-    static func bridgedAsDictExpr(variable v: (name: String, initial: TLAValue, initialSet: StateExpr?, swiftTypeName: String?)) -> String {
-        guard let swiftType = v.swiftTypeName else {
-            return "d[Variables.\(v.name).rawValue] = \(constructor(for: v.initial, value: v.name))"
-        }
-        let key = "Variables.\(v.name).rawValue"
-        if swiftType.hasPrefix("[") {
-            return "d[\(key)] = .tuple(\(v.name).map(\\.tlaValue))"
-        }
-        if swiftType.hasPrefix("Set<") {
-            return "d[\(key)] = { var s = Set<TLAValue>(); for e in \(v.name) { s.insert(e.tlaValue) }; return .set(s) }()"
-        }
-        return "d[\(key)] = \(constructor(for: v.initial, value: v.name))"
-    }
-
-    /// Returns an empty-collection default literal for a collection Swift type.
-    static func collectionDefaultValue(for swiftType: String) -> String {
-        if swiftType.hasPrefix("[") && swiftType.contains(":") { return "[:]" }
-        if swiftType.hasPrefix("[") { return "[]" }
-        if swiftType.hasPrefix("Set<") { return "[]" }
-        return "[]"
     }
 }
 

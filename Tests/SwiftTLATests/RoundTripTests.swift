@@ -1482,7 +1482,7 @@ enum Status: String, TLAValueType, StateExprConvertible {
     func intEnumStateVar() throws {
         let mode = Var("mode", Mode.idle)
         let spec = TLASpec("IntEnumSV") {
-            Variable(mode.name, mode.initial)
+            Variable(mode)
             Action("toggle") {
                 (mode == Mode.idle) && mode.becomes(Mode.active) ||
                 (mode == Mode.active) && mode.becomes(Mode.idle)
@@ -1510,7 +1510,7 @@ enum Status: String, TLAValueType, StateExprConvertible {
     func stringEnumStateVar() throws {
         let state = Var("state", Status.on)
         let spec = TLASpec("StringEnumSV") {
-            Variable(state.name, state.initial)
+            Variable(state)
             Action("toggle") {
                 (state == Status.on) && state.becomes(Status.off) ||
                 (state == Status.off) && state.becomes(Status.on)

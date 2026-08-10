@@ -18,6 +18,9 @@ public actor MediaContract {
             let cPhase = Var("cPhase", 0)
             let wPhase = Var("wPhase", 0)
             let pPhase = Var("pPhase", 0)
+            Variable(cPhase)
+            Variable(wPhase)
+            Variable(pPhase)
 
             Action("cStop")     { (cPhase == 2 || cPhase == 3) && (wPhase != 2 && wPhase != 3) && cPhase.becomes(0) }
             Action("cInterrupt") { cPhase == 2 && (wPhase != 2 && wPhase != 3) && cPhase.becomes(3) }

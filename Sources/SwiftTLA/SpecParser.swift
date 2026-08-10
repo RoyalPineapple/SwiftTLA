@@ -772,15 +772,15 @@ public enum SpecParser {
         }
     }
 
-    /// Parses `let x = StateVar(...)` bindings into `ParsedSpecComponents.variables`.
-    /// Handles both raw `StateVar(0)` and rewrites where ModelMacro injected a string name.
+    /// Parses `let x = Var(...)` or `let x = StateVar(...)` bindings into `ParsedSpecComponents.variables`.
+    /// Handles both raw `Var("x", 0)` and rewrites where ModelMacro injected a string name.
     private static func parseStateVarDecl(_ varDecl: VariableDeclSyntax, into result: inout ParsedSpecComponents) {
         for binding in varDecl.bindings {
             guard let patternName = binding.pattern.as(IdentifierPatternSyntax.self)?.identifier.text,
                   let initializer = binding.initializer?.value,
                   let fc = initializer.as(FunctionCallExprSyntax.self),
                   let calledName = fc.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text,
-                  calledName == "StateVar"
+                  (calledName == "StateVar" || calledName == "Var")
             else { continue }
 
             let args = Array(fc.arguments)
