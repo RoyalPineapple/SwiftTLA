@@ -1,6 +1,6 @@
 # SwiftTLA
 
-SwiftTLA is a compile-time behavioral compiler. Swift types constrain which models you can construct. The macros `@TLAModel`, `@TLAActor`, `@TLAObservable`, and `@TLAValidated` parse the model. They then model-check its behavior during compilation. A successful check generates an executable state machine or an actor API.
+SwiftTLA is a compile-time spec validator and behavioral compiler. Swift types constrain which models you can construct. The macros `@TLAModel`, `@TLAActor`, `@TLAObservable`, and `@TLAValidated` parse the model. They then model-check its behavior during compilation. A successful check generates an executable state machine or an actor API.
 
 The `@TLAValidated` macro generates no code. You can use it when you need proof only.
 
