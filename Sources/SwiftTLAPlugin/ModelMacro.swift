@@ -1704,7 +1704,8 @@ enum MacroExpander {
             let condition = guardExprs.isEmpty ? "true" : guardExprs.joined(separator: " && ")
             let assignments = extracted.assignments.compactMap { (name, expr) -> String? in
                 if case .variable(let refName) = expr, refName == name { return nil }
-                return "_state.\(name) = \(codegenExpr(expr, variables: variables, enumInfos: enumInfos))"
+                let rhs = codegenExpr(expr, variables: variables, enumInfos: enumInfos).replacingOccurrences(of: "_state.", with: "_saved.")
+                return "_state.\(name) = \(rhs)"
             }
             return "if \(condition) {\n            \(assignments.joined(separator: "\n            "))\n            return\n        }"
         }

@@ -76,6 +76,8 @@ struct UpstreamParityNativeTests {
     // DieHard
     @Test("DieHard native verifySpec")
     func dieHardNativeVerifySpec() throws { try DieHardModel.verifySpec() }
+    @Test("DieHard native verifyTransitions")
+    func dieHardNativeVerifyTransitions() throws { try DieHardModel.verifyTransitions() }
     @Test("DieHard native verifyInvariants")
     func dieHardNativeVerifyInvariants() throws { try DieHardModel.verifyInvariants() }
 
@@ -90,5 +92,6 @@ struct UpstreamParityNativeTests {
         }
         try check(HourClockModel.transitionMatrix(), runtime: HourClockModel.runtime)
         try check(HourClock2Model.transitionMatrix(), runtime: HourClock2Model.runtime)
+        try check(DieHardModel.transitionMatrix(), runtime: DieHardModel.runtime)
     }
 }
