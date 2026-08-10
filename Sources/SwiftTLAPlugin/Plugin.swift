@@ -7,7 +7,6 @@ struct SwiftTLAPlugin: CompilerPlugin {
         ModelMacro.self,
         TLAActorMacro.self,
         TLAObservableMacro.self,
-        TLAValidatedMacro.self,
         TypedVarMacro.self,
     ]
 }
