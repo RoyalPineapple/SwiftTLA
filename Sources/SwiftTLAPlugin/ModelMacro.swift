@@ -119,6 +119,57 @@ enum TLASpecVerifier {
         )
     }
 
+    // MARK: - Var bindings (scan pass)
+
+    struct VarBinding {
+        let name: String
+        let typeName: String
+    }
+
+    private static func typeNameFromAnnotation(_ typeAnn: TypeAnnotationSyntax?) -> String? {
+        typeAnn?.type.as(IdentifierTypeSyntax.self)?.name.text
+    }
+
+    private static func inferTypeFromExpr(_ expr: ExprSyntax) -> String? {
+        if expr.is(IntegerLiteralExprSyntax.self) { return "Int" }
+        if expr.is(BooleanLiteralExprSyntax.self) { return "Bool" }
+        if expr.is(StringLiteralExprSyntax.self) { return "String" }
+        if let memberAccess = expr.as(MemberAccessExprSyntax.self),
+           let baseRef = memberAccess.base?.as(DeclReferenceExprSyntax.self) {
+            return baseRef.baseName.text
+        }
+        return nil
+    }
+
+    private static func scanVarBindings(in closure: ClosureExprSyntax) -> [VarBinding] {
+        var bindings: [VarBinding] = []
+        for item in closure.statements {
+            guard case .decl(let decl) = item.item,
+                  let varDecl = decl.as(VariableDeclSyntax.self)
+            else { continue }
+            for binding in varDecl.bindings {
+                guard let patternName = binding.pattern.as(IdentifierPatternSyntax.self)?.identifier.text,
+                      let initializer = binding.initializer,
+                      let fc = initializer.value.as(FunctionCallExprSyntax.self)
+                else { continue }
+                let baseName = fc.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text
+                    ?? fc.calledExpression.as(GenericSpecializationExprSyntax.self)?.expression.as(DeclReferenceExprSyntax.self)?.baseName.text
+                guard baseName == "Var" else { continue }
+                let args = Array(fc.arguments)
+                guard !args.isEmpty,
+                      let firstArg = args[0].expression.as(StringLiteralExprSyntax.self),
+                      let varName = firstArg.segments.first?.as(StringSegmentSyntax.self)?.content.text,
+                      varName == patternName
+                else { continue }
+                let typeName = typeNameFromAnnotation(binding.typeAnnotation)
+                    ?? (args.count >= 2 ? inferTypeFromExpr(args[1].expression) : nil)
+                    ?? "Int"
+                bindings.append(VarBinding(name: patternName, typeName: typeName))
+            }
+        }
+        return bindings
+    }
+
     // MARK: - Var name injection
 
     private static func rewriteVarNames(in closure: ClosureExprSyntax) -> ClosureExprSyntax {
@@ -126,7 +177,12 @@ enum TLASpecVerifier {
         for item in closure.statements {
             newStatements.append(rewriteVarBinding(in: item))
         }
-        return closure.with(\.statements, CodeBlockItemListSyntax(newStatements))
+        let nameInjected = closure.with(\.statements, CodeBlockItemListSyntax(newStatements))
+        let bindings = scanVarBindings(in: nameInjected)
+        guard !bindings.isEmpty else { return nameInjected }
+        let rebinder = ClosureRebinder(bindings: bindings)
+        let rebound = rebinder.rewrite(Syntax(nameInjected))
+        return rebound.as(ClosureExprSyntax.self) ?? nameInjected
     }
 
     private static func rewriteVarBinding(in item: CodeBlockItemSyntax) -> CodeBlockItemSyntax {
@@ -214,6 +270,57 @@ enum TLASpecVerifier {
         guard bindingsChanged else { return item }
         let newDecl = varDecl.with(\.bindings, PatternBindingListSyntax(newBindings))
         return item.with(\.item, .decl(DeclSyntax(newDecl)))
+    }
+
+    // MARK: - Closure re-binding
+
+    private final class ClosureRebinder: SyntaxRewriter {
+        let bindingMap: [String: VarBinding]
+        private let bindingNames: Set<String>
+
+        init(bindings: [VarBinding]) {
+            self.bindingMap = Dictionary(uniqueKeysWithValues: bindings.map { ($0.name, $0) })
+            self.bindingNames = Set(bindings.map(\.name))
+        }
+
+        override func visit(_ node: FunctionCallExprSyntax) -> ExprSyntax {
+            guard let callName = node.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text,
+                  callName == "Action" || callName == "Invariant",
+                  let closure = node.trailingClosure
+            else { return super.visit(node) }
+
+            let scanner = ReferencedVarScanner(bindingNames: bindingNames)
+            scanner.walk(closure)
+            guard !scanner.referencedNames.isEmpty else { return super.visit(node) }
+
+            var rebindStatements: [CodeBlockItemSyntax] = []
+            for name in scanner.referencedNames.sorted() {
+                guard let binding = bindingMap[name] else { continue }
+                let source = "let \(name) = Var<\(binding.typeName)>(\"\(name)\")"
+                let parsed = Parser.parse(source: source)
+                rebindStatements.append(contentsOf: parsed.statements)
+            }
+
+            let newBody = CodeBlockItemListSyntax(rebindStatements + Array(closure.statements))
+            let newClosure = closure.with(\.statements, newBody)
+            return ExprSyntax(node.with(\.trailingClosure, newClosure))
+        }
+    }
+
+    private final class ReferencedVarScanner: SyntaxVisitor {
+        let bindingNames: Set<String>
+        var referencedNames = Set<String>()
+
+        init(bindingNames: Set<String>) {
+            self.bindingNames = bindingNames
+            super.init(viewMode: .sourceAccurate)
+        }
+
+        override func visit(_ node: DeclReferenceExprSyntax) -> SyntaxVisitorContinueKind {
+            let name = node.baseName.text
+            if bindingNames.contains(name) { referencedNames.insert(name) }
+            return .visitChildren
+        }
     }
 
     // MARK: - Helpers
@@ -412,7 +519,9 @@ enum MacroExpander {
         ))
 
         decls.append(DeclSyntax(generateVariablesEnum(variables: model.variables)))
-        decls.append(DeclSyntax(generateActionsEnum(actions: model.actions)))
+        if !model.actions.isEmpty {
+            decls.append(DeclSyntax(generateActionsEnum(actions: model.actions)))
+        }
         decls.append(DeclSyntax(generateStateStruct(variables: model.variables, enumInfos: model.enumInfos)))
         decls.append(contentsOf: generateCollectionRuntimeMembers(model.symmetricCollections))
         let ordinaryVariables = model.variables.filter { variable in
@@ -425,7 +534,9 @@ enum MacroExpander {
             collectionActions: model.collectionActions,
             symmetricCollections: model.symmetricCollections
         ).map(DeclSyntax.init))
-        decls.append(DeclSyntax(generateApplyHelper(symmetricCollections: model.symmetricCollections)))
+        if !model.actions.isEmpty {
+            decls.append(DeclSyntax(generateApplyHelper(symmetricCollections: model.symmetricCollections)))
+        }
         decls.append(DeclSyntax(
             VariableDeclSyntax(
                 modifiers: [DeclModifierSyntax(name: .keyword(.public)), DeclModifierSyntax(name: .keyword(.static))],
@@ -441,9 +552,11 @@ enum MacroExpander {
         ))
 
         decls.append(contentsOf: generateSpecTest())
-        decls.append(contentsOf: generateTransitionMatrix())
-        decls.append(contentsOf: generateTransitionsTest())
-        if model.hasInvariants {
+        if !model.actions.isEmpty {
+            decls.append(contentsOf: generateTransitionMatrix())
+        }
+        decls.append(contentsOf: generateTransitionsTest(model.actions))
+        if model.hasInvariants && !model.actions.isEmpty {
             decls.append(contentsOf: generateInvariantsTest())
         }
 
@@ -518,25 +631,26 @@ enum MacroExpander {
                     ),
                     body: CodeBlockSyntax {
                         for v in variables {
-                            if let typeName = v.swiftTypeName,
-                               let info = enumInfos.first(where: { $0.typeName == typeName }) {
-                                let caseLines = info.cases.map { c in
-                                    "case \"\(c.name)\": return \(typeName).\(c.name)"
-                                }.joined(separator: "\n                    ")
-                                ExprSyntax(stringLiteral: """
-                                self.\(v.name) = {
-                                    guard case .string(let s) = dict[Variables.\(v.name).rawValue] else { fatalError("Invalid enum value for \(v.name)") }
-                                    switch s {
-                                    \(caseLines)
-                                    default: fatalError("Unknown \(typeName): \\(s)")
-                                    }
-                                }()
-                                """)
-                            } else if let typeName = v.swiftTypeName {
-                                ExprSyntax(stringLiteral: "self.\(v.name) = \(typeName)(rawValue: dict[Variables.\(v.name).rawValue]!.\(extractor(for: v.initial)))!")
-                            } else {
-                                ExprSyntax(stringLiteral: "self.\(v.name) = dict[Variables.\(v.name).rawValue]!.\(extractor(for: v.initial))")
-                            }
+                if let typeName = v.swiftTypeName,
+                   let info = enumInfos.first(where: { $0.typeName == typeName }) {
+                    let caseLines = info.cases.map { c in
+                        "case \"\(c.name)\": return \(typeName).\(c.name)"
+                    }.joined(separator: "\n                    ")
+                    ExprSyntax(stringLiteral: """
+                    self.\(v.name) = {
+                        guard case .string(let s) = dict[Variables.\(v.name).rawValue] else { fatalError("Invalid enum value for \(v.name)") }
+                        switch s {
+                        \(caseLines)
+                        default: fatalError("Unknown \(typeName): \\(s)")
+                        }
+                    }()
+                    """)
+                } else if let typeName = v.swiftTypeName,
+                          !["Int", "Bool", "String", "TLAValue"].contains(typeName) {
+                    ExprSyntax(stringLiteral: "self.\(v.name) = \(typeName)(rawValue: dict[Variables.\(v.name).rawValue]!.\(extractor(for: v.initial)))!")
+                } else {
+                    ExprSyntax(stringLiteral: "self.\(v.name) = dict[Variables.\(v.name).rawValue]!.\(extractor(for: v.initial))")
+                }
                         }
                     }
                 )
@@ -759,8 +873,9 @@ enum MacroExpander {
         """)]
     }
 
-    static func generateTransitionsTest() -> [DeclSyntax] {
-        [DeclSyntax(stringLiteral: """
+    static func generateTransitionsTest(_ actions: [(name: String, body: ActionExpr)]) -> [DeclSyntax] {
+        if actions.isEmpty { return [] }
+        return [DeclSyntax(stringLiteral: """
         public static func verifyTransitions() throws {
             let matrix = try Self.transitionMatrix()
             let runtime = Self.runtime

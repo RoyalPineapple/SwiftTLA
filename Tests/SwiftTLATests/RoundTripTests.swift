@@ -1021,7 +1021,7 @@ import SwiftSyntax
     func specParserChooseCall() {
         let source = "choose(picked, from: q)"
         let expr = Parser.parse(source: source).statements.first!.item.as(ExprSyntax.self)!
-        let result = SpecParser.parseSingleAction(expr)
+        let result = SpecParser.decodeActionExpr(expr)
         #expect(result == ActionExpr.chooseAction("picked", .variable("q")))
     }
 
@@ -1029,7 +1029,7 @@ import SwiftSyntax
     func specParserSingleton() throws {
         let source = "StateExpr.singleton(x)"
         let expr = Parser.parse(source: source).statements.first!.item.as(ExprSyntax.self)!
-        let result = SpecParser.parseStateExpr(expr)
+        let result = SpecParser.decodeStateExpr(expr)
         #expect(result == StateExpr.setLiteral([.variable("x")]))
     }
 
@@ -1037,7 +1037,7 @@ import SwiftSyntax
     func specParserFunctionLiteral() throws {
         let source = "StateExpr.functionLiteral(StateExpr.set([1]), (2 + 3))"
         let expr = Parser.parse(source: source).statements.first!.item.as(ExprSyntax.self)!
-        let result = SpecParser.parseStateExpr(expr)
+        let result = SpecParser.decodeStateExpr(expr)
         let d = result?.description ?? ""
         #expect(d.contains("|->") && d.contains("{1}") && d.contains("(2 + 3)"))
     }
@@ -1744,7 +1744,7 @@ private extension StateExpr {
         #expect(!source.contains("\\in"), "\(name): swiftSource contains TLA+ syntax: \(source)")
         #expect(!source.contains("<<"), "\(name): swiftSource contains TLA+ tuple syntax: \(source)")
 
-        let parsed = SpecParser.parseStateExpr(Self.parseExpression(source))
+        let parsed = SpecParser.decodeStateExpr(Self.parseExpression(source))
         let parsedNormalized = parsed?.normalized
         #expect(parsedNormalized == expr.normalized,
                 "\(name): round-trip failed.\n  source: \(source)\n  parsed: \(String(describing: parsed))\n  expected: \(expr)")

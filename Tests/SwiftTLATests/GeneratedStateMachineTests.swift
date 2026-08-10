@@ -62,9 +62,39 @@ struct MultiVar {
     }
 }
 
+// MARK: - Builder-only: Var initial in constructor, no explicit Variable()
+
+@TLAModel
+struct BuilderOnlyClock {
+    static var spec: TLASpec {
+        TLASpec("BuilderOnlyClock") {
+            let hr = Var<Int>("hr", 1)
+            hr
+            Action("tick") { (hr < 12 && hr.becomes(hr + 1)) || (hr == 12 && hr.becomes(1)) }
+            Invariant("valid") { hr >= 1 && hr <= 12 }
+        }
+    }
+}
+
 // MARK: - Tests for generated verification methods
 
 struct GeneratedStateMachineTests {
+    @Test("Builder path: TLASpec from Var with initial, no explicit Variable")
+    func builderOnlyClockRuntime() throws {
+        let spec = TLASpec("BuilderOnlyClock") {
+            let hr = Var<Int>("hr", 1)
+            hr
+            Action("tick") { (hr < 12 && hr.becomes(hr + 1)) || (hr == 12 && hr.becomes(1)) }
+            Invariant("valid") { hr >= 1 && hr <= 12 }
+        }
+        #expect(spec.variables.count == 1)
+        #expect(spec.variables[0].name == "hr")
+        #expect(spec.variables[0].initial == .int(1))
+        let result = try ModelChecker(spec: spec, maxStates: 100).check()
+        if case .ok(let count) = result { #expect(count == 12) }
+        else { #expect(Bool(false), "Expected 12 states") }
+    }
+
     @Test("verifySpec passes for CounterNoInvs")
     func counterNoInvsVerifySpec() throws {
         try CounterNoInvs.verifySpec()
