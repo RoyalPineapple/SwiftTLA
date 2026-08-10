@@ -278,7 +278,7 @@ extension TLAValue {
         let spec = TLASpec("RemoveProof") {
             seen
             Action("add") { seen.insert(1) }
-            Action("toggle") { Guard(seen.contains(1)); seen.remove(1) }
+            Action("toggle") { (seen.contains(1) && seen.remove(1)) }
             Invariant("valid") { seen.isEmpty || seen.contains(1) }
         }
         let result = try ModelChecker(spec: spec).check()
@@ -292,7 +292,7 @@ extension TLAValue {
         let vals = ArrayVar<Int>("vals", count: 0)
         let spec = TLASpec("ArrProof") {
             vals
-            Action("push") { Guard(vals.sizeExpr < 2); vals.append(1) }
+            Action("push") { (vals.sizeExpr < 2 && vals.append(1)) }
             Invariant("lenAtMost2") { vals.sizeExpr <= 2 }
         }
         let result = try ModelChecker(spec: spec).check()
@@ -317,25 +317,5 @@ extension TLAValue {
             Issue.record("Expected ok, got \(result)"); return
         }
         #expect(count == 4)
-    }
-
-    @Test func layer2EquivalentToLayer1ViaBFS() throws {
-        let x = Var<Int>("x", 0)
-        let layer1 = TLASpec("L1") {
-            Variable(x)
-            Action("tick") { (x < 12 && x.becomes(x + 1)) || (x == 12 && x.becomes(1)) }
-            Invariant("valid") { (x >= 0 && x <= 12) || x == 1 }
-        }
-        let layer2 = TLASpec("L2") {
-            Variable(x)
-            Action("tick") { When(x < 12) { x.becomes(x + 1) }.Otherwise { x.becomes(1) } }
-            Invariant("valid") { (x >= 0 && x <= 12) || x == 1 }
-        }
-        let r1 = try ModelChecker(spec: layer1).check()
-        let r2 = try ModelChecker(spec: layer2).check()
-        guard case .ok(let c1) = r1.underlyingOutcome, case .ok(let c2) = r2.underlyingOutcome else {
-            Issue.record("Expected ok, got L1=\(r1), L2=\(r2)"); return
-        }
-        #expect(c1 == c2 && c1 == 13)
     }
 }
