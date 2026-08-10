@@ -147,8 +147,8 @@ extension StateExpr {
             var result = Set<TLAValue>()
             for elem in sv {
                 var boundState = state
-                boundState[qv.name] = elem
-                let exprWithVar = Self.substituteVariable(qv.name, elem, in: p)
+                boundState[qv] = elem
+                let exprWithVar = Self.substituteVariable(qv, elem, in: p)
                 if case .bool(true) = try ev(exprWithVar) {
                     result.insert(elem)
                 }
@@ -159,7 +159,7 @@ extension StateExpr {
             guard case .set(let sv) = try ev(s) else { throw tm("set map", got: try ev(s)) }
             var result = Set<TLAValue>()
             for elem in sv {
-                let exprWithVar = Self.substituteVariable(qv.name, elem, in: e)
+                let exprWithVar = Self.substituteVariable(qv, elem, in: e)
                 result.insert(try ev(exprWithVar))
             }
             return .set(result)
@@ -241,7 +241,7 @@ extension StateExpr {
             }
             var mapping: [TLAValue: TLAValue] = [:]
             for element in domainSet {
-                let substituted = Self.substituteVariable(qv.name, element, in: body)
+                let substituted = Self.substituteVariable(qv, element, in: body)
                 mapping[element] = try ev(substituted)
             }
             return .function(mapping)
@@ -282,7 +282,7 @@ extension StateExpr {
         case .forAll(let set, let qv, let predicate):
             guard case .set(let sv) = try ev(set) else { throw tm("∀", got: try ev(set)) }
             for elem in sv {
-                let substituted = Self.substituteVariable(qv.name, elem, in: predicate)
+                let substituted = Self.substituteVariable(qv, elem, in: predicate)
                 if case .bool(false) = try ev(substituted) {
                     return .bool(false)
                 }
@@ -292,7 +292,7 @@ extension StateExpr {
         case .exists(let set, let qv, let predicate):
             guard case .set(let sv) = try ev(set) else { throw tm("∃", got: try ev(set)) }
             for elem in sv {
-                let substituted = Self.substituteVariable(qv.name, elem, in: predicate)
+                let substituted = Self.substituteVariable(qv, elem, in: predicate)
                 if case .bool(true) = try ev(substituted) {
                     return .bool(true)
                 }
@@ -302,7 +302,7 @@ extension StateExpr {
         case .choose(let set, let qv, let predicate):
             guard case .set(let sv) = try ev(set) else { throw tm("CHOOSE", got: try ev(set)) }
             for elem in sv {
-                let substituted = Self.substituteVariable(qv.name, elem, in: predicate)
+                let substituted = Self.substituteVariable(qv, elem, in: predicate)
                 if case .bool(true) = try ev(substituted) {
                     return elem
                 }

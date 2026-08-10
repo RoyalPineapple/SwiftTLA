@@ -60,9 +60,9 @@ public struct GeneratedShorthandPredicateRuntime {
 struct SymmetricCollectionPredicateTests {
   @Test("Parser lowers collection predicates to the direct invariant AST")
   func parserMatchesDirectCollectionPredicateInvariants() throws {
-    QuantVar.resetCounter()
+    FreshVarName.resetCounter()
     let parsed = SpecParser.parseSpecClosure(predicateClosure())
-    QuantVar.resetCounter()
+    FreshVarName.resetCounter()
     let direct = directPredicateSpec()
     let parsedSpec = spec(from: parsed)
 
@@ -103,7 +103,7 @@ struct SymmetricCollectionPredicateTests {
       return
     }
     #expect(body == .equal(
-      .functionApply(.variable("devices"), .variable(member.name)),
+      .functionApply(.variable("devices"), .variable(member)),
       .value(.int(0))
     ))
     guard case .and(
@@ -114,7 +114,7 @@ struct SymmetricCollectionPredicateTests {
       return
     }
     #expect(selectedBody == .equal(
-      .functionApply(.variable("devices"), .variable(selected.name)),
+      .functionApply(.variable("devices"), .variable(selected)),
       .value(.int(0))
     ))
   }

@@ -265,14 +265,14 @@ public struct DictionaryVar<K: Identifiable, V: TLAValueType>: Sendable, CustomS
     }
 
     public func allSatisfy(_ predicate: (Expr<V>) -> StateExpr) -> StateExpr {
-        let mv = QuantVar.fresh()
-        let value = Expr<V>(.functionApply(.variable(name), .variable(mv.name)))
+        let mv = FreshVarName.fresh()
+        let value = Expr<V>(.functionApply(.variable(name), .variable(mv)))
         return .forAll(.domain(.variable(name)), mv, predicate(value))
     }
 
     public func contains(where predicate: (Expr<V>) -> StateExpr) -> StateExpr {
-        let mv = QuantVar.fresh()
-        let value = Expr<V>(.functionApply(.variable(name), .variable(mv.name)))
+        let mv = FreshVarName.fresh()
+        let value = Expr<V>(.functionApply(.variable(name), .variable(mv)))
         return .exists(.domain(.variable(name)), mv, predicate(value))
     }
 }
@@ -552,8 +552,8 @@ extension StateExpr {
     public var count: StateExpr { .tupleLength(self) }
     public var head: StateExpr { .tupleHead(self) }
     public var tail: StateExpr { .tupleTail(self) }
-    public func filtering(_ predicate: StateExpr) -> StateExpr { .setFilter(self, .fresh(), predicate) }
-    public func mapping(_ expression: StateExpr) -> StateExpr { .setMap(expression, .fresh(), self) }
+    public func filtering(_ predicate: StateExpr) -> StateExpr { .setFilter(self, FreshVarName.fresh(), predicate) }
+    public func mapping(_ expression: StateExpr) -> StateExpr { .setMap(expression, FreshVarName.fresh(), self) }
     public func appending(_ element: StateExpr) -> StateExpr { .tupleAppend(self, element) }
     public func concatenating(_ other: StateExpr) -> StateExpr { .tupleConcatenate(self, other) }
     public func at(_ index: Int) -> StateExpr { .tupleAccess(self, index) }
@@ -561,24 +561,24 @@ extension StateExpr {
 
     public static func set(_ elements: [some StateExprConvertible]) -> StateExpr { .setLiteral(elements.map(\.stateExpr)) }
     public static func `for`(allIn set: StateExpr, _ predicate: StateExpr) -> StateExpr {
-        let qv = QuantVar.fresh()
-        return .forAll(set, qv, renameVar("x", to: qv.name, in: predicate))
+        let qv = FreshVarName.fresh()
+        return .forAll(set, qv, renameVar("x", to: qv, in: predicate))
     }
     public static func exists(in set: StateExpr, _ predicate: StateExpr) -> StateExpr {
-        let qv = QuantVar.fresh()
-        return .exists(set, qv, renameVar("x", to: qv.name, in: predicate))
+        let qv = FreshVarName.fresh()
+        return .exists(set, qv, renameVar("x", to: qv, in: predicate))
     }
     public static func choose(from set: StateExpr, matching predicate: StateExpr) -> StateExpr {
-        let qv = QuantVar.fresh()
-        return .choose(set, qv, renameVar("x", to: qv.name, in: predicate))
+        let qv = FreshVarName.fresh()
+        return .choose(set, qv, renameVar("x", to: qv, in: predicate))
     }
     public static func any(from set: StateExpr) -> StateExpr {
-        let qv = QuantVar.fresh()
+        let qv = FreshVarName.fresh()
         return .choose(set, qv, .value(.bool(true)))
     }
     public static func function(domain: StateExpr, _ body: StateExpr) -> StateExpr {
-        let qv = QuantVar.fresh()
-        return .functionLiteral(domain, qv, renameVar("x", to: qv.name, in: body))
+        let qv = FreshVarName.fresh()
+        return .functionLiteral(domain, qv, renameVar("x", to: qv, in: body))
     }
     public static func tuple(_ elements: [some StateExprConvertible]) -> StateExpr { .tupleLiteral(elements.map(\.stateExpr)) }
     public static func record(_ fields: [String: StateExpr]) -> StateExpr { .recordLiteral(fields) }
@@ -587,35 +587,35 @@ extension StateExpr {
     // MARK: - Var-based bound variables
 
     public static func forAll(_ variable: Var<some TLAValueType>, in set: StateExpr, _ body: StateExpr) -> StateExpr {
-        let qv = QuantVar.fresh()
-        return .forAll(set, qv, renameVar(variable.name, to: qv.name, in: body))
+        let qv = FreshVarName.fresh()
+        return .forAll(set, qv, renameVar(variable.name, to: qv, in: body))
     }
     public static func exists(_ variable: Var<some TLAValueType>, in set: StateExpr, _ body: StateExpr) -> StateExpr {
-        let qv = QuantVar.fresh()
-        return .exists(set, qv, renameVar(variable.name, to: qv.name, in: body))
+        let qv = FreshVarName.fresh()
+        return .exists(set, qv, renameVar(variable.name, to: qv, in: body))
     }
     public static func choose(_ variable: Var<some TLAValueType>, from set: StateExpr, matching predicate: StateExpr) -> StateExpr {
-        let qv = QuantVar.fresh()
-        return .choose(set, qv, renameVar(variable.name, to: qv.name, in: predicate))
+        let qv = FreshVarName.fresh()
+        return .choose(set, qv, renameVar(variable.name, to: qv, in: predicate))
     }
     public static func functionLiteral(_ variable: Var<some TLAValueType>, in domain: StateExpr, _ body: StateExpr) -> StateExpr {
-        let qv = QuantVar.fresh()
-        return .functionLiteral(domain, qv, renameVar(variable.name, to: qv.name, in: body))
+        let qv = FreshVarName.fresh()
+        return .functionLiteral(domain, qv, renameVar(variable.name, to: qv, in: body))
     }
 
     // MARK: - Closure-based with InvariantBuilder context
 
     public static func forAll(_ set: StateExpr, @InvariantBuilder _ body: (StateExpr) -> StateExpr) -> StateExpr {
-        let qv = QuantVar.fresh()
-        return .forAll(set, qv, body(.variable(qv.name)))
+        let qv = FreshVarName.fresh()
+        return .forAll(set, qv, body(.variable(qv)))
     }
     public static func existsIn(_ set: StateExpr, @InvariantBuilder _ body: (StateExpr) -> StateExpr) -> StateExpr {
-        let qv = QuantVar.fresh()
-        return .exists(set, qv, body(.variable(qv.name)))
+        let qv = FreshVarName.fresh()
+        return .exists(set, qv, body(.variable(qv)))
     }
     public static func filterSet(_ set: StateExpr, @InvariantBuilder _ body: (StateExpr) -> StateExpr) -> StateExpr {
-        let qv = QuantVar.fresh()
-        return .setFilter(set, qv, body(.variable(qv.name)))
+        let qv = FreshVarName.fresh()
+        return .setFilter(set, qv, body(.variable(qv)))
     }
 }
 

@@ -83,15 +83,15 @@ import Testing
 
     @Test("quantifiers — forAll, exists")
     func quantifiers() throws {
-        #expect(try StateExpr.forAll(.variable("s"), QuantVar(name: "x"), .greaterThan(.variable("x"), .int(0))).evaluate(in: state) == .bool(true))
-        #expect(try StateExpr.exists(.variable("s"), QuantVar(name: "x"), .equal(.variable("x"), .int(2))).evaluate(in: state) == .bool(true))
+        #expect(try StateExpr.forAll(.variable("s"), "x", .greaterThan(.variable("x"), .int(0))).evaluate(in: state) == .bool(true))
+        #expect(try StateExpr.exists(.variable("s"), "x", .equal(.variable("x"), .int(2))).evaluate(in: state) == .bool(true))
     }
 
     @Test("builtins — sequenceFromSet, setSum, functionSet")
     func builtins() throws {
         #expect(try StateExpr.sequenceFromSet(.setLiteral([.int(3), .int(1)])).evaluate(in: [:]) == .tuple([.int(1), .int(3)]))
         let sum = try StateExpr.setSum(
-            .functionLiteral(.setLiteral([.int(1), .int(2)]), QuantVar(name: "x"), .variable("x")),
+            .functionLiteral(.setLiteral([.int(1), .int(2)]), "x", .variable("x")),
             .setLiteral([.int(1), .int(2)])
         ).evaluate(in: [:])
         #expect(sum == .int(3))

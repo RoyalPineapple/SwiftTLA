@@ -675,8 +675,8 @@ enum MacroExpander {
         case .tupleConcatenate(let a, let b): return "StateExpr.tupleConcatenate(\(cg(a)), \(cg(b)))"
         case .except(let f, let k, let v): return "StateExpr.except(\(cg(f)), \(cg(k)), \(cg(v)))"
         case .domain(let f): return "StateExpr.domain(\(cg(f)))"
-        case .setFilter(let s, let qv, let p): return "StateExpr.setFilter(\(cg(s)), QuantVar(name: \"\(qv.name)\"), \(cg(p)))"
-        case .setMap(let e, let qv, let s): return "StateExpr.setMap(\(cg(e)), QuantVar(name: \"\(qv.name)\"), \(cg(s)))"
+        case .setFilter(let s, let qv, let p): return "StateExpr.setFilter(\(cg(s)), \"\(qv)\", \(cg(p)))"
+        case .setMap(let e, let qv, let s): return "StateExpr.setMap(\(cg(e)), \"\(qv)\", \(cg(s)))"
         case .powerSet(let s): return "StateExpr.powerSet(\(cg(s)))"
         case .unionAll(let s): return "StateExpr.unionAll(\(cg(s)))"
         case .tupleLiteral(let es): return "StateExpr.tupleLiteral([\(es.map(cg).joined(separator: ", "))])"
@@ -684,7 +684,7 @@ enum MacroExpander {
             let fields = fs.map { "\"\($0.key)\": \(cg($0.value))" }.joined(separator: ", ")
             return "StateExpr.recordLiteral([\(fields)])"
         case .setLiteral(let es): return "StateExpr.setLiteral([\(es.map(cg).joined(separator: ", "))])"
-        case .functionLiteral(let d, let qv, let b): return "StateExpr.functionLiteral(\(cg(d)), QuantVar(name: \"\(qv.name)\"), \(cg(b)))"
+        case .functionLiteral(let d, let qv, let b): return "StateExpr.functionLiteral(\(cg(d)), \"\(qv)\", \(cg(b)))"
         case .caseExpr(let ps, let fb):
             let patterns = ps.map(cg).joined(separator: ", ")
             let fallback = fb.map { cg($0) } ?? "nil"
@@ -1357,9 +1357,9 @@ enum MacroExpander {
         case .domain(let f): return "\(cg(f)).keys"
 
         case .setFilter(let s, let qv, let p):
-            return "\(cg(s)).filter { \(qv.name) in \(codegenExprInner(p, variables: variables, enumInfos: enumInfos, forceTLAValue: forceTLAValue, boundVarName: qv.name)) }"
+            return "\(cg(s)).filter { \(qv) in \(codegenExprInner(p, variables: variables, enumInfos: enumInfos, forceTLAValue: forceTLAValue, boundVarName: qv)) }"
         case .setMap(let e, let qv, let s):
-            return "\(cg(s)).map { \(qv.name) in \(codegenExprInner(e, variables: variables, enumInfos: enumInfos, forceTLAValue: forceTLAValue, boundVarName: qv.name)) }"
+            return "\(cg(s)).map { \(qv) in \(codegenExprInner(e, variables: variables, enumInfos: enumInfos, forceTLAValue: forceTLAValue, boundVarName: qv)) }"
         case .powerSet(let s): return "\(cg(s)).powerSet"
         case .unionAll(let s): return "\(cg(s)).flattened"
 
@@ -1370,7 +1370,7 @@ enum MacroExpander {
         case .setLiteral(let es):
             return "Set([\(es.map { cg($0) }.joined(separator: ", "))])"
         case .functionLiteral(let d, let qv, let b):
-            return "\(cg(d)).asFunctionLiteral { \(qv.name) in \(codegenExprInner(b, variables: variables, enumInfos: enumInfos, forceTLAValue: forceTLAValue, boundVarName: qv.name)) }"
+            return "\(cg(d)).asFunctionLiteral { \(qv) in \(codegenExprInner(b, variables: variables, enumInfos: enumInfos, forceTLAValue: forceTLAValue, boundVarName: qv)) }"
         case .caseExpr:
             return "StateExpr.caseExpr([], nil)"
 

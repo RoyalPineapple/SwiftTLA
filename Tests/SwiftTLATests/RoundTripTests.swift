@@ -222,8 +222,8 @@ import SwiftSyntax
             .intersection(.setLiteral([.int(1)]), .setLiteral([.int(1)])),
             .setDifference(.setLiteral([.int(1)]), .setLiteral([.int(1)])),
             .cardinality(.setLiteral([.int(1)])),
-            .setFilter(.setLiteral([.int(1)]), QuantVar(name: "x0"), .bool(true)),
-            .setMap(.variable("x"), QuantVar(name: "x0"), .setLiteral([.int(1)])),
+            .setFilter(.setLiteral([.int(1)]), "x0", .bool(true)),
+            .setMap(.variable("x"), "x0", .setLiteral([.int(1)])),
             .powerSet(.setLiteral([.int(1)])),
             .unionAll(.setLiteral([.setLiteral([.int(1)])])),
             .tupleLiteral([.int(1)]), .tupleAccess(.tupleLiteral([.int(1)]), 0),
@@ -232,13 +232,13 @@ import SwiftSyntax
             .tupleConcatenate(.tupleLiteral([.int(1)]), .tupleLiteral([.int(2)])),
             .recordLiteral(["k": .int(1)]), .recordAccess(.recordLiteral(["k": .int(1)]), "k"),
             .domain(.recordLiteral(["k": .int(1)])),
-            .functionLiteral(.setLiteral([.int(1)]), QuantVar(name: "x0"), .variable("x")),
-            .functionApply(.functionLiteral(.setLiteral([.int(1)]), QuantVar(name: "x0"), .variable("x")), .int(1)),
-            .except(.functionLiteral(.setLiteral([.int(1)]), QuantVar(name: "x0"), .variable("x")), .int(1), .int(2)),
+            .functionLiteral(.setLiteral([.int(1)]), "x0", .variable("x")),
+            .functionApply(.functionLiteral(.setLiteral([.int(1)]), "x0", .variable("x")), .int(1)),
+            .except(.functionLiteral(.setLiteral([.int(1)]), "x0", .variable("x")), .int(1), .int(2)),
             .caseExpr([.bool(true), .int(1)], .int(0)),
-            .forAll(.setLiteral([.int(1)]), QuantVar(name: "x0"), .bool(true)),
-            .exists(.setLiteral([.int(1)]), QuantVar(name: "x0"), .bool(true)),
-            .choose(.setLiteral([.int(1)]), QuantVar(name: "x0"), .bool(true)),
+            .forAll(.setLiteral([.int(1)]), "x0", .bool(true)),
+            .exists(.setLiteral([.int(1)]), "x0", .bool(true)),
+            .choose(.setLiteral([.int(1)]), "x0", .bool(true)),
             .enabledAction("Foo")
         ]
         for e in cases {
@@ -1629,12 +1629,12 @@ enum Status: String, TLAValueType, StateExprConvertible {
 private extension StateExpr {
     var normalized: StateExpr {
         switch self {
-        case .setFilter(let s, _, let p): return .setFilter(s.normalized, QuantVar(name: "x"), p.normalized)
-        case .setMap(let e, _, let s): return .setMap(e.normalized, QuantVar(name: "x"), s.normalized)
-        case .forAll(let s, _, let p): return .forAll(s.normalized, QuantVar(name: "x"), p.normalized)
-        case .exists(let s, _, let p): return .exists(s.normalized, QuantVar(name: "x"), p.normalized)
-        case .choose(let s, _, let p): return .choose(s.normalized, QuantVar(name: "x"), p.normalized)
-        case .functionLiteral(let d, _, let b): return .functionLiteral(d.normalized, QuantVar(name: "x"), b.normalized)
+        case .setFilter(let s, _, let p): return .setFilter(s.normalized, "x", p.normalized)
+        case .setMap(let e, _, let s): return .setMap(e.normalized, "x", s.normalized)
+        case .forAll(let s, _, let p): return .forAll(s.normalized, "x", p.normalized)
+        case .exists(let s, _, let p): return .exists(s.normalized, "x", p.normalized)
+        case .choose(let s, _, let p): return .choose(s.normalized, "x", p.normalized)
+        case .functionLiteral(let d, _, let b): return .functionLiteral(d.normalized, "x", b.normalized)
         case .add(let a, let b): return .add(a.normalized, b.normalized)
         case .subtract(let a, let b): return .subtract(a.normalized, b.normalized)
         case .multiply(let a, let b): return .multiply(a.normalized, b.normalized)
@@ -1729,12 +1729,12 @@ private extension StateExpr {
             ("tupleConcatenate", StateExpr.tupleConcatenate(.tupleLiteral([.int(1)]), .tupleLiteral([.int(2)]))),
             ("recordLiteral",  StateExpr.recordLiteral(["k": .int(1)])),
             ("recordAccess",   StateExpr.recordAccess(.recordLiteral(["k": .int(1)]), "k")),
-            ("setFilter",      StateExpr.setFilter(.setLiteral([.int(1)]), QuantVar(name: "x0"), .bool(true))),
-            ("setMap",         StateExpr.setMap(.variable("y"), QuantVar(name: "x0"), .setLiteral([.int(1)]))),
-            ("forAll",         StateExpr.forAll(.setLiteral([.int(1)]), QuantVar(name: "x0"), .bool(true))),
-            ("exists",         StateExpr.exists(.setLiteral([.int(1)]), QuantVar(name: "x0"), .bool(true))),
-            ("choose",         StateExpr.choose(.setLiteral([.int(1)]), QuantVar(name: "x0"), .bool(true))),
-            ("functionLiteral", StateExpr.functionLiteral(.setLiteral([.int(1)]), QuantVar(name: "x0"), .variable("z"))),
+            ("setFilter",      StateExpr.setFilter(.setLiteral([.int(1)]), "x0", .bool(true))),
+            ("setMap",         StateExpr.setMap(.variable("y"), "x0", .setLiteral([.int(1)]))),
+            ("forAll",         StateExpr.forAll(.setLiteral([.int(1)]), "x0", .bool(true))),
+            ("exists",         StateExpr.exists(.setLiteral([.int(1)]), "x0", .bool(true))),
+            ("choose",         StateExpr.choose(.setLiteral([.int(1)]), "x0", .bool(true))),
+            ("functionLiteral", StateExpr.functionLiteral(.setLiteral([.int(1)]), "x0", .variable("z"))),
             ("caseExpr",       StateExpr.caseExpr([.bool(true), .int(1), .bool(false), .int(2)], .int(0))),
             ("enabledAction",  StateExpr.enabledAction("Tick")),
           ] as [(String, StateExpr)])
