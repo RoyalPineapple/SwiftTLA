@@ -206,7 +206,7 @@ public func completeAction(_ e: ActionExpr, allVars: [String]) -> ActionExpr {
     return completed.dropFirst().reduce(first) { .or($0, $1) }
 }
 
-func distributeOr(_ action: ActionExpr) -> [ActionExpr] {
+public func distributeOr(_ action: ActionExpr) -> [ActionExpr] {
     switch action {
     case .or(let a, let b):
         return distributeOr(a) + distributeOr(b)
