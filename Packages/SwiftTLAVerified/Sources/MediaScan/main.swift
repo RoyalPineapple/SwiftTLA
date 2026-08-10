@@ -271,7 +271,8 @@ enum RollItem: Identifiable {
 final class CameraModel {
     static var spec: TLASpec {
         TLASpec("CameraModel") {
-            let phase = StateVar(0)
+            let phase = Var("phase", 0)
+            Variable(phase)
 
             Action("ready")  { phase == 0 && phase.becomes(1) }
             Action("record") { phase == 1 && phase.becomes(2) }

@@ -1431,9 +1431,9 @@ import SwiftSyntax
             Invariant("ok") { x >= 0 && x <= 5 }
         }
 
-        let sv = StateVar(0, name: "x")
+        let sv = Var("x", 0)
         let spec2 = TLASpec("Test") {
-            Variable(sv.name, sv.initial)
+            Variable(sv)
             Action("inc") { sv.becomes(sv + 1).when(sv < 5) }
             Invariant("ok") { sv >= 0 && sv <= 5 }
         }
@@ -1480,7 +1480,7 @@ enum Status: String, TLAValueType, StateExprConvertible {
 
     @Test("Int-backed enum StateVar model-checks correctly")
     func intEnumStateVar() throws {
-        let mode = StateVar(Mode.idle, name: "mode")
+        let mode = Var("mode", Mode.idle)
         let spec = TLASpec("IntEnumSV") {
             Variable(mode.name, mode.initial)
             Action("toggle") {
@@ -1508,7 +1508,7 @@ enum Status: String, TLAValueType, StateExprConvertible {
 
     @Test("String-backed enum StateVar model-checks correctly")
     func stringEnumStateVar() throws {
-        let state = StateVar(Status.on, name: "state")
+        let state = Var("state", Status.on)
         let spec = TLASpec("StringEnumSV") {
             Variable(state.name, state.initial)
             Action("toggle") {
@@ -1748,5 +1748,22 @@ private extension StateExpr {
         let parsedNormalized = parsed?.normalized
         #expect(parsedNormalized == expr.normalized,
                 "\(name): round-trip failed.\n  source: \(source)\n  parsed: \(String(describing: parsed))\n  expected: \(expr)")
+    }
+}
+
+// MARK: - Var-as-SpecComponent: builder collects Var directly
+
+@Suite(.serialized) struct VarSpecComponentTests {
+    @Test("Var(name, value) + Variable(ref) registers spec variable")
+    func varAsSpecComponent() throws {
+        let spec = TLASpec("VarTest") {
+            let x = Var("x", 0)
+            Variable(x)
+            Action("inc") { x.becomes(x + 1).when(x < 3) }
+        }
+        #expect(spec.variables.count == 1)
+        #expect(spec.variables[0].name == "x")
+        #expect(spec.variables[0].initial == .int(0))
+        #expect(try ModelChecker(spec: spec, maxStates: 10).exploreGraph().states.count == 4)
     }
 }

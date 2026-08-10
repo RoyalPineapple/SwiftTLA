@@ -10,8 +10,10 @@ public struct Retry: Sendable {
 
     public static var spec: TLASpec {
         TLASpec("Retry") {
-            let phase = StateVar(0)
-            let attempts = StateVar(0)
+            let phase = Var("phase", 0)
+            Variable(phase)
+            let attempts = Var("attempts", 0)
+            Variable(attempts)
             // 0=idle, 1=attempting, 2=backingOff, 3=succeeded, 4=failed, 5=cancelled
 
             Action("start")            { phase == 0 && attempts == 0 && phase.becomes(1) && attempts.becomes(1) }

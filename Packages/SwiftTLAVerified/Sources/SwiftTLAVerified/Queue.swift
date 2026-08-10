@@ -8,8 +8,10 @@ public struct Queue<Element: Sendable>: Sendable {
 
     public static var spec: TLASpec {
         TLASpec("Queue") {
-            let queued = StateVar(TLAValue.set([]))
-            let phase = StateVar(0)
+            let queued = Var("queued", TLAValue.set([]))
+            Variable(queued)
+            let phase = Var("phase", 0)
+            Variable(phase)
 
             Action("enqueue") { phase == 0 && queued.cardinality < 4 && phase.stays }
             Action("drain")   { phase == 0 && phase.becomes(1) }

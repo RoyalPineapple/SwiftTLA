@@ -19,7 +19,8 @@ private final class BleDelegate: NSObject, CBCentralManagerDelegate {
 public actor Bluetooth {
     public static var spec: TLASpec {
         TLASpec("Bluetooth") {
-            let phase = StateVar(0)
+            let phase = Var("phase", 0)
+            Variable(phase)
             Action("toPoweredOn")    { (phase == 0 || phase == 1 || phase == 4) && phase.becomes(5) }
             Action("toPoweredOff")   { (phase == 0 || phase == 1 || phase == 5) && phase.becomes(4) }
             Action("toUnsupported")  { phase == 0 && phase.becomes(2) }

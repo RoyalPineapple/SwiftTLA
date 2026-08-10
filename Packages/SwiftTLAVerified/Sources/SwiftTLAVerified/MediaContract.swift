@@ -15,9 +15,9 @@ public actor MediaContract {
             Use(spec: writer)
             Use(spec: player)
 
-            let cPhase = StateVar("cPhase", 0)
-            let wPhase = StateVar("wPhase", 0)
-            let pPhase = StateVar("pPhase", 0)
+            let cPhase = Var("cPhase", 0)
+            let wPhase = Var("wPhase", 0)
+            let pPhase = Var("pPhase", 0)
 
             Action("cStop")     { (cPhase == 2 || cPhase == 3) && (wPhase != 2 && wPhase != 3) && cPhase.becomes(0) }
             Action("cInterrupt") { cPhase == 2 && (wPhase != 2 && wPhase != 3) && cPhase.becomes(3) }

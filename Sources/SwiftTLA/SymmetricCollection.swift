@@ -356,12 +356,12 @@ public func SymmetricCollection<Element: Identifiable, Value: TLAValueType>(
 
 @discardableResult
 public func SymmetricCollection<Element: Identifiable, Value: TLAValueType>(
-  _ initialState: StateVar<Value>,
+  _ initialState: Var<Value>,
   verificationScope: Int,
   elementType: Element.Type
 ) -> SymmetricCollectionDecl {
   SymmetricCollectionDecl(
-    name: initialState.name, verificationScope: verificationScope, initial: initialState.initial)
+    name: initialState.name, verificationScope: verificationScope, initial: initialState.initial ?? Value.defaultValue.tlaValue)
 }
 
 @discardableResult

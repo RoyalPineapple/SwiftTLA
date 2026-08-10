@@ -74,75 +74,29 @@ public struct Expr<T: TLAValueType>: StateExprConvertible, Sendable {
 }
 
 @dynamicMemberLookup
-public struct StateVar<T: TLAValueType>: Sendable, CustomStringConvertible {
+public struct Var<T: TLAValueType>: Sendable, CustomStringConvertible, SpecComponent {
     public let name: String
-    public let initial: TLAValue
-    public let constraint: VarConstraint?
-    private let _handle: Var<T>
-
-    public var description: String { name }
-
-    public init(_ initial: T, name: String? = nil, constraint: VarConstraint? = nil) {
-        self.name = name ?? ""
-        self.initial = initial.tlaValue
-        self.constraint = constraint
-        self._handle = Var(name ?? "")
-    }
-    public init(_ explicitName: String, _ initial: T, constraint: VarConstraint? = nil) {
-        self.name = explicitName
-        self.initial = initial.tlaValue
-        self.constraint = constraint
-        self._handle = Var(explicitName)
-    }
-    public init(in range: ClosedRange<Int>, name: String? = nil) where T == Int {
-        self.name = name ?? ""
-        self.initial = .int(range.lowerBound)
-        self.constraint = .intRange(range)
-        self._handle = Var(name ?? "", bounded: range)
-    }
-    public init(values: [String], name: String? = nil) where T == String {
-        self.name = name ?? ""
-        self.initial = .string(values.first ?? "")
-        self.constraint = .enumValues(values)
-        self._handle = Var(name ?? "", values: values)
-    }
-
-    @discardableResult public func becomes(_ value: T) -> ActionExpr { _handle.becomes(value) }
-    @discardableResult public func becomes(_ expr: Expr<T>) -> ActionExpr { _handle.becomes(expr) }
-    @discardableResult public func becomes(_ other: StateVar<T>) -> ActionExpr { .assign(name, other.stateExpr) }
-    @discardableResult public func becomes(_ expr: some StateExprConvertible) -> ActionExpr { _handle.becomes(expr) }
-    public var stays: ActionExpr { _handle.stays }
-    public subscript(dynamicMember field: String) -> StateExpr { _handle[dynamicMember: field] }
-    public var isEmpty: StateExpr { _handle.isEmpty }
-    public var cardinality: StateExpr { _handle.cardinality }
-}
-
-extension StateVar: StateExprConvertible {
-    public var stateExpr: StateExpr { .variable(name) }
-}
-
-extension Dictionary where Key == String, Value == TLAValue {
-    public subscript<T: TLAValueType>(_ variable: StateVar<T>) -> TLAValue? {
-        get { self[variable.name] }
-        set { self[variable.name] = newValue }
-    }
-}
-
-@dynamicMemberLookup
-public struct Var<T: TLAValueType>: Sendable, CustomStringConvertible {
-    public let name: String
+    public let initial: TLAValue?
     public let constraint: VarConstraint?
 
-    public init(_ name: String? = nil, constraint: VarConstraint? = nil) {
+    public init(_ name: String, _ value: T) {
+        self.name = name
+        self.initial = value.tlaValue
+        self.constraint = nil
+    }
+    public init(_ name: String? = nil, _ initial: TLAValue? = nil, constraint: VarConstraint? = nil) {
         self.name = name ?? ""
+        self.initial = initial
         self.constraint = constraint
     }
     public init(_ name: String? = nil, bounded range: ClosedRange<Int>) where T == Int {
         self.name = name ?? ""
+        self.initial = nil
         self.constraint = .intRange(range)
     }
     public init(_ name: String? = nil, values: [String]) where T == String {
         self.name = name ?? ""
+        self.initial = nil
         self.constraint = .enumValues(values)
     }
     public var description: String { name }
@@ -172,7 +126,6 @@ public struct Var<T: TLAValueType>: Sendable, CustomStringConvertible {
     public var isEmpty: StateExpr { .equal(.cardinality(.variable(name)), .value(.int(0))) }
     public var cardinality: StateExpr { .cardinality(.variable(name)) }
 }
-
 
 /// Attaches a guard condition to an action.
 /// `x.becomes(1).when(x == 0)` produces `(x == 0) /\ x' = 1`.
@@ -397,6 +350,59 @@ extension TLAValue: TLAValueConvertible { public var tlaValue: TLAValue { self }
 extension Int: TLAValueConvertible { public var tlaValue: TLAValue { .int(self) } }
 extension Bool: TLAValueConvertible { public var tlaValue: TLAValue { .bool(self) } }
 extension String: TLAValueConvertible { public var tlaValue: TLAValue { .string(self) } }
+
+// MARK: - TLABridgeable protocol
+
+public protocol TLABridgeable {
+    var tlaValue: TLAValue { get }
+    init(tlaValue: TLAValue)
+}
+
+extension Bool: TLABridgeable {
+    public init(tlaValue: TLAValue) {
+        if case .bool(let v) = tlaValue { self = v } else { self = false }
+    }
+}
+
+extension Int: TLABridgeable {
+    public init(tlaValue: TLAValue) {
+        if case .int(let v) = tlaValue { self = v } else { self = 0 }
+    }
+}
+
+extension String: TLABridgeable {
+    public init(tlaValue: TLAValue) {
+        if case .string(let v) = tlaValue { self = v } else { self = "" }
+    }
+}
+
+extension Array: TLABridgeable where Element: TLABridgeable {
+    public init(tlaValue: TLAValue) {
+        if case .tuple(let elements) = tlaValue {
+            self = elements.map { Element.init(tlaValue: $0) }
+        } else {
+            self = []
+        }
+    }
+    public var tlaValue: TLAValue {
+        .tuple(self.map { $0.tlaValue })
+    }
+}
+
+extension Set: TLABridgeable where Element: TLABridgeable & Hashable {
+    public init(tlaValue: TLAValue) {
+        if case .set(let elements) = tlaValue {
+            self = Set(elements.compactMap { Element.init(tlaValue: $0) })
+        } else {
+            self = []
+        }
+    }
+    public var tlaValue: TLAValue {
+        var mapped = Set<TLAValue>()
+        for elem in self { mapped.insert(elem.tlaValue) }
+        return .set(mapped)
+    }
+}
 
 // MARK: - Arithmetic (Var<Int> only)
 
