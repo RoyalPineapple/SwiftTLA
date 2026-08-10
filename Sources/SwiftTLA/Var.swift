@@ -386,7 +386,10 @@ extension SpecBuilder {
     }
 
     public static func buildExpression<K: Identifiable, V: TLAValueType>(_ expr: DictionaryVar<K, V>) -> [SpecComponent] {
-        [VarDecl(expr.name, .function([:]), collectionType: .dictionary(expr.scope))]
+        if expr.scope > 0 {
+            return [SymmetricCollectionDecl(name: expr.name, verificationScope: expr.scope, initial: V.defaultValue.tlaValue)]
+        }
+        return [VarDecl(expr.name, .function([:]), collectionType: .dictionary(expr.scope))]
     }
 
     public static func buildExpression<T: TLAValueType>(_ expr: SetVar<T>) -> [SpecComponent] {

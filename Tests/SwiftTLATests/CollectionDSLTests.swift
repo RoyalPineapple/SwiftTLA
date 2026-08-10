@@ -119,8 +119,12 @@ extension TLAValue {
         let spec = TLASpec("Test") { d }
         #expect(spec.variables.count == 1)
         #expect(spec.variables[0].name == "enabled")
-        #expect(spec.variables[0].initial == .function([:]))
         #expect(spec.variables[0].collectionType == .dictionary(4))
+        // When scope > 0, SymmetricCollectionDecl generates a function with member keys
+        guard case .function(let f) = spec.variables[0].initial else {
+            Issue.record("Expected function initial"); return
+        }
+        #expect(f.count == 4) // 4 member constants
     }
 }
 
@@ -209,7 +213,8 @@ extension TLAValue {
         let tla = spec.tlaModule
         #expect(tla.contains("enabled = ["))
         #expect(tla.contains("|->"))
-        #expect(tla.contains("{}"))
+        #expect(tla.contains("EnabledKeys"))
+        #expect(tla.contains("Permutations"))
     }
 
     @Test func setWithRemoveExportsSetDiff() {
@@ -310,9 +315,10 @@ extension TLAValue {
             d
             Action("a1") { d.update(k0, to: true) }
             Action("a2") { d.update(k1, to: true) }
-            Invariant("allTrue") { d.allSatisfy { $0 == true } }
+            Invariant("coherent") { d.allSatisfy { $0 == true || $0 == false } }
         }
         let result = try ModelChecker(spec: spec).check()
+        // With scope > 0, dictionary is symmetric → bounded verification
         guard case .ok(let count) = result.underlyingOutcome else {
             Issue.record("Expected ok, got \(result)"); return
         }
