@@ -49,6 +49,35 @@ public struct NamedInvariant: Sendable, CustomStringConvertible, Equatable {
     public var description: String { "\(name): \(body)" }
 }
 
+public struct ParsedSpecModel: Equatable, Sendable {
+    public let variables: [(name: String, initial: TLAValue)]
+    public let actions: [(name: String, body: ActionExpr)]
+    public let invariants: [(name: String, body: StateExpr)]
+
+    public init(variables: [(String, TLAValue)], actions: [(String, ActionExpr)], invariants: [(String, StateExpr)]) {
+        self.variables = variables
+        self.actions = actions
+        self.invariants = invariants
+    }
+
+    public static func == (lhs: ParsedSpecModel, rhs: ParsedSpecModel) -> Bool {
+        guard lhs.variables.count == rhs.variables.count,
+              lhs.actions.count == rhs.actions.count,
+              lhs.invariants.count == rhs.invariants.count
+        else { return false }
+        for (a, b) in zip(lhs.variables, rhs.variables) {
+            if a.name != b.name || a.initial != b.initial { return false }
+        }
+        for (a, b) in zip(lhs.actions, rhs.actions) {
+            if a.name != b.name || a.body != b.body { return false }
+        }
+        for (a, b) in zip(lhs.invariants, rhs.invariants) {
+            if a.name != b.name || a.body != b.body { return false }
+        }
+        return true
+    }
+}
+
 public struct TLASpec: Sendable {
     public let name: String
     public let variables: [NamedVar]
@@ -648,7 +677,7 @@ public func RuntimeFunc(_ name: String, tlaBody: String, _ implementation: @esca
 }
 
 extension TLASpec {
-    public init(_ name: String, @SpecBuilder _ builder: () -> [SpecComponent]) {
+    public init(_ name: String, parserTree: ParsedSpecModel? = nil, @SpecBuilder _ builder: () -> [SpecComponent]) {
         let components = builder()
         var variables: [NamedVar] = []
         var actions: [NamedAction] = []
@@ -751,6 +780,17 @@ extension TLASpec {
             if let a = used.assume { assumes = assumes.map { .and($0, a) } ?? a }
             symmetrySets += used.symmetrySets
             symmetricCollections += used.symmetricCollections
+        }
+
+        if let tree = parserTree {
+            let built = ParsedSpecModel(
+                variables: variables.map { ($0.name, $0.initial) },
+                actions: actions.map { ($0.name, $0.body) },
+                invariants: invariants.map { ($0.name, $0.body) }
+            )
+            guard built == tree else {
+                fatalError("SpecParser tree mismatch for '\(name)'")
+            }
         }
 
         // Auto-UNCHANGED: push into OR branches so TLC sees complete assignments

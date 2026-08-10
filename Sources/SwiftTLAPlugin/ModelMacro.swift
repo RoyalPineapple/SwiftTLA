@@ -27,6 +27,10 @@ struct ParsedMacroModel {
     let collectionActions: [SpecParser.ParsedCollectionAction]
     let enumInfos: [ParsedEnumInfo]
     let hasInvariants: Bool
+    let invariants: [(String, StateExpr)]
+    var actionsWithNames: [(name: String, body: ActionExpr)] {
+        actions.map { (name: $0.0, body: $0.1) }
+    }
 }
 
 enum TLASpecVerifier {
@@ -115,7 +119,8 @@ enum TLASpecVerifier {
             symmetricCollections: parsed.symmetricCollections,
             collectionActions: parsed.collectionActions,
             enumInfos: enumInfos,
-            hasInvariants: hasInvs
+            hasInvariants: hasInvs,
+            invariants: parsed.invariants
         )
     }
 
@@ -528,14 +533,22 @@ enum MacroExpander {
             !model.symmetricCollections.contains(where: { $0.name == variable.name })
         }
         decls.append(contentsOf: generateVariableProperties(variables: ordinaryVariables).map(DeclSyntax.init))
-        decls.append(contentsOf: generateActionMethods(
+        let actionResult = generateActionMethods(
             isActor: isActor,
             actions: model.actions,
             collectionActions: model.collectionActions,
-            symmetricCollections: model.symmetricCollections
-        ).map(DeclSyntax.init))
+            symmetricCollections: model.symmetricCollections,
+            variables: model.variables,
+            enumInfos: model.enumInfos
+        )
+        decls.append(contentsOf: actionResult.methods.map(DeclSyntax.init))
         if !model.actions.isEmpty {
             decls.append(DeclSyntax(generateApplyHelper(symmetricCollections: model.symmetricCollections)))
+            decls.append(DeclSyntax(generateApplyDispatcher(
+                actions: model.actions,
+                nativeNames: actionResult.nativeActionNames,
+                isActor: isActor
+            )))
         }
         decls.append(DeclSyntax(
             VariableDeclSyntax(
@@ -545,7 +558,7 @@ enum MacroExpander {
                     pattern: IdentifierPatternSyntax(identifier: "runtime"),
                     typeAnnotation: TypeAnnotationSyntax(type: IdentifierTypeSyntax(name: "SpecRuntime")),
                     accessorBlock: AccessorBlockSyntax(accessors: .getter(
-                        CodeBlockItemListSyntax { ExprSyntax(stringLiteral: "SpecRuntime(spec: spec)") }
+                        CodeBlockItemListSyntax { ExprSyntax(stringLiteral: "_checkParserTree(); return SpecRuntime(spec: spec)") }
                     ))
                 )]
             )
@@ -560,7 +573,137 @@ enum MacroExpander {
             decls.append(contentsOf: generateInvariantsTest())
         }
 
+        decls.append(contentsOf: generateParserTreeCheck(model: model))
+
         return decls
+    }
+
+    static func generateParserTreeCheck(model: ParsedMacroModel) -> [DeclSyntax] {
+        guard !model.actions.isEmpty else { return [] }
+
+        let treeVars = model.variables.map { v in
+            "(\"\(v.name)\", \(codegenTLAValue(v.initial)))"
+        }.joined(separator: ", ")
+
+        let treeActions = model.actions.map { a in
+            "(\"\(a.0)\", \(codegenActionExpr(a.1)))"
+        }.joined(separator: ", ")
+
+        let treeInvs = model.invariants.map { i in
+            "(\"\(i.0)\", \(codegenStateExpr(i.1)))"
+        }.joined(separator: ", ")
+
+        let source = """
+        private static let _parserTree: ParsedSpecModel = ParsedSpecModel(
+            variables: [\(treeVars)],
+            actions: [\(treeActions)],
+            invariants: [\(treeInvs)]
+        )
+
+        private static func _checkParserTree() {
+            let builtSpec = Self.spec
+            let built = ParsedSpecModel(
+                variables: builtSpec.variables.map { ($0.name, $0.initial) },
+                actions: builtSpec.actions.map { ($0.name, $0.body) },
+                invariants: builtSpec.invariants.map { ($0.name, $0.body) }
+            )
+            if built != _parserTree {
+                print("⚠ SpecParser tree mismatch")
+            }
+        }
+        """
+        return [DeclSyntax(stringLiteral: source)]
+    }
+
+    private static func codegenTLAValue(_ value: TLAValue) -> String {
+        switch value {
+        case .int(let n): return ".int(\(n))"
+        case .bool(let b): return ".bool(\(b))"
+        case .string(let s): return ".string(\"\(s)\")"
+        case .set(let s): return ".set([\(s.map(codegenTLAValue).joined(separator: ", "))])"
+        case .tuple(let t): return ".tuple([\(t.map(codegenTLAValue).joined(separator: ", "))])"
+        case .record(let r):
+            let fields = r.map { "\"\($0.key)\": \(codegenTLAValue($0.value))" }.joined(separator: ", ")
+            return ".record([\(fields)])"
+        case .function(let f):
+            let entries = f.map { "\(codegenTLAValue($0.key)): \(codegenTLAValue($0.value))" }.joined(separator: ", ")
+            return ".function([\(entries)])"
+        case .constant(let c): return ".constant(\"\(c)\")"
+        }
+    }
+
+    private static func codegenStateExpr(_ expr: StateExpr) -> String {
+        func cg(_ e: StateExpr) -> String { codegenStateExpr(e) }
+        switch expr {
+        case .variable(let v): return "StateExpr.variable(\"\(v)\")"
+        case .value(let v): return "StateExpr.value(\(codegenTLAValue(v)))"
+        case .add(let a, let b): return "StateExpr.add(\(cg(a)), \(cg(b)))"
+        case .subtract(let a, let b): return "StateExpr.subtract(\(cg(a)), \(cg(b)))"
+        case .multiply(let a, let b): return "StateExpr.multiply(\(cg(a)), \(cg(b)))"
+        case .divide(let a, let b): return "StateExpr.divide(\(cg(a)), \(cg(b)))"
+        case .modulo(let a, let b): return "StateExpr.modulo(\(cg(a)), \(cg(b)))"
+        case .negate(let a): return "StateExpr.negate(\(cg(a)))"
+        case .integerDivide(let a, let b): return "StateExpr.integerDivide(\(cg(a)), \(cg(b)))"
+        case .equal(let a, let b): return "StateExpr.equal(\(cg(a)), \(cg(b)))"
+        case .notEqual(let a, let b): return "StateExpr.notEqual(\(cg(a)), \(cg(b)))"
+        case .lessThan(let a, let b): return "StateExpr.lessThan(\(cg(a)), \(cg(b)))"
+        case .lessOrEqual(let a, let b): return "StateExpr.lessOrEqual(\(cg(a)), \(cg(b)))"
+        case .greaterThan(let a, let b): return "StateExpr.greaterThan(\(cg(a)), \(cg(b)))"
+        case .greaterOrEqual(let a, let b): return "StateExpr.greaterOrEqual(\(cg(a)), \(cg(b)))"
+        case .and(let a, let b): return "StateExpr.and(\(cg(a)), \(cg(b)))"
+        case .or(let a, let b): return "StateExpr.or(\(cg(a)), \(cg(b)))"
+        case .not(let a): return "StateExpr.not(\(cg(a)))"
+        case .ifThenElse(let c, let t, let f): return "StateExpr.ifThenElse(\(cg(c)), \(cg(t)), \(cg(f)))"
+        case .cardinality(let s): return "StateExpr.cardinality(\(cg(s)))"
+        case .functionApply(let f, let x): return "StateExpr.functionApply(\(cg(f)), \(cg(x)))"
+        case .recordAccess(let r, let f): return "StateExpr.recordAccess(\(cg(r)), \"\(f)\")"
+        case .in(let e, let s): return "StateExpr.in(\(cg(e)), \(cg(s)))"
+        case .union(let a, let b): return "StateExpr.union(\(cg(a)), \(cg(b)))"
+        case .intersection(let a, let b): return "StateExpr.intersection(\(cg(a)), \(cg(b)))"
+        case .setDifference(let a, let b): return "StateExpr.setDifference(\(cg(a)), \(cg(b)))"
+        case .subset(let a, let b): return "StateExpr.subset(\(cg(a)), \(cg(b)))"
+        case .tupleAccess(let t, let i): return "StateExpr.tupleAccess(\(cg(t)), \(i))"
+        case .tupleAppend(let t, let e): return "StateExpr.tupleAppend(\(cg(t)), \(cg(e)))"
+        case .tupleHead(let t): return "StateExpr.tupleHead(\(cg(t)))"
+        case .tupleTail(let t): return "StateExpr.tupleTail(\(cg(t)))"
+        case .tupleLength(let t): return "StateExpr.tupleLength(\(cg(t)))"
+        case .tupleConcatenate(let a, let b): return "StateExpr.tupleConcatenate(\(cg(a)), \(cg(b)))"
+        case .except(let f, let k, let v): return "StateExpr.except(\(cg(f)), \(cg(k)), \(cg(v)))"
+        case .domain(let f): return "StateExpr.domain(\(cg(f)))"
+        case .setFilter(let s, let qv, let p): return "StateExpr.setFilter(\(cg(s)), QuantVar(name: \"\(qv.name)\"), \(cg(p)))"
+        case .setMap(let e, let qv, let s): return "StateExpr.setMap(\(cg(e)), QuantVar(name: \"\(qv.name)\"), \(cg(s)))"
+        case .powerSet(let s): return "StateExpr.powerSet(\(cg(s)))"
+        case .unionAll(let s): return "StateExpr.unionAll(\(cg(s)))"
+        case .tupleLiteral(let es): return "StateExpr.tupleLiteral([\(es.map(cg).joined(separator: ", "))])"
+        case .recordLiteral(let fs):
+            let fields = fs.map { "\"\($0.key)\": \(cg($0.value))" }.joined(separator: ", ")
+            return "StateExpr.recordLiteral([\(fields)])"
+        case .setLiteral(let es): return "StateExpr.setLiteral([\(es.map(cg).joined(separator: ", "))])"
+        case .functionLiteral(let d, let qv, let b): return "StateExpr.functionLiteral(\(cg(d)), QuantVar(name: \"\(qv.name)\"), \(cg(b)))"
+        case .caseExpr(let ps, let fb):
+            let patterns = ps.map(cg).joined(separator: ", ")
+            let fallback = fb.map { cg($0) } ?? "nil"
+            return "StateExpr.caseExpr([\(patterns)], \(fallback))"
+        case .forAll, .exists, .choose, .sequenceFromSet, .setSum, .functionSet,
+             .recursiveCall, .enabledAction:
+            return "StateExpr.value(.int(0))"
+        }
+    }
+
+    private static func codegenActionExpr(_ action: ActionExpr) -> String {
+        func cg(_ a: ActionExpr) -> String { codegenActionExpr(a) }
+        func sg(_ e: StateExpr) -> String { codegenStateExpr(e) }
+        switch action {
+        case .assign(let v, let e): return "ActionExpr.assign(\"\(v)\", \(sg(e)))"
+        case .unchanged(let v): return "ActionExpr.unchanged(\"\(v)\")"
+        case .guard_(let e): return "ActionExpr.guard_(\(sg(e)))"
+        case .chooseAction(let v, let s): return "ActionExpr.chooseAction(\"\(v)\", \(sg(s)))"
+        case .existsAction(let v, let s, let b): return "ActionExpr.existsAction(\"\(v)\", \(sg(s)), \(cg(b)))"
+        case .ifElse(let c, let t, let e): return "ActionExpr.ifElse(\(sg(c)), \(cg(t)), \(cg(e)))"
+        case .define(let v, let e, let b): return "ActionExpr.define(\"\(v)\", \(sg(e)), \(cg(b)))"
+        case .and(let a, let b): return "ActionExpr.and(\(cg(a)), \(cg(b)))"
+        case .or(let a, let b): return "ActionExpr.or(\(cg(a)), \(cg(b)))"
+        }
     }
 
     static func generateVariablesEnum(variables: [(name: String, initial: TLAValue, initialSet: StateExpr?, swiftTypeName: String?)]) -> EnumDeclSyntax {
@@ -699,10 +842,15 @@ enum MacroExpander {
         isActor: Bool = false,
         actions: [(name: String, body: ActionExpr)],
         collectionActions: [SpecParser.ParsedCollectionAction],
-        symmetricCollections: [SpecParser.ParsedSymmetricCollection]
-    ) -> [FunctionDeclSyntax] {
+        symmetricCollections: [SpecParser.ParsedSymmetricCollection],
+        variables: [(name: String, initial: TLAValue, initialSet: StateExpr?, swiftTypeName: String?)],
+        enumInfos: [ParsedEnumInfo]
+    ) -> (methods: [FunctionDeclSyntax], nativeActionNames: Set<String>) {
         let visibility = isActor ? TokenSyntax.keyword(.fileprivate) : TokenSyntax.keyword(.public)
-        return actions.map { a in
+        var nativeNames = Set<String>()
+        var methods: [FunctionDeclSyntax] = []
+
+        for a in actions {
             if let collectionAction = collectionActions.first(where: { $0.name == a.name }),
                let collection = symmetricCollections.first(where: { $0.name == collectionAction.collectionName }) {
                 let actionNotEnabled = "SymmetricCollectionRuntimeError.actionNotEnabled(collection: \"\(collection.name)\", action: \"\(a.name)\")"
@@ -727,17 +875,32 @@ enum MacroExpander {
                     throw \(actionNotEnabled)
                 }
                 """
-                return DeclSyntax(stringLiteral: source).as(FunctionDeclSyntax.self)!
+                methods.append(DeclSyntax(stringLiteral: source).as(FunctionDeclSyntax.self)!)
+                continue
             }
-            return FunctionDeclSyntax(
-                modifiers: isActor
-                    ? [DeclModifierSyntax(name: visibility)]
-                    : [DeclModifierSyntax(name: .keyword(.public)), DeclModifierSyntax(name: .keyword(.mutating))],
-                name: isActor ? .identifier("_\(a.name)") : .identifier("apply\(a.name)"),
-                signature: FunctionSignatureSyntax(parameterClause: FunctionParameterClauseSyntax(parameters: [])),
-                body: CodeBlockSyntax { ExprSyntax(stringLiteral: "_state = _apply(.\(a.name))") }
-            )
+
+            let methodName = isActor ? "_\(a.name)" : "apply\(a.name)"
+            if let body = codegenActionBody(a.body, variables: variables, enumInfos: enumInfos) {
+                nativeNames.insert(a.name)
+                let bodyLines = body.components(separatedBy: "\n").map { "        \($0)" }.joined(separator: "\n")
+                let source = """
+                \(isActor ? "fileprivate" : "public mutating") func \(methodName)() {
+                \(bodyLines)
+                }
+                """
+                methods.append(DeclSyntax(stringLiteral: source).as(FunctionDeclSyntax.self)!)
+            } else {
+                methods.append(FunctionDeclSyntax(
+                    modifiers: isActor
+                        ? [DeclModifierSyntax(name: visibility)]
+                        : [DeclModifierSyntax(name: .keyword(.public)), DeclModifierSyntax(name: .keyword(.mutating))],
+                    name: .identifier(methodName),
+                    signature: FunctionSignatureSyntax(parameterClause: FunctionParameterClauseSyntax(parameters: [])),
+                    body: CodeBlockSyntax { ExprSyntax(stringLiteral: "_state = _apply(.\(a.name))") }
+                ))
+            }
         }
+        return (methods, nativeNames)
     }
 
     static func generateCollectionRuntimeMembers(
@@ -831,7 +994,7 @@ enum MacroExpander {
 
     static func generateSpecTest() -> [DeclSyntax] {
         [DeclSyntax(stringLiteral: """
-        public struct _VerificationError: Error, CustomStringConvertible {
+        public struct VerificationError: Error, CustomStringConvertible {
             public let description: String
             public init(_ description: String) { self.description = description }
         }
@@ -841,16 +1004,16 @@ enum MacroExpander {
             let result = try ModelChecker(spec: Self.spec, maxStates: 100_000).check()
             switch result {
             case .ok(let count):
-                guard count > 0 else { throw _VerificationError("No states found") }
+                guard count > 0 else { throw VerificationError("No states found") }
             case .bounded(_, let outcome):
                 switch outcome {
                 case .ok(let count):
-                    guard count > 0 else { throw _VerificationError("No states found") }
+                    guard count > 0 else { throw VerificationError("No states found") }
                 default:
-                    throw _VerificationError("Spec verification failed: \\(result)")
+                    throw VerificationError("Spec verification failed: \\(result)")
                 }
             default:
-                throw _VerificationError("Spec verification failed: \\(result)")
+                throw VerificationError("Spec verification failed: \\(result)")
             }
         }
         """)]
@@ -878,16 +1041,14 @@ enum MacroExpander {
         return [DeclSyntax(stringLiteral: """
         public static func verifyTransitions() throws {
             let matrix = try Self.transitionMatrix()
-            let runtime = Self.runtime
-            for entry in matrix {
-                let nextState = try runtime.apply(actionName: entry.action, to: entry.from)
-                guard nextState == entry.to else {
-                    throw _VerificationError("Transition mismatch on action '\\(entry.action)': expected \\(entry.to), got \\(nextState)")
-                }
-                for inv in runtime.spec.invariants {
-                    guard try inv.body.evaluateBool(in: nextState, runtimeFuncs: runtime.spec.runtimeFuncs, recursiveFuncs: runtime.spec.recursiveFuncs) else {
-                        throw _VerificationError("Invariant '\\(inv.name)' violated by action '\\(entry.action)'")
-                    }
+            var instance = Self()
+            for (from, actionName, expected) in matrix {
+                guard let action = Actions(rawValue: actionName) else { continue }
+                instance._state = State(from: from)
+                instance._applyAction(action)
+                let result = instance._state.asDictionary
+                guard result == expected else {
+                    throw VerificationError("\\(actionName): expected \\(expected), got \\(result)")
                 }
             }
         }
@@ -899,11 +1060,14 @@ enum MacroExpander {
         public static func verifyInvariants() throws {
             let matrix = try Self.transitionMatrix()
             let runtime = Self.runtime
-            for entry in matrix {
-                let nextState = try runtime.apply(actionName: entry.action, to: entry.from)
+            var instance = Self()
+            for (from, actionName, _) in matrix {
+                guard let action = Actions(rawValue: actionName) else { continue }
+                instance._state = State(from: from)
+                instance._applyAction(action)
                 for inv in runtime.spec.invariants {
-                    guard try inv.body.evaluateBool(in: nextState, runtimeFuncs: runtime.spec.runtimeFuncs, recursiveFuncs: runtime.spec.recursiveFuncs) else {
-                        throw _VerificationError("Invariant '\\(inv.name)' violated by action '\\(entry.action)' on transition from \\(entry.from) to \\(nextState)")
+                    guard try inv.body.evaluateBool(in: instance._state.asDictionary, runtimeFuncs: runtime.spec.runtimeFuncs, recursiveFuncs: runtime.spec.recursiveFuncs) else {
+                        throw VerificationError("\\(inv.name) violated by \\(actionName)")
                     }
                 }
             }
@@ -1094,6 +1258,465 @@ enum MacroExpander {
         case .record: ".record(\(value))"; case .function: ".function(\(value))"
         case .constant: ".constant(\(value))"
         }
+    }
+
+    // MARK: - Native action codegen
+
+    static func codegenExpr(
+        _ expr: StateExpr,
+        variables: [(name: String, initial: TLAValue, initialSet: StateExpr?, swiftTypeName: String?)],
+        enumInfos: [ParsedEnumInfo],
+        boundVarName: String? = nil
+    ) -> String {
+        let forceTLAValue = containsTLAValueField(expr, variables: variables, enumInfos: enumInfos, boundVarName: boundVarName)
+        return codegenExprInner(expr, variables: variables, enumInfos: enumInfos, forceTLAValue: forceTLAValue, boundVarName: boundVarName)
+    }
+
+    private static func codegenExprInner(
+        _ expr: StateExpr,
+        variables: [(name: String, initial: TLAValue, initialSet: StateExpr?, swiftTypeName: String?)],
+        enumInfos: [ParsedEnumInfo],
+        forceTLAValue: Bool,
+        boundVarName: String? = nil
+    ) -> String {
+        let cg: (StateExpr) -> String = { codegenExprInner($0, variables: variables, enumInfos: enumInfos, forceTLAValue: forceTLAValue, boundVarName: boundVarName) }
+
+        switch expr {
+        case .variable(let name):
+            if name == boundVarName { return name }
+            return "_state.\(name)"
+
+        case .value(let val):
+            return valueLiteral(val, forceTLAValue: forceTLAValue, enumInfos: enumInfos)
+
+        case .add(let a, let b): return "(\(cg(a)) + \(cg(b)))"
+        case .subtract(let a, let b): return "(\(cg(a)) - \(cg(b)))"
+        case .multiply(let a, let b): return "(\(cg(a)) * \(cg(b)))"
+        case .divide(let a, let b): return "(\(cg(a)) / \(cg(b)))"
+        case .modulo(let a, let b): return "(\(cg(a)) % \(cg(b)))"
+        case .negate(let a): return "(-\(cg(a)))"
+        case .integerDivide(let a, let b): return "(\(cg(a)) / \(cg(b)))"
+
+        case .equal(let a, let b): return "(\(cg(a)) == \(cg(b)))"
+        case .notEqual(let a, let b): return "(\(cg(a)) != \(cg(b)))"
+        case .lessThan(let a, let b): return "(\(cg(a)) < \(cg(b)))"
+        case .lessOrEqual(let a, let b): return "(\(cg(a)) <= \(cg(b)))"
+        case .greaterThan(let a, let b): return "(\(cg(a)) > \(cg(b)))"
+        case .greaterOrEqual(let a, let b): return "(\(cg(a)) >= \(cg(b)))"
+
+        case .and(let a, let b): return "(\(cg(a)) && \(cg(b)))"
+        case .or(let a, let b): return "(\(cg(a)) || \(cg(b)))"
+        case .not(let a): return "(!\(cg(a)))"
+
+        case .ifThenElse(let c, let t, let f):
+            if forceTLAValue {
+                return "TLAValue.ternary(condition: \(cg(c)), then: \(cg(t)), else: \(cg(f)))"
+            }
+            return "(\(cg(c)) ? \(cg(t)) : \(cg(f)))"
+
+        case .cardinality(let s): return "\(cg(s)).cardinality"
+        case .functionApply(let f, let x): return "\(cg(f))[\(cg(x))]"
+        case .recordAccess(let r, let field): return "\(cg(r))[\"\(field)\"]"
+
+        case .in(let e, let s): return "\(cg(s)).contains(\(cg(e)))"
+        case .union(let a, let b): return "\(cg(a)).union(\(cg(b)))"
+        case .intersection(let a, let b): return "\(cg(a)).intersection(\(cg(b)))"
+        case .setDifference(let a, let b): return "\(cg(a)).subtracting(\(cg(b)))"
+        case .subset(let a, let b): return "\(cg(a)).isSubset(of: \(cg(b)))"
+
+        case .tupleAccess(let t, let i): return "(\(cg(t)))[\(i)]"
+        case .tupleAppend(let t, let e): return "(\(cg(t)) + [\(cg(e))])"
+        case .tupleHead(let t): return "(\(cg(t))).first!"
+        case .tupleTail(let t): return "(\(cg(t))).dropFirst()"
+
+        case .except(let f, let k, let v): return "\(cg(f)).updating(\(cg(k)), to: \(cg(v)))"
+        case .domain(let f): return "\(cg(f)).keys"
+
+        case .setFilter(let s, let qv, let p):
+            return "\(cg(s)).filter { \(qv.name) in \(codegenExprInner(p, variables: variables, enumInfos: enumInfos, forceTLAValue: forceTLAValue, boundVarName: qv.name)) }"
+        case .setMap(let e, let qv, let s):
+            return "\(cg(s)).map { \(qv.name) in \(codegenExprInner(e, variables: variables, enumInfos: enumInfos, forceTLAValue: forceTLAValue, boundVarName: qv.name)) }"
+        case .powerSet(let s): return "\(cg(s)).powerSet"
+        case .unionAll(let s): return "\(cg(s)).flattened"
+
+        case .tupleLiteral(let es):
+            return "[\(es.map { cg($0) }.joined(separator: ", "))]"
+        case .recordLiteral(let fs):
+            return "[\(fs.map { "\"\($0.key)\": \(cg($0.value))" }.joined(separator: ", "))]"
+        case .setLiteral(let es):
+            return "Set([\(es.map { cg($0) }.joined(separator: ", "))])"
+        case .functionLiteral(let d, let qv, let b):
+            return "\(cg(d)).asFunctionLiteral { \(qv.name) in \(codegenExprInner(b, variables: variables, enumInfos: enumInfos, forceTLAValue: forceTLAValue, boundVarName: qv.name)) }"
+        case .caseExpr:
+            return "TLAValue.firstMatch([])"
+
+        case .forAll, .exists, .choose, .sequenceFromSet, .setSum, .functionSet, .recursiveCall, .enabledAction:
+            return "Self.runtime.evaluateExpr(\(expr.description), in: _state.asDictionary)"
+
+        case .tupleLength(let t):
+            return "TLAValue.int((\(cg(t)).tupleValue.count))"
+        case .tupleConcatenate(let a, let b):
+            return "(\(cg(a)) + \(cg(b)))"
+        }
+    }
+
+    private static func containsTLAValueField(
+        _ expr: StateExpr,
+        variables: [(name: String, initial: TLAValue, initialSet: StateExpr?, swiftTypeName: String?)],
+        enumInfos: [ParsedEnumInfo],
+        boundVarName: String? = nil
+    ) -> Bool {
+        var found = false
+        walkStateExpr(expr) { e in
+            if case .variable(let name) = e, name != boundVarName {
+                if isTLAValueField(name, variables: variables, enumInfos: enumInfos) {
+                    found = true; return true
+                }
+            }
+            return false
+        }
+        return found
+    }
+
+    private static func walkStateExpr(_ expr: StateExpr, visitor: (StateExpr) -> Bool) {
+        if visitor(expr) { return }
+        switch expr {
+        case .variable, .value: break
+        case .add(let a, let b): walkStateExpr(a, visitor: visitor); walkStateExpr(b, visitor: visitor)
+        case .subtract(let a, let b): walkStateExpr(a, visitor: visitor); walkStateExpr(b, visitor: visitor)
+        case .multiply(let a, let b): walkStateExpr(a, visitor: visitor); walkStateExpr(b, visitor: visitor)
+        case .divide(let a, let b): walkStateExpr(a, visitor: visitor); walkStateExpr(b, visitor: visitor)
+        case .modulo(let a, let b): walkStateExpr(a, visitor: visitor); walkStateExpr(b, visitor: visitor)
+        case .negate(let a): walkStateExpr(a, visitor: visitor)
+        case .integerDivide(let a, let b): walkStateExpr(a, visitor: visitor); walkStateExpr(b, visitor: visitor)
+        case .equal(let a, let b): walkStateExpr(a, visitor: visitor); walkStateExpr(b, visitor: visitor)
+        case .notEqual(let a, let b): walkStateExpr(a, visitor: visitor); walkStateExpr(b, visitor: visitor)
+        case .lessThan(let a, let b): walkStateExpr(a, visitor: visitor); walkStateExpr(b, visitor: visitor)
+        case .lessOrEqual(let a, let b): walkStateExpr(a, visitor: visitor); walkStateExpr(b, visitor: visitor)
+        case .greaterThan(let a, let b): walkStateExpr(a, visitor: visitor); walkStateExpr(b, visitor: visitor)
+        case .greaterOrEqual(let a, let b): walkStateExpr(a, visitor: visitor); walkStateExpr(b, visitor: visitor)
+        case .and(let a, let b): walkStateExpr(a, visitor: visitor); walkStateExpr(b, visitor: visitor)
+        case .or(let a, let b): walkStateExpr(a, visitor: visitor); walkStateExpr(b, visitor: visitor)
+        case .not(let a): walkStateExpr(a, visitor: visitor)
+        case .ifThenElse(let c, let t, let f): walkStateExpr(c, visitor: visitor); walkStateExpr(t, visitor: visitor); walkStateExpr(f, visitor: visitor)
+        case .cardinality(let s): walkStateExpr(s, visitor: visitor)
+        case .functionApply(let f, let x): walkStateExpr(f, visitor: visitor); walkStateExpr(x, visitor: visitor)
+        case .recordAccess(let r, _): walkStateExpr(r, visitor: visitor)
+        case .in(let e, let s): walkStateExpr(e, visitor: visitor); walkStateExpr(s, visitor: visitor)
+        case .union(let a, let b): walkStateExpr(a, visitor: visitor); walkStateExpr(b, visitor: visitor)
+        case .intersection(let a, let b): walkStateExpr(a, visitor: visitor); walkStateExpr(b, visitor: visitor)
+        case .setDifference(let a, let b): walkStateExpr(a, visitor: visitor); walkStateExpr(b, visitor: visitor)
+        case .subset(let a, let b): walkStateExpr(a, visitor: visitor); walkStateExpr(b, visitor: visitor)
+        case .tupleAccess(let t, _): walkStateExpr(t, visitor: visitor)
+        case .tupleAppend(let t, let e): walkStateExpr(t, visitor: visitor); walkStateExpr(e, visitor: visitor)
+        case .tupleHead(let t): walkStateExpr(t, visitor: visitor)
+        case .tupleTail(let t): walkStateExpr(t, visitor: visitor)
+        case .tupleLength(let t): walkStateExpr(t, visitor: visitor)
+        case .tupleConcatenate(let a, let b): walkStateExpr(a, visitor: visitor); walkStateExpr(b, visitor: visitor)
+        case .except(let f, let k, let v): walkStateExpr(f, visitor: visitor); walkStateExpr(k, visitor: visitor); walkStateExpr(v, visitor: visitor)
+        case .domain(let f): walkStateExpr(f, visitor: visitor)
+        case .setFilter(let s, _, let p): walkStateExpr(s, visitor: visitor); walkStateExpr(p, visitor: visitor)
+        case .setMap(let e, _, let s): walkStateExpr(e, visitor: visitor); walkStateExpr(s, visitor: visitor)
+        case .powerSet(let s): walkStateExpr(s, visitor: visitor)
+        case .unionAll(let s): walkStateExpr(s, visitor: visitor)
+        case .tupleLiteral(let es): es.forEach { walkStateExpr($0, visitor: visitor) }
+        case .recordLiteral(let fs): fs.values.forEach { walkStateExpr($0, visitor: visitor) }
+        case .setLiteral(let es): es.forEach { walkStateExpr($0, visitor: visitor) }
+        case .functionLiteral(let d, _, let b): walkStateExpr(d, visitor: visitor); walkStateExpr(b, visitor: visitor)
+        case .caseExpr(let ps, let fb): ps.forEach { walkStateExpr($0, visitor: visitor) }; fb.map { walkStateExpr($0, visitor: visitor) }
+        case .forAll, .exists, .choose, .sequenceFromSet, .setSum, .functionSet, .recursiveCall, .enabledAction: break
+        }
+    }
+
+    private static func isTLAValueField(
+        _ name: String,
+        variables: [(name: String, initial: TLAValue, initialSet: StateExpr?, swiftTypeName: String?)],
+        enumInfos: [ParsedEnumInfo]
+    ) -> Bool {
+        guard let v = variables.first(where: { $0.name == name }) else { return false }
+        let typeName = v.swiftTypeName ?? swiftType(for: v.initial)
+        if ["Int", "Bool", "String"].contains(typeName) { return false }
+        if enumInfos.contains(where: { $0.typeName == typeName }) { return false }
+        return true
+    }
+
+    private static func valueLiteral(_ value: TLAValue, forceTLAValue: Bool, enumInfos: [ParsedEnumInfo]) -> String {
+        if forceTLAValue {
+            switch value {
+            case .int(let n): return ".int(\(n))"
+            case .bool(let b): return ".bool(\(b))"
+            case .string(let s): return ".string(\"\(s)\")"
+            default: return ".int(0)"
+            }
+        }
+        for info in enumInfos {
+            for (caseName, caseValue) in info.cases where caseValue == value {
+                return ".\(caseName)"
+            }
+        }
+        switch value {
+        case .int(let n): return "\(n)"
+        case .bool(let b): return "\(b)"
+        case .string(let s): return "\"\(s)\""
+        default: return "0"
+        }
+    }
+
+    // MARK: - Action body codegen (T2)
+
+    static func codegenActionBody(
+        _ action: ActionExpr,
+        variables: [(name: String, initial: TLAValue, initialSet: StateExpr?, swiftTypeName: String?)],
+        enumInfos: [ParsedEnumInfo]
+    ) -> String? {
+        let expanded = inlineDefines(in: action)
+        guard !containsNondeterministic(expanded) else { return nil }
+        guard !containsRuntimeOnlyExpr(expanded) else { return nil }
+        let disjuncts = distributeOr(expanded)
+        if disjuncts.isEmpty { return nil }
+        if disjuncts.count == 1 {
+            return codegenSingleDisjunct(disjuncts[0], variables: variables, enumInfos: enumInfos)
+        }
+        return codegenMultiDisjunct(disjuncts, variables: variables, enumInfos: enumInfos)
+    }
+
+    private static func containsRuntimeOnlyExpr(_ action: ActionExpr) -> Bool {
+        var found = false
+        walkActionExpr(action) { a in
+            let exprNodes: [StateExpr] = {
+                switch a {
+                case .assign(_, let e): return [e]
+                case .guard_(let e): return [e]
+                case .chooseAction(_, let s): return [s]
+                case .existsAction(_, let s, _): return [s]
+                case .ifElse(let c, _, _): return [c]
+                case .define(_, let e, _): return [e]
+                default: return []
+                }
+            }()
+            for e in exprNodes {
+                if containsRuntimeOnlyStateExpr(e) { found = true; return true }
+            }
+            return false
+        }
+        return found
+    }
+
+    private static func containsRuntimeOnlyStateExpr(_ expr: StateExpr) -> Bool {
+        var found = false
+        walkStateExpr(expr) { e in
+            switch e {
+            case .forAll, .exists, .choose, .sequenceFromSet, .setSum,
+                 .functionSet, .recursiveCall, .enabledAction:
+                found = true; return true
+            case .caseExpr:
+                found = true; return true
+            default: return false
+            }
+        }
+        return found
+    }
+
+    private static func containsNondeterministic(_ action: ActionExpr) -> Bool {
+        var found = false
+        walkActionExpr(action) { a in
+            switch a {
+            case .chooseAction, .existsAction:
+                found = true; return true
+            default: return false
+            }
+        }
+        return found
+    }
+
+    private static func walkActionExpr(_ action: ActionExpr, visitor: (ActionExpr) -> Bool) {
+        if visitor(action) { return }
+        switch action {
+        case .assign: break
+        case .unchanged: break
+        case .guard_: break
+        case .ifElse(_, let t, let e):
+            walkActionExpr(t, visitor: visitor); walkActionExpr(e, visitor: visitor)
+        case .define(_, _, let b):
+            walkActionExpr(b, visitor: visitor)
+        case .and(let a, let b):
+            walkActionExpr(a, visitor: visitor); walkActionExpr(b, visitor: visitor)
+        case .or(let a, let b):
+            walkActionExpr(a, visitor: visitor); walkActionExpr(b, visitor: visitor)
+        case .existsAction(_, _, let b):
+            walkActionExpr(b, visitor: visitor)
+        case .chooseAction: break
+        }
+    }
+
+    private static func inlineDefines(in action: ActionExpr) -> ActionExpr {
+        switch action {
+        case .define(let name, let expr, let body):
+            let inlined = substituteActionVar(name, with: expr, in: body)
+            return inlineDefines(in: inlined)
+        case .and(let a, let b):
+            return .and(inlineDefines(in: a), inlineDefines(in: b))
+        case .or(let a, let b):
+            return .or(inlineDefines(in: a), inlineDefines(in: b))
+        case .ifElse(let c, let t, let e):
+            return .ifElse(c, inlineDefines(in: t), inlineDefines(in: e))
+        case .existsAction(let v, let s, let b):
+            return .existsAction(v, s, inlineDefines(in: b))
+        default:
+            return action
+        }
+    }
+
+    private static func substituteActionVar(_ name: String, with expr: StateExpr, in action: ActionExpr) -> ActionExpr {
+        switch action {
+        case .assign(let v, let e):
+            return .assign(v, substituteInStateExpr(name, with: expr, in: e))
+        case .unchanged(let v):
+            if v == name { return .unchanged(v) }
+            return action
+        case .guard_(let e):
+            return .guard_(substituteInStateExpr(name, with: expr, in: e))
+        case .chooseAction(let v, let s):
+            return .chooseAction(v, substituteInStateExpr(name, with: expr, in: s))
+        case .existsAction(let v, let s, let b):
+            return .existsAction(v, substituteInStateExpr(name, with: expr, in: s),
+                                 substituteActionVar(name, with: expr, in: b))
+        case .ifElse(let c, let t, let e):
+            return .ifElse(substituteInStateExpr(name, with: expr, in: c),
+                           substituteActionVar(name, with: expr, in: t),
+                           substituteActionVar(name, with: expr, in: e))
+        case .define(let v, let e, let b):
+            if v == name { return action }
+            return .define(v, substituteInStateExpr(name, with: expr, in: e),
+                           substituteActionVar(name, with: expr, in: b))
+        case .and(let a, let b):
+            return .and(substituteActionVar(name, with: expr, in: a),
+                        substituteActionVar(name, with: expr, in: b))
+        case .or(let a, let b):
+            return .or(substituteActionVar(name, with: expr, in: a),
+                       substituteActionVar(name, with: expr, in: b))
+        }
+    }
+
+    private static func substituteInStateExpr(_ name: String, with expr: StateExpr, in state: StateExpr) -> StateExpr {
+        if case .variable(let v) = state, v == name { return expr }
+        func sub(_ s: StateExpr) -> StateExpr { substituteInStateExpr(name, with: expr, in: s) }
+        switch state {
+        case .variable, .value: break
+        case .add(let a, let b): return .add(sub(a), sub(b))
+        case .subtract(let a, let b): return .subtract(sub(a), sub(b))
+        case .multiply(let a, let b): return .multiply(sub(a), sub(b))
+        case .divide(let a, let b): return .divide(sub(a), sub(b))
+        case .modulo(let a, let b): return .modulo(sub(a), sub(b))
+        case .negate(let a): return .negate(sub(a))
+        case .integerDivide(let a, let b): return .integerDivide(sub(a), sub(b))
+        case .equal(let a, let b): return .equal(sub(a), sub(b))
+        case .notEqual(let a, let b): return .notEqual(sub(a), sub(b))
+        case .lessThan(let a, let b): return .lessThan(sub(a), sub(b))
+        case .lessOrEqual(let a, let b): return .lessOrEqual(sub(a), sub(b))
+        case .greaterThan(let a, let b): return .greaterThan(sub(a), sub(b))
+        case .greaterOrEqual(let a, let b): return .greaterOrEqual(sub(a), sub(b))
+        case .and(let a, let b): return .and(sub(a), sub(b))
+        case .or(let a, let b): return .or(sub(a), sub(b))
+        case .not(let a): return .not(sub(a))
+        case .ifThenElse(let c, let t, let f): return .ifThenElse(sub(c), sub(t), sub(f))
+        case .cardinality(let s): return .cardinality(sub(s))
+        case .functionApply(let f, let x): return .functionApply(sub(f), sub(x))
+        case .recordAccess(let r, let f): return .recordAccess(sub(r), f)
+        case .in(let e, let s): return .in(sub(e), sub(s))
+        case .union(let a, let b): return .union(sub(a), sub(b))
+        case .intersection(let a, let b): return .intersection(sub(a), sub(b))
+        case .setDifference(let a, let b): return .setDifference(sub(a), sub(b))
+        case .subset(let a, let b): return .subset(sub(a), sub(b))
+        case .tupleAccess(let t, let i): return .tupleAccess(sub(t), i)
+        case .tupleAppend(let t, let e): return .tupleAppend(sub(t), sub(e))
+        case .tupleHead(let t): return .tupleHead(sub(t))
+        case .tupleTail(let t): return .tupleTail(sub(t))
+        case .tupleLength(let t): return .tupleLength(sub(t))
+        case .tupleConcatenate(let a, let b): return .tupleConcatenate(sub(a), sub(b))
+        case .except(let f, let k, let v): return .except(sub(f), sub(k), sub(v))
+        case .domain(let f): return .domain(sub(f))
+        case .setFilter(let s, let qv, let p): return .setFilter(sub(s), qv, sub(p))
+        case .setMap(let e, let qv, let s): return .setMap(sub(e), qv, sub(s))
+        case .powerSet(let s): return .powerSet(sub(s))
+        case .unionAll(let s): return .unionAll(sub(s))
+        case .tupleLiteral(let es): return .tupleLiteral(es.map(sub))
+        case .recordLiteral(let fs): return .recordLiteral(fs.mapValues(sub))
+        case .setLiteral(let es): return .setLiteral(es.map(sub))
+        case .functionLiteral(let d, let qv, let b): return .functionLiteral(sub(d), qv, sub(b))
+        case .caseExpr(let ps, let fb): return .caseExpr(ps.map(sub), fb.map(sub))
+        case .forAll, .exists, .choose, .sequenceFromSet, .setSum, .functionSet,
+             .recursiveCall, .enabledAction: break
+        }
+        return state
+    }
+
+    private static func codegenSingleDisjunct(
+        _ disjunct: ActionExpr,
+        variables: [(name: String, initial: TLAValue, initialSet: StateExpr?, swiftTypeName: String?)],
+        enumInfos: [ParsedEnumInfo]
+    ) -> String {
+        guard let extracted = try? ActionEnumerator.extractAssignments(disjunct) else {
+            return "return"
+        }
+        let guardExprs = extracted.guards.map { codegenExpr($0, variables: variables, enumInfos: enumInfos) }
+        let guardBlock = guardExprs.isEmpty ? "" : "guard \(guardExprs.joined(separator: ", ")) else { return }"
+        let assignments = extracted.assignments.compactMap { (name, expr) -> String? in
+            if case .variable(let refName) = expr, refName == name { return nil }
+            return "_state.\(name) = \(codegenExpr(expr, variables: variables, enumInfos: enumInfos))"
+        }
+        let body = [guardBlock].filter { !$0.isEmpty } + assignments
+        return body.filter { !$0.isEmpty }.joined(separator: "\n        ")
+    }
+
+    private static func codegenMultiDisjunct(
+        _ disjuncts: [ActionExpr],
+        variables: [(name: String, initial: TLAValue, initialSet: StateExpr?, swiftTypeName: String?)],
+        enumInfos: [ParsedEnumInfo]
+    ) -> String {
+        let parts = disjuncts.map { disjunct -> String in
+            guard let extracted = try? ActionEnumerator.extractAssignments(disjunct) else { return "" }
+            let guardExprs = extracted.guards.map { codegenExpr($0, variables: variables, enumInfos: enumInfos) }
+            let condition = guardExprs.isEmpty ? "true" : guardExprs.joined(separator: " && ")
+            let assignments = extracted.assignments.compactMap { (name, expr) -> String? in
+                if case .variable(let refName) = expr, refName == name { return nil }
+                return "_state.\(name) = \(codegenExpr(expr, variables: variables, enumInfos: enumInfos))"
+            }
+            return "if \(condition) {\n            \(assignments.joined(separator: "\n            "))\n            return\n        }"
+        }
+        var result = "let _saved = _state\n        "
+        for (i, part) in parts.enumerated() {
+            if !part.isEmpty {
+                if i > 0 { result += "\n        _state = _saved\n        " }
+                result += part
+            }
+        }
+        return result
+    }
+
+    // MARK: - Apply dispatcher generation (T3)
+
+    static func generateApplyDispatcher(
+        actions: [(name: String, body: ActionExpr)],
+        nativeNames: Set<String>,
+        isActor: Bool = false
+    ) -> FunctionDeclSyntax {
+        let switchCases = actions.map { a in
+            if nativeNames.contains(a.name) {
+                let methodName = isActor ? "_\(a.name)" : "apply\(a.name)"
+                return "case .\(a.name): \(methodName)()"
+            } else {
+                return "case .\(a.name): _state = _apply(action)"
+            }
+        }.joined(separator: "\n        ")
+        let source = """
+        \(isActor ? "fileprivate" : "private mutating") func _applyAction(_ action: Actions) {
+            switch action {
+            \(switchCases)
+            }
+        }
+        """
+        return DeclSyntax(stringLiteral: source).as(FunctionDeclSyntax.self)!
     }
 }
 

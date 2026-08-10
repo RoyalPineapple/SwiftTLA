@@ -125,3 +125,261 @@ extension TLAValue: Comparable {
 extension TLAValue: ExpressibleByStringLiteral {
     public init(stringLiteral value: String) { self = .string(value) }
 }
+
+// MARK: - Arithmetic operators
+
+extension TLAValue {
+    public static func + (lhs: TLAValue, rhs: TLAValue) -> TLAValue {
+        switch (lhs, rhs) {
+        case (.int(let a), .int(let b)): return .int(a + b)
+        case (.tuple(let a), .tuple(let b)): return .tuple(a + b)
+        case (.tuple(let a), _): return .tuple(a + [rhs])
+        case (_, .tuple(let b)): return .tuple([lhs] + b)
+        default: return .int(0)
+        }
+    }
+
+    public static func - (lhs: TLAValue, rhs: TLAValue) -> TLAValue {
+        switch (lhs, rhs) {
+        case (.int(let a), .int(let b)): return .int(a - b)
+        default: return .int(0)
+        }
+    }
+
+    public static func * (lhs: TLAValue, rhs: TLAValue) -> TLAValue {
+        switch (lhs, rhs) {
+        case (.int(let a), .int(let b)): return .int(a * b)
+        default: return .int(0)
+        }
+    }
+
+    public static func / (lhs: TLAValue, rhs: TLAValue) -> TLAValue {
+        switch (lhs, rhs) {
+        case (.int(let a), .int(let b)): return b != 0 ? .int(a / b) : .int(0)
+        default: return .int(0)
+        }
+    }
+
+    public static func % (lhs: TLAValue, rhs: TLAValue) -> TLAValue {
+        switch (lhs, rhs) {
+        case (.int(let a), .int(let b)): return b != 0 ? .int(a % b) : .int(0)
+        default: return .int(0)
+        }
+    }
+
+    public static prefix func - (operand: TLAValue) -> TLAValue {
+        switch operand {
+        case .int(let n): return .int(-n)
+        default: return .int(0)
+        }
+    }
+}
+
+// MARK: - Logical operators
+
+extension TLAValue {
+    public static func && (lhs: TLAValue, rhs: TLAValue) -> TLAValue {
+        switch (lhs, rhs) {
+        case (.bool(let a), .bool(let b)): return .bool(a && b)
+        default: return .bool(false)
+        }
+    }
+
+    public static func || (lhs: TLAValue, rhs: TLAValue) -> TLAValue {
+        switch (lhs, rhs) {
+        case (.bool(let a), .bool(let b)): return .bool(a || b)
+        default: return .bool(false)
+        }
+    }
+
+    public static prefix func ! (operand: TLAValue) -> TLAValue {
+        switch operand {
+        case .bool(let b): return .bool(!b)
+        default: return .bool(false)
+        }
+    }
+}
+
+// MARK: - Conditional
+
+extension TLAValue {
+    public static func ternary(condition: TLAValue, then: TLAValue, else elseValue: TLAValue) -> TLAValue {
+        switch condition {
+        case .bool(let b): return b ? then : elseValue
+        default: return elseValue
+        }
+    }
+}
+
+// MARK: - Collection methods
+
+extension TLAValue {
+    public var cardinality: TLAValue {
+        switch self {
+        case .set(let s): return .int(s.count)
+        case .function(let f): return .int(f.count)
+        case .tuple(let t): return .int(t.count)
+        default: return .int(0)
+        }
+    }
+
+    public var keys: TLAValue {
+        switch self {
+        case .function(let f): return .set(Set(f.keys))
+        case .record(let r): return .set(Set(r.keys.map { .string($0) }))
+        default: return .set([])
+        }
+    }
+
+    public var powerSet: TLAValue {
+        guard case .set(let s) = self else { return .set([]) }
+        let arr = Array(s)
+        var result = Set<TLAValue>()
+        let n = arr.count
+        for mask in 0..<(1 << n) {
+            var subset = Set<TLAValue>()
+            for i in 0..<n where (mask >> i) & 1 == 1 {
+                subset.insert(arr[i])
+            }
+            result.insert(.set(subset))
+        }
+        return .set(result)
+    }
+
+    public var flattened: TLAValue {
+        guard case .set(let s) = self else { return .set([]) }
+        var result = Set<TLAValue>()
+        for elem in s {
+            if case .set(let inner) = elem {
+                result.formUnion(inner)
+            }
+        }
+        return .set(result)
+    }
+
+    public var first: TLAValue? {
+        switch self {
+        case .tuple(let t): return t.first
+        case .set(let s): return s.first
+        default: return nil
+        }
+    }
+
+    public func dropFirst() -> TLAValue {
+        switch self {
+        case .tuple(let t): return .tuple(Array(t.dropFirst()))
+        case .set(let s): return .set(Set(s.sorted().dropFirst()))
+        default: return self
+        }
+    }
+
+    public func union(_ other: TLAValue) -> TLAValue {
+        switch (self, other) {
+        case (.set(let a), .set(let b)): return .set(a.union(b))
+        default: return .set([])
+        }
+    }
+
+    public func intersection(_ other: TLAValue) -> TLAValue {
+        switch (self, other) {
+        case (.set(let a), .set(let b)): return .set(a.intersection(b))
+        default: return .set([])
+        }
+    }
+
+    public func subtracting(_ other: TLAValue) -> TLAValue {
+        switch (self, other) {
+        case (.set(let a), .set(let b)): return .set(a.subtracting(b))
+        default: return .set([])
+        }
+    }
+
+    public func isSubset(of other: TLAValue) -> TLAValue {
+        switch (self, other) {
+        case (.set(let a), .set(let b)): return .bool(a.isSubset(of: b))
+        default: return .bool(false)
+        }
+    }
+
+    public func contains(_ element: TLAValue) -> TLAValue {
+        switch self {
+        case .set(let s): return .bool(s.contains(element))
+        case .tuple(let t): return .bool(t.contains(element))
+        default: return .bool(false)
+        }
+    }
+
+    public func updating(_ key: TLAValue, to value: TLAValue) -> TLAValue {
+        switch self {
+        case .function(var f):
+            f[key] = value
+            return .function(f)
+        case .record(var r):
+            if case .string(let k) = key { r[k] = value }
+            return .record(r)
+        default:
+            return self
+        }
+    }
+
+    public func filter(_ predicate: (TLAValue) -> TLAValue) -> TLAValue {
+        switch self {
+        case .set(let s):
+            let filtered = s.filter { elem in
+                if case .bool(true) = predicate(elem) { return true }
+                return false
+            }
+            return .set(filtered)
+        default:
+            return .set([])
+        }
+    }
+
+    public func map(_ transform: (TLAValue) -> TLAValue) -> TLAValue {
+        switch self {
+        case .set(let s):
+            return .set(Set(s.map(transform)))
+        default:
+            return .set([])
+        }
+    }
+
+    public func asFunctionLiteral(_ body: (TLAValue) -> TLAValue) -> TLAValue {
+        switch self {
+        case .set(let domain):
+            var result: [TLAValue: TLAValue] = [:]
+            for key in domain { result[key] = body(key) }
+            return .function(result)
+        default:
+            return .function([:])
+        }
+    }
+
+    public subscript(index: TLAValue) -> TLAValue {
+        switch self {
+        case .function(let f): return f[index] ?? .int(0)
+        default: return .int(0)
+        }
+    }
+
+    public subscript(field: String) -> TLAValue {
+        switch self {
+        case .record(let r): return r[field] ?? .int(0)
+        default: return .int(0)
+        }
+    }
+}
+
+// MARK: - Tuple subscript
+
+extension TLAValue {
+    public subscript(index: Int) -> TLAValue {
+        switch self {
+        case .tuple(let t):
+            guard index >= 0, index < t.count else { return .int(0) }
+            return t[index]
+        default:
+            return .int(0)
+        }
+    }
+}
