@@ -74,61 +74,6 @@ public struct Expr<T: TLAValueType>: StateExprConvertible, Sendable {
 }
 
 @dynamicMemberLookup
-public struct StateVar<T: TLAValueType>: Sendable, CustomStringConvertible {
-    public let name: String
-    public let initial: TLAValue
-    public let constraint: VarConstraint?
-    private let _handle: Var<T>
-
-    public var description: String { name }
-
-    public init(_ initial: T, name: String? = nil, constraint: VarConstraint? = nil) {
-        self.name = name ?? ""
-        self.initial = initial.tlaValue
-        self.constraint = constraint
-        self._handle = Var(name ?? "")
-    }
-    public init(_ explicitName: String, _ initial: T, constraint: VarConstraint? = nil) {
-        self.name = explicitName
-        self.initial = initial.tlaValue
-        self.constraint = constraint
-        self._handle = Var(explicitName)
-    }
-    public init(in range: ClosedRange<Int>, name: String? = nil) where T == Int {
-        self.name = name ?? ""
-        self.initial = .int(range.lowerBound)
-        self.constraint = .intRange(range)
-        self._handle = Var(name ?? "", bounded: range)
-    }
-    public init(values: [String], name: String? = nil) where T == String {
-        self.name = name ?? ""
-        self.initial = .string(values.first ?? "")
-        self.constraint = .enumValues(values)
-        self._handle = Var(name ?? "", values: values)
-    }
-
-    @discardableResult public func becomes(_ value: T) -> ActionExpr { _handle.becomes(value) }
-    @discardableResult public func becomes(_ expr: Expr<T>) -> ActionExpr { _handle.becomes(expr) }
-    @discardableResult public func becomes(_ other: StateVar<T>) -> ActionExpr { .assign(name, other.stateExpr) }
-    @discardableResult public func becomes(_ expr: some StateExprConvertible) -> ActionExpr { _handle.becomes(expr) }
-    public var stays: ActionExpr { _handle.stays }
-    public subscript(dynamicMember field: String) -> StateExpr { _handle[dynamicMember: field] }
-    public var isEmpty: StateExpr { _handle.isEmpty }
-    public var cardinality: StateExpr { _handle.cardinality }
-}
-
-extension StateVar: StateExprConvertible {
-    public var stateExpr: StateExpr { .variable(name) }
-}
-
-extension Dictionary where Key == String, Value == TLAValue {
-    public subscript<T: TLAValueType>(_ variable: StateVar<T>) -> TLAValue? {
-        get { self[variable.name] }
-        set { self[variable.name] = newValue }
-    }
-}
-
-@dynamicMemberLookup
 public struct Var<T: TLAValueType>: Sendable, CustomStringConvertible, SpecComponent {
     public let name: String
     public let initial: TLAValue?

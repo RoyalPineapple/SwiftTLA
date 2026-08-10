@@ -48,7 +48,7 @@ struct SymmetricCollectionDeclarationTests {
 
   @Test("SymmetricCollection StateVar overload produces correct name and initial")
   func stateVarOverload() {
-    let initialState = StateVar(0, name: "phases")
+    let initialState = Var("phases", 0)
     let decl = SymmetricCollection(initialState, verificationScope: 3, elementType: Device.self)
 
     #expect(decl.name == "phases")

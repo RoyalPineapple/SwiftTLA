@@ -17,7 +17,7 @@ public actor Contract {
 
     public static var spec: TLASpec {
         TLASpec("Contract") {
-            let cPhase = StateVar("cPhase", 0)
+            let cPhase = Var("cPhase", 0)
             let devicePhases = SymmetricCollectionVar<Device, Int>("devicePhases")
             /// Scope four is the explicit verification reference model, not a
             /// cap on the runtime's identified device population.
