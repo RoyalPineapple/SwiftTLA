@@ -3,10 +3,10 @@ import SwiftSyntax
 import SwiftParser
 import SwiftTLA
 
-/// Proves SpecParser produces the same AST as the runtime builder
-/// for every expression form in the DSL.  Each test parses a source string
-/// and compares the result to the equivalent value built through Swift's
-/// type system (operator overloads and method calls).
+/// Proves SpecParser's compact decoder produces the same AST as the runtime
+/// builder for every expression form in the DSL. Each test parses a source
+/// string and compares the result to the equivalent value built through
+/// Swift's type system (operator overloads and method calls).
 
 // MARK: - Helpers
 
@@ -18,19 +18,19 @@ private func parseExpression(_ source: String) -> ExprSyntax {
 
 @Suite(.serialized) struct StateExprLiteralTests {
     @Test func parseInts() {
-        #expect(SpecParser.parseStateExpr(parseExpression("0")) == .value(.int(0)))
-        #expect(SpecParser.parseStateExpr(parseExpression("42")) == .value(.int(42)))
+        #expect(SpecParser.decodeStateExpr(parseExpression("0")) == .value(.int(0)))
+        #expect(SpecParser.decodeStateExpr(parseExpression("42")) == .value(.int(42)))
     }
 
     @Test func parseBools() {
-        #expect(SpecParser.parseStateExpr(parseExpression("true")) == .value(.bool(true)))
-        #expect(SpecParser.parseStateExpr(parseExpression("false")) == .value(.bool(false)))
+        #expect(SpecParser.decodeStateExpr(parseExpression("true")) == .value(.bool(true)))
+        #expect(SpecParser.decodeStateExpr(parseExpression("false")) == .value(.bool(false)))
     }
 
     @Test func parseStrings() {
-        #expect(SpecParser.parseStateExpr(parseExpression("\"hello\"")) == .value(.string("hello")))
-        #expect(SpecParser.parseStateExpr(parseExpression("\"left\"")) == .value(.string("left")))
-        #expect(SpecParser.parseStateExpr(parseExpression("\"\"")) == .value(.string("")))
+        #expect(SpecParser.decodeStateExpr(parseExpression("\"hello\"")) == .value(.string("hello")))
+        #expect(SpecParser.decodeStateExpr(parseExpression("\"left\"")) == .value(.string("left")))
+        #expect(SpecParser.decodeStateExpr(parseExpression("\"\"")) == .value(.string("")))
     }
 }
 
@@ -38,9 +38,9 @@ private func parseExpression(_ source: String) -> ExprSyntax {
 
 @Suite(.serialized) struct StateExprVariableTests {
     @Test func parseVariableReferences() {
-        #expect(SpecParser.parseStateExpr(parseExpression("x")) == .variable("x"))
-        #expect(SpecParser.parseStateExpr(parseExpression("count")) == .variable("count"))
-        #expect(SpecParser.parseStateExpr(parseExpression("direction")) == .variable("direction"))
+        #expect(SpecParser.decodeStateExpr(parseExpression("x")) == .variable("x"))
+        #expect(SpecParser.decodeStateExpr(parseExpression("count")) == .variable("count"))
+        #expect(SpecParser.decodeStateExpr(parseExpression("direction")) == .variable("direction"))
     }
 }
 
@@ -48,11 +48,11 @@ private func parseExpression(_ source: String) -> ExprSyntax {
 
 @Suite(.serialized) struct StateExprArithmeticTests {
     @Test func parseArithmetic() {
-        #expect(SpecParser.parseStateExpr(parseExpression("x + 5")) == StateExpr.add(.variable("x"), .value(.int(5))))
-        #expect(SpecParser.parseStateExpr(parseExpression("x - 3")) == StateExpr.subtract(.variable("x"), .value(.int(3))))
-        #expect(SpecParser.parseStateExpr(parseExpression("x * 2")) == StateExpr.multiply(.variable("x"), .value(.int(2))))
-        #expect(SpecParser.parseStateExpr(parseExpression("x / 4")) == StateExpr.divide(.variable("x"), .value(.int(4))))
-        #expect(SpecParser.parseStateExpr(parseExpression("x % 7")) == StateExpr.modulo(.variable("x"), .value(.int(7))))
+        #expect(SpecParser.decodeStateExpr(parseExpression("x + 5")) == StateExpr.add(.variable("x"), .value(.int(5))))
+        #expect(SpecParser.decodeStateExpr(parseExpression("x - 3")) == StateExpr.subtract(.variable("x"), .value(.int(3))))
+        #expect(SpecParser.decodeStateExpr(parseExpression("x * 2")) == StateExpr.multiply(.variable("x"), .value(.int(2))))
+        #expect(SpecParser.decodeStateExpr(parseExpression("x / 4")) == StateExpr.divide(.variable("x"), .value(.int(4))))
+        #expect(SpecParser.decodeStateExpr(parseExpression("x % 7")) == StateExpr.modulo(.variable("x"), .value(.int(7))))
     }
 }
 
@@ -62,12 +62,12 @@ private func parseExpression(_ source: String) -> ExprSyntax {
     @Test func parseComparisons() {
         let x: StateExpr = .variable("x")
         let y: StateExpr = .variable("y")
-        #expect(SpecParser.parseStateExpr(parseExpression("x == y")) == StateExpr.equal(x, y))
-        #expect(SpecParser.parseStateExpr(parseExpression("x != y")) == StateExpr.notEqual(x, y))
-        #expect(SpecParser.parseStateExpr(parseExpression("x < y")) == StateExpr.lessThan(x, y))
-        #expect(SpecParser.parseStateExpr(parseExpression("x <= y")) == StateExpr.lessOrEqual(x, y))
-        #expect(SpecParser.parseStateExpr(parseExpression("x > y")) == StateExpr.greaterThan(x, y))
-        #expect(SpecParser.parseStateExpr(parseExpression("x >= y")) == StateExpr.greaterOrEqual(x, y))
+        #expect(SpecParser.decodeStateExpr(parseExpression("x == y")) == StateExpr.equal(x, y))
+        #expect(SpecParser.decodeStateExpr(parseExpression("x != y")) == StateExpr.notEqual(x, y))
+        #expect(SpecParser.decodeStateExpr(parseExpression("x < y")) == StateExpr.lessThan(x, y))
+        #expect(SpecParser.decodeStateExpr(parseExpression("x <= y")) == StateExpr.lessOrEqual(x, y))
+        #expect(SpecParser.decodeStateExpr(parseExpression("x > y")) == StateExpr.greaterThan(x, y))
+        #expect(SpecParser.decodeStateExpr(parseExpression("x >= y")) == StateExpr.greaterOrEqual(x, y))
     }
 }
 
@@ -77,18 +77,18 @@ private func parseExpression(_ source: String) -> ExprSyntax {
     @Test func parseLogical() {
         let x: StateExpr = .variable("x")
         let y: StateExpr = .variable("y")
-        #expect(SpecParser.parseStateExpr(parseExpression("x && y")) == StateExpr.and(x, y))
-        #expect(SpecParser.parseStateExpr(parseExpression("x || y")) == StateExpr.or(x, y))
+        #expect(SpecParser.decodeStateExpr(parseExpression("x && y")) == StateExpr.and(x, y))
+        #expect(SpecParser.decodeStateExpr(parseExpression("x || y")) == StateExpr.or(x, y))
     }
 
     @Test func parsePrefix() {
         let x: StateExpr = .variable("x")
-        #expect(SpecParser.parseStateExpr(parseExpression("!x")) == StateExpr.not(x))
-        #expect(SpecParser.parseStateExpr(parseExpression("-x")) == StateExpr.negate(x))
+        #expect(SpecParser.decodeStateExpr(parseExpression("!x")) == StateExpr.not(x))
+        #expect(SpecParser.decodeStateExpr(parseExpression("-x")) == StateExpr.negate(x))
     }
 
     @Test func parseParenthesized() {
-        #expect(SpecParser.parseStateExpr(parseExpression("(x)")) == .variable("x"))
+        #expect(SpecParser.decodeStateExpr(parseExpression("(x)")) == .variable("x"))
     }
 }
 
@@ -96,8 +96,8 @@ private func parseExpression(_ source: String) -> ExprSyntax {
 
 @Suite(.serialized) struct StateExprRangeTests {
     @Test func parseRangeOperator() {
-        #expect(SpecParser.parseStateExpr(parseExpression("1...3")) == StateExpr.setLiteral([.value(.int(1)), .value(.int(2)), .value(.int(3))]))
-        #expect(SpecParser.parseStateExpr(parseExpression("0...2")) == StateExpr.setLiteral([.value(.int(0)), .value(.int(1)), .value(.int(2))]))
+        #expect(SpecParser.decodeStateExpr(parseExpression("1...3")) == StateExpr.setLiteral([.value(.int(1)), .value(.int(2)), .value(.int(3))]))
+        #expect(SpecParser.decodeStateExpr(parseExpression("0...2")) == StateExpr.setLiteral([.value(.int(0)), .value(.int(1)), .value(.int(2))]))
     }
 }
 
@@ -106,16 +106,16 @@ private func parseExpression(_ source: String) -> ExprSyntax {
 @Suite(.serialized) struct StateExprMemberAccessTests {
     @Test func parseKnownProperties() {
         let s: StateExpr = .variable("s")
-        #expect(SpecParser.parseStateExpr(parseExpression("s.cardinality")) == StateExpr.cardinality(s))
-        #expect(SpecParser.parseStateExpr(parseExpression("s.flattened")) == StateExpr.unionAll(s))
-        #expect(SpecParser.parseStateExpr(parseExpression("s.subsets")) == StateExpr.powerSet(s))
-        #expect(SpecParser.parseStateExpr(parseExpression("s.domain")) == StateExpr.domain(s))
-        #expect(SpecParser.parseStateExpr(parseExpression("s.count")) == StateExpr.tupleLength(s))
+        #expect(SpecParser.decodeStateExpr(parseExpression("s.cardinality")) == StateExpr.cardinality(s))
+        #expect(SpecParser.decodeStateExpr(parseExpression("s.flattened")) == StateExpr.unionAll(s))
+        #expect(SpecParser.decodeStateExpr(parseExpression("s.subsets")) == StateExpr.powerSet(s))
+        #expect(SpecParser.decodeStateExpr(parseExpression("s.domain")) == StateExpr.domain(s))
+        #expect(SpecParser.decodeStateExpr(parseExpression("s.count")) == StateExpr.tupleLength(s))
     }
 
     @Test func parseUnknownPropertyAsRecordAccess() {
-        #expect(SpecParser.parseStateExpr(parseExpression("msg.type")) == StateExpr.recordAccess(.variable("msg"), "type"))
-        #expect(SpecParser.parseStateExpr(parseExpression("ballot.val")) == StateExpr.recordAccess(.variable("ballot"), "val"))
+        #expect(SpecParser.decodeStateExpr(parseExpression("msg.type")) == StateExpr.recordAccess(.variable("msg"), "type"))
+        #expect(SpecParser.decodeStateExpr(parseExpression("ballot.val")) == StateExpr.recordAccess(.variable("ballot"), "val"))
     }
 }
 
@@ -125,19 +125,19 @@ private func parseExpression(_ source: String) -> ExprSyntax {
     @Test func parseBinaryMethods() {
         let x: StateExpr = .variable("x")
         let s: StateExpr = .variable("s")
-        #expect(SpecParser.parseStateExpr(parseExpression("x.isIn(s)")) == StateExpr.in(x, s))
-        #expect(SpecParser.parseStateExpr(parseExpression("x.union(s)")) == StateExpr.union(x, s))
-        #expect(SpecParser.parseStateExpr(parseExpression("x.intersection(s)")) == StateExpr.intersection(x, s))
-        #expect(SpecParser.parseStateExpr(parseExpression("x.subtracting(s)")) == StateExpr.setDifference(x, s))
-        #expect(SpecParser.parseStateExpr(parseExpression("x.isSubset(of: s)")) == StateExpr.subset(x, s))
-        #expect(SpecParser.parseStateExpr(parseExpression("x.applying(s)")) == StateExpr.functionApply(x, s))
-        let filterResult = SpecParser.parseStateExpr(parseExpression("x.filtering(s)"))
+        #expect(SpecParser.decodeStateExpr(parseExpression("x.isIn(s)")) == StateExpr.in(x, s))
+        #expect(SpecParser.decodeStateExpr(parseExpression("x.union(s)")) == StateExpr.union(x, s))
+        #expect(SpecParser.decodeStateExpr(parseExpression("x.intersection(s)")) == StateExpr.intersection(x, s))
+        #expect(SpecParser.decodeStateExpr(parseExpression("x.subtracting(s)")) == StateExpr.setDifference(x, s))
+        #expect(SpecParser.decodeStateExpr(parseExpression("x.isSubset(of: s)")) == StateExpr.subset(x, s))
+        #expect(SpecParser.decodeStateExpr(parseExpression("x.applying(s)")) == StateExpr.functionApply(x, s))
+        let filterResult = SpecParser.decodeStateExpr(parseExpression("x.filtering(s)"))
         #expect(filterResult?.description.contains("\\in") == true)
-        let mapResult = SpecParser.parseStateExpr(parseExpression("x.mapping(s)"))
+        let mapResult = SpecParser.decodeStateExpr(parseExpression("x.mapping(s)"))
         #expect(mapResult?.description.contains(":") == true)
-        #expect(SpecParser.parseStateExpr(parseExpression("x.appending(s)")) == StateExpr.tupleAppend(x, s))
-        #expect(SpecParser.parseStateExpr(parseExpression("x.concatenating(s)")) == StateExpr.tupleConcatenate(x, s))
-        #expect(SpecParser.parseStateExpr(parseExpression("x.integerDivided(by: 2)")) == StateExpr.integerDivide(x, .value(.int(2))))
+        #expect(SpecParser.decodeStateExpr(parseExpression("x.appending(s)")) == StateExpr.tupleAppend(x, s))
+        #expect(SpecParser.decodeStateExpr(parseExpression("x.concatenating(s)")) == StateExpr.tupleConcatenate(x, s))
+        #expect(SpecParser.decodeStateExpr(parseExpression("x.integerDivided(by: 2)")) == StateExpr.integerDivide(x, .value(.int(2))))
     }
 }
 
@@ -146,11 +146,11 @@ private func parseExpression(_ source: String) -> ExprSyntax {
 @Suite(.serialized) struct StateExprMultiArgMethodTests {
     @Test func parseUpdated() {
         let f: StateExpr = .variable("f")
-        #expect(SpecParser.parseStateExpr(parseExpression("f.updated(at: 0, to: 1)")) == StateExpr.except(f, .value(.int(0)), .value(.int(1))))
+        #expect(SpecParser.decodeStateExpr(parseExpression("f.updated(at: 0, to: 1)")) == StateExpr.except(f, .value(.int(0)), .value(.int(1))))
     }
 
     @Test func parseAt() {
-        #expect(SpecParser.parseStateExpr(parseExpression("t.at(3)")) == StateExpr.tupleAccess(.variable("t"), 3))
+        #expect(SpecParser.decodeStateExpr(parseExpression("t.at(3)")) == StateExpr.tupleAccess(.variable("t"), 3))
     }
 }
 
@@ -158,19 +158,19 @@ private func parseExpression(_ source: String) -> ExprSyntax {
 
 @Suite(.serialized) struct StateExprStaticCallTests {
     @Test func parseStaticSet() {
-        #expect(SpecParser.parseStateExpr(parseExpression("StateExpr.set([1, 2, 3])")) == StateExpr.setLiteral([.value(.int(1)), .value(.int(2)), .value(.int(3))]))
+        #expect(SpecParser.decodeStateExpr(parseExpression("StateExpr.set([1, 2, 3])")) == StateExpr.setLiteral([.value(.int(1)), .value(.int(2)), .value(.int(3))]))
     }
 
     @Test func parseStaticTuple() {
-        #expect(SpecParser.parseStateExpr(parseExpression("StateExpr.tuple([1, x])")) == StateExpr.tupleLiteral([.value(.int(1)), .variable("x")]))
+        #expect(SpecParser.decodeStateExpr(parseExpression("StateExpr.tuple([1, x])")) == StateExpr.tupleLiteral([.value(.int(1)), .variable("x")]))
     }
 
     @Test func parseStaticRecord() {
-        #expect(SpecParser.parseStateExpr(parseExpression("StateExpr.record(name: x, age: 42)")) == StateExpr.recordLiteral(["name": .variable("x"), "age": .value(.int(42))]))
+        #expect(SpecParser.decodeStateExpr(parseExpression("StateExpr.record(name: x, age: 42)")) == StateExpr.recordLiteral(["name": .variable("x"), "age": .value(.int(42))]))
     }
 
     @Test func parseStaticIf() {
-        let result = SpecParser.parseStateExpr(parseExpression("StateExpr.if(x == 0, then: 1, else: 2)"))
+        let result = SpecParser.decodeStateExpr(parseExpression("StateExpr.if(x == 0, then: 1, else: 2)"))
         #expect(result == StateExpr.ifThenElse(
             StateExpr.equal(.variable("x"), .value(.int(0))),
             .value(.int(1)),
@@ -179,11 +179,11 @@ private func parseExpression(_ source: String) -> ExprSyntax {
     }
 
     @Test func parseStaticEnabled() {
-        #expect(SpecParser.parseStateExpr(parseExpression("StateExpr.enabled(\"Next\")")) == StateExpr.enabledAction("Next"))
+        #expect(SpecParser.decodeStateExpr(parseExpression("StateExpr.enabled(\"Next\")")) == StateExpr.enabledAction("Next"))
     }
 
     @Test func parseStaticFunction() {
-        guard let result = SpecParser.parseStateExpr(parseExpression("StateExpr.function(domain: StateExpr.set([1, 2]), x + 1)")) else {
+        guard let result = SpecParser.decodeStateExpr(parseExpression("StateExpr.function(domain: StateExpr.set([1, 2]), x + 1)")) else {
             #expect(Bool(false)); return
         }
         let d = result.description
@@ -191,7 +191,7 @@ private func parseExpression(_ source: String) -> ExprSyntax {
     }
 
     @Test func parseStaticForAll() {
-        guard let result = SpecParser.parseStateExpr(parseExpression("StateExpr.for(allIn: StateExpr.set([1, 2]), x > 0)")) else {
+        guard let result = SpecParser.decodeStateExpr(parseExpression("StateExpr.for(allIn: StateExpr.set([1, 2]), x > 0)")) else {
             #expect(Bool(false)); return
         }
         let d = result.description
@@ -199,7 +199,7 @@ private func parseExpression(_ source: String) -> ExprSyntax {
     }
 
     @Test func parseStaticExists() {
-        guard let result = SpecParser.parseStateExpr(parseExpression("StateExpr.exists(in: StateExpr.set([1, 2]), x > 0)")) else {
+        guard let result = SpecParser.decodeStateExpr(parseExpression("StateExpr.exists(in: StateExpr.set([1, 2]), x > 0)")) else {
             #expect(Bool(false)); return
         }
         let d = result.description
@@ -207,7 +207,7 @@ private func parseExpression(_ source: String) -> ExprSyntax {
     }
 
     @Test func parseStaticChoose() {
-        guard let result = SpecParser.parseStateExpr(parseExpression("StateExpr.choose(from: StateExpr.set([1, 2]), matching: x > 0)")) else {
+        guard let result = SpecParser.decodeStateExpr(parseExpression("StateExpr.choose(from: StateExpr.set([1, 2]), matching: x > 0)")) else {
             #expect(Bool(false)); return
         }
         let d = result.description
@@ -215,7 +215,7 @@ private func parseExpression(_ source: String) -> ExprSyntax {
     }
 
     @Test func parseStaticAny() {
-        guard let result = SpecParser.parseStateExpr(parseExpression("StateExpr.any(from: StateExpr.set([1, 2]))")) else {
+        guard let result = SpecParser.decodeStateExpr(parseExpression("StateExpr.any(from: StateExpr.set([1, 2]))")) else {
             #expect(Bool(false)); return
         }
         let d = result.description
@@ -223,7 +223,7 @@ private func parseExpression(_ source: String) -> ExprSyntax {
     }
 
     @Test func parseStaticFirstMatchWithFallback() {
-        let result = SpecParser.parseStateExpr(
+        let result = SpecParser.decodeStateExpr(
             parseExpression("StateExpr.firstMatch((when: x == 0, then: 10), (when: x == 1, then: 20), fallback: 99)")
         )
         #expect(result == StateExpr.caseExpr(
@@ -236,7 +236,7 @@ private func parseExpression(_ source: String) -> ExprSyntax {
     }
 
     @Test func parseStaticFirstMatchNoFallback() {
-        let result = SpecParser.parseStateExpr(
+        let result = SpecParser.decodeStateExpr(
             parseExpression("StateExpr.firstMatch((when: x < 0, then: -1))")
         )
         #expect(result == StateExpr.caseExpr(
@@ -250,23 +250,23 @@ private func parseExpression(_ source: String) -> ExprSyntax {
 
 @Suite(.serialized) struct ActionExprBasicTests {
     @Test func parseBecomes() {
-        #expect(SpecParser.parseSingleAction(parseExpression("x.becomes(5)")) == ActionExpr.assign("x", .value(.int(5))))
-        #expect(SpecParser.parseSingleAction(parseExpression("x.becomes(x + 1)")) == ActionExpr.assign("x", StateExpr.add(.variable("x"), .value(.int(1)))))
+        #expect(SpecParser.decodeActionExpr(parseExpression("x.becomes(5)")) == ActionExpr.assign("x", .value(.int(5))))
+        #expect(SpecParser.decodeActionExpr(parseExpression("x.becomes(x + 1)")) == ActionExpr.assign("x", StateExpr.add(.variable("x"), .value(.int(1)))))
     }
 
     @Test func parseStays() {
-        #expect(SpecParser.parseSingleAction(parseExpression("x.stays")) == ActionExpr.unchanged("x"))
+        #expect(SpecParser.decodeActionExpr(parseExpression("x.stays")) == ActionExpr.unchanged("x"))
     }
 
     @Test func parseGuardedBecomes() {
-        #expect(SpecParser.parseSingleAction(parseExpression("x.becomes(1).when(x == 0)")) == ActionExpr.and(
+        #expect(SpecParser.decodeActionExpr(parseExpression("x.becomes(1).when(x == 0)")) == ActionExpr.and(
             ActionExpr.guard_(StateExpr.equal(.variable("x"), .value(.int(0)))),
             ActionExpr.assign("x", .value(.int(1)))
         ))
     }
 
     @Test func parseDoubleWhen() {
-        let result = SpecParser.parseSingleAction(parseExpression("x.becomes(1).when(x > 0).when(x < 5)"))
+        let result = SpecParser.decodeActionExpr(parseExpression("x.becomes(1).when(x > 0).when(x < 5)"))
         #expect(result == ActionExpr.and(
             ActionExpr.guard_(StateExpr.and(
                 StateExpr.lessThan(.variable("x"), .value(.int(5))),
@@ -277,7 +277,7 @@ private func parseExpression(_ source: String) -> ExprSyntax {
     }
 
     @Test func parseNondeterministicAssign() {
-        let result = SpecParser.parseSingleAction(
+        let result = SpecParser.decodeActionExpr(
             parseExpression("x.becomes(StateExpr.any(from: StateExpr.set([1, 2, 3])))")
         )
         let expectedSet = StateExpr.setLiteral([.value(.int(1)), .value(.int(2)), .value(.int(3))])
@@ -289,42 +289,42 @@ private func parseExpression(_ source: String) -> ExprSyntax {
 
 @Suite(.serialized) struct ActionExprCombinatorTests {
     @Test func parseAndOfTwoActions() {
-        #expect(SpecParser.parseSingleAction(parseExpression("x.becomes(1) && y.becomes(2)")) == ActionExpr.and(
+        #expect(SpecParser.decodeActionExpr(parseExpression("x.becomes(1) && y.becomes(2)")) == ActionExpr.and(
             ActionExpr.assign("x", .value(.int(1))),
             ActionExpr.assign("y", .value(.int(2)))
         ))
     }
 
     @Test func parseOrOfTwoActions() {
-        #expect(SpecParser.parseSingleAction(parseExpression("x.becomes(1) || x.becomes(2)")) == ActionExpr.or(
+        #expect(SpecParser.decodeActionExpr(parseExpression("x.becomes(1) || x.becomes(2)")) == ActionExpr.or(
             ActionExpr.assign("x", .value(.int(1))),
             ActionExpr.assign("x", .value(.int(2)))
         ))
     }
 
     @Test func parseGuardAndAction() {
-        #expect(SpecParser.parseSingleAction(parseExpression("x > 0 && x.becomes(x - 1)")) == ActionExpr.and(
+        #expect(SpecParser.decodeActionExpr(parseExpression("x > 0 && x.becomes(x - 1)")) == ActionExpr.and(
             ActionExpr.guard_(StateExpr.greaterThan(.variable("x"), .value(.int(0)))),
             ActionExpr.assign("x", StateExpr.subtract(.variable("x"), .value(.int(1))))
         ))
     }
 
     @Test func parseActionAndGuard() {
-        #expect(SpecParser.parseSingleAction(parseExpression("x.becomes(0) && x == 0")) == ActionExpr.and(
+        #expect(SpecParser.decodeActionExpr(parseExpression("x.becomes(0) && x == 0")) == ActionExpr.and(
             ActionExpr.assign("x", .value(.int(0))),
             ActionExpr.guard_(StateExpr.equal(.variable("x"), .value(.int(0))))
         ))
     }
 
     @Test func parseStateOrAction() {
-        #expect(SpecParser.parseSingleAction(parseExpression("x == 0 || x.becomes(1)")) == ActionExpr.or(
+        #expect(SpecParser.decodeActionExpr(parseExpression("x == 0 || x.becomes(1)")) == ActionExpr.or(
             ActionExpr.guard_(StateExpr.equal(.variable("x"), .value(.int(0)))),
             ActionExpr.assign("x", .value(.int(1)))
         ))
     }
 
     @Test func parseHourClockStyleNestedOr() {
-        let result = SpecParser.parseSingleAction(
+        let result = SpecParser.decodeActionExpr(
             parseExpression("(x != 12) && x.becomes(x + 1) || (x == 12) && x.becomes(1)")
         )
         let left = ActionExpr.and(
@@ -344,17 +344,17 @@ private func parseExpression(_ source: String) -> ExprSyntax {
 @Suite(.serialized) struct ActionExprClosureTests {
     @Test func parseEmptyClosure() {
         let closure = parseClosure("{}")
-        #expect(SpecParser.parseActionFrom(closure) == ActionExpr.guard_(.value(.bool(true))))
+        #expect(SpecParser.decodeActionFromClosure(closure) == ActionExpr.guard_(.value(.bool(true))))
     }
 
     @Test func parseSingleStatementClosure() {
         let closure = parseClosure("{ x.becomes(1) }")
-        #expect(SpecParser.parseActionFrom(closure) == ActionExpr.assign("x", .value(.int(1))))
+        #expect(SpecParser.decodeActionFromClosure(closure) == ActionExpr.assign("x", .value(.int(1))))
     }
 
     @Test func parseMultiStatementClosure() {
         let closure = parseClosure("{ x.becomes(1) ; y.stays }")
-        #expect(SpecParser.parseActionFrom(closure) == ActionExpr.and(
+        #expect(SpecParser.decodeActionFromClosure(closure) == ActionExpr.and(
             ActionExpr.assign("x", .value(.int(1))),
             ActionExpr.unchanged("y")
         ))
@@ -372,11 +372,11 @@ private func parseClosure(_ source: String) -> ClosureExprSyntax {
 
 @Suite(.serialized) struct TemporalExprTests {
     @Test func parseLeadsTo() {
-        #expect(SpecParser.parseTemporal(parseExpression("x.leadsTo(y)")) == TemporalExpr.leadsTo(.variable("x"), .variable("y")))
+        #expect(SpecParser.decodeTemporal(parseExpression("x.leadsTo(y)").as(FunctionCallExprSyntax.self)!) == TemporalExpr.leadsTo(.variable("x"), .variable("y")))
     }
 
     @Test func parseLeadsToWithExpressions() {
-        let result = SpecParser.parseTemporal(parseExpression("(x > 0).leadsTo(y == 0)"))
+        let result = SpecParser.decodeTemporal(parseExpression("(x > 0).leadsTo(y == 0)").as(FunctionCallExprSyntax.self)!)
         #expect(result == TemporalExpr.leadsTo(
             StateExpr.greaterThan(.variable("x"), .value(.int(0))),
             StateExpr.equal(.variable("y"), .value(.int(0)))
@@ -388,15 +388,15 @@ private func parseClosure(_ source: String) -> ClosureExprSyntax {
 
 @Suite(.serialized) struct FairnessConditionTests {
     @Test func parseWeakFairness() {
-        #expect(SpecParser.parseFairnessExpr(parseExpression("x.weakFairness(\"Tick\")")) == FairnessCondition.weakFairness("Tick"))
+        #expect(SpecParser.decodeFairness(parseExpression("x.weakFairness(\"Tick\")").as(FunctionCallExprSyntax.self)!) == FairnessCondition.weakFairness("Tick"))
     }
 
     @Test func parseStrongFairness() {
-        #expect(SpecParser.parseFairnessExpr(parseExpression("x.strongFairness(\"Tick\")")) == FairnessCondition.strongFairness("Tick"))
+        #expect(SpecParser.decodeFairness(parseExpression("x.strongFairness(\"Tick\")").as(FunctionCallExprSyntax.self)!) == FairnessCondition.strongFairness("Tick"))
     }
 
     @Test func parseUnknownReturnsNil() {
-        #expect(SpecParser.parseFairnessExpr(parseExpression("x.unknown()")) == nil)
+        #expect(SpecParser.decodeFairness(parseExpression("x.unknown()").as(FunctionCallExprSyntax.self)!) == nil)
     }
 }
 

@@ -7,559 +7,339 @@ import SwiftBasicFormat
 /// Tests live in SpecParserTests.
 public enum SpecParser {
 
-    private enum InfixOp: String {
-        case add = "+", sub = "-", mul = "*", div = "/", mod = "%"
-        case lt = "<", le = "<=", gt = ">", ge = ">=", eq = "==", ne = "!="
-        case and = "&&", or = "||", range = "..."
-
-        func makeStateExpr(_ lhs: StateExpr, _ rhs: StateExpr) -> StateExpr? {
-            switch self {
-            case .add: return .add(lhs, rhs)
-            case .sub: return .subtract(lhs, rhs)
-            case .mul: return .multiply(lhs, rhs)
-            case .div: return .divide(lhs, rhs)
-            case .mod: return .modulo(lhs, rhs)
-            case .lt: return .lessThan(lhs, rhs)
-            case .le: return .lessOrEqual(lhs, rhs)
-            case .gt: return .greaterThan(lhs, rhs)
-            case .ge: return .greaterOrEqual(lhs, rhs)
-            case .eq: return .equal(lhs, rhs)
-            case .ne: return .notEqual(lhs, rhs)
-            case .and: return .and(lhs, rhs)
-            case .or: return .or(lhs, rhs)
-            case .range:
-                guard case .value(.int(let f)) = lhs,
-                      case .value(.int(let l)) = rhs else { return nil }
-                return .setLiteral((f...l).map { .value(.int($0)) })
-            }
-        }
-    }
-
-    // MARK: - State expressions
-
     /// Local constants collected during parsing (for `Value` / `let` bindings).
     nonisolated(unsafe) private static var _constants: [String: TLAValue] = [:]
 
     /// Enum phase map (typeName → caseName → TLAValue) set per-parse by the macro.
     nonisolated(unsafe) private static var _enumPhases: [String: [String: TLAValue]] = [:]
 
-    /// Parses any Swift expression that represents a state-level value (no primes, no assignments).
-    /// Returns nil if the expression cannot be interpreted as a state expression.
-    public static func parseStateExpr(_ expression: ExprSyntax?, localConstants: [String: TLAValue] = [:]) -> StateExpr? {
-        guard let expression else { return nil }
+    // MARK: - Compact expression decoder
 
-        if let integerLiteral = expression.as(IntegerLiteralExprSyntax.self) {
-            return .value(.int(Int(integerLiteral.literal.text) ?? 0))
+    public static func decodeStateExpr(_ expression: ExprSyntax) -> StateExpr? {
+        if let intLit = expression.as(IntegerLiteralExprSyntax.self) {
+            return .value(.int(Int(intLit.literal.text) ?? 0))
         }
-        if let booleanLiteral = expression.as(BooleanLiteralExprSyntax.self) {
-            return .value(.bool(booleanLiteral.literal.text == "true"))
+        if let boolLit = expression.as(BooleanLiteralExprSyntax.self) {
+            return .value(.bool(boolLit.literal.text == "true"))
         }
-        if let stringLiteral = expression.as(StringLiteralExprSyntax.self) {
-            let text = stringLiteral.segments.description
-            return .value(.string(text))
+        if let stringLit = expression.as(StringLiteralExprSyntax.self) {
+            return .value(.string(stringLit.segments.description))
         }
-        if let variableReference = expression.as(DeclReferenceExprSyntax.self) {
-            let name = variableReference.baseName.text
-            if let resolved = localConstants[name] { return .value(resolved) }
+        if let ref = expression.as(DeclReferenceExprSyntax.self) {
+            let name = ref.baseName.text
+            if let resolved = _constants[name] { return .value(resolved) }
             return .variable(name)
         }
-        if let functionCall = expression.as(FunctionCallExprSyntax.self) {
-            return parseMethodCall(functionCall)
+        if let memberAccess = expression.as(MemberAccessExprSyntax.self),
+           let baseRef = memberAccess.base?.as(DeclReferenceExprSyntax.self),
+           let cases = _enumPhases[baseRef.baseName.text] {
+            return cases[memberAccess.declName.baseName.text].map { .value($0) }
         }
-        if let memberAccess = expression.as(MemberAccessExprSyntax.self) {
-            return parseMemberAccess(memberAccess)
+        if let memberAccess = expression.as(MemberAccessExprSyntax.self),
+           let base = memberAccess.base,
+           let selfExpr = decodeStateExpr(base) {
+            let propName = memberAccess.declName.baseName.text
+            switch propName {
+            case "cardinality": return .cardinality(selfExpr)
+            case "flattened": return .unionAll(selfExpr)
+            case "subsets": return .powerSet(selfExpr)
+            case "domain": return .domain(selfExpr)
+            case "count": return .tupleLength(selfExpr)
+            case "head": return .tupleHead(selfExpr)
+            case "tail": return .tupleTail(selfExpr)
+            case "isEmpty": return .equal(.cardinality(selfExpr), .value(.int(0)))
+            default: return .recordAccess(selfExpr, propName)
+            }
         }
-        if let tupleExpression = expression.as(TupleExprSyntax.self),
-           let singleElement = tupleExpression.elements.first?.expression {
-            return parseStateExpr(singleElement)
+        if let call = expression.as(FunctionCallExprSyntax.self),
+           let memberAccess = call.calledExpression.as(MemberAccessExprSyntax.self) {
+            if let result = decodeCollectionPredicate(call) { return result }
+            return decodeMethodCall(memberAccess, call)
         }
-        if let infixOperator = expression.as(InfixOperatorExprSyntax.self),
-           let leftOperand = parseStateExpr(infixOperator.leftOperand),
-           let rightOperand = parseStateExpr(infixOperator.rightOperand) {
-            let operatorText = infixOperator.operator.as(BinaryOperatorExprSyntax.self)?.operator.text
-            return parseInfixOperation(leftOperand: leftOperand, rightOperand: rightOperand, operatorText: operatorText)
+        if let tuple = expression.as(TupleExprSyntax.self),
+           let single = tuple.elements.first?.expression {
+            return decodeStateExpr(single)
         }
-        if let sequence = expression.as(SequenceExprSyntax.self) {
-            let elements = Array(sequence.elements)
-            guard elements.count == 3,
-                  let leftOperand = parseStateExpr(elements[0]),
-                  let operatorText = elements[1].as(BinaryOperatorExprSyntax.self)?.operator.text,
-                  let rightOperand = parseStateExpr(elements[2])
-            else { return nil }
-            return parseInfixOperation(leftOperand: leftOperand, rightOperand: rightOperand, operatorText: operatorText)
+        if let seq = expression.as(SequenceExprSyntax.self) {
+            return decodeInfixExpr(Array(seq.elements))
+        }
+        if let infix = expression.as(InfixOperatorExprSyntax.self),
+           let opText = infix.operator.as(BinaryOperatorExprSyntax.self)?.operator.text,
+           let lhs = decodeStateExpr(infix.leftOperand),
+           let rhs = decodeStateExpr(infix.rightOperand) {
+            return applyInfixOp(opText, lhs, rhs)
         }
         if let prefix = expression.as(PrefixOperatorExprSyntax.self) {
-            let operand = parseStateExpr(prefix.expression)
+            let operand = decodeStateExpr(prefix.expression)
             if prefix.operator.text == "!", let operand { return .not(operand) }
             if prefix.operator.text == "-", let operand { return .negate(operand) }
         }
         return nil
     }
 
-    /// Maps an infix operator and its two operands to the correct StateExpr case.
-    private static func parseInfixOperation(
-        leftOperand: StateExpr,
-        rightOperand: StateExpr,
-        operatorText: String?
-    ) -> StateExpr? {
-        operatorText.flatMap(InfixOp.init(rawValue:))?.makeStateExpr(leftOperand, rightOperand)
-    }
-
-    // MARK: - Action parsing
-
-    /// Parses a closure body containing action expressions (connected by implicit AND).
-    public static func parseActionFrom(
-        _ closure: ClosureExprSyntax,
-        localConstants: [String: TLAValue] = [:],
-        symmetricCollections: Set<String> = []
-    ) -> ActionExpr? {
-        var actions: [ActionExpr] = []
-        for statement in closure.statements {
-            guard case .expr(let expression) = statement.item else { continue }
-            guard let action = parseSingleAction(expression, symmetricCollections: symmetricCollections) else {
-                return nil
-            }
-            actions.append(action)
-        }
-        guard let first = actions.first else { return .guard_(.value(.bool(true))) }
-        return actions.dropFirst().reduce(first) { .and($0, $1) }
-    }
-
-    public static func parseInvariantFrom(_ closure: ClosureExprSyntax) -> StateExpr? {
-        parseStateExprFrom(closure)
-    }
-
-    private static func parseStateExprFrom(_ closure: ClosureExprSyntax) -> StateExpr? {
-        let exprs = closure.statements.compactMap { statement -> StateExpr? in
-            guard case .expr(let inner) = statement.item else { return nil }
-            return parseStateExpr(inner)
-        }
-        if exprs.isEmpty { return .value(.bool(true)) }
-        return exprs.dropFirst().reduce(exprs[0]) { .and($0, $1) }
-    }
-
-    /// Parses a single action expression (one step in a transition).
-    /// Handles: guard conditions, assignments, unchanged, OR/AND between actions.
-    public static func parseSingleAction(
-        _ expression: ExprSyntax,
-        symmetricCollections: Set<String> = []
-    ) -> ActionExpr? {
-        if let infixOperator = expression.as(InfixOperatorExprSyntax.self) {
-            let operatorText = infixOperator.operator.as(BinaryOperatorExprSyntax.self)?.operator.text
-
-            if operatorText == "||" {
-                let leftResult = parseSingleAction(infixOperator.leftOperand, symmetricCollections: symmetricCollections)
-                let rightResult = parseSingleAction(infixOperator.rightOperand, symmetricCollections: symmetricCollections)
-                let leftState = parseInvariantExpression(infixOperator.leftOperand, symmetricCollections: symmetricCollections)
-                let rightState = parseInvariantExpression(infixOperator.rightOperand, symmetricCollections: symmetricCollections)
-
-                let leftAction = leftState == nil ? leftResult : nil
-                let rightAction = rightState == nil ? rightResult : nil
-
-                if let guardExpr = leftState, let actionExpr = rightResult { return .or(.guard_(guardExpr), actionExpr) }
-                if let actionExpr = leftResult, let guardExpr = rightState { return .or(actionExpr, .guard_(guardExpr)) }
-                if let leftAction, let rightAction { return .or(leftAction, rightAction) }
-            }
-
-            if operatorText == "&&" {
-                let leftState = parseInvariantExpression(infixOperator.leftOperand, symmetricCollections: symmetricCollections)
-                let rightState = parseInvariantExpression(infixOperator.rightOperand, symmetricCollections: symmetricCollections)
-                let leftAction = leftState == nil ? parseSingleAction(infixOperator.leftOperand, symmetricCollections: symmetricCollections) : nil
-                let rightAction = rightState == nil ? parseSingleAction(infixOperator.rightOperand, symmetricCollections: symmetricCollections) : nil
-
-                if let guardExpr = leftState, let actionExpr = rightAction { return .and(.guard_(guardExpr), actionExpr) }
-                if let actionExpr = leftAction, let guardExpr = rightState { return .and(actionExpr, .guard_(guardExpr)) }
-                if let leftAction, let rightAction { return .and(leftAction, rightAction) }
-            }
-        }
-
-        if let sequence = expression.as(SequenceExprSyntax.self) {
-            let elements = Array(sequence.elements)
-            if elements.count == 3 {
-                let operatorText = elements[1].as(BinaryOperatorExprSyntax.self)?.operator.text
-                if let leftAction = parseLeafAsAction(elements[0], symmetricCollections: symmetricCollections),
-                   let rightAction = parseLeafAsAction(elements[2], symmetricCollections: symmetricCollections) {
-                    if operatorText == "||" { return .or(leftAction, rightAction) }
-                    if operatorText == "&&" { return .and(leftAction, rightAction) }
-                }
-            } else if elements.count > 3 {
-                return foldActionSequence(elements, symmetricCollections: symmetricCollections)
-            }
-        }
-
-        if let functionCall = expression.as(FunctionCallExprSyntax.self),
-            let becomesChain = parseBecomesChain(functionCall, symmetricCollections: symmetricCollections) {
-            return becomesChain
-        }
-
-        if let functionCall = expression.as(FunctionCallExprSyntax.self) {
-            if let becomesChain = parseBecomesChain(functionCall, symmetricCollections: symmetricCollections) {
-                return becomesChain
-            }
-            if let chooseAction = parseChooseCall(functionCall) {
-                return chooseAction
-            }
-        }
-
-        if let memberAccess = expression.as(MemberAccessExprSyntax.self),
-           memberAccess.declName.baseName.text == "stays",
-           let baseReference = memberAccess.base?.as(DeclReferenceExprSyntax.self) {
-            return .unchanged(baseReference.baseName.text)
-        }
-
-        return nil
-    }
-
-    /// Parses `choose(variable, from: set)` into `.chooseAction(name, set)`.
-    private static func parseChooseCall(_ call: FunctionCallExprSyntax) -> ActionExpr? {
-        guard let ref = call.calledExpression.as(DeclReferenceExprSyntax.self),
-              ref.baseName.text == "choose",
-              let variableArg = call.arguments.first?.expression.as(DeclReferenceExprSyntax.self),
-              let fromArg = call.arguments.dropFirst().first?.expression,
-              let setExpr = parseStateExpr(fromArg)
-        else { return nil }
-        return .chooseAction(variableArg.baseName.text, setExpr)
-    }
-
-    /// Folds a multi-element SequenceExprSyntax (5+ elements) into an ActionExpr
-    /// by splitting on || (lowest precedence) then && within each group.
-    private static func foldActionSequence(
-        _ elements: [ExprSyntax],
-        symmetricCollections: Set<String>
-    ) -> ActionExpr? {
-        // The sequence alternates: leaf, operator, leaf, operator, leaf, ...
-        // Operator positions: 1, 3, 5, ...   Leaf positions: 0, 2, 4, ...
-        guard elements.count >= 3, elements.count % 2 == 1 else { return nil }
-
-        var orSplitIndices: [Int] = []
-        for index in stride(from: 1, to: elements.count, by: 2) {
-            if elements[index].as(BinaryOperatorExprSyntax.self)?.operator.text == "||" {
-                orSplitIndices.append(index)
-            }
-        }
-
-        if orSplitIndices.isEmpty {
-            return foldAndGroup(elements, symmetricCollections: symmetricCollections)
-        }
-
-        var groups: [ActionExpr] = []
-        var start = 0
-        for splitIndex in orSplitIndices {
-            if let group = foldAndGroup(Array(elements[start..<splitIndex]), symmetricCollections: symmetricCollections) {
-                groups.append(group)
-            }
-            start = splitIndex + 1
-        }
-        if start < elements.count, let group = foldAndGroup(Array(elements[start...]), symmetricCollections: symmetricCollections) {
-            groups.append(group)
-        }
-
-        guard !groups.isEmpty else { return nil }
-        return groups.dropFirst().reduce(groups[0]) { .or($0, $1) }
-    }
-
-    /// Folds a sequence containing only && operators (or a single leaf) into an ActionExpr.
-    private static func foldAndGroup(
-        _ elements: [ExprSyntax],
-        symmetricCollections: Set<String>
-    ) -> ActionExpr? {
-        guard elements.count >= 1 else { return nil }
-        if elements.count == 1 { return parseLeafAsAction(elements[0], symmetricCollections: symmetricCollections) }
-
-        var andSplitIndices: [Int] = []
-        for index in stride(from: 1, to: elements.count, by: 2) {
-            if elements[index].as(BinaryOperatorExprSyntax.self)?.operator.text == "&&" {
-                andSplitIndices.append(index)
-            }
-        }
-
-        if andSplitIndices.isEmpty {
-            return parseAndLeaf(elements, symmetricCollections: symmetricCollections)
-        }
-
-        var leafActions: [ActionExpr] = []
-        var start = 0
-        for splitIndex in andSplitIndices {
-            if let leaf = parseAndLeaf(Array(elements[start..<splitIndex]), symmetricCollections: symmetricCollections) {
-                leafActions.append(leaf)
-            }
-            start = splitIndex + 1
-        }
-        if start < elements.count, let leaf = parseAndLeaf(Array(elements[start...]), symmetricCollections: symmetricCollections) {
-            leafActions.append(leaf)
-        }
-
-        guard !leafActions.isEmpty else { return nil }
-        return leafActions.dropFirst().reduce(leafActions[0]) { .and($0, $1) }
-    }
-
-    /// Parses a leaf slice (one or more ExprSyntax elements) as an action or guard.
-    private static func parseAndLeaf(
-        _ slice: [ExprSyntax],
-        symmetricCollections: Set<String>
-    ) -> ActionExpr? {
-        if slice.count == 1 {
-            return parseLeafAsAction(slice[0], symmetricCollections: symmetricCollections)
-        }
-        let source = slice.map { $0.description }.joined()
-        guard let reconstructed = SwiftParser.Parser.parse(source: source).statements.first?.item.as(ExprSyntax.self) else {
-            return nil
-        }
-        return parseLeafAsAction(reconstructed, symmetricCollections: symmetricCollections)
-    }
-
-    /// Tries to parse a single expression as either an action or a guard (state expression).
-    private static func parseLeafAsAction(
-        _ expression: ExprSyntax,
-        symmetricCollections: Set<String>
-    ) -> ActionExpr? {
-        if let action = parseSingleAction(expression, symmetricCollections: symmetricCollections) { return action }
-        if let state = parseInvariantExpression(expression, symmetricCollections: symmetricCollections) { return .guard_(state) }
-        return nil
-    }
-
-    // MARK: - Becomes chain (assignment with optional .when guards)
-
-    private struct GuardedAssignment {
-        let call: FunctionCallExprSyntax
-        let condition: StateExpr?
-    }
-
-    /// Unwraps nested `.when(...)` calls from a `.becomes(...)` chain.
-    /// `x.becomes(1).when(x < 5)` → call = `x.becomes(1)`, condition = `x < 5`
-    private static func unwrapGuards(
-        _ functionCall: FunctionCallExprSyntax,
-        symmetricCollections: Set<String>
-    ) -> GuardedAssignment {
-        if let memberAccess = functionCall.calledExpression.as(MemberAccessExprSyntax.self),
-           memberAccess.declName.baseName.text == "when",
-           let innerCall = memberAccess.base?.as(FunctionCallExprSyntax.self) {
-            let outerCondition = functionCall.arguments.first.flatMap {
-                parseInvariantExpression($0.expression, symmetricCollections: symmetricCollections)
-            }
-            let inner = unwrapGuards(innerCall, symmetricCollections: symmetricCollections)
-            if let outer = outerCondition, let innerCondition = inner.condition {
-                return GuardedAssignment(call: inner.call, condition: .and(outer, innerCondition))
-            }
-            return GuardedAssignment(call: inner.call, condition: outerCondition ?? inner.condition)
-        }
-        return GuardedAssignment(call: functionCall, condition: nil)
-    }
-
-    /// Parses a `.becomes(...)` call (possibly wrapped in `.when(...)` chains).
-    /// Detects whether the assignment is deterministic or nondeterministic (CHOOSE).
-    private static func parseBecomesChain(
-        _ functionCall: FunctionCallExprSyntax,
-        symmetricCollections: Set<String>
-    ) -> ActionExpr? {
-        let guarded = unwrapGuards(functionCall, symmetricCollections: symmetricCollections)
-        guard let (variableName, assignment) = parseBecomesArgument(guarded.call) else { return nil }
-
-        let action: ActionExpr
-        if case .choose(let chosenSet, _, _) = assignment {
-            action = .chooseAction(variableName, chosenSet)
-        } else {
-            action = .assign(variableName, assignment)
-        }
-
-        return guarded.condition.map { .and(.guard_($0), action) } ?? action
-    }
-
-    /// Extracts the variable name and value expression from a `.becomes(expr)` call.
-    private static func parseBecomesArgument(_ functionCall: FunctionCallExprSyntax) -> (String, StateExpr)? {
-        guard let memberAccess = functionCall.calledExpression.as(MemberAccessExprSyntax.self),
-              memberAccess.declName.baseName.text == "becomes",
-              let baseReference = memberAccess.base?.as(DeclReferenceExprSyntax.self),
-              let argument = functionCall.arguments.first?.expression
-        else { return nil }
-
-        let variableName = baseReference.baseName.text
-        let value = parseStateExpr(argument) ?? .value(.int(0))
-        return (variableName, value)
-    }
-
-    // MARK: - Temporal properties
-
-    private enum TemporalMethod: String {
-        case leadsTo
-        case always
-        case eventually
-        case alwaysEventually
-        case eventuallyAlways
-    }
-
-    public static func parseTemporal(_ expression: ExprSyntax) -> TemporalExpr? {
-        guard let functionCall = expression.as(FunctionCallExprSyntax.self),
-              let memberRef = functionCall.calledExpression.as(MemberAccessExprSyntax.self)
-        else { return nil }
-
-        let firstArgument = functionCall.arguments.first.flatMap { parseStateExpr($0.expression) }
-
-        guard let method = TemporalMethod(rawValue: memberRef.declName.baseName.text) else { return nil }
-
-        switch method {
-        case .leadsTo:
-            let source = parseStateExpr(memberRef.base) ?? .value(.bool(true))
-            return firstArgument.map { .leadsTo(source, $0) }
-        case .always:           return firstArgument.map { .always($0) }
-        case .eventually:       return firstArgument.map { .eventually($0) }
-        case .alwaysEventually:  return firstArgument.map { .alwaysEventually($0) }
-        case .eventuallyAlways:  return firstArgument.map { .eventuallyAlways($0) }
-        }
-    }
-
-    // MARK: - Fairness conditions
-
-    private enum FairnessMethod: String {
-        case weakFairness
-        case strongFairness
-    }
-
-    public static func parseFairnessExpr(_ expression: ExprSyntax) -> FairnessCondition? {
-        guard let functionCall = expression.as(FunctionCallExprSyntax.self),
-              let memberRef = functionCall.calledExpression.as(MemberAccessExprSyntax.self)
-        else { return nil }
-
-        let name = functionCall.arguments.first?.expression
-            .as(StringLiteralExprSyntax.self)?
-            .segments.description
-            .replacingOccurrences(of: "\"", with: "")
-            ?? ""
-
-        guard let method = FairnessMethod(rawValue: memberRef.declName.baseName.text) else { return nil }
-
-        switch method {
-        case .weakFairness:   return .weakFairness(name)
-        case .strongFairness: return .strongFairness(name)
-        }
-    }
-
-    // MARK: - Method calls on state expressions
-
-    private enum StateMethod: String {
-        case isIn
-        case union
-        case intersection
-        case subtracting
-        case isSubset
-        case applying
-        case filtering
-        case mapping
-        case appending
-        case concatenating
-        case integerDivided
-        case updated
-        case at
-    }
-
-    private static func parseMethodCall(_ functionCall: FunctionCallExprSyntax) -> StateExpr? {
-        guard let memberAccess = functionCall.calledExpression.as(MemberAccessExprSyntax.self)
-        else { return nil }
-
+    private static func decodeMethodCall(_ memberAccess: MemberAccessExprSyntax, _ call: FunctionCallExprSyntax) -> StateExpr? {
         let methodName = memberAccess.declName.baseName.text
-        let firstArgument = functionCall.arguments.first?.expression
-        let baseExpression = memberAccess.base
-
-        guard let method = StateMethod(rawValue: methodName) else {
-            // Check for static StateExpr calls
-            if let referenceBase = memberAccess.base?.as(DeclReferenceExprSyntax.self),
-               referenceBase.baseName.text == "StateExpr" {
-                return parseStaticCall(
-                    memberAccess: memberAccess,
-                    arguments: Array(functionCall.arguments),
-                    method: methodName
-                )
+        let args = Array(call.arguments)
+        let base = memberAccess.base
+        let selfExpr = base.flatMap { decodeStateExpr($0) }
+        switch methodName {
+        case "isIn":
+            guard let selfExpr, let arg = args.first?.expression, let argExpr = decodeStateExpr(arg) else { return nil }
+            return .in(selfExpr, argExpr)
+        case "union":
+            guard let selfExpr, let arg = args.first?.expression, let argExpr = decodeStateExpr(arg) else { return nil }
+            return .union(selfExpr, argExpr)
+        case "intersection":
+            guard let selfExpr, let arg = args.first?.expression, let argExpr = decodeStateExpr(arg) else { return nil }
+            return .intersection(selfExpr, argExpr)
+        case "subtracting":
+            guard let selfExpr, let arg = args.first?.expression, let argExpr = decodeStateExpr(arg) else { return nil }
+            return .setDifference(selfExpr, argExpr)
+        case "isSubset":
+            guard let selfExpr, let arg = args.first?.expression, let argExpr = decodeStateExpr(arg) else { return nil }
+            return .subset(selfExpr, argExpr)
+        case "applying":
+            guard let selfExpr, let arg = args.first?.expression, let argExpr = decodeStateExpr(arg) else { return nil }
+            return .functionApply(selfExpr, argExpr)
+        case "filtering":
+            guard let selfExpr, let arg = args.first?.expression, let argExpr = decodeStateExpr(arg) else { return nil }
+            return .setFilter(selfExpr, .fresh(), argExpr)
+        case "mapping":
+            guard let selfExpr, let arg = args.first?.expression, let argExpr = decodeStateExpr(arg) else { return nil }
+            return .setMap(argExpr, .fresh(), selfExpr)
+        case "appending":
+            guard let selfExpr, let arg = args.first?.expression, let argExpr = decodeStateExpr(arg) else { return nil }
+            return .tupleAppend(selfExpr, argExpr)
+        case "concatenating":
+            guard let selfExpr, let arg = args.first?.expression, let argExpr = decodeStateExpr(arg) else { return nil }
+            return .tupleConcatenate(selfExpr, argExpr)
+        case "integerDivided":
+            guard let selfExpr, let arg = args.first?.expression, let argExpr = decodeStateExpr(arg) else { return nil }
+            return .integerDivide(selfExpr, argExpr)
+        case "updated":
+            guard let selfExpr, args.count >= 2,
+                  let key = decodeStateExpr(args[0].expression),
+                  let val = decodeStateExpr(args[1].expression) else { return nil }
+            return .except(selfExpr, key, val)
+        case "at":
+            guard let selfExpr,
+                  let idx = args.first?.expression.as(IntegerLiteralExprSyntax.self).flatMap({ Int($0.literal.text) })
+            else { return nil }
+            return .tupleAccess(selfExpr, idx)
+        case "set", "tuple", "singleton":
+            guard memberAccess.base?.as(DeclReferenceExprSyntax.self)?.baseName.text == "StateExpr" else { return nil }
+            if let array = args.first?.expression.as(ArrayExprSyntax.self) {
+                let exprs = array.elements.compactMap { decodeStateExpr($0.expression) }
+                return (methodName == "tuple") ? .tupleLiteral(exprs) : .setLiteral(exprs)
+            }
+            if methodName == "singleton", let single = args.first.flatMap({ decodeStateExpr($0.expression) }) {
+                return .setLiteral([single])
             }
             return nil
-        }
-
-        switch method {
-        case .isIn:         return parseBinaryMethod(base: baseExpression, argument: firstArgument, combine: { .in($0, $1) })
-        case .union:        return parseBinaryMethod(base: baseExpression, argument: firstArgument, combine: { .union($0, $1) })
-        case .intersection:  return parseBinaryMethod(base: baseExpression, argument: firstArgument, combine: { .intersection($0, $1) })
-        case .subtracting:  return parseBinaryMethod(base: baseExpression, argument: firstArgument, combine: { .setDifference($0, $1) })
-        case .isSubset:     return parseBinaryMethod(base: baseExpression, argument: firstArgument, combine: { .subset($0, $1) })
-        case .applying:     return parseBinaryMethod(base: baseExpression, argument: firstArgument, combine: { .functionApply($0, $1) })
-        case .filtering:    return parseBinaryMethod(base: baseExpression, argument: firstArgument, combine: { .setFilter($0, .fresh(), $1) })
-        case .mapping:      return parseBinaryMethod(base: baseExpression, argument: firstArgument, combine: { .setMap($1, .fresh(), $0) })
-        case .appending:    return parseBinaryMethod(base: baseExpression, argument: firstArgument, combine: { .tupleAppend($0, $1) })
-        case .concatenating: return parseBinaryMethod(base: baseExpression, argument: firstArgument, combine: { .tupleConcatenate($0, $1) })
-        case .integerDivided: return parseBinaryMethod(base: baseExpression, argument: firstArgument, combine: { .integerDivide($0, $1) })
-        case .updated:
-            guard let baseExpression,
-                  let selfExpr = parseStateExpr(baseExpression)
-            else { return nil }
-            let allArguments = Array(functionCall.arguments)
-            guard allArguments.count >= 2,
-                  let keyExpr = parseStateExpr(allArguments[0].expression),
-                  let valueExpr = parseStateExpr(allArguments[1].expression)
-            else { return nil }
-            return .except(selfExpr, keyExpr, valueExpr)
-        case .at:
-            guard let baseExpression,
-                  let selfExpr = parseStateExpr(baseExpression),
-                  let index = functionCall.arguments.first?.expression
-                    .as(IntegerLiteralExprSyntax.self)
-                    .flatMap({ Int($0.literal.text) })
-            else { return nil }
-            return .tupleAccess(selfExpr, index)
+        case "record":
+            guard memberAccess.base?.as(DeclReferenceExprSyntax.self)?.baseName.text == "StateExpr" else { return nil }
+            var fields: [String: StateExpr] = [:]
+            for arg in args {
+                guard let label = arg.label?.text, let val = decodeStateExpr(arg.expression) else { return nil }
+                fields[label] = val
+            }
+            return .recordLiteral(fields)
+        case "if":
+            guard memberAccess.base?.as(DeclReferenceExprSyntax.self)?.baseName.text == "StateExpr",
+                  args.count >= 3,
+                  let cond = decodeStateExpr(args[0].expression),
+                  let thenVal = decodeStateExpr(args[1].expression),
+                  let elseVal = decodeStateExpr(args[2].expression) else { return nil }
+            return .ifThenElse(cond, thenVal, elseVal)
+        case "enabled":
+            guard memberAccess.base?.as(DeclReferenceExprSyntax.self)?.baseName.text == "StateExpr" else { return nil }
+            let name = args.first?.expression.as(StringLiteralExprSyntax.self)?.segments.description
+                .replacingOccurrences(of: "\"", with: "") ?? ""
+            return .enabledAction(name)
+        case "function", "for", "exists", "choose", "any", "functionLiteral":
+            guard memberAccess.base?.as(DeclReferenceExprSyntax.self)?.baseName.text == "StateExpr" else { return nil }
+            let exprs = args.compactMap { decodeStateExpr($0.expression) }
+            switch methodName {
+            case "function", "functionLiteral": return exprs.count >= 2 ? .functionLiteral(exprs[0], .fresh(), exprs[1]) : nil
+            case "for": return exprs.count >= 2 ? .forAll(exprs[0], .fresh(), exprs[1]) : nil
+            case "exists": return exprs.count >= 2 ? .exists(exprs[0], .fresh(), exprs[1]) : nil
+            case "choose": return exprs.count >= 2 ? .choose(exprs[0], .fresh(), exprs[1]) : nil
+            case "any": return exprs.count >= 1 ? .choose(exprs[0], .fresh(), .value(.bool(true))) : nil
+            default: return nil
+            }
+        case "firstMatch":
+            guard memberAccess.base?.as(DeclReferenceExprSyntax.self)?.baseName.text == "StateExpr" else { return nil }
+            var pairs: [StateExpr] = []
+            var fallback: StateExpr?
+            for arg in args {
+                if arg.label?.text == "fallback" { fallback = decodeStateExpr(arg.expression) }
+                else if let tuple = arg.expression.as(TupleExprSyntax.self) {
+                    for elem in tuple.elements { if let p = decodeStateExpr(elem.expression) { pairs.append(p) } }
+                }
+            }
+            return .caseExpr(pairs, fallback)
+        default:
+            return nil
         }
     }
 
-    /// Helper for methods that take exactly one argument: `receiver.method(argument)`.
-    private static func parseBinaryMethod(
-        base: ExprSyntax?,
-        argument: ExprSyntax?,
-        combine: (StateExpr, StateExpr) -> StateExpr
-    ) -> StateExpr? {
-        guard let base,
-              let selfExpr = parseStateExpr(base),
-              let argumentExpr = parseStateExpr(argument)
-        else { return nil }
-        return combine(selfExpr, argumentExpr)
+    private static func decodeInfixExpr(_ elements: [ExprSyntax]) -> StateExpr? {
+        guard elements.count >= 3, elements.count % 2 == 1 else { return nil }
+        if elements.count == 3 {
+            guard let opText = elements[1].as(BinaryOperatorExprSyntax.self)?.operator.text,
+                  let lhs = decodeStateExpr(elements[0]),
+                  let rhs = decodeStateExpr(elements[2]) else { return nil }
+            return applyInfixOp(opText, lhs, rhs)
+        }
+        if let orIdx = stride(from: 1, to: elements.count, by: 2).first(where: {
+            elements[$0].as(BinaryOperatorExprSyntax.self)?.operator.text == "||"
+        }) {
+            guard let left = decodeInfixExpr(Array(elements[0..<orIdx])),
+                  let right = decodeInfixExpr(Array(elements[(orIdx + 1)..<elements.count]))
+            else { return nil }
+            return .or(left, right)
+        }
+        if let andIdx = stride(from: 1, to: elements.count, by: 2).first(where: {
+            elements[$0].as(BinaryOperatorExprSyntax.self)?.operator.text == "&&"
+        }) {
+            guard let left = decodeInfixExpr(Array(elements[0..<andIdx])),
+                  let right = decodeInfixExpr(Array(elements[(andIdx + 1)..<elements.count]))
+            else { return nil }
+            return .and(left, right)
+        }
+        var result = decodeStateExpr(elements[0])
+        for i in stride(from: 1, to: elements.count, by: 2) {
+            guard let opText = elements[i].as(BinaryOperatorExprSyntax.self)?.operator.text,
+                  let lhs = result,
+                  let rhs = decodeStateExpr(elements[i + 1]) else { return nil }
+            result = applyInfixOp(opText, lhs, rhs)
+        }
+        return result
     }
 
-    // MARK: - DSL dispatch tables
+    private static func applyInfixOp(_ op: String, _ lhs: StateExpr, _ rhs: StateExpr) -> StateExpr? {
+        switch op {
+        case "+": return .add(lhs, rhs)
+        case "-": return .subtract(lhs, rhs)
+        case "*": return .multiply(lhs, rhs)
+        case "/": return .divide(lhs, rhs)
+        case "%": return .modulo(lhs, rhs)
+        case "<": return .lessThan(lhs, rhs)
+        case "<=": return .lessOrEqual(lhs, rhs)
+        case ">": return .greaterThan(lhs, rhs)
+        case ">=": return .greaterOrEqual(lhs, rhs)
+        case "==": return .equal(lhs, rhs)
+        case "!=": return .notEqual(lhs, rhs)
+        case "&&": return .and(lhs, rhs)
+        case "||": return .or(lhs, rhs)
+        case "...":
+            guard case .value(.int(let f)) = lhs, case .value(.int(let l)) = rhs else { return nil }
+            return .setLiteral((f...l).map { .value(.int($0)) })
+        default: return nil
+        }
+    }
 
-    private enum DSLStaticMethod: String, CaseIterable {
-        case set, tuple, record, `if`, enabled, function, `for`, exists, choose, any, firstMatch, singleton, functionLiteral
-
-        func build(_ args: [StateExpr]) -> StateExpr? {
-            switch self {
-            case .set:    return .setLiteral(args)
-            case .tuple:  return .tupleLiteral(args)
-            case .record: return nil  // labeled args, handled separately
-            case .if:     return args.count >= 3 ? .ifThenElse(args[0], args[1], args[2]) : nil
-            case .enabled: return nil  // string arg, handled separately
-            case .function: return args.count >= 2 ? .functionLiteral(args[0], .fresh(), args[1]) : nil
-            case .for:    return args.count >= 2 ? .forAll(args[0], .fresh(), args[1]) : nil
-            case .exists: return args.count >= 2 ? .exists(args[0], .fresh(), args[1]) : nil
-            case .choose: return args.count >= 2 ? .choose(args[0], .fresh(), args[1]) : nil
-            case .any:    return args.count >= 1 ? .choose(args[0], .fresh(), .value(.bool(true))) : nil
-            case .firstMatch: return nil  // tuple pairs, handled separately
-            case .singleton: return args.count >= 1 ? .setLiteral(args) : nil
-            case .functionLiteral: return args.count >= 2 ? .functionLiteral(args[0], .fresh(), args[1]) : nil
+    public static func decodeActionExpr(_ expression: ExprSyntax) -> ActionExpr? {
+        if let call = expression.as(FunctionCallExprSyntax.self),
+           let access = call.calledExpression.as(MemberAccessExprSyntax.self),
+           access.declName.baseName.text == "becomes",
+           let baseRef = access.base?.as(DeclReferenceExprSyntax.self) {
+            let varName = baseRef.baseName.text
+            if let arg = call.arguments.first?.expression,
+               let state = decodeStateExpr(arg) {
+                if case .choose(let chosenSet, _, _) = state {
+                    return .chooseAction(varName, chosenSet)
+                }
+                return .assign(varName, state)
+            }
+            return .assign(varName, .value(.int(0)))
+        }
+        if let access = expression.as(MemberAccessExprSyntax.self),
+           access.declName.baseName.text == "stays",
+           let baseRef = access.base?.as(DeclReferenceExprSyntax.self) {
+            return .unchanged(baseRef.baseName.text)
+        }
+        if let call = expression.as(FunctionCallExprSyntax.self),
+           let access = call.calledExpression.as(MemberAccessExprSyntax.self),
+           access.declName.baseName.text == "when" {
+            let outerCondition = call.arguments.first.flatMap { decodeStateExpr($0.expression) }
+            guard let inner = access.base.flatMap({ decodeActionExpr($0) }) else { return nil }
+            guard let outer = outerCondition else { return inner }
+            // Merge: inner is always .and(.guard_(innerConditions), innerAction) or just .guard_ + .assign
+            // We want: .and(.guard_(outer && innerConditions), innerAction)
+            if case .and(.guard_(let innerCond), let innerAction) = inner {
+                return .and(.guard_(.and(outer, innerCond)), innerAction)
+            }
+            return .and(.guard_(outer), inner)
+        }
+        if let call = expression.as(FunctionCallExprSyntax.self),
+           let ref = call.calledExpression.as(DeclReferenceExprSyntax.self),
+           ref.baseName.text == "choose",
+           let varArg = call.arguments.first?.expression.as(DeclReferenceExprSyntax.self),
+           let fromArg = call.arguments.dropFirst().first?.expression,
+           let setExpr = decodeStateExpr(fromArg) {
+            return .chooseAction(varArg.baseName.text, setExpr)
+        }
+        if let seq = expression.as(SequenceExprSyntax.self) {
+            return decodeActionSequence(Array(seq.elements))
+        }
+        if let infix = expression.as(InfixOperatorExprSyntax.self),
+           let opText = infix.operator.as(BinaryOperatorExprSyntax.self)?.operator.text {
+            let leftAction = decodeActionExpr(infix.leftOperand)
+            let rightAction = decodeActionExpr(infix.rightOperand)
+            let leftState = decodeStateExpr(infix.leftOperand)
+            let rightState = decodeStateExpr(infix.rightOperand)
+            if opText == "||" {
+                let l = leftAction ?? leftState.map(ActionExpr.guard_)
+                let r = rightAction ?? rightState.map(ActionExpr.guard_)
+                if let l, let r { return .or(l, r) }
+            }
+            if opText == "&&" {
+                let l = leftAction ?? leftState.map(ActionExpr.guard_)
+                let r = rightAction ?? rightState.map(ActionExpr.guard_)
+                if let l, let r { return .and(l, r) }
             }
         }
-    }
-
-    private enum DSLProperty: String, CaseIterable {
-        case cardinality, flattened, subsets, domain, count, head, tail
-
-        func build(_ expr: StateExpr) -> StateExpr {
-            switch self {
-            case .cardinality: return .cardinality(expr)
-            case .flattened:   return .unionAll(expr)
-            case .subsets:     return .powerSet(expr)
-            case .domain:      return .domain(expr)
-            case .count:       return .tupleLength(expr)
-            case .head:        return .tupleHead(expr)
-            case .tail:        return .tupleTail(expr)
-            }
+        if let tuple = expression.as(TupleExprSyntax.self),
+           let single = tuple.elements.first?.expression {
+            return decodeActionExpr(single)
         }
+        if let state = decodeStateExpr(expression) {
+            return .guard_(state)
+        }
+        return nil
     }
 
-    // MARK: - Shared expression structure helpers
+    private static func decodeActionSequence(_ elements: [ExprSyntax]) -> ActionExpr? {
+        guard elements.count >= 1 else { return nil }
+        if elements.count == 1 { return decodeActionExpr(elements[0]) }
+        if let orIdx = stride(from: 1, to: elements.count, by: 2).first(where: {
+            elements[$0].as(BinaryOperatorExprSyntax.self)?.operator.text == "||"
+        }) {
+            guard let left = decodeActionSequence(Array(elements[0..<orIdx])),
+                  let right = decodeActionSequence(Array(elements[(orIdx + 1)..<elements.count]))
+            else { return nil }
+            return .or(left, right)
+        }
+        if let andIdx = stride(from: 1, to: elements.count, by: 2).first(where: {
+            elements[$0].as(BinaryOperatorExprSyntax.self)?.operator.text == "&&"
+        }) {
+            guard let left = decodeActionSequence(Array(elements[0..<andIdx])),
+                  let right = decodeActionSequence(Array(elements[(andIdx + 1)..<elements.count]))
+            else { return nil }
+            return .and(left, right)
+        }
+        if elements.count >= 3 {
+            guard let opText = elements[1].as(BinaryOperatorExprSyntax.self)?.operator.text else { return nil }
+            if opText == "||" || opText == "&&" {
+                guard let left = decodeActionExpr(elements[0]),
+                      let right = decodeActionExpr(elements[2]) else { return nil }
+                return opText == "||" ? .or(left, right) : .and(left, right)
+            }
+            if let state = decodeInfixExpr(elements) { return .guard_(state) }
+        }
+        return nil
+    }
 
     private static func unwrapSingleElementTuple(_ expression: ExprSyntax) -> ExprSyntax {
         if let tuple = expression.as(TupleExprSyntax.self),
@@ -570,114 +350,70 @@ public enum SpecParser {
         return expression
     }
 
-    private struct SequenceSplit {
-        let left: [ExprSyntax]
-        let operatorText: String
-        let right: [ExprSyntax]
+    public static func decodeActionFromClosure(_ closure: ClosureExprSyntax) -> ActionExpr? {
+        var actions: [ActionExpr] = []
+        for statement in closure.statements {
+            guard case .expr(let expression) = statement.item else { continue }
+            guard let action = decodeActionExpr(expression) else { return nil }
+            actions.append(action)
+        }
+        guard let first = actions.first else { return .guard_(.value(.bool(true))) }
+        return actions.dropFirst().reduce(first) { .and($0, $1) }
     }
 
-    private static func splitSequenceElements(_ elements: [ExprSyntax]) -> SequenceSplit? {
-        guard elements.count >= 3, elements.count % 2 == 1 else { return nil }
-        let operatorIndices = Array(stride(from: 1, to: elements.count, by: 2))
-        let splitIndex = operatorIndices.first {
-            elements[$0].as(BinaryOperatorExprSyntax.self)?.operator.text == "||"
-        } ?? operatorIndices.first {
-            elements[$0].as(BinaryOperatorExprSyntax.self)?.operator.text == "&&"
-        } ?? operatorIndices.first
-        guard let splitIndex,
-              let operatorText = elements[splitIndex].as(BinaryOperatorExprSyntax.self)?.operator.text
+    private static func decodeCollectionPredicate(_ call: FunctionCallExprSyntax) -> StateExpr? {
+        guard let access = call.calledExpression.as(MemberAccessExprSyntax.self),
+              let collection = access.base?.as(DeclReferenceExprSyntax.self)?.baseName.text,
+              let method = CollectionPredicateKind(rawValue: access.declName.baseName.text),
+              let closure = call.trailingClosure
+                ?? call.arguments.first?.expression.as(ClosureExprSyntax.self),
+              let parameter = collectionPredicateParameter(in: closure)
         else { return nil }
-        return SequenceSplit(
-            left: Array(elements[0..<splitIndex]),
-            operatorText: operatorText,
-            right: Array(elements[(splitIndex + 1)..<elements.count])
-        )
-    }
-
-    // MARK: - Static calls on StateExpr
-
-    /// Parses static method calls like `StateExpr.set([...])`, `StateExpr.choose(from:matching:)`, etc.
-    private static func parseStaticCall(
-        memberAccess: MemberAccessExprSyntax,
-        arguments: [LabeledExprSyntax],
-        method: String
-    ) -> StateExpr? {
-        guard let staticMethod = DSLStaticMethod(rawValue: method) else { return nil }
-
-        switch staticMethod {
-        case .set, .tuple, .singleton:
-            let elements = arguments.first?.expression
-                .as(ArrayExprSyntax.self)?.elements
-                .compactMap { parseStateExpr($0.expression) }
-                ?? (staticMethod == .singleton
-                    ? [arguments.first.flatMap { parseStateExpr($0.expression) }].compactMap { $0 }
-                    : [])
-            return staticMethod == .set ? .setLiteral(elements)
-                : staticMethod == .tuple ? .tupleLiteral(elements)
-                : .setLiteral(elements)
-        case .record:
-            var fields: [String: StateExpr] = [:]
-            for argument in arguments {
-                guard let label = argument.label?.text,
-                      let value = parseStateExpr(argument.expression)
-                else { return nil }
-                fields[label] = value
-            }
-            return .recordLiteral(fields)
-        case .enabled:
-            let actionName = arguments.first?.expression
-                .as(StringLiteralExprSyntax.self)?
-                .segments.description
-                .replacingOccurrences(of: "\"", with: "")
-                ?? ""
-            return .enabledAction(actionName)
-        case .firstMatch:
-            var flatPairs: [StateExpr] = []
-            var fallbackExpr: StateExpr?
-            for argument in arguments {
-                if argument.label?.text == "fallback" {
-                    fallbackExpr = parseStateExpr(argument.expression)
-                } else if let tupleExpr = argument.expression.as(TupleExprSyntax.self) {
-                    for element in tupleExpr.elements {
-                        guard let parsed = parseStateExpr(element.expression) else { return nil }
-                        flatPairs.append(parsed)
-                    }
-                } else {
-                    return nil
-                }
-            }
-            return .caseExpr(flatPairs, fallbackExpr)
-        default:
-            let exprs = arguments.compactMap { parseStateExpr($0.expression) }
-            return staticMethod.build(exprs)
+        let member = QuantVar.fresh()
+        let rewrittenStatements = closure.statements.map { statement in
+            PredicateValueRewriter(
+                parameter: parameter,
+                replacement: "\(collection).applying(\(member.name))"
+            ).visit(statement)
+        }
+        let rewrittenClosure = closure.with(\.statements, CodeBlockItemListSyntax(rewrittenStatements))
+        guard let bodyExpr = rewrittenClosure.statements.first.flatMap({ stmt -> ExprSyntax? in
+            guard case .expr(let e) = stmt.item else { return nil }
+            return e
+        }), let body = decodeStateExpr(bodyExpr) else { return nil }
+        let domain = StateExpr.domain(.variable(collection))
+        switch method {
+        case .allSatisfy: return .forAll(domain, member, body)
+        case .contains: return .exists(domain, member, body)
         }
     }
 
-    // MARK: - Member access (dot notation)
-
-    /// Parses dot-notation property access like `expr.cardinality`, `expr.domain`,
-    /// or arbitrary record field access like `msg.type`, `node.value`.
-    private static func parseMemberAccess(_ memberAccess: MemberAccessExprSyntax) -> StateExpr? {
-        let propertyName = memberAccess.declName.baseName.text
-
-        if let baseExpression = memberAccess.base,
-           let baseRef = baseExpression.as(DeclReferenceExprSyntax.self) {
-            if let cases = _enumPhases[baseRef.baseName.text] {
-                if let value = cases[propertyName] {
-                    return .value(value)
-                }
-                return nil
-            }
+    public static func decodeTemporal(_ call: FunctionCallExprSyntax) -> TemporalExpr? {
+        guard let ref = call.calledExpression.as(MemberAccessExprSyntax.self) else { return nil }
+        let name = ref.declName.baseName.text
+        let firstArg = call.arguments.first.flatMap { decodeStateExpr($0.expression) }
+        switch name {
+        case "leadsTo":
+            let source = ref.base.flatMap { decodeStateExpr($0) } ?? .value(.bool(true))
+            return firstArg.map { .leadsTo(source, $0) }
+        case "always": return firstArg.map { .always($0) }
+        case "eventually": return firstArg.map { .eventually($0) }
+        case "alwaysEventually": return firstArg.map { .alwaysEventually($0) }
+        case "eventuallyAlways": return firstArg.map { .eventuallyAlways($0) }
+        default: return nil
         }
+    }
 
-        guard let baseExpression = memberAccess.base,
-              let selfExpr = parseStateExpr(baseExpression)
-        else { return nil }
-
-        if let property = DSLProperty(rawValue: propertyName) {
-            return property.build(selfExpr)
+    public static func decodeFairness(_ call: FunctionCallExprSyntax) -> FairnessCondition? {
+        guard let ref = call.calledExpression.as(MemberAccessExprSyntax.self) else { return nil }
+        let name = ref.declName.baseName.text
+        let actionName = call.arguments.first?.expression.as(StringLiteralExprSyntax.self)?
+            .segments.description.replacingOccurrences(of: "\"", with: "") ?? ""
+        switch name {
+        case "weakFairness": return .weakFairness(actionName)
+        case "strongFairness": return .strongFairness(actionName)
+        default: return nil
         }
-        return .recordAccess(selfExpr, propertyName)
     }
 
     // MARK: - Unified spec builder parser
@@ -793,21 +529,28 @@ public enum SpecParser {
         for binding in varDecl.bindings {
             guard let patternName = binding.pattern.as(IdentifierPatternSyntax.self)?.identifier.text,
                   let initializer = binding.initializer?.value,
-                  let fc = initializer.as(FunctionCallExprSyntax.self),
-                  let (_, swiftTypeName) = resolveVarCall(fc)
+                  let fc = initializer.as(FunctionCallExprSyntax.self)
             else { continue }
+
+            let stateVarInfo = resolveVarCall(fc)
+            let varTypeName = stateVarInfo?.1 ?? resolveVarTypeArg(fc)
+            let callName = stateVarInfo?.0 ?? (resolveVarTypeArg(fc) != nil ? "Var" : nil)
+
+            guard callName != nil else { continue }
 
             let args = Array(fc.arguments)
 
+            if callName == "Var" && args.count < 2 { continue }
+
             if let rangeExpr = args.first(where: { $0.label?.text == "in" })?.expression {
                 let lowerBound = parseRangeLowerBound(rangeExpr)
-                result.variables.append((patternName, .int(lowerBound), nil, swiftTypeName))
+                result.variables.append((patternName, .int(lowerBound), nil, varTypeName))
                 continue
             }
 
             if let valuesArg = args.first(where: { $0.label?.text == "values" })?.expression {
                 let firstValue = parseValuesFirst(valuesArg)
-                result.variables.append((patternName, .string(firstValue), nil, swiftTypeName))
+                result.variables.append((patternName, .string(firstValue), nil, varTypeName))
                 continue
             }
 
@@ -817,11 +560,11 @@ public enum SpecParser {
                 let varName = stringLit.segments.description.replacingOccurrences(of: "\"", with: "")
                 let initial: TLAValue = args.count >= 2 ? parseInitialExpr(args[1].expression) : .int(0)
                 let inferredType = args.count >= 2 ? enumCaseTypeName(from: args[1].expression) : nil
-                result.variables.append((varName, initial, nil, swiftTypeName ?? inferredType))
+                result.variables.append((varName, initial, nil, varTypeName ?? inferredType))
             } else {
                 let initial: TLAValue = parseInitialExpr(args[0].expression)
                 let inferredType = enumCaseTypeName(from: args[0].expression)
-                result.variables.append((patternName, initial, nil, swiftTypeName ?? inferredType))
+                result.variables.append((patternName, initial, nil, varTypeName ?? inferredType))
             }
         }
     }
@@ -843,6 +586,23 @@ public enum SpecParser {
             return ("StateVar", swiftTypeName)
         }
         return nil
+    }
+
+    private static func resolveVarTypeArg(_ fc: FunctionCallExprSyntax) -> String? {
+        guard let generic = fc.calledExpression.as(GenericSpecializationExprSyntax.self),
+              let ref = generic.expression.as(DeclReferenceExprSyntax.self),
+              ref.baseName.text == "Var"
+        else {
+            if let ref = fc.calledExpression.as(DeclReferenceExprSyntax.self),
+               ref.baseName.text == "Var" {
+                return nil
+            }
+            return nil
+        }
+        let typeArgs = Array(generic.genericArgumentClause.arguments)
+        return typeArgs.count >= 1
+            ? typeArgs[0].argument.description.trimmingCharacters(in: .whitespacesAndNewlines)
+            : nil
     }
 
     /// Extracts the lower bound from a range expression like `1...12`.
@@ -931,12 +691,7 @@ public enum SpecParser {
             parseVariableDecl(call, into: &result)
         case "Action":
             if let actionName = extractStringArg(call, index: 0, loopVar: loopVar, loopValue: loopValue),
-                let body = call.trailingClosure.flatMap({
-                    parseActionFrom(
-                        $0,
-                        symmetricCollections: Set(result.symmetricCollections.map(\.name))
-                    )
-                }) {
+                let body = call.trailingClosure.flatMap(decodeActionFromClosure) {
                 result.actions.append((actionName, body))
             } else if let actionName = extractStringArg(call, index: 0, loopVar: loopVar, loopValue: loopValue),
                       let closure = call.trailingClosure {
@@ -950,11 +705,11 @@ public enum SpecParser {
         case "Constant":
             parseConstantDecl(call, into: &result)
         case "LeadsTo", "Eventually", "Always", "AlwaysEventually", "EventuallyAlways":
-            if let expr = parseTemporal(ExprSyntax(call)) {
+            if let expr = decodeTemporal(call) {
                 result.temporal.append((name, expr))
             }
         case "WeakFairness", "StrongFairness":
-            if let fc = parseFairnessExpr(ExprSyntax(call)) {
+            if let fc = decodeFairness(call) {
                 result.fairness.append(fc)
             }
         case "Value":
@@ -1013,16 +768,27 @@ public enum SpecParser {
     ) -> StateExpr? {
         var expressions: [StateExpr] = []
         for statement in closure.statements {
-            guard case .expr(let expression) = statement.item,
-                  let parsed = parseInvariantExpression(
-                    expression,
-                    symmetricCollections: symmetricCollections
-                  )
+            guard case .expr(let expression) = statement.item else { continue }
+            guard let parsed = decodeInvariantExpression(expression, symmetricCollections: symmetricCollections)
             else { return nil }
             expressions.append(parsed)
         }
         guard let first = expressions.first else { return nil }
         return expressions.dropFirst().reduce(first, StateExpr.and)
+    }
+
+    private static func decodeInvariantExpression(
+        _ expression: ExprSyntax,
+        symmetricCollections: Set<String>
+    ) -> StateExpr? {
+        if let predicate = parseCollectionPredicate(expression, symmetricCollections: symmetricCollections) {
+            return predicate
+        }
+        let unwrapped = unwrapSingleElementTuple(expression)
+        if unwrapped != expression {
+            return decodeInvariantExpression(unwrapped, symmetricCollections: symmetricCollections)
+        }
+        return decodeStateExpr(unwrapped)
     }
 
     private static func unsupportedInvariantExpression(
@@ -1031,68 +797,11 @@ public enum SpecParser {
     ) -> ExprSyntax? {
         for statement in closure.statements {
             guard case .expr(let expression) = statement.item else { continue }
-            if parseInvariantExpression(expression, symmetricCollections: symmetricCollections) == nil {
+            if decodeInvariantExpression(expression, symmetricCollections: symmetricCollections) == nil {
                 return expression
             }
         }
         return nil
-    }
-
-    private static func parseInvariantExpression(
-        _ expression: ExprSyntax,
-        symmetricCollections: Set<String>
-    ) -> StateExpr? {
-        if let predicate = parseCollectionPredicate(
-            expression,
-            symmetricCollections: symmetricCollections
-        ) {
-            return predicate
-        }
-        let unwrapped = unwrapSingleElementTuple(expression)
-        if unwrapped != expression {
-            return parseInvariantExpression(unwrapped, symmetricCollections: symmetricCollections)
-        }
-        if let infix = expression.as(InfixOperatorExprSyntax.self),
-           let operatorText = infix.operator.as(BinaryOperatorExprSyntax.self)?.operator.text,
-           let left = parseInvariantExpression(infix.leftOperand, symmetricCollections: symmetricCollections),
-           let right = parseInvariantExpression(infix.rightOperand, symmetricCollections: symmetricCollections) {
-            return parseInfixOperation(
-                leftOperand: left,
-                rightOperand: right,
-                operatorText: operatorText
-            )
-        }
-        if let sequence = expression.as(SequenceExprSyntax.self) {
-            return parseInvariantSequence(Array(sequence.elements), symmetricCollections: symmetricCollections)
-        }
-        return parseStateExpr(expression)
-    }
-
-    private static func parseInvariantSequence(
-        _ elements: [ExprSyntax],
-        symmetricCollections: Set<String>
-    ) -> StateExpr? {
-        guard let split = splitSequenceElements(elements),
-              let left = parseInvariantElements(
-                split.left,
-                symmetricCollections: symmetricCollections
-              ),
-              let right = parseInvariantElements(
-                split.right,
-                symmetricCollections: symmetricCollections
-              )
-        else { return nil }
-        return parseInfixOperation(leftOperand: left, rightOperand: right, operatorText: split.operatorText)
-    }
-
-    private static func parseInvariantElements(
-        _ elements: [ExprSyntax],
-        symmetricCollections: Set<String>
-    ) -> StateExpr? {
-        if elements.count == 1 {
-            return parseInvariantExpression(elements[0], symmetricCollections: symmetricCollections)
-        }
-        return parseInvariantSequence(elements, symmetricCollections: symmetricCollections)
     }
 
     private static func parseCollectionPredicate(
@@ -1103,7 +812,7 @@ public enum SpecParser {
               let access = call.calledExpression.as(MemberAccessExprSyntax.self),
               let collection = access.base?.as(DeclReferenceExprSyntax.self)?.baseName.text,
               symmetricCollections.contains(collection),
-              let kind = CollectionPredicate(rawValue: access.declName.baseName.text),
+              let kind = CollectionPredicateKind(rawValue: access.declName.baseName.text),
               let closure = call.trailingClosure
                 ?? call.arguments.first?.expression.as(ClosureExprSyntax.self),
               let parameter = collectionPredicateParameter(in: closure)
@@ -1117,10 +826,11 @@ public enum SpecParser {
             ).visit(statement)
         }
         let rewrittenClosure = closure.with(\.statements, CodeBlockItemListSyntax(rewrittenStatements))
-        guard let body = parseInvariantBody(
-            rewrittenClosure,
-            symmetricCollections: symmetricCollections
-        ) else { return nil }
+        guard let bodyExpr = rewrittenClosure.statements.first.flatMap({ statement -> ExprSyntax? in
+            guard case .expr(let e) = statement.item else { return nil }
+            return e
+        }), let body = decodeInvariantExpression(bodyExpr, symmetricCollections: symmetricCollections)
+        else { return nil }
 
         let domain = StateExpr.domain(.variable(collection))
         switch kind {
@@ -1141,7 +851,7 @@ public enum SpecParser {
         }
     }
 
-    private enum CollectionPredicate: String {
+    private enum CollectionPredicateKind: String {
         case allSatisfy
         case contains
     }
@@ -1389,7 +1099,7 @@ public enum SpecParser {
                 member: member,
                 replacement: binding
             ).visit(update.expression)
-            guard let value = parseStateExpr(rewritten) else { return nil }
+            guard let value = decodeStateExpr(rewritten) else { return nil }
             return .assign(collection, .except(.variable(collection), .variable(binding), value))
         }
         if let infix = expression.as(InfixOperatorExprSyntax.self),
@@ -1404,7 +1114,7 @@ public enum SpecParser {
             member: member,
             replacement: binding
         ).visit(expression)
-        return parseStateExpr(rewritten).map(ActionExpr.guard_)
+        return decodeStateExpr(rewritten).map(ActionExpr.guard_)
     }
 
     private static func collectionActionSequenceSplit(
@@ -1749,7 +1459,7 @@ public enum SpecParser {
         if args.count >= 2 {
             let label = args[1].label?.text
             if label == "in" {
-                if let setExpr = parseStateExpr(args[1].expression) {
+                if let setExpr = decodeStateExpr(args[1].expression) {
                     result.variables.append((firstName, .set([]), setExpr, nil))
                     return
                 }
