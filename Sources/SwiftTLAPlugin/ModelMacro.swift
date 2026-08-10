@@ -26,6 +26,7 @@ struct ParsedMacroModel {
     let symmetricCollections: [SpecParser.ParsedSymmetricCollection]
     let collectionActions: [SpecParser.ParsedCollectionAction]
     let enumInfos: [ParsedEnumInfo]
+    let hasInvariants: Bool
 }
 
 struct MacroExpander {
@@ -105,13 +106,16 @@ struct MacroExpander {
             SpecRegistry.register(spec)
         }
 
+        let hasInvs = !allInvariants.isEmpty
+
         return ParsedMacroModel(
             typeName: typeName,
             variables: parsed.variables,
             actions: parsed.actions,
             symmetricCollections: parsed.symmetricCollections,
             collectionActions: parsed.collectionActions,
-            enumInfos: enumInfos
+            enumInfos: enumInfos,
+            hasInvariants: hasInvs
         )
     }
 
@@ -120,7 +124,8 @@ struct MacroExpander {
         actions: [(name: String, body: ActionExpr)],
         symmetricCollections: [SpecParser.ParsedSymmetricCollection] = [],
         collectionActions: [SpecParser.ParsedCollectionAction] = [],
-        enumInfos: [ParsedEnumInfo] = []
+        enumInfos: [ParsedEnumInfo] = [],
+        hasInvariants: Bool = false
     ) -> [DeclSyntax] {
         var decls: [DeclSyntax] = []
 
@@ -163,6 +168,13 @@ struct MacroExpander {
                 )]
             )
         ))
+
+        decls.append(contentsOf: generateSpecTest())
+        decls.append(contentsOf: generateTransitionMatrix())
+        decls.append(contentsOf: generateTransitionsTest())
+        if hasInvariants {
+            decls.append(contentsOf: generateInvariantsTest())
+        }
 
         return decls
     }
@@ -528,6 +540,89 @@ struct MacroExpander {
         )
     }
 
+    // MARK: - Spec verification code generation
+
+    func generateSpecTest() -> [DeclSyntax] {
+        [DeclSyntax(stringLiteral: """
+        public struct _VerificationError: Error, CustomStringConvertible {
+            public let description: String
+            public init(_ description: String) { self.description = description }
+        }
+        """),
+        DeclSyntax(stringLiteral: """
+        public static func verifySpec() throws {
+            let result = try ModelChecker(spec: Self.spec, maxStates: 100_000).check()
+            switch result {
+            case .ok(let count):
+                guard count > 0 else { throw _VerificationError("No states found") }
+            case .bounded(_, let outcome):
+                switch outcome {
+                case .ok(let count):
+                    guard count > 0 else { throw _VerificationError("No states found") }
+                default:
+                    throw _VerificationError("Spec verification failed: \\(result)")
+                }
+            default:
+                throw _VerificationError("Spec verification failed: \\(result)")
+            }
+        }
+        """)]
+    }
+
+    func generateTransitionMatrix() -> [DeclSyntax] {
+        [DeclSyntax(stringLiteral: """
+        public static func transitionMatrix() throws -> [(from: [String: TLAValue], action: String, to: [String: TLAValue])] {
+            let graph = try ModelChecker(spec: Self.spec, maxStates: 100_000).exploreGraph()
+            var matrix: [(from: [String: TLAValue], action: String, to: [String: TLAValue])] = []
+            for (fromID, transitions) in graph.transitions {
+                guard let fromState = graph.states[fromID] else { continue }
+                for t in transitions {
+                    guard let toState = graph.states[t.target] else { continue }
+                    matrix.append((from: fromState, action: t.action, to: toState))
+                }
+            }
+            return matrix
+        }
+        """)]
+    }
+
+    func generateTransitionsTest() -> [DeclSyntax] {
+        [DeclSyntax(stringLiteral: """
+        public static func verifyTransitions() throws {
+            let matrix = try Self.transitionMatrix()
+            let runtime = Self.runtime
+            for entry in matrix {
+                let nextState = try runtime.apply(actionName: entry.action, to: entry.from)
+                guard nextState == entry.to else {
+                    throw _VerificationError("Transition mismatch on action '\\(entry.action)': expected \\(entry.to), got \\(nextState)")
+                }
+                for inv in runtime.spec.invariants {
+                    guard try inv.body.evaluateBool(in: nextState, runtimeFuncs: runtime.spec.runtimeFuncs, recursiveFuncs: runtime.spec.recursiveFuncs) else {
+                        throw _VerificationError("Invariant '\\(inv.name)' violated by action '\\(entry.action)'")
+                    }
+                }
+            }
+        }
+        """)]
+    }
+
+    func generateInvariantsTest() -> [DeclSyntax] {
+        [DeclSyntax(stringLiteral: """
+        public static func verifyInvariants() throws {
+            let matrix = try Self.transitionMatrix()
+            let runtime = Self.runtime
+            for entry in matrix {
+                let nextState = try runtime.apply(actionName: entry.action, to: entry.from)
+                for inv in runtime.spec.invariants {
+                    guard try inv.body.evaluateBool(in: nextState, runtimeFuncs: runtime.spec.runtimeFuncs, recursiveFuncs: runtime.spec.recursiveFuncs) else {
+                        throw _VerificationError("Invariant '\\(inv.name)' violated by action '\\(entry.action)' on transition from \\(entry.from) to \\(nextState)")
+                    }
+                }
+            }
+        }
+        """)]
+    }
+
     // MARK: - Observable code generation
 
     func generateObservableMembers(
@@ -877,7 +972,8 @@ public struct ModelMacro: MemberMacro, ExtensionMacro {
             actions: parsed.actions,
             symmetricCollections: parsed.symmetricCollections,
             collectionActions: parsed.collectionActions,
-            enumInfos: parsed.enumInfos
+            enumInfos: parsed.enumInfos,
+            hasInvariants: parsed.hasInvariants
         )
     }
 }
@@ -907,7 +1003,8 @@ public struct TLAActorMacro: MemberMacro, ExtensionMacro {
             actions: parsed.actions,
             symmetricCollections: parsed.symmetricCollections,
             collectionActions: parsed.collectionActions,
-            enumInfos: parsed.enumInfos
+            enumInfos: parsed.enumInfos,
+            hasInvariants: parsed.hasInvariants
         )
     }
 }

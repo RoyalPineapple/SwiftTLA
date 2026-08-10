@@ -134,7 +134,7 @@ public enum ActionEnumerator {
         }
     }
 
-    private static func extractAssignments(_ action: ActionExpr) throws -> (assignments: [String: StateExpr], guards: [StateExpr]) {
+    public static func extractAssignments(_ action: ActionExpr) throws -> (assignments: [String: StateExpr], guards: [StateExpr]) {
         switch action {
         case .assign(let name, let expr):
             return ([name: expr], [])
