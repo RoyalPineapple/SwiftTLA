@@ -284,9 +284,9 @@ private func runSymmetricCollectionOracle() throws {
 }
 
 private func symmetricOracleSpec(scope: Int) -> TLASpec {
-    let devices = SymmetricCollectionVar<OracleDevice, Int>("devices")
+    let devices = DictionaryVar<OracleDevice, Int>("devices", scope: scope)
     return TLASpec("SymmetricOracle\(scope)") {
-        SymmetricCollection(devices, verificationScope: scope, initial: 0)
+        devices
         CollectionAction("advance", on: devices) { member in
             devices[member] == 0 && devices.update(member, to: 1)
         }
