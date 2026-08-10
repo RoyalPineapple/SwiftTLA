@@ -35,7 +35,7 @@ public struct SymmetricCollectionVar<Element: Identifiable, Value: TLAValueType>
     return .exists(memberDomain, member, predicate(value))
   }
 
-  fileprivate var memberDomain: StateExpr {
+  public var memberDomain: StateExpr {
     .domain(.variable(name))
   }
 }
@@ -61,7 +61,7 @@ public struct SymmetricCollectionDecl: SpecComponent, Sendable {
   public var verificationScope: Int { metadata.verificationScope }
   public var initial: TLAValue { metadata.initial }
 
-  init(name: String, verificationScope: Int, initial: TLAValue) {
+  public init(name: String, verificationScope: Int, initial: TLAValue) {
     self.metadata = SymmetricCollectionMetadata(
       name: name,
       verificationScope: verificationScope,
@@ -72,7 +72,8 @@ public struct SymmetricCollectionDecl: SpecComponent, Sendable {
   var variable: NamedVar {
     NamedVar(
       name: name,
-      initial: .function(Dictionary(uniqueKeysWithValues: metadata.members.map { ($0, initial) }))
+      initial: .function(Dictionary(uniqueKeysWithValues: metadata.members.map { ($0, initial) })),
+      collectionType: .dictionary(verificationScope)
     )
   }
 }
@@ -374,3 +375,15 @@ public func CollectionAction<Element: Identifiable, Value: TLAValueType>(
   let token = SymmetricMember<Element>(owner: collection.name, binding: .variable(member.name))
   return ActionDecl(name, .existsAction(member.name, collection.memberDomain, body(token)))
 }
+
+@discardableResult
+public func CollectionAction<K: Identifiable, V: TLAValueType>(
+  _ name: String,
+  on collection: DictionaryVar<K, V>,
+  @ActionBuilder _ body: (DictMember<K>) -> ActionExpr
+) -> ActionDecl {
+  let mv = QuantVar.fresh()
+  let token = DictMember<K>(key: .constant(mv.name))
+  return ActionDecl(name, .existsAction(mv.name, .domain(.variable(collection.name)), body(token)))
+}
+

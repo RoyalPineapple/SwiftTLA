@@ -1,11 +1,19 @@
+public enum CollectionVarType: Sendable, Equatable {
+    case scalar
+    case set
+    case array(Int)
+    case dictionary(Int)
+}
+
 public struct NamedVar: Sendable, CustomStringConvertible, Equatable {
     public let name: String
     public let initial: TLAValue
     public let initialSet: StateExpr?
     public let initExpr: StateExpr?
     public let lazySet: StateExpr?  // expression-backed nondeterministic init
-    public init(name: String, initial: TLAValue, initialSet: StateExpr? = nil, initExpr: StateExpr? = nil, lazySet: StateExpr? = nil) {
-        self.name = name; self.initial = initial; self.initialSet = initialSet; self.initExpr = initExpr; self.lazySet = lazySet
+    public let collectionType: CollectionVarType
+    public init(name: String, initial: TLAValue, initialSet: StateExpr? = nil, initExpr: StateExpr? = nil, lazySet: StateExpr? = nil, collectionType: CollectionVarType = .scalar) {
+        self.name = name; self.initial = initial; self.initialSet = initialSet; self.initExpr = initExpr; self.lazySet = lazySet; self.collectionType = collectionType
     }
     public var description: String {
         if let s = lazySet { return "\(name) \\in \(s)" }
@@ -161,10 +169,11 @@ public struct VarDecl: SpecComponent {
     public let initialSet: StateExpr?
     public let initExpr: StateExpr?
     public let lazySet: StateExpr?
-    init(_ name: String, _ initial: TLAValue) { self.name = name; self.initial = initial; self.initialSet = nil; self.initExpr = nil; self.lazySet = nil }
-    init(_ name: String, _ initial: TLAValue, initialSet: StateExpr?) { self.name = name; self.initial = initial; self.initialSet = initialSet; self.initExpr = nil; self.lazySet = nil }
-    init(_ name: String, initExpr: StateExpr) { self.name = name; self.initial = .int(0); self.initialSet = nil; self.initExpr = initExpr; self.lazySet = nil }
-    init(_ name: String, lazySet: StateExpr) { self.name = name; self.initial = .int(0); self.initialSet = nil; self.initExpr = nil; self.lazySet = lazySet }
+    public let collectionType: CollectionVarType
+    init(_ name: String, _ initial: TLAValue, collectionType: CollectionVarType = .scalar) { self.name = name; self.initial = initial; self.initialSet = nil; self.initExpr = nil; self.lazySet = nil; self.collectionType = collectionType }
+    init(_ name: String, _ initial: TLAValue, initialSet: StateExpr?, collectionType: CollectionVarType = .scalar) { self.name = name; self.initial = initial; self.initialSet = initialSet; self.initExpr = nil; self.lazySet = nil; self.collectionType = collectionType }
+    init(_ name: String, initExpr: StateExpr, collectionType: CollectionVarType = .scalar) { self.name = name; self.initial = .int(0); self.initialSet = nil; self.initExpr = initExpr; self.lazySet = nil; self.collectionType = collectionType }
+    init(_ name: String, lazySet: StateExpr, collectionType: CollectionVarType = .scalar) { self.name = name; self.initial = .int(0); self.initialSet = nil; self.initExpr = nil; self.lazySet = lazySet; self.collectionType = collectionType }
 }
 
 public struct ActionDecl: SpecComponent {
@@ -670,9 +679,9 @@ extension TLASpec {
 
         for comp in components {
             if let v = comp as? VarDecl {
-                variables.append(NamedVar(name: v.name, initial: v.initial, initialSet: v.initialSet, initExpr: v.initExpr, lazySet: v.lazySet))
+                variables.append(NamedVar(name: v.name, initial: v.initial, initialSet: v.initialSet, initExpr: v.initExpr, lazySet: v.lazySet, collectionType: v.collectionType))
             } else if let s = comp as? SymmetricCollectionDecl {
-                variables.append(s.variable)
+                variables.append(NamedVar(name: s.variable.name, initial: s.variable.initial, initialSet: s.variable.initialSet, initExpr: s.variable.initExpr, lazySet: s.variable.lazySet, collectionType: s.variable.collectionType))
                 symmetricCollections.append(s)
             } else if let a = comp as? ActionDecl {
                 actions.append(NamedAction(name: a.name, body: a.body))
@@ -781,7 +790,8 @@ public func substituteConstants(_ spec: TLASpec) -> TLASpec {
             initial: substituteInValue(v.initial, constants: constants),
             initialSet: v.initialSet.map { substituteInState($0, constants: constants) },
             initExpr: v.initExpr.map { substituteInState($0, constants: constants) },
-            lazySet: v.lazySet.map { substituteInState($0, constants: constants) }
+            lazySet: v.lazySet.map { substituteInState($0, constants: constants) },
+            collectionType: v.collectionType
         )
     }
     let acts = spec.actions.map { a in

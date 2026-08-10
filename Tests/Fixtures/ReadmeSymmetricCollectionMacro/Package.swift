@@ -7,7 +7,7 @@ let package = Package(
   name: "ReadmeSymmetricCollectionMacro",
   platforms: [.macOS(.v14)],
   dependencies: [
-    .package(path: "../../..")
+    .package(name: "SwiftTLA", path: "../../..")
   ],
   targets: [
     .executableTarget(

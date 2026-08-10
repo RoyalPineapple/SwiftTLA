@@ -7,7 +7,7 @@ let package = Package(
   name: "InvalidReadmePhaseMacro",
   platforms: [.macOS(.v14)],
   dependencies: [
-    .package(path: "../../..")
+    .package(name: "SwiftTLA", path: "../../..")
   ],
   targets: [
     .executableTarget(

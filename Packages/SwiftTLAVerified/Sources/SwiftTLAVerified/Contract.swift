@@ -19,10 +19,10 @@ public actor Contract {
         TLASpec("Contract") {
             let cPhase = Var("cPhase", 0)
             Variable(cPhase)
-            let devicePhases = SymmetricCollectionVar<Device, Int>("devicePhases")
+            let devicePhases = DictionaryVar<Device, Int>("devicePhases", scope: 4)
             /// Scope four is the explicit verification reference model, not a
             /// cap on the runtime's identified device population.
-            SymmetricCollection(devicePhases, verificationScope: 4, initial: 0)
+            devicePhases
 
             Action("cToPoweredOn") { (cPhase == 0 || cPhase == 1 || cPhase == 4) && cPhase.becomes(5) }
             Action("cToPoweredOff") {

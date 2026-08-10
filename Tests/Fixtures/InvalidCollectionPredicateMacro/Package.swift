@@ -7,7 +7,7 @@ let package = Package(
   name: "InvalidCollectionPredicateMacro",
   platforms: [.macOS(.v14)],
   dependencies: [
-    .package(path: "../../..")
+    .package(name: "SwiftTLA", path: "../../..")
   ],
   targets: [
     .executableTarget(
