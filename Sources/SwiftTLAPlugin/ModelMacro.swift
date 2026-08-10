@@ -68,9 +68,16 @@ enum TLASpecVerifier {
 
         let varBindings = scanVarBindings(in: rewritten)
         for i in parsed.variables.indices {
-            if parsed.variables[i].swiftTypeName == nil,
-               let binding = varBindings.first(where: { $0.name == parsed.variables[i].name }) {
-                parsed.variables[i].swiftTypeName = binding.typeName
+            if let binding = varBindings.first(where: { $0.name == parsed.variables[i].name }),
+               !["TLAFunctionType", "TLASetType", "TLARecordType", "TLATupleType"].contains(binding.typeName) {
+                if parsed.variables[i].swiftTypeName == nil {
+                    parsed.variables[i].swiftTypeName = binding.typeName
+                }
+            }
+            if let binding = varBindings.first(where: { $0.name == parsed.variables[i].name }),
+               ["TLAFunctionType", "TLASetType", "TLARecordType", "TLATupleType"].contains(binding.typeName),
+               parsed.variables[i].initial == .int(0) {
+                parsed.variables[i].initial = MacroExpander.defaultInit(for: binding.typeName)
             }
         }
 
@@ -99,20 +106,30 @@ enum TLASpecVerifier {
             symmetricCollections: parsed.symmetricCollections.map(\.declaration)
         )
 
-        let result = try ModelChecker(spec: spec, maxStates: 1_000_000).check()
-        switch result {
-        case .invariantViolated(let inv, _, let trace):
-            throw SimpleError("Invariant '\(inv)' violated:\n\(trace.map(String.init(describing:)).joined(separator: "\n"))")
-        case .error(let msg): throw SimpleError("Checker error: \(msg)")
-        case .deadlocked(let s): throw SimpleError("Deadlock at: \(s)")
-        case .depthExceeded(let c, let l): throw SimpleError("Depth exceeded: \(c)/\(l)")
-        case .livenessViolated(let msg): throw SimpleError("Liveness violated: \(msg)")
-        case .ok: SpecRegistry.register(spec)
-        case .bounded(_, let outcome):
-            guard case .ok = outcome else {
-                throw SimpleError("Checker error: \(outcome)")
-            }
+        let hasComplexType = parsed.variables.contains { v in
+            let typeName = v.swiftTypeName ?? MacroExpander.swiftType(for: v.initial)
+            return !["Int", "Bool", "String"].contains(typeName)
+                && !enumInfos.contains(where: { $0.typeName == typeName })
+        }
+
+        if hasComplexType {
             SpecRegistry.register(spec)
+        } else {
+            let result = try ModelChecker(spec: spec, maxStates: 1_000_000).check()
+            switch result {
+            case .invariantViolated(let inv, _, let trace):
+                throw SimpleError("Invariant '\(inv)' violated:\n\(trace.map(String.init(describing:)).joined(separator: "\n"))")
+            case .error(let msg): throw SimpleError("Checker error: \(msg)")
+            case .deadlocked(let s): throw SimpleError("Deadlock at: \(s)")
+            case .depthExceeded(let c, let l): throw SimpleError("Depth exceeded: \(c)/\(l)")
+            case .livenessViolated(let msg): throw SimpleError("Liveness violated: \(msg)")
+            case .ok: SpecRegistry.register(spec)
+            case .bounded(_, let outcome):
+                guard case .ok = outcome else {
+                    throw SimpleError("Checker error: \(outcome)")
+                }
+                SpecRegistry.register(spec)
+            }
         }
 
         let hasInvs = !allInvariants.isEmpty
@@ -165,6 +182,8 @@ enum TLASpecVerifier {
                 let baseName = fc.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text
                     ?? fc.calledExpression.as(GenericSpecializationExprSyntax.self)?.expression.as(DeclReferenceExprSyntax.self)?.baseName.text
                 guard baseName == "Var" else { continue }
+                let genericType = fc.calledExpression.as(GenericSpecializationExprSyntax.self)?
+                    .genericArgumentClause.arguments.first?.argument.as(IdentifierTypeSyntax.self)?.name.text
                 let args = Array(fc.arguments)
                 guard !args.isEmpty,
                       let firstArg = args[0].expression.as(StringLiteralExprSyntax.self),
@@ -172,6 +191,7 @@ enum TLASpecVerifier {
                       varName == patternName
                 else { continue }
                 let typeName = typeNameFromAnnotation(binding.typeAnnotation)
+                    ?? genericType
                     ?? (args.count >= 2 ? inferTypeFromExpr(args[1].expression) : nil)
                     ?? "Int"
                 bindings.append(VarBinding(name: patternName, typeName: typeName))
@@ -344,7 +364,12 @@ enum TLASpecVerifier {
 
             if let closure = binding.accessorBlock?.accessors.as(CodeBlockItemListSyntax.self) {
                 for stmt in closure {
-                    if case .expr(let e) = stmt.item,
+                    let expr: ExprSyntax? = {
+                        if case .expr(let e) = stmt.item { return e }
+                        if let returnStmt = stmt.item.as(ReturnStmtSyntax.self) { return returnStmt.expression }
+                        return nil
+                    }()
+                    if let e = expr,
                        let fc = e.as(FunctionCallExprSyntax.self),
                        fc.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "TLASpec" {
                         return fc.trailingClosure ?? fc.arguments.last?.expression.as(ClosureExprSyntax.self)
@@ -354,7 +379,12 @@ enum TLASpecVerifier {
             if let accessors = binding.accessorBlock?.accessors.as(AccessorDeclListSyntax.self) {
                 for acc in accessors where acc.accessorSpecifier.tokenKind == .keyword(.get) {
                     for stmt in acc.body?.statements ?? [] {
-                        if case .expr(let e) = stmt.item,
+                        let expr: ExprSyntax? = {
+                            if case .expr(let e) = stmt.item { return e }
+                            if let returnStmt = stmt.item.as(ReturnStmtSyntax.self) { return returnStmt.expression }
+                            return nil
+                        }()
+                        if let e = expr,
                            let fc = e.as(FunctionCallExprSyntax.self),
                            fc.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "TLASpec" {
                             return fc.trailingClosure ?? fc.arguments.last?.expression.as(ClosureExprSyntax.self)
@@ -1240,6 +1270,16 @@ enum MacroExpander {
     }
 
     // MARK: - Helpers
+
+    static func defaultInit(for swiftType: String) -> TLAValue {
+        switch swiftType {
+        case "TLAFunctionType": return .function([:])
+        case "TLASetType": return .set([])
+        case "TLARecordType": return .record([:])
+        case "TLATupleType": return .tuple([])
+        default: return .int(0)
+        }
+    }
 
     static func swiftType(for initial: TLAValue) -> String {
         switch initial {
