@@ -130,6 +130,9 @@ identifier_name:
     - ⊆
     - ∪
     - ∩
+    - N
+    - NP
+    - M
 
 large_tuple:
   warning: 4

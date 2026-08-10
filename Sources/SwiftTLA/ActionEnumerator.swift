@@ -35,6 +35,10 @@ public enum ActionEnumerator {
 
         let existsBindings = extractExistsActions(action)
         if !existsBindings.isEmpty {
+            let (_, actionGuards) = try extractAssignments(action)
+            let guardExpr = actionGuards.reduce(StateExpr.value(.bool(true))) { .and($0, $1) }
+            guard try guardExpr.evaluateBool(in: oldState) else { return [] }
+
             let (v, s, body) = existsBindings[0]
             guard case .set(let sv) = try s.evaluate(in: oldState) else {
                 throw ActionError.invalidActionForm("\\E set must be a set")
