@@ -190,6 +190,169 @@ extension Dictionary where Key == String, Value == TLAValue {
     }
 }
 
+// MARK: - ArrayVar<T>
+
+/// A lightweight Typed TLA+ variable wrapping a tuple (sequence).
+/// Domain = 0..<count.
+///
+/// ```swift
+/// let vals = ArrayVar<Int>("vals", count: 3)
+/// vals[0]                // StateExpr: vals[1]
+/// vals.becomes([1,2,3])  // vals' = <<1,2,3>>
+/// ```
+public struct ArrayVar<T: TLAValueType>: Sendable, CustomStringConvertible {
+    public let name: String
+    public let count: Int
+
+    public init(_ name: String? = nil, count: Int) {
+        self.name = name ?? ""
+        self.count = count
+    }
+
+    public var description: String { name }
+
+    public subscript(index: Int) -> StateExpr {
+        .tupleAccess(.variable(name), index)
+    }
+
+    @discardableResult
+    public func becomes(_ values: [T]) -> ActionExpr {
+        .assign(name, .tupleLiteral(values.map { .value($0.tlaValue) }))
+    }
+
+    @discardableResult
+    public func becomes(_ expr: some StateExprConvertible) -> ActionExpr {
+        .assign(name, expr.stateExpr)
+    }
+
+    @discardableResult
+    public func becomes(_ other: ArrayVar<T>) -> ActionExpr {
+        .assign(name, other.stateExpr)
+    }
+
+    public var stays: ActionExpr { .unchanged(name) }
+}
+
+extension ArrayVar: StateExprConvertible {
+    public var stateExpr: StateExpr { .variable(name) }
+}
+
+// MARK: - DictMember<K>
+
+/// Opaque member token for DictionaryVar.
+public struct DictMember<K: Identifiable>: Sendable {
+    public let key: TLAValue
+    public init(key: TLAValue) { self.key = key }
+}
+
+// MARK: - DictionaryVar<K, V>
+
+/// A lightweight TLA+ dictionary wrapping a function. Symmetry proven.
+///
+/// ```swift
+/// let dict = DictionaryVar<DeviceID, Bool>("enabled", scope: 4)
+/// dict[member]               // Expr<Bool>: enabled[memKey]
+/// dict.update(member, to: true)  // enabled' = [enabled EXCEPT ![memKey] = TRUE]
+/// dict.allSatisfy { $0 == true } // ∀ m ∈ DOMAIN enabled: enabled[m] = TRUE
+/// ```
+public struct DictionaryVar<K: Identifiable, V: TLAValueType>: Sendable, CustomStringConvertible {
+    public let name: String
+    public let scope: Int
+
+    public init(_ name: String? = nil, scope: Int = 4) {
+        self.name = name ?? ""
+        self.scope = scope
+    }
+
+    public var description: String { name }
+
+    public subscript(member: DictMember<K>) -> Expr<V> {
+        Expr(.functionApply(.variable(name), .value(member.key)))
+    }
+
+    @discardableResult
+    public func update(_ member: DictMember<K>, to value: V) -> ActionExpr {
+        update(member, to: Expr<V>(.value(value.tlaValue)))
+    }
+
+    @discardableResult
+    public func update(_ member: DictMember<K>, to value: Expr<V>) -> ActionExpr {
+        .assign(name, .except(.variable(name), .value(member.key), value.raw))
+    }
+
+    public func allSatisfy(_ predicate: (Expr<V>) -> StateExpr) -> StateExpr {
+        let mv = QuantVar.fresh()
+        let value = Expr<V>(.functionApply(.variable(name), .variable(mv.name)))
+        return .forAll(.domain(.variable(name)), mv, predicate(value))
+    }
+
+    public func contains(where predicate: (Expr<V>) -> StateExpr) -> StateExpr {
+        let mv = QuantVar.fresh()
+        let value = Expr<V>(.functionApply(.variable(name), .variable(mv.name)))
+        return .exists(.domain(.variable(name)), mv, predicate(value))
+    }
+}
+
+extension DictionaryVar: StateExprConvertible {
+    public var stateExpr: StateExpr { .variable(name) }
+}
+
+// MARK: - SetVar<T>
+
+/// A lightweight TLA+ variable wrapping a set.
+///
+/// ```swift
+/// let s = SetVar<Int>("seen")
+/// s.becomes([1,2,3])   // seen' = {1, 2, 3}
+/// ```
+public struct SetVar<T: TLAValueType>: Sendable, CustomStringConvertible {
+    public let name: String
+
+    public init(_ name: String? = nil) {
+        self.name = name ?? ""
+    }
+
+    public var description: String { name }
+
+    @discardableResult
+    public func becomes(_ elements: [T]) -> ActionExpr {
+        .assign(name, .setLiteral(elements.map { .value($0.tlaValue) }))
+    }
+
+    @discardableResult
+    public func becomes(_ expr: some StateExprConvertible) -> ActionExpr {
+        .assign(name, expr.stateExpr)
+    }
+
+    @discardableResult
+    public func becomes(_ other: SetVar<T>) -> ActionExpr {
+        .assign(name, other.stateExpr)
+    }
+
+    public var stays: ActionExpr { .unchanged(name) }
+}
+
+extension SetVar: StateExprConvertible {
+    public var stateExpr: StateExpr { .variable(name) }
+}
+
+// MARK: - Builder integration
+
+extension SpecBuilder {
+    public static func buildExpression<T: TLAValueType>(_ expr: ArrayVar<T>) -> [SpecComponent] {
+        let initial = TLAValue.tuple(Array(repeating: T.defaultValue.tlaValue, count: expr.count))
+        return [VarDecl(expr.name, initial)]
+    }
+
+    public static func buildExpression<K: Identifiable, V: TLAValueType>(_ expr: DictionaryVar<K, V>) -> [SpecComponent] {
+        [VarDecl(expr.name, .function([:]))]
+    }
+
+    public static func buildExpression<T: TLAValueType>(_ expr: SetVar<T>) -> [SpecComponent] {
+        [VarDecl(expr.name, .set([]))]
+    }
+}
+
 public protocol StateExprConvertible { var stateExpr: StateExpr { get } }
 extension StateExpr: StateExprConvertible { public var stateExpr: StateExpr { self } }
 extension Int: StateExprConvertible { public var stateExpr: StateExpr { .value(.int(self)) } }

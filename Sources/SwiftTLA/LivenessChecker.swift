@@ -61,16 +61,29 @@ public struct LivenessChecker {
                 switch condition {
                 case .weakFairness(let name):
                     guard actionNames.contains(name) else { return true }
-                    return scc.contains { state in
-                        let successors = graph.transitions[graph.states.keys.first(where: { $0 == state }) ?? state] ?? []
-                        return successors.contains { $0.action == name }
+                    // A is taken if any S transition within the SCC has action name
+                    let takenInSCC = scc.contains { state in
+                        guard let successors = graph.transitions[state] else { return false }
+                        return successors.contains { $0.action == name && scc.contains($0.target) }
                     }
+                    // A is disabled somewhere if some state has no outgoing S labeled name
+                    let disabledSomewhere = scc.contains { state in
+                        guard let successors = graph.transitions[state] else { return true }
+                        return !successors.contains { $0.action == name }
+                    }
+                    return takenInSCC || disabledSomewhere
                 case .strongFairness(let name):
                     guard actionNames.contains(name) else { return true }
-                    return scc.contains { state in
-                        let successors = graph.transitions[graph.states.keys.first(where: { $0 == state }) ?? state] ?? []
-                        return successors.contains { $0.action == name }
+                    let takenInSCC = scc.contains { state in
+                        guard let successors = graph.transitions[state] else { return false }
+                        return successors.contains { $0.action == name && scc.contains($0.target) }
                     }
+                    // SF(A): fair if A is taken within S OR A is disabled everywhere
+                    let disabledEverywhere = scc.allSatisfy { state in
+                        guard let successors = graph.transitions[state] else { return true }
+                        return !successors.contains { $0.action == name }
+                    }
+                    return takenInSCC || disabledEverywhere
                 }
             }
         }
@@ -111,8 +124,9 @@ public struct LivenessChecker {
     }
 
     public func checkLeadsTo(_ from: StateExpr, _ to: StateExpr, fairSCCs: [Set<StateGraph.StateID>]) throws -> TemporalResult {
-        // from ~> to: for every state where 'from' holds, 'to' must eventually hold in every path
-        // In an SCC: if 'from' holds anywhere, 'to' must hold somewhere (since all states reachable)
+        // from ~> to: in every fair terminal SCC, if 'from' holds anywhere, 'to' must hold somewhere.
+        // Since all states in an SCC are mutually reachable, 'to' holding anywhere ensures
+        // every path from a 'from'-state eventually reaches a 'to'-state.
         for scc in fairSCCs {
             let hasFrom = try scc.contains { state in
                 guard let values = graph.states[state] else { return false }
