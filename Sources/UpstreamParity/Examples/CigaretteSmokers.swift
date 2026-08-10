@@ -1,29 +1,17 @@
 import SwiftTLA
+import SwiftTLAMacros
 
-extension Example {
-    public static let cigaretteSmokers = Entry(
-        id: "CigaretteSmokers/CigaretteSmokers",
-        upstreamSpec: "CigaretteSmokers",
-        upstreamModule: "specifications/CigaretteSmokers/CigaretteSmokers.tla",
-        upstreamCfg: "specifications/CigaretteSmokers/CigaretteSmokers.cfg",
-        expectedDistinct: 6,
-        spec: cigaretteSmokersSpec(),
-        notes: "Ingredients={m,p,t}, Offers=pairs. TLC TypeOK+AtMostOne = 6.",
-    )
-
-static func cigaretteSmokersSpec() -> TLASpec {
-        // Flatten: smoking_m, smoking_p, smoking_t bools; dealer in 0..3
-        // 0=empty, 1={m,p}, 2={m,t}, 3={p,t}
-        let sm = Var<Bool>("smoking_m")
-        let sp = Var<Bool>("smoking_p")
-        let st = Var<Bool>("smoking_t")
-        let dealer = Var<Int>("dealer")
-        return TLASpec("CigaretteSmokers") {
+@TLAModel
+public struct CigaretteSmokersModel {
+    public static var spec: TLASpec {
+        TLASpec("CigaretteSmokers") {
             Extends("Integers")
+            let sm = Var<Bool>("smoking_m")
+            let sp = Var<Bool>("smoking_p")
+            let st = Var<Bool>("smoking_t")
+            let dealer = Var<Int>("dealer")
             Variable(sm, false); Variable(sp, false); Variable(st, false)
-            Variable(dealer, in: 1...3) // Init: dealer \in Offers
-            // startSmoking: dealer /= {} ; the one missing ingredient smokes
-            // Offer 1={m,p} missing t → tobacco smoker
+            Variable(dealer, in: 1...3)
             Action("start_1") {
                 dealer == 1 && st.becomes(true) && dealer.becomes(0) && sm.stays && sp.stays
             }
@@ -33,7 +21,6 @@ static func cigaretteSmokersSpec() -> TLASpec {
             Action("start_3") {
                 dealer == 3 && sm.becomes(true) && dealer.becomes(0) && sp.stays && st.stays
             }
-            // stopSmoking: dealer={} ; stop the one smoking; dealer' \in Offers
             Action("stop_m1") { dealer == 0 && sm == true && sm.becomes(false) && dealer.becomes(1) }
             Action("stop_m2") { dealer == 0 && sm == true && sm.becomes(false) && dealer.becomes(2) }
             Action("stop_m3") { dealer == 0 && sm == true && sm.becomes(false) && dealer.becomes(3) }
@@ -44,10 +31,22 @@ static func cigaretteSmokersSpec() -> TLASpec {
             Action("stop_t2") { dealer == 0 && st == true && st.becomes(false) && dealer.becomes(2) }
             Action("stop_t3") { dealer == 0 && st == true && st.becomes(false) && dealer.becomes(3) }
             Invariant("AtMostOne") {
-                // at most one of sm,sp,st true — count via pairwise
-                !((sm == true && sp == true) || (sm == true && st == true) || (sp == true && st == true))
+                !(sm == true && sp == true)
+                !(sm == true && st == true)
+                !(sp == true && st == true)
             }
         }
     }
+}
 
+extension Example {
+    public static let cigaretteSmokers = Entry(
+        id: "CigaretteSmokers/CigaretteSmokers",
+        upstreamSpec: "CigaretteSmokers",
+        upstreamModule: "specifications/CigaretteSmokers/CigaretteSmokers.tla",
+        upstreamCfg: "specifications/CigaretteSmokers/CigaretteSmokers.cfg",
+        expectedDistinct: 6,
+        spec: CigaretteSmokersModel.spec,
+        notes: "Ingredients={m,p,t}, Offers=pairs. TLC TypeOK+AtMostOne = 6.",
+    )
 }

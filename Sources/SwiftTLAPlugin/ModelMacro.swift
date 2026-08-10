@@ -28,9 +28,6 @@ struct ParsedMacroModel {
     let enumInfos: [ParsedEnumInfo]
     let hasInvariants: Bool
     let invariants: [(String, StateExpr)]
-    var actionsWithNames: [(name: String, body: ActionExpr)] {
-        actions.map { (name: $0.0, body: $0.1) }
-    }
 }
 
 enum TLASpecVerifier {
@@ -1327,7 +1324,7 @@ enum MacroExpander {
         case .tupleAccess(let t, let i): return "(\(cg(t)))[\(i)]"
         case .tupleAppend(let t, let e): return "(\(cg(t)) + [\(cg(e))])"
         case .tupleHead(let t): return "(\(cg(t))).first!"
-        case .tupleTail(let t): return "(\(cg(t))).dropFirst()"
+        case .tupleTail(let t): return "Array((\(cg(t))).dropFirst())"
 
         case .except(let f, let k, let v): return "\(cg(f)).updating(\(cg(k)), to: \(cg(v)))"
         case .domain(let f): return "\(cg(f)).keys"
@@ -1348,7 +1345,7 @@ enum MacroExpander {
         case .functionLiteral(let d, let qv, let b):
             return "\(cg(d)).asFunctionLiteral { \(qv.name) in \(codegenExprInner(b, variables: variables, enumInfos: enumInfos, forceTLAValue: forceTLAValue, boundVarName: qv.name)) }"
         case .caseExpr:
-            return "TLAValue.firstMatch([])"
+            return "StateExpr.caseExpr([], nil)"
 
         case .forAll, .exists, .choose, .sequenceFromSet, .setSum, .functionSet, .recursiveCall, .enabledAction:
             return "Self.runtime.evaluateExpr(\(expr.description), in: _state.asDictionary)"
