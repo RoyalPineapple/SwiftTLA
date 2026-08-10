@@ -1477,6 +1477,10 @@ public enum SpecParser {
                 result.variables.append((firstName, .bool(boolVal.literal.text == "true"), nil, nil))
                 return
             }
+            if let stringVal = valExpr.as(StringLiteralExprSyntax.self) {
+                result.variables.append((firstName, .string(stringVal.segments.description), nil, nil))
+                return
+            }
             // TLAValue.set([]), TLAValue.tuple([]), etc.
             if let fc = valExpr.as(FunctionCallExprSyntax.self),
                let memberAccess = fc.calledExpression.as(MemberAccessExprSyntax.self),

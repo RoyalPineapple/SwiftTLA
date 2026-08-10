@@ -40,7 +40,7 @@ let package = Package(
         .target(name: "SwiftTLAModels", dependencies: ["SwiftTLA", "SwiftTLAMacros"], swiftSettings: settings),
         .target(
             name: "UpstreamParity",
-            dependencies: ["SwiftTLA"],
+            dependencies: ["SwiftTLA", "SwiftTLAMacros"],
             exclude: ["Examples/AGENTS.md"],
             swiftSettings: settings
         ),
