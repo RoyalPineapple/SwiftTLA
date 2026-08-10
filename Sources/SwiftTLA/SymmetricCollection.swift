@@ -35,7 +35,7 @@ public struct SymmetricCollectionVar<Element: Identifiable, Value: TLAValueType>
     return .exists(memberDomain, member, predicate(value))
   }
 
-  fileprivate var memberDomain: StateExpr {
+  public var memberDomain: StateExpr {
     .domain(.variable(name))
   }
 }
@@ -72,7 +72,8 @@ public struct SymmetricCollectionDecl: SpecComponent, Sendable {
   var variable: NamedVar {
     NamedVar(
       name: name,
-      initial: .function(Dictionary(uniqueKeysWithValues: metadata.members.map { ($0, initial) }))
+      initial: .function(Dictionary(uniqueKeysWithValues: metadata.members.map { ($0, initial) })),
+      collectionType: .dictionary(verificationScope)
     )
   }
 }

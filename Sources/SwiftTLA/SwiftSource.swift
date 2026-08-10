@@ -12,9 +12,16 @@ extension TLASpec {
         if extendsModules != "Integers" { lines.append("            Extends(\"\(extendsModules)\")") }
         for (k, v) in constants.sorted(by: { $0.key < $1.key }) { lines.append("            Constant(\"\(k)\", \(v.swiftLiteral))") }
         for v in variables {
-            let initStr: String
-            if let s = v.initialSet { initStr = "in: \(s.swiftSource)" } else { initStr = "\(v.initial.swiftLiteral)" }
-            lines.append("            Variable(Var<Int>(\"\(v.name)\"), \(initStr))")
+            switch v.collectionType {
+            case .set:
+                lines.append("            SetVar<Int>(\"\(v.name)\")")
+            case .array(let count):
+                lines.append("            ArrayVar<Int>(\"\(v.name)\", count: \(count))")
+            case .dictionary(let scope):
+                lines.append("            DictionaryVar<SomeID, Int>(\"\(v.name)\", scope: \(scope))")
+            case .scalar:
+                lines.append("            Var<Int>(\"\(v.name)\", \(v.initial.swiftLiteral))")
+            }
         }
         for a in actions { lines.append("            Action(\"\(a.name)\") { \(a.body.swiftSource) }") }
         for i in invariants { lines.append("            Invariant(\"\(i.name)\") { \(i.body.swiftSource) }") }

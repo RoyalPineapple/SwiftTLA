@@ -1,11 +1,19 @@
+public enum CollectionVarType: Sendable, Equatable {
+    case scalar
+    case set
+    case array(Int)
+    case dictionary(Int)
+}
+
 public struct NamedVar: Sendable, CustomStringConvertible, Equatable {
     public let name: String
     public let initial: TLAValue
     public let initialSet: StateExpr?
     public let initExpr: StateExpr?
     public let lazySet: StateExpr?  // expression-backed nondeterministic init
-    public init(name: String, initial: TLAValue, initialSet: StateExpr? = nil, initExpr: StateExpr? = nil, lazySet: StateExpr? = nil) {
-        self.name = name; self.initial = initial; self.initialSet = initialSet; self.initExpr = initExpr; self.lazySet = lazySet
+    public let collectionType: CollectionVarType
+    public init(name: String, initial: TLAValue, initialSet: StateExpr? = nil, initExpr: StateExpr? = nil, lazySet: StateExpr? = nil, collectionType: CollectionVarType = .scalar) {
+        self.name = name; self.initial = initial; self.initialSet = initialSet; self.initExpr = initExpr; self.lazySet = lazySet; self.collectionType = collectionType
     }
     public var description: String {
         if let s = lazySet { return "\(name) \\in \(s)" }
@@ -161,10 +169,11 @@ public struct VarDecl: SpecComponent {
     public let initialSet: StateExpr?
     public let initExpr: StateExpr?
     public let lazySet: StateExpr?
-    init(_ name: String, _ initial: TLAValue) { self.name = name; self.initial = initial; self.initialSet = nil; self.initExpr = nil; self.lazySet = nil }
-    init(_ name: String, _ initial: TLAValue, initialSet: StateExpr?) { self.name = name; self.initial = initial; self.initialSet = initialSet; self.initExpr = nil; self.lazySet = nil }
-    init(_ name: String, initExpr: StateExpr) { self.name = name; self.initial = .int(0); self.initialSet = nil; self.initExpr = initExpr; self.lazySet = nil }
-    init(_ name: String, lazySet: StateExpr) { self.name = name; self.initial = .int(0); self.initialSet = nil; self.initExpr = nil; self.lazySet = lazySet }
+    public let collectionType: CollectionVarType
+    init(_ name: String, _ initial: TLAValue, collectionType: CollectionVarType = .scalar) { self.name = name; self.initial = initial; self.initialSet = nil; self.initExpr = nil; self.lazySet = nil; self.collectionType = collectionType }
+    init(_ name: String, _ initial: TLAValue, initialSet: StateExpr?, collectionType: CollectionVarType = .scalar) { self.name = name; self.initial = initial; self.initialSet = initialSet; self.initExpr = nil; self.lazySet = nil; self.collectionType = collectionType }
+    init(_ name: String, initExpr: StateExpr, collectionType: CollectionVarType = .scalar) { self.name = name; self.initial = .int(0); self.initialSet = nil; self.initExpr = initExpr; self.lazySet = nil; self.collectionType = collectionType }
+    init(_ name: String, lazySet: StateExpr, collectionType: CollectionVarType = .scalar) { self.name = name; self.initial = .int(0); self.initialSet = nil; self.initExpr = nil; self.lazySet = lazySet; self.collectionType = collectionType }
 }
 
 public struct ActionDecl: SpecComponent {
@@ -370,6 +379,98 @@ public enum ActionBuilder {
     public static func buildOptional(_ component: ActionExpr?) -> ActionExpr { component ?? .guard_(.value(.bool(true))) }
     public static func buildEither(first: ActionExpr) -> ActionExpr { first }
     public static func buildEither(second: ActionExpr) -> ActionExpr { second }
+}
+
+// MARK: - Layer 2: Swift-Shaped DSL Affordances
+
+@discardableResult
+public func Guard(_ condition: some StateExprConvertible) -> ActionExpr {
+    .guard_(condition.stateExpr)
+}
+
+public struct WhenClause {
+    let whenBranch: ActionExpr
+}
+
+@discardableResult
+public func When(_ condition: some StateExprConvertible, @ActionBuilder _ body: () -> ActionExpr) -> WhenClause {
+    WhenClause(whenBranch: .and(.guard_(condition.stateExpr), body()))
+}
+
+extension WhenClause {
+    @discardableResult
+    public func Otherwise(@ActionBuilder _ body: () -> ActionExpr) -> ActionExpr {
+        .or(whenBranch, body())
+    }
+}
+
+extension ActionBuilder {
+    public static func buildExpression(_ clause: WhenClause) -> ActionExpr {
+        clause.whenBranch
+    }
+}
+
+@discardableResult
+public func Stay<T: TLAValueType>(_ variable: Var<T>) -> ActionExpr {
+    .unchanged(variable.name)
+}
+
+@discardableResult
+public func Stay<T1: TLAValueType, T2: TLAValueType>(_ v1: Var<T1>, _ v2: Var<T2>) -> ActionExpr {
+    .and(.unchanged(v1.name), .unchanged(v2.name))
+}
+
+@discardableResult
+public func Stay<T1: TLAValueType, T2: TLAValueType, T3: TLAValueType>(_ v1: Var<T1>, _ v2: Var<T2>, _ v3: Var<T3>) -> ActionExpr {
+    .and(.and(.unchanged(v1.name), .unchanged(v2.name)), .unchanged(v3.name))
+}
+
+@discardableResult
+public func Choose(_ variable: Var<some TLAValueType>, from set: some StateExprConvertible) -> ActionExpr {
+    .chooseAction(variable.name, set.stateExpr)
+}
+
+@discardableResult
+public func ForEach<Element: Identifiable, Value: TLAValueType>(
+    _ collection: SymmetricCollectionVar<Element, Value>,
+    @ActionBuilder _ body: (Var<Value>) -> ActionExpr
+) -> ActionExpr {
+    let qv = QuantVar.fresh()
+    let bound = Var<Value>(qv.name)
+    return .existsAction(qv.name, collection.memberDomain, body(bound))
+}
+
+public func AllSatisfy<Element: Identifiable, Value: TLAValueType>(
+    _ collection: SymmetricCollectionVar<Element, Value>,
+    _ predicate: @escaping (Expr<Value>) -> StateExpr
+) -> StateExpr {
+    collection.allSatisfy(predicate)
+}
+
+@discardableResult
+public func Switch<T: Equatable & TLAValueType>(
+    _ value: Var<T>,
+    cases: [(T, ActionExpr)],
+    default defaultBody: ActionExpr? = nil
+) -> ActionExpr {
+    var result = defaultBody ?? .guard_(.value(.bool(false)))
+    for (match, body) in cases.reversed() {
+        result = .or(.and(.guard_(.equal(value.stateExpr, .value(match.tlaValue))), body), result)
+    }
+    return result
+}
+
+@discardableResult
+public func Case<T: Equatable & TLAValueType>(
+    _ match: T,
+    @ActionBuilder _ body: () -> ActionExpr
+) -> (T, ActionExpr) {
+    (match, body())
+}
+
+@discardableResult
+public func Default(@ActionBuilder _ body: () -> ActionExpr) -> ActionExpr {
+    body()
 }
 
 @discardableResult
@@ -670,9 +771,9 @@ extension TLASpec {
 
         for comp in components {
             if let v = comp as? VarDecl {
-                variables.append(NamedVar(name: v.name, initial: v.initial, initialSet: v.initialSet, initExpr: v.initExpr, lazySet: v.lazySet))
+                variables.append(NamedVar(name: v.name, initial: v.initial, initialSet: v.initialSet, initExpr: v.initExpr, lazySet: v.lazySet, collectionType: v.collectionType))
             } else if let s = comp as? SymmetricCollectionDecl {
-                variables.append(s.variable)
+                variables.append(NamedVar(name: s.variable.name, initial: s.variable.initial, initialSet: s.variable.initialSet, initExpr: s.variable.initExpr, lazySet: s.variable.lazySet, collectionType: s.variable.collectionType))
                 symmetricCollections.append(s)
             } else if let a = comp as? ActionDecl {
                 actions.append(NamedAction(name: a.name, body: a.body))
@@ -781,7 +882,8 @@ public func substituteConstants(_ spec: TLASpec) -> TLASpec {
             initial: substituteInValue(v.initial, constants: constants),
             initialSet: v.initialSet.map { substituteInState($0, constants: constants) },
             initExpr: v.initExpr.map { substituteInState($0, constants: constants) },
-            lazySet: v.lazySet.map { substituteInState($0, constants: constants) }
+            lazySet: v.lazySet.map { substituteInState($0, constants: constants) },
+            collectionType: v.collectionType
         )
     }
     let acts = spec.actions.map { a in

@@ -126,6 +126,16 @@ identifier_name:
     - Always
     - SymmetryGroup
     - Value
+    - Guard
+    - When
+    - WhenClause
+    - Otherwise
+    - Stay
+    - Choose
+    - AllSatisfy
+    - Switch
+    - Case
+    - Default
     - ∈
     - ⊆
     - ∪
