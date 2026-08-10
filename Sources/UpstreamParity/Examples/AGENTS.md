@@ -44,15 +44,15 @@ The spec function follows the upstream structure. Use the same variable names an
 private func <name>Spec() -> TLASpec {
     // ---------- VARIABLES ----------
     // (description of each variable and its range)
-    let <var> = Var<T>("<name>", value: <initial>)
-    let <var> = Var<TLAFunctionType>("<name>")
+    let <var> = Var("<name>", <initial>)
+    let <var> = Var.typed<TLAFunctionType>("<name>")
 
     return TLASpec("<ModuleName>") {
         Extends("Naturals")
 
         // ---------- INITIAL PREDICATE ----------
         // (explanation of init)
-        Variable(<var>, <initial>)
+        Variable(<var>)
         Variable(<var>, in: <values>)
 
         // ---------- TYPE INVARIANT ----------
@@ -74,9 +74,9 @@ private func <name>Spec() -> TLASpec {
 | TLA+ | Swift |
 |------|-------|
 | `EXTENDS Naturals` | `Extends("Naturals")` |
-| `VARIABLES x` | `let x = Var<Int>("x")` |
-| `VARIABLES f` (function) | `let f = Var<TLAFunctionType>("f")` |
-| `x = 0` | `Variable(x, 0)` |
+| `VARIABLES x` | `let x = Var("x", 0)` |
+| `VARIABLES f` (function) | `let f = Var.typed<TLAFunctionType>("f")` |
+| `x = 0` | `Variable(x)` |
 | `x \in {0,1,2}` | `Variable(x, in: 0..<3)` |
 | `x' = e` | `x.becomes(e)` |
 | `UNCHANGED x` | `x.stays` |
