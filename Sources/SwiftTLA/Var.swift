@@ -11,6 +11,11 @@ extension TLAValueType where Self: RawRepresentable, Self.RawValue == Int {
     public var tlaValue: TLAValue { .int(rawValue) }
 }
 
+extension TLAValueType where Self: RawRepresentable, Self.RawValue == Int, Self: CustomStringConvertible {
+    public var tlaValue: TLAValue { .string(description) }
+    public var description: String { String(describing: self) }
+}
+
 /// All RawRepresentable String enums get TLAValueType support.
 extension TLAValueType where Self: RawRepresentable, Self.RawValue == String {
     public static var defaultValue: Self { Self(rawValue: "")! }

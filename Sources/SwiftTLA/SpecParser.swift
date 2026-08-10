@@ -40,6 +40,9 @@ public enum SpecParser {
     /// Local constants collected during parsing (for `Value` / `let` bindings).
     nonisolated(unsafe) private static var _constants: [String: TLAValue] = [:]
 
+    /// Enum phase map (typeName → caseName → TLAValue) set per-parse by the macro.
+    nonisolated(unsafe) private static var _enumPhases: [String: [String: TLAValue]] = [:]
+
     /// Parses any Swift expression that represents a state-level value (no primes, no assignments).
     /// Returns nil if the expression cannot be interpreted as a state expression.
     public static func parseStateExpr(_ expression: ExprSyntax?, localConstants: [String: TLAValue] = [:]) -> StateExpr? {
@@ -656,6 +659,17 @@ public enum SpecParser {
     /// or arbitrary record field access like `msg.type`, `node.value`.
     private static func parseMemberAccess(_ memberAccess: MemberAccessExprSyntax) -> StateExpr? {
         let propertyName = memberAccess.declName.baseName.text
+
+        if let baseExpression = memberAccess.base,
+           let baseRef = baseExpression.as(DeclReferenceExprSyntax.self) {
+            if let cases = _enumPhases[baseRef.baseName.text] {
+                if let value = cases[propertyName] {
+                    return .value(value)
+                }
+                return nil
+            }
+        }
+
         guard let baseExpression = memberAccess.base,
               let selfExpr = parseStateExpr(baseExpression)
         else { return nil }
@@ -726,7 +740,8 @@ public enum SpecParser {
         public var description: String { message }
     }
 
-      public static func parseSpecClosure(_ closure: ClosureExprSyntax) -> ParsedSpecComponents {
+      public static func parseSpecClosure(_ closure: ClosureExprSyntax, enumPhases: [String: [String: TLAValue]] = [:]) -> ParsedSpecComponents {
+        _enumPhases = enumPhases
         var result = ParsedSpecComponents()
         let collectionTypes = collectSymmetricCollectionTypes(in: closure)
         for statement in closure.statements {
@@ -779,21 +794,20 @@ public enum SpecParser {
             guard let patternName = binding.pattern.as(IdentifierPatternSyntax.self)?.identifier.text,
                   let initializer = binding.initializer?.value,
                   let fc = initializer.as(FunctionCallExprSyntax.self),
-                  let calledName = fc.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text,
-                  (calledName == "StateVar" || calledName == "Var")
+                  let (_, swiftTypeName) = resolveVarCall(fc)
             else { continue }
 
             let args = Array(fc.arguments)
 
             if let rangeExpr = args.first(where: { $0.label?.text == "in" })?.expression {
                 let lowerBound = parseRangeLowerBound(rangeExpr)
-                result.variables.append((patternName, .int(lowerBound), nil, nil))
+                result.variables.append((patternName, .int(lowerBound), nil, swiftTypeName))
                 continue
             }
 
             if let valuesArg = args.first(where: { $0.label?.text == "values" })?.expression {
                 let firstValue = parseValuesFirst(valuesArg)
-                result.variables.append((patternName, .string(firstValue), nil, nil))
+                result.variables.append((patternName, .string(firstValue), nil, swiftTypeName))
                 continue
             }
 
@@ -802,14 +816,33 @@ public enum SpecParser {
             if let stringLit = args[0].expression.as(StringLiteralExprSyntax.self) {
                 let varName = stringLit.segments.description.replacingOccurrences(of: "\"", with: "")
                 let initial: TLAValue = args.count >= 2 ? parseInitialExpr(args[1].expression) : .int(0)
-                let typeName = args.count >= 2 ? enumCaseTypeName(from: args[1].expression) : nil
-                result.variables.append((varName, initial, nil, typeName))
+                let inferredType = args.count >= 2 ? enumCaseTypeName(from: args[1].expression) : nil
+                result.variables.append((varName, initial, nil, swiftTypeName ?? inferredType))
             } else {
                 let initial: TLAValue = parseInitialExpr(args[0].expression)
-                let typeName = enumCaseTypeName(from: args[0].expression)
-                result.variables.append((patternName, initial, nil, typeName))
+                let inferredType = enumCaseTypeName(from: args[0].expression)
+                result.variables.append((patternName, initial, nil, swiftTypeName ?? inferredType))
             }
         }
+    }
+
+    /// Resolves a StateVar call expression to (callName, swiftTypeName).
+    /// Returns nil if the call is not a StateVar constructor.
+    private static func resolveVarCall(_ fc: FunctionCallExprSyntax) -> (String, String?)? {
+        if let ref = fc.calledExpression.as(DeclReferenceExprSyntax.self) {
+            guard ref.baseName.text == "StateVar" else { return nil }
+            return ("StateVar", nil)
+        }
+        if let generic = fc.calledExpression.as(GenericSpecializationExprSyntax.self),
+           let ref = generic.expression.as(DeclReferenceExprSyntax.self) {
+            guard ref.baseName.text == "StateVar" else { return nil }
+            let typeArgs = Array(generic.genericArgumentClause.arguments)
+            let swiftTypeName = typeArgs.count >= 1
+                ? typeArgs[0].argument.description.trimmingCharacters(in: .whitespacesAndNewlines)
+                : nil
+            return ("StateVar", swiftTypeName)
+        }
+        return nil
     }
 
     /// Extracts the lower bound from a range expression like `1...12`.
@@ -848,6 +881,17 @@ public enum SpecParser {
         }
         if let stringLit = expression.as(StringLiteralExprSyntax.self) {
             return .string(stringLit.segments.description.replacingOccurrences(of: "\"", with: ""))
+        }
+        if let memberAccess = expression.as(MemberAccessExprSyntax.self) {
+            if let baseRef = memberAccess.base?.as(DeclReferenceExprSyntax.self),
+               let cases = _enumPhases[baseRef.baseName.text],
+               let value = cases[memberAccess.declName.baseName.text] {
+                return value
+            }
+            let caseName = memberAccess.declName.baseName.text
+            for (_, cases) in _enumPhases {
+                if let value = cases[caseName] { return value }
+            }
         }
         if let fc = expression.as(FunctionCallExprSyntax.self),
            let memberAccess = fc.calledExpression.as(MemberAccessExprSyntax.self),

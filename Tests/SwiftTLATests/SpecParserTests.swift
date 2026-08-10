@@ -399,3 +399,89 @@ private func parseClosure(_ source: String) -> ClosureExprSyntax {
         #expect(SpecParser.parseFairnessExpr(parseExpression("x.unknown()")) == nil)
     }
 }
+
+// MARK: - Enum phase parsing
+
+private let cameraModePhases: [String: [String: TLAValue]] = [
+    "CameraMode": [
+        "idle": .string("idle"),
+        "live": .string("live"),
+        "recording": .string("recording"),
+        "playback": .string("playback")
+    ]
+]
+
+@Suite(.serialized) struct EnumPhaseParsingTests {
+    @Test func parseQualifiedEnumCaseInInvariant() {
+        let source = """
+        {
+            Invariant("idleOnly") {
+                mode == CameraMode.idle
+            }
+        }
+        """
+        let closure = Parser.parse(source: source).statements.first!.item.as(ClosureExprSyntax.self)!
+        let parsed = SpecParser.parseSpecClosure(closure, enumPhases: cameraModePhases)
+        #expect(parsed.invariants.count == 1)
+        #expect(parsed.invariants[0].body == .equal(.variable("mode"), .value(.string("idle"))))
+    }
+
+    @Test func parseEnumAssignment() {
+        let source = """
+        {
+            Action("test") {
+                mode.becomes(CameraMode.live)
+            }
+        }
+        """
+        let closure = Parser.parse(source: source).statements.first!.item.as(ClosureExprSyntax.self)!
+        let parsed = SpecParser.parseSpecClosure(closure, enumPhases: cameraModePhases)
+        #expect(parsed.actions.count == 1)
+        #expect(parsed.actions[0].body == .assign("mode", .value(.string("live"))))
+    }
+
+    @Test func parseInvalidEnumCaseReturnsNilForInvariant() {
+        let source = """
+        {
+            Invariant("bad") {
+                mode == CameraMode.unknown
+            }
+        }
+        """
+        let closure = Parser.parse(source: source).statements.first!.item.as(ClosureExprSyntax.self)!
+        let parsed = SpecParser.parseSpecClosure(closure, enumPhases: cameraModePhases)
+        #expect(parsed.invariants.isEmpty)
+        #expect(!parsed.diagnostics.isEmpty)
+    }
+
+    @Test func parseEnumInvariant() {
+        let source = """
+        {
+            Invariant("notError") {
+                mode != CameraMode.error
+            }
+        }
+        """
+        let phases: [String: [String: TLAValue]] = [
+            "CameraMode": ["idle": .string("idle"), "error": .string("error")]
+        ]
+        let closure = Parser.parse(source: source).statements.first!.item.as(ClosureExprSyntax.self)!
+        let parsed = SpecParser.parseSpecClosure(closure, enumPhases: phases)
+        #expect(parsed.invariants.count == 1)
+        #expect(parsed.invariants[0].body == .notEqual(.variable("mode"), .value(.string("error"))))
+    }
+
+    @Test func parseEnumStateVarInit() {
+        let source = """
+        {
+            let mode = StateVar<CameraMode>(CameraMode.idle)
+        }
+        """
+        let closure = Parser.parse(source: source).statements.first!.item.as(ClosureExprSyntax.self)!
+        let parsed = SpecParser.parseSpecClosure(closure, enumPhases: cameraModePhases)
+        #expect(parsed.variables.count == 1)
+        #expect(parsed.variables[0].name == "mode")
+        #expect(parsed.variables[0].initial == .string("idle"))
+        #expect(parsed.variables[0].swiftTypeName == "CameraMode")
+    }
+}
