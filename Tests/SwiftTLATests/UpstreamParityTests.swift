@@ -49,3 +49,46 @@ struct UpstreamParityTests {
         }
     }
 }
+
+// MARK: - Native codegen verification for @TLAModel parity specs
+
+struct UpstreamParityNativeTests {
+    // HourClock
+    @Test("HourClock native verifySpec")
+    func hourClockNativeVerifySpec() throws { try HourClockModel.verifySpec() }
+    @Test("HourClock native verifyTransitions")
+    func hourClockNativeVerifyTransitions() throws { try HourClockModel.verifyTransitions() }
+    @Test("HourClock native verifyInvariants")
+    func hourClockNativeVerifyInvariants() throws { try HourClockModel.verifyInvariants() }
+    @Test("HourClock native transitionMatrix count")
+    func hourClockNativeTransitionMatrix() throws { #expect(try HourClockModel.transitionMatrix().count == 12) }
+
+    // HourClock2
+    @Test("HourClock2 native verifySpec")
+    func hourClock2NativeVerifySpec() throws { try HourClock2Model.verifySpec() }
+    @Test("HourClock2 native verifyTransitions")
+    func hourClock2NativeVerifyTransitions() throws { try HourClock2Model.verifyTransitions() }
+    @Test("HourClock2 native verifyInvariants")
+    func hourClock2NativeVerifyInvariants() throws { try HourClock2Model.verifyInvariants() }
+    @Test("HourClock2 native transitionMatrix count")
+    func hourClock2NativeTransitionMatrix() throws { #expect(try HourClock2Model.transitionMatrix().count == 12) }
+
+    // DieHard
+    @Test("DieHard native verifySpec")
+    func dieHardNativeVerifySpec() throws { try DieHardModel.verifySpec() }
+    @Test("DieHard native verifyInvariants")
+    func dieHardNativeVerifyInvariants() throws { try DieHardModel.verifyInvariants() }
+
+    // Self-consistency
+    @Test("Native codegen self-consistency")
+    func nativeSelfConsistency() throws {
+        func check(_ matrix: [(from: [String: TLAValue], action: String, to: [String: TLAValue])], runtime: SpecRuntime) throws {
+            for entry in matrix {
+                let next = try runtime.apply(actionName: entry.action, to: entry.from)
+                #expect(next == entry.to)
+            }
+        }
+        try check(HourClockModel.transitionMatrix(), runtime: HourClockModel.runtime)
+        try check(HourClock2Model.transitionMatrix(), runtime: HourClock2Model.runtime)
+    }
+}

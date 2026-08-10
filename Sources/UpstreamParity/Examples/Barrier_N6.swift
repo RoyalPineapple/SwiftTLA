@@ -11,8 +11,7 @@ extension Example {
         notes: "N=6. TLC = 64.",
     )
 
-static func barrierSpec(n: Int) -> TLASpec {
-        // Explicit N=6 (upstream Barrier.cfg)
+    static func barrierSpec(n: Int) -> TLASpec {
         precondition(n == 6)
         let p1 = Var<String>("pc1")
         let p2 = Var<String>("pc2")
@@ -37,5 +36,4 @@ static func barrierSpec(n: Int) -> TLASpec {
             }
         }
     }
-
 }

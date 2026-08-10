@@ -1,9 +1,17 @@
 import SwiftTLA
-import SwiftTLAMacros
 
-@TLAModel
-public struct CigaretteSmokersModel {
-    public static var spec: TLASpec {
+extension Example {
+    public static let cigaretteSmokers = Entry(
+        id: "CigaretteSmokers/CigaretteSmokers",
+        upstreamSpec: "CigaretteSmokers",
+        upstreamModule: "specifications/CigaretteSmokers/CigaretteSmokers.tla",
+        upstreamCfg: "specifications/CigaretteSmokers/CigaretteSmokers.cfg",
+        expectedDistinct: 6,
+        spec: cigaretteSmokersSpec(),
+        notes: "Ingredients={m,p,t}, Offers=pairs. TLC TypeOK+AtMostOne = 6.",
+    )
+
+    static func cigaretteSmokersSpec() -> TLASpec {
         TLASpec("CigaretteSmokers") {
             Extends("Integers")
             let sm = Var<Bool>("smoking_m")
@@ -37,16 +45,4 @@ public struct CigaretteSmokersModel {
             }
         }
     }
-}
-
-extension Example {
-    public static let cigaretteSmokers = Entry(
-        id: "CigaretteSmokers/CigaretteSmokers",
-        upstreamSpec: "CigaretteSmokers",
-        upstreamModule: "specifications/CigaretteSmokers/CigaretteSmokers.tla",
-        upstreamCfg: "specifications/CigaretteSmokers/CigaretteSmokers.cfg",
-        expectedDistinct: 6,
-        spec: CigaretteSmokersModel.spec,
-        notes: "Ingredients={m,p,t}, Offers=pairs. TLC TypeOK+AtMostOne = 6.",
-    )
 }

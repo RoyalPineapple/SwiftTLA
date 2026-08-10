@@ -60,11 +60,19 @@ enum TLASpecVerifier {
             let allCases = caseToType.keys.sorted().joined(separator: ", ")
             throw SimpleError("Unknown enum case '.\(unknown)'. Available cases: [\(allCases)]")
         }
-        let parsed = SpecParser.parseSpecClosure(dotRewritten, enumPhases: enumPhases)
+        var parsed = SpecParser.parseSpecClosure(dotRewritten, enumPhases: enumPhases)
         if let diagnostic = parsed.diagnostics.first {
             throw diagnostic
         }
         if parsed.variables.isEmpty { throw SimpleError("No variables in spec") }
+
+        let varBindings = scanVarBindings(in: rewritten)
+        for i in parsed.variables.indices {
+            if parsed.variables[i].swiftTypeName == nil,
+               let binding = varBindings.first(where: { $0.name == parsed.variables[i].name }) {
+                parsed.variables[i].swiftTypeName = binding.typeName
+            }
+        }
 
         let enumInfos = Self.collectEnumStateVars(from: memberList)
 
@@ -789,7 +797,7 @@ enum MacroExpander {
                           !["Int", "Bool", "String", "TLAValue"].contains(typeName) {
                     ExprSyntax(stringLiteral: "self.\(v.name) = \(typeName)(rawValue: dict[Variables.\(v.name).rawValue]!.\(extractor(for: v.initial)))!")
                 } else {
-                    ExprSyntax(stringLiteral: "self.\(v.name) = dict[Variables.\(v.name).rawValue]!.\(extractor(for: v.initial))")
+                    ExprSyntax(stringLiteral: "self.\(v.name) = dict[Variables.\(v.name).rawValue]!.\(v.swiftTypeName.map(extractor(forSwiftType:)) ?? extractor(for: v.initial))")
                 }
                         }
                     }
@@ -804,8 +812,11 @@ enum MacroExpander {
                             CodeBlockItemListSyntax {
                                 DeclSyntax(stringLiteral: "var d: [String: TLAValue] = [:]")
                                 for v in variables {
+                                    let swiftType = v.swiftTypeName ?? swiftType(for: v.initial)
                                     if v.swiftTypeName != nil && enumInfos.contains(where: { $0.typeName == v.swiftTypeName }) {
                                         ExprSyntax(stringLiteral: "d[Variables.\(v.name).rawValue] = .string(String(describing: \(v.name)))")
+                                    } else if ["Int", "Bool", "String"].contains(swiftType) {
+                                        ExprSyntax(stringLiteral: "d[Variables.\(v.name).rawValue] = \(constructor(forSwiftType: swiftType, value: v.name))")
                                     } else {
                                         ExprSyntax(stringLiteral: "d[Variables.\(v.name).rawValue] = \(constructor(for: v.initial, value: v.name))")
                                     }
@@ -1245,6 +1256,22 @@ enum MacroExpander {
         case .set: "intSetValue"; case .tuple: "tupleValue"
         case .record: "recordValue"; case .function: "functionValue"
         case .constant: "stringValue"
+        }
+    }
+
+    static func extractor(forSwiftType swiftType: String) -> String {
+        switch swiftType {
+        case "Int": "intValue"; case "Bool": "boolValue"; case "String": "stringValue"
+        default: "intValue"
+        }
+    }
+
+    static func constructor(forSwiftType swiftType: String, value: String) -> String {
+        switch swiftType {
+        case "Int": ".int(\(value))"
+        case "Bool": ".bool(\(value))"
+        case "String": ".string(\(value))"
+        default: ".int(0)"
         }
     }
 
