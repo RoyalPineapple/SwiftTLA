@@ -15,13 +15,9 @@ guard let name = args.first else {
 
 
 if name == "check-all" {
-    var ok = 0; var fail = 0; var skip = 0
+    var ok = 0; var fail = 0
     print("=== SwiftTLA ModelChecker vs TLC ===")
     for entry in Example.all {
-        if entry.id == "Bakery/N2" || entry.id == "NanoBlockchain/Small" {
-            print("SKIP \(entry.id) — known evaluator issue")
-            skip += 1; continue
-        }
         let mc = ModelChecker(spec: entry.spec, maxStates: 50000)
         do {
             let count = try mc.exploreGraph().states.count
@@ -39,7 +35,7 @@ if name == "check-all" {
             fail += 1
         }
     }
-    print("=== \(ok) passed, \(fail) failed, \(skip) skipped ===")
+    print("=== \(ok) passed, \(fail) failed, 0 skipped ===")
     exit(fail > 0 ? 1 : 0)
 }
 

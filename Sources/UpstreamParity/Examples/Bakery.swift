@@ -10,7 +10,7 @@ extension Example {
         upstreamSpec: "Bakery-Boulangerie",
         upstreamModule: "specifications/Bakery-Boulangerie/Bakery.tla",
         upstreamCfg: "specifications/Bakery-Boulangerie/MCBakery.cfg",
-        expectedDistinct: 2303,  // TLC-verified. Swift ModelChecker has known evaluator divergence (FIXME)
+        expectedDistinct: 2303,  // TLC-verified
         spec: bakerySpec(),
         notes: "N=2, MaxNat=2. Mutual exclusion + inductive invariant.",
     )
