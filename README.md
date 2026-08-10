@@ -1,6 +1,8 @@
 # SwiftTLA
 
-SwiftTLA is a compile-time behavioral compiler inspired by type-level programming. Swift types constrain which models can be constructed; `@TLAModel` and `@TLAActor` macros parse the model and model-check its global behavior during compilation. A successful check generates an executable state machine or actor API from that same model.
+SwiftTLA is a compile-time behavioral compiler. Swift types constrain which models you can construct. The macros `@TLAModel`, `@TLAActor`, `@TLAObservable`, and `@TLAValidated` parse the model. They then model-check its behavior during compilation. A successful check generates an executable state machine or an actor API.
+
+The `@TLAValidated` macro generates no code. You can use it when you need proof only.
 
 It also exports TLA+ and a TLC configuration so bounded models can be checked against TLC as an oracle.
 
@@ -17,9 +19,11 @@ Typed Swift DSL ──► TLASpec ──► compile-time model checking ──�
        └── types constrain legal variables, values, and collection operations
 ```
 
-`@TLAModel` produces an executable model type and `@TLAActor` applies the same verification pipeline to an actor. The runtime behavior, the compile-time check, and the TLA+ export all derive from the authored DSL model rather than separate hand-maintained implementations.
+Each macro model-checks the spec before it generates code. `@TLAModel` produces an executable model type. `@TLAActor` applies the same pipeline to an actor. `@TLAObservable` generates an `@Observable` class with callbacks. `@TLAValidated` verifies the spec at compile time. It generates no runtime code. The runtime behavior, the compile-time check, and the TLA+ export all come from one DSL model.
 
 ## Usage
+
+### @TLAModel — executable struct
 
 ```swift
 import Foundation
@@ -42,8 +46,28 @@ public struct HourClock {
 }
 
 var clock = HourClock()
-clock.applyTick()
+clock.applytick()
 ```
+
+### @TLAValidated — proof
+
+The `@TLAValidated` macro checks the spec at compile time. It does not generate code.
+
+```swift
+@TLAValidated
+struct CounterProtocol {
+    static var spec: TLASpec {
+        TLASpec("CounterProtocol") {
+            let counter = Var("counter", 0)
+            Variable(counter)
+            Action("increment") { counter.becomes(counter + 1) }
+            Invariant("nonNegative") { counter >= 0 }
+        }
+    }
+}
+```
+
+The spec is registered for composition with `UseSpec()`. The macro does not generate `_state`, `apply…()`, or `runtime` members.
 
 ## Symmetric collections
 
