@@ -1,8 +1,6 @@
 # SwiftTLA
 
-SwiftTLA is a compile-time spec validator and behavioral compiler. Swift types constrain which models you can construct. The macros `@TLAModel`, `@TLAActor`, `@TLAObservable`, and `@TLAValidated` parse the model. They then model-check its behavior during compilation. A successful check generates an executable state machine or an actor API.
-
-The `@TLAValidated` macro generates no code. You can use it when you need proof only.
+SwiftTLA is a compile-time spec validator and behavioral compiler. Swift types constrain which models you can construct. The `@TLAModel`, `@TLAActor`, and `@TLAObservable` macros parse the model. They model-check supported finite safety behavior during compilation. A successful check generates an executable state machine or an actor API.
 
 It also exports TLA+ and a TLC configuration so bounded models can be checked against TLC as an oracle.
 
@@ -19,7 +17,7 @@ Typed Swift DSL ──► TLASpec ──► compile-time model checking ──�
        └── types constrain legal variables, values, and collection operations
 ```
 
-Each macro model-checks the spec before it generates code. `@TLAModel` produces an executable model type. `@TLAActor` applies the same pipeline to an actor. `@TLAObservable` generates an `@Observable` class with callbacks. `@TLAValidated` verifies the spec at compile time. It generates no runtime code. The runtime behavior, the compile-time check, and the TLA+ export all come from one DSL model.
+Each supported macro model-checks the spec before it generates code. `@TLAModel` produces an executable model type. `@TLAActor` applies the same pipeline to an actor. `@TLAObservable` generates an `@Observable` class with callbacks. The runtime behavior, the compile-time check, and the TLA+ export all come from one DSL model.
 
 ## Usage
 
@@ -48,26 +46,6 @@ public struct HourClock {
 var clock = HourClock()
 clock.applytick()
 ```
-
-### @TLAValidated — proof
-
-The `@TLAValidated` macro checks the spec at compile time. It does not generate code.
-
-```swift
-@TLAValidated
-struct CounterProtocol {
-    static var spec: TLASpec {
-        TLASpec("CounterProtocol") {
-            let counter = Var("counter", 0)
-            Variable(counter)
-            Action("increment") { counter.becomes(counter + 1) }
-            Invariant("nonNegative") { counter >= 0 }
-        }
-    }
-}
-```
-
-The spec is registered for composition with `UseSpec()`. The macro does not generate `_state`, `apply…()`, or `runtime` members.
 
 ## Symmetric collections
 
@@ -138,7 +116,9 @@ Production exploration is plain BFS. Composition is for self-proof, not a contro
 
 Core ports live under `Examples/` (HourClock, DieHard, CoffeeCan, MovingCat, Majority, Allocator, and more). State counts for core specifications are regression-tested.
 
-Upstream CI-validated specifications are the TLC oracle; see [Documentation/UpstreamParity.md](Documentation/UpstreamParity.md).
+For selected finite core models, the repository can compare the complete labeled transition relation with a pinned TLC run. See [core graph conformance](Documentation/CoreGraphConformance.md).
+
+State counts alone do not establish behavioral equivalence. A successful bounded check does not prove arbitrary population sizes, liveness, or unsupported TLA+ constructs.
 
 ```bash
 ./scripts/setup-tlc.sh
