@@ -1,0 +1,4 @@
+[submodule "academic"]
+	path = academic
+	url = https://github.com/RoyalPineapple/SwiftTLA-Academic.git
+	branch = main
