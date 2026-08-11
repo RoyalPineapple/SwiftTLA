@@ -297,11 +297,9 @@ struct CoreConformanceTLCAdapterTests {
     let directory = try helperProcessDirectory()
     defer { try? FileManager.default.removeItem(at: directory) }
     let executable = directory.appendingPathComponent("environment.sh")
-    try "#!/bin/sh\nprintf 'TLC2 Version 2026.07.31.184830 (rev: 30cc360)\\n'\nprintf 'secret=%s allowed=%s\\n' \"${CORE_CONFORMANCE_TEST_SECRET-unset}\" \"${CORE_CONFORMANCE_ALLOWED_VALUE-unset}\"\n"
+    try "#!/bin/sh\nprintf 'TLC2 Version 2026.07.31.184830 (rev: 30cc360)\\n'\nprintf 'home=%s allowed=%s\\n' \"${HOME-unset}\" \"${CORE_CONFORMANCE_ALLOWED_VALUE-unset}\"\n"
       .write(to: executable, atomically: true, encoding: .utf8)
     try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: executable.path)
-    setenv("CORE_CONFORMANCE_TEST_SECRET", "host-only", 1)
-    defer { unsetenv("CORE_CONFORMANCE_TEST_SECRET") }
 
     let request = try helperProcessRequest(
       executable: executable,
@@ -310,7 +308,7 @@ struct CoreConformanceTLCAdapterTests {
     )
     let result = try SystemTLCProcessExecutorV1(validatesReferences: false).execute(request)
 
-    #expect(result.stdout.contains("secret=unset allowed=declared"))
+    #expect(result.stdout.contains("home=unset allowed=declared"))
   }
 
   @Test("graph event parser rejects malformed footer and unsupported callbacks")
