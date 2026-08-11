@@ -3,6 +3,7 @@ import Foundation
 import Testing
 import UpstreamParity
 
+@Suite(.serialized)
 struct CoreConformanceTLCAdapterTests {
   @Test("frozen graph stream becomes complete canonical evidence")
   func parsesFrozenGraphIntoCanonicalRun() throws {
