@@ -791,7 +791,7 @@ enum MacroExpander {
                         bindingSpecifier: .keyword(.var),
                         bindings: [PatternBindingSyntax(
                             pattern: IdentifierPatternSyntax(identifier: .identifier(v.name)),
-                            typeAnnotation: TypeAnnotationSyntax(type: IdentifierTypeSyntax(name: .identifier(v.swiftTypeName ?? swiftType(for: v.initial))))
+                            typeAnnotation: TypeAnnotationSyntax(type: IdentifierTypeSyntax(name: .identifier(stateType(for: v, enumInfos: enumInfos))))
                         )]
                     )
                 }
@@ -825,8 +825,8 @@ enum MacroExpander {
                           !["Int", "Bool", "String", "TLAValue"].contains(typeName) {
                     ExprSyntax(stringLiteral: "self.\(v.name) = \(typeName)(rawValue: dict[Variables.\(v.name).rawValue]!.\(extractor(for: v.initial)))!")
                 } else {
-                    let swiftType = v.swiftTypeName ?? swiftType(for: v.initial)
-                    if swiftType == "TLAValue" {
+                    let st = stateType(for: v, enumInfos: enumInfos)
+                    if st == "TLAValue" {
                         ExprSyntax(stringLiteral: "self.\(v.name) = dict[Variables.\(v.name).rawValue]!")
                     } else {
                         let extractor = v.swiftTypeName.map(extractor(forSwiftType:)) ?? extractor(for: v.initial)
@@ -846,11 +846,13 @@ enum MacroExpander {
                             CodeBlockItemListSyntax {
                                 DeclSyntax(stringLiteral: "var d: [String: TLAValue] = [:]")
                                 for v in variables {
-                                    let swiftType = v.swiftTypeName ?? swiftType(for: v.initial)
+                                    let st = stateType(for: v, enumInfos: enumInfos)
                                     if v.swiftTypeName != nil && enumInfos.contains(where: { $0.typeName == v.swiftTypeName }) {
                                         ExprSyntax(stringLiteral: "d[Variables.\(v.name).rawValue] = .string(String(describing: \(v.name)))")
-                                    } else if ["Int", "Bool", "String"].contains(swiftType) {
-                                        ExprSyntax(stringLiteral: "d[Variables.\(v.name).rawValue] = \(constructor(forSwiftType: swiftType, value: v.name))")
+                                    } else if st == "TLAValue" {
+                                        ExprSyntax(stringLiteral: "d[Variables.\(v.name).rawValue] = \(v.name)")
+                                    } else if ["Int", "Bool", "String"].contains(st) {
+                                        ExprSyntax(stringLiteral: "d[Variables.\(v.name).rawValue] = \(constructor(forSwiftType: st, value: v.name))")
                                     } else {
                                         ExprSyntax(stringLiteral: "d[Variables.\(v.name).rawValue] = \(constructor(for: v.initial, value: v.name))")
                                     }
@@ -866,12 +868,14 @@ enum MacroExpander {
 
     static func generateVariableProperties(variables: [(name: String, initial: TLAValue, initialSet: StateExpr?, swiftTypeName: String?)]) -> [VariableDeclSyntax] {
         variables.map { v in
-            VariableDeclSyntax(
+            let inferred = v.swiftTypeName ?? swiftType(for: v.initial)
+            let propType = ["Int", "Bool", "String"].contains(inferred) ? inferred : "TLAValue"
+            return VariableDeclSyntax(
                 modifiers: [DeclModifierSyntax(name: .keyword(.public))],
                 bindingSpecifier: .keyword(.var),
                 bindings: [PatternBindingSyntax(
                     pattern: IdentifierPatternSyntax(identifier: .identifier(v.name)),
-                    typeAnnotation: TypeAnnotationSyntax(type: IdentifierTypeSyntax(name: .identifier(v.swiftTypeName ?? swiftType(for: v.initial)))),
+                    typeAnnotation: TypeAnnotationSyntax(type: IdentifierTypeSyntax(name: .identifier(propType))),
                     accessorBlock: AccessorBlockSyntax(accessors: .getter(
                         CodeBlockItemListSyntax { ExprSyntax(stringLiteral: "_state.\(v.name)") }
                     ))
@@ -1296,6 +1300,13 @@ enum MacroExpander {
         case .function: "[TLAValue: TLAValue]"
         case .constant: "String"
         }
+    }
+
+    static func stateType(for v: (name: String, initial: TLAValue, initialSet: StateExpr?, swiftTypeName: String?), enumInfos: [ParsedEnumInfo]) -> String {
+        let inferred = v.swiftTypeName ?? swiftType(for: v.initial)
+        if ["Int", "Bool", "String"].contains(inferred) { return inferred }
+        if enumInfos.contains(where: { $0.typeName == inferred }) { return inferred }
+        return "TLAValue"
     }
 
     static func extractor(for initial: TLAValue) -> String {

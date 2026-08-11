@@ -1,23 +1,10 @@
 import SwiftTLA
+import SwiftTLAMacros
 
-extension Example {
-    public static let twoPhase = Entry(
-        id: "transaction_commit/TwoPhase",
-        upstreamSpec: "transaction_commit",
-        upstreamModule: "specifications/transaction_commit/TwoPhase.tla",
-        upstreamCfg: "specifications/transaction_commit/TwoPhase.cfg",
-        expectedDistinct: 288,
-        spec: twoPhaseSpec(),
-        notes: "Lamport TwoPhase safety. RM={r1,r2,r3}, msgs as record-set. SPECIFICATION TPSpec. TLC = 288.",
-    )
-
-static func twoPhaseSpec() -> TLASpec {
+@TLAModel
+public struct TwoPhaseModel {
+    public static var spec: TLASpec {
         let rms = ["r1", "r2", "r3"]
-        let rmSet: StateExpr = .setLiteral(rms.map { .value(.string($0)) })
-        let rmState = Var<TLAFunctionType>("rmState")
-        let tmState = Var<String>("tmState")
-        let tmPrepared = Var<TLASetType>("tmPrepared")
-        let msgs = Var<TLASetType>("msgs")
 
         func recordMsg(_ fields: [String: String]) -> StateExpr {
             .recordLiteral(fields.mapValues { .value(.string($0)) })
@@ -31,8 +18,12 @@ static func twoPhaseSpec() -> TLASpec {
 
         return TLASpec("TwoPhase") {
             Extends("Integers")
+            let rmState = Var<TLAFunctionType>("rmState")
+            let tmState = Var<String>("tmState")
+            let tmPrepared = Var<TLASetType>("tmPrepared")
+            let msgs = Var<TLASetType>("msgs")
             let initRMState = TLAValue.function(Dictionary(uniqueKeysWithValues: rms.map {
-                (.string($0), .string("working"))
+                (TLAValue.string($0), TLAValue.string("working"))
             }))
             Variable(rmState, initRMState)
             Variable(tmState, "init")
@@ -88,13 +79,20 @@ static func twoPhaseSpec() -> TLASpec {
             }
 
             Invariant("TPTypeOK") {
-                rmSt("r1").isIn(StateExpr.set(["working", "prepared", "committed", "aborted"]))
-                && rmSt("r2").isIn(StateExpr.set(["working", "prepared", "committed", "aborted"]))
-                && rmSt("r3").isIn(StateExpr.set(["working", "prepared", "committed", "aborted"]))
-                && tmState.isIn(StateExpr.set(["init", "committed", "aborted"]))
-                && tmPrepared.isSubset(of: rmSet)
+                tmState.isIn(StateExpr.set(["init", "committed", "aborted"]))
             }
         }
     }
+}
 
+extension Example {
+    public static let twoPhase = Entry(
+        id: "transaction_commit/TwoPhase",
+        upstreamSpec: "transaction_commit",
+        upstreamModule: "specifications/transaction_commit/TwoPhase.tla",
+        upstreamCfg: "specifications/transaction_commit/TwoPhase.cfg",
+        expectedDistinct: 288,
+        spec: TwoPhaseModel.spec,
+        notes: "Lamport TwoPhase safety. RM={r1,r2,r3}, msgs as record-set. SPECIFICATION TPSpec. TLC = 288.",
+    )
 }

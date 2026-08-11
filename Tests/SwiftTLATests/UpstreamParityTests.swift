@@ -81,6 +81,10 @@ struct UpstreamParityNativeTests {
     @Test("DieHard native verifyInvariants")
     func dieHardNativeVerifyInvariants() throws { try DieHardModel.verifyInvariants() }
 
+    // TwoPhase
+    @Test("TwoPhase native verifySpec")
+    func twoPhaseNativeVerifySpec() throws { try TwoPhaseModel.verifySpec() }
+
     // Barrier
     @Test("Barrier_N6 native verifySpec")
     func barrierNativeVerifySpec() throws { try BarrierModel.verifySpec() }
