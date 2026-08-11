@@ -613,8 +613,6 @@ enum MacroExpander {
     }
 
     static func generateParserTreeCheck(model: ParsedMacroModel) -> [DeclSyntax] {
-        guard !model.actions.isEmpty else { return [] }
-
         let treeVars = model.variables.map { v in
             "(\"\(v.name)\", \(codegenTLAValue(v.initial)))"
         }.joined(separator: ", ")
