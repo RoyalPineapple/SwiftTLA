@@ -1,0 +1,17 @@
+{
+  "attempted" : [
+    "primary"
+  ],
+  "correlation" : {
+    "caseID" : "hour-clock",
+    "engine" : "tlc",
+    "runID" : "5ec08d25-30f7-4409-9410-0d2bb6e3920b"
+  },
+  "primary" : {
+    "isViolation" : false,
+    "reportedExhaustiveCompletion" : true,
+    "status" : 0
+  },
+  "replay" : null,
+  "trace" : null
+}

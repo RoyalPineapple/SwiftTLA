@@ -1,0 +1,31 @@
+{
+  "architecture" : "arm64",
+  "arguments" : [
+    "-workers",
+    "1",
+    "-fp",
+    "1"
+  ],
+  "argumentsSHA256" : "5a29989b077aadf61edf04f0b0cc435c5f9ef27fe0b75daa01cb703ee9ce89b5",
+  "cfgSHA256" : "5fc99b8399ad0227b0afbf25ff802c3582d4347dd06e26461313ecef6d5253f8",
+  "deadlock" : false,
+  "environment" : {
+
+  },
+  "fingerprintPolynomial" : 1,
+  "id" : "hour-clock-edge-mismatch",
+  "moduleSHA256" : "d9095b5892b817e41c8dfb11129703d8d4da6e67e2a2e23fbb57a30ae51c6a8f",
+  "operatingSystem" : "macos",
+  "pin" : {
+    "bridgeBinarySHA256" : "240a717693a5500be4067a3bb4d90fa9c3edce67855f09c5422daf5512ee0fde",
+    "bridgeClass" : "org.swifttla.conformance.LosslessStateWriter",
+    "bridgeSourceSHA256" : "d6a390a1dd8c81e20c22f715a0133f5c7561178a9a5dcdcd7f184c695a6741b7",
+    "commit" : "30cc3601321c3fc02e044d0ecb5c58d8921e18df",
+    "jarSHA256" : "e22f8ffb4bacdea0a871f444dd94fe5fb0d8013b3388ae39e82e26f852c735d5",
+    "javaArchiveSHA256" : "8fa1eff40bb637a33613b2ccb8b12c70dc3661cc22cf8e784943715769a05336",
+    "javaDistribution" : "Eclipse Temurin",
+    "javaVersion" : "17.0.19+10",
+    "tag" : "v1.8.0"
+  },
+  "workers" : 1
+}

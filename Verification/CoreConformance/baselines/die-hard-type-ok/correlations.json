@@ -1,0 +1,17 @@
+{
+  "runner" : {
+    "caseID" : "die-hard-type-ok",
+    "engine" : "runner",
+    "runID" : "7791b8cc-a784-497c-90c8-473fa25ab15c"
+  },
+  "swift" : {
+    "caseID" : "die-hard-type-ok",
+    "engine" : "swift",
+    "runID" : "7791b8cc-a784-497c-90c8-473fa25ab15c"
+  },
+  "tlc" : {
+    "caseID" : "die-hard-type-ok",
+    "engine" : "tlc",
+    "runID" : "7791b8cc-a784-497c-90c8-473fa25ab15c"
+  }
+}
