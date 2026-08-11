@@ -84,6 +84,7 @@
       "fingerprintPolynomial": 1,
       "deadlock": false,
       "replay": "none",
+      "expectedExit": 1,
       "upstream": {
         "repository": "https://github.com/tlaplus/Examples.git",
         "commit": "52c4c651022b2d50bc9ca2aca1bd53277d4332c6"
@@ -115,6 +116,7 @@
       "fingerprintPolynomial": 1,
       "deadlock": false,
       "replay": "required",
+      "expectedExit": 1,
       "upstream": {
         "repository": "https://github.com/tlaplus/Examples.git",
         "commit": "52c4c651022b2d50bc9ca2aca1bd53277d4332c6"

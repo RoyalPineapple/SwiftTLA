@@ -40,6 +40,7 @@ private struct CoreConformanceManifest: Decodable {
         let fingerprintPolynomial: Int
         let deadlock: Bool
         let replay: String
+        let expectedExit: Int?
         let identityMapping: IdentityMapping
     }
 }
@@ -201,6 +202,13 @@ private func runCoreConformance(arguments: [String]) -> Never {
 
         var exitCode: Int32 = CoreConformanceExitCodeV1.exact.rawValue
         for entry in selected {
+            let expectedExit = Int32(entry.expectedExit ?? Int(CoreConformanceExitCodeV1.exact.rawValue))
+            guard expectedExit == CoreConformanceExitCodeV1.exact.rawValue ||
+                expectedExit == CoreConformanceExitCodeV1.semanticDifference.rawValue
+            else {
+                throw CoreConformanceCLIError.invalidManifest(
+                    "unsupported expected exit \(expectedExit) for \(entry.id)")
+            }
             let caseOutput = selected.count == 1
                 ? output
                 : output.appendingPathComponent(entry.id, isDirectory: true)
@@ -238,7 +246,11 @@ private func runCoreConformance(arguments: [String]) -> Never {
             } else {
                 print("core-conformance \(entry.id): \(result.exitCode.rawValue) \(result.evidenceDirectory?.path ?? "")")
             }
-            exitCode = max(exitCode, result.exitCode.rawValue)
+            if selected.count == 1 {
+                exitCode = result.exitCode.rawValue
+            } else if result.exitCode.rawValue != expectedExit {
+                exitCode = max(exitCode, result.exitCode.rawValue)
+            }
         }
         exit(exitCode)
     } catch {

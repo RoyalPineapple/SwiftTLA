@@ -1,4 +1,4 @@
------------------------------- MODULE DieHard -------------------------------
+------------------------------ MODULE DieHard ------------------------------- 
 EXTENDS Naturals
 VARIABLES big, small
 TypeOK == /\ small \in 0..3

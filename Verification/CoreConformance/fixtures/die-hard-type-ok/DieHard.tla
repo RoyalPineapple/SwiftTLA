@@ -1,4 +1,4 @@
------------------------------- MODULE DieHard -------------------------------
+------------------------------ MODULE DieHard ------------------------------- 
 (***************************************************************************)
 (* In the movie Die Hard 3, the heroes must obtain exactly 4 gallons of     *)
 (* water using a 5 gallon jug, a 3 gallon jug, and a water faucet.  Our    *)
@@ -12,7 +12,7 @@ EXTENDS Naturals
   (* This statement imports the definitions of the ordinary operators on   *)
   (* natural numbers, such as +.                                           *)
   (*************************************************************************)
-
+  
 (***************************************************************************)
 (* We next declare the specification's variables.                          *)
 (***************************************************************************)
@@ -35,7 +35,7 @@ VARIABLES big,   \* The number of gallons of water in the 5 gallon jug.
 (* of parentheses.  This makes a large formula much easier to read.        *)
 (* However, it does mean that you have to be careful with your indentation.*)
 (***************************************************************************)
-TypeOK == /\ small \in 0..3
+TypeOK == /\ small \in 0..3 
           /\ big   \in 0..5
 
 
@@ -44,7 +44,7 @@ TypeOK == /\ small \in 0..3
 (* values of the variables.  I like to name this predicate Init, but the   *)
 (* name doesn't matter.                                                    *)
 (***************************************************************************)
-Init == /\ big = 0
+Init == /\ big = 0 
         /\ small = 0
 
 (***************************************************************************)
@@ -62,16 +62,16 @@ Init == /\ big = 0
 (* So, the first two possibilities yield the following four possible       *)
 (* actions.                                                                *)
 (***************************************************************************)
-FillSmallJug  == /\ small' = 3
+FillSmallJug  == /\ small' = 3 
                  /\ big' = big
 
-FillBigJug    == /\ big' = 5
+FillBigJug    == /\ big' = 5 
                  /\ small' = small
 
-EmptySmallJug == /\ small' = 0
+EmptySmallJug == /\ small' = 0 
                  /\ big' = big
 
-EmptyBigJug   == /\ big' = 0
+EmptyBigJug   == /\ big' = 0 
                  /\ small' = small
 
 (***************************************************************************)
@@ -94,7 +94,7 @@ Min(m,n) == IF m < n THEN m ELSE n
 SmallToBig == /\ big'   = Min(big + small, 5)
               /\ small' = small - (big' - big)
 
-BigToSmall == /\ small' = Min(big + small, 3)
+BigToSmall == /\ small' = Min(big + small, 3) 
               /\ big'   = big - (small' - small)
 
 (***************************************************************************)
@@ -102,12 +102,12 @@ BigToSmall == /\ small' = Min(big + small, 3)
 (* step is a step of one of the six actions defined above.  Hence, Next is *)
 (* the disjunction of those actions.                                       *)
 (***************************************************************************)
-Next ==  \/ FillSmallJug
-         \/ FillBigJug
-         \/ EmptySmallJug
-         \/ EmptyBigJug
-         \/ SmallToBig
-         \/ BigToSmall
+Next ==  \/ FillSmallJug 
+         \/ FillBigJug    
+         \/ EmptySmallJug 
+         \/ EmptyBigJug    
+         \/ SmallToBig    
+         \/ BigToSmall    
 
 (***************************************************************************)
 (* We define the formula Spec to be the complete specification, asserting  *)
@@ -115,7 +115,7 @@ Next ==  \/ FillSmallJug
 (* step either satisfies Next or else leaves the pair <<big, small>>       *)
 (* unchanged.                                                              *)
 (***************************************************************************)
-Spec == Init /\ [][Next]_<<big, small>>
+Spec == Init /\ [][Next]_<<big, small>> 
 -----------------------------------------------------------------------------
 
 (***************************************************************************)
