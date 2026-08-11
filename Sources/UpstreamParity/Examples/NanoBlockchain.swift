@@ -1,4 +1,5 @@
 import SwiftTLA
+import SwiftTLAMacros
 
 /// Nano blockchain — 2 nodes, 3 hashes, 2 keypairs. GenesisBalance=3.
 /// Upstream: specifications/NanoBlockchain/Nano.tla
@@ -11,12 +12,14 @@ extension Example {
         upstreamModule: "specifications/NanoBlockchain/Nano.tla",
         upstreamCfg: "specifications/NanoBlockchain/MCNanoSmall.cfg",
         expectedDistinct: 24577,
-        spec: nanoSpec(),
+        spec: NanoBlockchainModel.spec,
         notes: "2 nodes, 3 hashes. Genesis + Create + Process blocks. DefineRecursive for chain walking.",
     )
 }
 
-private func nanoSpec() -> TLASpec {
+@TLAModel
+public struct NanoBlockchainModel {
+    public static var spec: TLASpec {
     let nodes = ["n1", "n2"]
     let hashes = ["h1", "h2", "h3"]
     let privKeys = ["prv1", "prv2"]
@@ -24,9 +27,6 @@ private func nanoSpec() -> TLASpec {
     let noBlock: TLAValue = .record(["block": .record(["type": .string("NoBlock")]),
                                       "signature": .record(["data": .string("NoHash"), "signedWith": .string("NoPriv")])])
 
-    let lastHash = Var<String>("lastHash")
-    let distributedLedger = Var<TLAFunctionType>("distributedLedger")
-    let received = Var<TLAFunctionType>("received")
 
     let emptyLedger: TLAValue = .function(
         Dictionary(uniqueKeysWithValues: hashes.map { (.string($0), noBlock) }))
@@ -43,10 +43,10 @@ private func nanoSpec() -> TLASpec {
     }
 
     // GenesisBlockExists
-    func genesisExists() -> StateExpr { lastHash != "NoHash" }
+    func genesisExists() -> StateExpr { StateExpr.variable("lastHash") != "NoHash" }
 
     // Ledger access
-    func ledgerOf(_ node: String) -> StateExpr { distributedLedger.applying(node) }
+    func ledgerOf(_ node: String) -> StateExpr { StateExpr.variable("distributedLedger").applying(node) }
     func blockAt(_ node: String, _ hash: StateExpr) -> StateExpr {
         ledgerOf(node).applying(hash)
     }
@@ -54,7 +54,10 @@ private func nanoSpec() -> TLASpec {
     return TLASpec("NanoBlockchain") {
         Extends("Integers")
 
-        Variable(lastHash, "NoHash")
+            let lastHash = Var<String>("lastHash")
+            let distributedLedger = Var<TLAFunctionType>("distributedLedger")
+            let received = Var<TLAFunctionType>("received")
+            Variable(lastHash, "NoHash")
         Variable(distributedLedger, initDL)
         Variable(received, initRecv)
 
@@ -121,4 +124,5 @@ private func nanoSpec() -> TLASpec {
             }
         }
     }
+}
 }
