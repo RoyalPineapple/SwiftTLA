@@ -147,6 +147,7 @@ public struct CoreConformanceCaseV1: Equatable, Sendable {
     public let architecture: String
     public let environment: [String: String]
     public let pin: TLCReferencePinV1
+    public let governance: CoreConformanceCaseGovernanceV1?
 
     public init(
         id: String,
@@ -160,7 +161,8 @@ public struct CoreConformanceCaseV1: Equatable, Sendable {
         operatingSystem: String,
         architecture: String,
         environment: [String: String],
-        pin: TLCReferencePinV1
+        pin: TLCReferencePinV1,
+        governance: CoreConformanceCaseGovernanceV1? = nil
     ) throws {
         guard !id.isEmpty else { throw CoreConformanceCaseErrorV1.invalidIdentifier("case ID") }
         guard TLCReferencePinV1.isSHA256(moduleSHA256) else { throw CoreConformanceCaseErrorV1.invalidSHA256(field: "moduleSHA256") }
@@ -180,6 +182,7 @@ public struct CoreConformanceCaseV1: Equatable, Sendable {
         self.architecture = architecture
         self.environment = environment
         self.pin = pin
+        self.governance = governance
     }
 
     public static func argumentsDigest(_ arguments: [String]) -> String {
@@ -197,6 +200,174 @@ public struct CoreConformanceCaseV1: Equatable, Sendable {
         }
         guard arguments == self.arguments, Self.argumentsDigest(arguments) == argumentsSHA256 else {
             throw CoreConformanceCaseErrorV1.executionArgumentsMismatch
+        }
+    }
+}
+
+/// The source-controlled declaration for a finite conformance case.
+///
+/// This is deliberately separate from `CoreConformanceCaseV1`: the latter is
+/// the runtime launch contract, while this type retains the governance facts
+/// that make a launch eligible for support evidence.
+public struct CoreConformanceCasesManifestV1: Decodable, Sendable {
+    public static let schema = "CoreConformanceCasesV1"
+    public static let relation = "exactFiniteTLCGraphV1"
+
+    public let schema: String
+    public let relation: String
+    public let cases: [Entry]
+
+    public struct Entry: Decodable, Sendable {
+        public struct IdentityMapping: Decodable, Sendable {
+            public let variables: [String: String]
+            public let actions: [String: String]
+
+            private enum CodingKeys: String, CodingKey, CaseIterable { case variables, actions }
+
+            public init(from decoder: Decoder) throws {
+                let container = try CoreGovernanceDecodingV1.container(decoder, keyedBy: CodingKeys.self)
+                variables = try container.decode([String: String].self, forKey: .variables)
+                actions = try container.decode([String: String].self, forKey: .actions)
+            }
+        }
+
+        public struct Upstream: Decodable, Sendable {
+            public let repository: String
+            public let commit: String
+
+            private enum CodingKeys: String, CodingKey, CaseIterable { case repository, commit }
+
+            public init(from decoder: Decoder) throws {
+                let container = try CoreGovernanceDecodingV1.container(decoder, keyedBy: CodingKeys.self)
+                repository = try container.decode(String.self, forKey: .repository)
+                commit = try container.decode(String.self, forKey: .commit)
+            }
+        }
+
+        public struct Fixtures: Decodable, Sendable {
+            public let module: String
+            public let configuration: String
+
+            private enum CodingKeys: String, CodingKey, CaseIterable { case module, configuration }
+
+            public init(from decoder: Decoder) throws {
+                let container = try CoreGovernanceDecodingV1.container(decoder, keyedBy: CodingKeys.self)
+                module = try container.decode(String.self, forKey: .module)
+                configuration = try container.decode(String.self, forKey: .configuration)
+            }
+        }
+
+        public let id: String
+        public let swiftSpec: String
+        public let module: String
+        public let configuration: String
+        public let moduleSHA256: String
+        public let cfgSHA256: String
+        public let arguments: [String]
+        public let argumentsSHA256: String
+        public let workers: Int
+        public let fingerprintPolynomial: Int
+        public let deadlock: Bool
+        public let replay: String
+        public let expectedExit: Int?
+        public let upstream: Upstream
+        public let fixtures: Fixtures
+        public let identityMapping: IdentityMapping
+        public let semanticCitations: [String]
+        public let governance: CoreConformanceCaseGovernanceV1
+        public let expectedArtifacts: String
+
+        private enum CodingKeys: String, CodingKey, CaseIterable {
+            case id, swiftSpec, module, configuration, moduleSHA256, cfgSHA256
+            case arguments, argumentsSHA256, workers, fingerprintPolynomial, deadlock, replay
+            case expectedExit, upstream, fixtures, identityMapping, semanticCitations, governance
+            case expectedArtifacts
+        }
+
+        public init(from decoder: Decoder) throws {
+            let container = try CoreGovernanceDecodingV1.container(decoder, keyedBy: CodingKeys.self)
+            id = try container.decode(String.self, forKey: .id)
+            swiftSpec = try container.decode(String.self, forKey: .swiftSpec)
+            module = try container.decode(String.self, forKey: .module)
+            configuration = try container.decode(String.self, forKey: .configuration)
+            moduleSHA256 = try container.decode(String.self, forKey: .moduleSHA256)
+            cfgSHA256 = try container.decode(String.self, forKey: .cfgSHA256)
+            arguments = try container.decode([String].self, forKey: .arguments)
+            argumentsSHA256 = try container.decode(String.self, forKey: .argumentsSHA256)
+            workers = try container.decode(Int.self, forKey: .workers)
+            fingerprintPolynomial = try container.decode(Int.self, forKey: .fingerprintPolynomial)
+            deadlock = try container.decode(Bool.self, forKey: .deadlock)
+            replay = try container.decode(String.self, forKey: .replay)
+            expectedExit = try container.decodeIfPresent(Int.self, forKey: .expectedExit)
+            upstream = try container.decode(Upstream.self, forKey: .upstream)
+            fixtures = try container.decode(Fixtures.self, forKey: .fixtures)
+            identityMapping = try container.decode(IdentityMapping.self, forKey: .identityMapping)
+            semanticCitations = try container.decode([String].self, forKey: .semanticCitations)
+            governance = try container.decode(CoreConformanceCaseGovernanceV1.self, forKey: .governance)
+            expectedArtifacts = try container.decode(String.self, forKey: .expectedArtifacts)
+            try validate()
+        }
+
+        public func validate() throws {
+            guard !id.isEmpty, !swiftSpec.isEmpty, !module.isEmpty, !configuration.isEmpty,
+                  !replay.isEmpty, !expectedArtifacts.isEmpty, !upstream.repository.isEmpty,
+                  !upstream.commit.isEmpty, !fixtures.module.isEmpty, !fixtures.configuration.isEmpty,
+                  !semanticCitations.isEmpty, semanticCitations.allSatisfy({ !$0.isEmpty }) else {
+                throw CoreGovernanceErrorV1.invalidField(record: id, field: "case declaration")
+            }
+            guard TLCReferencePinV1.isSHA256(moduleSHA256), TLCReferencePinV1.isSHA256(cfgSHA256),
+                  argumentsSHA256 == CoreConformanceCaseV1.argumentsDigest(arguments), workers == 1,
+                  fingerprintPolynomial >= 0 else {
+                throw CoreGovernanceErrorV1.invalidField(record: id, field: "launch contract")
+            }
+            let expectedOutcome: CoreRegressionOutcomeV1 = expectedExit == nil || expectedExit == 0
+                ? .exact : .difference
+            guard expectedExit == nil || expectedExit == 0 || expectedExit == 1,
+                  governance.expectedRegressionOutcome == expectedOutcome,
+                  (governance.role == .requiredComparison) == (expectedOutcome == .exact) else {
+                throw CoreGovernanceErrorV1.invalidField(record: id, field: "governance outcome")
+            }
+        }
+    }
+
+    private enum CodingKeys: String, CodingKey, CaseIterable { case schema, relation, cases }
+
+    public init(from decoder: Decoder) throws {
+        let container = try CoreGovernanceDecodingV1.container(decoder, keyedBy: CodingKeys.self)
+        schema = try container.decode(String.self, forKey: .schema)
+        relation = try container.decode(String.self, forKey: .relation)
+        cases = try container.decode([Entry].self, forKey: .cases)
+        try validate()
+    }
+
+    public func validate() throws {
+        guard schema == Self.schema, relation == Self.relation, !cases.isEmpty else {
+            throw CoreGovernanceErrorV1.invalidSchema(schema)
+        }
+        var ids = Set<String>()
+        for entry in cases {
+            try entry.validate()
+            guard ids.insert(entry.id).inserted else {
+                throw CoreGovernanceErrorV1.duplicateID(kind: "case", id: entry.id)
+            }
+        }
+    }
+
+    public func validate(ledger: CoreDivergenceLedgerV1) throws {
+        try validate()
+        let entries = Dictionary(uniqueKeysWithValues: cases.map { ($0.id, $0) })
+        try ledger.validate(caseIDs: Set(entries.keys))
+        for record in ledger.records {
+            guard let original = entries[record.provenance.caseID],
+                  let regression = entries[record.permanentRegressionCaseID],
+                  regression.governance.role == .permanentRegression,
+                  regression.governance.expectedRegressionOutcome == .difference,
+                  original.moduleSHA256 == record.provenance.moduleSHA256,
+                  original.cfgSHA256 == record.provenance.cfgSHA256,
+                  original.argumentsSHA256 == record.provenance.argumentsSHA256,
+                  Set(record.semanticCitations).isSubset(of: Set(original.governance.semanticCitations)) else {
+                throw CoreGovernanceErrorV1.invalidField(record: record.id, field: "case governance correlation")
+            }
         }
     }
 }

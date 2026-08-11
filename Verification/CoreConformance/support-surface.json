@@ -1,0 +1,109 @@
+{
+  "schema": "CoreSupportSurfaceV1",
+  "entries": [
+    {
+      "id": "hour-clock-reachable-state-space",
+      "behavior": "HourClock reachable finite state-space enumeration",
+      "category": "stateSpace",
+      "finiteBounds": {
+        "summary": "One integer variable over 1...12 with 12 reachable states.",
+        "limits": {
+          "states": 12,
+          "variables": 1
+        }
+      },
+      "relation": "exactFiniteTLCGraphV1",
+      "mandatoryCaseIDs": ["hour-clock"],
+      "requestedStatus": "requested",
+      "linkedDivergenceIDs": []
+    },
+    {
+      "id": "hour-clock-transition-relation",
+      "behavior": "HourClock HCnxt labeled transition relation",
+      "category": "transitionRelation",
+      "finiteBounds": {
+        "summary": "One integer variable over 1...12 with 12 labeled HCnxt transitions.",
+        "limits": {
+          "states": 12,
+          "transitions": 12,
+          "variables": 1
+        }
+      },
+      "relation": "exactFiniteTLCGraphV1",
+      "mandatoryCaseIDs": ["hour-clock"],
+      "requestedStatus": "requested",
+      "linkedDivergenceIDs": []
+    },
+    {
+      "id": "die-hard-type-safety",
+      "behavior": "DieHard TypeOK invariant safety across the retained finite graph",
+      "category": "invariantSafety",
+      "finiteBounds": {
+        "summary": "Two jug variables bounded to 0...5 and 0...3 with a retained 16-state exact finite graph.",
+        "limits": {
+          "bigCapacity": 5,
+          "smallCapacity": 3,
+          "states": 16,
+          "variables": 2
+        }
+      },
+      "relation": "exactFiniteTLCGraphV1",
+      "mandatoryCaseIDs": ["die-hard-type-ok"],
+      "requestedStatus": "requested",
+      "linkedDivergenceIDs": []
+    },
+    {
+      "id": "hour-clock-altered-transition-control",
+      "behavior": "Altered HourClock HCnxt transition semantics",
+      "category": "transitionRelation",
+      "finiteBounds": {
+        "summary": "One integer variable over 1...12 with the deliberately altered 12 -> 2 edge.",
+        "limits": {
+          "states": 12,
+          "transitions": 12,
+          "variables": 1
+        }
+      },
+      "relation": "exactFiniteTLCGraphV1",
+      "mandatoryCaseIDs": ["hour-clock-edge-mismatch"],
+      "requestedStatus": "unsupported",
+      "linkedDivergenceIDs": ["hour-clock-edge-mismatch"],
+      "reason": "This retained negative control intentionally differs from the declared HourClock semantics and cannot substantiate support."
+    },
+    {
+      "id": "die-hard-notsolved-control",
+      "behavior": "DieHard NotSolved invariant outcome",
+      "category": "invariantSafety",
+      "finiteBounds": {
+        "summary": "Two jug variables bounded to 0...5 and 0...3 with a deliberately failing NotSolved invariant.",
+        "limits": {
+          "bigCapacity": 5,
+          "smallCapacity": 3,
+          "states": 16,
+          "variables": 2
+        }
+      },
+      "relation": "exactFiniteTLCGraphV1",
+      "mandatoryCaseIDs": ["die-hard-violation"],
+      "requestedStatus": "unsupported",
+      "linkedDivergenceIDs": ["die-hard-violation"],
+      "reason": "This retained negative control intentionally forces a TLC-only invariant failure and cannot substantiate support."
+    },
+    {
+      "id": "unproven-finite-core-graph-behavior",
+      "behavior": "Finite core graph behavior outside the declared HourClock and DieHard bounds",
+      "category": "stateSpace",
+      "finiteBounds": {
+        "summary": "No broader bound is admitted beyond the two retained exact finite graphs.",
+        "limits": {
+          "declaredExactCases": 2
+        }
+      },
+      "relation": "exactFiniteTLCGraphV1",
+      "mandatoryCaseIDs": ["hour-clock", "die-hard-type-ok"],
+      "requestedStatus": "unsupported",
+      "linkedDivergenceIDs": [],
+      "reason": "No current exact case directly demonstrates broader core graph behavior."
+    }
+  ]
+}

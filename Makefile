@@ -1,4 +1,4 @@
-.PHONY: test tlc parity build examples core-conformance ci-local
+.PHONY: test tlc parity build examples core-conformance core-support-gate ci-local
 
 test:
 	swift test
@@ -19,6 +19,9 @@ examples:
 
 core-conformance:
 	./scripts/run_core_conformance.sh --case all --output .build/core-conformance-evidence
+
+core-support-gate:
+	./scripts/run_core_support_gate.sh --output .build/core-support-gate
 
 ci-local:
 	./scripts/run_ci_locally.sh

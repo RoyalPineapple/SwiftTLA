@@ -19,8 +19,9 @@ forbid() {
 }
 
 require "runs-on: macos-15"
-require './scripts/setup-core-conformance-tools.sh --tool-root "$CORE_CONFORMANCE_TOOL_ROOT" --cases Verification/CoreConformance/cases.json'
-require "make core-conformance"
+require "make core-support-gate"
+require "scripts/run_core_support_gate.sh"
+require ".build/core-support-gate"
 require "if: always()"
 require "actions/upload-artifact@v4"
 require 'case "$status" in'
@@ -33,6 +34,7 @@ require "exit 2"
 forbid "baseline"
 forbid "validate_upstream_parity.sh"
 forbid "swift test --filter UpstreamParity"
+forbid "make core-conformance"
 forbid "curl "
 forbid "wget "
 forbid "-dumpTrace"

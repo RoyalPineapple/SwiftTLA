@@ -13,6 +13,7 @@ on:
       - 'Tools/TLCGraphBridge/**'
       - 'Verification/CoreConformance/**'
       - 'scripts/run_core_conformance.sh'
+      - 'scripts/run_core_support_gate.sh'
       - 'scripts/setup-core-conformance-tools.sh'
   pull_request:
     branches: [main]
@@ -26,6 +27,7 @@ on:
       - 'Tools/TLCGraphBridge/**'
       - 'Verification/CoreConformance/**'
       - 'scripts/run_core_conformance.sh'
+      - 'scripts/run_core_support_gate.sh'
       - 'scripts/setup-core-conformance-tools.sh'
   workflow_dispatch:
 
@@ -43,30 +45,24 @@ jobs:
       - name: Validate focused workflow contract
         run: Tests/Fixtures/CoreConformance/CI/assert_workflow.sh
 
-      - name: Run locked core conformance
+      - name: Run mandatory core-support gate
         id: conformance
         run: |
           set +e
-          ./scripts/setup-core-conformance-tools.sh --tool-root "$CORE_CONFORMANCE_TOOL_ROOT" --cases Verification/CoreConformance/cases.json
-          setup_status=$?
-          if [ "$setup_status" -eq 0 ]; then
-            make core-conformance
-            status=$?
-          else
-            status=2
-          fi
+          make core-support-gate
+          status=$?
 
           mkdir -p .build/core-conformance-ci
           printf '%s\n' "$status" > .build/core-conformance-ci/exit-code
           case "$status" in
             0)
-              echo "Core conformance passed (exit 0)."
+              echo "Core support gate passed (exit 0)."
               ;;
             1)
-              echo "::error::Core conformance found a semantic difference (exit 1)."
+              echo "::error::Core support gate blocked admission (exit 1)."
               ;;
             2)
-              echo "::error::Core conformance prerequisites or evidence failed (exit 2)."
+              echo "::error::Core support gate prerequisites or evidence failed (exit 2)."
               ;;
             *)
               echo "::error::Core conformance returned an unexpected exit $status."
@@ -80,7 +76,7 @@ jobs:
         with:
           name: core-conformance-${{ github.run_id }}
           path: |
-            .build/core-conformance-evidence
+            .build/core-support-gate
             .build/core-conformance-ci
           if-no-files-found: warn
 

@@ -1,0 +1,98 @@
+{
+  "schema": "CoreDivergenceLedgerV1",
+  "records": [
+    {
+      "id": "hour-clock-edge-mismatch",
+      "provenance": {
+        "caseID": "hour-clock-edge-mismatch",
+        "moduleSHA256": "d9095b5892b817e41c8dfb11129703d8d4da6e67e2a2e23fbb57a30ae51c6a8f",
+        "cfgSHA256": "5fc99b8399ad0227b0afbf25ff802c3582d4347dd06e26461313ecef6d5253f8",
+        "argumentsSHA256": "5a29989b077aadf61edf04f0b0cc435c5f9ef27fe0b75daa01cb703ee9ce89b5",
+        "tlcTag": "v1.8.0",
+        "tlcCommit": "30cc3601321c3fc02e044d0ecb5c58d8921e18df",
+        "tlcJarSHA256": "e22f8ffb4bacdea0a871f444dd94fe5fb0d8013b3388ae39e82e26f852c735d5",
+        "javaDistribution": "Eclipse Temurin",
+        "javaVersion": "17.0.19+10",
+        "javaArchiveSHA256": "8fa1eff40bb637a33613b2ccb8b12c70dc3661cc22cf8e784943715769a05336",
+        "bridgeClass": "org.swifttla.conformance.LosslessStateWriter",
+        "bridgeSourceSHA256": "d6a390a1dd8c81e20c22f715a0133f5c7561178a9a5dcdcd7f184c695a6741b7",
+        "bridgeBinarySHA256": "240a717693a5500be4067a3bb4d90fa9c3edce67855f09c5422daf5512ee0fde"
+      },
+      "semanticCitations": [
+        "specifications/SpecifyingSystems/HourClock/HourClock.tla: HCnxt",
+        "Verification/CoreConformance/fixtures/hour-clock-edge-mismatch/control.json"
+      ],
+      "reproducer": {
+        "summary": "Deliberate HourClock negative control: one integer variable over 1...12, 12 states, and one altered HCnxt edge.",
+        "limits": {
+          "states": 12,
+          "transitions": 12,
+          "variables": 1
+        }
+      },
+      "originalEvidence": {
+        "path": "Verification/CoreConformance/fixtures/hour-clock-edge-mismatch/evidence/comparison.json",
+        "sha256": "ad723192ef31b676bde660f7abdc2836027be278229ce2b4ebb1e57783d923f0"
+      },
+      "permanentRegressionCaseID": "hour-clock-edge-mismatch",
+      "classification": "harnessOrConfigurationDefect",
+      "disposition": "unsupported",
+      "normalizedDifferenceFingerprint": "4191a035e62b2f264f35cf8adbe8e29714d0fedd82ee823b11d31f0cc3f5fb53",
+      "latestComparison": {
+        "evidence": {
+          "path": "Verification/CoreConformance/fixtures/hour-clock-edge-mismatch/evidence/comparison.json",
+          "sha256": "ad723192ef31b676bde660f7abdc2836027be278229ce2b4ebb1e57783d923f0"
+        },
+        "outcome": "difference",
+        "normalizedDifferenceFingerprint": "4191a035e62b2f264f35cf8adbe8e29714d0fedd82ee823b11d31f0cc3f5fb53"
+      }
+    },
+    {
+      "id": "die-hard-violation",
+      "provenance": {
+        "caseID": "die-hard-violation",
+        "moduleSHA256": "59eac00c38748568ee17c85b994b5fbd2864ff8562fb5b1bdd5db786eb6f09bf",
+        "cfgSHA256": "59fca38d703a0b17f967b35267fad8581e305b442c72147f1b2a530ea0ba6547",
+        "argumentsSHA256": "5a29989b077aadf61edf04f0b0cc435c5f9ef27fe0b75daa01cb703ee9ce89b5",
+        "tlcTag": "v1.8.0",
+        "tlcCommit": "30cc3601321c3fc02e044d0ecb5c58d8921e18df",
+        "tlcJarSHA256": "e22f8ffb4bacdea0a871f444dd94fe5fb0d8013b3388ae39e82e26f852c735d5",
+        "javaDistribution": "Eclipse Temurin",
+        "javaVersion": "17.0.19+10",
+        "javaArchiveSHA256": "8fa1eff40bb637a33613b2ccb8b12c70dc3661cc22cf8e784943715769a05336",
+        "bridgeClass": "org.swifttla.conformance.LosslessStateWriter",
+        "bridgeSourceSHA256": "d6a390a1dd8c81e20c22f715a0133f5c7561178a9a5dcdcd7f184c695a6741b7",
+        "bridgeBinarySHA256": "240a717693a5500be4067a3bb4d90fa9c3edce67855f09c5422daf5512ee0fde"
+      },
+      "semanticCitations": [
+        "specifications/DieHard/DieHard.tla: NotSolved",
+        "Verification/CoreConformance/fixtures/die-hard-violation/DieHard.cfg: INVARIANTS TypeOK NotSolved"
+      ],
+      "reproducer": {
+        "summary": "Deliberate DieHard negative control: two jug variables bounded to 0...5 and 0...3 with a forced NotSolved invariant failure.",
+        "limits": {
+          "bigCapacity": 5,
+          "smallCapacity": 3,
+          "states": 16,
+          "variables": 2
+        }
+      },
+      "originalEvidence": {
+        "path": "Verification/CoreConformance/fixtures/die-hard-violation/evidence/comparison.json",
+        "sha256": "e59d77f35003b39fee179c91c12dbd5ab33ea4f1661604c71f26a3f1f9480235"
+      },
+      "permanentRegressionCaseID": "die-hard-violation",
+      "classification": "harnessOrConfigurationDefect",
+      "disposition": "unsupported",
+      "normalizedDifferenceFingerprint": "7bd47a3941b836684ce33fcef619777c90657dbf423ed7a54989f04e6298452d",
+      "latestComparison": {
+        "evidence": {
+          "path": "Verification/CoreConformance/fixtures/die-hard-violation/evidence/comparison.json",
+          "sha256": "e59d77f35003b39fee179c91c12dbd5ab33ea4f1661604c71f26a3f1f9480235"
+        },
+        "outcome": "difference",
+        "normalizedDifferenceFingerprint": "7bd47a3941b836684ce33fcef619777c90657dbf423ed7a54989f04e6298452d"
+      }
+    }
+  ]
+}
