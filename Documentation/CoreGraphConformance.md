@@ -12,6 +12,16 @@ Run the maintained command:
 make core-conformance
 ```
 
+Run the same required checks as the GitHub workflows on a local Mac:
+
+```bash
+make ci-local
+```
+
+This command runs tests, coverage, package builds, macro builds, and core
+conformance. It keeps the conformance evidence in `.build/`. SwiftLint runs
+as an advisory check.
+
 The command uses the locked TLC, Java, and bridge artifacts. It fails when an
 artifact identity, input, graph stream, or comparison result does not match.
 
