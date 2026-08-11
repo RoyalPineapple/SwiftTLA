@@ -76,7 +76,7 @@ enum TLASpecVerifier {
             }
             if let binding = varBindings.first(where: { $0.name == parsed.variables[i].name }),
                ["TLAFunctionType", "TLASetType", "TLARecordType", "TLATupleType"].contains(binding.typeName),
-               parsed.variables[i].initial == .int(0) {
+               (parsed.variables[i].initial == .int(0) || parsed.variables[i].initial == .set([])) {
                 parsed.variables[i].initial = MacroExpander.defaultInit(for: binding.typeName)
             }
         }
@@ -825,7 +825,13 @@ enum MacroExpander {
                           !["Int", "Bool", "String", "TLAValue"].contains(typeName) {
                     ExprSyntax(stringLiteral: "self.\(v.name) = \(typeName)(rawValue: dict[Variables.\(v.name).rawValue]!.\(extractor(for: v.initial)))!")
                 } else {
-                    ExprSyntax(stringLiteral: "self.\(v.name) = dict[Variables.\(v.name).rawValue]!.\(v.swiftTypeName.map(extractor(forSwiftType:)) ?? extractor(for: v.initial))")
+                    let swiftType = v.swiftTypeName ?? swiftType(for: v.initial)
+                    if swiftType == "TLAValue" {
+                        ExprSyntax(stringLiteral: "self.\(v.name) = dict[Variables.\(v.name).rawValue]!")
+                    } else {
+                        let extractor = v.swiftTypeName.map(extractor(forSwiftType:)) ?? extractor(for: v.initial)
+                        ExprSyntax(stringLiteral: "self.\(v.name) = dict[Variables.\(v.name).rawValue]!.\(extractor)")
+                    }
                 }
                         }
                     }
@@ -1281,10 +1287,10 @@ enum MacroExpander {
 
     static func swiftType(for initial: TLAValue) -> String {
         switch initial {
-        case .int: "Int"; case .bool: "Bool"; case .string: "String"
-        case .set: "Set<Int>"; case .tuple: "[TLAValue]"
-        case .record: "[String: TLAValue]"; case .function: "[TLAValue: TLAValue]"
-        case .constant: "String"
+        case .int: "Int"
+        case .bool: "Bool"
+        case .string: "String"
+        case .set, .tuple, .record, .function, .constant: "TLAValue"
         }
     }
 
@@ -1299,7 +1305,10 @@ enum MacroExpander {
 
     static func extractor(forSwiftType swiftType: String) -> String {
         switch swiftType {
-        case "Int": "intValue"; case "Bool": "boolValue"; case "String": "stringValue"
+        case "Int": "intValue"
+        case "Bool": "boolValue"
+        case "String": "stringValue"
+        case "TLAValue": ""
         default: "intValue"
         }
     }
@@ -1309,6 +1318,7 @@ enum MacroExpander {
         case "Int": ".int(\(value))"
         case "Bool": ".bool(\(value))"
         case "String": ".string(\(value))"
+        case "TLAValue": value
         default: ".int(0)"
         }
     }
