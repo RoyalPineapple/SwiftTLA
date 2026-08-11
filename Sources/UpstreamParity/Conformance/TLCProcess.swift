@@ -427,7 +427,7 @@ private func executeProcess(
       partialStderr: String(data: output.stderr, encoding: .utf8) ?? "<non-UTF-8 output>"
     )
   }
-  _ = outputGroup.wait(timeout: .now() + 1)
+  _ = outputGroup.wait(timeout: .now() + 10)
   return TLCProcessResultV1(
     status: process.terminationStatus,
     stdout: String(data: output.stdout, encoding: .utf8) ?? "<non-UTF-8 output>",
