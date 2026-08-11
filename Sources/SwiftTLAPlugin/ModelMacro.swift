@@ -56,7 +56,7 @@ enum TLASpecVerifier {
         let rewriter = EnumDotRewriter(caseToType: caseToType)
         let dotRewrittenSyntax = rewriter.rewrite(rewritten)
         let dotRewritten = dotRewrittenSyntax.as(ClosureExprSyntax.self) ?? rewritten
-        if let unknown = rewriter.unknownDots.first {
+        if let unknown = rewriter.unknownDots.first, !caseToType.isEmpty {
             let allCases = caseToType.keys.sorted().joined(separator: ", ")
             throw SimpleError("Unknown enum case '.\(unknown)'. Available cases: [\(allCases)]")
         }
