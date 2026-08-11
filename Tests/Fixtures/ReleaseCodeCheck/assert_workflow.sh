@@ -19,6 +19,7 @@ forbid() {
 }
 
 require "release-code-check:"
+require "run_hosted_diagnostics:"
 require "Run SwiftLint (advisory)"
 require "./scripts/lint-zero-new.sh"
 require 'lint_status=$?'
@@ -32,6 +33,7 @@ require "Run coverage (hosted diagnostic)"
 require "-enableCodeCoverage YES"
 require 'coverage_status=$?'
 require "Hosted macOS coverage runner failed"
+require "github.event_name == 'workflow_dispatch' && inputs.run_hosted_diagnostics"
 forbid "continue-on-error"
 forbid "swift test || true"
 forbid "swift test --enable-code-coverage || true"

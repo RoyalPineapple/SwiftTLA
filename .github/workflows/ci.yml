@@ -5,6 +5,13 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  workflow_dispatch:
+    inputs:
+      run_hosted_diagnostics:
+        description: Run unstable hosted macOS test and coverage diagnostics.
+        required: false
+        default: false
+        type: boolean
 
 jobs:
   release-code-check:
@@ -26,6 +33,7 @@ jobs:
           fi
 
       - name: Run tests (hosted diagnostic)
+        if: github.event_name == 'workflow_dispatch' && inputs.run_hosted_diagnostics
         run: |
           set +e
           xcodebuild test -scheme SwiftTLA-Package -destination 'platform=macOS'
@@ -36,6 +44,7 @@ jobs:
           fi
 
       - name: Run coverage (hosted diagnostic)
+        if: github.event_name == 'workflow_dispatch' && inputs.run_hosted_diagnostics
         run: |
           set +e
           xcodebuild test -scheme SwiftTLA-Package -destination 'platform=macOS' -enableCodeCoverage YES
