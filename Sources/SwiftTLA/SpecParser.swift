@@ -103,10 +103,10 @@ public enum SpecParser {
             return .functionApply(selfExpr, argExpr)
         case "filtering":
             guard let selfExpr, let arg = args.first?.expression, let argExpr = decodeStateExpr(arg) else { return nil }
-            return .setFilter(selfExpr, .fresh(), argExpr)
+            return .setFilter(selfExpr, FreshVarName.fresh(), argExpr)
         case "mapping":
             guard let selfExpr, let arg = args.first?.expression, let argExpr = decodeStateExpr(arg) else { return nil }
-            return .setMap(argExpr, .fresh(), selfExpr)
+            return .setMap(argExpr, FreshVarName.fresh(), selfExpr)
         case "appending":
             guard let selfExpr, let arg = args.first?.expression, let argExpr = decodeStateExpr(arg) else { return nil }
             return .tupleAppend(selfExpr, argExpr)
@@ -160,11 +160,11 @@ public enum SpecParser {
             guard memberAccess.base?.as(DeclReferenceExprSyntax.self)?.baseName.text == "StateExpr" else { return nil }
             let exprs = args.compactMap { decodeStateExpr($0.expression) }
             switch methodName {
-            case "function", "functionLiteral": return exprs.count >= 2 ? .functionLiteral(exprs[0], .fresh(), exprs[1]) : nil
-            case "for": return exprs.count >= 2 ? .forAll(exprs[0], .fresh(), exprs[1]) : nil
-            case "exists": return exprs.count >= 2 ? .exists(exprs[0], .fresh(), exprs[1]) : nil
-            case "choose": return exprs.count >= 2 ? .choose(exprs[0], .fresh(), exprs[1]) : nil
-            case "any": return exprs.count >= 1 ? .choose(exprs[0], .fresh(), .value(.bool(true))) : nil
+            case "function", "functionLiteral": return exprs.count >= 2 ? .functionLiteral(exprs[0], FreshVarName.fresh(), exprs[1]) : nil
+            case "for": return exprs.count >= 2 ? .forAll(exprs[0], FreshVarName.fresh(), exprs[1]) : nil
+            case "exists": return exprs.count >= 2 ? .exists(exprs[0], FreshVarName.fresh(), exprs[1]) : nil
+            case "choose": return exprs.count >= 2 ? .choose(exprs[0], FreshVarName.fresh(), exprs[1]) : nil
+            case "any": return exprs.count >= 1 ? .choose(exprs[0], FreshVarName.fresh(), .value(.bool(true))) : nil
             default: return nil
             }
         case "firstMatch":
@@ -369,11 +369,11 @@ public enum SpecParser {
                 ?? call.arguments.first?.expression.as(ClosureExprSyntax.self),
               let parameter = collectionPredicateParameter(in: closure)
         else { return nil }
-        let member = QuantVar.fresh()
+        let member = FreshVarName.fresh()
         let rewrittenStatements = closure.statements.map { statement in
             PredicateValueRewriter(
                 parameter: parameter,
-                replacement: "\(collection).applying(\(member.name))"
+                replacement: "\(collection).applying(\(member))"
             ).visit(statement)
         }
         let rewrittenClosure = closure.with(\.statements, CodeBlockItemListSyntax(rewrittenStatements))
@@ -818,11 +818,11 @@ public enum SpecParser {
               let parameter = collectionPredicateParameter(in: closure)
         else { return nil }
 
-        let member = QuantVar.fresh()
+        let member = FreshVarName.fresh()
         let rewrittenStatements = closure.statements.map { statement in
             PredicateValueRewriter(
                 parameter: parameter,
-                replacement: "\(collection).applying(\(member.name))"
+                replacement: "\(collection).applying(\(member))"
             ).visit(statement)
         }
         let rewrittenClosure = closure.with(\.statements, CodeBlockItemListSyntax(rewrittenStatements))
@@ -958,7 +958,7 @@ public enum SpecParser {
             ))
             return
         }
-        let member = QuantVar.fresh()
+        let member = FreshVarName.fresh()
         let diagnosticCount = result.diagnostics.count
         validateMemberUses(
             memberName,
@@ -971,7 +971,7 @@ public enum SpecParser {
             closure,
             collection: collectionName,
             member: memberName,
-            binding: member.name
+            binding: member
         ) else {
             if result.diagnostics.count == diagnosticCount {
                 result.diagnostics.append(.init(
@@ -984,7 +984,7 @@ public enum SpecParser {
         result.collectionActions.append(.init(
             name: actionName,
             collectionName: collectionName,
-            body: .existsAction(member.name, .domain(.variable(collectionName)), actionBody),
+            body: .existsAction(member, .domain(.variable(collectionName)), actionBody),
             runtimeBranches: runtimeBranches(
                 in: closure,
                 collection: collectionName,
@@ -994,7 +994,7 @@ public enum SpecParser {
             source: call.description
         ))
         result.actions.append((actionName, .existsAction(
-            member.name,
+            member,
             .domain(.variable(collectionName)),
             actionBody
         )))

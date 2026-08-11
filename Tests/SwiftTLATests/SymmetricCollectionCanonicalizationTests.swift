@@ -107,14 +107,14 @@ struct SymmetricCollectionCanonicalizationTests {
   @Test("Nested symmetric values are quotient-canonicalized without collapsing identities")
   func nestedValuesUseFullStatePermutations() throws {
     let members = SymmetricCollectionVar<Device, TLAValue>("members")
-    let selected = QuantVar(name: "selected")
+    let selected = "selected"
     let nestedValue = StateExpr.recordLiteral([
-      "member": .variable(selected.name),
+      "member": .variable(selected),
       "nested": .tupleLiteral([
-        .setLiteral([.variable(selected.name)]),
+        .setLiteral([.variable(selected)]),
         .functionLiteral(
-          .setLiteral([.variable(selected.name)]),
-          QuantVar(name: "functionKey"),
+          .setLiteral([.variable(selected)]),
+          "functionKey",
           .recordLiteral(["key": .variable("functionKey")])
         )
       ])
@@ -123,9 +123,9 @@ struct SymmetricCollectionCanonicalizationTests {
       SymmetricCollection(members, verificationScope: 2, initial: .record([:]))
       Action("mark") {
         .existsAction(
-          selected.name,
+          selected,
           .domain(.variable(members.name)),
-          .assign(members.name, .except(.variable(members.name), .variable(selected.name), nestedValue))
+          .assign(members.name, .except(.variable(members.name), .variable(selected), nestedValue))
         )
       }
     }

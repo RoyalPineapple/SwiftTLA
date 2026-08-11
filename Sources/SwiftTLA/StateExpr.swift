@@ -1,20 +1,17 @@
 import Foundation
 
-public struct QuantVar: Hashable, Sendable, CustomStringConvertible {
-    public let name: String
-    public var description: String { name }
-    public init(name: String) { self.name = name }
+public enum FreshVarName {
+    private static let _lock = NSLock()
+    private nonisolated(unsafe) static var _counter = 0
 
-    public static func fresh() -> QuantVar {
+    public static func fresh() -> String {
         let c = _lock.withLock { () -> Int in
             _counter += 1
             return _counter
         }
-        return QuantVar(name: "x\(c)")
+        return "x\(c)"
     }
     public static func resetCounter() { _lock.withLock { _counter = 0 } }
-    private static let _lock = NSLock()
-    private nonisolated(unsafe) static var _counter = 0
 }
 
 public indirect enum StateExpr: Hashable, Sendable, CustomStringConvertible {
@@ -49,8 +46,8 @@ public indirect enum StateExpr: Hashable, Sendable, CustomStringConvertible {
     case intersection(StateExpr, StateExpr)
     case setDifference(StateExpr, StateExpr)
     case cardinality(StateExpr)
-    case setFilter(StateExpr, QuantVar, StateExpr)
-    case setMap(StateExpr, QuantVar, StateExpr)
+    case setFilter(StateExpr, String, StateExpr)
+    case setMap(StateExpr, String, StateExpr)
     case powerSet(StateExpr)
     case unionAll(StateExpr)
 
@@ -65,14 +62,14 @@ public indirect enum StateExpr: Hashable, Sendable, CustomStringConvertible {
     case recordLiteral([String: StateExpr])
     case recordAccess(StateExpr, String)
     case domain(StateExpr)
-    case functionLiteral(StateExpr, QuantVar, StateExpr)
+    case functionLiteral(StateExpr, String, StateExpr)
     case functionApply(StateExpr, StateExpr)
     case except(StateExpr, StateExpr, StateExpr)
     case caseExpr([StateExpr], StateExpr?)
 
-    case forAll(StateExpr, QuantVar, StateExpr)
-    case exists(StateExpr, QuantVar, StateExpr)
-    case choose(StateExpr, QuantVar, StateExpr)
+    case forAll(StateExpr, String, StateExpr)
+    case exists(StateExpr, String, StateExpr)
+    case choose(StateExpr, String, StateExpr)
     case enabledAction(String)
 
     case sequenceFromSet(StateExpr)

@@ -24,14 +24,14 @@ public struct SymmetricCollectionVar<Element: Identifiable, Value: TLAValueType>
   }
 
   public func allSatisfy(_ predicate: (Expr<Value>) -> StateExpr) -> StateExpr {
-    let member = QuantVar.fresh()
-    let value = Expr<Value>(.functionApply(.variable(name), .variable(member.name)))
+    let member = FreshVarName.fresh()
+    let value = Expr<Value>(.functionApply(.variable(name), .variable(member)))
     return .forAll(memberDomain, member, predicate(value))
   }
 
   public func contains(where predicate: (Expr<Value>) -> StateExpr) -> StateExpr {
-    let member = QuantVar.fresh()
-    let value = Expr<Value>(.functionApply(.variable(name), .variable(member.name)))
+    let member = FreshVarName.fresh()
+    let value = Expr<Value>(.functionApply(.variable(name), .variable(member)))
     return .exists(memberDomain, member, predicate(value))
   }
 
@@ -371,9 +371,9 @@ public func CollectionAction<Element: Identifiable, Value: TLAValueType>(
   on collection: SymmetricCollectionVar<Element, Value>,
   @ActionBuilder _ body: (SymmetricMember<Element>) -> ActionExpr
 ) -> ActionDecl {
-  let member = QuantVar.fresh()
-  let token = SymmetricMember<Element>(owner: collection.name, binding: .variable(member.name))
-  return ActionDecl(name, .existsAction(member.name, collection.memberDomain, body(token)))
+  let member = FreshVarName.fresh()
+  let token = SymmetricMember<Element>(owner: collection.name, binding: .variable(member))
+  return ActionDecl(name, .existsAction(member, collection.memberDomain, body(token)))
 }
 
 @discardableResult
@@ -382,8 +382,8 @@ public func CollectionAction<K: Identifiable, V: TLAValueType>(
   on collection: DictionaryVar<K, V>,
   @ActionBuilder _ body: (DictMember<K>) -> ActionExpr
 ) -> ActionDecl {
-  let mv = QuantVar.fresh()
-  let token = DictMember<K>(key: .constant(mv.name))
-  return ActionDecl(name, .existsAction(mv.name, .domain(.variable(collection.name)), body(token)))
+  let mv = FreshVarName.fresh()
+  let token = DictMember<K>(key: .constant(mv))
+  return ActionDecl(name, .existsAction(mv, .domain(.variable(collection.name)), body(token)))
 }
 
