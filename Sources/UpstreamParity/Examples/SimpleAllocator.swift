@@ -1,26 +1,15 @@
 import SwiftTLA
+import SwiftTLAMacros
 
-extension Example {
-    public static let simpleAllocator = Entry(
-        id: "allocator/SimpleAllocator",
-        upstreamSpec: "allocator",
-        upstreamModule: "specifications/allocator/SimpleAllocator.tla",
-        upstreamCfg: "specifications/allocator/SimpleAllocator.cfg",
-        expectedDistinct: 400,
-        spec: simpleAllocatorSpec(),
-        notes: "Clients={c1,c2,c3} Resources={r1,r2}. Request/Allocate/Return. TLC = 400.",
-    )
-
-    /// Faithful SimpleAllocator (Stephan Merz) for the standard TLC constants.
-static func simpleAllocatorSpec() -> TLASpec {
+@TLAModel
+public struct SimpleAllocatorModel {
+    public static var spec: TLASpec {
         let clients = ["c1", "c2", "c3"]
         let nonemptySubsets: [TLAValue] = [
             .set([.string("r1")]),
             .set([.string("r2")]),
             .set([.string("r1"), .string("r2")])
         ]
-        let unsat = Var<TLAFunctionType>("unsat")
-        let alloc = Var<TLAFunctionType>("alloc")
         let emptyFun = TLAValue.function([
             .string("c1"): .set([]),
             .string("c2"): .set([]),
@@ -42,6 +31,8 @@ static func simpleAllocatorSpec() -> TLASpec {
 
         return TLASpec("SimpleAllocator") {
             Extends("Integers, FiniteSets")
+            let unsat = Var<TLAFunctionType>("unsat")
+            let alloc = Var<TLAFunctionType>("alloc")
             Variable(unsat, emptyFun)
             Variable(alloc, emptyFun)
 
@@ -75,5 +66,16 @@ static func simpleAllocatorSpec() -> TLASpec {
             }
         }
     }
+}
 
+extension Example {
+    public static let simpleAllocator = Entry(
+        id: "allocator/SimpleAllocator",
+        upstreamSpec: "allocator",
+        upstreamModule: "specifications/allocator/SimpleAllocator.tla",
+        upstreamCfg: "specifications/allocator/SimpleAllocator.cfg",
+        expectedDistinct: 400,
+        spec: SimpleAllocatorModel.spec,
+        notes: "Clients={c1,c2,c3} Resources={r1,r2}. Request/Allocate/Return. TLC = 400.",
+    )
 }

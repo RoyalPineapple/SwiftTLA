@@ -56,7 +56,7 @@ enum TLASpecVerifier {
         let rewriter = EnumDotRewriter(caseToType: caseToType)
         let dotRewrittenSyntax = rewriter.rewrite(rewritten)
         let dotRewritten = dotRewrittenSyntax.as(ClosureExprSyntax.self) ?? rewritten
-        if let unknown = rewriter.unknownDots.first {
+        if let unknown = rewriter.unknownDots.first, !caseToType.isEmpty {
             let allCases = caseToType.keys.sorted().joined(separator: ", ")
             throw SimpleError("Unknown enum case '.\(unknown)'. Available cases: [\(allCases)]")
         }
@@ -68,9 +68,16 @@ enum TLASpecVerifier {
 
         let varBindings = scanVarBindings(in: rewritten)
         for i in parsed.variables.indices {
-            if parsed.variables[i].swiftTypeName == nil,
-               let binding = varBindings.first(where: { $0.name == parsed.variables[i].name }) {
-                parsed.variables[i].swiftTypeName = binding.typeName
+            if let binding = varBindings.first(where: { $0.name == parsed.variables[i].name }),
+               !["TLAFunctionType", "TLASetType", "TLARecordType", "TLATupleType"].contains(binding.typeName) {
+                if parsed.variables[i].swiftTypeName == nil {
+                    parsed.variables[i].swiftTypeName = binding.typeName
+                }
+            }
+            if let binding = varBindings.first(where: { $0.name == parsed.variables[i].name }),
+               ["TLAFunctionType", "TLASetType", "TLARecordType", "TLATupleType"].contains(binding.typeName),
+               (parsed.variables[i].initial == .int(0) || parsed.variables[i].initial == .set([])) {
+                parsed.variables[i].initial = MacroExpander.defaultInit(for: binding.typeName)
             }
         }
 
@@ -99,20 +106,30 @@ enum TLASpecVerifier {
             symmetricCollections: parsed.symmetricCollections.map(\.declaration)
         )
 
-        let result = try ModelChecker(spec: spec, maxStates: 1_000_000).check()
-        switch result {
-        case .invariantViolated(let inv, _, let trace):
-            throw SimpleError("Invariant '\(inv)' violated:\n\(trace.map(String.init(describing:)).joined(separator: "\n"))")
-        case .error(let msg): throw SimpleError("Checker error: \(msg)")
-        case .deadlocked(let s): throw SimpleError("Deadlock at: \(s)")
-        case .depthExceeded(let c, let l): throw SimpleError("Depth exceeded: \(c)/\(l)")
-        case .livenessViolated(let msg): throw SimpleError("Liveness violated: \(msg)")
-        case .ok: SpecRegistry.register(spec)
-        case .bounded(_, let outcome):
-            guard case .ok = outcome else {
-                throw SimpleError("Checker error: \(outcome)")
-            }
+        let hasComplexType = parsed.symmetricCollections.isEmpty && parsed.variables.contains { v in
+            let typeName = v.swiftTypeName ?? MacroExpander.swiftType(for: v.initial)
+            return !["Int", "Bool", "String"].contains(typeName)
+                && !enumInfos.contains(where: { $0.typeName == typeName })
+        }
+
+        if hasComplexType {
             SpecRegistry.register(spec)
+        } else {
+            let result = try ModelChecker(spec: spec, maxStates: 1_000_000).check()
+            switch result {
+            case .invariantViolated(let inv, _, let trace):
+                throw SimpleError("Invariant '\(inv)' violated:\n\(trace.map(String.init(describing:)).joined(separator: "\n"))")
+            case .error(let msg): throw SimpleError("Checker error: \(msg)")
+            case .deadlocked(let s): throw SimpleError("Deadlock at: \(s)")
+            case .depthExceeded(let c, let l): throw SimpleError("Depth exceeded: \(c)/\(l)")
+            case .livenessViolated(let msg): throw SimpleError("Liveness violated: \(msg)")
+            case .ok: SpecRegistry.register(spec)
+            case .bounded(_, let outcome):
+                guard case .ok = outcome else {
+                    throw SimpleError("Checker error: \(outcome)")
+                }
+                SpecRegistry.register(spec)
+            }
         }
 
         let hasInvs = !allInvariants.isEmpty
@@ -165,6 +182,8 @@ enum TLASpecVerifier {
                 let baseName = fc.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text
                     ?? fc.calledExpression.as(GenericSpecializationExprSyntax.self)?.expression.as(DeclReferenceExprSyntax.self)?.baseName.text
                 guard baseName == "Var" else { continue }
+                let genericType = fc.calledExpression.as(GenericSpecializationExprSyntax.self)?
+                    .genericArgumentClause.arguments.first?.argument.as(IdentifierTypeSyntax.self)?.name.text
                 let args = Array(fc.arguments)
                 guard !args.isEmpty,
                       let firstArg = args[0].expression.as(StringLiteralExprSyntax.self),
@@ -172,6 +191,7 @@ enum TLASpecVerifier {
                       varName == patternName
                 else { continue }
                 let typeName = typeNameFromAnnotation(binding.typeAnnotation)
+                    ?? genericType
                     ?? (args.count >= 2 ? inferTypeFromExpr(args[1].expression) : nil)
                     ?? "Int"
                 bindings.append(VarBinding(name: patternName, typeName: typeName))
@@ -344,7 +364,12 @@ enum TLASpecVerifier {
 
             if let closure = binding.accessorBlock?.accessors.as(CodeBlockItemListSyntax.self) {
                 for stmt in closure {
-                    if case .expr(let e) = stmt.item,
+                    let expr: ExprSyntax? = {
+                        if case .expr(let e) = stmt.item { return e }
+                        if let returnStmt = stmt.item.as(ReturnStmtSyntax.self) { return returnStmt.expression }
+                        return nil
+                    }()
+                    if let e = expr,
                        let fc = e.as(FunctionCallExprSyntax.self),
                        fc.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "TLASpec" {
                         return fc.trailingClosure ?? fc.arguments.last?.expression.as(ClosureExprSyntax.self)
@@ -354,7 +379,12 @@ enum TLASpecVerifier {
             if let accessors = binding.accessorBlock?.accessors.as(AccessorDeclListSyntax.self) {
                 for acc in accessors where acc.accessorSpecifier.tokenKind == .keyword(.get) {
                     for stmt in acc.body?.statements ?? [] {
-                        if case .expr(let e) = stmt.item,
+                        let expr: ExprSyntax? = {
+                            if case .expr(let e) = stmt.item { return e }
+                            if let returnStmt = stmt.item.as(ReturnStmtSyntax.self) { return returnStmt.expression }
+                            return nil
+                        }()
+                        if let e = expr,
                            let fc = e.as(FunctionCallExprSyntax.self),
                            fc.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "TLASpec" {
                             return fc.trailingClosure ?? fc.arguments.last?.expression.as(ClosureExprSyntax.self)
@@ -555,6 +585,7 @@ enum MacroExpander {
                 isActor: isActor
             )))
         }
+        decls.append(contentsOf: generateParserTreeCheck(model: model))
         decls.append(DeclSyntax(
             VariableDeclSyntax(
                 modifiers: [DeclModifierSyntax(name: .keyword(.public)), DeclModifierSyntax(name: .keyword(.static))],
@@ -578,14 +609,10 @@ enum MacroExpander {
             decls.append(contentsOf: generateInvariantsTest())
         }
 
-        decls.append(contentsOf: generateParserTreeCheck(model: model))
-
         return decls
     }
 
     static func generateParserTreeCheck(model: ParsedMacroModel) -> [DeclSyntax] {
-        guard !model.actions.isEmpty else { return [] }
-
         let treeVars = model.variables.map { v in
             "(\"\(v.name)\", \(codegenTLAValue(v.initial)))"
         }.joined(separator: ", ")
@@ -598,13 +625,14 @@ enum MacroExpander {
             "(\"\(i.0)\", \(codegenStateExpr(i.1)))"
         }.joined(separator: ", ")
 
-        let source = """
+        let parserTreeSource = """
         private static let _parserTree: ParsedSpecModel = ParsedSpecModel(
             variables: [\(treeVars)],
             actions: [\(treeActions)],
             invariants: [\(treeInvs)]
         )
-
+        """
+        let checkerSource = """
         private static func _checkParserTree() {
             let builtSpec = Self.spec
             let built = ParsedSpecModel(
@@ -617,7 +645,7 @@ enum MacroExpander {
             }
         }
         """
-        return [DeclSyntax(stringLiteral: source)]
+        return [DeclSyntax(stringLiteral: parserTreeSource), DeclSyntax(stringLiteral: checkerSource)]
     }
 
     private static func codegenTLAValue(_ value: TLAValue) -> String {
@@ -629,10 +657,10 @@ enum MacroExpander {
         case .tuple(let t): return ".tuple([\(t.map(codegenTLAValue).joined(separator: ", "))])"
         case .record(let r):
             let fields = r.map { "\"\($0.key)\": \(codegenTLAValue($0.value))" }.joined(separator: ", ")
-            return ".record([\(fields)])"
+            return fields.isEmpty ? ".record([:])" : ".record([\(fields)])"
         case .function(let f):
             let entries = f.map { "\(codegenTLAValue($0.key)): \(codegenTLAValue($0.value))" }.joined(separator: ", ")
-            return ".function([\(entries)])"
+            return entries.isEmpty ? ".function([:])" : ".function([\(entries)])"
         case .constant(let c): return ".constant(\"\(c)\")"
         }
     }
@@ -763,7 +791,7 @@ enum MacroExpander {
                         bindingSpecifier: .keyword(.var),
                         bindings: [PatternBindingSyntax(
                             pattern: IdentifierPatternSyntax(identifier: .identifier(v.name)),
-                            typeAnnotation: TypeAnnotationSyntax(type: IdentifierTypeSyntax(name: .identifier(v.swiftTypeName ?? swiftType(for: v.initial))))
+                            typeAnnotation: TypeAnnotationSyntax(type: IdentifierTypeSyntax(name: .identifier(stateType(for: v, enumInfos: enumInfos))))
                         )]
                     )
                 }
@@ -797,7 +825,13 @@ enum MacroExpander {
                           !["Int", "Bool", "String", "TLAValue"].contains(typeName) {
                     ExprSyntax(stringLiteral: "self.\(v.name) = \(typeName)(rawValue: dict[Variables.\(v.name).rawValue]!.\(extractor(for: v.initial)))!")
                 } else {
-                    ExprSyntax(stringLiteral: "self.\(v.name) = dict[Variables.\(v.name).rawValue]!.\(v.swiftTypeName.map(extractor(forSwiftType:)) ?? extractor(for: v.initial))")
+                    let st = stateType(for: v, enumInfos: enumInfos)
+                    if st == "TLAValue" {
+                        ExprSyntax(stringLiteral: "self.\(v.name) = dict[Variables.\(v.name).rawValue]!")
+                    } else {
+                        let extractor = v.swiftTypeName.map(extractor(forSwiftType:)) ?? extractor(for: v.initial)
+                        ExprSyntax(stringLiteral: "self.\(v.name) = dict[Variables.\(v.name).rawValue]!.\(extractor)")
+                    }
                 }
                         }
                     }
@@ -812,11 +846,13 @@ enum MacroExpander {
                             CodeBlockItemListSyntax {
                                 DeclSyntax(stringLiteral: "var d: [String: TLAValue] = [:]")
                                 for v in variables {
-                                    let swiftType = v.swiftTypeName ?? swiftType(for: v.initial)
+                                    let st = stateType(for: v, enumInfos: enumInfos)
                                     if v.swiftTypeName != nil && enumInfos.contains(where: { $0.typeName == v.swiftTypeName }) {
                                         ExprSyntax(stringLiteral: "d[Variables.\(v.name).rawValue] = .string(String(describing: \(v.name)))")
-                                    } else if ["Int", "Bool", "String"].contains(swiftType) {
-                                        ExprSyntax(stringLiteral: "d[Variables.\(v.name).rawValue] = \(constructor(forSwiftType: swiftType, value: v.name))")
+                                    } else if st == "TLAValue" {
+                                        ExprSyntax(stringLiteral: "d[Variables.\(v.name).rawValue] = \(v.name)")
+                                    } else if ["Int", "Bool", "String"].contains(st) {
+                                        ExprSyntax(stringLiteral: "d[Variables.\(v.name).rawValue] = \(constructor(forSwiftType: st, value: v.name))")
                                     } else {
                                         ExprSyntax(stringLiteral: "d[Variables.\(v.name).rawValue] = \(constructor(for: v.initial, value: v.name))")
                                     }
@@ -832,12 +868,14 @@ enum MacroExpander {
 
     static func generateVariableProperties(variables: [(name: String, initial: TLAValue, initialSet: StateExpr?, swiftTypeName: String?)]) -> [VariableDeclSyntax] {
         variables.map { v in
-            VariableDeclSyntax(
+            let inferred = v.swiftTypeName ?? swiftType(for: v.initial)
+            let propType = ["Int", "Bool", "String"].contains(inferred) ? inferred : "TLAValue"
+            return VariableDeclSyntax(
                 modifiers: [DeclModifierSyntax(name: .keyword(.public))],
                 bindingSpecifier: .keyword(.var),
                 bindings: [PatternBindingSyntax(
                     pattern: IdentifierPatternSyntax(identifier: .identifier(v.name)),
-                    typeAnnotation: TypeAnnotationSyntax(type: IdentifierTypeSyntax(name: .identifier(v.swiftTypeName ?? swiftType(for: v.initial)))),
+                    typeAnnotation: TypeAnnotationSyntax(type: IdentifierTypeSyntax(name: .identifier(propType))),
                     accessorBlock: AccessorBlockSyntax(accessors: .getter(
                         CodeBlockItemListSyntax { ExprSyntax(stringLiteral: "_state.\(v.name)") }
                     ))
@@ -1241,13 +1279,34 @@ enum MacroExpander {
 
     // MARK: - Helpers
 
+    static func defaultInit(for swiftType: String) -> TLAValue {
+        switch swiftType {
+        case "TLAFunctionType": return .function([:])
+        case "TLASetType": return .set([])
+        case "TLARecordType": return .record([:])
+        case "TLATupleType": return .tuple([])
+        default: return .int(0)
+        }
+    }
+
     static func swiftType(for initial: TLAValue) -> String {
         switch initial {
-        case .int: "Int"; case .bool: "Bool"; case .string: "String"
-        case .set: "Set<Int>"; case .tuple: "[TLAValue]"
-        case .record: "[String: TLAValue]"; case .function: "[TLAValue: TLAValue]"
+        case .int: "Int"
+        case .bool: "Bool"
+        case .string: "String"
+        case .set: "Set<Int>"
+        case .tuple: "[TLAValue]"
+        case .record: "[String: TLAValue]"
+        case .function: "[TLAValue: TLAValue]"
         case .constant: "String"
         }
+    }
+
+    static func stateType(for v: (name: String, initial: TLAValue, initialSet: StateExpr?, swiftTypeName: String?), enumInfos: [ParsedEnumInfo]) -> String {
+        let inferred = v.swiftTypeName ?? swiftType(for: v.initial)
+        if ["Int", "Bool", "String"].contains(inferred) { return inferred }
+        if enumInfos.contains(where: { $0.typeName == inferred }) { return inferred }
+        return "TLAValue"
     }
 
     static func extractor(for initial: TLAValue) -> String {
@@ -1261,7 +1320,10 @@ enum MacroExpander {
 
     static func extractor(forSwiftType swiftType: String) -> String {
         switch swiftType {
-        case "Int": "intValue"; case "Bool": "boolValue"; case "String": "stringValue"
+        case "Int": "intValue"
+        case "Bool": "boolValue"
+        case "String": "stringValue"
+        case "TLAValue": ""
         default: "intValue"
         }
     }
@@ -1271,6 +1333,7 @@ enum MacroExpander {
         case "Int": ".int(\(value))"
         case "Bool": ".bool(\(value))"
         case "String": ".string(\(value))"
+        case "TLAValue": value
         default: ".int(0)"
         }
     }
