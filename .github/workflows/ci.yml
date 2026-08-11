@@ -26,10 +26,10 @@ jobs:
           fi
 
       - name: Run tests
-        run: swift test --no-parallel
+        run: xcodebuild test -scheme SwiftTLA-Package -destination 'platform=macOS'
 
       - name: Run coverage
-        run: swift test --enable-code-coverage --no-parallel
+        run: xcodebuild test -scheme SwiftTLA-Package -destination 'platform=macOS' -enableCodeCoverage YES
 
   build:
     runs-on: macos-15
