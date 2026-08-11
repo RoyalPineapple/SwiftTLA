@@ -7,11 +7,29 @@ on:
     branches: [main]
 
 jobs:
-  test:
+  release-code-check:
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
-      - run: swift test
+
+      - name: Validate release code-check contract
+        run: bash Tests/Fixtures/ReleaseCodeCheck/assert_workflow.sh
+
+      - name: Run SwiftLint (advisory)
+        run: |
+          set +e
+          ./scripts/lint-zero-new.sh
+          lint_status=$?
+          set -e
+          if [ "$lint_status" -ne 0 ]; then
+            echo "::warning::SwiftLint violations found; see this step's diagnostics."
+          fi
+
+      - name: Run tests
+        run: swift test
+
+      - name: Run coverage
+        run: swift test --enable-code-coverage
 
   build:
     runs-on: macos-15

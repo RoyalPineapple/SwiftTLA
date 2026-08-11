@@ -383,7 +383,6 @@ public func CollectionAction<K: Identifiable, V: TLAValueType>(
   @ActionBuilder _ body: (DictMember<K>) -> ActionExpr
 ) -> ActionDecl {
   let mv = FreshVarName.fresh()
-  let token = DictMember<K>(key: .constant(mv))
+  let token = DictMember<K>(key: StateExpr.variable(mv))
   return ActionDecl(name, .existsAction(mv, .domain(.variable(collection.name)), body(token)))
 }
-

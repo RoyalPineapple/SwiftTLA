@@ -324,4 +324,21 @@ extension TLAValue {
         }
         #expect(count == 4)
     }
+
+    @Test func dictionaryCollectionActionBindsItsSelectedMember() throws {
+        let d = DictionaryVar<TestKey, Bool>("enabled", scope: 2)
+        let spec = TLASpec("BoundDictionaryMember") {
+            d
+            CollectionAction("enable", on: d) { member in
+                d[member] == false && d.update(member, to: true)
+            }
+        }
+
+        let result = try ModelChecker(spec: spec).check()
+        guard case .ok(let count) = result.underlyingOutcome else {
+            Issue.record("Expected ok, got \(result)")
+            return
+        }
+        #expect(count == 3)
+    }
 }

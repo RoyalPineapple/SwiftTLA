@@ -1,0 +1,31 @@
+{
+  "schema": "TLCReferencePinV1",
+  "tlc": {
+    "tag": "v1.8.0",
+    "commit": "30cc3601321c3fc02e044d0ecb5c58d8921e18df",
+    "jar": {
+      "url": "https://github.com/tlaplus/tlaplus/releases/download/v1.8.0/tla2tools.jar",
+      "sha256": "e22f8ffb4bacdea0a871f444dd94fe5fb0d8013b3388ae39e82e26f852c735d5"
+    }
+  },
+  "java": {
+    "distribution": "Eclipse Temurin",
+    "version": "17.0.19+10",
+    "archives": {
+      "arm64": {
+        "url": "https://github.com/adoptium/temurin17-binaries/releases/download/jdk-17.0.19%2B10/OpenJDK17U-jdk_aarch64_mac_hotspot_17.0.19_10.tar.gz",
+        "sha256": "8fa1eff40bb637a33613b2ccb8b12c70dc3661cc22cf8e784943715769a05336"
+      },
+      "x86_64": {
+        "url": "https://github.com/adoptium/temurin17-binaries/releases/download/jdk-17.0.19%2B10/OpenJDK17U-jdk_x64_mac_hotspot_17.0.19_10.tar.gz",
+        "sha256": "03632d1fbf139ab3719a9f4b47dc206251449b87557143c822336dbf8c06560f"
+      }
+    }
+  },
+  "bridge": {
+    "class": "org.swifttla.conformance.LosslessStateWriter",
+    "source": "Tools/TLCGraphBridge/src/org/swifttla/conformance/LosslessStateWriter.java",
+    "sourceSha256": "d6a390a1dd8c81e20c22f715a0133f5c7561178a9a5dcdcd7f184c695a6741b7",
+    "binarySha256": "240a717693a5500be4067a3bb4d90fa9c3edce67855f09c5422daf5512ee0fde"
+  }
+}

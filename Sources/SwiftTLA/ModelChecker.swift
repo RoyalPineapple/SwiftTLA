@@ -23,6 +23,8 @@ public struct ModelChecker {
     }
     public func exploreGraph() throws -> StateGraph { try explore().graph }
 
+    public func explore() throws -> ModelExplorationResult { try runExploration() }
+
     public func checkLiveness() throws -> CheckResult {
         do {
             let exploration = try explore()
@@ -57,12 +59,7 @@ public struct ModelChecker {
 
     private typealias State = [String: TLAValue]
 
-    fileprivate struct Exploration {
-        let result: CheckResult
-        let graph: StateGraph
-    }
-
-    private func explore() throws -> Exploration {
+    private func runExploration() throws -> ModelExplorationResult {
         if let validationError = validateSymmetricCollections() {
             return emptyExploration(
                 self.spec,
@@ -93,7 +90,7 @@ public struct ModelChecker {
             )
         }
 
-        let seeds = initialStates.enumerated().map { (StateGraph.StateID($0.offset), $0.element) }
+        let seeds = initialStates
         let exploration = try bfs(
             seeds: seeds,
             variableNames: variableNames,
@@ -108,7 +105,11 @@ public struct ModelChecker {
             symmetryGroups: substituted.symmetryGroups,
             symmetricCollections: substituted.symmetricCollections
         )
-        return Exploration(result: bounded(exploration.result), graph: exploration.graph)
+        return ModelExplorationResult(
+            graph: exploration.graph,
+            initialStateIDs: exploration.initialStateIDs,
+            result: bounded(exploration.result)
+        )
     }
 
     private func buildExpander(
@@ -152,15 +153,16 @@ public struct ModelChecker {
         _ specification: TLASpec,
         variableNames: [String],
         result: CheckResult
-    ) -> Exploration {
-        Exploration(
-            result: result,
+    ) -> ModelExplorationResult {
+        ModelExplorationResult(
             graph: StateGraph(
                 specName: specification.name,
                 variableNames: variableNames,
                 transitions: [:],
                 states: [:]
-            )
+            ),
+            initialStateIDs: [],
+            result: result
         )
     }
 
@@ -197,7 +199,7 @@ private enum CheckerEvalError: Error, CustomStringConvertible {
 }
 
 private func bfs(
-    seeds: [(StateGraph.StateID, State)],
+    seeds: [State],
     variableNames: [String],
     expand: (State) throws -> [(String, State)],
     evaluate: (StateExpr, State) throws -> Bool,
@@ -209,7 +211,7 @@ private func bfs(
     symmetrySets: [SymmetrySet] = [],
     symmetryGroups: [SymmetryVariableGroup] = [],
     symmetricCollections: [SymmetricCollectionDecl] = []
-) throws -> ModelChecker.Exploration {
+) throws -> ModelExplorationResult {
     let symmetricCollectionGroups = symmetricCollections.map {
         SymmetricCollectionPermutationGroup(members: $0.metadata.members)
     }
@@ -230,8 +232,9 @@ private func bfs(
     var idToState: [StateGraph.StateID: State] = [:]
     var visited = Set<State>()
     var nextID = 0
+    var initialStateIDs: [StateGraph.StateID] = []
 
-    for (_, seed) in seeds {
+    for seed in seeds {
         let key = canonicalKey(seed)
         guard !visited.contains(key) else { continue }
         visited.insert(key)
@@ -239,6 +242,7 @@ private func bfs(
         stateToID[key] = id
         idToState[id] = seed
         queue.append(seed)
+        initialStateIDs.append(id)
         nextID += 1
     }
 
@@ -258,9 +262,10 @@ private func bfs(
 
     while head < queue.count {
         guard processed < maxStates else {
-            return ModelChecker.Exploration(
-                result: .depthExceeded(statesCount: processed, limit: maxStates),
-                graph: graph()
+            return ModelExplorationResult(
+                graph: graph(),
+                initialStateIDs: initialStateIDs,
+                result: .depthExceeded(statesCount: processed, limit: maxStates)
             )
         }
 
@@ -274,9 +279,10 @@ private func bfs(
         do {
             enabled = try enabledState(current, actions: actions, variableNames: variableNames)
         } catch {
-            return ModelChecker.Exploration(
-                result: .error(String(describing: error)),
-                graph: graph()
+            return ModelExplorationResult(
+                graph: graph(),
+                initialStateIDs: initialStateIDs,
+                result: .error(String(describing: error))
             )
         }
 
@@ -285,9 +291,10 @@ private func bfs(
             do {
                 holds = try evaluate(invariant.body, enabled)
             } catch {
-                return ModelChecker.Exploration(
-                    result: .error("Invariant '\(invariant.name)': \(error)"),
-                    graph: graph()
+                return ModelExplorationResult(
+                    graph: graph(),
+                    initialStateIDs: initialStateIDs,
+                    result: .error("Invariant '\(invariant.name)': \(error)")
                 )
             }
             if !holds {
@@ -296,13 +303,14 @@ private func bfs(
                     predecessors: predecessors,
                     initial: queue.isEmpty ? current : queue[0]
                 )
-                return ModelChecker.Exploration(
+                return ModelExplorationResult(
+                    graph: graph(),
+                    initialStateIDs: initialStateIDs,
                     result: .invariantViolated(
                         invariant: invariant.name,
                         state: current,
                         trace: trace
-                    ),
-                    graph: graph()
+                    )
                 )
             }
         }
@@ -311,16 +319,18 @@ private func bfs(
         do {
             successors = try expand(current)
         } catch {
-            return ModelChecker.Exploration(
-                result: .error(String(describing: error)),
-                graph: graph()
+            return ModelExplorationResult(
+                graph: graph(),
+                initialStateIDs: initialStateIDs,
+                result: .error(String(describing: error))
             )
         }
 
         if checkDeadlock && successors.isEmpty {
-            return ModelChecker.Exploration(
-                result: .deadlocked(state: current),
-                graph: graph()
+            return ModelExplorationResult(
+                graph: graph(),
+                initialStateIDs: initialStateIDs,
+                result: .deadlocked(state: current)
             )
         }
 
@@ -348,9 +358,10 @@ private func bfs(
         }
     }
 
-    return ModelChecker.Exploration(
-        result: .ok(statesCount: processed),
-        graph: graph()
+    return ModelExplorationResult(
+        graph: graph(),
+        initialStateIDs: initialStateIDs,
+        result: .ok(statesCount: processed)
     )
 }
 

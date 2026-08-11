@@ -1,4 +1,4 @@
-.PHONY: test tlc parity build examples
+.PHONY: test tlc parity build examples core-conformance
 
 test:
 	swift test
@@ -16,3 +16,6 @@ build:
 
 examples:
 	swift build --package-path Examples
+
+core-conformance:
+	./scripts/run_core_conformance.sh --case all --output .build/core-conformance-evidence

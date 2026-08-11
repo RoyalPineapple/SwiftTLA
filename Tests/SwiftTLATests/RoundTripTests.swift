@@ -295,6 +295,32 @@ import SwiftSyntax
 // MARK: - ModelChecker: spec pattern matrix
 
 @Suite(.serialized) struct ModelCheckerMatrix {
+    @Test func explorationResultMatchesExistingCheckerViews() throws {
+        let x = Var<Int>("x")
+        let spec = TLASpec("ExplorationSnapshot") {
+            Variable(from: x.name, StateExpr.set([1, 2]))
+            Action("inc") { x.becomes(x + 1).when(x < 3) }
+        }
+        let checker = ModelChecker(spec: spec, maxStates: 100)
+
+        let exploration = try checker.explore()
+        let graph = try checker.exploreGraph()
+        let result = try checker.check()
+
+        #expect(exploration.initialStateIDs.map(\.id) == [0, 1])
+        #expect(exploration.initialStateIDs.allSatisfy { exploration.graph.states[$0] != nil })
+        #expect(exploration.graph.states == graph.states)
+        #expect(
+            exploration.graph.transitions.mapValues { $0.map { "\($0.action):\($0.target.id)" } }
+                == graph.transitions.mapValues { $0.map { "\($0.action):\($0.target.id)" } }
+        )
+        #expect(exploration.result.description == result.description)
+        #expect(exploration.isComplete)
+
+        let incomplete = try ModelChecker(spec: spec, maxStates: 1).explore()
+        #expect(!incomplete.isComplete)
+    }
+
     @Test func singleVarLinear() throws {
         let x = Var<Int>("x")
         let spec = TLASpec("Test") {
