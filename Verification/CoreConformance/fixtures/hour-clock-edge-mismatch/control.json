@@ -1,0 +1,14 @@
+{
+  "schema": "CoreConformanceSameCountControlV1",
+  "caseId": "hour-clock-edge-mismatch",
+  "referenceCaseId": "hour-clock",
+  "expectedStateCount": 12,
+  "expectedExitCode": 1,
+  "requiredDifference": {
+    "category": "edge",
+    "source": { "hr": 12 },
+    "action": "HCnxt",
+    "expectedTarget": { "hr": 1 },
+    "actualTarget": { "hr": 2 }
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "attempted" : [
+    "primary"
+  ],
+  "correlation" : {
+    "caseID" : "die-hard-type-ok",
+    "engine" : "tlc",
+    "runID" : "7791b8cc-a784-497c-90c8-473fa25ab15c"
+  },
+  "primary" : {
+    "isViolation" : false,
+    "reportedExhaustiveCompletion" : true,
+    "status" : 0
+  },
+  "replay" : null,
+  "trace" : null
+}

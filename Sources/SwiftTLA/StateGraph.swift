@@ -30,3 +30,24 @@ public struct StateGraph: Sendable {
         public var description: String { "s\(id)" }
     }
 }
+
+public struct ModelExplorationResult {
+    public let graph: StateGraph
+    public let initialStateIDs: [StateGraph.StateID]
+    public let result: CheckResult
+
+    public var isComplete: Bool {
+        if case .ok = result.underlyingOutcome { return true }
+        return false
+    }
+
+    public init(
+        graph: StateGraph,
+        initialStateIDs: [StateGraph.StateID],
+        result: CheckResult
+    ) {
+        self.graph = graph
+        self.initialStateIDs = initialStateIDs
+        self.result = result
+    }
+}

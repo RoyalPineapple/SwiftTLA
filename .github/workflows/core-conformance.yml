@@ -1,0 +1,106 @@
+name: Core Conformance
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/core-conformance.yml'
+      - 'Makefile'
+      - 'Package.swift'
+      - 'Sources/TLCValidate/**'
+      - 'Sources/UpstreamParity/Conformance/**'
+      - 'Tests/Fixtures/CoreConformance/CI/**'
+      - 'Tools/TLCGraphBridge/**'
+      - 'Verification/CoreConformance/**'
+      - 'scripts/run_core_conformance.sh'
+      - 'scripts/setup-core-conformance-tools.sh'
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/core-conformance.yml'
+      - 'Makefile'
+      - 'Package.swift'
+      - 'Sources/TLCValidate/**'
+      - 'Sources/UpstreamParity/Conformance/**'
+      - 'Tests/Fixtures/CoreConformance/CI/**'
+      - 'Tools/TLCGraphBridge/**'
+      - 'Verification/CoreConformance/**'
+      - 'scripts/run_core_conformance.sh'
+      - 'scripts/setup-core-conformance-tools.sh'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  core-conformance:
+    runs-on: macos-15
+    env:
+      CORE_CONFORMANCE_TOOL_ROOT: ${{ github.workspace }}/.build/core-conformance-tools
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate focused workflow contract
+        run: Tests/Fixtures/CoreConformance/CI/assert_workflow.sh
+
+      - name: Run locked core conformance
+        id: conformance
+        run: |
+          set +e
+          ./scripts/setup-core-conformance-tools.sh --tool-root "$CORE_CONFORMANCE_TOOL_ROOT" --cases Verification/CoreConformance/cases.json
+          setup_status=$?
+          if [ "$setup_status" -eq 0 ]; then
+            make core-conformance
+            status=$?
+          else
+            status=2
+          fi
+
+          mkdir -p .build/core-conformance-ci
+          printf '%s\n' "$status" > .build/core-conformance-ci/exit-code
+          case "$status" in
+            0)
+              echo "Core conformance passed (exit 0)."
+              ;;
+            1)
+              echo "::error::Core conformance found a semantic difference (exit 1)."
+              ;;
+            2)
+              echo "::error::Core conformance prerequisites or evidence failed (exit 2)."
+              ;;
+            *)
+              echo "::error::Core conformance returned an unexpected exit $status."
+              ;;
+          esac
+          echo "exit_code=$status" >> "$GITHUB_OUTPUT"
+
+      - name: Upload core-conformance evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: core-conformance-${{ github.run_id }}
+          path: |
+            .build/core-conformance-evidence
+            .build/core-conformance-ci
+          if-no-files-found: warn
+
+      - name: Enforce core-conformance result
+        if: always()
+        env:
+          CORE_CONFORMANCE_EXIT: ${{ steps.conformance.outputs.exit_code }}
+        run: |
+          case "$CORE_CONFORMANCE_EXIT" in
+            0)
+              exit 0
+              ;;
+            1)
+              exit 1
+              ;;
+            2)
+              exit 2
+              ;;
+            *)
+              echo "core-conformance did not report a recognized result" >&2
+              exit 2
+              ;;
+          esac

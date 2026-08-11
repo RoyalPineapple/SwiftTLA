@@ -1,0 +1,113 @@
+{
+  "conformant" : false,
+  "correlation" : {
+    "caseID" : "hour-clock-edge-mismatch",
+    "engine" : "runner",
+    "runID" : "9ed98428-4c50-4a22-8d85-003f11cbb3af"
+  },
+  "differences" : [
+    {
+      "actual" : [
+        {
+          "count" : 1,
+          "edge" : "edge:state:[6872=integer:10]--48436e7874-->state:[6872=integer:11]"
+        },
+        {
+          "count" : 1,
+          "edge" : "edge:state:[6872=integer:11]--48436e7874-->state:[6872=integer:12]"
+        },
+        {
+          "count" : 1,
+          "edge" : "edge:state:[6872=integer:12]--48436e7874-->state:[6872=integer:1]"
+        },
+        {
+          "count" : 1,
+          "edge" : "edge:state:[6872=integer:1]--48436e7874-->state:[6872=integer:2]"
+        },
+        {
+          "count" : 1,
+          "edge" : "edge:state:[6872=integer:2]--48436e7874-->state:[6872=integer:3]"
+        },
+        {
+          "count" : 1,
+          "edge" : "edge:state:[6872=integer:3]--48436e7874-->state:[6872=integer:4]"
+        },
+        {
+          "count" : 1,
+          "edge" : "edge:state:[6872=integer:4]--48436e7874-->state:[6872=integer:5]"
+        },
+        {
+          "count" : 1,
+          "edge" : "edge:state:[6872=integer:5]--48436e7874-->state:[6872=integer:6]"
+        },
+        {
+          "count" : 1,
+          "edge" : "edge:state:[6872=integer:6]--48436e7874-->state:[6872=integer:7]"
+        },
+        {
+          "count" : 1,
+          "edge" : "edge:state:[6872=integer:7]--48436e7874-->state:[6872=integer:8]"
+        },
+        {
+          "count" : 1,
+          "edge" : "edge:state:[6872=integer:8]--48436e7874-->state:[6872=integer:9]"
+        },
+        {
+          "count" : 1,
+          "edge" : "edge:state:[6872=integer:9]--48436e7874-->state:[6872=integer:10]"
+        }
+      ],
+      "category" : "edges",
+      "expected" : [
+        {
+          "count" : 1,
+          "edge" : "edge:state:[6872=integer:10]--48436e7874-->state:[6872=integer:11]"
+        },
+        {
+          "count" : 1,
+          "edge" : "edge:state:[6872=integer:11]--48436e7874-->state:[6872=integer:12]"
+        },
+        {
+          "count" : 1,
+          "edge" : "edge:state:[6872=integer:12]--48436e7874-->state:[6872=integer:2]"
+        },
+        {
+          "count" : 1,
+          "edge" : "edge:state:[6872=integer:1]--48436e7874-->state:[6872=integer:2]"
+        },
+        {
+          "count" : 1,
+          "edge" : "edge:state:[6872=integer:2]--48436e7874-->state:[6872=integer:3]"
+        },
+        {
+          "count" : 1,
+          "edge" : "edge:state:[6872=integer:3]--48436e7874-->state:[6872=integer:4]"
+        },
+        {
+          "count" : 1,
+          "edge" : "edge:state:[6872=integer:4]--48436e7874-->state:[6872=integer:5]"
+        },
+        {
+          "count" : 1,
+          "edge" : "edge:state:[6872=integer:5]--48436e7874-->state:[6872=integer:6]"
+        },
+        {
+          "count" : 1,
+          "edge" : "edge:state:[6872=integer:6]--48436e7874-->state:[6872=integer:7]"
+        },
+        {
+          "count" : 1,
+          "edge" : "edge:state:[6872=integer:7]--48436e7874-->state:[6872=integer:8]"
+        },
+        {
+          "count" : 1,
+          "edge" : "edge:state:[6872=integer:8]--48436e7874-->state:[6872=integer:9]"
+        },
+        {
+          "count" : 1,
+          "edge" : "edge:state:[6872=integer:9]--48436e7874-->state:[6872=integer:10]"
+        }
+      ]
+    }
+  ]
+}

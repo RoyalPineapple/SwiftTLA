@@ -1,0 +1,184 @@
+{
+  "correlation" : {
+    "caseID" : "hour-clock",
+    "engine" : "swift",
+    "runID" : "5ec08d25-30f7-4409-9410-0d2bb6e3920b"
+  },
+  "edges" : [
+    {
+      "count" : 1,
+      "edge" : "edge:state:[6872=integer:10]--48436e7874-->state:[6872=integer:11]"
+    },
+    {
+      "count" : 1,
+      "edge" : "edge:state:[6872=integer:11]--48436e7874-->state:[6872=integer:12]"
+    },
+    {
+      "count" : 1,
+      "edge" : "edge:state:[6872=integer:12]--48436e7874-->state:[6872=integer:1]"
+    },
+    {
+      "count" : 1,
+      "edge" : "edge:state:[6872=integer:1]--48436e7874-->state:[6872=integer:2]"
+    },
+    {
+      "count" : 1,
+      "edge" : "edge:state:[6872=integer:2]--48436e7874-->state:[6872=integer:3]"
+    },
+    {
+      "count" : 1,
+      "edge" : "edge:state:[6872=integer:3]--48436e7874-->state:[6872=integer:4]"
+    },
+    {
+      "count" : 1,
+      "edge" : "edge:state:[6872=integer:4]--48436e7874-->state:[6872=integer:5]"
+    },
+    {
+      "count" : 1,
+      "edge" : "edge:state:[6872=integer:5]--48436e7874-->state:[6872=integer:6]"
+    },
+    {
+      "count" : 1,
+      "edge" : "edge:state:[6872=integer:6]--48436e7874-->state:[6872=integer:7]"
+    },
+    {
+      "count" : 1,
+      "edge" : "edge:state:[6872=integer:7]--48436e7874-->state:[6872=integer:8]"
+    },
+    {
+      "count" : 1,
+      "edge" : "edge:state:[6872=integer:8]--48436e7874-->state:[6872=integer:9]"
+    },
+    {
+      "count" : 1,
+      "edge" : "edge:state:[6872=integer:9]--48436e7874-->state:[6872=integer:10]"
+    }
+  ],
+  "errors" : [
+
+  ],
+  "initialStates" : [
+    "state:[6872=integer:10]",
+    "state:[6872=integer:11]",
+    "state:[6872=integer:12]",
+    "state:[6872=integer:1]",
+    "state:[6872=integer:2]",
+    "state:[6872=integer:3]",
+    "state:[6872=integer:4]",
+    "state:[6872=integer:5]",
+    "state:[6872=integer:6]",
+    "state:[6872=integer:7]",
+    "state:[6872=integer:8]",
+    "state:[6872=integer:9]"
+  ],
+  "observableActions" : [
+    "HCnxt"
+  ],
+  "observations" : [
+    {
+      "enabledActions" : [
+        "HCnxt"
+      ],
+      "isTerminal" : false,
+      "state" : "state:[6872=integer:10]"
+    },
+    {
+      "enabledActions" : [
+        "HCnxt"
+      ],
+      "isTerminal" : false,
+      "state" : "state:[6872=integer:11]"
+    },
+    {
+      "enabledActions" : [
+        "HCnxt"
+      ],
+      "isTerminal" : false,
+      "state" : "state:[6872=integer:12]"
+    },
+    {
+      "enabledActions" : [
+        "HCnxt"
+      ],
+      "isTerminal" : false,
+      "state" : "state:[6872=integer:1]"
+    },
+    {
+      "enabledActions" : [
+        "HCnxt"
+      ],
+      "isTerminal" : false,
+      "state" : "state:[6872=integer:2]"
+    },
+    {
+      "enabledActions" : [
+        "HCnxt"
+      ],
+      "isTerminal" : false,
+      "state" : "state:[6872=integer:3]"
+    },
+    {
+      "enabledActions" : [
+        "HCnxt"
+      ],
+      "isTerminal" : false,
+      "state" : "state:[6872=integer:4]"
+    },
+    {
+      "enabledActions" : [
+        "HCnxt"
+      ],
+      "isTerminal" : false,
+      "state" : "state:[6872=integer:5]"
+    },
+    {
+      "enabledActions" : [
+        "HCnxt"
+      ],
+      "isTerminal" : false,
+      "state" : "state:[6872=integer:6]"
+    },
+    {
+      "enabledActions" : [
+        "HCnxt"
+      ],
+      "isTerminal" : false,
+      "state" : "state:[6872=integer:7]"
+    },
+    {
+      "enabledActions" : [
+        "HCnxt"
+      ],
+      "isTerminal" : false,
+      "state" : "state:[6872=integer:8]"
+    },
+    {
+      "enabledActions" : [
+        "HCnxt"
+      ],
+      "isTerminal" : false,
+      "state" : "state:[6872=integer:9]"
+    }
+  ],
+  "outcome" : {
+    "kind" : "exhaustiveSuccess"
+  },
+  "schema" : "exactFiniteTLCGraphV1",
+  "states" : [
+    "state:[6872=integer:10]",
+    "state:[6872=integer:11]",
+    "state:[6872=integer:12]",
+    "state:[6872=integer:1]",
+    "state:[6872=integer:2]",
+    "state:[6872=integer:3]",
+    "state:[6872=integer:4]",
+    "state:[6872=integer:5]",
+    "state:[6872=integer:6]",
+    "state:[6872=integer:7]",
+    "state:[6872=integer:8]",
+    "state:[6872=integer:9]"
+  ],
+  "traces" : [
+
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "runner" : {
+    "caseID" : "die-hard-violation",
+    "engine" : "runner",
+    "runID" : "4bdd96e7-002c-4622-91ab-3c70a3875b7c"
+  },
+  "swift" : {
+    "caseID" : "die-hard-violation",
+    "engine" : "swift",
+    "runID" : "4bdd96e7-002c-4622-91ab-3c70a3875b7c"
+  },
+  "tlc" : {
+    "caseID" : "die-hard-violation",
+    "engine" : "tlc",
+    "runID" : "4bdd96e7-002c-4622-91ab-3c70a3875b7c"
+  }
+}

@@ -225,8 +225,9 @@ extension ArrayVar {
 
 /// Opaque member token for DictionaryVar.
 public struct DictMember<K: Identifiable>: Sendable {
-    public let key: TLAValue
-    public init(key: TLAValue) { self.key = key }
+    public let key: StateExpr
+    public init(key: TLAValue) { self.key = .value(key) }
+    init(key: StateExpr) { self.key = key }
 }
 
 // MARK: - DictionaryVar<K, V>
@@ -251,7 +252,7 @@ public struct DictionaryVar<K: Identifiable, V: TLAValueType>: Sendable, CustomS
     public var description: String { name }
 
     public subscript(member: DictMember<K>) -> Expr<V> {
-        Expr(.functionApply(.variable(name), .value(member.key)))
+        Expr(.functionApply(.variable(name), member.key))
     }
 
     @discardableResult
@@ -261,7 +262,7 @@ public struct DictionaryVar<K: Identifiable, V: TLAValueType>: Sendable, CustomS
 
     @discardableResult
     public func update(_ member: DictMember<K>, to value: Expr<V>) -> ActionExpr {
-        .assign(name, .except(.variable(name), .value(member.key), value.raw))
+        .assign(name, .except(.variable(name), member.key, value.raw))
     }
 
     public func allSatisfy(_ predicate: (Expr<V>) -> StateExpr) -> StateExpr {

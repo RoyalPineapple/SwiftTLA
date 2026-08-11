@@ -1,0 +1,146 @@
+{
+  "schema": "CoreConformanceCasesV1",
+  "relation": "exactFiniteTLCGraphV1",
+  "cases": [
+    {
+      "id": "hour-clock",
+      "swiftSpec": "hour-clock",
+      "module": "hour-clock/HourClock.tla",
+      "configuration": "hour-clock/HourClock.cfg",
+      "moduleSHA256": "985903176db4725f9cf25df84ad84dcd53ba94be80d26298b87ec86fbc9b08b3",
+      "cfgSHA256": "c1e28ec8c38919b15577a0a7148840ba1d4e4c6541ea43e36edd482c5ff16687",
+      "arguments": ["-workers", "1", "-fp", "1"],
+      "argumentsSHA256": "5a29989b077aadf61edf04f0b0cc435c5f9ef27fe0b75daa01cb703ee9ce89b5",
+      "workers": 1,
+      "fingerprintPolynomial": 1,
+      "deadlock": false,
+      "replay": "none",
+      "upstream": {
+        "repository": "https://github.com/tlaplus/Examples.git",
+        "commit": "52c4c651022b2d50bc9ca2aca1bd53277d4332c6"
+      },
+      "fixtures": {
+        "module": "Verification/CoreConformance/fixtures/hour-clock/HourClock.tla",
+        "configuration": "Verification/CoreConformance/fixtures/hour-clock/HourClock.cfg"
+      },
+      "identityMapping": {
+        "variables": { "hr": "hr" },
+        "actions": { "HCnxt": "HCnxt" }
+      },
+      "semanticCitations": [
+        "specifications/SpecifyingSystems/HourClock/HourClock.tla: HCini, HCnxt, HC",
+        "specifications/SpecifyingSystems/HourClock/HourClock.cfg: SPECIFICATION HC, INVARIANT HCini"
+      ],
+      "expectedArtifacts": "Verification/CoreConformance/baselines/hour-clock"
+    },
+    {
+      "id": "die-hard-type-ok",
+      "swiftSpec": "die-hard-type-ok",
+      "module": "die-hard-type-ok/DieHard.tla",
+      "configuration": "die-hard-type-ok/DieHard.cfg",
+      "moduleSHA256": "295495de6509d86a82b88757835b95e3f91fad8691d764ece4d98886dcf42b66",
+      "cfgSHA256": "d653a6add3e94b67cd6ccdc7e7473ab0a381df7931ecaf3c8760fad4bcabdc7d",
+      "arguments": ["-workers", "1", "-fp", "1"],
+      "argumentsSHA256": "5a29989b077aadf61edf04f0b0cc435c5f9ef27fe0b75daa01cb703ee9ce89b5",
+      "workers": 1,
+      "fingerprintPolynomial": 1,
+      "deadlock": false,
+      "replay": "none",
+      "upstream": {
+        "repository": "https://github.com/tlaplus/Examples.git",
+        "commit": "52c4c651022b2d50bc9ca2aca1bd53277d4332c6"
+      },
+      "fixtures": {
+        "module": "Verification/CoreConformance/fixtures/die-hard-type-ok/DieHard.tla",
+        "configuration": "Verification/CoreConformance/fixtures/die-hard-type-ok/DieHard.cfg"
+      },
+      "identityMapping": {
+        "variables": { "big": "big", "small": "small" },
+        "actions": {
+          "FillSmallJug": "FillSmallJug",
+          "FillBigJug": "FillBigJug",
+          "EmptySmallJug": "EmptySmallJug",
+          "EmptyBigJug": "EmptyBigJug",
+          "SmallToBig": "SmallToBig",
+          "BigToSmall": "BigToSmall"
+        }
+      },
+      "semanticCitations": [
+        "specifications/DieHard/DieHard.tla: TypeOK, Init, FillSmallJug, FillBigJug, EmptySmallJug, EmptyBigJug, SmallToBig, BigToSmall, Spec",
+        "Verification/CoreConformance/fixtures/die-hard-type-ok/DieHard.cfg: SPECIFICATION Spec, INVARIANT TypeOK"
+      ],
+      "expectedArtifacts": "Verification/CoreConformance/baselines/die-hard-type-ok"
+    },
+    {
+      "id": "hour-clock-edge-mismatch",
+      "swiftSpec": "hour-clock",
+      "module": "hour-clock-edge-mismatch/HourClock.tla",
+      "configuration": "hour-clock-edge-mismatch/HourClock.cfg",
+      "moduleSHA256": "d9095b5892b817e41c8dfb11129703d8d4da6e67e2a2e23fbb57a30ae51c6a8f",
+      "cfgSHA256": "5fc99b8399ad0227b0afbf25ff802c3582d4347dd06e26461313ecef6d5253f8",
+      "arguments": ["-workers", "1", "-fp", "1"],
+      "argumentsSHA256": "5a29989b077aadf61edf04f0b0cc435c5f9ef27fe0b75daa01cb703ee9ce89b5",
+      "workers": 1,
+      "fingerprintPolynomial": 1,
+      "deadlock": false,
+      "replay": "none",
+      "expectedExit": 1,
+      "upstream": {
+        "repository": "https://github.com/tlaplus/Examples.git",
+        "commit": "52c4c651022b2d50bc9ca2aca1bd53277d4332c6"
+      },
+      "fixtures": {
+        "module": "Verification/CoreConformance/fixtures/hour-clock-edge-mismatch/HourClock.tla",
+        "configuration": "Verification/CoreConformance/fixtures/hour-clock-edge-mismatch/HourClock.cfg"
+      },
+      "identityMapping": {
+        "variables": { "hr": "hr" },
+        "actions": { "HCnxt": "HCnxt" }
+      },
+      "semanticCitations": [
+        "Verification/CoreConformance/fixtures/hour-clock-edge-mismatch/HourClock.tla: HCnxt changes only 12 -> 1 to 12 -> 2",
+        "Verification/CoreConformance/fixtures/hour-clock-edge-mismatch/control.json"
+      ],
+      "expectedArtifacts": "Verification/CoreConformance/fixtures/hour-clock-edge-mismatch/evidence"
+    },
+    {
+      "id": "die-hard-violation",
+      "swiftSpec": "die-hard-type-ok",
+      "module": "die-hard-violation/DieHard.tla",
+      "configuration": "die-hard-violation/DieHard.cfg",
+      "moduleSHA256": "59eac00c38748568ee17c85b994b5fbd2864ff8562fb5b1bdd5db786eb6f09bf",
+      "cfgSHA256": "59fca38d703a0b17f967b35267fad8581e305b442c72147f1b2a530ea0ba6547",
+      "arguments": ["-workers", "1", "-fp", "1"],
+      "argumentsSHA256": "5a29989b077aadf61edf04f0b0cc435c5f9ef27fe0b75daa01cb703ee9ce89b5",
+      "workers": 1,
+      "fingerprintPolynomial": 1,
+      "deadlock": false,
+      "replay": "required",
+      "expectedExit": 1,
+      "upstream": {
+        "repository": "https://github.com/tlaplus/Examples.git",
+        "commit": "52c4c651022b2d50bc9ca2aca1bd53277d4332c6"
+      },
+      "fixtures": {
+        "module": "Verification/CoreConformance/fixtures/die-hard-violation/DieHard.tla",
+        "configuration": "Verification/CoreConformance/fixtures/die-hard-violation/DieHard.cfg"
+      },
+      "identityMapping": {
+        "variables": { "big": "big", "small": "small" },
+        "actions": {
+          "FillSmallJug": "FillSmallJug",
+          "FillBigJug": "FillBigJug",
+          "EmptySmallJug": "EmptySmallJug",
+          "EmptyBigJug": "EmptyBigJug",
+          "SmallToBig": "SmallToBig",
+          "BigToSmall": "BigToSmall"
+        }
+      },
+      "semanticCitations": [
+        "specifications/DieHard/DieHard.tla: NotSolved",
+        "Verification/CoreConformance/fixtures/die-hard-violation/DieHard.cfg: INVARIANTS TypeOK NotSolved"
+      ],
+      "expectedArtifacts": "Verification/CoreConformance/fixtures/die-hard-violation/evidence"
+    }
+  ]
+}

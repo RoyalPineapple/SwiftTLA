@@ -4,6 +4,11 @@ Derived/
 *.xcworkspace
 .swiftpm/
 *.DS_Store
+*.profraw
+states/
+**/states/
+**/*_TTrace_*.bin
+**/*_TTrace_*.tla
 
 # rp1:start:v0.7.1
 !.rp1/

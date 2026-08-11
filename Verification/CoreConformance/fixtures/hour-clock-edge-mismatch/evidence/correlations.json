@@ -1,0 +1,17 @@
+{
+  "runner" : {
+    "caseID" : "hour-clock-edge-mismatch",
+    "engine" : "runner",
+    "runID" : "9ed98428-4c50-4a22-8d85-003f11cbb3af"
+  },
+  "swift" : {
+    "caseID" : "hour-clock-edge-mismatch",
+    "engine" : "swift",
+    "runID" : "9ed98428-4c50-4a22-8d85-003f11cbb3af"
+  },
+  "tlc" : {
+    "caseID" : "hour-clock-edge-mismatch",
+    "engine" : "tlc",
+    "runID" : "9ed98428-4c50-4a22-8d85-003f11cbb3af"
+  }
+}

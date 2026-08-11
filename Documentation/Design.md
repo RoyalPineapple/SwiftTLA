@@ -10,9 +10,12 @@ DSL → StateExpr/ActionExpr AST
         └── .tlaModule       (TLC validates against upstream)
 ```
 
-**TLC parity proves runtime correctness.** If TLC finds N states and our
-ModelChecker finds N states, the Swift runtime is behaviorally identical
-to the TLA+ specification.
+State-count parity does not prove runtime correctness. Equal state counts can
+hide different initial states, transitions, action labels, or outcomes.
+
+For selected finite core models, the core-conformance command compares the
+complete labeled transition relation from SwiftTLA with a pinned TLC run. See
+`Documentation/CoreGraphConformance.md` for the boundary and command.
 
 ## DSL philosophy
 

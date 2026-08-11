@@ -49,9 +49,10 @@ struct SymmetricCollectionTLCOracleTests {
       "/usr/local/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home/bin/java"
     ].compactMap { $0 }.contains { FileManager.default.isExecutableFile(atPath: $0) }
     let executable = [
+      testProductExecutable(named: "tlc-validate"),
       root.appendingPathComponent(".build/out/Products/Debug/tlc-validate").path,
       root.appendingPathComponent(".build/debug/tlc-validate").path
-    ].first(where: FileManager.default.isExecutableFile(atPath:))
+    ].compactMap { $0 }.first(where: FileManager.default.isExecutableFile(atPath:))
     guard FileManager.default.fileExists(atPath: jar), configuredJava, let executable else { return }
 
     let process = Process()
@@ -195,6 +196,12 @@ struct SymmetricCollectionTLCOracleTests {
     """
     let closure = Parser.parse(source: source).statements.first!.item.as(ClosureExprSyntax.self)!
     return SpecParser.parseSpecClosure(closure)
+  }
+
+  private func testProductExecutable(named name: String) -> String? {
+    Bundle.allBundles
+      .first { $0.bundleURL.lastPathComponent == "SwiftTLATests.xctest" }
+      .map { $0.bundleURL.deletingLastPathComponent().appendingPathComponent(name).path }
   }
 
   private func packageRoot() -> URL {
