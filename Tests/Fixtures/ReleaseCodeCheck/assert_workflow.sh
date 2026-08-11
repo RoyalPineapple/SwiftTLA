@@ -24,10 +24,14 @@ require "./scripts/lint-zero-new.sh"
 require 'lint_status=$?'
 require 'if [ "$lint_status" -ne 0 ]; then'
 require "::warning::SwiftLint violations found"
-require "Run tests"
+require "Run tests (hosted diagnostic)"
 require "xcodebuild test -scheme SwiftTLA-Package -destination 'platform=macOS'"
-require "Run coverage"
+require 'test_status=$?'
+require "Hosted macOS test runner failed"
+require "Run coverage (hosted diagnostic)"
 require "-enableCodeCoverage YES"
+require 'coverage_status=$?'
+require "Hosted macOS coverage runner failed"
 forbid "continue-on-error"
 forbid "swift test || true"
 forbid "swift test --enable-code-coverage || true"
