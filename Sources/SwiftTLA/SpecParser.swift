@@ -694,11 +694,11 @@ public enum SpecParser {
                 let body = call.trailingClosure.flatMap(decodeActionFromClosure) {
                 result.actions.append((actionName, body))
             } else if let actionName = extractStringArg(call, index: 0, loopVar: loopVar, loopValue: loopValue),
-                      let closure = call.trailingClosure {
-                result.diagnostics.append(.init(
-                    message: "Action '\(actionName)' contains an unsupported action expression.",
-                    source: closure
-                ))
+                      call.trailingClosure != nil {
+                // Action body uses unsupported constructs (existsAction, etc.).
+                // Store a placeholder body; the macro will fall back to interpreter
+                // trampoline which reads the body from the runtime spec at Self.spec.
+                result.actions.append((actionName, .chooseAction("_parser_skip", .value(.bool(false)))))
             }
         case "Invariant":
             parseInvariant(call, into: &result)
@@ -742,21 +742,8 @@ public enum SpecParser {
             closure,
             symmetricCollections: Set(result.symmetricCollections.map(\.name))
         ) else {
-            let unsupported = unsupportedInvariantExpression(
-                in: closure,
-                symmetricCollections: Set(result.symmetricCollections.map(\.name))
-            )
-            if let unsupported {
-                result.diagnostics.append(.init(
-                    message: "Invariant '\(name)' contains an unsupported invariant expression.",
-                    source: unsupported
-                ))
-            } else {
-                result.diagnostics.append(.init(
-                    message: "Invariant '\(name)' contains an unsupported invariant expression.",
-                    source: closure
-                ))
-            }
+            // Invariant uses unsupported expressions (for loops, function calls).
+            // Skip it; runtime verifyInvariants() checks the actual invariant.
             return
         }
         result.invariants.append((name, body))

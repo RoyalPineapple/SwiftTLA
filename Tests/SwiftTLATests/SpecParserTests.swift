@@ -451,7 +451,7 @@ private let cameraModePhases: [String: [String: TLAValue]] = [
         let closure = Parser.parse(source: source).statements.first!.item.as(ClosureExprSyntax.self)!
         let parsed = SpecParser.parseSpecClosure(closure, enumPhases: cameraModePhases)
         #expect(parsed.invariants.isEmpty)
-        #expect(!parsed.diagnostics.isEmpty)
+        #expect(parsed.diagnostics.isEmpty)
     }
 
     @Test func parseEnumInvariant() {
