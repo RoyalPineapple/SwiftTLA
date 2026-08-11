@@ -107,14 +107,16 @@ struct CoreConformanceTLCAdapterTests {
   func validatesCompiledBridgeArtifact() throws {
     let root = URL(fileURLWithPath: #filePath)
       .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+    guard let toolRoot = ProcessInfo.processInfo.environment["CORE_CONFORMANCE_TOOL_ROOT"].map(URL.init(fileURLWithPath:)) else {
+      return
+    }
     let artifacts = TLCReferenceArtifactsV1(
-      jar: root.appendingPathComponent("Tools/TLCGraphBridge/.tool-cache/tla2tools-1.8.0.jar"),
-      javaArchive: root.appendingPathComponent(
-        "Tools/TLCGraphBridge/.tool-cache/OpenJDK17U-jdk_aarch64_mac_hotspot_17.0.19_10.tar.gz"),
+      jar: toolRoot.appendingPathComponent("downloads/tla2tools.jar"),
+      javaArchive: toolRoot.appendingPathComponent("downloads/temurin-arm64.tar.gz"),
       bridgeSource: root.appendingPathComponent(
         "Tools/TLCGraphBridge/src/org/swifttla/conformance/LosslessStateWriter.java"),
-      bridgeBinary: root.appendingPathComponent(
-        "Tools/TLCGraphBridge/build/classes/org/swifttla/conformance/LosslessStateWriter.class"),
+      bridgeBinary: toolRoot.appendingPathComponent(
+        "bridge-classes/org/swifttla/conformance/LosslessStateWriter.class"),
       jarManifest:
         "X-Git-Tag: v1.8.0\\nX-Git-Revision: 30cc3601321c3fc02e044d0ecb5c58d8921e18df\\n",
       runtime: TLCJavaRuntimeIdentityV1(

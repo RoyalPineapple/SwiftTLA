@@ -395,24 +395,16 @@ private func executeProcess(
   process.standardOutput = stdoutPipe
   process.standardError = stderrPipe
   let outputGroup = DispatchGroup()
-  let readersStarted = DispatchGroup()
   let output = ProcessOutputBuffersV1()
-  readersStarted.enter()
   outputGroup.enter()
   DispatchQueue.global().async {
-    readersStarted.leave()
     drain(stdoutPipe.fileHandleForReading, into: output.appendStdout)
     outputGroup.leave()
   }
-  readersStarted.enter()
   outputGroup.enter()
   DispatchQueue.global().async {
-    readersStarted.leave()
     drain(stderrPipe.fileHandleForReading, into: output.appendStderr)
     outputGroup.leave()
-  }
-  guard readersStarted.wait(timeout: .now() + 1) == .success else {
-    throw TLCProcessErrorV1.failedToStart("could not start process output readers")
   }
   let termination = DispatchSemaphore(value: 0)
   process.terminationHandler = { _ in termination.signal() }
