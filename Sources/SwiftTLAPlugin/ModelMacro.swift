@@ -585,6 +585,7 @@ enum MacroExpander {
                 isActor: isActor
             )))
         }
+        decls.append(contentsOf: generateParserTreeCheck(model: model))
         decls.append(DeclSyntax(
             VariableDeclSyntax(
                 modifiers: [DeclModifierSyntax(name: .keyword(.public)), DeclModifierSyntax(name: .keyword(.static))],
@@ -608,8 +609,6 @@ enum MacroExpander {
             decls.append(contentsOf: generateInvariantsTest())
         }
 
-        decls.append(contentsOf: generateParserTreeCheck(model: model))
-
         return decls
     }
 
@@ -628,13 +627,14 @@ enum MacroExpander {
             "(\"\(i.0)\", \(codegenStateExpr(i.1)))"
         }.joined(separator: ", ")
 
-        let source = """
+        let parserTreeSource = """
         private static let _parserTree: ParsedSpecModel = ParsedSpecModel(
             variables: [\(treeVars)],
             actions: [\(treeActions)],
             invariants: [\(treeInvs)]
         )
-
+        """
+        let checkerSource = """
         private static func _checkParserTree() {
             let builtSpec = Self.spec
             let built = ParsedSpecModel(
@@ -647,7 +647,7 @@ enum MacroExpander {
             }
         }
         """
-        return [DeclSyntax(stringLiteral: source)]
+        return [DeclSyntax(stringLiteral: parserTreeSource), DeclSyntax(stringLiteral: checkerSource)]
     }
 
     private static func codegenTLAValue(_ value: TLAValue) -> String {
@@ -659,10 +659,10 @@ enum MacroExpander {
         case .tuple(let t): return ".tuple([\(t.map(codegenTLAValue).joined(separator: ", "))])"
         case .record(let r):
             let fields = r.map { "\"\($0.key)\": \(codegenTLAValue($0.value))" }.joined(separator: ", ")
-            return ".record([\(fields)])"
+            return fields.isEmpty ? ".record([:])" : ".record([\(fields)])"
         case .function(let f):
             let entries = f.map { "\(codegenTLAValue($0.key)): \(codegenTLAValue($0.value))" }.joined(separator: ", ")
-            return ".function([\(entries)])"
+            return entries.isEmpty ? ".function([:])" : ".function([\(entries)])"
         case .constant(let c): return ".constant(\"\(c)\")"
         }
     }
