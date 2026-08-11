@@ -81,6 +81,12 @@ struct UpstreamParityNativeTests {
     @Test("DieHard native verifyInvariants")
     func dieHardNativeVerifyInvariants() throws { try DieHardModel.verifyInvariants() }
 
+    // Barrier
+    @Test("Barrier_N6 native verifySpec")
+    func barrierNativeVerifySpec() throws { try BarrierModel.verifySpec() }
+    @Test("Barrier_N6 native verifyTransitions")
+    func barrierNativeVerifyTransitions() throws { try BarrierModel.verifyTransitions() }
+
     // Self-consistency
     @Test("Native codegen self-consistency")
     func nativeSelfConsistency() throws {
@@ -93,5 +99,6 @@ struct UpstreamParityNativeTests {
         try check(HourClockModel.transitionMatrix(), runtime: HourClockModel.runtime)
         try check(HourClock2Model.transitionMatrix(), runtime: HourClock2Model.runtime)
         try check(DieHardModel.transitionMatrix(), runtime: DieHardModel.runtime)
+        try check(BarrierModel.transitionMatrix(), runtime: BarrierModel.runtime)
     }
 }
