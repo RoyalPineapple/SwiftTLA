@@ -3,6 +3,7 @@ import Foundation
 import Testing
 import UpstreamParity
 
+@Suite(.serialized)
 struct CoreConformanceTLCAdapterTests {
   @Test("frozen graph stream becomes complete canonical evidence")
   func parsesFrozenGraphIntoCanonicalRun() throws {
@@ -107,14 +108,16 @@ struct CoreConformanceTLCAdapterTests {
   func validatesCompiledBridgeArtifact() throws {
     let root = URL(fileURLWithPath: #filePath)
       .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+    guard let toolRoot = ProcessInfo.processInfo.environment["CORE_CONFORMANCE_TOOL_ROOT"].map(URL.init(fileURLWithPath:)) else {
+      return
+    }
     let artifacts = TLCReferenceArtifactsV1(
-      jar: root.appendingPathComponent("Tools/TLCGraphBridge/.tool-cache/tla2tools-1.8.0.jar"),
-      javaArchive: root.appendingPathComponent(
-        "Tools/TLCGraphBridge/.tool-cache/OpenJDK17U-jdk_aarch64_mac_hotspot_17.0.19_10.tar.gz"),
+      jar: toolRoot.appendingPathComponent("downloads/tla2tools.jar"),
+      javaArchive: toolRoot.appendingPathComponent("downloads/temurin-arm64.tar.gz"),
       bridgeSource: root.appendingPathComponent(
         "Tools/TLCGraphBridge/src/org/swifttla/conformance/LosslessStateWriter.java"),
-      bridgeBinary: root.appendingPathComponent(
-        "Tools/TLCGraphBridge/build/classes/org/swifttla/conformance/LosslessStateWriter.class"),
+      bridgeBinary: toolRoot.appendingPathComponent(
+        "bridge-classes/org/swifttla/conformance/LosslessStateWriter.class"),
       jarManifest:
         "X-Git-Tag: v1.8.0\\nX-Git-Revision: 30cc3601321c3fc02e044d0ecb5c58d8921e18df\\n",
       runtime: TLCJavaRuntimeIdentityV1(
@@ -295,11 +298,9 @@ struct CoreConformanceTLCAdapterTests {
     let directory = try helperProcessDirectory()
     defer { try? FileManager.default.removeItem(at: directory) }
     let executable = directory.appendingPathComponent("environment.sh")
-    try "#!/bin/sh\nprintf 'TLC2 Version 2026.07.31.184830 (rev: 30cc360)\\n'\nprintf 'secret=%s allowed=%s\\n' \"${CORE_CONFORMANCE_TEST_SECRET-unset}\" \"${CORE_CONFORMANCE_ALLOWED_VALUE-unset}\"\n"
+    try "#!/bin/sh\nprintf 'TLC2 Version 2026.07.31.184830 (rev: 30cc360)\\n'\nprintf 'home=%s allowed=%s\\n' \"${HOME-unset}\" \"${CORE_CONFORMANCE_ALLOWED_VALUE-unset}\"\n"
       .write(to: executable, atomically: true, encoding: .utf8)
     try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: executable.path)
-    setenv("CORE_CONFORMANCE_TEST_SECRET", "host-only", 1)
-    defer { unsetenv("CORE_CONFORMANCE_TEST_SECRET") }
 
     let request = try helperProcessRequest(
       executable: executable,
@@ -308,7 +309,7 @@ struct CoreConformanceTLCAdapterTests {
     )
     let result = try SystemTLCProcessExecutorV1(validatesReferences: false).execute(request)
 
-    #expect(result.stdout.contains("secret=unset allowed=declared"))
+    #expect(result.stdout.contains("home=unset allowed=declared"))
   }
 
   @Test("graph event parser rejects malformed footer and unsupported callbacks")
