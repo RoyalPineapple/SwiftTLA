@@ -26,10 +26,10 @@ jobs:
           fi
 
       - name: Run tests
-        run: swift test --parallel --num-workers 1
+        run: swift test --no-parallel
 
       - name: Run coverage
-        run: swift test --enable-code-coverage --parallel --num-workers 1
+        run: swift test --enable-code-coverage --no-parallel
 
   build:
     runs-on: macos-15

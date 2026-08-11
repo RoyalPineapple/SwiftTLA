@@ -25,9 +25,9 @@ require 'lint_status=$?'
 require 'if [ "$lint_status" -ne 0 ]; then'
 require "::warning::SwiftLint violations found"
 require "Run tests"
-require "swift test"
+require "swift test --no-parallel"
 require "Run coverage"
-require "swift test --enable-code-coverage"
+require "swift test --enable-code-coverage --no-parallel"
 forbid "continue-on-error"
 forbid "swift test || true"
 forbid "swift test --enable-code-coverage || true"
