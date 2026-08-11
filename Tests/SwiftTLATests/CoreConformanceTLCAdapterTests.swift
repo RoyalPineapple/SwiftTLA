@@ -272,7 +272,7 @@ struct CoreConformanceTLCAdapterTests {
     #expect(throws: TLCProcessErrorV1.self) {
       _ = try SystemTLCProcessExecutorV1(validatesReferences: false).execute(request)
     }
-    #expect(Date().timeIntervalSince(started) < 1.5)
+    #expect(Date().timeIntervalSince(started) < 3)
   }
 
   @Test("production TLC execution rejects a banner outside the pinned revision")

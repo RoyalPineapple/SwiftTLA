@@ -166,9 +166,24 @@ download_locked() {
     mv "$temporary" "$destination"
 }
 
+seed_from_cache() {
+    local cache_file="$1"
+    local digest="$2"
+    local destination="$3"
+    if [ -f "$destination" ] || [ ! -f "$cache_file" ]; then
+        return
+    fi
+    if [ "$(sha256 "$cache_file")" = "$digest" ]; then
+        cp "$cache_file" "$destination"
+    fi
+}
+
 mkdir -p "$TOOL_ROOT/downloads" "$TOOL_ROOT/bridge-classes"
 TLC_JAR="$TOOL_ROOT/downloads/tla2tools.jar"
 JAVA_ARCHIVE="$TOOL_ROOT/downloads/temurin-${ARCHITECTURE}.tar.gz"
+CACHE_ROOT="$PROJECT_ROOT/Tools/TLCGraphBridge/.tool-cache"
+seed_from_cache "$CACHE_ROOT/tla2tools-1.8.0.jar" "$TLC_SHA256" "$TLC_JAR"
+seed_from_cache "$CACHE_ROOT/OpenJDK17U-jdk_${ARCHITECTURE}_mac_hotspot_17.0.19_10.tar.gz" "$JAVA_SHA256" "$JAVA_ARCHIVE"
 download_locked "$TLC_URL" "$TLC_SHA256" "$TLC_JAR"
 download_locked "$JAVA_URL" "$JAVA_SHA256" "$JAVA_ARCHIVE"
 [ "$(sha256 "$BRIDGE_SOURCE")" = "d6a390a1dd8c81e20c22f715a0133f5c7561178a9a5dcdcd7f184c695a6741b7" ] || fail "bridge source digest mismatch"
