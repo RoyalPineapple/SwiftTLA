@@ -1290,7 +1290,11 @@ enum MacroExpander {
         case .int: "Int"
         case .bool: "Bool"
         case .string: "String"
-        case .set, .tuple, .record, .function, .constant: "TLAValue"
+        case .set: "Set<Int>"
+        case .tuple: "[TLAValue]"
+        case .record: "[String: TLAValue]"
+        case .function: "[TLAValue: TLAValue]"
+        case .constant: "String"
         }
     }
 
