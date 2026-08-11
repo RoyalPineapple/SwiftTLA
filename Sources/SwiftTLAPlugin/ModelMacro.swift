@@ -106,7 +106,7 @@ enum TLASpecVerifier {
             symmetricCollections: parsed.symmetricCollections.map(\.declaration)
         )
 
-        let hasComplexType = parsed.variables.contains { v in
+        let hasComplexType = parsed.symmetricCollections.isEmpty && parsed.variables.contains { v in
             let typeName = v.swiftTypeName ?? MacroExpander.swiftType(for: v.initial)
             return !["Int", "Bool", "String"].contains(typeName)
                 && !enumInfos.contains(where: { $0.typeName == typeName })
