@@ -1,0 +1,56 @@
+{
+  "schema": "PublicWorkflowAnnotationInventoryV1",
+  "annotations": [
+    {
+      "name": "@TLAModel",
+      "fixtureID": "p4-annotation-tla-model",
+      "advertised": true,
+      "decision": "fixtureBacked",
+      "positiveFixture": "TLAModel/Valid",
+      "invalidFixture": "TLAModel/Invalid",
+      "positiveCommand": "build",
+      "expectedPositiveOutcome": "buildSucceeded",
+      "expectedInvalidOutcome": "buildFailed",
+      "diagnosticCategory": "macroInvariantViolation",
+      "diagnosticText": "Invariant 'withinBounds' violated",
+      "sourceInputs": ["TLAModel/Valid/Package.swift", "TLAModel/Valid/Package.resolved", "TLAModel/Valid/Sources/main.swift", "TLAModel/Invalid/Package.swift", "TLAModel/Invalid/Package.resolved", "TLAModel/Invalid/Sources/main.swift"]
+    },
+    {
+      "name": "@TLAActor",
+      "fixtureID": "p4-annotation-tla-actor",
+      "advertised": true,
+      "decision": "fixtureBacked",
+      "positiveFixture": "TLActor/Valid",
+      "invalidFixture": "TLActor/Invalid",
+      "positiveCommand": "run",
+      "expectedPositiveOutcome": "runSucceeded",
+      "expectedInvalidOutcome": "buildFailed",
+      "diagnosticCategory": "macroInvariantViolation",
+      "diagnosticText": "Invariant 'withinBounds' violated",
+      "sourceInputs": ["TLActor/Valid/Package.swift", "TLActor/Valid/Package.resolved", "TLActor/Valid/Sources/main.swift", "TLActor/Invalid/Package.swift", "TLActor/Invalid/Package.resolved", "TLActor/Invalid/Sources/main.swift"]
+    },
+    {
+      "name": "@TLAObservable",
+      "fixtureID": "p4-annotation-tla-observable",
+      "advertised": true,
+      "decision": "fixtureBacked",
+      "positiveFixture": "TLAObservable/Valid",
+      "invalidFixture": "TLAObservable/Invalid",
+      "positiveCommand": "build",
+      "expectedPositiveOutcome": "buildSucceeded",
+      "expectedInvalidOutcome": "buildFailed",
+      "diagnosticCategory": "macroInvariantViolation",
+      "diagnosticText": "Invariant 'withinBounds' violated",
+      "sourceInputs": ["TLAObservable/Valid/Package.swift", "TLAObservable/Valid/Package.resolved", "TLAObservable/Valid/Sources/main.swift", "TLAObservable/Invalid/Package.swift", "TLAObservable/Invalid/Sources/main.swift"]
+    },
+    {
+      "name": "@TLAValidated",
+      "fixtureID": "p4-annotation-tla-validated-removal",
+      "advertised": false,
+      "decision": "removeBeforeRelease",
+      "sourceDeclaration": "Sources/SwiftTLAMacros/Macros.swift",
+      "reason": "The declared plugin implementation does not exist. It has no fixture-backed public contract.",
+      "sourceInputs": ["Sources/SwiftTLAMacros/Macros.swift"]
+    }
+  ]
+}
