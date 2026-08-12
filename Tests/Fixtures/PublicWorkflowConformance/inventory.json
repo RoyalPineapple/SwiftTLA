@@ -43,12 +43,12 @@
       "runtimeProof": {"command": "swift run", "evidence": "localDiagnosticOnly"},
       "diagnosticCategory": "macroInvariantViolation",
       "diagnosticText": "Invariant 'withinBounds' violated",
-      "sourceInputsSHA256": "b9b0457c8113ef4188c3b638448b563ee3d3aa058667326cf24e1888239557aa",
+      "sourceInputsSHA256": "7c55b90463118bb575e08bcfff5368600e8140eb1282d24b323237415608f560",
       "sourceInputs": [
         {"path": "Sources/SwiftTLAMacros/Macros.swift", "sha256": "842f6e97c4920a32029bef6adc495b055b6a4f155aad06366c7d1fe029341295"},
         {"path": "Tests/Fixtures/PublicWorkflowConformance/TLActor/Valid/Package.swift", "sha256": "64dc2dfd687dd85995916554127496b07d0caee6728de9d12edb16ba05f6ef52"},
         {"path": "Tests/Fixtures/PublicWorkflowConformance/TLActor/Valid/Package.resolved", "sha256": "428e950613fff4d86ba7fd29e9a8c3ded615672f89b50b72a928b2de5ac2b1c3"},
-        {"path": "Tests/Fixtures/PublicWorkflowConformance/TLActor/Valid/Sources/main.swift", "sha256": "134ce05ee42f02da86ddf6b1be4624d4e92eca1a82834e254a9d0ad2f495ca7d"},
+        {"path": "Tests/Fixtures/PublicWorkflowConformance/TLActor/Valid/Sources/ValidActorFixture.swift", "sha256": "134ce05ee42f02da86ddf6b1be4624d4e92eca1a82834e254a9d0ad2f495ca7d"},
         {"path": "Tests/Fixtures/PublicWorkflowConformance/TLActor/Invalid/Package.swift", "sha256": "1160efd08b1ba36c4f4fd3d5b70d66b3ad7672e6a1ffdc42837acfec6f51e42f"},
         {"path": "Tests/Fixtures/PublicWorkflowConformance/TLActor/Invalid/Package.resolved", "sha256": "428e950613fff4d86ba7fd29e9a8c3ded615672f89b50b72a928b2de5ac2b1c3"},
         {"path": "Tests/Fixtures/PublicWorkflowConformance/TLActor/Invalid/Sources/main.swift", "sha256": "1cdd5571b5c7f1ecae34d45501ca1bb9ccc5d2b54fd98e28bac94431a78a9990"}
