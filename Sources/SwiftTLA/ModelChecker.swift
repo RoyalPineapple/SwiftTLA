@@ -131,15 +131,28 @@ public struct ModelChecker {
         constraint: StateExpr? = nil,
         runtimeFuncs: [String: StateExpr.RuntimeFunc] = [:],
         recursiveFuncs: [RecursiveFunc] = []
-    ) -> (State) throws -> [(String, State)] {
+    ) -> (State) throws -> [(StateGraph.TransitionLabel, State)] {
         { state in
-            var result: [(String, State)] = []
+            var result: [(StateGraph.TransitionLabel, State)] = []
             for action in actions {
                 do {
-                    let successors = try ActionEnumerator.enumerate(
-                        action.body, from: state, varNames: variableNames
-                    )
-                    result.append(contentsOf: successors.map { (action.name, $0) })
+                    if let binding = action.binding {
+                        for value in binding.values {
+                            let successors = try ActionEnumerator.enumerate(
+                                action.body.substituteVar(binding.name, with: value, in: action.body),
+                                from: state,
+                                varNames: variableNames
+                            )
+                            let label = StateGraph.TransitionLabel(action: action.name, argument: value)
+                            result.append(contentsOf: successors.map { (label, $0) })
+                        }
+                    } else {
+                        let successors = try ActionEnumerator.enumerate(
+                            action.body, from: state, varNames: variableNames
+                        )
+                        let label = StateGraph.TransitionLabel(action: action.name)
+                        result.append(contentsOf: successors.map { (label, $0) })
+                    }
                 } catch {
                     throw CheckerEvalError.action(action.name, error)
                 }
@@ -214,7 +227,7 @@ private enum CheckerEvalError: Error, CustomStringConvertible {
 private func bfs(
     seeds: [State],
     variableNames: [String],
-    expand: (State) throws -> [(String, State)],
+    expand: (State) throws -> [(StateGraph.TransitionLabel, State)],
     evaluate: (StateExpr, State) throws -> Bool,
     actions: [NamedAction],
     invariants: [NamedInvariant],
@@ -328,7 +341,7 @@ private func bfs(
             }
         }
 
-        let successors: [(String, State)]
+        let successors: [(StateGraph.TransitionLabel, State)]
         do {
             successors = try expand(current)
         } catch {
@@ -347,11 +360,11 @@ private func bfs(
             )
         }
 
-        for (successorAction, successorState) in successors {
+        for (successorLabel, successorState) in successors {
             let key = canonicalKey(successorState)
             if let targetID = stateToID[key] {
                 transitions[currentID, default: []] += [
-                    StateGraph.Transition(action: successorAction, target: targetID)
+                    StateGraph.Transition(label: successorLabel, target: targetID)
                 ]
             }
         }
@@ -360,11 +373,11 @@ private func bfs(
             let key = canonicalKey(successor.1)
             let targetID = StateGraph.StateID(nextID)
             transitions[currentID, default: []] += [
-                StateGraph.Transition(action: successor.0, target: targetID)
+                StateGraph.Transition(label: successor.0, target: targetID)
             ]
             stateToID[key] = targetID
             idToState[targetID] = successor.1
-            predecessors[successor.1] = (current, successor.0)
+            predecessors[successor.1] = (current, successor.0.description)
             queue.append(successor.1)
             visited.insert(key)
             nextID += 1
@@ -386,10 +399,15 @@ private func enabledState(
     var result = state
     for action in actions where !action.name.isEmpty {
         do {
-            let successors = try ActionEnumerator.enumerate(
-                action.body, from: state, varNames: variableNames
-            )
-            result["_enabled_" + action.name] = .bool(!successors.isEmpty)
+            let bodies = action.binding?.values.map { action.body.substituteVar(action.binding!.name, with: $0, in: action.body) } ?? [action.body]
+            var enabled = false
+            for body in bodies {
+                if try !ActionEnumerator.enumerate(body, from: state, varNames: variableNames).isEmpty {
+                    enabled = true
+                    break
+                }
+            }
+            result["_enabled_" + action.name] = .bool(enabled)
         } catch {
             throw CheckerEvalError.enabled(action.name, error)
         }

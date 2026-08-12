@@ -22,14 +22,28 @@ public struct NamedVar: Sendable, CustomStringConvertible, Equatable {
     }
 }
 
+public struct ActionBinding: Sendable, Hashable, Equatable {
+    public let name: String
+    public let values: [TLAValue]
+
+    public init(name: String, values: [TLAValue]) {
+        precondition(!name.isEmpty, "Parameterized actions require a binder name")
+        precondition(!values.isEmpty, "Parameterized actions require a non-empty finite domain")
+        self.name = name
+        self.values = TLAValue.sorted(Set(values))
+    }
+}
+
 public struct NamedAction: Sendable, CustomStringConvertible, Equatable {
     public let name: String
     public let body: ActionExpr
-    public init(name: String, body: ActionExpr) {
+    public let binding: ActionBinding?
+    public init(name: String, body: ActionExpr, binding: ActionBinding? = nil) {
         self.name = name
         self.body = body
+        self.binding = binding
     }
-    public var description: String { "\(name): \(body)" }
+    public var description: String { "\(name)\(binding.map { "(\($0.name))" } ?? ""): \(body)" }
 }
 
 public struct NamedTemporal: Sendable, CustomStringConvertible, Equatable {
@@ -208,7 +222,8 @@ public struct VarDecl: SpecComponent {
 public struct ActionDecl: SpecComponent {
     public let name: String
     public let body: ActionExpr
-    init(_ name: String, _ body: ActionExpr) { self.name = name; self.body = body }
+    public let binding: ActionBinding?
+    init(_ name: String, _ body: ActionExpr, binding: ActionBinding? = nil) { self.name = name; self.body = body; self.binding = binding }
 }
 
 public struct InvDecl: SpecComponent {
@@ -479,6 +494,16 @@ public func Action(_ name: String, @ActionBuilder _ body: () -> ActionExpr) -> A
     ActionDecl(name, body())
 }
 
+@discardableResult
+public func Action<T: TLAValueType>(
+    _ name: String,
+    id values: [T],
+    @ActionBuilder _ body: (Var<T>) -> ActionExpr
+) -> ActionDecl {
+    let binding = ActionBinding(name: "id", values: values.map(\.tlaValue))
+    return ActionDecl(name, body(Var<T>(binding.name)), binding: binding)
+}
+
 public func Invariant(_ name: String, @InvariantBuilder _ body: () -> StateExpr) -> InvDecl {
     InvDecl(name, body())
 }
@@ -713,7 +738,7 @@ extension TLASpec {
                 variables.append(NamedVar(name: s.variable.name, initial: s.variable.initial, initialSet: s.variable.initialSet, initExpr: s.variable.initExpr, lazySet: s.variable.lazySet, collectionType: s.variable.collectionType))
                 symmetricCollections.append(s)
             } else if let a = comp as? ActionDecl {
-                actions.append(NamedAction(name: a.name, body: a.body))
+                actions.append(NamedAction(name: a.name, body: a.body, binding: a.binding))
             } else if let i = comp as? InvDecl {
                 invariants.append(NamedInvariant(name: i.name, body: i.body))
             } else if let t = comp as? TemporalDecl {
@@ -796,7 +821,7 @@ extension TLASpec {
         // Auto-UNCHANGED: push into OR branches so TLC sees complete assignments
         let vn = variables.map(\.name)
         actions = actions.map { a in
-            NamedAction(name: a.name, body: completeAction(a.body, allVars: vn))
+            NamedAction(name: a.name, body: completeAction(a.body, allVars: vn), binding: a.binding)
         }
 
         self.name = name
@@ -835,7 +860,7 @@ public func substituteConstants(_ spec: TLASpec) -> TLASpec {
         )
     }
     let acts = spec.actions.map { a in
-        NamedAction(name: a.name, body: substituteInAction(a.body, constants: constants))
+        NamedAction(name: a.name, body: substituteInAction(a.body, constants: constants), binding: a.binding)
     }
     let invs = spec.invariants.map { i in
         NamedInvariant(name: i.name, body: substituteInState(i.body, constants: constants))

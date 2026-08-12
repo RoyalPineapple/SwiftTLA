@@ -295,6 +295,25 @@ import SwiftSyntax
 // MARK: - ModelChecker: spec pattern matrix
 
 @Suite(.serialized) struct ModelCheckerMatrix {
+    @Test func parameterizedActionExpandsFiniteDomainAndLabelsTransitions() throws {
+        let floor = Var<Int>("floor")
+        let spec = TLASpec("TwoCars") {
+            Variable(floor, 0)
+            Action("moveElevator", id: [1, 2]) { id in
+                floor.becomes(id)
+            }
+        }
+
+        #expect(spec.actions[0].binding?.name == "id")
+        #expect(spec.actions[0].binding?.values == [.int(1), .int(2)])
+        let graph = try ModelChecker(spec: spec).exploreGraph()
+        let labels = graph.transitions[.init(0)]!.map(\.label)
+        #expect(Set(labels) == [.init(action: "moveElevator", argument: .int(1)), .init(action: "moveElevator", argument: .int(2))])
+        #expect(Set(graph.transitions[.init(0)]!.map(\.action)) == ["moveElevator(1)", "moveElevator(2)"])
+        #expect(spec.tlaModule.contains("moveElevator(id) =="))
+        #expect(spec.tlaModule.contains("\\E id \\in {1, 2}: moveElevator(id)"))
+    }
+
     @Test func explorationResultMatchesExistingCheckerViews() throws {
         let x = Var<Int>("x")
         let spec = TLASpec("ExplorationSnapshot") {

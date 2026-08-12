@@ -1,11 +1,29 @@
 public struct StateGraph: Sendable {
     public let specName: String
     public let variableNames: [String]
-    public struct Transition: Sendable {
+    public struct TransitionLabel: Hashable, Sendable, CustomStringConvertible {
         public let action: String
+        public let argument: TLAValue?
+
+        public init(action: String, argument: TLAValue? = nil) {
+            self.action = action
+            self.argument = argument
+        }
+
+        public var description: String {
+            argument.map { "\(action)(\($0))" } ?? action
+        }
+    }
+
+    public struct Transition: Sendable {
+        public let label: TransitionLabel
+        public var action: String { label.description }
         public let target: StateID
         public init(action: String, target: StateID) {
-            self.action = action; self.target = target
+            self.init(label: .init(action: action), target: target)
+        }
+        public init(label: TransitionLabel, target: StateID) {
+            self.label = label; self.target = target
         }
     }
 

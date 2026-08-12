@@ -22,7 +22,7 @@ struct ParsedEnumInfo {
 struct ParsedMacroModel {
     let typeName: String
     let variables: [(name: String, initial: TLAValue, initialSet: StateExpr?, swiftTypeName: String?)]
-    let actions: [(String, ActionExpr)]
+    let actions: [SpecParser.ParsedAction]
     let symmetricCollections: [SpecParser.ParsedSymmetricCollection]
     let collectionActions: [SpecParser.ParsedCollectionAction]
     let enumInfos: [ParsedEnumInfo]
@@ -99,7 +99,7 @@ enum TLASpecVerifier {
             name: typeName,
             variables: parsed.variables.map { NamedVar(name: $0.name, initial: $0.initial, initialSet: $0.initialSet) },
             constants: parsed.constants,
-            actions: parsed.actions.map { NamedAction(name: $0.name, body: $0.body) },
+            actions: parsed.actions.map { NamedAction(name: $0.name, body: $0.body, binding: $0.binding) },
             invariants: allInvariants,
             temporalProperties: parsed.temporal.map { NamedTemporal(name: $0.name, expr: $0.expr) },
             fairness: parsed.fairness,
@@ -579,6 +579,7 @@ enum MacroExpander {
         decls.append(contentsOf: actionResult.methods.map(DeclSyntax.init))
         if !model.actions.isEmpty {
             decls.append(DeclSyntax(generateApplyHelper(symmetricCollections: model.symmetricCollections)))
+            decls.append(DeclSyntax(generateParameterizedApplyHelper()))
             decls.append(DeclSyntax(generateApplyDispatcher(
                 actions: model.actions,
                 nativeNames: actionResult.nativeActionNames,
@@ -618,7 +619,7 @@ enum MacroExpander {
         }.joined(separator: ", ")
 
         let treeActions = model.actions.map { a in
-            "(\"\(a.0)\", \(codegenActionExpr(a.1)))"
+            "(\"\(a.name)\", \(codegenActionExpr(a.body)))"
         }.joined(separator: ", ")
 
         let treeInvs = model.invariants.map { i in
@@ -757,7 +758,7 @@ enum MacroExpander {
         )
     }
 
-    static func generateActionsEnum(actions: [(name: String, body: ActionExpr)]) -> EnumDeclSyntax {
+    static func generateActionsEnum(actions: [SpecParser.ParsedAction]) -> EnumDeclSyntax {
         EnumDeclSyntax(
             modifiers: [DeclModifierSyntax(name: .keyword(.public))],
             name: "Actions",
@@ -886,7 +887,7 @@ enum MacroExpander {
 
     static func generateActionMethods(
         isActor: Bool = false,
-        actions: [(name: String, body: ActionExpr)],
+        actions: [SpecParser.ParsedAction],
         collectionActions: [SpecParser.ParsedCollectionAction],
         symmetricCollections: [SpecParser.ParsedSymmetricCollection],
         variables: [(name: String, initial: TLAValue, initialSet: StateExpr?, swiftTypeName: String?)],
@@ -897,6 +898,18 @@ enum MacroExpander {
         var methods: [FunctionDeclSyntax] = []
 
         for a in actions {
+            if let binding = a.binding {
+                let type = swiftType(for: binding.values[0])
+                let value = tlaValueConstructor(for: type, value: binding.name)
+                let methodName = isActor ? "_\(a.name)" : "apply\(a.name)"
+                let source = """
+                \(isActor ? "fileprivate" : "public mutating") func \(methodName)(\(binding.name): \(type)) {
+                    _state = _apply(actionName: "\(a.name)", argument: \(value))
+                }
+                """
+                methods.append(DeclSyntax(stringLiteral: source).as(FunctionDeclSyntax.self)!)
+                continue
+            }
             if let collectionAction = collectionActions.first(where: { $0.name == a.name }),
                let collection = symmetricCollections.first(where: { $0.name == collectionAction.collectionName }) {
                 let actionNotEnabled = "SymmetricCollectionRuntimeError.actionNotEnabled(collection: \"\(collection.name)\", action: \"\(a.name)\")"
@@ -1082,7 +1095,7 @@ enum MacroExpander {
         """)]
     }
 
-    static func generateTransitionsTest(_ actions: [(name: String, body: ActionExpr)]) -> [DeclSyntax] {
+    static func generateTransitionsTest(_ actions: [SpecParser.ParsedAction]) -> [DeclSyntax] {
         if actions.isEmpty { return [] }
         return [DeclSyntax(stringLiteral: """
         public static func verifyTransitions() throws {
@@ -1125,7 +1138,7 @@ enum MacroExpander {
 
     static func generateObservableMembers(
         variables: [(name: String, initial: TLAValue, initialSet: StateExpr?, swiftTypeName: String?)],
-        actions: [(name: String, body: ActionExpr)],
+        actions: [SpecParser.ParsedAction],
         enumInfos: [ParsedEnumInfo] = []
     ) -> [DeclSyntax] {
         var decls: [DeclSyntax] = []
@@ -1137,7 +1150,8 @@ enum MacroExpander {
                let info = enumInfos.first(where: { $0.typeName == swiftType }),
                let caseName = info.cases.first(where: { $0.value == v.initial })?.name {
                 initStr = ".\(caseName)"
-            } else if v.swiftTypeName != nil {
+            } else if let swiftType = v.swiftTypeName,
+                      !["Int", "Bool", "String"].contains(swiftType) {
                 initStr = "\(typeStr)(rawValue: \(literalExpr(for: v.initial)))!"
             } else {
                 initStr = literalExpr(for: v.initial)
@@ -1157,14 +1171,21 @@ enum MacroExpander {
         }
 
         for a in actions {
-            let callbackName = "on" + a.0.prefix(1).capitalized + a.0.dropFirst()
+            let callbackName = "on" + a.name.prefix(1).capitalized + a.name.dropFirst()
+            let callbackType: String
+            if let binding = a.binding {
+                let type = swiftType(for: binding.values[0])
+                callbackType = "((\(type), State, State) -> Void)?"
+            } else {
+                callbackType = "((State, State) async -> Void)?"
+            }
             let callbackVar: DeclSyntax = DeclSyntax(
                 VariableDeclSyntax(
                     modifiers: [DeclModifierSyntax(name: .keyword(.public))],
                     bindingSpecifier: .keyword(.var),
                     bindings: [PatternBindingSyntax(
                         pattern: IdentifierPatternSyntax(identifier: .identifier(callbackName)),
-                        typeAnnotation: TypeAnnotationSyntax(type: TypeSyntax(stringLiteral: "((State, State) async -> Void)?"))
+                        typeAnnotation: TypeAnnotationSyntax(type: TypeSyntax(stringLiteral: callbackType))
                     )]
                 )
             )
@@ -1188,6 +1209,7 @@ enum MacroExpander {
         decls.append(DeclSyntax(generateStateStruct(variables: variables, enumInfos: enumInfos)))
         decls.append(contentsOf: generateObservableActionMethods(variables: variables, actions: actions).map(DeclSyntax.init))
         decls.append(DeclSyntax(generateApplyHelper()))
+        decls.append(DeclSyntax(generateParameterizedApplyHelper()))
         decls.append(DeclSyntax(
             VariableDeclSyntax(
                 modifiers: [DeclModifierSyntax(name: .keyword(.public)), DeclModifierSyntax(name: .keyword(.static))],
@@ -1207,13 +1229,27 @@ enum MacroExpander {
 
     static func generateObservableActionMethods(
         variables: [(name: String, initial: TLAValue, initialSet: StateExpr?, swiftTypeName: String?)],
-        actions: [(name: String, body: ActionExpr)]
+        actions: [SpecParser.ParsedAction]
     ) -> [FunctionDeclSyntax] {
         actions.map { a in
-            let callbackName = "on" + a.0.prefix(1).capitalized + a.0.dropFirst()
+            let callbackName = "on" + a.name.prefix(1).capitalized + a.name.dropFirst()
+            if let binding = a.binding {
+                let type = swiftType(for: binding.values[0])
+                let value = tlaValueConstructor(for: type, value: binding.name)
+                let source = """
+                public func _\(a.name)(\(binding.name): \(type)) {
+                    let from = _state
+                    _state = _apply(actionName: "\(a.name)", argument: \(value))
+                    \(variables.map { "\($0.name) = _state.\($0.name)" }.joined(separator: "\n                    "))
+                    let to = _state
+                    if let h = \(callbackName) { h(\(binding.name), from, to) }
+                }
+                """
+                return DeclSyntax(stringLiteral: source).as(FunctionDeclSyntax.self)!
+            }
             var bodyExprs: [ExprSyntax] = [
                 ExprSyntax(stringLiteral: "let from = _state"),
-                ExprSyntax(stringLiteral: "_state = _apply(.\(a.0))")
+                ExprSyntax(stringLiteral: "_state = _apply(.\(a.name))")
             ]
             for v in variables {
                 bodyExprs.append(ExprSyntax(stringLiteral: "\(v.name) = _state.\(v.name)"))
@@ -1221,12 +1257,29 @@ enum MacroExpander {
             bodyExprs.append(ExprSyntax(stringLiteral: "if let h = \(callbackName) { Task { await h(from, _state) } }"))
             return FunctionDeclSyntax(
                 modifiers: [DeclModifierSyntax(name: .keyword(.public))],
-                name: .identifier("_\(a.0)"),
+                name: .identifier("_\(a.name)"),
                 signature: FunctionSignatureSyntax(parameterClause: FunctionParameterClauseSyntax(parameters: [])),
                 body: CodeBlockSyntax(statements: CodeBlockItemListSyntax(bodyExprs.map {
                     CodeBlockItemSyntax(item: .expr($0))
                 }))
             )
+        }
+    }
+
+    static func generateParameterizedApplyHelper() -> FunctionDeclSyntax {
+        DeclSyntax(stringLiteral: """
+        private func _apply(actionName: String, argument: TLAValue) -> State {
+            guard let next = try? Self.runtime.apply(actionName: actionName, argument: argument, to: _state.asDictionary) else { return _state }
+            return State(from: next)
+        }
+        """).as(FunctionDeclSyntax.self)!
+    }
+
+    static func tlaValueConstructor(for swiftType: String, value: String) -> String {
+        switch swiftType {
+        case "Int": return ".int(\(value))"
+        case "Bool": return ".bool(\(value))"
+        default: return ".string(\(value))"
         }
     }
 
@@ -1240,13 +1293,13 @@ enum MacroExpander {
         }
     }
 
-    static func generateCallbackProtocol(typeName: String, actions: [(String, ActionExpr)]) throws -> [DeclSyntax] {
+    static func generateCallbackProtocol(typeName: String, actions: [SpecParser.ParsedAction]) throws -> [DeclSyntax] {
         let protoName = "\(typeName)Actions"
         var callbackDecls: [String] = []
         var defaultDecls: [String] = []
 
         for a in actions {
-            let callbackName = "on" + a.0.prefix(1).capitalized + a.0.dropFirst()
+            let callbackName = "on" + a.name.prefix(1).capitalized + a.name.dropFirst()
             callbackDecls.append("func \(callbackName)()")
             defaultDecls.append("""
                 func \(callbackName)() {
@@ -1785,7 +1838,7 @@ enum MacroExpander {
     // MARK: - Apply dispatcher generation (T3)
 
     static func generateApplyDispatcher(
-        actions: [(name: String, body: ActionExpr)],
+        actions: [SpecParser.ParsedAction],
         nativeNames: Set<String>,
         isActor: Bool = false
     ) -> FunctionDeclSyntax {

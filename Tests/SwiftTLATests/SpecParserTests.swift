@@ -440,6 +440,36 @@ private let cameraModePhases: [String: [String: TLAValue]] = [
         #expect(parsed.actions[0].body == .assign("mode", .value(.string("live"))))
     }
 
+    @Test func parsesParameterizedActionWithExplicitFiniteDomain() {
+        let source = """
+        {
+            Action("moveElevator", id: [1, 2]) { id in
+                floor.becomes(id)
+            }
+        }
+        """
+        let closure = Parser.parse(source: source).statements.first!.item.as(ClosureExprSyntax.self)!
+        let parsed = SpecParser.parseSpecClosure(closure)
+        #expect(parsed.actions.count == 1)
+        #expect(parsed.actions[0].binding?.name == "id")
+        #expect(parsed.actions[0].binding?.values == [.int(1), .int(2)])
+        #expect(parsed.actions[0].body == .assign("floor", .variable("id")))
+    }
+
+    @Test func rejectsParameterizedActionWithoutExplicitFiniteDomain() {
+        let source = """
+        {
+            Action("moveElevator", id: elevatorIDs) { id in
+                floor.becomes(id)
+            }
+        }
+        """
+        let closure = Parser.parse(source: source).statements.first!.item.as(ClosureExprSyntax.self)!
+        let parsed = SpecParser.parseSpecClosure(closure)
+        #expect(parsed.actions.isEmpty)
+        #expect(parsed.diagnostics.map(\.message) == ["Parameterized action 'moveElevator' requires an explicitly written non-empty finite array domain."])
+    }
+
     @Test func parseInvalidEnumCaseReturnsNilForInvariant() {
         let source = """
         {

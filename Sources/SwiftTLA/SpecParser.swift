@@ -420,7 +420,7 @@ public enum SpecParser {
 
     public struct ParsedSpecComponents {
         public var variables: [(name: String, initial: TLAValue, initialSet: StateExpr?, swiftTypeName: String?)] = []
-        public var actions: [(name: String, body: ActionExpr)] = []
+        public var actions: [ParsedAction] = []
         public var symmetricCollections: [ParsedSymmetricCollection] = []
         public var collectionActions: [ParsedCollectionAction] = []
         public var diagnostics: [SymmetricCollectionParseDiagnostic] = []
@@ -430,6 +430,18 @@ public enum SpecParser {
         public var constants: [String: TLAValue] = [:]
         /// Local named values (from NamedValue declarations, resolved in expressions)
         public var localConstants: [String: TLAValue] = [:]
+    }
+
+    public struct ParsedAction: Sendable, Equatable {
+        public let name: String
+        public let body: ActionExpr
+        public let binding: ActionBinding?
+
+        public init(name: String, body: ActionExpr, binding: ActionBinding? = nil) {
+            self.name = name
+            self.body = body
+            self.binding = binding
+        }
     }
 
     public struct ParsedSymmetricCollection {
@@ -690,16 +702,7 @@ public enum SpecParser {
         case "Variable":
             parseVariableDecl(call, into: &result)
         case "Action":
-            if let actionName = extractStringArg(call, index: 0, loopVar: loopVar, loopValue: loopValue),
-                let body = call.trailingClosure.flatMap(decodeActionFromClosure) {
-                result.actions.append((actionName, body))
-            } else if let actionName = extractStringArg(call, index: 0, loopVar: loopVar, loopValue: loopValue),
-                      call.trailingClosure != nil {
-                // Action body uses unsupported constructs (existsAction, etc.).
-                // Store a placeholder body; the macro will fall back to interpreter
-                // trampoline which reads the body from the runtime spec at Self.spec.
-                result.actions.append((actionName, .chooseAction("_parser_skip", .value(.bool(false)))))
-            }
+            parseAction(call, into: &result, loopVar: loopVar, loopValue: loopValue)
         case "Invariant":
             parseInvariant(call, into: &result)
         case "Constant":
@@ -720,11 +723,85 @@ public enum SpecParser {
                let spec = SpecRegistry.lookup(name) {
                 result.variables += spec.variables.map { (name: $0.name, initial: $0.initial, initialSet: $0.initialSet, swiftTypeName: nil) }
                 result.invariants += spec.invariants.map { (name: $0.name, body: $0.body) }
-                result.actions += spec.actions.map { (name: $0.name, body: $0.body) }
+                result.actions += spec.actions.map { ParsedAction(name: $0.name, body: $0.body, binding: $0.binding) }
             }
         default:
             break
         }
+    }
+
+    private static func parseAction(
+        _ call: FunctionCallExprSyntax,
+        into result: inout ParsedSpecComponents,
+        loopVar: String?,
+        loopValue: Int?
+    ) {
+        guard let actionName = extractStringArg(call, index: 0, loopVar: loopVar, loopValue: loopValue),
+              let closure = call.trailingClosure
+        else { return }
+        let arguments = Array(call.arguments)
+        let bindingArguments = arguments.dropFirst()
+        if bindingArguments.isEmpty {
+            if let body = decodeActionFromClosure(closure) {
+                result.actions.append(.init(name: actionName, body: body))
+            } else {
+                // Action body uses unsupported constructs (existsAction, etc.).
+                // Store a placeholder body; the macro will fall back to interpreter
+                // trampoline which reads the body from the runtime spec at Self.spec.
+                result.actions.append(.init(name: actionName, body: .chooseAction("_parser_skip", .value(.bool(false)))))
+            }
+            return
+        }
+        guard bindingArguments.count == 1,
+              let argument = bindingArguments.first,
+              let binderName = argument.label?.text,
+              let values = finiteDomain(argument.expression),
+              !values.isEmpty
+        else {
+            result.diagnostics.append(.init(
+                message: "Parameterized action '\(actionName)' requires an explicitly written non-empty finite array domain.",
+                source: call
+            ))
+            return
+        }
+        guard closureParameterName(in: closure) == binderName else {
+            result.diagnostics.append(.init(
+                message: "Parameterized action '\(actionName)' must declare binder '\(binderName)' in its closure.",
+                source: closure
+            ))
+            return
+        }
+        guard let body = decodeActionFromClosure(closure) else {
+            result.diagnostics.append(.init(
+                message: "Parameterized action '\(actionName)' contains an unsupported action expression.",
+                source: closure
+            ))
+            return
+        }
+        result.actions.append(.init(
+            name: actionName,
+            body: body,
+            binding: ActionBinding(name: binderName, values: values)
+        ))
+    }
+
+    private static func closureParameterName(in closure: ClosureExprSyntax) -> String? {
+        guard let parameters = closure.signature?.parameterClause else { return nil }
+        switch parameters {
+        case .simpleInput(let list): return list.first?.name.text
+        case .parameterClause(let clause):
+            guard let parameter = clause.parameters.first else { return nil }
+            return parameter.secondName?.text ?? parameter.firstName.text
+        }
+    }
+
+    private static func finiteDomain(_ expression: ExprSyntax) -> [TLAValue]? {
+        guard let array = expression.as(ArrayExprSyntax.self) else { return nil }
+        let values = array.elements.compactMap { element -> TLAValue? in
+            guard case .value(let value)? = decodeStateExpr(element.expression) else { return nil }
+            return value
+        }
+        return values.count == array.elements.count ? values : nil
     }
 
     private static func parseInvariant(
@@ -980,7 +1057,7 @@ public enum SpecParser {
             ),
             source: call.description
         ))
-        result.actions.append((actionName, .existsAction(
+        result.actions.append(.init(name: actionName, body: .existsAction(
             member,
             .domain(.variable(collectionName)),
             actionBody

@@ -107,7 +107,8 @@ extension TLASpec {
         lines.append("")
 
         for act in actions where !act.name.isEmpty {
-            lines.append("\(act.name) == \(act.body)")
+            let header = act.binding.map { "\(act.name)(\($0.name))" } ?? act.name
+            lines.append("\(header) == \(act.body)")
         }
         lines.append("")
 
@@ -115,11 +116,16 @@ extension TLASpec {
         if actionNames.count == 1 && actionNames[0].name == "Next" {
             // Single action already named Next — no separate disjunction needed
         } else if actionNames.count == 1 {
-            lines.append("Next == \(actionNames[0].name)")
+            let action = actionNames[0]
+            let invocation = action.binding.map {
+                "\\E \($0.name) \\in {\($0.values.map(\.description).joined(separator: ", "))}: \(action.name)(\($0.name))"
+            } ?? action.name
+            lines.append("Next == \(invocation)")
         } else {
             lines.append("Next ==")
             for a in actions where !a.name.isEmpty {
-                lines.append("  \\/ \(a.name)")
+                let invocation = a.binding.map { "\\E \($0.name) \\in {\($0.values.map(\.description).joined(separator: ", "))}: \(a.name)(\($0.name))" } ?? a.name
+                lines.append("  \\/ \(invocation)")
             }
         }
         lines.append("")
