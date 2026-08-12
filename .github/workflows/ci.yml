@@ -65,3 +65,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: swift build --target SwiftTLAMacros
+
+  test:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - run: xcodebuild test -scheme SwiftTLA-Package -destination 'platform=macOS'
