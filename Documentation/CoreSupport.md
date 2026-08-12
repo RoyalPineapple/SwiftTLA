@@ -5,6 +5,11 @@ names each behavior, its
 finite bounds, required cases, graph relation, requested status, and any
 linked divergence. Behavior outside that register is not admitted.
 
+Parser, macro, generated-machine, nested-package, and Apple-platform checks
+use a separate [public workflow conformance](PublicWorkflowConformance.md)
+report. Its diagnostic or hosted-candidate result does not widen this core
+support register.
+
 ## Temporal and symmetry admission boundary
 
 Temporal and symmetry admission is a separate P3 boundary. It does not widen

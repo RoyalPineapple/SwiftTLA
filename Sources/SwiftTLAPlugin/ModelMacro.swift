@@ -23,6 +23,7 @@ struct ParsedMacroModel {
     let typeName: String
     let isGeneric: Bool
     let requiresVerificationInstanceFactory: Bool
+    let declaredMemberNames: Set<String>
     let variables: [(name: String, initial: TLAValue, initialSet: StateExpr?, swiftTypeName: String?)]
     let actions: [SpecParser.ParsedAction]
     let symmetricCollections: [SpecParser.ParsedSymmetricCollection]
@@ -147,6 +148,7 @@ enum TLASpecVerifier {
             typeName: typeName,
             isGeneric: isGeneric,
             requiresVerificationInstanceFactory: !hasCallableZeroArgumentInitializer(in: memberList),
+            declaredMemberNames: declaredMemberNames(in: memberList),
             variables: parsed.variables,
             actions: parsed.actions,
             symmetricCollections: parsed.symmetricCollections,
@@ -155,6 +157,23 @@ enum TLASpecVerifier {
             hasInvariants: hasInvs,
             invariants: parsed.invariants
         )
+    }
+
+    private static func declaredMemberNames(in members: MemberBlockItemListSyntax) -> Set<String> {
+        var names = Set<String>()
+        for member in members {
+            if let function = member.decl.as(FunctionDeclSyntax.self) {
+                names.insert(function.name.text)
+            }
+            if let variable = member.decl.as(VariableDeclSyntax.self) {
+                for binding in variable.bindings {
+                    if let identifier = binding.pattern.as(IdentifierPatternSyntax.self) {
+                        names.insert(identifier.identifier.text)
+                    }
+                }
+            }
+        }
+        return names
     }
 
     private static func hasCallableZeroArgumentInitializer(in members: MemberBlockItemListSyntax) -> Bool {
@@ -613,7 +632,10 @@ enum MacroExpander {
             collectionActions: model.collectionActions,
             symmetricCollections: model.symmetricCollections,
             variables: model.variables,
-            enumInfos: model.enumInfos
+            enumInfos: model.enumInfos,
+            declaredMemberNames: model.declaredMemberNames
+                .union(model.variables.map(\.name))
+                .union(["runtime", "verifySpec", "verifyTransitions", "verifyInvariants", "transitionMatrix"])
         )
         decls.append(contentsOf: actionResult.methods.map(DeclSyntax.init))
         if !model.actions.isEmpty {
@@ -643,6 +665,11 @@ enum MacroExpander {
         decls.append(contentsOf: generateSpecTest())
         if !model.actions.isEmpty {
             decls.append(contentsOf: generateTransitionMatrix())
+            if !isActor {
+                decls.append(contentsOf: generateGeneratedActionOutcome(
+                    requiresInstanceFactory: model.requiresVerificationInstanceFactory))
+                decls.append(contentsOf: generateGeneratedPropertyOutcomes())
+            }
         }
         if isActor {
             decls.append(DeclSyntax(generateActorVerificationApplyHelper()))
@@ -953,7 +980,8 @@ enum MacroExpander {
         collectionActions: [SpecParser.ParsedCollectionAction],
         symmetricCollections: [SpecParser.ParsedSymmetricCollection],
         variables: [(name: String, initial: TLAValue, initialSet: StateExpr?, swiftTypeName: String?)],
-        enumInfos: [ParsedEnumInfo]
+        enumInfos: [ParsedEnumInfo],
+        declaredMemberNames: Set<String> = []
     ) -> (methods: [FunctionDeclSyntax], nativeActionNames: Set<String>) {
         let visibility = isActor ? TokenSyntax.keyword(.fileprivate) : TokenSyntax.keyword(.public)
         var nativeNames = Set<String>()
@@ -970,6 +998,14 @@ enum MacroExpander {
                 }
                 """
                 methods.append(DeclSyntax(stringLiteral: source).as(FunctionDeclSyntax.self)!)
+                if isActor && !declaredMemberNames.contains(a.name) {
+                    let bridge = """
+                    fileprivate func \(a.name)(\(binding.name): \(type)) {
+                        _\(a.name)(\(binding.name): \(binding.name))
+                    }
+                    """
+                    methods.append(DeclSyntax(stringLiteral: bridge).as(FunctionDeclSyntax.self)!)
+                }
                 continue
             }
             if let collectionAction = collectionActions.first(where: { $0.name == a.name }),
@@ -1019,6 +1055,14 @@ enum MacroExpander {
                     signature: FunctionSignatureSyntax(parameterClause: FunctionParameterClauseSyntax(parameters: [])),
                     body: CodeBlockSyntax { ExprSyntax(stringLiteral: "_state = _apply(.\(a.name))") }
                 ))
+            }
+            if isActor && !declaredMemberNames.contains(a.name) {
+                let bridge = """
+                fileprivate func \(a.name)() {
+                    _\(a.name)()
+                }
+                """
+                methods.append(DeclSyntax(stringLiteral: bridge).as(FunctionDeclSyntax.self)!)
             }
         }
         return (methods, nativeNames)
@@ -1153,6 +1197,41 @@ enum MacroExpander {
                 }
             }
             return matrix
+        }
+        """)]
+    }
+
+    static func generateGeneratedActionOutcome(requiresInstanceFactory: Bool) -> [DeclSyntax] {
+        let factoryParameter = requiresInstanceFactory ? ", makeInstance: () -> Self" : ""
+        let instance = requiresInstanceFactory ? "makeInstance()" : "Self()"
+        return [DeclSyntax(stringLiteral: """
+        public static func generatedActionOutcome(
+            actionName: String,
+            in state: [String: TLAValue]\(factoryParameter)
+        ) -> SpecRuntime.RuntimeActionOutcome {
+            let outcome = Self.runtime.actionOutcome(named: actionName, in: state)
+            guard case .enabled = outcome else { return outcome }
+            guard let action = Actions(rawValue: actionName) else {
+                return .evaluationUnavailable(
+                    actionName: actionName,
+                    diagnostic: .init(
+                        code: .evaluatorUnavailable,
+                        message: "Generated action extraction is unavailable for \\(actionName)"))
+            }
+            var instance = \(instance)
+            instance._state = State(from: state)
+            instance._applyAction(action)
+            return .enabled(actionName: actionName, successors: [instance._state.asDictionary])
+        }
+        """)]
+    }
+
+    static func generateGeneratedPropertyOutcomes() -> [DeclSyntax] {
+        [DeclSyntax(stringLiteral: """
+        public static func generatedPropertyOutcomes(
+            in state: [String: TLAValue]
+        ) -> [SpecRuntime.RuntimePropertyOutcome] {
+            Self.runtime.propertyOutcomes(in: state)
         }
         """)]
     }

@@ -4,7 +4,7 @@ import Testing
 
 @Suite("P4 public workflow governance")
 struct PublicWorkflowGovernanceTests {
-  @Test("admission needs complete, local, exact evidence and a successful named platform")
+  @Test("admission needs complete hosted workflow evidence and a successful named platform")
   func admissionIsEvidenceBound() throws {
     let fixture = Fixture()
     let caseRecord = try fixture.caseRecord()
@@ -15,7 +15,7 @@ struct PublicWorkflowGovernanceTests {
       supportID: support.id, decision: .admitted, reasonCodes: [], mandatoryCaseIDs: [caseRecord.id],
       divergenceIDs: [], evidence: [evidence], platformEvidence: [platform])
     let report = try PublicWorkflowAdmissionV1(
-      gateRunID: fixture.gateRunID, entries: [entry], admittedBounds: [support.id: caseRecord.finiteBounds])
+      gateRunID: fixture.gateRunID, entries: [entry], admittedBounds: [support.id: support.finiteBounds])
 
     try report.validate(
       supportSurface: try PublicWorkflowSupportSurfaceV1(entries: [support]),
@@ -68,7 +68,8 @@ struct PublicWorkflowGovernanceTests {
         correlation: try fixture.platformCorrelation(caseID: record.id, platformRunID: fixture.platformRunID),
         fixtureBinding: try fixture.binding(caseID: record.id, evidence: fixture.reference("platform-fixture"), runID: fixture.platformRunID),
         stdoutBinding: try fixture.binding(caseID: record.id, evidence: fixture.reference("stdout"), runID: fixture.platformRunID),
-        stderrBinding: try fixture.binding(caseID: record.id, evidence: fixture.reference("stderr"), runID: fixture.platformRunID))
+        stderrBinding: try fixture.binding(caseID: record.id, evidence: fixture.reference("stderr"), runID: fixture.platformRunID),
+        execution: try fixture.candidateExecution())
     #expect(throws: PublicWorkflowGovernanceErrorV1.self) {
       _ = try PublicWorkflowAdmissionEntryV1(
         supportID: "annotation", decision: .admitted, reasonCodes: [], mandatoryCaseIDs: [record.id],
@@ -157,6 +158,27 @@ struct PublicWorkflowGovernanceTests {
     #expect(throws: PublicWorkflowGovernanceErrorV1.self) {
       _ = try fixture.platform(caseID: record.id, stdoutBindingEvidence: fixture.reference("stderr"))
     }
+    let localDiagnostic = try fixture.platform(caseID: record.id, ci: false)
+    #expect(localDiagnostic.execution.authority == .diagnostic)
+  }
+
+  @Test("diagnostic evidence cannot impersonate hosted workflow evidence")
+  func candidateAndDiagnosticEvidenceAreDistinct() throws {
+    let fixture = Fixture()
+    let record = try fixture.caseRecord()
+    let localEvidence = try fixture.evidence(caseID: record.id, gateRunID: fixture.gateRunID, ci: false)
+    #expect(localEvidence.execution.authority == .diagnostic)
+    let candidateEvidence = try fixture.evidence(caseID: record.id, gateRunID: fixture.gateRunID)
+    #expect(candidateEvidence.execution.authority == .candidate)
+    let support = try fixture.support(caseID: record.id)
+    let candidateReport = try fixture.admittedReport(record: record, evidence: candidateEvidence, platform: try fixture.platform(caseID: record.id))
+    try candidateReport.validate(supportSurface: try PublicWorkflowSupportSurfaceV1(entries: [support]),
+                                 cases: try PublicWorkflowCasesV1(cases: [record]), ledger: try PublicWorkflowDivergenceLedgerV1(records: []))
+    let diagnosticReport = try fixture.admittedReport(record: record, evidence: localEvidence, platform: try fixture.platform(caseID: record.id, ci: false))
+    #expect(throws: PublicWorkflowGovernanceErrorV1.self) {
+      try diagnosticReport.validate(supportSurface: try PublicWorkflowSupportSurfaceV1(entries: [support]),
+                                    cases: try PublicWorkflowCasesV1(cases: [record]), ledger: try PublicWorkflowDivergenceLedgerV1(records: []))
+    }
   }
 
   private struct Fixture {
@@ -201,7 +223,7 @@ struct PublicWorkflowGovernanceTests {
 
     func evidence(
       caseID: String, gateRunID: UUID, status: PublicWorkflowEvidenceStatusV1 = .complete,
-      fixtureSource: CoreEvidenceReferenceV1? = nil
+      fixtureSource: CoreEvidenceReferenceV1? = nil, ci: Bool = true
     ) throws -> PublicWorkflowCaseEvidenceV1 {
       let fixtureRunID = UUID()
       let comparisonRunID = UUID()
@@ -216,7 +238,8 @@ struct PublicWorkflowGovernanceTests {
         fixtureBinding: try PublicWorkflowEvidenceBindingV1(caseID: caseID, gateRunID: gateRunID, evidenceRunID: fixtureRunID, sourceInput: fixtureSource ?? record.sourceInput, configuration: record.configuration, provenance: record.provenance, evidence: fixtureReference),
         comparisonBinding: try PublicWorkflowEvidenceBindingV1(caseID: caseID, gateRunID: gateRunID, evidenceRunID: comparisonRunID, sourceInput: record.sourceInput, configuration: record.configuration, provenance: record.provenance, evidence: comparisonReference),
         provenanceBinding: try PublicWorkflowEvidenceBindingV1(caseID: caseID, gateRunID: gateRunID, evidenceRunID: comparisonRunID, sourceInput: record.sourceInput, configuration: record.configuration, provenance: record.provenance, evidence: provenanceReference),
-        outcome: status == .complete ? .exact : .unavailable, diagnosticCode: status == .complete ? .exactAgreement : .evidenceUnavailable)
+        outcome: status == .complete ? .exact : .unavailable, diagnosticCode: status == .complete ? .exactAgreement : .evidenceUnavailable,
+        execution: try (ci ? candidateExecution() : diagnosticExecution()))
     }
 
     func platformCorrelation(caseID: String, platformRunID: UUID = UUID()) throws -> PublicWorkflowPlatformRunCorrelationV1 {
@@ -225,7 +248,7 @@ struct PublicWorkflowGovernanceTests {
 
     func platform(caseID: String = "annotation-valid", record: PublicWorkflowConformanceCaseV1? = nil,
                   platformRunID: UUID? = nil, bindingRunID: UUID? = nil,
-                  stdoutBindingEvidence: CoreEvidenceReferenceV1? = nil) throws -> PublicWorkflowPlatformEvidenceV1 {
+                  stdoutBindingEvidence: CoreEvidenceReferenceV1? = nil, ci: Bool = true) throws -> PublicWorkflowPlatformEvidenceV1 {
       let platformFixture = try reference("platform-fixture")
       let stdout = try reference("stdout")
       let stderr = try reference("stderr")
@@ -238,7 +261,19 @@ struct PublicWorkflowGovernanceTests {
         exitCode: 0, stdout: stdout, stderr: stderr, correlation: correlation,
         fixtureBinding: try binding(caseID: caseID, evidence: platformFixture, runID: bindingRunID, record: record),
         stdoutBinding: try binding(caseID: caseID, evidence: stdoutBindingEvidence ?? stdout, runID: bindingRunID, record: record),
-        stderrBinding: try binding(caseID: caseID, evidence: stderr, runID: bindingRunID, record: record))
+        stderrBinding: try binding(caseID: caseID, evidence: stderr, runID: bindingRunID, record: record),
+        execution: try (ci ? candidateExecution() : diagnosticExecution()))
+    }
+
+    func diagnosticExecution() throws -> PublicWorkflowCIExecutionV1 {
+      try PublicWorkflowCIExecutionV1(authority: .diagnostic, metadata: try reference("local-diagnostic.json"))
+    }
+
+    func candidateExecution() throws -> PublicWorkflowCIExecutionV1 {
+      return try PublicWorkflowCIExecutionV1(
+        authority: .candidate, gitSHA: String(repeating: "b", count: 40), repository: "RoyalPineapple/SwiftTLA",
+        workflow: "Public Workflow Conformance", ref: "refs/heads/main", runID: "123", runAttempt: 1, job: "public-workflow",
+        serverURL: "https://github.com", metadata: try reference("ci-candidate.json"))
     }
 
     func admittedReport(record: PublicWorkflowConformanceCaseV1, evidence: PublicWorkflowCaseEvidenceV1, platform: PublicWorkflowPlatformEvidenceV1) throws -> PublicWorkflowAdmissionV1 {

@@ -1,0 +1,1 @@
+{"schema":"PublicWorkflowGeneratedBehaviorNotApplicableV1","reason":"This compiled generated-machine comparison runs SwiftTLA fixtures only; TLC, Java, and a separately-built bridge binary are not inputs."}

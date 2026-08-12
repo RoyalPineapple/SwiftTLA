@@ -5,52 +5,105 @@
       "name": "@TLAModel",
       "fixtureID": "p4-annotation-tla-model",
       "advertised": true,
-      "decision": "fixtureBacked",
+      "decision": "pendingCI",
+      "publicAdmission": "notAdmitted",
+      "localEvidence": "diagnosticOnly",
+      "ciEvidence": "requiredRetained",
       "positiveFixture": "TLAModel/Valid",
       "invalidFixture": "TLAModel/Invalid",
-      "positiveCommand": "build",
+      "scheme": "PublicWorkflowTLAModelValid",
       "expectedPositiveOutcome": "buildSucceeded",
       "expectedInvalidOutcome": "buildFailed",
       "diagnosticCategory": "macroInvariantViolation",
       "diagnosticText": "Invariant 'withinBounds' violated",
-      "sourceInputs": ["TLAModel/Valid/Package.swift", "TLAModel/Valid/Package.resolved", "TLAModel/Valid/Sources/main.swift", "TLAModel/Invalid/Package.swift", "TLAModel/Invalid/Package.resolved", "TLAModel/Invalid/Sources/main.swift"]
+      "sourceInputsSHA256": "64a8cc21f93cb48f29182ffb22570455574de4049e9dc3c67f34243ead0c4972",
+      "sourceInputs": [
+        {"path": "Sources/SwiftTLAMacros/Macros.swift", "sha256": "842f6e97c4920a32029bef6adc495b055b6a4f155aad06366c7d1fe029341295"},
+        {"path": "Tests/Fixtures/PublicWorkflowConformance/TLAModel/Valid/Package.swift", "sha256": "ef5d117d2c4658ba3b0d63268d59d2689398829ee8578ac5619e14460131d15b"},
+        {"path": "Tests/Fixtures/PublicWorkflowConformance/TLAModel/Valid/Package.resolved", "sha256": "428e950613fff4d86ba7fd29e9a8c3ded615672f89b50b72a928b2de5ac2b1c3"},
+        {"path": "Tests/Fixtures/PublicWorkflowConformance/TLAModel/Valid/Sources/main.swift", "sha256": "ca363bc24259cd34f8f56b9d689594344c9b143e336fc5ac8e005f85b535c75b"},
+        {"path": "Tests/Fixtures/PublicWorkflowConformance/TLAModel/Invalid/Package.swift", "sha256": "4dea385083e4fd1acd0249f8db00790b566156083b89dc8f128cca3e3d15d24a"},
+        {"path": "Tests/Fixtures/PublicWorkflowConformance/TLAModel/Invalid/Package.resolved", "sha256": "428e950613fff4d86ba7fd29e9a8c3ded615672f89b50b72a928b2de5ac2b1c3"},
+        {"path": "Tests/Fixtures/PublicWorkflowConformance/TLAModel/Invalid/Sources/main.swift", "sha256": "e27c8c90738198d18b8e9c17f0ac13f105750345032ca562e9e4b84f943039ed"}
+      ]
     },
     {
       "name": "@TLAActor",
       "fixtureID": "p4-annotation-tla-actor",
       "advertised": true,
-      "decision": "fixtureBacked",
+      "decision": "pendingCI",
+      "publicAdmission": "notAdmitted",
+      "localEvidence": "diagnosticOnly",
+      "ciEvidence": "requiredRetained",
       "positiveFixture": "TLActor/Valid",
       "invalidFixture": "TLActor/Invalid",
-      "positiveCommand": "run",
-      "expectedPositiveOutcome": "runSucceeded",
+      "scheme": "PublicWorkflowTLAActorValid",
+      "expectedPositiveOutcome": "buildSucceeded",
       "expectedInvalidOutcome": "buildFailed",
+      "runtimeProof": {"command": "swift run", "evidence": "localDiagnosticOnly"},
       "diagnosticCategory": "macroInvariantViolation",
       "diagnosticText": "Invariant 'withinBounds' violated",
-      "sourceInputs": ["TLActor/Valid/Package.swift", "TLActor/Valid/Package.resolved", "TLActor/Valid/Sources/main.swift", "TLActor/Invalid/Package.swift", "TLActor/Invalid/Package.resolved", "TLActor/Invalid/Sources/main.swift"]
+      "sourceInputsSHA256": "b9b0457c8113ef4188c3b638448b563ee3d3aa058667326cf24e1888239557aa",
+      "sourceInputs": [
+        {"path": "Sources/SwiftTLAMacros/Macros.swift", "sha256": "842f6e97c4920a32029bef6adc495b055b6a4f155aad06366c7d1fe029341295"},
+        {"path": "Tests/Fixtures/PublicWorkflowConformance/TLActor/Valid/Package.swift", "sha256": "64dc2dfd687dd85995916554127496b07d0caee6728de9d12edb16ba05f6ef52"},
+        {"path": "Tests/Fixtures/PublicWorkflowConformance/TLActor/Valid/Package.resolved", "sha256": "428e950613fff4d86ba7fd29e9a8c3ded615672f89b50b72a928b2de5ac2b1c3"},
+        {"path": "Tests/Fixtures/PublicWorkflowConformance/TLActor/Valid/Sources/main.swift", "sha256": "134ce05ee42f02da86ddf6b1be4624d4e92eca1a82834e254a9d0ad2f495ca7d"},
+        {"path": "Tests/Fixtures/PublicWorkflowConformance/TLActor/Invalid/Package.swift", "sha256": "1160efd08b1ba36c4f4fd3d5b70d66b3ad7672e6a1ffdc42837acfec6f51e42f"},
+        {"path": "Tests/Fixtures/PublicWorkflowConformance/TLActor/Invalid/Package.resolved", "sha256": "428e950613fff4d86ba7fd29e9a8c3ded615672f89b50b72a928b2de5ac2b1c3"},
+        {"path": "Tests/Fixtures/PublicWorkflowConformance/TLActor/Invalid/Sources/main.swift", "sha256": "1cdd5571b5c7f1ecae34d45501ca1bb9ccc5d2b54fd98e28bac94431a78a9990"}
+      ]
     },
     {
       "name": "@TLAObservable",
       "fixtureID": "p4-annotation-tla-observable",
       "advertised": true,
-      "decision": "fixtureBacked",
+      "decision": "pendingCI",
+      "publicAdmission": "notAdmitted",
+      "localEvidence": "diagnosticOnly",
+      "ciEvidence": "requiredRetained",
       "positiveFixture": "TLAObservable/Valid",
       "invalidFixture": "TLAObservable/Invalid",
-      "positiveCommand": "build",
+      "scheme": "PublicWorkflowTLAObservableValid",
       "expectedPositiveOutcome": "buildSucceeded",
       "expectedInvalidOutcome": "buildFailed",
       "diagnosticCategory": "macroInvariantViolation",
       "diagnosticText": "Invariant 'withinBounds' violated",
-      "sourceInputs": ["TLAObservable/Valid/Package.swift", "TLAObservable/Valid/Package.resolved", "TLAObservable/Valid/Sources/main.swift", "TLAObservable/Invalid/Package.swift", "TLAObservable/Invalid/Sources/main.swift"]
+      "sourceInputsSHA256": "953badfd2bf2a032cd316ce8b3df67de620b59db571ba597a80f67708c979f0f",
+      "sourceInputs": [
+        {"path": "Sources/SwiftTLAMacros/Macros.swift", "sha256": "842f6e97c4920a32029bef6adc495b055b6a4f155aad06366c7d1fe029341295"},
+        {"path": "Tests/Fixtures/PublicWorkflowConformance/TLAObservable/Valid/Package.swift", "sha256": "9d32aad60423342ae2b71ce98262bb5e83b7ccd973b6963879b5d63d1346b7d6"},
+        {"path": "Tests/Fixtures/PublicWorkflowConformance/TLAObservable/Valid/Package.resolved", "sha256": "428e950613fff4d86ba7fd29e9a8c3ded615672f89b50b72a928b2de5ac2b1c3"},
+        {"path": "Tests/Fixtures/PublicWorkflowConformance/TLAObservable/Valid/Sources/main.swift", "sha256": "cd620ea3db9d815644203b2f60c5525b54510240c17527f6c29ce6198dfe9153"},
+        {"path": "Tests/Fixtures/PublicWorkflowConformance/TLAObservable/Invalid/Package.swift", "sha256": "67e75a8b4a8d5c950359b0bb64a8c718134b43e28eda5d162ec6cf3f259274f8"},
+        {"path": "Tests/Fixtures/PublicWorkflowConformance/TLAObservable/Invalid/Package.resolved", "sha256": "428e950613fff4d86ba7fd29e9a8c3ded615672f89b50b72a928b2de5ac2b1c3"},
+        {"path": "Tests/Fixtures/PublicWorkflowConformance/TLAObservable/Invalid/Sources/main.swift", "sha256": "6aafbe1ed3afc82c066173af01dc0aac89023baa76866dbfac6e7ce72e143ec7"}
+      ]
+    },
+    {
+      "name": "@TypedVar",
+      "fixtureID": "p4-annotation-typed-var-not-release-facing",
+      "advertised": false,
+      "decision": "notReleaseFacing",
+      "publicAdmission": "notAdmitted",
+      "reason": "The exported peer macro is an undocumented implementation surface and has no fixture-backed release claim.",
+      "sourceInputsSHA256": "06475e002c652eb30fde1355845c0f8e2e797748e03ceac2284c59be11864486",
+      "sourceInputs": [
+        {"path": "Sources/SwiftTLAMacros/Macros.swift", "sha256": "842f6e97c4920a32029bef6adc495b055b6a4f155aad06366c7d1fe029341295"},
+        {"path": "Sources/SwiftTLAPlugin/TypedVarMacro.swift", "sha256": "401babebbc2bf67146abd93b814f9c296a97de9f791f857ea7a8983939e673b3"}
+      ]
     },
     {
       "name": "@TLAValidated",
-      "fixtureID": "p4-annotation-tla-validated-removal",
+      "fixtureID": "p4-annotation-tla-validated-removed",
       "advertised": false,
-      "decision": "removeBeforeRelease",
+      "decision": "removed",
       "sourceDeclaration": "Sources/SwiftTLAMacros/Macros.swift",
-      "reason": "The declared plugin implementation does not exist. It has no fixture-backed public contract.",
-      "sourceInputs": ["Sources/SwiftTLAMacros/Macros.swift"]
+      "reason": "The public declaration was removed because its declared plugin implementation did not exist.",
+      "sourceInputsSHA256": "e0786a2e2d9f17275d2625244ae5d32bf4063bf46bb3c80e41b51a48d0e7e66a",
+      "sourceInputs": [
+        {"path": "Sources/SwiftTLAMacros/Macros.swift", "sha256": "842f6e97c4920a32029bef6adc495b055b6a4f155aad06366c7d1fe029341295"}
+      ]
     }
   ]
 }

@@ -135,6 +135,35 @@ public struct SpecRuntime: Sendable {
         actions.map { actionOutcome(named: $0.name, in: state) }
     }
 
+    public func propertyOutcomes(in state: [String: TLAValue]) -> [RuntimePropertyOutcome] {
+        var outcomes = invariants.map { invariant -> RuntimePropertyOutcome in
+            do {
+                return try invariant.body.evaluateBool(
+                    in: state,
+                    runtimeFuncs: spec.runtimeFuncs,
+                    recursiveFuncs: spec.recursiveFuncs
+                )
+                    ? .satisfied(name: invariant.name)
+                    : .violated(name: invariant.name)
+            } catch {
+                return .evaluationFailed(
+                    name: invariant.name,
+                    diagnostic: .init(code: .evaluationError, message: String(describing: error))
+                )
+            }
+        }
+        outcomes += spec.temporalProperties.map {
+            .evaluationUnavailable(
+                name: $0.name,
+                diagnostic: .init(
+                    code: .evaluatorUnavailable,
+                    message: "Temporal properties require a complete graph evaluation"
+                )
+            )
+        }
+        return outcomes
+    }
+
     public func check(_ invariantName: String, in state: [String: TLAValue]) throws -> Bool {
         guard let inv = invariants.first(where: { $0.name == invariantName }) else {
             throw RuntimeError.invariantNotFound(invariantName)
@@ -185,9 +214,31 @@ public struct SpecRuntime: Sendable {
         case actionNotFound(actionName: String)
     }
 
+    public enum RuntimePropertyOutcome: Sendable, Equatable {
+        case satisfied(name: String)
+        case violated(name: String)
+        case evaluationFailed(name: String, diagnostic: PropertyEvaluationDiagnostic)
+        case evaluationUnavailable(name: String, diagnostic: PropertyEvaluationDiagnostic)
+    }
+
     public struct ActionEvaluationDiagnostic: Sendable, Equatable {
         public enum Code: String, Sendable, Equatable {
             case actionError
+            case evaluationError
+            case evaluatorUnavailable
+        }
+
+        public let code: Code
+        public let message: String
+
+        public init(code: Code, message: String) {
+            self.code = code
+            self.message = message
+        }
+    }
+
+    public struct PropertyEvaluationDiagnostic: Sendable, Equatable {
+        public enum Code: String, Sendable, Equatable {
             case evaluationError
             case evaluatorUnavailable
         }

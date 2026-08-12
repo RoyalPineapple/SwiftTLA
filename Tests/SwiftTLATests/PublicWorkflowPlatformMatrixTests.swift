@@ -59,10 +59,16 @@ struct PublicWorkflowPlatformMatrixTests {
 
   private func makeContext(at url: URL) throws -> URL {
     let digest = String(repeating: "a", count: 64)
-    let source = try CoreEvidenceReferenceV1(path: "Tests/Fixtures/PublicWorkflowConformance/Platform/assert_platform_matrix.sh", sha256: digest)
-    let configuration = try CoreEvidenceReferenceV1(path: "Packages/SwiftTLAVerified/Package.swift", sha256: digest)
+    let root = try packageRoot()
+    let sourcePath = "Tests/Fixtures/PublicWorkflowConformance/Platform/assert_platform_matrix.sh"
+    let configurationPath = "Packages/SwiftTLAVerified/Package.swift"
+    let sourceDigest = SHA256V1.hex(try Data(contentsOf: root.appendingPathComponent(sourcePath)))
+    let configurationDigest = SHA256V1.hex(try Data(contentsOf: root.appendingPathComponent(configurationPath)))
+    let source = try CoreEvidenceReferenceV1(path: sourcePath, sha256: sourceDigest)
+    let configuration = try CoreEvidenceReferenceV1(path: configurationPath, sha256: configurationDigest)
     let provenance = try CoreDivergenceProvenanceV1(
-      caseID: "nested-package-macos", moduleSHA256: digest, cfgSHA256: digest, argumentsSHA256: digest,
+      caseID: "nested-package-macos", moduleSHA256: sourceDigest, cfgSHA256: configurationDigest,
+      argumentsSHA256: SHA256V1.hex(try JSONEncoder().encode([["xcodebuild", "-scheme", "SwiftTLAVerified-Package", "-sdk", "macosx", "-destination", "platform=macOS", "test"]])),
       tlcTag: "v1.8.0", tlcCommit: "30cc3601321c3fc02e044d0ecb5c58d8921e18df", tlcJarSHA256: digest,
       javaDistribution: "Eclipse Temurin", javaVersion: "17.0.19+10", javaArchiveSHA256: digest,
       bridgeClass: "org.swifttla.conformance.LosslessStateWriter", bridgeSourceSHA256: digest,

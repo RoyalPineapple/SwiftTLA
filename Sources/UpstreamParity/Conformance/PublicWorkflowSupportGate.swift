@@ -21,6 +21,7 @@ public enum PublicWorkflowReasonCodeV1: String, CaseIterable, Codable, Sendable 
   case unresolvedDivergence
   case unexplainedDivergence
   case executionFailed
+  case nonCIExecution
 }
 
 public enum PublicWorkflowPrerequisiteCategoryV1: String, Codable, Sendable { case core, temporalSymmetry }
@@ -265,7 +266,7 @@ public struct PublicWorkflowAdmissionV1: Equatable, Codable, Sendable {
               admittedBounds[support.id] == support.finiteBounds,
               entry.evidence.allSatisfy({ evidence in
                 guard let declaration = cases.cases.first(where: { $0.id == evidence.caseID }) else { return false }
-                return evidence.correlation.gateRunID == gateRunID
+                return evidence.execution.authority == .candidate && evidence.correlation.gateRunID == gateRunID
                   && evidence.fixtureBinding.matches(declaration, gateRunID: gateRunID,
                     expectedRunID: evidence.correlation.fixtureRunID, evidence: evidence.fixture)
                   && evidence.comparisonBinding.matches(declaration, gateRunID: gateRunID,
@@ -276,7 +277,7 @@ public struct PublicWorkflowAdmissionV1: Equatable, Codable, Sendable {
               entry.platformEvidence.allSatisfy({ platform in
                 guard support.mandatoryCaseIDs.contains(platform.correlation.caseID),
                       let declaration = cases.cases.first(where: { $0.id == platform.correlation.caseID }) else { return false }
-                return platform.correlation.gateRunID == gateRunID
+                return platform.execution.authority == .candidate && platform.correlation.gateRunID == gateRunID
                   && platform.fixtureBinding.matches(declaration, gateRunID: gateRunID,
                     expectedRunID: platform.correlation.platformRunID, evidence: platform.fixture)
                   && platform.stdoutBinding.matches(declaration, gateRunID: gateRunID,
@@ -285,7 +286,7 @@ public struct PublicWorkflowAdmissionV1: Equatable, Codable, Sendable {
                     expectedRunID: platform.correlation.platformRunID, evidence: platform.stderr)
               }),
               Set(entry.platformEvidence.map(\.platform)).isSuperset(of: Set(support.requiredPlatforms)) else {
-          throw PublicWorkflowGovernanceErrorV1.invalidField(record: support.id, field: "correlated platform evidence")
+          throw PublicWorkflowGovernanceErrorV1.invalidField(record: support.id, field: "correlated hosted workflow evidence")
         }
       } else {
         try validateReasonCodes(entry, support: support, hasUnexplainedDivergence: derivedUnexplainedCount > 0)
@@ -315,8 +316,10 @@ public struct PublicWorkflowAdmissionV1: Equatable, Codable, Sendable {
       if entry.evidence.isEmpty { reasons.insert(.missingEvidence) }
       if entry.evidence.contains(where: { $0.status == .partial }) { reasons.insert(.partialEvidence) }
       if entry.evidence.contains(where: { $0.status == .unavailable }) { reasons.insert(.missingEvidence) }
+      if entry.evidence.contains(where: { $0.execution.authority == .diagnostic }) { reasons.insert(.nonCIExecution) }
       if entry.platformEvidence.contains(where: { $0.status == .unavailable }) { reasons.insert(.unsupportedPlatform) }
       if entry.platformEvidence.contains(where: { $0.status == .failed }) { reasons.insert(.platformValidationFailed) }
+      if entry.platformEvidence.contains(where: { $0.execution.authority == .diagnostic }) { reasons.insert(.nonCIExecution) }
       supportedReasons = reasons
     }
     guard Set(entry.reasonCodes).isSubset(of: supportedReasons), !supportedReasons.isEmpty else {

@@ -6,16 +6,23 @@ RUNNER="$ROOT/scripts/run_public_workflow_platform_matrix.sh"
 TMP="$(mktemp -d "$ROOT/.build/public-workflow-platform-contract.XXXXXX")"
 
 context="$TMP/context.json"
-python3 - "$context" <<'PY'
+python3 - "$context" "$ROOT" <<'PY'
+import hashlib
 import json
+import pathlib
 import sys
 
 digest = "a" * 64
+root = pathlib.Path(sys.argv[2])
+source_path = "Tests/Fixtures/PublicWorkflowConformance/Platform/assert_platform_matrix.sh"
+configuration_path = "Packages/SwiftTLAVerified/Package.swift"
+source_digest = hashlib.sha256((root / source_path).read_bytes()).hexdigest()
+configuration_digest = hashlib.sha256((root / configuration_path).read_bytes()).hexdigest()
 provenance = {
     "caseID": "nested-package-macos",
-    "moduleSHA256": digest,
-    "cfgSHA256": digest,
-    "argumentsSHA256": digest,
+    "moduleSHA256": source_digest,
+    "cfgSHA256": configuration_digest,
+    "argumentsSHA256": hashlib.sha256(json.dumps([["xcodebuild", "-scheme", "SwiftTLAVerified-Package", "-sdk", "macosx", "-destination", "platform=macOS", "test"]], separators=(",", ":")).encode()).hexdigest(),
     "tlcTag": "v1.8.0",
     "tlcCommit": "30cc3601321c3fc02e044d0ecb5c58d8921e18df",
     "tlcJarSHA256": digest,
@@ -29,8 +36,8 @@ provenance = {
 value = {
     "caseID": "nested-package-macos",
     "gateRunID": "11111111-1111-4111-8111-111111111111",
-    "sourceInput": {"path": "Tests/Fixtures/PublicWorkflowConformance/Platform/assert_platform_matrix.sh", "sha256": digest},
-    "configuration": {"path": "Packages/SwiftTLAVerified/Package.swift", "sha256": digest},
+    "sourceInput": {"path": source_path, "sha256": source_digest},
+    "configuration": {"path": configuration_path, "sha256": configuration_digest},
     "provenance": provenance,
 }
 open(sys.argv[1], "w", encoding="utf-8").write(json.dumps(value))
@@ -72,13 +79,28 @@ assert_result() {
       and .results[0].fixtureBinding.evidence == .results[0].fixture
       and .results[0].stdoutBinding.evidence == .results[0].stdout
       and .results[0].stderrBinding.evidence == .results[0].stderr
+      and .results[0].execution.authority == "diagnostic"
+      and (.results[0].execution.metadata.path | startswith(".build/"))
     ' "$report" >/dev/null
+    local fixture_path
+    fixture_path="$(jq -r '.results[0].fixture.path' "$report")"
+    jq -e '
+      ((.workingDirectory | test("^(Packages|\\.build)/[^.].*")) or (.workingDirectory | startswith("/")))
+      and (.workingDirectory | contains("../") | not)
+      and (.derivedDataPath | startswith(".build/"))
+      and (.command | contains("xcodebuild"))
+      and (.commandSHA256 | test("^[0-9a-f]{64}$"))
+    ' "$ROOT/$fixture_path" >/dev/null
 }
 
 single_platform='macos|macosx|platform=macOS|test'
 expect_exit 2 env PUBLIC_WORKFLOW_PLATFORM_PACKAGE_PATH="$TMP/no-package" \
     PUBLIC_WORKFLOW_PLATFORM_MATRIX="$single_platform" "$RUNNER" --output "$TMP/missing-package" --context "$context"
 assert_result "$TMP/missing-package/platform-matrix.json" unavailable missing-package-path
+
+expect_exit 2 env PUBLIC_WORKFLOW_PLATFORM_PACKAGE_PATH="$TMP/configured-missing" \
+    PUBLIC_WORKFLOW_PLATFORM_MATRIX="$single_platform" "$RUNNER" --output "$TMP/configured-package" --context "$context"
+assert_result "$TMP/configured-package/platform-matrix.json" unavailable missing-package-path
 
 fake_destination="$TMP/fake-destination-xcodebuild"
 printf '%s\n' '#!/bin/bash' 'if [ "$1" = "-version" ]; then echo "Xcode Fake"; exit 0; fi' 'echo "Unable to find a destination matching the provided destination specifier" >&2' 'exit 70' > "$fake_destination"
@@ -100,5 +122,39 @@ chmod +x "$fake_silent"
 expect_exit 2 env PUBLIC_WORKFLOW_PLATFORM_XCODEBUILD="$fake_silent" \
     PUBLIC_WORKFLOW_PLATFORM_MATRIX="$single_platform" "$RUNNER" --output "$TMP/missing-logs" --context "$context"
 assert_result "$TMP/missing-logs/platform-matrix.json" unavailable missing-command-logs
+
+fake_success="$TMP/fake-success-xcodebuild"
+printf '%s\n' '#!/bin/bash' 'if [ "$1" = "-version" ]; then echo "Xcode Fake"; exit 0; fi' 'echo "build succeeded"' 'exit 0' > "$fake_success"
+chmod +x "$fake_success"
+spoofed="$TMP/spoofed-env"
+expect_exit 0 env GITHUB_ACTIONS=true GITHUB_SHA=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb \
+    GITHUB_REPOSITORY=RoyalPineapple/SwiftTLA GITHUB_WORKFLOW='Public Workflow Conformance' \
+    GITHUB_REF=refs/heads/main GITHUB_RUN_ID=123 GITHUB_RUN_ATTEMPT=1 GITHUB_JOB=public-workflow \
+    GITHUB_SERVER_URL=https://github.com PUBLIC_WORKFLOW_PLATFORM_XCODEBUILD="$fake_success" \
+    PUBLIC_WORKFLOW_PLATFORM_MATRIX="$single_platform" "$RUNNER" --output "$spoofed" --context "$context"
+jq -e '.results[0].execution.authority == "diagnostic" and (.results[0].execution.identity == null)' \
+    "$spoofed/platform-matrix.json" >/dev/null
+
+zero_context="$TMP/zero-context.json"
+python3 - "$zero_context" <<'PY'
+import json
+import pathlib
+import sys
+value = json.loads(pathlib.Path(sys.argv[1]).with_name("context.json").read_text())
+value["sourceInput"]["sha256"] = "0" * 64
+pathlib.Path(sys.argv[1]).write_text(json.dumps(value))
+PY
+expect_exit 2 "$RUNNER" --output "$TMP/zero-context" --context "$zero_context"
+
+arguments_context="$TMP/arguments-context.json"
+python3 - "$arguments_context" <<'PY'
+import json
+import pathlib
+import sys
+value = json.loads(pathlib.Path(sys.argv[1]).with_name("context.json").read_text())
+value["provenance"]["argumentsSHA256"] = "f" * 64
+pathlib.Path(sys.argv[1]).write_text(json.dumps(value))
+PY
+expect_exit 2 "$RUNNER" --output "$TMP/arguments-context" --context "$arguments_context"
 
 echo "public-workflow platform matrix checks passed"

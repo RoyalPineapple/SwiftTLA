@@ -40,8 +40,25 @@ let package = Package(
         .target(name: "SwiftTLAModels", dependencies: ["SwiftTLA", "SwiftTLAMacros"], swiftSettings: settings),
         .target(
             name: "UpstreamParity",
-            dependencies: ["SwiftTLA", "SwiftTLAMacros"],
+            dependencies: [
+                "SwiftTLA",
+                "SwiftTLAMacros",
+                .product(name: "SwiftParser", package: "swift-syntax"),
+                .product(name: "SwiftSyntax", package: "swift-syntax")
+            ],
             exclude: ["Examples/AGENTS.md"],
+            swiftSettings: settings
+        ),
+        .target(
+            name: "PublicWorkflowGeneratedFixtures",
+            dependencies: ["SwiftTLA", "SwiftTLAMacros"],
+            path: "Tests/Fixtures/PublicWorkflowConformance/Generated",
+            exclude: [
+                "builder-observation.json",
+                "counter.config.json",
+                "counter-mismatch.config.json",
+                "generated-observation.json"
+            ],
             swiftSettings: settings
         ),
         .executableTarget(name: "tlc-validate", dependencies: ["SwiftTLA", "UpstreamParity"], path: "Sources/TLCValidate"),
@@ -49,7 +66,8 @@ let package = Package(
             "SwiftTLA",
             "SwiftTLAModels",
             "SwiftTLAMacros",
-            "UpstreamParity"
+            "UpstreamParity",
+            "PublicWorkflowGeneratedFixtures"
         ], swiftSettings: settings)
     ]
 )

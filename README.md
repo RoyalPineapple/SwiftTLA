@@ -18,7 +18,7 @@ Typed Swift DSL ──► TLASpec ──► compile-time model checking ──�
        └── types constrain legal variables, values, and collection operations
 ```
 
-Each supported macro model-checks the spec before it generates code. `@TLAModel` produces an executable model type. `@TLAActor` applies the same pipeline to an actor. `@TLAObservable` generates an `@Observable` class with callbacks. The runtime behavior, the compile-time check, and the TLA+ export all come from one DSL model.
+The release-facing macro examples use the same model-checking pipeline before they generate code. `@TLAModel` produces an executable model type. `@TLAActor` applies the pipeline to an actor. `@TLAObservable` generates an `@Observable` class with callbacks. The runtime behavior, the compile-time check, and the TLA+ export all come from one DSL model. The current public-workflow evidence covers only the bounded fixtures and package matrix described in [public workflow conformance](Documentation/PublicWorkflowConformance.md); it is not a claim about every accepted macro input.
 
 ## Usage
 
@@ -171,6 +171,30 @@ The declared entries are finite temporal cases and one binary-valued
 arbitrary temporal formulas, unbounded fairness or liveness, larger symmetry
 scopes, combined temporal symmetry reduction, multiple or legacy collections,
 or nested member values. See [temporal and symmetry conformance](Documentation/TemporalSymmetryConformance.md).
+
+### Public workflow validation
+
+Run the aggregate P4 diagnostic with:
+
+```bash
+make public-workflow-release-check
+```
+
+It checks the declared parser-builder and generated two-state counters, the
+valid/invalid `@TLAModel`, `@TLAActor`, and `@TLAObservable` fixtures, and the
+`SwiftTLAVerified-Package` matrix: macOS tests plus generic iOS, Mac Catalyst,
+tvOS, and watchOS builds. Exit `0` means those exact bounded checks matched;
+exit `1` means a completed difference; exit `2` means unavailable or unsafe
+evaluation. A local report is diagnostic only. The checked-in GitHub workflow
+produces explicit hosted-candidate evidence and retains its logs and artifacts,
+but does not turn the bounded result into general public support.
+
+The current report is `.build/public-workflow-support-gate/support-admission.json`,
+with immutable evidence under `.build/public-workflow-support-gate/runs/<run-id>/`.
+`@TypedVar` is not release-facing or admitted, and `@TLAValidated` was removed.
+See [public workflow conformance](Documentation/PublicWorkflowConformance.md)
+for fixture identities, report fields, workflow artifact locations, authority
+labels, and limits.
 
 State counts alone do not establish behavioral equivalence. A successful bounded check does not prove arbitrary population sizes, liveness, or unsupported TLA+ constructs.
 

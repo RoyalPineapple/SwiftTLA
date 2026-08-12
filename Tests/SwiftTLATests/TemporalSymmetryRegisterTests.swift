@@ -6,7 +6,7 @@ import SwiftTLA
 struct TemporalSymmetryRegisterTests {
   @Test("P3 register declares every temporal form, fairness boundary, and exact symmetry scope")
   func registerIsCompleteAndCrossLinked() throws {
-    let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+    let root = try packageRoot()
     let register = try decode(TemporalSymmetryCasesV1.self, root, "cases.json")
     let ledger = try decode(TemporalSymmetryDivergenceLedgerV1.self, root, "divergences.json")
     let support = try decode(TemporalSymmetrySupportSurfaceV1.self, root, "support-surface.json")
@@ -29,7 +29,7 @@ struct TemporalSymmetryRegisterTests {
 
   @Test("P3 symmetry scopes use distinct raw and TLC SYMMETRY configurations")
   func symmetryConfigurationsAreExecutablePairs() throws {
-    let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+    let root = try packageRoot()
     let register = try decode(TemporalSymmetryCasesV1.self, root, "cases.json")
     let baseline = try baseline(root)
     let configurations = try #require(baseline["configurationFixtures"] as? [String: [String: String]])
@@ -56,7 +56,7 @@ struct TemporalSymmetryRegisterTests {
 
   @Test("P3 fairness boundary rejects the intermittent B/C recurrence only under strong fairness")
   func fairnessBoundaryUsesIntermittentEnabledness() throws {
-    let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+    let root = try packageRoot()
     let register = try decode(TemporalSymmetryCasesV1.self, root, "cases.json")
     let weak = try #require(register.cases.first { $0.id == "temporal-weak-fairness-boundary" })
     let strong = try #require(register.cases.first { $0.id == "temporal-strong-fairness-boundary" })
@@ -98,7 +98,7 @@ struct TemporalSymmetryRegisterTests {
 
   @Test("P3 unsupported boundaries retain distinct executable control shapes")
   func unsupportedControlsMatchTheirBoundaryDescriptions() throws {
-    let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+    let root = try packageRoot()
     let baseline = try baseline(root)
     let controls = try #require(baseline["unsupportedControls"] as? [String: [String: String]])
     for control in controls.values {
@@ -125,7 +125,7 @@ struct TemporalSymmetryRegisterTests {
 
   @Test("P3 register pins every declared source input to its checked-in digest")
   func registerSourceDigestsMatchFixtures() throws {
-    let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+    let root = try packageRoot()
     let register = try decode(TemporalSymmetryCasesV1.self, root, "cases.json")
     let baseline = try baseline(root)
     let configurations = try #require(baseline["configurationFixtures"] as? [String: [String: String]])
@@ -150,5 +150,15 @@ struct TemporalSymmetryRegisterTests {
   private func baseline(_ root: URL) throws -> [String: Any] {
     try #require(JSONSerialization.jsonObject(with: Data(contentsOf: root.appendingPathComponent(
       "Verification/TemporalSymmetryConformance/baselines/manifest.json"))) as? [String: Any])
+  }
+
+  private func packageRoot() throws -> URL {
+    var directory = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+    while !FileManager.default.fileExists(atPath: directory.appendingPathComponent("Package.swift").path) {
+      let parent = directory.deletingLastPathComponent()
+      guard parent != directory else { throw CocoaError(.fileNoSuchFile) }
+      directory = parent
+    }
+    return directory
   }
 }
