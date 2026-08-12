@@ -149,6 +149,29 @@ or paid GitHub runner. This is a bounded claim for the declared cases only. It
 does not prove arbitrary bounds, temporal properties, liveness, fairness, or
 symmetry reduction.
 
+### Temporal and symmetry support
+
+Temporal and symmetry support is report-derived. Do not advertise a requested
+entry unless the current P3 admission report marks it `admitted`.
+
+Run the mandatory local P3 check with:
+
+```bash
+make temporal-symmetry-release-check
+```
+
+The command creates `.build/temporal-symmetry-support-gate/support-admission.json`.
+It exits `0` only when every requested entry is admitted. Exit `1` means a
+complete evaluation blocks a claim. Exit `2` means the evaluation is
+unavailable or unsafe. Both nonzero results remain failures in local and
+hosted workflows.
+
+The declared entries are finite temporal cases and one binary-valued
+`SymmetricCollection` at exact scopes 2, 3, and 4. The report does not claim
+arbitrary temporal formulas, unbounded fairness or liveness, larger symmetry
+scopes, combined temporal symmetry reduction, multiple or legacy collections,
+or nested member values. See [temporal and symmetry conformance](Documentation/TemporalSymmetryConformance.md).
+
 State counts alone do not establish behavioral equivalence. A successful bounded check does not prove arbitrary population sizes, liveness, or unsupported TLA+ constructs.
 
 ```bash

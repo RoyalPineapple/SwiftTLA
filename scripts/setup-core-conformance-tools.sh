@@ -105,8 +105,8 @@ expected = {
     "java.archives.arm64.sha256": "8fa1eff40bb637a33613b2ccb8b12c70dc3661cc22cf8e784943715769a05336",
     "java.archives.x86_64.sha256": "03632d1fbf139ab3719a9f4b47dc206251449b87557143c822336dbf8c06560f",
     "bridge.class": "org.swifttla.conformance.LosslessStateWriter",
-    "bridge.sourceSha256": "d6a390a1dd8c81e20c22f715a0133f5c7561178a9a5dcdcd7f184c695a6741b7",
-    "bridge.binarySha256": "240a717693a5500be4067a3bb4d90fa9c3edce67855f09c5422daf5512ee0fde",
+    "bridge.sourceSha256": "f921b202205dde3d34e626f7801676cc0635de58f503c3dddd3affcc893532ee",
+    "bridge.binarySha256": "a50ae51e9c540a3c0eb9386b05bb0c0f677cefa62bcfdc48545c6046ccb12d64",
 }
 
 with open(sys.argv[1], encoding="utf-8") as source:
@@ -186,7 +186,7 @@ seed_from_cache "$CACHE_ROOT/tla2tools-1.8.0.jar" "$TLC_SHA256" "$TLC_JAR"
 seed_from_cache "$CACHE_ROOT/OpenJDK17U-jdk_${ARCHITECTURE}_mac_hotspot_17.0.19_10.tar.gz" "$JAVA_SHA256" "$JAVA_ARCHIVE"
 download_locked "$TLC_URL" "$TLC_SHA256" "$TLC_JAR"
 download_locked "$JAVA_URL" "$JAVA_SHA256" "$JAVA_ARCHIVE"
-[ "$(sha256 "$BRIDGE_SOURCE")" = "d6a390a1dd8c81e20c22f715a0133f5c7561178a9a5dcdcd7f184c695a6741b7" ] || fail "bridge source digest mismatch"
+[ "$(sha256 "$BRIDGE_SOURCE")" = "f921b202205dde3d34e626f7801676cc0635de58f503c3dddd3affcc893532ee" ] || fail "bridge source digest mismatch"
 
 JAVA_HOME="$TOOL_ROOT/java-${ARCHITECTURE}/Contents/Home"
 if [ ! -x "$JAVA_HOME/bin/javac" ]; then
@@ -197,12 +197,12 @@ fi
 [ -x "$JAVA_HOME/bin/javac" ] || fail "locked Temurin archive does not contain javac"
 
 BRIDGE_CLASS="$TOOL_ROOT/bridge-classes/org/swifttla/conformance/LosslessStateWriter.class"
-if [ ! -f "$BRIDGE_CLASS" ] || [ "$(sha256 "$BRIDGE_CLASS")" != "240a717693a5500be4067a3bb4d90fa9c3edce67855f09c5422daf5512ee0fde" ]; then
+if [ ! -f "$BRIDGE_CLASS" ] || [ "$(sha256 "$BRIDGE_CLASS")" != "a50ae51e9c540a3c0eb9386b05bb0c0f677cefa62bcfdc48545c6046ccb12d64" ]; then
     rm -rf "$TOOL_ROOT/bridge-classes"
     mkdir -p "$TOOL_ROOT/bridge-classes"
     "$JAVA_HOME/bin/javac" --release 17 -cp "$TLC_JAR" -d "$TOOL_ROOT/bridge-classes" "$BRIDGE_SOURCE"
 fi
-[ "$(sha256 "$BRIDGE_CLASS")" = "240a717693a5500be4067a3bb4d90fa9c3edce67855f09c5422daf5512ee0fde" ] || fail "bridge binary digest mismatch"
+[ "$(sha256 "$BRIDGE_CLASS")" = "a50ae51e9c540a3c0eb9386b05bb0c0f677cefa62bcfdc48545c6046ccb12d64" ] || fail "bridge binary digest mismatch"
 
 if [ -f "$CASES_FILE" ]; then
     INPUT_ROOT="$TOOL_ROOT/inputs"

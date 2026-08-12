@@ -15,8 +15,8 @@
         "javaVersion": "17.0.19+10",
         "javaArchiveSHA256": "8fa1eff40bb637a33613b2ccb8b12c70dc3661cc22cf8e784943715769a05336",
         "bridgeClass": "org.swifttla.conformance.LosslessStateWriter",
-        "bridgeSourceSHA256": "d6a390a1dd8c81e20c22f715a0133f5c7561178a9a5dcdcd7f184c695a6741b7",
-        "bridgeBinarySHA256": "240a717693a5500be4067a3bb4d90fa9c3edce67855f09c5422daf5512ee0fde"
+        "bridgeSourceSHA256": "f921b202205dde3d34e626f7801676cc0635de58f503c3dddd3affcc893532ee",
+        "bridgeBinarySHA256": "a50ae51e9c540a3c0eb9386b05bb0c0f677cefa62bcfdc48545c6046ccb12d64"
       },
       "semanticCitations": [
         "specifications/SpecifyingSystems/HourClock/HourClock.tla: HCnxt",
@@ -32,7 +32,7 @@
       },
       "originalEvidence": {
         "path": "Verification/CoreConformance/fixtures/hour-clock-edge-mismatch/evidence/comparison.json",
-        "sha256": "ad723192ef31b676bde660f7abdc2836027be278229ce2b4ebb1e57783d923f0"
+        "sha256": "3acbcb82a4caa9fb68075f091ee51a1988bd7184217abf24225b8398c41cb604"
       },
       "permanentRegressionCaseID": "hour-clock-edge-mismatch",
       "classification": "harnessOrConfigurationDefect",
@@ -41,7 +41,7 @@
       "latestComparison": {
         "evidence": {
           "path": "Verification/CoreConformance/fixtures/hour-clock-edge-mismatch/evidence/comparison.json",
-          "sha256": "ad723192ef31b676bde660f7abdc2836027be278229ce2b4ebb1e57783d923f0"
+          "sha256": "3acbcb82a4caa9fb68075f091ee51a1988bd7184217abf24225b8398c41cb604"
         },
         "outcome": "difference",
         "normalizedDifferenceFingerprint": "4191a035e62b2f264f35cf8adbe8e29714d0fedd82ee823b11d31f0cc3f5fb53"
@@ -61,8 +61,8 @@
         "javaVersion": "17.0.19+10",
         "javaArchiveSHA256": "8fa1eff40bb637a33613b2ccb8b12c70dc3661cc22cf8e784943715769a05336",
         "bridgeClass": "org.swifttla.conformance.LosslessStateWriter",
-        "bridgeSourceSHA256": "d6a390a1dd8c81e20c22f715a0133f5c7561178a9a5dcdcd7f184c695a6741b7",
-        "bridgeBinarySHA256": "240a717693a5500be4067a3bb4d90fa9c3edce67855f09c5422daf5512ee0fde"
+        "bridgeSourceSHA256": "f921b202205dde3d34e626f7801676cc0635de58f503c3dddd3affcc893532ee",
+        "bridgeBinarySHA256": "a50ae51e9c540a3c0eb9386b05bb0c0f677cefa62bcfdc48545c6046ccb12d64"
       },
       "semanticCitations": [
         "specifications/DieHard/DieHard.tla: NotSolved",
@@ -79,7 +79,7 @@
       },
       "originalEvidence": {
         "path": "Verification/CoreConformance/fixtures/die-hard-violation/evidence/comparison.json",
-        "sha256": "e59d77f35003b39fee179c91c12dbd5ab33ea4f1661604c71f26a3f1f9480235"
+        "sha256": "2dbc87b2e02c66b9f79c796a107cb37d31acd058d23305e2f95e0a0fc407b7c9"
       },
       "permanentRegressionCaseID": "die-hard-violation",
       "classification": "harnessOrConfigurationDefect",
@@ -88,7 +88,7 @@
       "latestComparison": {
         "evidence": {
           "path": "Verification/CoreConformance/fixtures/die-hard-violation/evidence/comparison.json",
-          "sha256": "e59d77f35003b39fee179c91c12dbd5ab33ea4f1661604c71f26a3f1f9480235"
+          "sha256": "2dbc87b2e02c66b9f79c796a107cb37d31acd058d23305e2f95e0a0fc407b7c9"
         },
         "outcome": "difference",
         "normalizedDifferenceFingerprint": "7bd47a3941b836684ce33fcef619777c90657dbf423ed7a54989f04e6298452d"

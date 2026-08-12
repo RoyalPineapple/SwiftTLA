@@ -64,25 +64,39 @@ public struct TLCTraceParserV1: Sendable {
         else { throw TLCTraceErrorV1.missingStates }
 
         let states = try rawStates.enumerated().map { index, state in
-            try parseState(state, variables: variables, index: index)
+            try parseNumberedState(state, variables: variables, index: index)
         }
         let transitions = try rawActions.enumerated().map { index, action in
-            try parseAction(action, variables: variables, index: index)
+            try parseAction(action, variables: variables, index: index, states: states)
         }
-        guard transitions.count == states.count - 1 else {
+        guard transitions.count == states.count - 1 || transitions.count == states.count else {
             throw TLCTraceErrorV1.invalidAction(transitions.count)
         }
         for index in transitions.indices {
-            guard transitions[index].source == states[index], transitions[index].target == states[index + 1] else {
+            guard transitions[index].source == states[index].state else {
                 throw TLCTraceErrorV1.invalidAction(index)
             }
+            if index < states.count - 1 {
+                guard transitions[index].target == states[index + 1].state else {
+                    throw TLCTraceErrorV1.invalidAction(index)
+                }
+            } else {
+                guard states.contains(where: { $0.state == transitions[index].target }) else {
+                    throw TLCTraceErrorV1.invalidAction(index)
+                }
+            }
         }
-        return TLCCounterexampleEvidenceV1(rawJSON: data, states: states, transitions: transitions)
+        return TLCCounterexampleEvidenceV1(rawJSON: data, states: states.map(\.state), transitions: transitions)
     }
 
-    private func parseState(_ raw: Any, variables: [String], index: Int) throws -> CanonicalStateV1 {
+    private struct NumberedState {
+        let number: Int
+        let state: CanonicalStateV1
+    }
+
+    private func parseNumberedState(_ raw: Any, variables: [String], index: Int) throws -> NumberedState {
         guard let pair = raw as? [Any], pair.count == 2,
-              pair[0] is NSNumber,
+              let number = pair[0] as? NSNumber, number.intValue == index + 1,
               let bindings = pair[1] as? [String: Any], Set(bindings.keys) == Set(variables)
         else { throw TLCTraceErrorV1.invalidState(index) }
         var canonical: [String: CanonicalValueV1] = [:]
@@ -90,18 +104,29 @@ public struct TLCTraceParserV1: Sendable {
             guard let value = bindings[variable] else { throw TLCTraceErrorV1.invalidState(index) }
             canonical[variable] = try parseValue(value, state: index)
         }
-        return CanonicalStateV1(bindings: canonical)
+        return NumberedState(number: number.intValue, state: CanonicalStateV1(bindings: canonical))
     }
 
     private func parseAction(
-        _ raw: Any, variables: [String], index: Int
+        _ raw: Any, variables: [String], index: Int, states: [NumberedState]
     ) throws -> TLCCounterexampleActionV1 {
         guard let triple = raw as? [Any], triple.count == 3,
               let metadata = triple[1] as? [String: Any], let name = metadata["name"] as? String, !name.isEmpty
         else { throw TLCTraceErrorV1.invalidAction(index) }
-        let source = try parseState(triple[0], variables: variables, index: index)
-        let target = try parseState(triple[2], variables: variables, index: index + 1)
-        return TLCCounterexampleActionV1(source: source, name: name, target: target)
+        let source = try parseNumberedState(triple[0], variables: variables, index: index)
+        guard source.number == states[index].number, source.state == states[index].state else {
+            throw TLCTraceErrorV1.invalidAction(index)
+        }
+        guard let targetPair = triple[2] as? [Any], targetPair.count == 2,
+              let targetNumber = targetPair[0] as? NSNumber,
+              let targetIndex = states.firstIndex(where: { $0.number == targetNumber.intValue }) else {
+            throw TLCTraceErrorV1.invalidAction(index)
+        }
+        let target = try parseNumberedState(targetPair, variables: variables, index: targetIndex)
+        guard target.number == states[targetIndex].number, target.state == states[targetIndex].state else {
+            throw TLCTraceErrorV1.invalidAction(index)
+        }
+        return TLCCounterexampleActionV1(source: source.state, name: name, target: target.state)
     }
 
     private func parseValue(_ raw: Any, state: Int) throws -> CanonicalValueV1 {

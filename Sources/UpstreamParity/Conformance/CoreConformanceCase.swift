@@ -83,8 +83,8 @@ public struct TLCReferencePinV1: Equatable, Sendable {
         javaVersion: "17.0.19+10",
         javaArchiveSHA256: "8fa1eff40bb637a33613b2ccb8b12c70dc3661cc22cf8e784943715769a05336",
         bridgeClass: "org.swifttla.conformance.LosslessStateWriter",
-        bridgeSourceSHA256: "d6a390a1dd8c81e20c22f715a0133f5c7561178a9a5dcdcd7f184c695a6741b7",
-        bridgeBinarySHA256: "240a717693a5500be4067a3bb4d90fa9c3edce67855f09c5422daf5512ee0fde"
+        bridgeSourceSHA256: "f921b202205dde3d34e626f7801676cc0635de58f503c3dddd3affcc893532ee",
+        bridgeBinarySHA256: "a50ae51e9c540a3c0eb9386b05bb0c0f677cefa62bcfdc48545c6046ccb12d64"
     )
 
     public static let lockedJarSHA256 = "e22f8ffb4bacdea0a871f444dd94fe5fb0d8013b3388ae39e82e26f852c735d5"
@@ -92,8 +92,8 @@ public struct TLCReferencePinV1: Equatable, Sendable {
         "arm64": "8fa1eff40bb637a33613b2ccb8b12c70dc3661cc22cf8e784943715769a05336",
         "x86_64": "03632d1fbf139ab3719a9f4b47dc206251449b87557143c822336dbf8c06560f"
     ]
-    public static let lockedBridgeSourceSHA256 = "d6a390a1dd8c81e20c22f715a0133f5c7561178a9a5dcdcd7f184c695a6741b7"
-    public static let lockedBridgeBinarySHA256 = "240a717693a5500be4067a3bb4d90fa9c3edce67855f09c5422daf5512ee0fde"
+    public static let lockedBridgeSourceSHA256 = "f921b202205dde3d34e626f7801676cc0635de58f503c3dddd3affcc893532ee"
+    public static let lockedBridgeBinarySHA256 = "a50ae51e9c540a3c0eb9386b05bb0c0f677cefa62bcfdc48545c6046ccb12d64"
     public static let lockedTLCBanner = "TLC2 Version 2026.07.31.184830 (rev: 30cc360)"
 
     public func validate(_ artifacts: TLCReferenceArtifactsV1) throws {

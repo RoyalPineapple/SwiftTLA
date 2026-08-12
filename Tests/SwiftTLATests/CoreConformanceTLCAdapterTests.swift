@@ -73,6 +73,28 @@ struct CoreConformanceTLCAdapterTests {
     #expect(run.graph.edgeOccurrences.values.reduce(0, +) == 9)
   }
 
+  @Test("active frozen CoreConformance streams bind to their regenerated bridge pin")
+  func parsesActiveFrozenCoreStreamsAgainstTheirMetadata() throws {
+    let root = URL(fileURLWithPath: #filePath)
+      .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+    let directories = [
+      "Verification/CoreConformance/baselines/hour-clock",
+      "Verification/CoreConformance/baselines/die-hard-type-ok",
+      "Verification/CoreConformance/fixtures/hour-clock-edge-mismatch/evidence",
+      "Verification/CoreConformance/fixtures/die-hard-violation/evidence",
+    ]
+    for path in directories {
+      let directory = root.appendingPathComponent(path)
+      let expected = try frozenCase(directory.appendingPathComponent("case.json"))
+      let streamNames = ["graph-events.jsonl"]
+      for name in streamNames where FileManager.default.fileExists(atPath: directory.appendingPathComponent(name).path) {
+        _ = try TLCGraphEventParserV1(expectedCase: expected).parseCanonicalRun(
+          Data(contentsOf: directory.appendingPathComponent(name)),
+          result: TLCProcessResultV1(status: 0, stdout: "Model checking completed. No error has been found.", stderr: ""))
+      }
+    }
+  }
+
   @Test("well-formed but unlocked digests fail pin validation")
   func rejectsWrongPinnedDigests() throws {
     let pin = TLCReferencePinV1.fixture
@@ -349,6 +371,38 @@ struct CoreConformanceTLCAdapterTests {
     }
   }
 
+  @Test("graph event parser accepts only TLC's exact actionless stuttering observation")
+  func acceptsExactStutteringObservation() throws {
+    let expectedCase = fixtureCase(.fixture)
+    let parser = TLCGraphEventParserV1(expectedCase: expectedCase)
+    let stream = completeGraphStreamWithStutteringObservation(expectedCase)
+    #expect(try parser.parse(stream).transitions.count == 1)
+
+    let rejected = Data(String(decoding: stream, as: UTF8.self)
+      .replacingOccurrences(of: "STUTTERING", with: "ARBITRARY").utf8)
+    #expect(throws: TLCGraphEventErrorV1.unsupportedCallback("writeState.visualization")) {
+      try parser.parse(rejected)
+    }
+  }
+
+  @Test("graph event parser resolves a reduced TLC alias only through its retained fingerprint representative")
+  func resolvesFingerprintAliasesFromSameStream() throws {
+    let expectedCase = fixtureCase(.fixture)
+    let parser = TLCGraphEventParserV1(expectedCase: expectedCase)
+
+    let parsed = try parser.parse(fingerprintAliasGraphStream(expectedCase, aliasSeen: true))
+    #expect(parsed.transitions.count == 2)
+    #expect(parsed.transitions[0].target == parsed.transitions[1].target)
+    #expect(parsed.fingerprintRepresentatives["2"] == parsed.transitions[0].target)
+
+    #expect(throws: TLCGraphEventErrorV1.invalidRecord(line: 4, reason: "ambiguous fingerprint representative")) {
+      try parser.parse(fingerprintAliasGraphStream(expectedCase, aliasSeen: false))
+    }
+    #expect(throws: TLCGraphEventErrorV1.invalidRecord(line: 4, reason: "seen fingerprint without representative")) {
+      try parser.parse(fingerprintAliasGraphStream(expectedCase, aliasSeen: true, aliasFingerprint: "foreign"))
+    }
+  }
+
   @Test("process adapter adds trace and replay only after a violation")
   func onlyRequestsTraceAfterViolation() throws {
     let executor = RecordingTLCExecutorV1(results: [
@@ -468,6 +522,70 @@ private func completeGraphStream(_ expectedCase: CoreConformanceCaseV1) -> Data 
   return body + jsonLine(footer) + Data([10])
 }
 
+private func completeGraphStreamWithStutteringObservation(_ expectedCase: CoreConformanceCaseV1) -> Data {
+  let runID = "00000000-0000-4000-8000-000000000001"
+  let lines = String(decoding: completeGraphStream(expectedCase), as: UTF8.self)
+    .split(separator: "\n", omittingEmptySubsequences: true).map(String.init)
+  let header = Data((lines[0] + "\n").utf8)
+  let initial = Data((lines[1] + "\n").utf8)
+  let transition = Data((lines[2] + "\n").utf8)
+  let stutter = jsonLine(record(
+    "unsupported", 3, runID, expectedCase.id,
+    ["callback": "writeState.visualization", "reason": "callback has no Action identity: STUTTERING"]
+  )) + Data([10])
+  let body = header + initial + transition + stutter
+  let footer = jsonLine(record(
+    "footer", 4, runID, expectedCase.id,
+    [
+      "callback": "writer.close", "status": "closed",
+      "counts": ["header": 1, "initial": 1, "transition": 1, "unsupported": 1],
+      "lastBodySeq": 3, "bodySha256": SHA256V1.hex(body),
+    ]
+  )) + Data([10])
+  return body + footer
+}
+
+private func fingerprintAliasGraphStream(
+  _ expectedCase: CoreConformanceCaseV1, aliasSeen: Bool, aliasFingerprint: String = "2"
+) -> Data {
+  let runID = "00000000-0000-4000-8000-000000000001"
+  let state0: [String: Any] = ["fingerprint": "1", "level": 1, "bindings": [binding(0, "x", "0")]]
+  let representative: [String: Any] = ["fingerprint": "2", "level": 2, "bindings": [binding(0, "x", "1")]]
+  let alias: [String: Any] = ["fingerprint": aliasFingerprint, "level": 2, "bindings": [binding(0, "x", "2")]]
+  let headerData = Data(header(expectedCase).utf8)
+  let initial = record(
+    "initial", 1, runID, expectedCase.id, ["callback": "writeState.initial", "state": state0])
+  let first = record(
+    "transition", 2, runID, expectedCase.id,
+    [
+      "callback": "writeState.action", "source": state0, "target": representative,
+      "action": ["name": "Next", "location": "", "named": true],
+      "stateFlags": ["raw": 0, "seen": false, "notInModel": false],
+      "visualization": "none", "predicateLocation": NSNull(), "reachable": "reachable",
+    ])
+  let second = record(
+    "transition", 3, runID, expectedCase.id,
+    [
+      "callback": "writeState.action", "source": state0, "target": alias,
+      "action": ["name": "Next", "location": "", "named": true],
+      "stateFlags": ["raw": 1, "seen": aliasSeen, "notInModel": false],
+      "visualization": "none", "predicateLocation": NSNull(), "reachable": "reachable",
+    ])
+  let body = [headerData, jsonLine(initial), jsonLine(first), jsonLine(second)].reduce(into: Data()) {
+    $0.append($1)
+    $0.append(10)
+  }
+  let footer = jsonLine(record(
+    "footer", 4, runID, expectedCase.id,
+    [
+      "callback": "writer.close", "status": "closed",
+      "counts": ["header": 1, "initial": 1, "transition": 2],
+      "lastBodySeq": 3, "bodySha256": SHA256V1.hex(body),
+    ]
+  )) + Data([10])
+  return body + footer
+}
+
 private func binding(_ ordinal: Int, _ name: String, _ tla: String) -> [String: Any] {
   ["ordinal": ordinal, "name": name, "tla": tla, "tlaSha256": SHA256V1.hex(Data(tla.utf8))]
 }
@@ -496,6 +614,23 @@ private func fixtureCase(_ pin: TLCReferencePinV1, arguments: [String] = [])
     fingerprintPolynomial: 1, deadlock: false, operatingSystem: "macos", architecture: "arm64",
     environment: [:], pin: pin
   )
+}
+
+private func frozenCase(_ url: URL) throws -> CoreConformanceCaseV1 {
+  let object = try #require(JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any])
+  let arguments = try #require(object["arguments"] as? [String])
+  return try CoreConformanceCaseV1(
+    id: try #require(object["id"] as? String),
+    moduleSHA256: try #require(object["moduleSHA256"] as? String),
+    cfgSHA256: try #require(object["cfgSHA256"] as? String),
+    arguments: arguments,
+    argumentsSHA256: try #require(object["argumentsSHA256"] as? String),
+    workers: try #require(object["workers"] as? Int),
+    fingerprintPolynomial: try #require(object["fingerprintPolynomial"] as? Int),
+    deadlock: try #require(object["deadlock"] as? Bool),
+    operatingSystem: try #require(object["operatingSystem"] as? String),
+    architecture: try #require(object["architecture"] as? String),
+    environment: try #require(object["environment"] as? [String: String]), pin: .fixture)
 }
 
 private func mutatedCompleteGraphStream(

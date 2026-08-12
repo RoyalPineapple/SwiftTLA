@@ -1,4 +1,6 @@
-.PHONY: test tlc parity build examples core-conformance core-support-gate ci-local
+.PHONY: test tlc parity build examples core-conformance core-support-gate temporal-symmetry-support-gate temporal-symmetry-release-check ci-local
+
+TEMPORAL_SYMMETRY_OUTPUT ?= .build/temporal-symmetry-support-gate
 
 test:
 	swift test
@@ -22,6 +24,12 @@ core-conformance:
 
 core-support-gate:
 	./scripts/run_core_support_gate.sh --output .build/core-support-gate
+
+temporal-symmetry-support-gate:
+	./scripts/run_temporal_symmetry_support_gate.sh --output $(TEMPORAL_SYMMETRY_OUTPUT)
+
+temporal-symmetry-release-check:
+	./scripts/check_temporal_symmetry_release.sh --output $(TEMPORAL_SYMMETRY_OUTPUT)
 
 ci-local:
 	./scripts/run_ci_locally.sh

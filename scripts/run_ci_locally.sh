@@ -30,5 +30,8 @@ swift build --target SwiftTLAMacros
 echo "Validate core-conformance workflow contract"
 Tests/Fixtures/CoreConformance/CI/assert_workflow.sh
 
-echo "Run mandatory core-support gate"
-CORE_CONFORMANCE_TOOL_ROOT="$tool_root" make core-support-gate
+echo "Validate temporal-symmetry workflow contract"
+Tests/Fixtures/TemporalSymmetryConformance/CI/assert_workflow.sh
+
+echo "Run mandatory temporal-symmetry release check"
+CORE_CONFORMANCE_TOOL_ROOT="$tool_root" make temporal-symmetry-release-check
