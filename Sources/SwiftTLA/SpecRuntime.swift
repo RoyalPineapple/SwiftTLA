@@ -19,7 +19,24 @@ public struct SpecRuntime: Sendable {
         guard let action = actions.first(where: { $0.name == actionName }) else {
             throw RuntimeError.actionNotFound(actionName)
         }
-        let successors = try ActionEnumerator.enumerate(action.body, from: state, varNames: varNames)
+        guard action.binding == nil else { throw RuntimeError.actionRequiresArgument(actionName) }
+        return try apply(actionName: actionName, argument: nil, to: state)
+    }
+
+    public func apply(actionName: String, argument: TLAValue?, to state: [String: TLAValue]) throws -> [String: TLAValue] {
+        guard let action = actions.first(where: { $0.name == actionName }) else {
+            throw RuntimeError.actionNotFound(actionName)
+        }
+        let body: ActionExpr
+        if let binding = action.binding {
+            guard let argument else { throw RuntimeError.actionRequiresArgument(actionName) }
+            guard binding.values.contains(argument) else { throw RuntimeError.invalidActionArgument(actionName, argument) }
+            body = action.body.substituteVar(binding.name, with: argument, in: action.body)
+        } else {
+            guard argument == nil else { throw RuntimeError.invalidActionArgument(actionName, argument!) }
+            body = action.body
+        }
+        let successors = try ActionEnumerator.enumerate(body, from: state, varNames: varNames)
         guard let next = successors.first else {
             throw RuntimeError.actionNotEnabled(actionName)
         }
@@ -28,8 +45,8 @@ public struct SpecRuntime: Sendable {
 
     public func availableActions(in state: [String: TLAValue]) -> [String] {
         actions.compactMap { action in
-            guard let successors = try? ActionEnumerator.enumerate(action.body, from: state, varNames: varNames),
-                  !successors.isEmpty else { return nil }
+            let bodies = action.binding?.values.map { action.body.substituteVar(action.binding!.name, with: $0, in: action.body) } ?? [action.body]
+            guard bodies.contains(where: { (try? ActionEnumerator.enumerate($0, from: state, varNames: varNames).isEmpty) == false }) else { return nil }
             return action.name
         }
     }
@@ -68,6 +85,8 @@ public struct SpecRuntime: Sendable {
     public enum RuntimeError: Error {
         case actionNotFound(String)
         case actionNotEnabled(String)
+        case actionRequiresArgument(String)
+        case invalidActionArgument(String, TLAValue)
         case invariantNotFound(String)
     }
 }

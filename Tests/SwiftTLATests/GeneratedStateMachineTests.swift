@@ -76,9 +76,52 @@ struct BuilderOnlyClock {
     }
 }
 
+@TLAObservable
+final class ObservableTwoCarElevator {
+    static var spec: TLASpec {
+        TLASpec("ObservableTwoCarElevator") {
+            let floor = Var<Int>("floor")
+            Variable(floor, 0)
+            Action("moveElevator", id: [1, 2]) { id in
+                floor.becomes(id)
+            }
+        }
+    }
+}
+
+@TLAModel
+struct TwoCarElevatorMachine {
+    static var spec: TLASpec {
+        TLASpec("TwoCarElevatorMachine") {
+            let floor = Var<Int>("floor")
+            Variable(floor, 0)
+            Action("moveElevator", id: [1, 2]) { id in
+                floor.becomes(id)
+            }
+        }
+    }
+}
+
 // MARK: - Tests for generated verification methods
 
 struct GeneratedStateMachineTests {
+    @Test("Observable parameterized action applies its selected finite-domain argument")
+    func observableParameterizedAction() {
+        let elevator = ObservableTwoCarElevator()
+        var callbackID: Int?
+        elevator.onMoveElevator = { id, _, _ in callbackID = id }
+        elevator._moveElevator(id: 2)
+        #expect(elevator.floor == 2)
+        #expect(callbackID == 2)
+    }
+
+    @Test("Model macro generates a parameterized action method")
+    func modelParameterizedAction() {
+        var elevator = TwoCarElevatorMachine()
+        elevator.applymoveElevator(id: 1)
+        #expect(elevator.floor == 1)
+    }
+
     @Test("Builder path: TLASpec from Var with initial, no explicit Variable")
     func builderOnlyClockRuntime() throws {
         let spec = TLASpec("BuilderOnlyClock") {
