@@ -14,8 +14,30 @@ State-count parity does not prove runtime correctness. Equal state counts can
 hide different initial states, transitions, action labels, or outcomes.
 
 For selected finite core models, the core-conformance command compares the
-complete labeled transition relation from SwiftTLA with a pinned TLC run. See
-`Documentation/CoreGraphConformance.md` for the boundary and command.
+complete labeled transition relation from SwiftTLA with a pinned TLC run. The
+core-support gate admits only the exact finite cases named in its support
+register. See `Documentation/CoreGraphConformance.md` and
+`Documentation/CoreSupport.md` for the boundary and commands.
+
+## Finite graph conformance flow
+
+`ModelChecker.explore()` produces one immutable exploration result: its BFS
+graph, initial state IDs, checker outcome, and derived completeness come from
+the same traversal. The Swift adapter canonicalizes that result without TLC
+imports. Separately, TLC invokes the version-bound `LosslessStateWriter`,
+which records callbacks as JSONL. The TLC adapter verifies the stream and
+provenance, then canonicalizes it. The comparator checks the finite initial
+set, state bindings, edge multiset, and outcome after the declared mappings.
+
+The bridge is transport only: it neither evaluates TLA expressions nor
+discovers successors nor decides equivalence. Trace/replay files are failure
+diagnostics, not substitutes for complete graph evidence. This architecture
+is intentionally bounded to declared finite cases; it does not claim temporal,
+liveness, fairness, or symmetry conformance.
+
+Published TLA+ semantics are authoritative. TLC is a pinned executable
+reference, and its source and tests are diagnostic evidence. No hidden checker
+or oracle is claimed.
 
 ## DSL philosophy
 
@@ -113,7 +135,9 @@ complete labeled transition relation from SwiftTLA with a pinned TLC run. See
 
 ## Rule
 
-**No feature without an oracle twin** (Swift test and/or TLC script) in the same change.
+**No feature without independent verification**: add a Swift regression test
+and, where a bounded external comparison applies, a pinned TLC comparison in
+the same change.
 
 **Every nested scope gets a builder.**
 

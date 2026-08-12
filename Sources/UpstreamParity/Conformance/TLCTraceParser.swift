@@ -10,21 +10,39 @@ public enum TLCTraceErrorV1: Error, Equatable, Sendable {
     case invalidAction(Int)
 }
 
+public struct TLCCounterexampleActionV1: Equatable, Sendable {
+    public let source: CanonicalStateV1
+    public let name: String
+    public let target: CanonicalStateV1
+
+    public init(source: CanonicalStateV1, name: String, target: CanonicalStateV1) {
+        self.source = source
+        self.name = name
+        self.target = target
+    }
+
+    public var edge: CanonicalEdgeV1 {
+        CanonicalEdgeV1(source: source.key, action: name, target: target.key)
+    }
+}
+
 public struct TLCCounterexampleEvidenceV1: Equatable, Sendable {
     public let rawJSON: Data
     public let states: [CanonicalStateV1]
-    public let actions: [String]
+    public let transitions: [TLCCounterexampleActionV1]
 
-    public init(rawJSON: Data, states: [CanonicalStateV1], actions: [String]) {
+    public var actions: [String] { transitions.map(\.name) }
+
+    public init(rawJSON: Data, states: [CanonicalStateV1], transitions: [TLCCounterexampleActionV1]) {
         self.rawJSON = rawJSON
         self.states = states
-        self.actions = actions
+        self.transitions = transitions
     }
 
     public func canonicalTrace(id: String) -> CanonicalTraceV1 {
         CanonicalTraceV1(
             id: id,
-            steps: zip(states, actions).map { CanonicalTraceStepV1(state: $0.key, action: $1) }
+            steps: transitions.map { CanonicalTraceStepV1(state: $0.source.key, action: $0.name) }
         )
     }
 }
@@ -48,11 +66,18 @@ public struct TLCTraceParserV1: Sendable {
         let states = try rawStates.enumerated().map { index, state in
             try parseState(state, variables: variables, index: index)
         }
-        let actions = try rawActions.enumerated().map { index, action in
-            try parseAction(action, index: index)
+        let transitions = try rawActions.enumerated().map { index, action in
+            try parseAction(action, variables: variables, index: index)
         }
-        guard actions.count == states.count - 1 else { throw TLCTraceErrorV1.invalidAction(actions.count) }
-        return TLCCounterexampleEvidenceV1(rawJSON: data, states: states, actions: actions)
+        guard transitions.count == states.count - 1 else {
+            throw TLCTraceErrorV1.invalidAction(transitions.count)
+        }
+        for index in transitions.indices {
+            guard transitions[index].source == states[index], transitions[index].target == states[index + 1] else {
+                throw TLCTraceErrorV1.invalidAction(index)
+            }
+        }
+        return TLCCounterexampleEvidenceV1(rawJSON: data, states: states, transitions: transitions)
     }
 
     private func parseState(_ raw: Any, variables: [String], index: Int) throws -> CanonicalStateV1 {
@@ -68,11 +93,15 @@ public struct TLCTraceParserV1: Sendable {
         return CanonicalStateV1(bindings: canonical)
     }
 
-    private func parseAction(_ raw: Any, index: Int) throws -> String {
+    private func parseAction(
+        _ raw: Any, variables: [String], index: Int
+    ) throws -> TLCCounterexampleActionV1 {
         guard let triple = raw as? [Any], triple.count == 3,
               let metadata = triple[1] as? [String: Any], let name = metadata["name"] as? String, !name.isEmpty
         else { throw TLCTraceErrorV1.invalidAction(index) }
-        return name
+        let source = try parseState(triple[0], variables: variables, index: index)
+        let target = try parseState(triple[2], variables: variables, index: index + 1)
+        return TLCCounterexampleActionV1(source: source, name: name, target: target)
     }
 
     private func parseValue(_ raw: Any, state: Int) throws -> CanonicalValueV1 {

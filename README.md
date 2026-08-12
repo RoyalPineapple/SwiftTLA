@@ -2,9 +2,10 @@
 
 SwiftTLA is a compile-time spec validator and behavioral compiler. Swift types constrain which models you can construct. The `@TLAModel`, `@TLAActor`, and `@TLAObservable` macros parse the model. They model-check supported finite safety behavior during compilation. A successful check generates an executable state machine or an actor API.
 
-It also exports TLA+ and a TLC configuration so bounded models can be checked against TLC as an oracle.
+It also exports TLA+ and a TLC configuration. For declared finite cases, TLC is a
+pinned executable reference. Published TLA+ semantics remain authoritative.
 
-See [Documentation/Fragment.md](Documentation/Fragment.md) for the supported language fragment and the [symmetric collections guide](Documentation/SymmetricCollections.md) for the identity and proof boundary.
+See [the supported language fragment](Documentation/Design.md) and the [symmetric collections guide](Documentation/SymmetricCollections.md) for the identity and proof boundary.
 
 ## Compiler pipeline
 
@@ -13,7 +14,7 @@ Typed Swift DSL ──► TLASpec ──► compile-time model checking ──�
        │                │                    │                         │
        │                │                    ├── failure: compiler diagnostic
        │                │                    └── success: state machine or actor API
-       │                └── .tlaModule + .tlaCfg ──► TLC oracle
+       │                └── .tlaModule + .tlaCfg ──► pinned TLC reference
        └── types constrain legal variables, values, and collection operations
 ```
 
@@ -90,7 +91,7 @@ The ID routes the generated runtime action but never becomes model data. This ma
 
 `verificationScope: 4` checks exactly four exchangeable model members for that run. The live runtime collection can contain a different number of concrete devices. A successful finite run does **not** prove the model for larger populations, arbitrary population sizes, or membership churn not represented in the model. Parametric verification is future work; it is not supplied by symmetric-collection reduction.
 
-Run the symmetric-collection TLC oracle after [setting up TLC](scripts/setup-tlc.sh):
+Run the symmetric-collection check with the pinned TLC executable after [setting up TLC](scripts/setup-tlc.sh):
 
 ```bash
 ./scripts/setup-tlc.sh
@@ -112,11 +113,41 @@ let machine = BFSChecker.StateMachine.initial
 
 Production exploration is plain BFS. Composition is for self-proof, not a controller inside the exploration loop.
 
-## Examples and oracle checks
+## Examples and TLC checks
 
 Core ports live under `Examples/` (HourClock, DieHard, CoffeeCan, MovingCat, Majority, Allocator, and more). State counts for core specifications are regression-tested.
 
-For selected finite core models, the repository can compare the complete labeled transition relation with a pinned TLC run. See [core graph conformance](Documentation/CoreGraphConformance.md).
+For selected finite core models, the repository can compare the complete labeled
+transition relation with a pinned TLC run. The support gate admits only the
+behavior and bounds named in its register. See [core graph
+conformance](Documentation/CoreGraphConformance.md) and [core
+support](Documentation/CoreSupport.md).
+
+Run the core-support gate directly with:
+
+```bash
+make core-support-gate
+```
+
+Exit `0` means all requested support entries were admitted from one current
+run. Exit `1` means the evidence was complete but requested support was
+blocked. Exit `2` means setup, execution, governance, or evidence validation
+failed. The command retains its current report at
+`.build/core-support-gate/support-admission.json` and each run below
+`.build/core-support-gate/runs/`.
+
+Run the complete local verification gate with:
+
+```bash
+make ci-local
+```
+
+It runs tests, coverage, builds, and the locked finite TLC comparison plus the
+core-support gate. It writes fresh evidence below `.build/`. SwiftLint remains
+an advisory warning. These commands run locally; they do not require a hosted
+or paid GitHub runner. This is a bounded claim for the declared cases only. It
+does not prove arbitrary bounds, temporal properties, liveness, fairness, or
+symmetry reduction.
 
 State counts alone do not establish behavioral equivalence. A successful bounded check does not prove arbitrary population sizes, liveness, or unsupported TLA+ constructs.
 

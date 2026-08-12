@@ -18,32 +18,7 @@ guard let name = args.first else {
     exit(1)
 }
 
-private struct CoreConformanceManifest: Decodable {
-    let schema: String
-    let cases: [Entry]
-
-    struct Entry: Decodable {
-        struct IdentityMapping: Decodable {
-            let variables: [String: String]
-            let actions: [String: String]
-        }
-
-        let id: String
-        let swiftSpec: String
-        let module: String
-        let configuration: String
-        let moduleSHA256: String
-        let cfgSHA256: String
-        let arguments: [String]
-        let argumentsSHA256: String
-        let workers: Int
-        let fingerprintPolynomial: Int
-        let deadlock: Bool
-        let replay: String
-        let expectedExit: Int?
-        let identityMapping: IdentityMapping
-    }
-}
+private typealias CoreConformanceManifest = CoreConformanceCasesManifestV1
 
 private struct CoreConformanceToolchain: Decodable {
     let schema: String
@@ -85,6 +60,9 @@ private enum CoreConformanceCLIError: Error, CustomStringConvertible {
     case outputExists(String)
     case unsupportedSwiftSpec(String)
     case invalidReplayPolicy(String)
+    case invalidGateRunID(String)
+    case invalidPrerequisite(String)
+    case unableToWriteReport(String)
 
     var description: String {
         switch self {
@@ -104,18 +82,32 @@ private enum CoreConformanceCLIError: Error, CustomStringConvertible {
             return "unsupported Swift core-conformance spec: \(id)"
         case .invalidReplayPolicy(let policy):
             return "invalid core-conformance replay policy: \(policy)"
+        case .invalidGateRunID(let value):
+            return "invalid core-support gate run ID: \(value)"
+        case .invalidPrerequisite(let value):
+            return "invalid core-support prerequisite status: \(value)"
+        case .unableToWriteReport(let path):
+            return "unable to write core-support admission report: \(path)"
         }
     }
 }
 
 private func runCoreConformance(arguments: [String]) -> Never {
+    guard let command = arguments.first else {
+        failCoreConformance(CoreConformanceCLIError.usage)
+    }
+    if command == "gate" {
+        runCoreSupportGate(arguments: Array(arguments.dropFirst()))
+    }
+    guard command == "run" else {
+        failCoreConformance(CoreConformanceCLIError.usage)
+    }
     do {
-        guard arguments.first == "run" else { throw CoreConformanceCLIError.usage }
         let options = try parseCoreConformanceOptions(Array(arguments.dropFirst()))
         let environment = ProcessInfo.processInfo.environment
         let casesPath = try requiredEnvironment("CORE_CONFORMANCE_CASES", environment)
         let manifest = try decode(CoreConformanceManifest.self, at: URL(fileURLWithPath: casesPath))
-        guard manifest.schema == "CoreConformanceCasesV1" else {
+        guard manifest.schema == CoreConformanceCasesManifestV1.schema else {
             throw CoreConformanceCLIError.invalidManifest("unsupported schema")
         }
         let selected: [CoreConformanceManifest.Entry]
@@ -225,7 +217,7 @@ private func runCoreConformance(arguments: [String]) -> Never {
                 workingDirectory: runRoot,
                 arguments: entry.arguments,
                 expectedCase: declaredCase,
-                runID: UUID(),
+                runID: options.gateRunID ?? UUID(),
                 referencePin: pin,
                 referenceArtifacts: referenceArtifacts
             )
@@ -253,14 +245,165 @@ private func runCoreConformance(arguments: [String]) -> Never {
             }
         }
         exit(exitCode)
+    } catch { failCoreConformance(error) }
+}
+
+private func runCoreSupportGate(arguments: [String]) -> Never {
+    let options: CoreSupportGateOptions
+    do {
+        options = try parseCoreSupportGateOptions(arguments)
     } catch {
-        fputs("core-conformance: \(error)\n", stderr)
-        exit(CoreConformanceExitCodeV1.failure.rawValue)
+        failCoreConformance(error)
     }
+
+    let environment = ProcessInfo.processInfo.environment
+    let projectRoot = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+    let reportURL = URL(fileURLWithPath: options.report).standardizedFileURL
+    let report: CoreSupportAdmissionV1
+    let registersLoaded: Bool
+    let requestedSupportIsAdmitted: Bool
+    do {
+        let casesPath = try requiredEnvironment("CORE_CONFORMANCE_CASES", environment)
+        let manifest = try decode(CoreConformanceManifest.self, at: URL(fileURLWithPath: casesPath))
+        let ledger = try decode(
+            CoreDivergenceLedgerV1.self,
+            at: governanceURL(
+                environment["CORE_CONFORMANCE_DIVERGENCES"],
+                projectRoot: projectRoot,
+                defaultPath: "Verification/CoreConformance/divergences.json"))
+        let surface = try decode(
+            CoreSupportSurfaceV1.self,
+            at: governanceURL(
+                environment["CORE_CONFORMANCE_SUPPORT_SURFACE"],
+                projectRoot: projectRoot,
+                defaultPath: "Verification/CoreConformance/support-surface.json"))
+        let evidenceRoot = URL(fileURLWithPath: options.evidence).standardizedFileURL
+        let evidence = manifest.cases.map {
+            CoreSupportCaseEvidenceV1(
+                caseID: $0.id,
+                directory: evidenceRoot.appendingPathComponent($0.id, isDirectory: true),
+                relativeDirectory: $0.id)
+        }
+        report = CoreSupportGateV1().evaluate(CoreSupportGateInputV1(
+            gateRunID: options.gateRunID,
+            manifest: manifest,
+            ledger: ledger,
+            surface: surface,
+            evidence: evidence,
+            prerequisiteAvailable: options.prerequisiteAvailable))
+        registersLoaded = true
+        requestedSupportIsAdmitted = !surface.entries.filter {
+            $0.requestedStatus == .requested
+        }.isEmpty && surface.entries.filter {
+            $0.requestedStatus == .requested
+        }.allSatisfy { entry in
+            report.entries.first(where: { $0.supportID == entry.id })?.decision == .admitted
+        }
+    } catch {
+        report = invalidRegisterReport(gateRunID: options.gateRunID)
+        registersLoaded = false
+        requestedSupportIsAdmitted = false
+        fputs("core-support-gate: register loading failed: \(error)\n", stderr)
+    }
+
+    do {
+        try writeAdmissionReport(report, to: reportURL)
+    } catch {
+        failCoreConformance(CoreConformanceCLIError.unableToWriteReport(reportURL.path))
+    }
+
+    for entry in report.entries {
+        let reasons = entry.reasonCodes.map(\.rawValue).joined(separator: ",")
+        print("core-support-gate \(entry.supportID): \(entry.decision.rawValue) \(reasons)")
+    }
+    print("core-support-gate: \(report.finalExitClass.rawValue) \(reportURL.path)")
+    exit(coreSupportGateExitCode(
+        report: report,
+        registersLoaded: registersLoaded,
+        requestedSupportIsAdmitted: requestedSupportIsAdmitted,
+        prerequisiteAvailable: options.prerequisiteAvailable,
+        conformanceExitCode: options.conformanceExitCode))
+}
+
+/// Exit 1 is reserved for a complete, current evidence evaluation that blocks
+/// requested support. Setup, execution, governance, and evidence failures use
+/// exit 2 so automation cannot mistake them for a semantic disagreement.
+private func coreSupportGateExitCode(
+    report: CoreSupportAdmissionV1,
+    registersLoaded: Bool,
+    requestedSupportIsAdmitted: Bool,
+    prerequisiteAvailable: Bool,
+    conformanceExitCode: Int32
+) -> Int32 {
+    let systemReasons: Set<CoreSupportReasonCodeV1> = [
+        .invalidRegister,
+        .missingPrerequisite,
+        .missingEvidence,
+        .partialEvidence,
+        .foreignRun,
+        .manifestDigestMismatch,
+        .toolchainDigestMismatch,
+        .executionFailed,
+    ]
+    let hasSystemFailure = report.entries.contains { entry in
+        !systemReasons.isDisjoint(with: Set(entry.reasonCodes))
+    }
+    guard registersLoaded,
+          prerequisiteAvailable,
+          conformanceExitCode != CoreConformanceExitCodeV1.failure.rawValue,
+          !hasSystemFailure
+    else {
+        return CoreConformanceExitCodeV1.failure.rawValue
+    }
+    if report.finalExitClass == .success, requestedSupportIsAdmitted {
+        return conformanceExitCode == CoreConformanceExitCodeV1.exact.rawValue
+          ? CoreConformanceExitCodeV1.exact.rawValue
+          : CoreConformanceExitCodeV1.failure.rawValue
+    }
+    return CoreConformanceExitCodeV1.semanticDifference.rawValue
+}
+
+private func failCoreConformance(_ error: Error) -> Never {
+    fputs("core-conformance: \(error)\n", stderr)
+    exit(CoreConformanceExitCodeV1.failure.rawValue)
+}
+
+private func governanceURL(_ configuredPath: String?, projectRoot: URL, defaultPath: String) -> URL {
+    if let configuredPath, !configuredPath.isEmpty {
+        return URL(fileURLWithPath: configuredPath).standardizedFileURL
+    }
+    return projectRoot.appendingPathComponent(defaultPath)
+}
+
+private func invalidRegisterReport(gateRunID: UUID) -> CoreSupportAdmissionV1 {
+    let entry = try! CoreSupportAdmissionEntryV1(
+        supportID: "governance-register",
+        decision: .blocked,
+        reasonCodes: [.invalidRegister],
+        mandatoryCaseIDs: ["governance-register"],
+        divergenceIDs: [])
+    return try! CoreSupportAdmissionV1(gateRunID: gateRunID, entries: [entry])
+}
+
+private func writeAdmissionReport(_ report: CoreSupportAdmissionV1, to url: URL) throws {
+    try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+    let encoder = JSONEncoder()
+    encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+    var data = try encoder.encode(report)
+    data.append(0x0A)
+    try data.write(to: url, options: .atomic)
+}
+
+private struct CoreSupportGateOptions {
+    let evidence: String
+    let report: String
+    let gateRunID: UUID
+    let prerequisiteAvailable: Bool
+    let conformanceExitCode: Int32
 }
 
 private func validateIdentityMapping(
-    _ mapping: CoreConformanceManifest.Entry.IdentityMapping,
+    _ mapping: CoreConformanceCasesManifestV1.Entry.IdentityMapping,
     for spec: TLASpec,
     caseID: String
 ) throws {
@@ -294,9 +437,12 @@ private func validateIdentityMapping(
     }
 }
 
-private func parseCoreConformanceOptions(_ arguments: [String]) throws -> (caseID: String, output: String) {
+private func parseCoreConformanceOptions(
+    _ arguments: [String]
+) throws -> (caseID: String, output: String, gateRunID: UUID?) {
     var caseID: String?
     var output: String?
+    var gateRunID: UUID?
     var index = 0
     while index < arguments.count {
         let option = arguments[index]
@@ -306,6 +452,11 @@ private func parseCoreConformanceOptions(_ arguments: [String]) throws -> (caseI
             caseID = arguments[index + 1]
         case "--output" where output == nil:
             output = arguments[index + 1]
+        case "--run-id" where gateRunID == nil:
+            guard let value = UUID(uuidString: arguments[index + 1]) else {
+                throw CoreConformanceCLIError.invalidGateRunID(arguments[index + 1])
+            }
+            gateRunID = value
         default:
             throw CoreConformanceCLIError.usage
         }
@@ -314,7 +465,58 @@ private func parseCoreConformanceOptions(_ arguments: [String]) throws -> (caseI
     guard let caseID, !caseID.isEmpty, let output, !output.isEmpty else {
         throw CoreConformanceCLIError.usage
     }
-    return (caseID, output)
+    return (caseID, output, gateRunID)
+}
+
+private func parseCoreSupportGateOptions(_ arguments: [String]) throws -> CoreSupportGateOptions {
+    var evidence: String?
+    var report: String?
+    var gateRunID: UUID?
+    var prerequisiteAvailable = true
+    var conformanceExitCode = CoreConformanceExitCodeV1.exact.rawValue
+    var index = 0
+    while index < arguments.count {
+        let option = arguments[index]
+        guard index + 1 < arguments.count else { throw CoreConformanceCLIError.usage }
+        let value = arguments[index + 1]
+        switch option {
+        case "--evidence" where evidence == nil:
+            evidence = value
+        case "--report" where report == nil:
+            report = value
+        case "--run-id" where gateRunID == nil:
+            guard let parsed = UUID(uuidString: value) else {
+                throw CoreConformanceCLIError.invalidGateRunID(value)
+            }
+            gateRunID = parsed
+        case "--prerequisite":
+            switch value {
+            case "available": prerequisiteAvailable = true
+            case "unavailable": prerequisiteAvailable = false
+            default: throw CoreConformanceCLIError.invalidPrerequisite(value)
+            }
+        case "--conformance-exit":
+            guard let parsed = Int32(value),
+                  parsed == CoreConformanceExitCodeV1.exact.rawValue
+                    || parsed == CoreConformanceExitCodeV1.semanticDifference.rawValue
+                    || parsed == CoreConformanceExitCodeV1.failure.rawValue
+            else { throw CoreConformanceCLIError.invalidPrerequisite(value) }
+            conformanceExitCode = parsed
+        default:
+            throw CoreConformanceCLIError.usage
+        }
+        index += 2
+    }
+    guard let evidence, !evidence.isEmpty,
+          let report, !report.isEmpty,
+          let gateRunID
+    else { throw CoreConformanceCLIError.usage }
+    return CoreSupportGateOptions(
+        evidence: evidence,
+        report: report,
+        gateRunID: gateRunID,
+        prerequisiteAvailable: prerequisiteAvailable,
+        conformanceExitCode: conformanceExitCode)
 }
 
 private func requiredEnvironment(_ name: String, _ environment: [String: String]) throws -> String {
@@ -345,7 +547,7 @@ private func normalizedArchitecture() throws -> String {
 }
 
 private func declaredCase(
-    _ entry: CoreConformanceManifest.Entry,
+    _ entry: CoreConformanceCasesManifestV1.Entry,
     pin: TLCReferencePinV1,
     architecture: String
 ) throws -> CoreConformanceCaseV1 {
@@ -361,7 +563,8 @@ private func declaredCase(
         operatingSystem: "macos",
         architecture: architecture,
         environment: [:],
-        pin: pin
+        pin: pin,
+        governance: entry.governance
     )
 }
 

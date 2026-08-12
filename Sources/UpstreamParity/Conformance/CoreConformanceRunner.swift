@@ -624,7 +624,7 @@ public struct CoreConformanceRunnerV1: Sendable {
   }
 
   private func caseJSON(_ declaredCase: CoreConformanceCaseV1) -> [String: Any] {
-    [
+    var snapshot: [String: Any] = [
       "id": declaredCase.id,
       "moduleSHA256": declaredCase.moduleSHA256,
       "cfgSHA256": declaredCase.cfgSHA256,
@@ -638,6 +638,18 @@ public struct CoreConformanceRunnerV1: Sendable {
       "environment": declaredCase.environment,
       "pin": pinJSON(declaredCase.pin),
     ]
+    if let governance = declaredCase.governance {
+      snapshot["governance"] = [
+        "role": governance.role.rawValue,
+        "finiteBounds": [
+          "summary": governance.finiteBounds.summary,
+          "limits": governance.finiteBounds.limits,
+        ],
+        "semanticCitations": governance.semanticCitations,
+        "expectedRegressionOutcome": governance.expectedRegressionOutcome.rawValue,
+      ]
+    }
+    return snapshot
   }
 
   private func toolchainJSON(for request: TLCProcessRequestV1) -> [String: Any] {

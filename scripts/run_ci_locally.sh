@@ -30,8 +30,5 @@ swift build --target SwiftTLAMacros
 echo "Validate core-conformance workflow contract"
 Tests/Fixtures/CoreConformance/CI/assert_workflow.sh
 
-echo "Set up locked core-conformance tools"
-./scripts/setup-core-conformance-tools.sh --tool-root "$tool_root" --cases Verification/CoreConformance/cases.json
-
-echo "Run locked core conformance"
-CORE_CONFORMANCE_TOOL_ROOT="$tool_root" make core-conformance
+echo "Run mandatory core-support gate"
+CORE_CONFORMANCE_TOOL_ROOT="$tool_root" make core-support-gate
