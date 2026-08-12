@@ -1,0 +1,41 @@
+{
+  "schema": "TemporalSymmetryBaselineManifestV1",
+  "role": "declared-input-baseline",
+  "currentEvidenceRequired": true,
+  "cases": "Verification/TemporalSymmetryConformance/cases.json",
+  "divergences": "Verification/TemporalSymmetryConformance/divergences.json",
+  "supportSurface": "Verification/TemporalSymmetryConformance/support-surface.json",
+  "temporalFairnessBoundary": {
+    "property": "AlwaysEventuallyP",
+    "weakCaseID": "temporal-weak-fairness-boundary",
+    "strongCaseID": "temporal-strong-fairness-boundary",
+    "intermittentlyEnabledAction": "A",
+    "avoidingCycleActions": ["B", "C"],
+    "weakResult": "violated",
+    "strongResult": "violated",
+    "strongRejection": "The B/C recurrence is rejected; implicit stuttering where A is disabled remains a separate fair counterexample."
+  },
+  "temporalReachabilityBounds": {
+    "states": 3,
+    "stateValues": [0, 1, 2]
+  },
+  "configurationFixtures": {
+    "temporal-always-none": { "path": "Verification/TemporalSymmetryConformance/fixtures/temporal/always-none.cfg", "sha256": "20f87e5bc8aeb84067930378931533b5f785f0f8b8bf209bcdf2922407608767" },
+    "temporal-eventually-none": { "path": "Verification/TemporalSymmetryConformance/fixtures/temporal/eventually-none.cfg", "sha256": "7ff5f01b3a1ec5f30d41c69b3b26e12b12fb75b0e9a59d7136b99deb4e7c53a7" },
+    "temporal-always-eventually-none": { "path": "Verification/TemporalSymmetryConformance/fixtures/temporal/always-eventually-none.cfg", "sha256": "7f271ff1b6b35024418d39df424fcce32b76a3a196082dc9d90c2e1b07374766" },
+    "temporal-eventually-always-weak": { "path": "Verification/TemporalSymmetryConformance/fixtures/temporal/eventually-always-weak.cfg", "sha256": "23ca7039e412176b2f97095e3abae6b751f28788edc21d239bab270973b2cfe0" },
+    "temporal-leads-to-strong": { "path": "Verification/TemporalSymmetryConformance/fixtures/temporal/leads-to-strong.cfg", "sha256": "c8deeb0299dcd48b5641afa090c19d4f2b62469f7ea2063c6128413e8c7bff2f" },
+    "temporal-weak-fairness-boundary": { "path": "Verification/TemporalSymmetryConformance/fixtures/temporal/weak-boundary.cfg", "sha256": "853eb3d1ca41e0e583656b6f847cced32caf6d2ad5932c67cf445285d2a98591" },
+    "temporal-strong-fairness-boundary": { "path": "Verification/TemporalSymmetryConformance/fixtures/temporal/strong-boundary.cfg", "sha256": "05d3a2c0f32e7972674019f06359bad6c331186f4dc323c66306042b2b058d29" },
+    "symmetry-single-collection-scope-2": { "path": "Verification/TemporalSymmetryConformance/fixtures/symmetry/scope-2-reduced.cfg", "sha256": "0faf90961fa5e0b47c2131071e82aaac38dcb82a09efe9a9c24ab41332533924", "rawPath": "Verification/TemporalSymmetryConformance/fixtures/symmetry/scope-2-raw.cfg", "rawSHA256": "1ba6c8b585cb9bf001d7eac9db875c5279e9b4579bcaebc6a1825a437be53d05" },
+    "symmetry-single-collection-scope-3": { "path": "Verification/TemporalSymmetryConformance/fixtures/symmetry/scope-3-reduced.cfg", "sha256": "c9c19758440c0b08ddcfa921af30986c2022ccf5ffafa3f120b2ae75c920cbad", "rawPath": "Verification/TemporalSymmetryConformance/fixtures/symmetry/scope-3-raw.cfg", "rawSHA256": "cad68d8f1f603a2a70696f7a21d6f3d8cfbe0b1da301a0156f9c908bcb5a7fff" },
+    "symmetry-single-collection-scope-4": { "path": "Verification/TemporalSymmetryConformance/fixtures/symmetry/scope-4-reduced.cfg", "sha256": "d5aec1ad0d38c5c7439d206882974ac5f63edf5e2ede1af0c632351bce6b2b71", "rawPath": "Verification/TemporalSymmetryConformance/fixtures/symmetry/scope-4-raw.cfg", "rawSHA256": "a66837d09f8e82718f37db618374797adeff33500fa4ab9c65b39115b25f888e" },
+    "symmetry-scope-5-unsupported": { "path": "Verification/TemporalSymmetryConformance/fixtures/symmetry/scope-5-reduced.cfg", "sha256": "a923b3793d24c8af78739b5a1eaf10af9a023d954faeb56f24802938ba71b069" }
+  },
+  "unsupportedControls": {
+    "combined-temporal-symmetry": { "module": "Verification/TemporalSymmetryConformance/fixtures/unsupported/TemporalSymmetry.tla", "moduleSHA256": "c22736dbe71d26769fc559983f32186807b174496bf2a3f54d7eb0bae7b31fc2", "configuration": "Verification/TemporalSymmetryConformance/fixtures/unsupported/combined-temporal-symmetry.cfg", "configurationSHA256": "e61eaaa830aa69cc38c1d78af094edac2bea6ce20792104728d517dc791c3781" },
+    "multiple-or-legacy-symmetry": { "module": "Verification/TemporalSymmetryConformance/fixtures/unsupported/MultipleCollections.tla", "moduleSHA256": "ad8b858c24e736827430fb8a701c55564a28700c77b58a1a7b461c925a9ad234", "configuration": "Verification/TemporalSymmetryConformance/fixtures/unsupported/multiple-collections.cfg", "configurationSHA256": "d8a68d3a9725e3a80a675a3aec70f09783f58d75961885d701f6d0e8fd69784a" },
+    "legacy-symmetry": { "module": "Verification/TemporalSymmetryConformance/fixtures/unsupported/LegacySymmetry.tla", "moduleSHA256": "ced725ad08ccd9193890e99e516637a7396e01e9e3f7e71f6598208a43aabe93", "configuration": "Verification/TemporalSymmetryConformance/fixtures/unsupported/legacy-symmetry.cfg", "configurationSHA256": "c8421a624b23b1294241296b82b95093350e30dc5d4968586a47a46d066ab9d9" },
+    "nested-members-symmetry": { "module": "Verification/TemporalSymmetryConformance/fixtures/unsupported/NestedMembers.tla", "moduleSHA256": "a9d3e1e13d7f42473f9142608a8b2595be9e18499922ef8ee4e1a21b582ca10b", "configuration": "Verification/TemporalSymmetryConformance/fixtures/unsupported/nested-members.cfg", "configurationSHA256": "ff083d7b3035fc174cc5dcdc801bef88b64fc170096cf1c97291330c495fe336" }
+  }
+}

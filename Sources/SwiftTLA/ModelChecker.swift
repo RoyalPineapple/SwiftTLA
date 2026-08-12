@@ -33,9 +33,22 @@ public struct ModelChecker {
 
             let graph = exploration.graph
             let lc = LivenessChecker(graph: graph)
-            let results = try lc.checkAll(self.spec.temporalProperties, fairness: self.spec.fairness, actions: self.spec.actions)
-            for r in results {
-                if case .violated(let msg, _) = r { return bounded(.livenessViolated(msg)) }
+            for property in self.spec.temporalProperties {
+                let result = lc.analyze(
+                    property.expr,
+                    fairness: self.spec.fairness,
+                    actions: self.spec.actions,
+                    initialStateIDs: exploration.initialStateIDs,
+                    isComplete: exploration.isComplete
+                )
+                switch result.status {
+                case .satisfied:
+                    continue
+                case .violated:
+                    return bounded(.livenessViolated("\(property.name): \(result.reason.rawValue)"))
+                case .unavailable:
+                    return bounded(.error("Liveness unavailable: \(result.diagnostic ?? result.reason.rawValue)"))
+                }
             }
             return bounded(.ok(statesCount: exploration.graph.states.count))
         } catch {

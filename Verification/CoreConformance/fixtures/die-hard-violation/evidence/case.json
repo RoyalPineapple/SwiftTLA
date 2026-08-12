@@ -13,13 +13,30 @@
 
   },
   "fingerprintPolynomial" : 1,
+  "governance" : {
+    "expectedRegressionOutcome" : "difference",
+    "finiteBounds" : {
+      "limits" : {
+        "bigCapacity" : 5,
+        "smallCapacity" : 3,
+        "states" : 16,
+        "variables" : 2
+      },
+      "summary" : "Deliberate DieHard negative control: two jug variables bounded to 0...5 and 0...3 with a forced NotSolved invariant failure."
+    },
+    "role" : "permanentRegression",
+    "semanticCitations" : [
+      "specifications\/DieHard\/DieHard.tla: NotSolved",
+      "Verification\/CoreConformance\/fixtures\/die-hard-violation\/DieHard.cfg: INVARIANTS TypeOK NotSolved"
+    ]
+  },
   "id" : "die-hard-violation",
   "moduleSHA256" : "59eac00c38748568ee17c85b994b5fbd2864ff8562fb5b1bdd5db786eb6f09bf",
   "operatingSystem" : "macos",
   "pin" : {
-    "bridgeBinarySHA256" : "240a717693a5500be4067a3bb4d90fa9c3edce67855f09c5422daf5512ee0fde",
+    "bridgeBinarySHA256" : "a50ae51e9c540a3c0eb9386b05bb0c0f677cefa62bcfdc48545c6046ccb12d64",
     "bridgeClass" : "org.swifttla.conformance.LosslessStateWriter",
-    "bridgeSourceSHA256" : "d6a390a1dd8c81e20c22f715a0133f5c7561178a9a5dcdcd7f184c695a6741b7",
+    "bridgeSourceSHA256" : "f921b202205dde3d34e626f7801676cc0635de58f503c3dddd3affcc893532ee",
     "commit" : "30cc3601321c3fc02e044d0ecb5c58d8921e18df",
     "jarSHA256" : "e22f8ffb4bacdea0a871f444dd94fe5fb0d8013b3388ae39e82e26f852c735d5",
     "javaArchiveSHA256" : "8fa1eff40bb637a33613b2ccb8b12c70dc3661cc22cf8e784943715769a05336",

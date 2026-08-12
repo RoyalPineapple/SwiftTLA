@@ -46,6 +46,7 @@ public final class LosslessStateWriter implements IStateWriter {
             output = Files.newBufferedWriter(outputPath, StandardCharsets.UTF_8);
             bodyDigest = MessageDigest.getInstance("SHA-256");
             emit("header", "writer.header", "\"provenance\":" + provenance);
+            Runtime.getRuntime().addShutdownHook(new Thread(this::close, "swifttla-graph-writer-close"));
         } catch (IOException error) {
             throw new UncheckedIOException("cannot create TLC graph event stream", error);
         } catch (NoSuchAlgorithmException error) {

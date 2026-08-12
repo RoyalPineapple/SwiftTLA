@@ -5,6 +5,34 @@ names each behavior, its
 finite bounds, required cases, graph relation, requested status, and any
 linked divergence. Behavior outside that register is not admitted.
 
+## Temporal and symmetry admission boundary
+
+Temporal and symmetry admission is a separate P3 boundary. It does not widen
+the core finite-graph claim in this document.
+
+The P3 source registers are under
+`Verification/TemporalSymmetryConformance/`. A current P3 report can admit
+only the exact requested temporal and symmetry entries named there. Its report
+is at `.build/temporal-symmetry-support-gate/support-admission.json`.
+
+Run the required local check with:
+
+```sh
+make temporal-symmetry-release-check
+```
+
+Exit `0` means all requested P3 entries are admitted. Exit `1` means complete
+evidence blocks a requested entry. Exit `2` means the evaluation is
+unavailable or unsafe. The command always retains a report and never converts
+exit `1` or `2` into success.
+
+P3 currently evaluates only declared temporal matrix cases and one
+binary-valued `SymmetricCollection` at exact scopes 2, 3, and 4. It explicitly
+does not support larger scopes, combined temporal-plus-symmetry checking,
+multiple collections, legacy symmetry declarations, or nested member-bearing
+values. See [temporal and symmetry conformance](TemporalSymmetryConformance.md)
+for the algorithms, evidence, and diagnosis steps.
+
 ## Current declared surface
 
 The current requested entries are limited to these exact finite cases:

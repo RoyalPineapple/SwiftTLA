@@ -8,6 +8,10 @@ if args.first == "core-conformance" {
     runCoreConformance(arguments: Array(args.dropFirst()))
 }
 
+if args.first == "temporal-symmetry" {
+    runTemporalSymmetry(arguments: Array(args.dropFirst()))
+}
+
 guard let name = args.first else {
     fputs("""
     Usage: tlc-validate <name>
@@ -392,6 +396,450 @@ private func writeAdmissionReport(_ report: CoreSupportAdmissionV1, to url: URL)
     var data = try encoder.encode(report)
     data.append(0x0A)
     try data.write(to: url, options: .atomic)
+}
+
+private enum TemporalSymmetryCLIError: Error, CustomStringConvertible {
+    case usage
+    case invalidRunID(String)
+    case invalidPrerequisite(String)
+    case invalidCoreReportID(String)
+    case evidenceOutsideProject(String)
+    case invalidEvidence(String)
+    case unsafeReportDestination(String)
+    case unableToWriteReport(String)
+
+    var description: String {
+        switch self {
+        case .usage:
+            return "Usage: tlc-validate temporal-symmetry <run|gate> --evidence <directory> --report <file> --run-id <uuid> --core-admission <file> --core-report-id <uuid> [--prerequisite available|unavailable]"
+        case .invalidRunID(let value):
+            return "invalid temporal-symmetry gate run ID: \(value)"
+        case .invalidPrerequisite(let value):
+            return "invalid temporal-symmetry prerequisite status: \(value)"
+        case .invalidCoreReportID(let value):
+            return "invalid temporal-symmetry core report ID: \(value)"
+        case .evidenceOutsideProject(let path):
+            return "temporal-symmetry evidence must be retained inside the project: \(path)"
+        case .invalidEvidence(let message):
+            return "invalid temporal-symmetry evidence: \(message)"
+        case .unsafeReportDestination(let path):
+            return "temporal-symmetry report path collides with protected evidence: \(path)"
+        case .unableToWriteReport(let path):
+            return "unable to write temporal-symmetry admission report: \(path)"
+        }
+    }
+}
+
+private struct TemporalSymmetryGateOptions {
+    let evidence: String
+    let report: String
+    let gateRunID: UUID
+    let coreAdmission: String
+    let coreReportID: UUID
+    let prerequisiteAvailable: Bool
+}
+
+private func runTemporalSymmetry(arguments: [String]) -> Never {
+    guard let command = arguments.first, command == "run" || command == "gate" else {
+        failTemporalSymmetry(TemporalSymmetryCLIError.usage)
+    }
+
+    let options: TemporalSymmetryGateOptions
+    do {
+        options = try parseTemporalSymmetryGateOptions(Array(arguments.dropFirst()))
+    } catch {
+        failTemporalSymmetry(error)
+    }
+
+    let projectRoot = URL(fileURLWithPath: FileManager.default.currentDirectoryPath).standardizedFileURL
+    let reportURL = URL(fileURLWithPath: options.report).standardizedFileURL
+    do {
+        try validateTemporalSymmetryReportDestination(
+            reportURL, options: options, projectRoot: projectRoot)
+    } catch {
+        failTemporalSymmetry(error)
+    }
+    if command == "run" {
+        do {
+            try runTemporalSymmetryEvidence(options: options, projectRoot: projectRoot)
+        } catch {
+            fputs("temporal-symmetry: evidence runner unavailable: \(error)\n", stderr)
+        }
+    }
+    let report: TemporalSymmetryAdmissionV1
+    do {
+        report = try temporalSymmetryAdmissionReport(options: options, projectRoot: projectRoot)
+    } catch {
+        fputs("temporal-symmetry: gate input unavailable: \(error)\n", stderr)
+        report = unavailableTemporalSymmetryReport(gateRunID: options.gateRunID)
+    }
+
+    do {
+        try writeTemporalSymmetryAdmissionReport(report, to: reportURL)
+    } catch {
+        failTemporalSymmetry(TemporalSymmetryCLIError.unableToWriteReport(reportURL.path))
+    }
+
+    for entry in report.entries {
+        let reasons = entry.reasonCodes.map(\.rawValue).joined(separator: ",")
+        print("temporal-symmetry \(entry.supportID): \(entry.decision.rawValue) \(reasons)")
+    }
+    print("temporal-symmetry: \(report.finalExitClass.rawValue) \(reportURL.path)")
+    exit(temporalSymmetryExitCode(report.finalExitClass))
+}
+
+private func runTemporalSymmetryEvidence(
+    options: TemporalSymmetryGateOptions,
+    projectRoot: URL
+) throws {
+    let environment = ProcessInfo.processInfo.environment
+    let casesURL = governanceURL(
+        environment["TEMPORAL_SYMMETRY_CASES"], projectRoot: projectRoot,
+        defaultPath: "Verification/TemporalSymmetryConformance/cases.json")
+    let cases = try decode(TemporalSymmetryCasesV1.self, at: casesURL)
+    _ = try projectRelativePath(URL(fileURLWithPath: options.evidence), projectRoot: projectRoot)
+    try TemporalSymmetryConformanceRunnerV1().run(TemporalSymmetryConformanceRunnerInputV1(
+        cases: cases,
+        gateRunID: options.gateRunID,
+        projectRoot: projectRoot,
+        outputDirectory: URL(fileURLWithPath: options.evidence).standardizedFileURL,
+        toolRoot: environment["CORE_CONFORMANCE_TOOL_ROOT"].map(URL.init(fileURLWithPath:))))
+}
+
+private func validateTemporalSymmetryReportDestination(
+    _ reportURL: URL,
+    options: TemporalSymmetryGateOptions,
+    projectRoot: URL
+) throws {
+    let environment = ProcessInfo.processInfo.environment
+    let protected = [
+        governanceURL(
+            environment["TEMPORAL_SYMMETRY_CASES"], projectRoot: projectRoot,
+            defaultPath: "Verification/TemporalSymmetryConformance/cases.json"),
+        governanceURL(
+            environment["TEMPORAL_SYMMETRY_DIVERGENCES"], projectRoot: projectRoot,
+            defaultPath: "Verification/TemporalSymmetryConformance/divergences.json"),
+        governanceURL(
+            environment["TEMPORAL_SYMMETRY_SUPPORT_SURFACE"], projectRoot: projectRoot,
+            defaultPath: "Verification/TemporalSymmetryConformance/support-surface.json"),
+        governanceURL(
+            environment["TEMPORAL_SYMMETRY_TOOLCHAIN"], projectRoot: projectRoot,
+            defaultPath: "Verification/CoreConformance/toolchain.json"),
+        URL(fileURLWithPath: options.coreAdmission),
+        URL(fileURLWithPath: options.evidence),
+    ]
+    let candidate = resolvedProspectivePath(reportURL)
+    guard protected.allSatisfy({ !pathsOverlap(candidate, resolvedProspectivePath($0)) }) else {
+        throw TemporalSymmetryCLIError.unsafeReportDestination(reportURL.path)
+    }
+}
+
+private func temporalSymmetryAdmissionReport(
+    options: TemporalSymmetryGateOptions,
+    projectRoot: URL
+) throws -> TemporalSymmetryAdmissionV1 {
+    let environment = ProcessInfo.processInfo.environment
+    let casesURL = governanceURL(
+        environment["TEMPORAL_SYMMETRY_CASES"], projectRoot: projectRoot,
+        defaultPath: "Verification/TemporalSymmetryConformance/cases.json")
+    let ledgerURL = governanceURL(
+        environment["TEMPORAL_SYMMETRY_DIVERGENCES"], projectRoot: projectRoot,
+        defaultPath: "Verification/TemporalSymmetryConformance/divergences.json")
+    let surfaceURL = governanceURL(
+        environment["TEMPORAL_SYMMETRY_SUPPORT_SURFACE"], projectRoot: projectRoot,
+        defaultPath: "Verification/TemporalSymmetryConformance/support-surface.json")
+    let toolchainURL = governanceURL(
+        environment["TEMPORAL_SYMMETRY_TOOLCHAIN"], projectRoot: projectRoot,
+        defaultPath: "Verification/CoreConformance/toolchain.json")
+    let cases = try decode(TemporalSymmetryCasesV1.self, at: casesURL)
+    let ledger = try decode(TemporalSymmetryDivergenceLedgerV1.self, at: ledgerURL)
+    let surface = try decode(TemporalSymmetrySupportSurfaceV1.self, at: surfaceURL)
+    let manifestSHA256 = try fileSHA256(casesURL)
+    let toolchainSHA256 = try fileSHA256(toolchainURL)
+
+    let coreURL = URL(fileURLWithPath: options.coreAdmission).standardizedFileURL
+    let corePath = try projectRelativePath(coreURL, projectRoot: projectRoot)
+    let coreReport = try decode(CoreSupportAdmissionV1.self, at: coreURL)
+    let coreDigest = try fileSHA256(coreURL)
+    let coreReference = try TemporalSymmetryCoreAdmissionReferenceV1(
+        reportID: options.coreReportID,
+        gateRunID: coreReport.gateRunID,
+        report: try CoreEvidenceReferenceV1(path: corePath, sha256: coreDigest))
+    let coreContext = try TemporalSymmetryCoreAdmissionContextV1(
+        temporalSymmetryGateRunID: options.gateRunID,
+        reportID: coreReference.reportID,
+        coreGateRunID: coreReport.gateRunID,
+        reportPath: corePath,
+        reportSHA256: coreDigest)
+    let evidenceRoot = URL(fileURLWithPath: options.evidence).standardizedFileURL
+    _ = try projectRelativePath(evidenceRoot, projectRoot: projectRoot)
+    let evidence = try temporalSymmetryEvidence(
+        cases: cases,
+        root: evidenceRoot,
+        projectRoot: projectRoot,
+        manifestSHA256: manifestSHA256,
+        toolchainSHA256: toolchainSHA256)
+    return TemporalSymmetrySupportGateV1().evaluate(TemporalSymmetryGateInputV1(
+        gateRunID: options.gateRunID,
+        coreAdmission: coreReference,
+        coreAdmissionContext: coreContext,
+        cases: cases,
+        ledger: ledger,
+        surface: surface,
+        evidence: evidence,
+        manifestSHA256: manifestSHA256,
+        toolchainSHA256: toolchainSHA256,
+        prerequisiteAvailable: options.prerequisiteAvailable && coreReport.finalExitClass == .success))
+}
+
+private func temporalSymmetryEvidence(
+    cases: TemporalSymmetryCasesV1,
+    root: URL,
+    projectRoot: URL,
+    manifestSHA256: String,
+    toolchainSHA256: String
+) throws -> [TemporalSymmetryCaseEvidenceV1] {
+    try cases.cases.compactMap { declaredCase in
+        let filename = declaredCase.kind == .temporal
+            ? "temporal-comparison.json"
+            : "symmetry-orbit-comparison.json"
+        let path = root.appendingPathComponent(declaredCase.id, isDirectory: true)
+            .appendingPathComponent(filename)
+        guard FileManager.default.fileExists(atPath: path.path) else { return nil }
+        let reference = try CoreEvidenceReferenceV1(
+            path: try projectRelativePath(path, projectRoot: projectRoot),
+            sha256: try fileSHA256(path))
+        let data = try Data(contentsOf: path)
+        let comparison: TemporalSymmetryComparisonEvidenceV1
+        switch declaredCase.kind {
+        case .temporal:
+            let temporal = try JSONDecoder().decode(TemporalComparisonV1.self, from: data)
+            try validateCompleteGraphEvidence(temporal, declaredCase: declaredCase, projectRoot: projectRoot)
+            comparison = .temporal(temporal)
+        case .symmetry:
+            comparison = .symmetry(try JSONDecoder().decode(SymmetryOrbitComparisonV1.self, from: data))
+        }
+        return try TemporalSymmetryCaseEvidenceV1(
+            comparison: comparison,
+            comparisonEvidence: reference,
+            manifestSHA256: manifestSHA256,
+            toolchainSHA256: toolchainSHA256,
+            status: .complete,
+            normalizedDifferenceFingerprint: comparison.outcome == .difference ? SHA256V1.hex(data) : nil)
+    }
+}
+
+private func validateCompleteGraphEvidence(
+    _ comparison: TemporalComparisonV1,
+    declaredCase: TemporalSymmetryCaseV1,
+    projectRoot: URL
+) throws {
+    guard let declaration = declaredCase.configuration.completeGraphPass else {
+        guard comparison.completeGraphEvidence == nil else {
+            throw TemporalSymmetryCLIError.invalidEvidence("unexpected complete graph evidence")
+        }
+        return
+    }
+    guard let evidence = comparison.completeGraphEvidence,
+          evidence.propertyRunID == comparison.correlation.tlcRunID,
+          evidence.sourceInput == declaredCase.sourceInput,
+          evidence.configuration == declaration.configuration else {
+        throw TemporalSymmetryCLIError.invalidEvidence("invalid complete graph evidence")
+    }
+    var urls: [String: URL] = [:]
+    for reference in [evidence.sourceInput, evidence.configuration, evidence.graphEvents, evidence.result] {
+        let url = projectRoot.appendingPathComponent(reference.path).resolvingSymlinksInPath().standardizedFileURL
+        guard url.path.hasPrefix(projectRoot.resolvingSymlinksInPath().standardizedFileURL.path + "/"),
+              FileManager.default.fileExists(atPath: url.path),
+              try fileSHA256(url) == reference.sha256 else {
+            throw TemporalSymmetryCLIError.invalidEvidence("substituted complete graph artifact")
+        }
+        urls[reference.path] = url
+    }
+    let provenance = declaredCase.provenance
+    let pin = try TLCReferencePinV1(
+        tag: provenance.tlcTag, commit: provenance.tlcCommit, jarSHA256: provenance.tlcJarSHA256,
+        javaDistribution: provenance.javaDistribution, javaVersion: provenance.javaVersion,
+        javaArchiveSHA256: provenance.javaArchiveSHA256, bridgeClass: provenance.bridgeClass,
+        bridgeSourceSHA256: provenance.bridgeSourceSHA256, bridgeBinarySHA256: provenance.bridgeBinarySHA256)
+    let graphCase = try CoreConformanceCaseV1(
+        id: declaredCase.id, moduleSHA256: declaredCase.sourceInput.sha256,
+        cfgSHA256: declaration.configuration.sha256, arguments: evidence.arguments,
+        argumentsSHA256: provenance.argumentsSHA256, workers: 1,
+        fingerprintPolynomial: evidence.fingerprintPolynomial, deadlock: false,
+        operatingSystem: evidence.operatingSystem, architecture: evidence.architecture,
+        environment: evidence.environment, pin: pin)
+    let resultURL = try requiredCompleteGraphURL(evidence.result, urls: urls)
+    let resultObject = try requiredJSONObject(resultURL)
+    guard let status = resultObject["status"] as? Int, status == 0,
+          resultObject["reportedExhaustiveCompletion"] as? Bool == true,
+          resultObject["isViolation"] as? Bool == false else {
+        throw TemporalSymmetryCLIError.invalidEvidence("incomplete complete graph result")
+    }
+    let graphURL = try requiredCompleteGraphURL(evidence.graphEvents, urls: urls)
+    let parser = TLCGraphEventParserV1(expectedCase: graphCase)
+    let stream = try parser.parse(Data(contentsOf: graphURL))
+    guard stream.runID == evidence.graphRunID else {
+        throw TemporalSymmetryCLIError.invalidEvidence("foreign complete graph run")
+    }
+    let canonical = try parser.parseCanonicalRun(
+        Data(contentsOf: graphURL),
+        result: TLCProcessResultV1(status: 0, stdout: "Model checking completed. No error has been found.", stderr: ""))
+    guard canonical.isPassEligible,
+          TLCTemporalAdapterV1.graphID(canonical) == comparison.tlcResult.graphID,
+          canonical.graph.initialStateKeys.sorted().map(\.canonicalEncoding) == comparison.tlcResult.initialStateIDs else {
+        throw TemporalSymmetryCLIError.invalidEvidence("complete graph does not bind the temporal comparison")
+    }
+}
+
+private func requiredCompleteGraphURL(_ reference: CoreEvidenceReferenceV1, urls: [String: URL]) throws -> URL {
+    guard let url = urls[reference.path] else {
+        throw TemporalSymmetryCLIError.invalidEvidence("missing complete graph artifact")
+    }
+    return url
+}
+
+private func requiredJSONObject(_ url: URL) throws -> [String: Any] {
+    guard let object = try JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any] else {
+        throw TemporalSymmetryCLIError.invalidEvidence("malformed complete graph result")
+    }
+    return object
+}
+
+private func unavailableTemporalSymmetryReport(gateRunID: UUID) -> TemporalSymmetryAdmissionV1 {
+    let unavailableReference = try! CoreEvidenceReferenceV1(
+        path: "unavailable/core-admission.json", sha256: String(repeating: "0", count: 64))
+    let coreAdmission = try! TemporalSymmetryCoreAdmissionReferenceV1(
+        reportID: UUID(), gateRunID: UUID(), report: unavailableReference)
+    let entry = try! TemporalSymmetryAdmissionEntryV1(
+        supportID: "governance-register",
+        decision: .blocked,
+        reasonCodes: [.missingPrerequisite, .invalidRegister],
+        mandatoryCaseIDs: ["governance-register"],
+        divergenceIDs: [])
+    return try! TemporalSymmetryAdmissionV1(
+        reportID: UUID(),
+        gateRunID: gateRunID,
+        coreAdmission: coreAdmission,
+        manifestSHA256: String(repeating: "0", count: 64),
+        toolchainSHA256: String(repeating: "0", count: 64),
+        entries: [entry],
+        admittedBounds: [:],
+        unexplainedDivergenceCount: 0,
+        finalExitClass: .unavailable)
+}
+
+private func parseTemporalSymmetryGateOptions(_ arguments: [String]) throws -> TemporalSymmetryGateOptions {
+    var evidence: String?
+    var report: String?
+    var gateRunID: UUID?
+    var coreAdmission: String?
+    var coreReportID: UUID?
+    var prerequisiteAvailable = true
+    var index = 0
+    while index < arguments.count {
+        let option = arguments[index]
+        guard index + 1 < arguments.count else { throw TemporalSymmetryCLIError.usage }
+        let value = arguments[index + 1]
+        switch option {
+        case "--evidence" where evidence == nil:
+            evidence = value
+        case "--report" where report == nil:
+            report = value
+        case "--run-id" where gateRunID == nil:
+            guard let parsed = UUID(uuidString: value) else {
+                throw TemporalSymmetryCLIError.invalidRunID(value)
+            }
+            gateRunID = parsed
+        case "--core-admission" where coreAdmission == nil:
+            coreAdmission = value
+        case "--core-report-id" where coreReportID == nil:
+            guard let parsed = UUID(uuidString: value) else {
+                throw TemporalSymmetryCLIError.invalidCoreReportID(value)
+            }
+            coreReportID = parsed
+        case "--prerequisite":
+            switch value {
+            case "available": prerequisiteAvailable = true
+            case "unavailable": prerequisiteAvailable = false
+            default: throw TemporalSymmetryCLIError.invalidPrerequisite(value)
+            }
+        default:
+            throw TemporalSymmetryCLIError.usage
+        }
+        index += 2
+    }
+    guard let evidence, !evidence.isEmpty,
+          let report, !report.isEmpty,
+          let gateRunID,
+          let coreAdmission, !coreAdmission.isEmpty,
+          let coreReportID
+    else {
+        throw TemporalSymmetryCLIError.usage
+    }
+    return TemporalSymmetryGateOptions(
+        evidence: evidence,
+        report: report,
+        gateRunID: gateRunID,
+        coreAdmission: coreAdmission,
+        coreReportID: coreReportID,
+        prerequisiteAvailable: prerequisiteAvailable)
+}
+
+private func writeTemporalSymmetryAdmissionReport(_ report: TemporalSymmetryAdmissionV1, to url: URL) throws {
+    try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+    let encoder = JSONEncoder()
+    encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+    var data = try encoder.encode(report)
+    data.append(0x0A)
+    try data.write(to: url, options: .atomic)
+}
+
+private func temporalSymmetryExitCode(_ exitClass: TemporalSymmetryAdmissionExitClassV1) -> Int32 {
+    switch exitClass {
+    case .success: return 0
+    case .blocked: return 1
+    case .unavailable: return 2
+    }
+}
+
+private func projectRelativePath(_ path: URL, projectRoot: URL) throws -> String {
+    let resolved = path.resolvingSymlinksInPath().standardizedFileURL
+    let root = projectRoot.resolvingSymlinksInPath().standardizedFileURL
+    guard resolved.path.hasPrefix(root.path + "/") else {
+        throw TemporalSymmetryCLIError.evidenceOutsideProject(path.path)
+    }
+    return String(resolved.path.dropFirst(root.path.count + 1))
+}
+
+private func resolvedProspectivePath(_ url: URL) -> URL {
+    var candidate = url.standardizedFileURL
+    var pendingComponents: [String] = []
+    while !FileManager.default.fileExists(atPath: candidate.path) {
+        let parent = candidate.deletingLastPathComponent()
+        guard parent.path != candidate.path else { break }
+        pendingComponents.insert(candidate.lastPathComponent, at: 0)
+        candidate = parent
+    }
+    let existingParent = candidate.resolvingSymlinksInPath().standardizedFileURL
+    return pendingComponents.reduce(existingParent) { path, component in
+        path.appendingPathComponent(component)
+    }.standardizedFileURL
+}
+
+private func pathsOverlap(_ first: URL, _ second: URL) -> Bool {
+    first.path == second.path
+        || first.path.hasPrefix(second.path + "/")
+        || second.path.hasPrefix(first.path + "/")
+}
+
+private func fileSHA256(_ url: URL) throws -> String {
+    SHA256V1.hex(try Data(contentsOf: url))
+}
+
+private func failTemporalSymmetry(_ error: Error) -> Never {
+    fputs("temporal-symmetry: \(error)\n", stderr)
+    exit(2)
 }
 
 private struct CoreSupportGateOptions {

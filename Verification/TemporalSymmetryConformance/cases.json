@@ -1,0 +1,93 @@
+{
+  "schema": "TemporalSymmetryCasesV1",
+  "cases": [
+    {
+      "id": "temporal-always-none", "kind": "temporal", "swiftSpec": "TemporalMatrix",
+      "provenance": { "caseID": "temporal-always-none", "moduleSHA256": "a7364faca5a0316660f0de57a962453643f47f80895d1e0c0be03f9d6420d7c5", "cfgSHA256": "20f87e5bc8aeb84067930378931533b5f785f0f8b8bf209bcdf2922407608767", "argumentsSHA256": "5a29989b077aadf61edf04f0b0cc435c5f9ef27fe0b75daa01cb703ee9ce89b5", "tlcTag": "v1.8.0", "tlcCommit": "30cc3601321c3fc02e044d0ecb5c58d8921e18df", "tlcJarSHA256": "e22f8ffb4bacdea0a871f444dd94fe5fb0d8013b3388ae39e82e26f852c735d5", "javaDistribution": "Eclipse Temurin", "javaVersion": "17.0.19+10", "javaArchiveSHA256": "8fa1eff40bb637a33613b2ccb8b12c70dc3661cc22cf8e784943715769a05336", "bridgeClass": "org.swifttla.conformance.LosslessStateWriter", "bridgeSourceSHA256": "f921b202205dde3d34e626f7801676cc0635de58f503c3dddd3affcc893532ee", "bridgeBinarySHA256": "a50ae51e9c540a3c0eb9386b05bb0c0f677cefa62bcfdc48545c6046ccb12d64" },
+      "finiteBounds": { "summary": "One Boolean-like integer variable, three reachable states, and stuttering.", "limits": { "states": 3, "variables": 1 } },
+      "semanticCitations": ["Verification/TemporalSymmetryConformance/fixtures/temporal/TemporalMatrix.tla: AlwaysP, Spec"],
+      "sourceInput": { "path": "Verification/TemporalSymmetryConformance/fixtures/temporal/TemporalMatrix.tla", "sha256": "a7364faca5a0316660f0de57a962453643f47f80895d1e0c0be03f9d6420d7c5" },
+      "configuration": { "property": "AlwaysP", "fairness": "none", "fairnessActions": [], "symmetryEnabled": false, "allowsImplicitStuttering": true, "completeGraphPass": { "configuration": { "path": "Verification/TemporalSymmetryConformance/fixtures/temporal/always-none-graph.cfg", "sha256": "5bf5c523864e1276b5d53c0d1158be61b2144a461b1d68d904b18fb4322bff87" } } }, "expectedOutcome": "exact"
+    },
+    {
+      "id": "temporal-eventually-none", "kind": "temporal", "swiftSpec": "TemporalMatrix",
+      "provenance": { "caseID": "temporal-eventually-none", "moduleSHA256": "a7364faca5a0316660f0de57a962453643f47f80895d1e0c0be03f9d6420d7c5", "cfgSHA256": "7ff5f01b3a1ec5f30d41c69b3b26e12b12fb75b0e9a59d7136b99deb4e7c53a7", "argumentsSHA256": "5a29989b077aadf61edf04f0b0cc435c5f9ef27fe0b75daa01cb703ee9ce89b5", "tlcTag": "v1.8.0", "tlcCommit": "30cc3601321c3fc02e044d0ecb5c58d8921e18df", "tlcJarSHA256": "e22f8ffb4bacdea0a871f444dd94fe5fb0d8013b3388ae39e82e26f852c735d5", "javaDistribution": "Eclipse Temurin", "javaVersion": "17.0.19+10", "javaArchiveSHA256": "8fa1eff40bb637a33613b2ccb8b12c70dc3661cc22cf8e784943715769a05336", "bridgeClass": "org.swifttla.conformance.LosslessStateWriter", "bridgeSourceSHA256": "f921b202205dde3d34e626f7801676cc0635de58f503c3dddd3affcc893532ee", "bridgeBinarySHA256": "a50ae51e9c540a3c0eb9386b05bb0c0f677cefa62bcfdc48545c6046ccb12d64" },
+      "finiteBounds": { "summary": "One Boolean-like integer variable, three reachable states, and stuttering.", "limits": { "states": 3, "variables": 1 } },
+      "semanticCitations": ["Verification/TemporalSymmetryConformance/fixtures/temporal/TemporalMatrix.tla: EventuallyP, Spec"],
+      "sourceInput": { "path": "Verification/TemporalSymmetryConformance/fixtures/temporal/TemporalMatrix.tla", "sha256": "a7364faca5a0316660f0de57a962453643f47f80895d1e0c0be03f9d6420d7c5" },
+      "configuration": { "property": "EventuallyP", "fairness": "none", "fairnessActions": [], "symmetryEnabled": false }, "expectedOutcome": "exact"
+    },
+    {
+      "id": "temporal-always-eventually-none", "kind": "temporal", "swiftSpec": "TemporalMatrix",
+      "provenance": { "caseID": "temporal-always-eventually-none", "moduleSHA256": "a7364faca5a0316660f0de57a962453643f47f80895d1e0c0be03f9d6420d7c5", "cfgSHA256": "7f271ff1b6b35024418d39df424fcce32b76a3a196082dc9d90c2e1b07374766", "argumentsSHA256": "5a29989b077aadf61edf04f0b0cc435c5f9ef27fe0b75daa01cb703ee9ce89b5", "tlcTag": "v1.8.0", "tlcCommit": "30cc3601321c3fc02e044d0ecb5c58d8921e18df", "tlcJarSHA256": "e22f8ffb4bacdea0a871f444dd94fe5fb0d8013b3388ae39e82e26f852c735d5", "javaDistribution": "Eclipse Temurin", "javaVersion": "17.0.19+10", "javaArchiveSHA256": "8fa1eff40bb637a33613b2ccb8b12c70dc3661cc22cf8e784943715769a05336", "bridgeClass": "org.swifttla.conformance.LosslessStateWriter", "bridgeSourceSHA256": "f921b202205dde3d34e626f7801676cc0635de58f503c3dddd3affcc893532ee", "bridgeBinarySHA256": "a50ae51e9c540a3c0eb9386b05bb0c0f677cefa62bcfdc48545c6046ccb12d64" },
+      "finiteBounds": { "summary": "One Boolean-like integer variable, three reachable states, and stuttering.", "limits": { "states": 3, "variables": 1 } },
+      "semanticCitations": ["Verification/TemporalSymmetryConformance/fixtures/temporal/TemporalMatrix.tla: AlwaysEventuallyP, Spec"],
+      "sourceInput": { "path": "Verification/TemporalSymmetryConformance/fixtures/temporal/TemporalMatrix.tla", "sha256": "a7364faca5a0316660f0de57a962453643f47f80895d1e0c0be03f9d6420d7c5" },
+      "configuration": { "property": "AlwaysEventuallyP", "fairness": "none", "fairnessActions": [], "symmetryEnabled": false }, "expectedOutcome": "exact"
+    },
+    {
+      "id": "temporal-eventually-always-weak", "kind": "temporal", "swiftSpec": "TemporalMatrix",
+      "provenance": { "caseID": "temporal-eventually-always-weak", "moduleSHA256": "a7364faca5a0316660f0de57a962453643f47f80895d1e0c0be03f9d6420d7c5", "cfgSHA256": "23ca7039e412176b2f97095e3abae6b751f28788edc21d239bab270973b2cfe0", "argumentsSHA256": "5a29989b077aadf61edf04f0b0cc435c5f9ef27fe0b75daa01cb703ee9ce89b5", "tlcTag": "v1.8.0", "tlcCommit": "30cc3601321c3fc02e044d0ecb5c58d8921e18df", "tlcJarSHA256": "e22f8ffb4bacdea0a871f444dd94fe5fb0d8013b3388ae39e82e26f852c735d5", "javaDistribution": "Eclipse Temurin", "javaVersion": "17.0.19+10", "javaArchiveSHA256": "8fa1eff40bb637a33613b2ccb8b12c70dc3661cc22cf8e784943715769a05336", "bridgeClass": "org.swifttla.conformance.LosslessStateWriter", "bridgeSourceSHA256": "f921b202205dde3d34e626f7801676cc0635de58f503c3dddd3affcc893532ee", "bridgeBinarySHA256": "a50ae51e9c540a3c0eb9386b05bb0c0f677cefa62bcfdc48545c6046ccb12d64" },
+      "finiteBounds": { "summary": "One Boolean-like integer variable, three reachable states, and weak-fairness stuttering boundary.", "limits": { "states": 3, "variables": 1 } },
+      "semanticCitations": ["Verification/TemporalSymmetryConformance/fixtures/temporal/TemporalMatrix.tla: EventuallyAlwaysP, WFSpec"],
+      "sourceInput": { "path": "Verification/TemporalSymmetryConformance/fixtures/temporal/TemporalMatrix.tla", "sha256": "a7364faca5a0316660f0de57a962453643f47f80895d1e0c0be03f9d6420d7c5" },
+      "configuration": { "property": "EventuallyAlwaysP", "fairness": "weak", "fairnessActions": ["A"], "symmetryEnabled": false }, "expectedOutcome": "exact"
+    },
+    {
+      "id": "temporal-leads-to-strong", "kind": "temporal", "swiftSpec": "TemporalMatrix",
+      "provenance": { "caseID": "temporal-leads-to-strong", "moduleSHA256": "a7364faca5a0316660f0de57a962453643f47f80895d1e0c0be03f9d6420d7c5", "cfgSHA256": "c8deeb0299dcd48b5641afa090c19d4f2b62469f7ea2063c6128413e8c7bff2f", "argumentsSHA256": "5a29989b077aadf61edf04f0b0cc435c5f9ef27fe0b75daa01cb703ee9ce89b5", "tlcTag": "v1.8.0", "tlcCommit": "30cc3601321c3fc02e044d0ecb5c58d8921e18df", "tlcJarSHA256": "e22f8ffb4bacdea0a871f444dd94fe5fb0d8013b3388ae39e82e26f852c735d5", "javaDistribution": "Eclipse Temurin", "javaVersion": "17.0.19+10", "javaArchiveSHA256": "8fa1eff40bb637a33613b2ccb8b12c70dc3661cc22cf8e784943715769a05336", "bridgeClass": "org.swifttla.conformance.LosslessStateWriter", "bridgeSourceSHA256": "f921b202205dde3d34e626f7801676cc0635de58f503c3dddd3affcc893532ee", "bridgeBinarySHA256": "a50ae51e9c540a3c0eb9386b05bb0c0f677cefa62bcfdc48545c6046ccb12d64" },
+      "finiteBounds": { "summary": "One Boolean-like integer variable, three reachable states, and strong-fairness boundary.", "limits": { "states": 3, "variables": 1 } },
+      "semanticCitations": ["Verification/TemporalSymmetryConformance/fixtures/temporal/TemporalMatrix.tla: LeadsToPQ, SFSpec"],
+      "sourceInput": { "path": "Verification/TemporalSymmetryConformance/fixtures/temporal/TemporalMatrix.tla", "sha256": "a7364faca5a0316660f0de57a962453643f47f80895d1e0c0be03f9d6420d7c5" },
+      "configuration": { "property": "LeadsToPQ", "fairness": "strong", "fairnessActions": ["A"], "symmetryEnabled": false, "allowsImplicitStuttering": true }, "expectedOutcome": "exact"
+    },
+    {
+      "id": "temporal-weak-fairness-boundary", "kind": "temporal", "swiftSpec": "TemporalMatrix",
+      "provenance": { "caseID": "temporal-weak-fairness-boundary", "moduleSHA256": "a7364faca5a0316660f0de57a962453643f47f80895d1e0c0be03f9d6420d7c5", "cfgSHA256": "853eb3d1ca41e0e583656b6f847cced32caf6d2ad5932c67cf445285d2a98591", "argumentsSHA256": "5a29989b077aadf61edf04f0b0cc435c5f9ef27fe0b75daa01cb703ee9ce89b5", "tlcTag": "v1.8.0", "tlcCommit": "30cc3601321c3fc02e044d0ecb5c58d8921e18df", "tlcJarSHA256": "e22f8ffb4bacdea0a871f444dd94fe5fb0d8013b3388ae39e82e26f852c735d5", "javaDistribution": "Eclipse Temurin", "javaVersion": "17.0.19+10", "javaArchiveSHA256": "8fa1eff40bb637a33613b2ccb8b12c70dc3661cc22cf8e784943715769a05336", "bridgeClass": "org.swifttla.conformance.LosslessStateWriter", "bridgeSourceSHA256": "f921b202205dde3d34e626f7801676cc0635de58f503c3dddd3affcc893532ee", "bridgeBinarySHA256": "a50ae51e9c540a3c0eb9386b05bb0c0f677cefa62bcfdc48545c6046ccb12d64" },
+      "finiteBounds": { "summary": "One Boolean-like integer variable, three reachable states, and weak-fairness subcycle boundary.", "limits": { "states": 3, "variables": 1 } },
+      "semanticCitations": ["Verification/TemporalSymmetryConformance/fixtures/temporal/TemporalMatrix.tla: AlwaysEventuallyP, WFSpec"],
+      "sourceInput": { "path": "Verification/TemporalSymmetryConformance/fixtures/temporal/TemporalMatrix.tla", "sha256": "a7364faca5a0316660f0de57a962453643f47f80895d1e0c0be03f9d6420d7c5" },
+      "configuration": { "property": "AlwaysEventuallyP", "fairness": "weak", "fairnessActions": ["A"], "symmetryEnabled": false }, "expectedOutcome": "exact"
+    },
+    {
+      "id": "temporal-strong-fairness-boundary", "kind": "temporal", "swiftSpec": "TemporalMatrix",
+      "provenance": { "caseID": "temporal-strong-fairness-boundary", "moduleSHA256": "a7364faca5a0316660f0de57a962453643f47f80895d1e0c0be03f9d6420d7c5", "cfgSHA256": "05d3a2c0f32e7972674019f06359bad6c331186f4dc323c66306042b2b058d29", "argumentsSHA256": "5a29989b077aadf61edf04f0b0cc435c5f9ef27fe0b75daa01cb703ee9ce89b5", "tlcTag": "v1.8.0", "tlcCommit": "30cc3601321c3fc02e044d0ecb5c58d8921e18df", "tlcJarSHA256": "e22f8ffb4bacdea0a871f444dd94fe5fb0d8013b3388ae39e82e26f852c735d5", "javaDistribution": "Eclipse Temurin", "javaVersion": "17.0.19+10", "javaArchiveSHA256": "8fa1eff40bb637a33613b2ccb8b12c70dc3661cc22cf8e784943715769a05336", "bridgeClass": "org.swifttla.conformance.LosslessStateWriter", "bridgeSourceSHA256": "f921b202205dde3d34e626f7801676cc0635de58f503c3dddd3affcc893532ee", "bridgeBinarySHA256": "a50ae51e9c540a3c0eb9386b05bb0c0f677cefa62bcfdc48545c6046ccb12d64" },
+      "finiteBounds": { "summary": "One Boolean-like integer variable, three reachable states, and strong-fairness subcycle boundary.", "limits": { "states": 3, "variables": 1 } },
+      "semanticCitations": ["Verification/TemporalSymmetryConformance/fixtures/temporal/TemporalMatrix.tla: AlwaysEventuallyP, SFSpec"],
+      "sourceInput": { "path": "Verification/TemporalSymmetryConformance/fixtures/temporal/TemporalMatrix.tla", "sha256": "a7364faca5a0316660f0de57a962453643f47f80895d1e0c0be03f9d6420d7c5" },
+      "configuration": { "property": "AlwaysEventuallyP", "fairness": "strong", "fairnessActions": ["A"], "symmetryEnabled": false, "allowsImplicitStuttering": true }, "expectedOutcome": "exact"
+    },
+    {
+      "id": "symmetry-single-collection-scope-2", "kind": "symmetry", "swiftSpec": "SymmetricCollectionScope2",
+      "provenance": { "caseID": "symmetry-single-collection-scope-2", "moduleSHA256": "0cff46d689a1c95800f95f77a271b13387508dde420b98c282420034f849cb04", "cfgSHA256": "0faf90961fa5e0b47c2131071e82aaac38dcb82a09efe9a9c24ab41332533924", "argumentsSHA256": "5a29989b077aadf61edf04f0b0cc435c5f9ef27fe0b75daa01cb703ee9ce89b5", "tlcTag": "v1.8.0", "tlcCommit": "30cc3601321c3fc02e044d0ecb5c58d8921e18df", "tlcJarSHA256": "e22f8ffb4bacdea0a871f444dd94fe5fb0d8013b3388ae39e82e26f852c735d5", "javaDistribution": "Eclipse Temurin", "javaVersion": "17.0.19+10", "javaArchiveSHA256": "8fa1eff40bb637a33613b2ccb8b12c70dc3661cc22cf8e784943715769a05336", "bridgeClass": "org.swifttla.conformance.LosslessStateWriter", "bridgeSourceSHA256": "f921b202205dde3d34e626f7801676cc0635de58f503c3dddd3affcc893532ee", "bridgeBinarySHA256": "a50ae51e9c540a3c0eb9386b05bb0c0f677cefa62bcfdc48545c6046ccb12d64" },
+      "finiteBounds": { "summary": "One binary-valued SymmetricCollection with exactly two opaque members.", "limits": { "collections": 1, "scope": 2, "values": 2 } },
+      "semanticCitations": ["Verification/TemporalSymmetryConformance/fixtures/symmetry/SymmetricCollection.tla: Init, Choose, Next"],
+      "sourceInput": { "path": "Verification/TemporalSymmetryConformance/fixtures/symmetry/SymmetricCollection.tla", "sha256": "0cff46d689a1c95800f95f77a271b13387508dde420b98c282420034f849cb04" },
+      "configuration": { "fairnessActions": [], "symmetryCollection": "Members", "symmetryScope": 2, "symmetryEnabled": true }, "expectedOutcome": "exact"
+    },
+    {
+      "id": "symmetry-single-collection-scope-3", "kind": "symmetry", "swiftSpec": "SymmetricCollectionScope3",
+      "provenance": { "caseID": "symmetry-single-collection-scope-3", "moduleSHA256": "0cff46d689a1c95800f95f77a271b13387508dde420b98c282420034f849cb04", "cfgSHA256": "c9c19758440c0b08ddcfa921af30986c2022ccf5ffafa3f120b2ae75c920cbad", "argumentsSHA256": "5a29989b077aadf61edf04f0b0cc435c5f9ef27fe0b75daa01cb703ee9ce89b5", "tlcTag": "v1.8.0", "tlcCommit": "30cc3601321c3fc02e044d0ecb5c58d8921e18df", "tlcJarSHA256": "e22f8ffb4bacdea0a871f444dd94fe5fb0d8013b3388ae39e82e26f852c735d5", "javaDistribution": "Eclipse Temurin", "javaVersion": "17.0.19+10", "javaArchiveSHA256": "8fa1eff40bb637a33613b2ccb8b12c70dc3661cc22cf8e784943715769a05336", "bridgeClass": "org.swifttla.conformance.LosslessStateWriter", "bridgeSourceSHA256": "f921b202205dde3d34e626f7801676cc0635de58f503c3dddd3affcc893532ee", "bridgeBinarySHA256": "a50ae51e9c540a3c0eb9386b05bb0c0f677cefa62bcfdc48545c6046ccb12d64" },
+      "finiteBounds": { "summary": "One binary-valued SymmetricCollection with exactly three opaque members.", "limits": { "collections": 1, "scope": 3, "values": 2 } },
+      "semanticCitations": ["Verification/TemporalSymmetryConformance/fixtures/symmetry/SymmetricCollection.tla: Init, Choose, Next"],
+      "sourceInput": { "path": "Verification/TemporalSymmetryConformance/fixtures/symmetry/SymmetricCollection.tla", "sha256": "0cff46d689a1c95800f95f77a271b13387508dde420b98c282420034f849cb04" },
+      "configuration": { "fairnessActions": [], "symmetryCollection": "Members", "symmetryScope": 3, "symmetryEnabled": true }, "expectedOutcome": "exact"
+    },
+    {
+      "id": "symmetry-single-collection-scope-4", "kind": "symmetry", "swiftSpec": "SymmetricCollectionScope4",
+      "provenance": { "caseID": "symmetry-single-collection-scope-4", "moduleSHA256": "0cff46d689a1c95800f95f77a271b13387508dde420b98c282420034f849cb04", "cfgSHA256": "d5aec1ad0d38c5c7439d206882974ac5f63edf5e2ede1af0c632351bce6b2b71", "argumentsSHA256": "5a29989b077aadf61edf04f0b0cc435c5f9ef27fe0b75daa01cb703ee9ce89b5", "tlcTag": "v1.8.0", "tlcCommit": "30cc3601321c3fc02e044d0ecb5c58d8921e18df", "tlcJarSHA256": "e22f8ffb4bacdea0a871f444dd94fe5fb0d8013b3388ae39e82e26f852c735d5", "javaDistribution": "Eclipse Temurin", "javaVersion": "17.0.19+10", "javaArchiveSHA256": "8fa1eff40bb637a33613b2ccb8b12c70dc3661cc22cf8e784943715769a05336", "bridgeClass": "org.swifttla.conformance.LosslessStateWriter", "bridgeSourceSHA256": "f921b202205dde3d34e626f7801676cc0635de58f503c3dddd3affcc893532ee", "bridgeBinarySHA256": "a50ae51e9c540a3c0eb9386b05bb0c0f677cefa62bcfdc48545c6046ccb12d64" },
+      "finiteBounds": { "summary": "One binary-valued SymmetricCollection with exactly four opaque members.", "limits": { "collections": 1, "scope": 4, "values": 2 } },
+      "semanticCitations": ["Verification/TemporalSymmetryConformance/fixtures/symmetry/SymmetricCollection.tla: Init, Choose, Next"],
+      "sourceInput": { "path": "Verification/TemporalSymmetryConformance/fixtures/symmetry/SymmetricCollection.tla", "sha256": "0cff46d689a1c95800f95f77a271b13387508dde420b98c282420034f849cb04" },
+      "configuration": { "fairnessActions": [], "symmetryCollection": "Members", "symmetryScope": 4, "symmetryEnabled": true }, "expectedOutcome": "exact"
+    },
+    {
+      "id": "symmetry-scope-5-unsupported", "kind": "symmetry", "swiftSpec": "SymmetricCollectionScope5", 
+      "provenance": { "caseID": "symmetry-scope-5-unsupported", "moduleSHA256": "0cff46d689a1c95800f95f77a271b13387508dde420b98c282420034f849cb04", "cfgSHA256": "a923b3793d24c8af78739b5a1eaf10af9a023d954faeb56f24802938ba71b069", "argumentsSHA256": "5a29989b077aadf61edf04f0b0cc435c5f9ef27fe0b75daa01cb703ee9ce89b5", "tlcTag": "v1.8.0", "tlcCommit": "30cc3601321c3fc02e044d0ecb5c58d8921e18df", "tlcJarSHA256": "e22f8ffb4bacdea0a871f444dd94fe5fb0d8013b3388ae39e82e26f852c735d5", "javaDistribution": "Eclipse Temurin", "javaVersion": "17.0.19+10", "javaArchiveSHA256": "8fa1eff40bb637a33613b2ccb8b12c70dc3661cc22cf8e784943715769a05336", "bridgeClass": "org.swifttla.conformance.LosslessStateWriter", "bridgeSourceSHA256": "f921b202205dde3d34e626f7801676cc0635de58f503c3dddd3affcc893532ee", "bridgeBinarySHA256": "a50ae51e9c540a3c0eb9386b05bb0c0f677cefa62bcfdc48545c6046ccb12d64" },
+      "finiteBounds": { "summary": "One binary-valued SymmetricCollection with five opaque members, retained only as an unsupported boundary.", "limits": { "collections": 1, "scope": 5, "values": 2 } },
+      "semanticCitations": ["Verification/TemporalSymmetryConformance/fixtures/symmetry/SymmetricCollection.tla: Init, Choose, Next"],
+      "sourceInput": { "path": "Verification/TemporalSymmetryConformance/fixtures/symmetry/SymmetricCollection.tla", "sha256": "0cff46d689a1c95800f95f77a271b13387508dde420b98c282420034f849cb04" },
+      "configuration": { "fairnessActions": [], "symmetryCollection": "Members", "symmetryScope": 5, "symmetryEnabled": true }, "expectedOutcome": "unavailable"
+    }
+  ]
+}
