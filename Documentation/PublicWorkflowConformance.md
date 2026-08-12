@@ -35,7 +35,8 @@ passes `--hosted-ci`. That explicit option changes the report authority from
 broader admission. Setting GitHub-looking environment variables on a local run
 does not select hosted-candidate mode.
 
-The command uses `xcodebuild` for the package, annotation, and Apple-platform
+The command uses `xcodebuild` for the root public library, annotation, and
+declared macOS-platform
 checks. It validates the project-relative paths and SHA-256 identities in the
 [runner register](../Verification/PublicWorkflowConformance/runner.json),
 [annotation inventory](../Tests/Fixtures/PublicWorkflowConformance/inventory.json),
@@ -50,7 +51,7 @@ Missing or changed bytes do not silently reuse an older result.
 | Parser and builder | The same bounded counter produces exact initial/reachable states, labeled/enabled transitions, properties, deadlocks, failures, and diagnostics. | One integer variable and two reachable states. A source/configuration mismatch must remain a `difference`. |
 | Generated behavior | The builder and generated counter agree on the initial state, two reachable states, the `advance` transition, `withinBounds`, and the terminal deadlock. | `maxStates: 2`. Intentional transition mismatch, evaluation failure, and evaluation unavailability must remain visible differences. |
 | Annotations | Valid and invalid external packages for `@TLAModel`, `@TLAActor`, and `@TLAObservable` run with their declared Xcode schemes. | Each valid package must build; each invalid package must fail with the declared `withinBounds` invariant diagnostic. These fixtures do not prove every model accepted by those annotations. |
-| Nested package and platforms | `Packages/SwiftTLAVerified` runs the `SwiftTLAVerified-Package` scheme. | macOS runs package tests. Generic iOS, Mac Catalyst, tvOS, and watchOS build the `SwiftTLAVerified` library target. watchOS deliberately exposes the camera capture, playback, and writer path as unavailable while retaining the portable library surface; that unavailable capability is not a platform-build failure or a media-support claim. A failed destination is a difference; a missing tool or destination is unavailable. Success applies only to the recorded package tree, command, Xcode toolchain, SDK, and destination. |
+| Public library platform | The root `SwiftTLA` product builds through the `SwiftTLA-Package` scheme on macOS. | The recorded command builds only the public `SwiftTLA` library target for the declared macOS destination. The root package declares macOS support, so this check makes no iOS, Mac Catalyst, tvOS, watchOS, demo, capture, playback, or writer claim. A failed destination is a difference; a missing tool or destination is unavailable. Success applies only to the recorded package tree, command, Xcode toolchain, SDK, and destination. |
 
 The mismatch and failure cases prove that the runner detects those declared
 conditions. They are not supported behaviors and do not enlarge the positive

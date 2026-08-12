@@ -3,14 +3,14 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-DEFAULT_PACKAGE="$PROJECT_ROOT/Packages/SwiftTLAVerified"
+DEFAULT_PACKAGE="$PROJECT_ROOT"
 OUTPUT=""
 CONTEXT=""
 HOSTED_CI=false
 PACKAGE_PATH="${PUBLIC_WORKFLOW_PLATFORM_PACKAGE_PATH:-$DEFAULT_PACKAGE}"
 XCODEBUILD="${PUBLIC_WORKFLOW_PLATFORM_XCODEBUILD:-xcodebuild}"
-SCHEME="${PUBLIC_WORKFLOW_PLATFORM_SCHEME:-SwiftTLAVerified-Package}"
-MATRIX="${PUBLIC_WORKFLOW_PLATFORM_MATRIX:-macos|macosx|platform=macOS|test|;ios|iphoneos|generic/platform=iOS|build|SwiftTLAVerified;mac-catalyst|macosx|platform=macOS,variant=Mac Catalyst|build|SwiftTLAVerified;tvos|appletvos|generic/platform=tvOS|build|SwiftTLAVerified;watchos|watchos|generic/platform=watchOS|build|SwiftTLAVerified}"
+SCHEME="${PUBLIC_WORKFLOW_PLATFORM_SCHEME:-SwiftTLA-Package}"
+MATRIX="${PUBLIC_WORKFLOW_PLATFORM_MATRIX:-macos|macosx|platform=macOS|build|SwiftTLA}"
 
 usage() {
     echo "Usage: $0 --output <directory> --context <binding-context.json> [--hosted-ci]" >&2
@@ -29,7 +29,11 @@ tree_digest() {
     fi
     (
         cd "$root"
-        find . -type f -not -path './.build/*' -not -path './.swiftpm/*' -print0 \
+        {
+            [ -f Package.swift ] && printf '%s\0' Package.swift
+            [ -f Package.resolved ] && printf '%s\0' Package.resolved
+            [ -d Sources/SwiftTLA ] && find Sources/SwiftTLA -type f -print0
+        } \
             | LC_ALL=C sort -z \
             | while IFS= read -r -d '' path; do
                 printf '%s %s\n' "$(sha256 "$path")" "$path"

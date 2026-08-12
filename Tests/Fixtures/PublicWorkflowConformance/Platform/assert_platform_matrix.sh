@@ -15,14 +15,14 @@ import sys
 digest = "a" * 64
 root = pathlib.Path(sys.argv[2])
 source_path = "Tests/Fixtures/PublicWorkflowConformance/Platform/assert_platform_matrix.sh"
-configuration_path = "Packages/SwiftTLAVerified/Package.swift"
+configuration_path = "Package.swift"
 source_digest = hashlib.sha256((root / source_path).read_bytes()).hexdigest()
 configuration_digest = hashlib.sha256((root / configuration_path).read_bytes()).hexdigest()
 provenance = {
-    "caseID": "nested-package-macos",
+    "caseID": "public-library-macos",
     "moduleSHA256": source_digest,
     "cfgSHA256": configuration_digest,
-    "argumentsSHA256": hashlib.sha256(json.dumps([["xcodebuild", "-scheme", "SwiftTLAVerified-Package", "-sdk", "macosx", "-destination", "platform=macOS", "test"]], separators=(",", ":")).encode()).hexdigest(),
+    "argumentsSHA256": hashlib.sha256(json.dumps([["xcodebuild", "-scheme", "SwiftTLA-Package", "-target", "SwiftTLA", "-sdk", "macosx", "-destination", "platform=macOS", "build"]], separators=(",", ":")).encode()).hexdigest(),
     "tlcTag": "v1.8.0",
     "tlcCommit": "30cc3601321c3fc02e044d0ecb5c58d8921e18df",
     "tlcJarSHA256": digest,
@@ -34,7 +34,7 @@ provenance = {
     "bridgeBinarySHA256": digest,
 }
 value = {
-    "caseID": "nested-package-macos",
+    "caseID": "public-library-macos",
     "gateRunID": "11111111-1111-4111-8111-111111111111",
     "sourceInput": {"path": source_path, "sha256": source_digest},
     "configuration": {"path": configuration_path, "sha256": configuration_digest},
@@ -74,7 +74,7 @@ assert_result() {
       and (.results[0].fixture.path | startswith(".build/"))
       and (.results[0].stdout.path | startswith(".build/"))
       and (.results[0].stderr.path | startswith(".build/"))
-      and .results[0].correlation.caseID == "nested-package-macos"
+      and .results[0].correlation.caseID == "public-library-macos"
       and .results[0].correlation.gateRunID == "11111111-1111-4111-8111-111111111111"
       and .results[0].fixtureBinding.evidence == .results[0].fixture
       and .results[0].stdoutBinding.evidence == .results[0].stdout
@@ -85,7 +85,7 @@ assert_result() {
     local fixture_path
     fixture_path="$(jq -r '.results[0].fixture.path' "$report")"
     jq -e '
-      ((.workingDirectory | test("^(Packages|\\.build)/[^.].*")) or (.workingDirectory | startswith("/")))
+      ((.workingDirectory == ".") or (.workingDirectory | startswith(".build/")) or (.workingDirectory | startswith("/")))
       and (.workingDirectory | contains("../") | not)
       and (.derivedDataPath | startswith(".build/"))
       and (.command | contains("xcodebuild"))
@@ -93,7 +93,7 @@ assert_result() {
     ' "$ROOT/$fixture_path" >/dev/null
 }
 
-single_platform='macos|macosx|platform=macOS|test'
+single_platform='macos|macosx|platform=macOS|build|SwiftTLA'
 expect_exit 2 env PUBLIC_WORKFLOW_PLATFORM_PACKAGE_PATH="$TMP/no-package" \
     PUBLIC_WORKFLOW_PLATFORM_MATRIX="$single_platform" "$RUNNER" --output "$TMP/missing-package" --context "$context"
 assert_result "$TMP/missing-package/platform-matrix.json" unavailable missing-package-path

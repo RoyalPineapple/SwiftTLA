@@ -167,26 +167,22 @@ public struct PublicWorkflowConformanceRunnerV1: Sendable {
   private func platformCheck(root: URL, output: URL, gateRunID: UUID, hostedCI: Bool) throws -> PublicWorkflowDiagnosticCheckV1 {
     try FileManager.default.createDirectory(at: output, withIntermediateDirectories: true)
     let script = root.appendingPathComponent("scripts/run_public_workflow_platform_matrix.sh")
-    let package = root.appendingPathComponent("Packages/SwiftTLAVerified/Package.resolved")
+    let package = root.appendingPathComponent("Package.resolved")
     let source = try reference(for: script, beneath: root)
     let configuration = try reference(for: package, beneath: root)
     let commands: [[String]] = [
-      ["xcodebuild", "-scheme", "SwiftTLAVerified-Package", "-sdk", "macosx", "-destination", "platform=macOS", "test"],
-      ["xcodebuild", "-scheme", "SwiftTLAVerified-Package", "-target", "SwiftTLAVerified", "-sdk", "iphoneos", "-destination", "generic/platform=iOS", "build"],
-      ["xcodebuild", "-scheme", "SwiftTLAVerified-Package", "-target", "SwiftTLAVerified", "-sdk", "macosx", "-destination", "platform=macOS,variant=Mac Catalyst", "build"],
-      ["xcodebuild", "-scheme", "SwiftTLAVerified-Package", "-target", "SwiftTLAVerified", "-sdk", "appletvos", "-destination", "generic/platform=tvOS", "build"],
-      ["xcodebuild", "-scheme", "SwiftTLAVerified-Package", "-target", "SwiftTLAVerified", "-sdk", "watchos", "-destination", "generic/platform=watchOS", "build"]
+      ["xcodebuild", "-scheme", "SwiftTLA-Package", "-target", "SwiftTLA", "-sdk", "macosx", "-destination", "platform=macOS", "build"]
     ]
     let arguments = try JSONSerialization.data(
       withJSONObject: commands, options: [.sortedKeys, .withoutEscapingSlashes])
     let contextURL = output.appendingPathComponent("binding-context.json")
     let context: [String: Any] = [
-      "caseID": "nested-package-macos",
+      "caseID": "public-library-macos",
       "gateRunID": gateRunID.uuidString.lowercased(),
       "sourceInput": ["path": source.path, "sha256": source.sha256],
       "configuration": ["path": configuration.path, "sha256": configuration.sha256],
       "provenance": [
-        "caseID": "nested-package-macos", "moduleSHA256": source.sha256, "cfgSHA256": configuration.sha256,
+        "caseID": "public-library-macos", "moduleSHA256": source.sha256, "cfgSHA256": configuration.sha256,
         "argumentsSHA256": SHA256V1.hex(arguments),
         "tlcTag": "not-applicable-platform-build", "tlcCommit": "not-applicable-platform-build", "tlcJarSHA256": source.sha256,
         "javaDistribution": "not-applicable-platform-build", "javaVersion": "not-applicable-platform-build", "javaArchiveSHA256": source.sha256,
@@ -213,7 +209,7 @@ public struct PublicWorkflowConformanceRunnerV1: Sendable {
         let value = try JSONSerialization.jsonObject(with: try verified(reference, beneath: root)) as? [String: Any]
         guard let correlation = value?["correlation"] as? [String: Any],
               correlation["gateRunID"] as? String == gateRunID.uuidString.lowercased(),
-              correlation["caseID"] as? String == "nested-package-macos",
+              correlation["caseID"] as? String == "public-library-macos",
               let status = value?["status"] as? String else {
           throw PublicWorkflowGovernanceErrorV1.invalidField(record: reference.path, field: "aggregate platform correlation")
         }
@@ -228,12 +224,12 @@ public struct PublicWorkflowConformanceRunnerV1: Sendable {
       case .none: status = .unavailable
       case .some: status = process.terminationStatus == 0 ? .matched : .differed
       }
-      return PublicWorkflowDiagnosticCheckV1(id: "nested-package-platform-matrix", command: "scripts/run_public_workflow_platform_matrix.sh",
+      return PublicWorkflowDiagnosticCheckV1(id: "public-library-platform-matrix", command: "scripts/run_public_workflow_platform_matrix.sh",
         status: status, expectedOutcome: .exact, actualOutcome: actual,
         evidence: try [reference(for: contextURL, beneath: root), reference(for: stdout, beneath: root), reference(for: stderr, beneath: root)] + retained,
         diagnostic: status == .matched ? nil : "platform matrix exited \(process.terminationStatus)")
     } catch {
-      return PublicWorkflowDiagnosticCheckV1(id: "nested-package-platform-matrix", command: "scripts/run_public_workflow_platform_matrix.sh",
+      return PublicWorkflowDiagnosticCheckV1(id: "public-library-platform-matrix", command: "scripts/run_public_workflow_platform_matrix.sh",
         status: .unavailable, expectedOutcome: .exact, actualOutcome: nil,
         evidence: try [reference(for: contextURL, beneath: root), reference(for: stdout, beneath: root), reference(for: stderr, beneath: root)], diagnostic: String(describing: error))
     }

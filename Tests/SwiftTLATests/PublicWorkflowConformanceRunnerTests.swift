@@ -53,7 +53,7 @@ struct PublicWorkflowConformanceRunnerTests {
     if case .blocked = report.finalExitClass {} else { Issue.record("completed difference must return exit 1") }
   }
 
-  @Test("public-workflow CLI uses one slash-preserving platform command digest and retains 0, 1, and 2 reports")
+  @Test("public-workflow CLI binds the declared platform command digest and retains 0, 1, and 2 reports")
   func cliUsesCanonicalPlatformCommandDigestAndRetainsExitClasses() throws {
     let root = try packageRoot()
     let temporary = root.appending(path: ".build/PublicWorkflowCLIRunner-\(UUID())")
@@ -72,37 +72,31 @@ struct PublicWorkflowConformanceRunnerTests {
       #expect(result == exitCode)
       let report = try JSONDecoder().decode(PublicWorkflowDiagnosticReportV1.self, from: Data(contentsOf: output.appending(path: "support-admission.json")))
       #expect(report.checks.contains(where: { $0.id == "annotation-fixtures" }))
-      #expect(report.checks.contains(where: { $0.id == "nested-package-platform-matrix" }))
+      #expect(report.checks.contains(where: { $0.id == "public-library-platform-matrix" }))
       #expect(report.finalExitClass.rawValue == expectedExit)
       let retained = try JSONDecoder().decode(PublicWorkflowDiagnosticReportV1.self, from: Data(contentsOf: output.appending(path: "runs/\(report.runID.uuidString.lowercased())/support-admission.json")))
       #expect(retained.runID == report.runID)
       #expect(retained.finalExitClass.rawValue == expectedExit)
 
       if mode == "platform-failure" {
-        let platform = try #require(report.checks.first(where: { $0.id == "nested-package-platform-matrix" }))
+        let platform = try #require(report.checks.first(where: { $0.id == "public-library-platform-matrix" }))
         #expect(platform.status == .differed)
         #expect(platform.actualOutcome == .difference)
         #expect(!platform.evidence.isEmpty)
       }
 
       let context = try #require(report.checks
-        .first(where: { $0.id == "nested-package-platform-matrix" })?
+        .first(where: { $0.id == "public-library-platform-matrix" })?
         .evidence.first(where: { $0.path.hasSuffix("binding-context.json") }))
       let contextJSON = try #require(JSONSerialization.jsonObject(
         with: Data(contentsOf: root.appending(path: context.path))) as? [String: Any])
       let provenance = try #require(contextJSON["provenance"] as? [String: Any])
       let commands: [[String]] = [
-        ["xcodebuild", "-scheme", "SwiftTLAVerified-Package", "-sdk", "macosx", "-destination", "platform=macOS", "test"],
-        ["xcodebuild", "-scheme", "SwiftTLAVerified-Package", "-target", "SwiftTLAVerified", "-sdk", "iphoneos", "-destination", "generic/platform=iOS", "build"],
-        ["xcodebuild", "-scheme", "SwiftTLAVerified-Package", "-target", "SwiftTLAVerified", "-sdk", "macosx", "-destination", "platform=macOS,variant=Mac Catalyst", "build"],
-        ["xcodebuild", "-scheme", "SwiftTLAVerified-Package", "-target", "SwiftTLAVerified", "-sdk", "appletvos", "-destination", "generic/platform=tvOS", "build"],
-        ["xcodebuild", "-scheme", "SwiftTLAVerified-Package", "-target", "SwiftTLAVerified", "-sdk", "watchos", "-destination", "generic/platform=watchOS", "build"]
+        ["xcodebuild", "-scheme", "SwiftTLA-Package", "-target", "SwiftTLA", "-sdk", "macosx", "-destination", "platform=macOS", "build"]
       ]
       let canonical = try JSONSerialization.data(
         withJSONObject: commands, options: [.sortedKeys, .withoutEscapingSlashes])
-      let escaped = try JSONSerialization.data(withJSONObject: commands, options: [.sortedKeys])
       #expect(provenance["argumentsSHA256"] as? String == SHA256V1.hex(canonical))
-      #expect(SHA256V1.hex(canonical) != SHA256V1.hex(escaped))
     }
   }
 
@@ -134,7 +128,7 @@ struct PublicWorkflowConformanceRunnerTests {
       "p4-generated-counter-evaluation-failed": .difference,
       "p4-generated-counter-evaluation-unavailable": .difference,
       "annotation-fixtures": .exact,
-      "nested-package-platform-matrix": .exact,
+      "public-library-platform-matrix": .exact,
     ]
     #expect(Dictionary(uniqueKeysWithValues: report.checks.map { ($0.id, $0.expectedOutcome) }) == expected)
     #expect(report.checks.allSatisfy { $0.status == .matched && $0.actualOutcome == $0.expectedOutcome && !$0.evidence.isEmpty })
@@ -241,7 +235,7 @@ struct PublicWorkflowConformanceRunnerTests {
     if [ "${PUBLIC_WORKFLOW_FAKE_MODE:-matched}" = "unavailable" ]; then exit 127; fi
     if [[ "$*" == *"Invalid"* ]]; then echo "Invariant 'withinBounds' violated"; exit 1; fi
     if [ "${PUBLIC_WORKFLOW_FAKE_MODE:-matched}" = "differed" ] && [[ "$*" == *"TLAModelValid"* ]]; then exit 1; fi
-    if [ "${PUBLIC_WORKFLOW_FAKE_MODE:-matched}" = "platform-failure" ] && [[ "$*" == *"SwiftTLAVerified-Package"* ]]; then echo "platform build failed"; exit 65; fi
+    if [ "${PUBLIC_WORKFLOW_FAKE_MODE:-matched}" = "platform-failure" ] && [[ "$*" == *"SwiftTLA-Package"* ]]; then echo "platform build failed"; exit 65; fi
     echo "Xcode 27.0"
     exit 0
     """.write(to: executable, atomically: true, encoding: .utf8)

@@ -5,7 +5,8 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/public-workflow-conformance.yml'
-      - 'Packages/SwiftTLAVerified/**'
+      - 'Package.swift'
+      - 'Package.resolved'
       - 'scripts/run_public_workflow_*'
       - 'Sources/SwiftTLA/**'
       - 'Sources/SwiftTLAPlugin/**'
@@ -19,7 +20,8 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/public-workflow-conformance.yml'
-      - 'Packages/SwiftTLAVerified/**'
+      - 'Package.swift'
+      - 'Package.resolved'
       - 'scripts/run_public_workflow_*'
       - 'Sources/SwiftTLA/**'
       - 'Sources/SwiftTLAPlugin/**'

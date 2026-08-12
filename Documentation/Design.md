@@ -45,8 +45,8 @@ The macro and package examples in this repository demonstrate API usage; they
 do not establish support for every accepted model. The separate [public
 workflow conformance](PublicWorkflowConformance.md) command retains bounded
 valid and invalid fixture results for `@TLAModel`, `@TLAActor`, and
-`@TLAObservable`, plus the exact named `SwiftTLAVerified-Package` platform
-matrix. Local output is diagnostic and explicit hosted output is candidate
+`@TLAObservable`, plus the exact named `SwiftTLA-Package` public-library macOS
+build. Local output is diagnostic and explicit hosted output is candidate
 evidence. `@TypedVar` is not release-facing or admitted, and `@TLAValidated`
 was removed because it had no implementation. The P4 report does not widen the
 finite core language claim in this document.

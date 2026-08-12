@@ -182,8 +182,8 @@ make public-workflow-release-check
 
 It checks the declared parser-builder and generated two-state counters, the
 valid/invalid `@TLAModel`, `@TLAActor`, and `@TLAObservable` fixtures, and the
-`SwiftTLAVerified-Package` matrix: macOS tests plus generic iOS, Mac Catalyst,
-tvOS, and watchOS builds. Exit `0` means those exact bounded checks matched;
+`SwiftTLA-Package` public-library build for the declared macOS destination.
+It makes no cross-platform or demo-product claim. Exit `0` means those exact bounded checks matched;
 exit `1` means a completed difference; exit `2` means unavailable or unsafe
 evaluation. A local report is diagnostic only. The checked-in GitHub workflow
 produces explicit hosted-candidate evidence and retains its logs and artifacts,

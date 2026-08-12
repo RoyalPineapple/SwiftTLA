@@ -37,7 +37,7 @@ struct PublicWorkflowPlatformMatrixTests {
       #expect(evidence.destination == "platform=macOS")
       #expect(evidence.command.contains("xcodebuild"))
       #expect(evidence.xcodeVersion == "Xcode Fake")
-      #expect(evidence.correlation.caseID == "nested-package-macos")
+      #expect(evidence.correlation.caseID == "public-library-macos")
       #expect(evidence.correlation.platformRunID != evidence.correlation.gateRunID)
       #expect(evidence.fixtureBinding.evidence == evidence.fixture)
       #expect(evidence.stdoutBinding.evidence == evidence.stdout)
@@ -61,20 +61,20 @@ struct PublicWorkflowPlatformMatrixTests {
     let digest = String(repeating: "a", count: 64)
     let root = try packageRoot()
     let sourcePath = "Tests/Fixtures/PublicWorkflowConformance/Platform/assert_platform_matrix.sh"
-    let configurationPath = "Packages/SwiftTLAVerified/Package.swift"
+    let configurationPath = "Package.swift"
     let sourceDigest = SHA256V1.hex(try Data(contentsOf: root.appendingPathComponent(sourcePath)))
     let configurationDigest = SHA256V1.hex(try Data(contentsOf: root.appendingPathComponent(configurationPath)))
     let source = try CoreEvidenceReferenceV1(path: sourcePath, sha256: sourceDigest)
     let configuration = try CoreEvidenceReferenceV1(path: configurationPath, sha256: configurationDigest)
     let provenance = try CoreDivergenceProvenanceV1(
-      caseID: "nested-package-macos", moduleSHA256: sourceDigest, cfgSHA256: configurationDigest,
-      argumentsSHA256: SHA256V1.hex(try JSONEncoder().encode([["xcodebuild", "-scheme", "SwiftTLAVerified-Package", "-sdk", "macosx", "-destination", "platform=macOS", "test"]])),
+      caseID: "public-library-macos", moduleSHA256: sourceDigest, cfgSHA256: configurationDigest,
+      argumentsSHA256: SHA256V1.hex(try JSONEncoder().encode([["xcodebuild", "-scheme", "SwiftTLA-Package", "-target", "SwiftTLA", "-sdk", "macosx", "-destination", "platform=macOS", "build"]])),
       tlcTag: "v1.8.0", tlcCommit: "30cc3601321c3fc02e044d0ecb5c58d8921e18df", tlcJarSHA256: digest,
       javaDistribution: "Eclipse Temurin", javaVersion: "17.0.19+10", javaArchiveSHA256: digest,
       bridgeClass: "org.swifttla.conformance.LosslessStateWriter", bridgeSourceSHA256: digest,
       bridgeBinarySHA256: digest)
     let context = BindingContext(
-      caseID: "nested-package-macos", gateRunID: UUID(uuidString: "11111111-1111-4111-8111-111111111111")!,
+      caseID: "public-library-macos", gateRunID: UUID(uuidString: "11111111-1111-4111-8111-111111111111")!,
       sourceInput: source, configuration: configuration, provenance: provenance)
     try JSONEncoder().encode(context).write(to: url)
     return url
@@ -106,7 +106,7 @@ struct PublicWorkflowPlatformMatrixTests {
     ]
     process.environment = ProcessInfo.processInfo.environment.merging([
       "PUBLIC_WORKFLOW_PLATFORM_XCODEBUILD": executable.path,
-      "PUBLIC_WORKFLOW_PLATFORM_MATRIX": "macos|macosx|platform=macOS|test",
+      "PUBLIC_WORKFLOW_PLATFORM_MATRIX": "macos|macosx|platform=macOS|build|SwiftTLA",
     ]) { _, replacement in replacement }
     let outputPipe = Pipe()
     process.standardOutput = outputPipe
