@@ -1,0 +1,124 @@
+{
+  "schema": "PublicWorkflowGeneratedBehaviorManifestV1",
+  "authority": "diagnosticOnly",
+  "fixtures": [
+    {
+      "id": "p4-generated-counter",
+      "sourceInput": { "path": "Sources/UpstreamParity/Conformance/PublicWorkflowGeneratedFixtureRegistry.swift", "sha256": "20aa8c32f54cc794882bc239ac608939708339633bd387c3d51481cfc71677da" },
+      "configuration": { "path": "Tests/Fixtures/PublicWorkflowConformance/Generated/counter.config.json", "sha256": "33e997b81c7c5a747954e00527e826ecdcefa8522d67ec4ce26829b177b3c51d" },
+      "semanticCitations": ["TLA+ Specifying Systems"],
+      "provenance": {
+        "caseID": "p4-generated-counter",
+        "moduleSHA256": "20aa8c32f54cc794882bc239ac608939708339633bd387c3d51481cfc71677da",
+        "cfgSHA256": "33e997b81c7c5a747954e00527e826ecdcefa8522d67ec4ce26829b177b3c51d",
+        "argumentsSHA256": "33e997b81c7c5a747954e00527e826ecdcefa8522d67ec4ce26829b177b3c51d",
+        "tlcTag": "not-applicable-generated-behavior-v1",
+        "tlcCommit": "not-applicable-generated-behavior-v1",
+        "tlcJarSHA256": "53a5c9190f96e11d5273ff6e1a47becbcedd0e83913d586ce3d4651bf1589638",
+        "javaDistribution": "not-applicable-generated-behavior-v1",
+        "javaVersion": "not-applicable-generated-behavior-v1",
+        "javaArchiveSHA256": "53a5c9190f96e11d5273ff6e1a47becbcedd0e83913d586ce3d4651bf1589638",
+        "bridgeClass": "SwiftTLA.PublicWorkflowGeneratedFixtureRegistryV1",
+        "bridgeSourceSHA256": "20aa8c32f54cc794882bc239ac608939708339633bd387c3d51481cfc71677da",
+        "bridgeBinarySHA256": "53a5c9190f96e11d5273ff6e1a47becbcedd0e83913d586ce3d4651bf1589638"
+      },
+      "builderEvidence": { "path": "Tests/Fixtures/PublicWorkflowConformance/Generated/builder-observation.json", "sha256": "48b9fb7e573a492763995175c1782fb78bf7313ea19b9b45973620edf1dce497" },
+      "generatedEvidence": { "path": "Tests/Fixtures/PublicWorkflowConformance/Generated/generated-observation.json", "sha256": "48b9fb7e573a492763995175c1782fb78bf7313ea19b9b45973620edf1dce497" },
+      "actionNames": ["advance"],
+      "maxStates": 2,
+      "expectedOutcome": "exact"
+    },
+    {
+      "id": "p4-generated-counter-intentional-mismatch",
+      "sourceInput": { "path": "Sources/UpstreamParity/Conformance/PublicWorkflowGeneratedFixtureRegistry.swift", "sha256": "20aa8c32f54cc794882bc239ac608939708339633bd387c3d51481cfc71677da" },
+      "configuration": { "path": "Tests/Fixtures/PublicWorkflowConformance/Generated/counter-mismatch.config.json", "sha256": "2b53bb1ca8d05a6b494e18c1a5aa043a8621291b9fa779c5bbaa632ebff44e82" },
+      "semanticCitations": ["TLA+ Specifying Systems"],
+      "provenance": {
+        "caseID": "p4-generated-counter-intentional-mismatch",
+        "moduleSHA256": "20aa8c32f54cc794882bc239ac608939708339633bd387c3d51481cfc71677da",
+        "cfgSHA256": "2b53bb1ca8d05a6b494e18c1a5aa043a8621291b9fa779c5bbaa632ebff44e82",
+        "argumentsSHA256": "2b53bb1ca8d05a6b494e18c1a5aa043a8621291b9fa779c5bbaa632ebff44e82",
+        "tlcTag": "not-applicable-generated-behavior-v1",
+        "tlcCommit": "not-applicable-generated-behavior-v1",
+        "tlcJarSHA256": "53a5c9190f96e11d5273ff6e1a47becbcedd0e83913d586ce3d4651bf1589638",
+        "javaDistribution": "not-applicable-generated-behavior-v1",
+        "javaVersion": "not-applicable-generated-behavior-v1",
+        "javaArchiveSHA256": "53a5c9190f96e11d5273ff6e1a47becbcedd0e83913d586ce3d4651bf1589638",
+        "bridgeClass": "SwiftTLA.PublicWorkflowGeneratedFixtureRegistryV1",
+        "bridgeSourceSHA256": "20aa8c32f54cc794882bc239ac608939708339633bd387c3d51481cfc71677da",
+        "bridgeBinarySHA256": "53a5c9190f96e11d5273ff6e1a47becbcedd0e83913d586ce3d4651bf1589638"
+      },
+      "builderEvidence": { "path": "Verification/PublicWorkflowConformance/Generated/builder-mismatch-observation.json", "sha256": "48b9fb7e573a492763995175c1782fb78bf7313ea19b9b45973620edf1dce497" },
+      "generatedEvidence": { "path": "Verification/PublicWorkflowConformance/Generated/generated-mismatch-observation.json", "sha256": "16f24c9cfb3ba9dd63988325552752dd1008e6045d3747e2c9a9cffc9120ba0f" },
+      "actionNames": ["advance"],
+      "maxStates": 2,
+      "expectedOutcome": "difference"
+    },
+    {
+      "id": "p4-generated-counter-evaluation-failed",
+      "sourceInput": { "path": "Sources/UpstreamParity/Conformance/PublicWorkflowGeneratedFixtureRegistry.swift", "sha256": "20aa8c32f54cc794882bc239ac608939708339633bd387c3d51481cfc71677da" },
+      "configuration": { "path": "Verification/PublicWorkflowConformance/Generated/counter-failed.config.json", "sha256": "8524bd9ab9b8be8a29195e1df4dd1c8e15cf2dd707b94208b1003ba8b23e7f0a" },
+      "semanticCitations": ["TLA+ Specifying Systems"],
+      "provenance": {
+        "caseID": "p4-generated-counter-evaluation-failed",
+        "moduleSHA256": "20aa8c32f54cc794882bc239ac608939708339633bd387c3d51481cfc71677da",
+        "cfgSHA256": "8524bd9ab9b8be8a29195e1df4dd1c8e15cf2dd707b94208b1003ba8b23e7f0a",
+        "argumentsSHA256": "8524bd9ab9b8be8a29195e1df4dd1c8e15cf2dd707b94208b1003ba8b23e7f0a",
+        "tlcTag": "not-applicable-generated-behavior-v1",
+        "tlcCommit": "not-applicable-generated-behavior-v1",
+        "tlcJarSHA256": "53a5c9190f96e11d5273ff6e1a47becbcedd0e83913d586ce3d4651bf1589638",
+        "javaDistribution": "not-applicable-generated-behavior-v1",
+        "javaVersion": "not-applicable-generated-behavior-v1",
+        "javaArchiveSHA256": "53a5c9190f96e11d5273ff6e1a47becbcedd0e83913d586ce3d4651bf1589638",
+        "bridgeClass": "SwiftTLA.PublicWorkflowGeneratedFixtureRegistryV1",
+        "bridgeSourceSHA256": "20aa8c32f54cc794882bc239ac608939708339633bd387c3d51481cfc71677da",
+        "bridgeBinarySHA256": "53a5c9190f96e11d5273ff6e1a47becbcedd0e83913d586ce3d4651bf1589638"
+      },
+      "builderEvidence": { "path": "Tests/Fixtures/PublicWorkflowConformance/Generated/builder-observation.json", "sha256": "48b9fb7e573a492763995175c1782fb78bf7313ea19b9b45973620edf1dce497" },
+      "generatedEvidence": { "path": "Verification/PublicWorkflowConformance/Generated/generated-failed-observation.json", "sha256": "adb89cbd4b7da8628018788fb411a564470a5d232e18094bd9ba51f485f58d68" },
+      "actionNames": ["advance"],
+      "maxStates": 2,
+      "expectedOutcome": "difference"
+    },
+    {
+      "id": "p4-generated-counter-evaluation-unavailable",
+      "sourceInput": { "path": "Sources/UpstreamParity/Conformance/PublicWorkflowGeneratedFixtureRegistry.swift", "sha256": "20aa8c32f54cc794882bc239ac608939708339633bd387c3d51481cfc71677da" },
+      "configuration": { "path": "Verification/PublicWorkflowConformance/Generated/counter-unavailable.config.json", "sha256": "d2e6241642906fb9e1ac6266c091c5374da8fee3136200c34a33d9ba91bbd561" },
+      "semanticCitations": ["TLA+ Specifying Systems"],
+      "provenance": {
+        "caseID": "p4-generated-counter-evaluation-unavailable",
+        "moduleSHA256": "20aa8c32f54cc794882bc239ac608939708339633bd387c3d51481cfc71677da",
+        "cfgSHA256": "d2e6241642906fb9e1ac6266c091c5374da8fee3136200c34a33d9ba91bbd561",
+        "argumentsSHA256": "d2e6241642906fb9e1ac6266c091c5374da8fee3136200c34a33d9ba91bbd561",
+        "tlcTag": "not-applicable-generated-behavior-v1",
+        "tlcCommit": "not-applicable-generated-behavior-v1",
+        "tlcJarSHA256": "53a5c9190f96e11d5273ff6e1a47becbcedd0e83913d586ce3d4651bf1589638",
+        "javaDistribution": "not-applicable-generated-behavior-v1",
+        "javaVersion": "not-applicable-generated-behavior-v1",
+        "javaArchiveSHA256": "53a5c9190f96e11d5273ff6e1a47becbcedd0e83913d586ce3d4651bf1589638",
+        "bridgeClass": "SwiftTLA.PublicWorkflowGeneratedFixtureRegistryV1",
+        "bridgeSourceSHA256": "20aa8c32f54cc794882bc239ac608939708339633bd387c3d51481cfc71677da",
+        "bridgeBinarySHA256": "53a5c9190f96e11d5273ff6e1a47becbcedd0e83913d586ce3d4651bf1589638"
+      },
+      "builderEvidence": { "path": "Tests/Fixtures/PublicWorkflowConformance/Generated/builder-observation.json", "sha256": "48b9fb7e573a492763995175c1782fb78bf7313ea19b9b45973620edf1dce497" },
+      "generatedEvidence": { "path": "Verification/PublicWorkflowConformance/Generated/generated-unavailable-observation.json", "sha256": "47de58790f8e1da826177e8d63c4a322b2a763372d648e007d5a53cbfe9872be" },
+      "actionNames": ["advance"],
+      "maxStates": 2,
+      "expectedOutcome": "difference"
+    }
+  ],
+  "toolchain": {
+    "schema": "PublicWorkflowGeneratedBehaviorToolchainV1",
+    "dependencies": [
+      { "id": "package", "evidence": { "path": "Package.swift", "sha256": "89d24e43dc0762347c8463a45fd8c4489a1fe03fe67915050cae69a80adfed7b" } },
+      { "id": "packageResolved", "evidence": { "path": "Package.resolved", "sha256": "cfdc69e87cdcea8681bfa8b117d599eef34e6f986fe23d9ad5eb4a320a1a18d7" } },
+      { "id": "adapter", "evidence": { "path": "Sources/UpstreamParity/Conformance/PublicWorkflowGeneratedBehaviorAdapter.swift", "sha256": "6481f8d87a9bd7d5571386eb6af5e39a9d1529eae33827e95674d180943c19b9" } },
+      { "id": "macro", "evidence": { "path": "Sources/SwiftTLAPlugin/ModelMacro.swift", "sha256": "2dad82ec1b5e7dfdb367f1d3f6865b15ddb1c10bf4b5dc7ea431ba5de487ecf7" } }
+    ],
+    "notApplicable": [
+      { "id": "tlc", "evidence": { "path": "Verification/PublicWorkflowConformance/Generated/not-applicable.json", "sha256": "53a5c9190f96e11d5273ff6e1a47becbcedd0e83913d586ce3d4651bf1589638" } },
+      { "id": "java", "evidence": { "path": "Verification/PublicWorkflowConformance/Generated/not-applicable.json", "sha256": "53a5c9190f96e11d5273ff6e1a47becbcedd0e83913d586ce3d4651bf1589638" } },
+      { "id": "bridge", "evidence": { "path": "Verification/PublicWorkflowConformance/Generated/not-applicable.json", "sha256": "53a5c9190f96e11d5273ff6e1a47becbcedd0e83913d586ce3d4651bf1589638" } }
+    ]
+  }
+}

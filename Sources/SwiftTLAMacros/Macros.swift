@@ -11,9 +11,5 @@ public macro TLAActor() = #externalMacro(module: "SwiftTLAPlugin", type: "TLAAct
 @attached(member, names: arbitrary)
 public macro TLAObservable() = #externalMacro(module: "SwiftTLAPlugin", type: "TLAObservableMacro")
 
-@attached(member, names: arbitrary)
-@attached(extension, conformances: TLAModelType, names: arbitrary)
-public macro TLAValidated() = #externalMacro(module: "SwiftTLAPlugin", type: "TLAValidatedMacro")
-
 @attached(peer, names: arbitrary)
 public macro TypedVar() = #externalMacro(module: "SwiftTLAPlugin", type: "TypedVarMacro")

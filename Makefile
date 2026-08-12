@@ -1,4 +1,4 @@
-.PHONY: test tlc parity build examples core-conformance core-support-gate temporal-symmetry-support-gate temporal-symmetry-release-check ci-local
+.PHONY: test tlc parity build examples core-conformance core-support-gate temporal-symmetry-support-gate temporal-symmetry-release-check public-workflow-release-check ci-local
 
 TEMPORAL_SYMMETRY_OUTPUT ?= .build/temporal-symmetry-support-gate
 
@@ -30,6 +30,9 @@ temporal-symmetry-support-gate:
 
 temporal-symmetry-release-check:
 	./scripts/check_temporal_symmetry_release.sh --output $(TEMPORAL_SYMMETRY_OUTPUT)
+
+public-workflow-release-check:
+	./scripts/run_public_workflow_support_gate.sh --output .build/public-workflow-support-gate
 
 ci-local:
 	./scripts/run_ci_locally.sh

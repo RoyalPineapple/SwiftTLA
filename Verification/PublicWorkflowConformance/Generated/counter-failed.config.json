@@ -1,0 +1,1 @@
+{"schema":"PublicWorkflowGeneratedFixtureConfigurationV1","fixtureID":"p4-generated-counter-evaluation-failed","maxStates":2,"actionNames":["advance"],"expectedOutcome":"difference"}

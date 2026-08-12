@@ -444,6 +444,22 @@ public enum SpecParser {
         }
     }
 
+    private struct ParsedVariableBinding {
+        let variableName: String
+        let initial: TLAValue
+        let initialSet: StateExpr?
+        let swiftTypeName: String?
+    }
+
+    private struct ParsedDictionaryBinding {
+        let collectionName: String
+        let elementType: String
+        let valueType: String
+        let verificationScope: Int
+        let initial: TLAValue
+        let source: String
+    }
+
     public struct ParsedSymmetricCollection {
         public let name: String
         public let elementType: String
@@ -491,22 +507,42 @@ public enum SpecParser {
       public static func parseSpecClosure(_ closure: ClosureExprSyntax, enumPhases: [String: [String: TLAValue]] = [:]) -> ParsedSpecComponents {
         _enumPhases = enumPhases
         var result = ParsedSpecComponents()
+        var variableBindings: [String: ParsedVariableBinding] = [:]
+        var dictionaryBindings: [String: ParsedDictionaryBinding] = [:]
         let collectionTypes = collectSymmetricCollectionTypes(in: closure)
         for statement in closure.statements {
             if case .expr(let expression) = statement.item,
                let fc = expression.as(FunctionCallExprSyntax.self) {
-                parseBuilderCall(fc, into: &result, collectionTypes: collectionTypes)
+                parseBuilderCall(
+                    fc,
+                    into: &result,
+                    variableBindings: variableBindings,
+                    collectionTypes: collectionTypes
+                )
+            } else if case .expr(let expression) = statement.item,
+                      let reference = expression.as(DeclReferenceExprSyntax.self),
+                      let binding = variableBindings[reference.baseName.text] {
+                appendVariable(binding, to: &result, replacingImplicit: true)
+            } else if case .expr(let expression) = statement.item,
+                      let reference = expression.as(DeclReferenceExprSyntax.self),
+                      let binding = dictionaryBindings[reference.baseName.text] {
+                appendDictionary(binding, to: &result)
             } else if let forStmt = statement.item.as(ForStmtSyntax.self) {
-                parseForLoop(forStmt, into: &result)
+                parseForLoop(forStmt, into: &result, variableBindings: variableBindings)
             } else if case .decl(let decl) = statement.item,
                       let varDecl = decl.as(VariableDeclSyntax.self) {
-                parseStateVarDecl(varDecl, into: &result)
+                parseStateVarDecl(varDecl, into: &result, bindings: &variableBindings)
+                parseDictionaryVarDecl(varDecl, into: &result, bindings: &dictionaryBindings)
             }
         }
         return result
     }
 
-    private static func parseForLoop(_ forStmt: ForStmtSyntax, into result: inout ParsedSpecComponents) {
+    private static func parseForLoop(
+        _ forStmt: ForStmtSyntax,
+        into result: inout ParsedSpecComponents,
+        variableBindings: [String: ParsedVariableBinding]
+    ) {
         guard let pattern = forStmt.pattern.as(IdentifierPatternSyntax.self)?.identifier.text,
               let sequence = forStmt.sequence.as(SequenceExprSyntax.self)
         else { return }
@@ -530,91 +566,178 @@ public enum SpecParser {
                 guard case .expr(let expr) = bodyStmt.item,
                       let fc = expr.as(FunctionCallExprSyntax.self)
                 else { continue }
-                parseBuilderCall(fc, into: &result, loopVar: pattern, loopValue: i)
+                parseBuilderCall(
+                    fc,
+                    into: &result,
+                    variableBindings: variableBindings,
+                    loopVar: pattern,
+                    loopValue: i
+                )
             }
         }
     }
 
     /// Parses `let x = Var(...)` or `let x = StateVar(...)` bindings into `ParsedSpecComponents.variables`.
     /// Handles both raw `Var("x", 0)` and rewrites where ModelMacro injected a string name.
-    private static func parseStateVarDecl(_ varDecl: VariableDeclSyntax, into result: inout ParsedSpecComponents) {
+    private static func parseStateVarDecl(
+        _ varDecl: VariableDeclSyntax,
+        into result: inout ParsedSpecComponents,
+        bindings: inout [String: ParsedVariableBinding]
+    ) {
         for binding in varDecl.bindings {
             guard let patternName = binding.pattern.as(IdentifierPatternSyntax.self)?.identifier.text,
                   let initializer = binding.initializer?.value,
                   let fc = initializer.as(FunctionCallExprSyntax.self)
             else { continue }
 
-            let stateVarInfo = resolveVarCall(fc)
-            let varTypeName = stateVarInfo?.1 ?? resolveVarTypeArg(fc)
-            let callName = stateVarInfo?.0 ?? (resolveVarTypeArg(fc) != nil ? "Var" : nil)
-
-            guard callName != nil else { continue }
+            guard let (callName, declaredTypeName) = resolveVariableCall(fc) else { continue }
+            let generatedTypeName = generatedStorageTypeName(declaredTypeName)
 
             let args = Array(fc.arguments)
-
-            if callName == "Var" && args.count < 2 { continue }
+            var parsed: ParsedVariableBinding?
+            var hasInitialValue = false
 
             if let rangeExpr = args.first(where: { $0.label?.text == "in" })?.expression {
                 let lowerBound = parseRangeLowerBound(rangeExpr)
-                result.variables.append((patternName, .int(lowerBound), nil, varTypeName))
-                continue
-            }
-
-            if let valuesArg = args.first(where: { $0.label?.text == "values" })?.expression {
+                hasInitialValue = true
+                parsed = ParsedVariableBinding(
+                    variableName: patternName,
+                    initial: .int(lowerBound),
+                    initialSet: nil,
+                    swiftTypeName: generatedTypeName
+                )
+            } else if let valuesArg = args.first(where: { $0.label?.text == "values" })?.expression {
                 let firstValue = parseValuesFirst(valuesArg)
-                result.variables.append((patternName, .string(firstValue), nil, varTypeName))
-                continue
-            }
-
-            guard !args.isEmpty else { continue }
-
-            if let stringLit = args[0].expression.as(StringLiteralExprSyntax.self) {
+                hasInitialValue = true
+                parsed = ParsedVariableBinding(
+                    variableName: patternName,
+                    initial: .string(firstValue),
+                    initialSet: nil,
+                    swiftTypeName: generatedTypeName
+                )
+            } else if let firstArgument = args.first,
+                      let stringLit = firstArgument.expression.as(StringLiteralExprSyntax.self) {
                 let varName = stringLit.segments.description.replacingOccurrences(of: "\"", with: "")
                 let initial: TLAValue = args.count >= 2 ? parseInitialExpr(args[1].expression) : .int(0)
-                let inferredType = args.count >= 2 ? enumCaseTypeName(from: args[1].expression) : nil
-                result.variables.append((varName, initial, nil, varTypeName ?? inferredType))
-            } else {
-                let initial: TLAValue = parseInitialExpr(args[0].expression)
-                let inferredType = enumCaseTypeName(from: args[0].expression)
-                result.variables.append((patternName, initial, nil, varTypeName ?? inferredType))
+                let inferredType = args.count >= 2 ? swiftTypeName(from: args[1].expression) : nil
+                hasInitialValue = args.count >= 2
+                parsed = ParsedVariableBinding(
+                    variableName: varName,
+                    initial: initial,
+                    initialSet: nil,
+                    swiftTypeName: generatedTypeName ?? inferredType
+                )
+            } else if let firstArgument = args.first {
+                hasInitialValue = true
+                parsed = ParsedVariableBinding(
+                    variableName: patternName,
+                    initial: parseInitialExpr(firstArgument.expression),
+                    initialSet: nil,
+                    swiftTypeName: generatedTypeName ?? swiftTypeName(from: firstArgument.expression)
+                )
+            }
+
+            guard let parsed else {
+                result.diagnostics.append(.init(message: "Malformed \(callName) binding '\(patternName)'", source: binding))
+                continue
+            }
+
+            bindings[patternName] = parsed
+            if hasInitialValue {
+                appendVariable(parsed, to: &result, replacingImplicit: false)
             }
         }
     }
 
-    /// Resolves a StateVar call expression to (callName, swiftTypeName).
-    /// Returns nil if the call is not a StateVar constructor.
-    private static func resolveVarCall(_ fc: FunctionCallExprSyntax) -> (String, String?)? {
+    private static func resolveVariableCall(_ fc: FunctionCallExprSyntax) -> (String, String?)? {
         if let ref = fc.calledExpression.as(DeclReferenceExprSyntax.self) {
-            guard ref.baseName.text == "StateVar" else { return nil }
-            return ("StateVar", nil)
+            guard ref.baseName.text == "StateVar" || ref.baseName.text == "Var" else { return nil }
+            return (ref.baseName.text, nil)
         }
         if let generic = fc.calledExpression.as(GenericSpecializationExprSyntax.self),
            let ref = generic.expression.as(DeclReferenceExprSyntax.self) {
-            guard ref.baseName.text == "StateVar" else { return nil }
+            guard ref.baseName.text == "StateVar" || ref.baseName.text == "Var" else { return nil }
             let typeArgs = Array(generic.genericArgumentClause.arguments)
             let swiftTypeName = typeArgs.count >= 1
                 ? typeArgs[0].argument.description.trimmingCharacters(in: .whitespacesAndNewlines)
                 : nil
-            return ("StateVar", swiftTypeName)
+            return (ref.baseName.text, swiftTypeName)
         }
         return nil
     }
 
-    private static func resolveVarTypeArg(_ fc: FunctionCallExprSyntax) -> String? {
-        guard let generic = fc.calledExpression.as(GenericSpecializationExprSyntax.self),
-              let ref = generic.expression.as(DeclReferenceExprSyntax.self),
-              ref.baseName.text == "Var"
-        else {
-            if let ref = fc.calledExpression.as(DeclReferenceExprSyntax.self),
-               ref.baseName.text == "Var" {
-                return nil
+    private static func parseDictionaryVarDecl(
+        _ varDecl: VariableDeclSyntax,
+        into result: inout ParsedSpecComponents,
+        bindings: inout [String: ParsedDictionaryBinding]
+    ) {
+        for binding in varDecl.bindings {
+            guard let patternName = binding.pattern.as(IdentifierPatternSyntax.self)?.identifier.text,
+                  let call = binding.initializer?.value.as(FunctionCallExprSyntax.self),
+                  let specialization = call.calledExpression.as(GenericSpecializationExprSyntax.self),
+                  specialization.expression.as(DeclReferenceExprSyntax.self)?.baseName.text == "DictionaryVar"
+            else { continue }
+
+            let typeArguments = Array(specialization.genericArgumentClause.arguments)
+            let arguments = Array(call.arguments)
+            guard typeArguments.count == 2,
+                  let nameArgument = arguments.first(where: { $0.label == nil })?.expression,
+                  let collectionName = parseStringLiteral(nameArgument),
+                  let scopeExpression = arguments.first(where: { $0.label?.text == "scope" })?.expression,
+                  let scopeLiteral = scopeExpression.as(IntegerLiteralExprSyntax.self),
+                  let verificationScope = Int(scopeLiteral.literal.text),
+                  verificationScope > 0
+            else {
+                result.diagnostics.append(.init(
+                    message: "DictionaryVar binding '\(patternName)' requires an explicit name and a positive integer literal scope.",
+                    source: binding
+                ))
+                continue
             }
-            return nil
+
+            let elementType = typeArguments[0].argument.description
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            let valueType = typeArguments[1].argument.description
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            guard let initial = dictionaryDefaultValue(for: valueType) else {
+                result.diagnostics.append(.init(
+                    message: "DictionaryVar binding '\(patternName)' uses unsupported value type '\(valueType)'.",
+                    source: binding
+                ))
+                continue
+            }
+
+            bindings[patternName] = ParsedDictionaryBinding(
+                collectionName: collectionName,
+                elementType: elementType,
+                valueType: valueType,
+                verificationScope: verificationScope,
+                initial: initial,
+                source: binding.description
+            )
         }
-        let typeArgs = Array(generic.genericArgumentClause.arguments)
-        return typeArgs.count >= 1
-            ? typeArgs[0].argument.description.trimmingCharacters(in: .whitespacesAndNewlines)
-            : nil
+    }
+
+    private static func dictionaryDefaultValue(for typeName: String) -> TLAValue? {
+        switch typeName {
+        case "Int", "TLAValue": return .int(0)
+        case "Bool": return .bool(false)
+        case "String": return .string("")
+        case "TLASet", "TLASetType": return .set([])
+        case "TLATuple", "TLASequence", "TLATupleType": return .tuple([])
+        case "TLARecord", "TLARecordType": return .record([:])
+        case "TLAFunctionType": return .function([:])
+        default:
+            return _enumPhases[typeName]?.values.first { $0 == .int(0) || $0 == .string("") }
+        }
+    }
+
+    private static func parseStringLiteral(_ expression: ExprSyntax) -> String? {
+        guard let literal = expression.as(StringLiteralExprSyntax.self),
+              literal.segments.count == 1,
+              let segment = literal.segments.first?.as(StringSegmentSyntax.self)
+        else { return nil }
+        return segment.content.text
     }
 
     /// Extracts the lower bound from a range expression like `1...12`.
@@ -685,9 +808,61 @@ public enum SpecParser {
         return nil
     }
 
+    private static func swiftTypeName(from expression: ExprSyntax) -> String? {
+        if expression.is(IntegerLiteralExprSyntax.self) { return "Int" }
+        if expression.is(BooleanLiteralExprSyntax.self) { return "Bool" }
+        if expression.is(StringLiteralExprSyntax.self) { return "String" }
+        if let call = expression.as(FunctionCallExprSyntax.self),
+           let member = call.calledExpression.as(MemberAccessExprSyntax.self),
+           let base = member.base?.as(DeclReferenceExprSyntax.self),
+           base.baseName.text == "TLAValue" {
+            return "TLAValue"
+        }
+        return enumCaseTypeName(from: expression)
+    }
+
+    private static func generatedStorageTypeName(_ declaredTypeName: String?) -> String? {
+        guard let declaredTypeName else { return nil }
+        return ["TLAFunctionType", "TLASetType", "TLARecordType", "TLATupleType"].contains(declaredTypeName)
+            ? "TLAValue"
+            : declaredTypeName
+    }
+
+    private static func appendVariable(
+        _ binding: ParsedVariableBinding,
+        to result: inout ParsedSpecComponents,
+        replacingImplicit: Bool
+    ) {
+        if replacingImplicit {
+            result.variables.removeAll { $0.name == binding.variableName }
+        }
+        result.variables.append((binding.variableName, binding.initial, binding.initialSet, binding.swiftTypeName))
+    }
+
+    private static func appendDictionary(
+        _ binding: ParsedDictionaryBinding,
+        to result: inout ParsedSpecComponents
+    ) {
+        let declaration = SymmetricCollectionDecl(
+            name: binding.collectionName,
+            verificationScope: binding.verificationScope,
+            initial: binding.initial
+        )
+        result.symmetricCollections.append(.init(
+            name: binding.collectionName,
+            elementType: binding.elementType,
+            valueType: binding.valueType,
+            verificationScope: binding.verificationScope,
+            source: binding.source,
+            declaration: declaration
+        ))
+        result.variables.append((binding.collectionName, declaration.variable.initial, nil, nil))
+    }
+
     private static func parseBuilderCall(
         _ call: FunctionCallExprSyntax,
         into result: inout ParsedSpecComponents,
+        variableBindings: [String: ParsedVariableBinding],
         loopVar: String? = nil,
         loopValue: Int? = nil,
         collectionTypes: [String: (element: String, value: String)] = [:]
@@ -700,7 +875,7 @@ public enum SpecParser {
         case "CollectionAction":
             parseCollectionAction(call, into: &result)
         case "Variable":
-            parseVariableDecl(call, into: &result)
+            parseVariableDecl(call, into: &result, variableBindings: variableBindings)
         case "Action":
             parseAction(call, into: &result, loopVar: loopVar, loopValue: loopValue)
         case "Invariant":
@@ -957,7 +1132,8 @@ public enum SpecParser {
                 guard let name = binding.pattern.as(IdentifierPatternSyntax.self)?.identifier.text,
                       let call = binding.initializer?.value.as(FunctionCallExprSyntax.self),
                       let specialization = call.calledExpression.as(GenericSpecializationExprSyntax.self),
-                      specialization.expression.as(DeclReferenceExprSyntax.self)?.baseName.text == "SymmetricCollectionVar"
+                      let typeName = specialization.expression.as(DeclReferenceExprSyntax.self)?.baseName.text,
+                      typeName == "SymmetricCollectionVar" || typeName == "DictionaryVar"
                 else { continue }
                 let arguments = Array(specialization.genericArgumentClause.arguments)
                 guard arguments.count == 2 else { continue }
@@ -1513,56 +1689,80 @@ public enum SpecParser {
         return result
     }
 
-    private static func parseVariableDecl(_ call: FunctionCallExprSyntax, into result: inout ParsedSpecComponents) {
+    private static func parseVariableDecl(
+        _ call: FunctionCallExprSyntax,
+        into result: inout ParsedSpecComponents,
+        variableBindings: [String: ParsedVariableBinding]
+    ) {
         let args = Array(call.arguments)
-        guard let firstName = args.first?.expression.as(DeclReferenceExprSyntax.self)?.baseName.text
-            ?? args.first?.expression.as(MemberAccessExprSyntax.self)?.declName.baseName.text
-        else { return }
+        guard let first = args.first, args.count <= 2 else {
+            result.diagnostics.append(.init(message: "Malformed Variable declaration", source: call))
+            return
+        }
+
+        let binding: ParsedVariableBinding
+        if let reference = first.expression.as(DeclReferenceExprSyntax.self) {
+            guard first.label == nil, let resolved = variableBindings[reference.baseName.text] else {
+                result.diagnostics.append(.init(
+                    message: "Variable '\(reference.baseName.text)' is not bound by a prior Var declaration",
+                    source: call
+                ))
+                return
+            }
+            binding = resolved
+        } else if let stringLiteral = first.expression.as(StringLiteralExprSyntax.self), args.count == 2 {
+            binding = ParsedVariableBinding(
+                variableName: stringLiteral.segments.description.replacingOccurrences(of: "\"", with: ""),
+                initial: .int(0),
+                initialSet: nil,
+                swiftTypeName: nil
+            )
+        } else {
+            result.diagnostics.append(.init(message: "Malformed Variable declaration", source: call))
+            return
+        }
+
+        guard args.count == 2 else {
+            appendVariable(binding, to: &result, replacingImplicit: true)
+            return
+        }
 
         // Variable(name, in: set)
-        if args.count >= 2 {
-            let label = args[1].label?.text
-            if label == "in" {
-                if let setExpr = decodeStateExpr(args[1].expression) {
-                    result.variables.append((firstName, .set([]), setExpr, nil))
-                    return
-                }
+        let label = args[1].label?.text
+        if label == "in" {
+            if let setExpr = decodeStateExpr(args[1].expression) {
+                appendVariable(
+                    ParsedVariableBinding(
+                        variableName: binding.variableName,
+                        initial: .set([]),
+                        initialSet: setExpr,
+                        swiftTypeName: binding.swiftTypeName
+                    ),
+                    to: &result,
+                    replacingImplicit: true
+                )
+                return
             }
+            result.diagnostics.append(.init(message: "Malformed Variable range declaration", source: call))
+            return
         }
 
-        // Variable(name, value)
-        if args.count >= 2 {
-            let valExpr = args[1].expression
-            if let intVal = valExpr.as(IntegerLiteralExprSyntax.self) {
-                result.variables.append((firstName, .int(Int(intVal.literal.text) ?? 0), nil, nil))
-                return
-            }
-            if let boolVal = valExpr.as(BooleanLiteralExprSyntax.self) {
-                result.variables.append((firstName, .bool(boolVal.literal.text == "true"), nil, nil))
-                return
-            }
-            if let stringVal = valExpr.as(StringLiteralExprSyntax.self) {
-                result.variables.append((firstName, .string(stringVal.segments.description), nil, nil))
-                return
-            }
-            // TLAValue.set([]), TLAValue.tuple([]), etc.
-            if let fc = valExpr.as(FunctionCallExprSyntax.self),
-               let memberAccess = fc.calledExpression.as(MemberAccessExprSyntax.self),
-               let base = memberAccess.base?.as(DeclReferenceExprSyntax.self),
-               base.baseName.text == "TLAValue" {
-                let name = memberAccess.declName.baseName.text
-                if let parsed = parseTLAValueConstructor(name: name, call: fc) {
-                    result.variables.append((firstName, parsed, nil, nil))
-                    return
-                }
-            }
+        guard label == nil else {
+            result.diagnostics.append(.init(message: "Malformed Variable declaration", source: call))
+            return
         }
 
-        // Variable(name, initializerExpr) — fallback
-        if args.count >= 2 {
-            let initial: TLAValue = .int(0)
-            result.variables.append((firstName, initial, nil, nil))
-        }
+        let initialExpression = args[1].expression
+        appendVariable(
+            ParsedVariableBinding(
+                variableName: binding.variableName,
+                initial: parseInitialExpr(initialExpression),
+                initialSet: nil,
+                swiftTypeName: binding.swiftTypeName ?? swiftTypeName(from: initialExpression)
+            ),
+            to: &result,
+            replacingImplicit: true
+        )
     }
 
     private static func parseTLAValueConstructor(name: String, call: FunctionCallExprSyntax) -> TLAValue? {

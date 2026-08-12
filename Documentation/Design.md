@@ -39,6 +39,18 @@ Published TLA+ semantics are authoritative. TLC is a pinned executable
 reference, and its source and tests are diagnostic evidence. No hidden checker
 or oracle is claimed.
 
+## Macro and package evidence boundary
+
+The macro and package examples in this repository demonstrate API usage; they
+do not establish support for every accepted model. The separate [public
+workflow conformance](PublicWorkflowConformance.md) command retains bounded
+valid and invalid fixture results for `@TLAModel`, `@TLAActor`, and
+`@TLAObservable`, plus the exact named `SwiftTLA-Package` public-library macOS
+build. Local output is diagnostic and explicit hosted output is candidate
+evidence. `@TypedVar` is not release-facing or admitted, and `@TLAValidated`
+was removed because it had no implementation. The P4 report does not widen the
+finite core language claim in this document.
+
 ## DSL philosophy
 
 - **Builders everywhere.** Every nested scope has a result builder: `Action { }`,

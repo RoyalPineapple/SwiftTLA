@@ -1,0 +1,25 @@
+{
+  "schema": "PublicWorkflowRunnerRegisterV1",
+  "parserBuilder": [
+    {
+      "id": "parser-builder-bounded-counter",
+      "manifest": {
+        "path": "Tests/Fixtures/PublicWorkflowConformance/ParserBuilder/manifest.json",
+        "sha256": "4ee599f4eac3b553d6bb545aadff2bf1da2f164b37176ccb46ec619766d8f422"
+      },
+      "expectedOutcome": "exact"
+    },
+    {
+      "id": "parser-builder-bounded-counter-mismatch",
+      "manifest": {
+        "path": "Tests/Fixtures/PublicWorkflowConformance/ParserBuilder/Mismatch/manifest.json",
+        "sha256": "9b648c0f3c2597dcf116b4adeebeedfb6c4299535db7aeca2345478ae7d969cc"
+      },
+      "expectedOutcome": "difference"
+    }
+  ],
+  "generatedBehavior": {
+    "path": "Verification/PublicWorkflowConformance/generated-behavior.json",
+    "sha256": "cef11b93a1f3fc6a25678f99acc1b68a50a9fe486640da11b3c97b3631e218da"
+  }
+}

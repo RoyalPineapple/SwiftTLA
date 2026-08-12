@@ -21,6 +21,9 @@ struct ParsedEnumInfo {
 
 struct ParsedMacroModel {
     let typeName: String
+    let isGeneric: Bool
+    let requiresVerificationInstanceFactory: Bool
+    let declaredMemberNames: Set<String>
     let variables: [(name: String, initial: TLAValue, initialSet: StateExpr?, swiftTypeName: String?)]
     let actions: [SpecParser.ParsedAction]
     let symmetricCollections: [SpecParser.ParsedSymmetricCollection]
@@ -35,14 +38,21 @@ enum TLASpecVerifier {
 
     static func parseAndVerify(_ declaration: some DeclGroupSyntax) throws -> ParsedMacroModel {
         let typeName: String
+        let isGeneric: Bool
         let memberList: MemberBlockItemListSyntax
 
         if let s = declaration.as(StructDeclSyntax.self) {
-            typeName = s.name.text; memberList = s.memberBlock.members
+            typeName = s.name.text
+            isGeneric = s.genericParameterClause != nil
+            memberList = s.memberBlock.members
         } else if let c = declaration.as(ClassDeclSyntax.self) {
-            typeName = c.name.text; memberList = c.memberBlock.members
+            typeName = c.name.text
+            isGeneric = c.genericParameterClause != nil
+            memberList = c.memberBlock.members
         } else if let a = declaration.as(ActorDeclSyntax.self) {
-            typeName = a.name.text; memberList = a.memberBlock.members
+            typeName = a.name.text
+            isGeneric = a.genericParameterClause != nil
+            memberList = a.memberBlock.members
         } else {
             throw SimpleError("Must be applied to a struct, class, or actor")
         }
@@ -136,6 +146,9 @@ enum TLASpecVerifier {
 
         return ParsedMacroModel(
             typeName: typeName,
+            isGeneric: isGeneric,
+            requiresVerificationInstanceFactory: !hasCallableZeroArgumentInitializer(in: memberList),
+            declaredMemberNames: declaredMemberNames(in: memberList),
             variables: parsed.variables,
             actions: parsed.actions,
             symmetricCollections: parsed.symmetricCollections,
@@ -144,6 +157,51 @@ enum TLASpecVerifier {
             hasInvariants: hasInvs,
             invariants: parsed.invariants
         )
+    }
+
+    private static func declaredMemberNames(in members: MemberBlockItemListSyntax) -> Set<String> {
+        var names = Set<String>()
+        for member in members {
+            if let function = member.decl.as(FunctionDeclSyntax.self) {
+                names.insert(function.name.text)
+            }
+            if let variable = member.decl.as(VariableDeclSyntax.self) {
+                for binding in variable.bindings {
+                    if let identifier = binding.pattern.as(IdentifierPatternSyntax.self) {
+                        names.insert(identifier.identifier.text)
+                    }
+                }
+            }
+        }
+        return names
+    }
+
+    private static func hasCallableZeroArgumentInitializer(in members: MemberBlockItemListSyntax) -> Bool {
+        let initializers = members.compactMap { $0.decl.as(InitializerDeclSyntax.self) }
+        if !initializers.isEmpty {
+            return initializers.contains { initializer in
+                initializer.optionalMark == nil
+                    && initializer.signature.effectSpecifiers?.asyncSpecifier == nil
+                    && initializer.signature.effectSpecifiers?.throwsClause == nil
+                    && initializer.signature.parameterClause.parameters.allSatisfy {
+                        $0.defaultValue != nil || $0.ellipsis != nil
+                    }
+            }
+        }
+
+        for member in members {
+            guard let variable = member.decl.as(VariableDeclSyntax.self),
+                  !variable.modifiers.contains(where: {
+                      $0.name.text == "static" || $0.name.text == "class"
+                  })
+            else { continue }
+            if variable.bindings.contains(where: {
+                $0.initializer == nil && $0.accessorBlock == nil
+            }) {
+                return false
+            }
+        }
+        return true
     }
 
     // MARK: - Var bindings (scan pass)
@@ -574,7 +632,10 @@ enum MacroExpander {
             collectionActions: model.collectionActions,
             symmetricCollections: model.symmetricCollections,
             variables: model.variables,
-            enumInfos: model.enumInfos
+            enumInfos: model.enumInfos,
+            declaredMemberNames: model.declaredMemberNames
+                .union(model.variables.map(\.name))
+                .union(["runtime", "verifySpec", "verifyTransitions", "verifyInvariants", "transitionMatrix"])
         )
         decls.append(contentsOf: actionResult.methods.map(DeclSyntax.init))
         if !model.actions.isEmpty {
@@ -604,10 +665,25 @@ enum MacroExpander {
         decls.append(contentsOf: generateSpecTest())
         if !model.actions.isEmpty {
             decls.append(contentsOf: generateTransitionMatrix())
+            if !isActor {
+                decls.append(contentsOf: generateGeneratedActionOutcome(
+                    requiresInstanceFactory: model.requiresVerificationInstanceFactory))
+                decls.append(contentsOf: generateGeneratedPropertyOutcomes())
+            }
         }
-        decls.append(contentsOf: generateTransitionsTest(model.actions))
+        if isActor {
+            decls.append(DeclSyntax(generateActorVerificationApplyHelper()))
+        }
+        decls.append(contentsOf: generateTransitionsTest(
+            model.actions,
+            isActor: isActor,
+            requiresInstanceFactory: model.requiresVerificationInstanceFactory
+        ))
         if model.hasInvariants && !model.actions.isEmpty {
-            decls.append(contentsOf: generateInvariantsTest())
+            decls.append(contentsOf: generateInvariantsTest(
+                isActor: isActor,
+                requiresInstanceFactory: model.requiresVerificationInstanceFactory
+            ))
         }
 
         return decls
@@ -626,13 +702,26 @@ enum MacroExpander {
             "(\"\(i.0)\", \(codegenStateExpr(i.1)))"
         }.joined(separator: ", ")
 
-        let parserTreeSource = """
-        private static let _parserTree: ParsedSpecModel = ParsedSpecModel(
-            variables: [\(treeVars)],
-            actions: [\(treeActions)],
-            invariants: [\(treeInvs)]
-        )
-        """
+        let parserTreeSource: String
+        if model.isGeneric {
+            parserTreeSource = """
+            private static var _parserTree: ParsedSpecModel {
+                ParsedSpecModel(
+                    variables: [\(treeVars)],
+                    actions: [\(treeActions)],
+                    invariants: [\(treeInvs)]
+                )
+            }
+            """
+        } else {
+            parserTreeSource = """
+            private static let _parserTree: ParsedSpecModel = ParsedSpecModel(
+                variables: [\(treeVars)],
+                actions: [\(treeActions)],
+                invariants: [\(treeInvs)]
+            )
+            """
+        }
         let checkerSource = """
         private static func _checkParserTree() {
             let builtSpec = Self.spec
@@ -891,7 +980,8 @@ enum MacroExpander {
         collectionActions: [SpecParser.ParsedCollectionAction],
         symmetricCollections: [SpecParser.ParsedSymmetricCollection],
         variables: [(name: String, initial: TLAValue, initialSet: StateExpr?, swiftTypeName: String?)],
-        enumInfos: [ParsedEnumInfo]
+        enumInfos: [ParsedEnumInfo],
+        declaredMemberNames: Set<String> = []
     ) -> (methods: [FunctionDeclSyntax], nativeActionNames: Set<String>) {
         let visibility = isActor ? TokenSyntax.keyword(.fileprivate) : TokenSyntax.keyword(.public)
         var nativeNames = Set<String>()
@@ -908,6 +998,14 @@ enum MacroExpander {
                 }
                 """
                 methods.append(DeclSyntax(stringLiteral: source).as(FunctionDeclSyntax.self)!)
+                if isActor && !declaredMemberNames.contains(a.name) {
+                    let bridge = """
+                    fileprivate func \(a.name)(\(binding.name): \(type)) {
+                        _\(a.name)(\(binding.name): \(binding.name))
+                    }
+                    """
+                    methods.append(DeclSyntax(stringLiteral: bridge).as(FunctionDeclSyntax.self)!)
+                }
                 continue
             }
             if let collectionAction = collectionActions.first(where: { $0.name == a.name }),
@@ -957,6 +1055,14 @@ enum MacroExpander {
                     signature: FunctionSignatureSyntax(parameterClause: FunctionParameterClauseSyntax(parameters: [])),
                     body: CodeBlockSyntax { ExprSyntax(stringLiteral: "_state = _apply(.\(a.name))") }
                 ))
+            }
+            if isActor && !declaredMemberNames.contains(a.name) {
+                let bridge = """
+                fileprivate func \(a.name)() {
+                    _\(a.name)()
+                }
+                """
+                methods.append(DeclSyntax(stringLiteral: bridge).as(FunctionDeclSyntax.self)!)
             }
         }
         return (methods, nativeNames)
@@ -1095,12 +1201,84 @@ enum MacroExpander {
         """)]
     }
 
-    static func generateTransitionsTest(_ actions: [SpecParser.ParsedAction]) -> [DeclSyntax] {
-        if actions.isEmpty { return [] }
+    static func generateGeneratedActionOutcome(requiresInstanceFactory: Bool) -> [DeclSyntax] {
+        let factoryParameter = requiresInstanceFactory ? ", makeInstance: () -> Self" : ""
+        let instance = requiresInstanceFactory ? "makeInstance()" : "Self()"
         return [DeclSyntax(stringLiteral: """
-        public static func verifyTransitions() throws {
+        public static func generatedActionOutcome(
+            actionName: String,
+            in state: [String: TLAValue]\(factoryParameter)
+        ) -> SpecRuntime.RuntimeActionOutcome {
+            let outcome = Self.runtime.actionOutcome(named: actionName, in: state)
+            guard case .enabled = outcome else { return outcome }
+            guard let action = Actions(rawValue: actionName) else {
+                return .evaluationUnavailable(
+                    actionName: actionName,
+                    diagnostic: .init(
+                        code: .evaluatorUnavailable,
+                        message: "Generated action extraction is unavailable for \\(actionName)"))
+            }
+            var instance = \(instance)
+            instance._state = State(from: state)
+            instance._applyAction(action)
+            return .enabled(actionName: actionName, successors: [instance._state.asDictionary])
+        }
+        """)]
+    }
+
+    static func generateGeneratedPropertyOutcomes() -> [DeclSyntax] {
+        [DeclSyntax(stringLiteral: """
+        public static func generatedPropertyOutcomes(
+            in state: [String: TLAValue]
+        ) -> [SpecRuntime.RuntimePropertyOutcome] {
+            Self.runtime.propertyOutcomes(in: state)
+        }
+        """)]
+    }
+
+    static func generateActorVerificationApplyHelper() -> FunctionDeclSyntax {
+        DeclSyntax(stringLiteral: """
+        fileprivate func _verifyApply(from state: [String: TLAValue], action: Actions) -> [String: TLAValue] {
+            _state = State(from: state)
+            _applyAction(action)
+            return _state.asDictionary
+        }
+        """).as(FunctionDeclSyntax.self)!
+    }
+
+    static func generateTransitionsTest(
+        _ actions: [SpecParser.ParsedAction],
+        isActor: Bool = false,
+        requiresInstanceFactory: Bool = false
+    ) -> [DeclSyntax] {
+        if actions.isEmpty { return [] }
+        if isActor {
+            let signature = requiresInstanceFactory
+                ? "public static func verifyTransitions(makeInstance: () -> Self) async throws"
+                : "public static func verifyTransitions() async throws"
+            let instance = requiresInstanceFactory ? "makeInstance()" : "Self()"
+            return [DeclSyntax(stringLiteral: """
+            \(signature) {
+                let matrix = try Self.transitionMatrix()
+                let instance = \(instance)
+                for (from, actionName, expected) in matrix {
+                    guard let action = Actions(rawValue: actionName) else { continue }
+                    let result = await instance._verifyApply(from: from, action: action)
+                    guard result == expected else {
+                        throw VerificationError("\\(actionName): expected \\(expected), got \\(result)")
+                    }
+                }
+            }
+            """)]
+        }
+        let signature = requiresInstanceFactory
+            ? "public static func verifyTransitions(makeInstance: () -> Self) throws"
+            : "public static func verifyTransitions() throws"
+        let instance = requiresInstanceFactory ? "makeInstance()" : "Self()"
+        return [DeclSyntax(stringLiteral: """
+        \(signature) {
             let matrix = try Self.transitionMatrix()
-            var instance = Self()
+            var instance = \(instance)
             for (from, actionName, expected) in matrix {
                 guard let action = Actions(rawValue: actionName) else { continue }
                 instance._state = State(from: from)
@@ -1114,12 +1292,41 @@ enum MacroExpander {
         """)]
     }
 
-    static func generateInvariantsTest() -> [DeclSyntax] {
-        [DeclSyntax(stringLiteral: """
-        public static func verifyInvariants() throws {
+    static func generateInvariantsTest(
+        isActor: Bool = false,
+        requiresInstanceFactory: Bool = false
+    ) -> [DeclSyntax] {
+        if isActor {
+            let signature = requiresInstanceFactory
+                ? "public static func verifyInvariants(makeInstance: () -> Self) async throws"
+                : "public static func verifyInvariants() async throws"
+            let instance = requiresInstanceFactory ? "makeInstance()" : "Self()"
+            return [DeclSyntax(stringLiteral: """
+            \(signature) {
+                let matrix = try Self.transitionMatrix()
+                let runtime = Self.runtime
+                let instance = \(instance)
+                for (from, actionName, _) in matrix {
+                    guard let action = Actions(rawValue: actionName) else { continue }
+                    let result = await instance._verifyApply(from: from, action: action)
+                    for inv in runtime.spec.invariants {
+                        guard try inv.body.evaluateBool(in: result, runtimeFuncs: runtime.spec.runtimeFuncs, recursiveFuncs: runtime.spec.recursiveFuncs) else {
+                            throw VerificationError("\\(inv.name) violated by \\(actionName)")
+                        }
+                    }
+                }
+            }
+            """)]
+        }
+        let signature = requiresInstanceFactory
+            ? "public static func verifyInvariants(makeInstance: () -> Self) throws"
+            : "public static func verifyInvariants() throws"
+        let instance = requiresInstanceFactory ? "makeInstance()" : "Self()"
+        return [DeclSyntax(stringLiteral: """
+        \(signature) {
             let matrix = try Self.transitionMatrix()
             let runtime = Self.runtime
-            var instance = Self()
+            var instance = \(instance)
             for (from, actionName, _) in matrix {
                 guard let action = Actions(rawValue: actionName) else { continue }
                 instance._state = State(from: from)
@@ -1151,7 +1358,7 @@ enum MacroExpander {
                let caseName = info.cases.first(where: { $0.value == v.initial })?.name {
                 initStr = ".\(caseName)"
             } else if let swiftType = v.swiftTypeName,
-                      !["Int", "Bool", "String"].contains(swiftType) {
+                      !["Int", "Bool", "String", "TLAValue"].contains(swiftType) {
                 initStr = "\(typeStr)(rawValue: \(literalExpr(for: v.initial)))!"
             } else {
                 initStr = literalExpr(for: v.initial)
