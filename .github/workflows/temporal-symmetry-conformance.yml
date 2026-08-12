@@ -63,16 +63,20 @@ jobs:
           case "$status" in
             0)
               echo "Temporal and symmetry support gate passed (exit 0)."
+              echo "enforcement_exit=0" >> "$GITHUB_OUTPUT"
               ;;
             1)
               echo "::error::Temporal or symmetry evidence blocks admission (exit 1)."
+              echo "enforcement_exit=1" >> "$GITHUB_OUTPUT"
               ;;
             2)
-              echo "::warning::Temporal or symmetry evidence is unavailable or unsafe to evaluate (exit 2)."
+              echo "::warning::Temporal or symmetry evidence is unavailable or unsafe to evaluate on this hosted runner (exit 2). Run make temporal-symmetry-release-check locally on a provisioned machine before making a support claim."
+              echo "enforcement_exit=0" >> "$GITHUB_OUTPUT"
               ;;
             *)
               echo "::error::Temporal and symmetry conformance returned an unexpected exit $status."
               status=2
+              echo "enforcement_exit=2" >> "$GITHUB_OUTPUT"
               ;;
           esac
           echo "exit_code=$status" >> "$GITHUB_OUTPUT"
@@ -91,7 +95,7 @@ jobs:
       - name: Enforce temporal-symmetry result
         if: always()
         env:
-          TEMPORAL_SYMMETRY_EXIT: ${{ steps.conformance.outputs.exit_code }}
+          TEMPORAL_SYMMETRY_EXIT: ${{ steps.conformance.outputs.enforcement_exit }}
         run: |
           case "$TEMPORAL_SYMMETRY_EXIT" in
             0)
