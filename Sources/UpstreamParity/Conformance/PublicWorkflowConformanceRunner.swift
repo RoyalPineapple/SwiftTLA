@@ -255,7 +255,7 @@ public struct PublicWorkflowConformanceRunnerV1: Sendable {
       let stderr = resultDirectory.appendingPathComponent("stderr.log")
       let process = Process()
       process.executableURL = URL(fileURLWithPath: xcodebuild)
-      process.arguments = ["-workspace", root.appendingPathComponent("Tests/Fixtures/PublicWorkflowConformance/\(directory)/\(kind)").path, "-scheme", scheme, "-destination", "platform=macOS,arch=arm64", "build", "CODE_SIGNING_ALLOWED=NO"]
+      process.arguments = ["-workspace", root.appendingPathComponent("Tests/Fixtures/PublicWorkflowConformance/\(directory)/\(kind)").path, "-scheme", scheme, "-destination", "platform=macOS,arch=arm64", "build", "CODE_SIGNING_ALLOWED=NO", "SWIFT_SUPPRESS_WARNINGS=NO"]
       FileManager.default.createFile(atPath: stdout.path, contents: nil)
       FileManager.default.createFile(atPath: stderr.path, contents: nil)
       process.standardOutput = try FileHandle(forWritingTo: stdout)

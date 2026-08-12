@@ -132,6 +132,9 @@ struct PublicWorkflowConformanceRunnerTests {
     ]
     #expect(Dictionary(uniqueKeysWithValues: report.checks.map { ($0.id, $0.expectedOutcome) }) == expected)
     #expect(report.checks.allSatisfy { $0.status == .matched && $0.actualOutcome == $0.expectedOutcome && !$0.evidence.isEmpty })
+    let annotation = try #require(report.checks.first(where: { $0.id == "annotation-fixtures" }))
+    let validFixtureLog = try #require(annotation.evidence.first(where: { $0.path.hasSuffix("TLAModel-valid/stdout.log") }))
+    #expect(try String(contentsOf: root.appending(path: validFixtureLog.path), encoding: .utf8).contains("SWIFT_SUPPRESS_WARNINGS=NO"))
     let retained = try JSONDecoder().decode(PublicWorkflowDiagnosticReportV1.self,
       from: Data(contentsOf: temporary.appending(path: "evidence/runs/\(report.runID.uuidString.lowercased())/support-admission.json")))
     #expect(retained.runID == report.runID)
@@ -233,6 +236,7 @@ struct PublicWorkflowConformanceRunnerTests {
     try """
     #!/bin/bash
     if [ "${PUBLIC_WORKFLOW_FAKE_MODE:-matched}" = "unavailable" ]; then exit 127; fi
+    echo "$*"
     if [[ "$*" == *"Invalid"* ]]; then echo "Invariant 'withinBounds' violated"; exit 1; fi
     if [ "${PUBLIC_WORKFLOW_FAKE_MODE:-matched}" = "differed" ] && [[ "$*" == *"TLAModelValid"* ]]; then exit 1; fi
     if [ "${PUBLIC_WORKFLOW_FAKE_MODE:-matched}" = "platform-failure" ] && [[ "$*" == *"SwiftTLA-Package"* ]]; then echo "platform build failed"; exit 65; fi
