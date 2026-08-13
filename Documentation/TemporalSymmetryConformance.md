@@ -15,10 +15,10 @@ Run the release check locally:
 make temporal-symmetry-release-check
 ```
 
-Run the complete local suite with:
+Run the complete release qualification with:
 
 ```sh
-make ci-local
+make ci-release-qualification
 ```
 
 Both commands run locally. They do not require GitHub Actions or a paid

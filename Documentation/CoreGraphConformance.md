@@ -24,17 +24,25 @@ itself admit a support claim. Use the core-support gate for that decision:
 make core-support-gate
 ```
 
-Run the local equivalent of the repository's required checks with:
+Run the fast local PR validation on a local Mac:
 
 ```bash
 make ci-local
 ```
 
-`make ci-local` runs release-contract checks, tests, coverage, package and
-macro builds, the core-conformance workflow contract, locked tool setup, core
-conformance, and the core-support gate. SwiftLint is visible but advisory. The
-commands are intended to run locally; hosted GitHub Actions availability is
-not evidence of a passing check.
+This command validates the local CI command contract, runs advisory SwiftLint,
+tests once, and builds the package and macro plugin. It does not run coverage
+or core conformance.
+
+For the complete release qualification, run:
+
+```bash
+make ci-release-qualification
+```
+
+That command runs coverage, validates the core-conformance and temporal-symmetry
+workflow contracts, and runs temporal/symmetry plus public-workflow
+qualification. It fails if a required gate is unavailable.
 
 ## What is pinned
 
