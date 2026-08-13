@@ -53,6 +53,32 @@ struct TemporalSymmetryConformanceRunnerTests {
     }
   }
 
+  @Test("the runner retains prospective mixed-alias evidence paths and rejects outside outputs")
+  func retainsProspectiveMixedAliasEvidencePath() throws {
+    let physicalRoot = projectRoot()
+    let projectRoot = URL(fileURLWithPath: physicalRoot.path.replacingOccurrences(of: "/private/tmp/", with: "/tmp/"), isDirectory: true)
+    let output = physicalRoot.appendingPathComponent(".build/temporal-symmetry-alias-\(UUID().uuidString)", isDirectory: true)
+    defer { try? FileManager.default.removeItem(at: output) }
+
+    #expect(!FileManager.default.fileExists(atPath: output.path))
+    let cases = try registeredCases()
+    let records = try TemporalSymmetryConformanceRunnerV1().run(
+      TemporalSymmetryConformanceRunnerInputV1(
+        cases: cases, gateRunID: UUID(), projectRoot: projectRoot, outputDirectory: output))
+    #expect(records.count == cases.cases.count)
+    #expect(FileManager.default.fileExists(atPath: output.path))
+    #expect(FileManager.default.fileExists(
+      atPath: output.appendingPathComponent(records[0].caseID).appendingPathComponent("case-run.json").path))
+
+    let outside = URL(fileURLWithPath: "/private/tmp/\(UUID().uuidString)/evidence", isDirectory: true)
+    #expect(throws: TemporalSymmetryConformanceRunnerErrorV1.sourceOutsideProject(outside.path)) {
+      try TemporalSymmetryConformanceRunnerV1().run(
+        TemporalSymmetryConformanceRunnerInputV1(
+          cases: cases, gateRunID: UUID(), projectRoot: projectRoot, outputDirectory: outside))
+    }
+    #expect(!FileManager.default.fileExists(atPath: outside.path))
+  }
+
   private func registeredCases() throws -> TemporalSymmetryCasesV1 {
     try JSONDecoder().decode(
       TemporalSymmetryCasesV1.self,
