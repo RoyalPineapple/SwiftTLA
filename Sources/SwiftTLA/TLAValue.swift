@@ -41,6 +41,167 @@ public enum TLAValue: Hashable, Sendable, CustomStringConvertible {
     }
 }
 
+public enum TLAValueCodingError: Error, Sendable, Equatable {
+    case unsupportedVersion(Int)
+    case unknownTag(String)
+    case malformedValue(String)
+}
+
+extension TLAValue: Codable {
+    private enum CodingKeys: String, CodingKey, CaseIterable {
+        case version
+        case tag
+        case value
+        case elements
+        case fields
+        case mappings
+    }
+
+    private enum Tag: String {
+        case int
+        case bool
+        case string
+        case set
+        case tuple
+        case record
+        case function
+        case constant
+    }
+
+    private struct DynamicCodingKey: CodingKey, Hashable {
+        let stringValue: String
+        let intValue: Int?
+
+        init?(stringValue: String) {
+            self.stringValue = stringValue
+            intValue = nil
+        }
+
+        init?(intValue: Int) {
+            stringValue = String(intValue)
+            self.intValue = intValue
+        }
+    }
+
+    private struct RecordEntry: Codable {
+        let key: String
+        let value: TLAValue
+    }
+
+    private struct FunctionEntry: Codable {
+        let key: TLAValue
+        let value: TLAValue
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        guard container.contains(.version), container.contains(.tag) else {
+            throw TLAValueCodingError.malformedValue("value")
+        }
+        guard let version = try? container.decode(Int.self, forKey: .version) else {
+            throw TLAValueCodingError.malformedValue("value")
+        }
+        guard version == 1 else {
+            throw TLAValueCodingError.unsupportedVersion(version)
+        }
+        guard let tagName = try? container.decode(String.self, forKey: .tag), let tag = Tag(rawValue: tagName) else {
+            let tagName = (try? container.decode(String.self, forKey: .tag)) ?? ""
+            throw TLAValueCodingError.unknownTag(tagName)
+        }
+
+        switch tag {
+        case .int:
+            try Self.requireKeys([.version, .tag, .value], from: decoder, for: tag)
+            guard let value = try? container.decode(Int.self, forKey: .value) else {
+                throw TLAValueCodingError.malformedValue(tag.rawValue)
+            }
+            self = .int(value)
+        case .bool:
+            try Self.requireKeys([.version, .tag, .value], from: decoder, for: tag)
+            guard let value = try? container.decode(Bool.self, forKey: .value) else {
+                throw TLAValueCodingError.malformedValue(tag.rawValue)
+            }
+            self = .bool(value)
+        case .string:
+            try Self.requireKeys([.version, .tag, .value], from: decoder, for: tag)
+            guard let value = try? container.decode(String.self, forKey: .value) else {
+                throw TLAValueCodingError.malformedValue(tag.rawValue)
+            }
+            self = .string(value)
+        case .constant:
+            try Self.requireKeys([.version, .tag, .value], from: decoder, for: tag)
+            guard let value = try? container.decode(String.self, forKey: .value) else {
+                throw TLAValueCodingError.malformedValue(tag.rawValue)
+            }
+            self = .constant(value)
+        case .set:
+            try Self.requireKeys([.version, .tag, .elements], from: decoder, for: tag)
+            guard let elements = try? container.decode([TLAValue].self, forKey: .elements) else {
+                throw TLAValueCodingError.malformedValue(tag.rawValue)
+            }
+            self = .set(Set(elements))
+        case .tuple:
+            try Self.requireKeys([.version, .tag, .elements], from: decoder, for: tag)
+            guard let elements = try? container.decode([TLAValue].self, forKey: .elements) else {
+                throw TLAValueCodingError.malformedValue(tag.rawValue)
+            }
+            self = .tuple(elements)
+        case .record:
+            try Self.requireKeys([.version, .tag, .fields], from: decoder, for: tag)
+            guard let fields = try? container.decode([RecordEntry].self, forKey: .fields), Set(fields.map(\.key)).count == fields.count else {
+                throw TLAValueCodingError.malformedValue(tag.rawValue)
+            }
+            self = .record(Dictionary(uniqueKeysWithValues: fields.map { ($0.key, $0.value) }))
+        case .function:
+            try Self.requireKeys([.version, .tag, .mappings], from: decoder, for: tag)
+            guard let mappings = try? container.decode([FunctionEntry].self, forKey: .mappings),
+                  Set(mappings.map(\.key)).count == mappings.count else {
+                throw TLAValueCodingError.malformedValue(tag.rawValue)
+            }
+            self = .function(Dictionary(uniqueKeysWithValues: mappings.map { ($0.key, $0.value) }))
+        }
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(1, forKey: .version)
+
+        switch self {
+        case .int(let value):
+            try container.encode(Tag.int.rawValue, forKey: .tag)
+            try container.encode(value, forKey: .value)
+        case .bool(let value):
+            try container.encode(Tag.bool.rawValue, forKey: .tag)
+            try container.encode(value, forKey: .value)
+        case .string(let value):
+            try container.encode(Tag.string.rawValue, forKey: .tag)
+            try container.encode(value, forKey: .value)
+        case .set(let elements):
+            try container.encode(Tag.set.rawValue, forKey: .tag)
+            try container.encode(Array(elements), forKey: .elements)
+        case .tuple(let elements):
+            try container.encode(Tag.tuple.rawValue, forKey: .tag)
+            try container.encode(elements, forKey: .elements)
+        case .record(let fields):
+            try container.encode(Tag.record.rawValue, forKey: .tag)
+            try container.encode(fields.keys.sorted().map { RecordEntry(key: $0, value: fields[$0]!) }, forKey: .fields)
+        case .function(let mappings):
+            try container.encode(Tag.function.rawValue, forKey: .tag)
+            try container.encode(mappings.map { FunctionEntry(key: $0.key, value: $0.value) }, forKey: .mappings)
+        case .constant(let value):
+            try container.encode(Tag.constant.rawValue, forKey: .tag)
+            try container.encode(value, forKey: .value)
+        }
+    }
+
+    private static func requireKeys(_ expected: Set<CodingKeys>, from decoder: Decoder, for tag: Tag) throws {
+        let container = try decoder.container(keyedBy: DynamicCodingKey.self)
+        guard Set(container.allKeys.map(\.stringValue)) == Set(expected.map(\.rawValue)) else {
+            throw TLAValueCodingError.malformedValue(tag.rawValue)
+        }
+    }
+}
+
 public func set(_ elements: [some TLAValueConvertible]) -> TLAValue {
     .set(Set(elements.map(\.tlaValue)))
 }
