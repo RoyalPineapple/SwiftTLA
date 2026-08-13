@@ -2,6 +2,24 @@
 
 public protocol PlusCalLabel: Hashable, Sendable {}
 
+/// A validated PlusCal program-counter label.
+///
+/// String literals are accepted only at this boundary. The algorithm validator
+/// rejects empty, reserved, and non-identifier labels before lowering.
+public struct ProgramLabel: Hashable, Sendable, RawRepresentable, ExpressibleByStringLiteral {
+    public let rawValue: String
+
+    public init(rawValue: String) {
+        self.rawValue = rawValue
+    }
+
+    public init(stringLiteral value: String) {
+        rawValue = value
+    }
+}
+
+extension ProgramLabel: PlusCalLabel {}
+
 public struct FiniteDomain<Value: FiniteDomainKey>: Sendable {
     fileprivate let values: [Value]
 
@@ -108,7 +126,7 @@ public enum AlgorithmBuilder {
 }
 
 @resultBuilder
-public enum StepBuilder {
+public enum DoBuilder {
     public static func buildBlock(_ statements: [StepStatement]...) -> [StepStatement] {
         statements.flatMap { $0 }
     }
@@ -163,7 +181,10 @@ public func Local<Value: TLAValueType>(_ variable: Var<Value>, initial: Value) -
     AlgorithmElement(model: .local(AlgorithmStateModel(root: variable.name, initial: initial.tlaValue)))
 }
 
-public func Process<Value: FiniteDomainKey>(
+/// Declares one independently scheduled process for every member of `domain`.
+///
+/// `Each` is concurrent: its bodies do not run as a sequential Swift loop.
+public func Each<Value: FiniteDomainKey>(
     _ domain: FiniteDomain<Value>,
     @AlgorithmBuilder _ body: (ProcessIdentifier<Value>) -> [AlgorithmElement]
 ) -> AlgorithmElement {
@@ -185,8 +206,15 @@ public func Process<Value: FiniteDomainKey>(
 /// transition. The label is the program-counter destination for `Goto`.
 public func Do<Name: PlusCalLabel & RawRepresentable>(
     _ label: Name,
-    @StepBuilder _ body: () -> [StepStatement]
+    @DoBuilder _ body: () -> [StepStatement]
 ) -> AlgorithmElement where Name.RawValue == String {
+    AlgorithmElement(model: .step(AlgorithmStepModel(label: AlgorithmLabelModel(name: label.rawValue), statements: body().map(\.model))))
+}
+
+public func Do(
+    _ label: ProgramLabel,
+    @DoBuilder _ body: () -> [StepStatement]
+) -> AlgorithmElement {
     AlgorithmElement(model: .step(AlgorithmStepModel(label: AlgorithmLabelModel(name: label.rawValue), statements: body().map(\.model))))
 }
 
@@ -210,22 +238,22 @@ public func Assign<Value: TLAValueType>(
 
 public func If(
     _ condition: some StateExprConvertible,
-    @StepBuilder _ then: () -> [StepStatement],
-    @StepBuilder else otherwise: @escaping () -> [StepStatement] = { [] }
+    @DoBuilder _ then: () -> [StepStatement],
+    @DoBuilder else otherwise: @escaping () -> [StepStatement] = { [] }
 ) -> StepStatement {
     StepStatement(model: .ifElse(condition.stateExpr, then().map(\.model), otherwise().map(\.model)))
 }
 
 public func Either(
-    @StepBuilder _ first: () -> [StepStatement],
-    @StepBuilder or second: @escaping () -> [StepStatement]
+    @DoBuilder _ first: () -> [StepStatement],
+    @DoBuilder or second: @escaping () -> [StepStatement]
 ) -> StepStatement {
     StepStatement(model: .either(first().map(\.model), second().map(\.model)))
 }
 
 public func Choose<Value: FiniteDomainKey>(
     _ domain: FiniteDomain<Value>,
-    @StepBuilder _ body: (ProcessIdentifier<Value>) -> [StepStatement]
+    @DoBuilder _ body: (ProcessIdentifier<Value>) -> [StepStatement]
 ) -> StepStatement {
     let name = "__pcal_choice"
     let value = ProcessIdentifier<Value>(expression: .variable(name))
@@ -233,6 +261,10 @@ public func Choose<Value: FiniteDomainKey>(
 }
 
 public func Goto<Label: PlusCalLabel & RawRepresentable>(_ label: Label) -> StepStatement where Label.RawValue == String {
+    StepStatement(model: .goto(AlgorithmLabelModel(name: label.rawValue)))
+}
+
+public func Goto(_ label: ProgramLabel) -> StepStatement {
     StepStatement(model: .goto(AlgorithmLabelModel(name: label.rawValue)))
 }
 
@@ -290,9 +322,6 @@ internal enum AlgorithmValidator {
             }
         }
 
-        if !steps.contains(where: { containsStop($0.statements) }) {
-            diagnostics.append(AlgorithmDiagnostic(.missingStop, at: processAnchor))
-        }
     }
 
     private static func validate(
@@ -351,21 +380,6 @@ internal enum AlgorithmValidator {
                 statementPaths = [[]]
             }
             paths = paths.flatMap { path in statementPaths.map { path + $0 } }
-        }
-    }
-
-    private static func containsStop(_ statements: [AlgorithmStatementModel]) -> Bool {
-        statements.contains {
-            switch $0 {
-            case .stop:
-                return true
-            case .ifElse(_, let then, let otherwise), .either(let then, let otherwise):
-                return containsStop(then) || containsStop(otherwise)
-            case .choose(_, _, let body):
-                return containsStop(body)
-            case .await, .set, .goto:
-                return false
-            }
         }
     }
 

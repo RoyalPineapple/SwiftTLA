@@ -10,7 +10,7 @@ struct AlgorithmBuilderTests {
 
         let algorithm = Algorithm("ChangRoberts") {
             Shared(maximum, initial: 0)
-            Process(Node.all) { node in
+            Each(Node.all) { node in
                 Local(inbox, initial: 0)
                 Do(AlgorithmLabel.receive) {
                     Await(inbox > 0)
@@ -47,7 +47,7 @@ struct AlgorithmBuilderTests {
     func rejectsInvalidAlgorithms() {
         let value = Var<Int>("value", 0)
         let invalid = Algorithm("__pcal_invalid") {
-            Process(EmptyNode.all) { _ in
+            Each(EmptyNode.all) { _ in
                 Do(AlgorithmLabel.receive) {
                     Assign(value, to: 1)
                     Assign(value, to: 2)
@@ -77,7 +77,7 @@ struct AlgorithmBuilderTests {
         let value = Var<Int>("value", 0)
         let algorithm = Algorithm("BoundedCounter") {
             Shared(value, initial: 0)
-            Process(Node.all) { _ in
+            Each(Node.all) { _ in
                 Do(AlgorithmLabel.receive) {
                     Assign(value, to: value + 1)
                     Goto(AlgorithmLabel.done)
@@ -91,8 +91,8 @@ struct AlgorithmBuilderTests {
         let spec = try algorithm.lower()
 
         #expect(spec.variables.map(\.name) == ["value", "pc"])
-        #expect(spec.actions.map(\.name) == ["receive", "done"])
-        for action in spec.actions {
+        #expect(spec.actions.map(\.name) == ["receive", "done", "Terminating"])
+        for action in spec.actions where action.name != "Terminating" {
             #expect(action.bindings == [ActionBinding(name: "self", values: Node.formalDomain.map(\.tlaValue))])
         }
 
@@ -103,12 +103,12 @@ struct AlgorithmBuilderTests {
         ]))
     }
 
-    @Test("lowered atomic actions advance pc and stop with a self loop")
+    @Test("lowered atomic actions advance pc and stop before the explicit terminating self loop")
     func lowersAtomicSemantics() throws {
         let value = Var<Int>("value", 0)
         let algorithm = Algorithm("BoundedCounter") {
             Shared(value, initial: 0)
-            Process(Node.all) { _ in
+            Each(Node.all) { _ in
                 Do(AlgorithmLabel.receive) {
                     Assign(value, to: value + 1)
                     Goto(AlgorithmLabel.done)
@@ -136,14 +136,28 @@ struct AlgorithmBuilderTests {
         let firstDone = try #require(actionInvocations(done).first { $0.invocation.arguments == [.string("first")] })
         let stopped = try #require(
             ActionEnumerator.enumerate(firstDone.body, from: advanced, varNames: spec.variables.map(\.name)).first)
-        #expect(stopped == advanced)
+        #expect(stopped["pc"] == .function([
+            .string("first"): .string("Done"),
+            .string("second"): .string("receive")
+        ]))
+
+        let secondReceive = try #require(actionInvocations(receive).first { $0.invocation.arguments == [.string("second")] })
+        let secondAdvanced = try #require(
+            ActionEnumerator.enumerate(secondReceive.body, from: stopped, varNames: spec.variables.map(\.name)).first)
+        let secondDone = try #require(actionInvocations(done).first { $0.invocation.arguments == [.string("second")] })
+        let allDone = try #require(
+            ActionEnumerator.enumerate(secondDone.body, from: secondAdvanced, varNames: spec.variables.map(\.name)).first)
+        let terminating = try #require(spec.actions.first { $0.name == "Terminating" })
+        let terminal = try #require(
+            ActionEnumerator.enumerate(terminating.body, from: allDone, varNames: spec.variables.map(\.name)).first)
+        #expect(terminal == allDone)
     }
 
     @Test("lowering represents process-local state as a function of self")
     func lowersLocalState() throws {
         let inbox = Var<Int>("inbox", 0)
         let algorithm = Algorithm("LocalCounter") {
-            Process(Node.all) { _ in
+            Each(Node.all) { _ in
                 Local(inbox, initial: 0)
                 Do(AlgorithmLabel.receive) {
                     Await(inbox == 0)
@@ -171,6 +185,101 @@ struct AlgorithmBuilderTests {
             .string("first"): .int(1),
             .string("second"): .int(0)
         ]))
+    }
+
+    @Test("string labels are contained by ProgramLabel and validated before lowering")
+    func validatesStringLabels() throws {
+        let value = Var<Int>("value", 0)
+        let algorithm = Algorithm("StringLabels") {
+            Shared(value, initial: 0)
+            Each(Node.all) { _ in
+                Do("move") {
+                    Assign(value, to: value + 1)
+                    Goto("done")
+                }
+                Do("done") { Stop() }
+            }
+        }
+
+        #expect(algorithm.validate().isEmpty)
+        #expect(try algorithm.lower().actions.map(\.name).contains("move"))
+
+        let invalid = Algorithm("InvalidStringLabel") {
+            Each(Node.all) { _ in
+                Do("bad label") { Stop() }
+            }
+        }
+        #expect(invalid.validate().contains { $0.code == .invalidName })
+    }
+
+    @Test("the end of an Each machine reaches its builder-owned Done state")
+    func eachMachineEndsInDone() throws {
+        let value = Var<Int>("value", 0)
+        let algorithm = Algorithm("ImplicitStop") {
+            Shared(value, initial: 0)
+            Each(Node.all) { _ in
+                Do("finish") {
+                    Assign(value, to: value + 1)
+                }
+            }
+        }
+
+        let spec = try algorithm.lower()
+        let initial = try #require(computeInitialStates(spec).first)
+        let finish = try #require(spec.actions.first { $0.name == "finish" })
+        let invocation = try #require(actionInvocations(finish).first { $0.invocation.arguments == [.string("first")] })
+        let terminal = try #require(
+            ActionEnumerator.enumerate(invocation.body, from: initial, varNames: spec.variables.map(\.name)).first)
+        #expect(terminal["pc"] == .function([
+            .string("first"): .string("Done"),
+            .string("second"): .string("finish")
+        ]))
+    }
+
+    @Test("an unlabeled transfer falls through to the next Do block")
+    func intermediateDoFallsThrough() throws {
+        let value = Var<Int>("value", 0)
+        let algorithm = Algorithm("Fallthrough") {
+            Shared(value, initial: 0)
+            Each(Node.all) { _ in
+                Do("prepare") {
+                    Assign(value, to: value + 1)
+                }
+                Do("finish") {
+                    Assign(value, to: value + 1)
+                }
+            }
+        }
+
+        let spec = try algorithm.lower()
+        let initial = try #require(computeInitialStates(spec).first)
+        let prepare = try #require(spec.actions.first { $0.name == "prepare" })
+        let invocation = try #require(actionInvocations(prepare).first { $0.invocation.arguments == [.string("first")] })
+        let advanced = try #require(
+            ActionEnumerator.enumerate(invocation.body, from: initial, varNames: spec.variables.map(\.name)).first)
+        #expect(advanced["pc"] == .function([
+            .string("first"): .string("finish"),
+            .string("second"): .string("prepare")
+        ]))
+    }
+
+    @Test("TLASpec accepts an algorithm component and lowers it before checking")
+    func algorithmComposesIntoTLASpec() throws {
+        let value = Var<Int>("value", 0)
+        let algorithm = Algorithm("Composed") {
+            Shared(value, initial: 0)
+            Each(Node.all) { _ in
+                Do("finish") { Assign(value, to: value + 1) }
+            }
+        }
+
+        let spec = TLASpec("Composed") {
+            algorithm
+            Invariant("nonNegative") { value >= 0 }
+        }
+        #expect(spec.variables.map(\.name) == ["value", "pc"])
+        #expect(spec.actions.map(\.name) == ["finish", "Terminating"])
+        #expect(spec.invariants.map(\.name) == ["nonNegative"])
     }
 }
 

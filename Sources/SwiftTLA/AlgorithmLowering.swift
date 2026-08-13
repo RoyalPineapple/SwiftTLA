@@ -10,6 +10,8 @@ private enum AlgorithmLowerer {
     private static let controlVariable = "pc"
     private static let processBinding = "self"
     private static let builderProcessIdentifier = "__pcal_self"
+    private static let doneLabel = "Done"
+    private static let terminatingAction = "Terminating"
 
     static func lower(_ algorithm: AlgorithmModel) -> TLASpec {
         let processes = algorithm.processes
@@ -41,21 +43,43 @@ private enum AlgorithmLowerer {
 
         let variableNames = variables.map(\.name)
         let localRoots = Set(localStates.map(\.root))
-        let actions = processes.flatMap { process in
-            process.steps.map { atomic in
+        var actions = processes.flatMap { process in
+            process.steps.enumerated().map { index, atomic in
                 let guardExpression = StateExpr.equal(
                     .functionApply(.variable(controlVariable), .variable(processBinding)),
                     .value(.string(atomic.label.name)))
-                let body = lower(
+                let nextLabel = process.steps.indices.contains(index + 1)
+                    ? process.steps[index + 1].label.name
+                    : doneLabel
+                let body = completingControl(
+                    lower(
                     atomic.statements,
                     localRoots: localRoots,
-                    processDomain: process.domain)
+                    processDomain: process.domain),
+                    fallthrough: nextLabel)
                 return NamedAction(
                     name: atomic.label.name,
                     body: completeAction(.and(.guard_(guardExpression), body), allVars: variableNames),
                     bindings: [ActionBinding(name: processBinding, values: process.domain)])
             }
         }
+
+        let allDone = processes.reduce(StateExpr.value(.bool(true))) { condition, process in
+            let members = StateExpr.setLiteral(process.domain.map(StateExpr.value))
+            let processDone = StateExpr.forAll(
+                members,
+                processBinding,
+                .equal(
+                    .functionApply(.variable(controlVariable), .variable(processBinding)),
+                    .value(.string(doneLabel))
+                )
+            )
+            return .and(condition, processDone)
+        }
+        let unchanged = variableNames
+            .map(ActionExpr.unchanged)
+            .reduce(.guard_(allDone), ActionExpr.and)
+        actions.append(NamedAction(name: terminatingAction, body: unchanged))
 
         return TLASpec(
             name: algorithm.name,
@@ -76,6 +100,31 @@ private enum AlgorithmLowerer {
         statements.reduce(.guard_(.value(.bool(true)))) { partial, statement in
             .and(partial, lower(statement, localRoots: localRoots, processDomain: processDomain))
         }
+    }
+
+    private static func stopAction() -> ActionExpr {
+        transfer(to: doneLabel)
+    }
+
+    private static func transfer(to label: String) -> ActionExpr {
+        .assign(
+            controlVariable,
+            .except(
+                .variable(controlVariable),
+                .variable(processBinding),
+                .value(.string(label))))
+    }
+
+    /// An `Each` machine continues to its next `Do` when it does not explicitly
+    /// transfer control. Its final `Do` reaches the builder-owned `Done` state.
+    private static func completingControl(_ action: ActionExpr, fallthrough label: String) -> ActionExpr {
+        let branches = distributeOr(action)
+        let completed = branches.map { branch in
+            assignedVars(branch).contains(controlVariable)
+                ? branch
+                : .and(branch, transfer(to: label))
+        }
+        return completed.dropFirst().reduce(completed.first ?? transfer(to: label), ActionExpr.or)
     }
 
     private static func lower(
@@ -125,8 +174,7 @@ private enum AlgorithmLowerer {
                     .variable(processBinding),
                     .value(.string(label.name))))
         case .stop:
-            // Keep a terminated process in place so its final atomic action is a self loop.
-            return .unchanged(controlVariable)
+            return stopAction()
         }
     }
 
