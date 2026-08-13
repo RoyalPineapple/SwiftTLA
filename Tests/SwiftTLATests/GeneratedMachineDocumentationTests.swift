@@ -76,6 +76,36 @@ struct GeneratedMachineDocumentationTests {
         }
     }
 
+    @Test("Generated-machine Markdown and DocC retain the typed public boundary")
+    func documentationRetainsTypedBoundary() throws {
+        let root = packageRoot()
+        let guide = try String(
+            contentsOf: root.appendingPathComponent("Documentation/GeneratedMachines.md"),
+            encoding: .utf8
+        )
+        let docc = try String(
+            contentsOf: root.appendingPathComponent("Sources/SwiftTLA/SwiftTLA.docc/GeneratedMachineSurface.md"),
+            encoding: .utf8
+        )
+        let macroDocc = try String(
+            contentsOf: root.appendingPathComponent("Sources/SwiftTLAMacros/SwiftTLAMacros.docc/SwiftTLAMacros.md"),
+            encoding: .utf8
+        )
+
+        for term in ["TransitionResult", "TLAStateProjectionResult", "ActionLabel", "State"] {
+            #expect(guide.contains(term), "Markdown guide is missing typed term: \(term)")
+            #expect(docc.contains(term), "SwiftTLA DocC is missing typed term: \(term)")
+        }
+        for macro in ["TLAModel", "TLAActor", "TLAObservable"] {
+            #expect(macroDocc.contains(macro), "Macro DocC is missing macro: \(macro)")
+        }
+
+        for staleTerm in ["TransitionEvidence", "state[\"value\"]", "tlaSnapshot()["] {
+            #expect(!guide.contains(staleTerm), "Markdown guide exposes stale boundary: \(staleTerm)")
+            #expect(!docc.contains(staleTerm), "SwiftTLA DocC exposes stale boundary: \(staleTerm)")
+        }
+    }
+
     @Test("Generated machine documentation fixture compiles and exercises its stated macOS behavior")
     func fixtureCompilesAndExercisesDocumentedBehavior() throws {
         let fixture = packageRoot().appendingPathComponent("Tests/Fixtures/GeneratedMachineDocumentation")
@@ -104,8 +134,8 @@ struct GeneratedMachineDocumentationTests {
         "Generated `Actions`",
         "`ActionLabel.toInvocation()`",
         "`ActionLabel.init?(invocation:)`",
-        "`State(from:)`",
-        "`asDictionary`",
+        "`TLAStateProjection`",
+        "`TLAStateProjectionResult`",
         "`availableInvocations()`",
         "`TLAMachineAdapterCanonicalModel`",
         "`TLAMachineAdapterAccess`",
@@ -143,6 +173,8 @@ struct GeneratedMachineDocumentationTests {
             ("`@TLAModel`", "Sources/SwiftTLAMacros/Macros.swift", "public macro TLAModel"),
             ("`@TLAActor`", "Sources/SwiftTLAMacros/Macros.swift", "public macro TLAActor"),
             ("`@TLAObservable`", "Sources/SwiftTLAMacros/Macros.swift", "public macro TLAObservable"),
+            ("`TLAStateProjection`", "Sources/SwiftTLA/CanonicalMachine.swift", "public struct TLAStateProjection"),
+            ("`TLAStateProjectionResult`", "Sources/SwiftTLA/CanonicalMachine.swift", "public enum TLAStateProjectionResult"),
             ("`TLAMachineObservation`", "Sources/SwiftTLA/CanonicalMachine.swift", "public struct TLAMachineObservation"),
             ("`TLAMachineAvailabilityDiagnostic`", "Sources/SwiftTLA/CanonicalMachine.swift", "public struct TLAMachineAvailabilityDiagnostic"),
             ("`TLAMachineObserving`", "Sources/SwiftTLA/CanonicalMachine.swift", "public protocol TLAMachineObserving"),
@@ -152,7 +184,7 @@ struct GeneratedMachineDocumentationTests {
             ("`TLAActionInvocation`", "Sources/SwiftTLA/TLASpec.swift", "public struct TLAActionInvocation"),
             ("`GeneratedMachineError`", "Sources/SwiftTLA/CanonicalMachine.swift", "public enum GeneratedMachineError"),
             ("Generated `ActionLabel`", "Sources/SwiftTLAPlugin/MacroExpander.swift", "public enum ActionLabel"),
-            ("Generated `TransitionEvidence`", "Sources/SwiftTLAPlugin/MacroExpander+CanonicalMachine.swift", "public struct TransitionEvidence"),
+            ("Generated `TransitionResult`", "Sources/SwiftTLAPlugin/MacroExpander+CanonicalMachine.swift", "public struct TransitionResult"),
             ("Generated `verifySpec()`", "Sources/SwiftTLAPlugin/MacroExpander+Generation.swift", "public static func verifySpec()")
         ]
     }

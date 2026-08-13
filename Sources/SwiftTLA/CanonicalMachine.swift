@@ -1,5 +1,6 @@
 import os
 
+/// Describes why the formal state cannot cross the guarded application boundary.
 public enum TLAStateProjectionDiagnostic: Error, Sendable, Equatable, CustomStringConvertible {
     case invalidKey(path: String)
     case invalidConstant(path: String)
@@ -22,6 +23,7 @@ public enum TLAStateProjectionDiagnostic: Error, Sendable, Equatable, CustomStri
 
 /// An opaque, safe view of formal-engine state for application-facing APIs.
 public struct TLAStateProjection: Sendable, Equatable, CustomStringConvertible {
+    /// A validated identifier for a value in a formal state projection.
     public struct Token: Sendable, Hashable, CustomStringConvertible {
         fileprivate let identifier: String
 
@@ -39,6 +41,7 @@ public struct TLAStateProjection: Sendable, Equatable, CustomStringConvertible {
         public var description: String { identifier }
     }
 
+    /// One validated value in a state projection.
     public struct Entry: Sendable, Equatable {
         public let token: Token
         public let value: TLAValue
@@ -127,6 +130,7 @@ public struct TLAStateProjection: Sendable, Equatable, CustomStringConvertible {
     }
 }
 
+/// Contains a valid projection or the typed reason why one is unavailable.
 public enum TLAStateProjectionResult: Sendable, Equatable {
     case projected(TLAStateProjection)
     case unavailable(TLAStateProjectionDiagnostic)
@@ -149,6 +153,7 @@ public enum TLAStateProjectionResult: Sendable, Equatable {
     }
 }
 
+/// An internal generic transition record for canonical machine implementations.
 public struct CanonicalTransitionEvidence<Snapshot: Equatable & Sendable>: Equatable, Sendable {
     public let invocation: TLAActionInvocation
     public let before: Snapshot
@@ -161,12 +166,14 @@ public struct CanonicalTransitionEvidence<Snapshot: Equatable & Sendable>: Equat
     }
 }
 
+/// Reports a generated-machine execution failure.
 public enum GeneratedMachineError: Error {
     case runtime(SpecRuntime.RuntimeError)
     case unexpected(any Error)
     case unrepresentableActionLabel(TLAActionInvocation)
 }
 
+/// Explains why a machine cannot report its currently available actions.
 public struct TLAMachineAvailabilityDiagnostic: Sendable, Equatable {
     public enum Code: String, Sendable, Equatable {
         case evaluationFailed
@@ -188,6 +195,7 @@ public struct TLAMachineAvailabilityDiagnostic: Sendable, Equatable {
     }
 }
 
+/// Combines a guarded state result with action availability for one observation.
 public struct TLAMachineObservation: Sendable, Equatable {
     public enum Availability: Sendable, Equatable {
         case available([TLAActionInvocation])
@@ -251,6 +259,7 @@ public struct TLAMachineObservation: Sendable, Equatable {
     public var projectionDiagnostic: TLAStateProjectionDiagnostic? { state.diagnostic }
 }
 
+/// An asynchronous source of guarded machine observations.
 public protocol TLAMachineObserving: Sendable {
     func machineObservation() async -> TLAMachineObservation
 }
@@ -265,12 +274,14 @@ public extension TLAMachineObserving {
     }
 }
 
+/// A machine that executes formal action invocations asynchronously.
 public protocol TLAMachineExecuting: TLAMachineObserving {
     associatedtype TransitionResult: Sendable
 
     mutating func execute(_ invocation: TLAActionInvocation) async throws -> TransitionResult
 }
 
+/// The synchronous canonical model that backs a generated adapter.
 public protocol TLAMachineAdapterCanonicalModel: TLAMachineExecuting, Sendable {
     func synchronousMachineObservation() -> TLAMachineObservation
 
@@ -279,6 +290,7 @@ public protocol TLAMachineAdapterCanonicalModel: TLAMachineExecuting, Sendable {
     ) throws -> TransitionResult
 }
 
+/// An adapter that provides serialized access to its canonical generated model.
 public protocol TLAMachineAdapterAccess: AnyObject, TLAMachineExecuting {
     associatedtype CanonicalModel: TLAMachineAdapterCanonicalModel
 

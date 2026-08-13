@@ -7,17 +7,17 @@ struct GeneratedMachineDocumentationTests {
     func disabledActionRetainsSnapshot() async throws {
         var machine = BoundedCounter()
         let initial = await machine.machineObservation()
-        let evidence = try machine.apply(.advance)
-        let beforeFailure = machine.tlaSnapshot()
+        let result = try machine.apply(.advance)
+        let beforeFailure = machine.state
 
-        #expect(initial.state["value"] == .int(0))
+        #expect(initial.projection != nil)
         #expect(initial.availableInvocations == [.init(name: "advance")])
-        #expect(evidence.before["value"] == .int(0))
-        #expect(evidence.after["value"] == .int(1))
+        #expect(result.before.value == 0)
+        #expect(result.after.value == 1)
         #expect(throws: GeneratedMachineError.self) {
             try machine.apply(.advance)
         }
-        #expect(machine.tlaSnapshot() == beforeFailure)
+        #expect(machine.state == beforeFailure)
     }
 
     @Test("nested adapters retain canonical isolation and callback semantics")
@@ -31,11 +31,11 @@ struct GeneratedMachineDocumentationTests {
             await recorder.record(before: before, after: after)
         }
 
-        #expect(await actor.machineObservation().state["value"] == .int(0))
-        _ = try await actor.execute(.init(name: "advance"))
-        _ = try await observable.execute(.init(name: "advance"))
+        #expect(await actor.state().value == 0)
+        _ = try await actor.execute(CounterHost.Actor.ActionLabel.advance.toInvocation())
+        _ = try await observable.execute(CounterScreenModel.Observable.ActionLabel.advance.toInvocation())
 
-        #expect(await actor.machineObservation().state["value"] == .int(1))
+        #expect(await actor.state().value == 1)
         #expect(await recorder.transitions == [.init(before: 0, after: 1)])
     }
 }

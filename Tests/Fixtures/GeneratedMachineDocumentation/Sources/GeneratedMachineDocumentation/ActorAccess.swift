@@ -20,9 +20,10 @@ struct CounterHost {
 
 func runActorAccess() async throws {
     let actor = CounterHost.Actor()
-    let observation = await actor.machineObservation()
-    let evidence = try await actor.execute(.init(name: "advance"))
+    let state = await actor.state()
+    let result = try await actor.execute(CounterHost.Actor.ActionLabel.advance.toInvocation())
 
-    assert(observation.state["value"] == .int(0))
-    assert(evidence.after["value"] == .int(1))
+    assert(state.value == 0)
+    assert(result.action == CounterHost.Actor.ActionLabel.advance)
+    assert(result.after.value == 1)
 }

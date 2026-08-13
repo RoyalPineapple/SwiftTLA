@@ -5,19 +5,18 @@ import SwiftUI
 
 struct CounterView: View {
     @State private var machine = CounterScreenModel.Observable()
-    @State private var observation = TLAMachineObservation(
-        state: [:],
-        availability: .available([])
-    )
+    @State private var state: CounterScreenModel.State?
+    @State private var observation: TLAMachineObservation?
     @State private var diagnostic = ""
 
     var body: some View {
         VStack {
-            Text("Value: \(observation.state["value"]?.description ?? "-")")
+            Text("Value: \(state.map { String($0.value) } ?? "-")")
             Button("Advance") {
                 Task { @MainActor in
                     do {
-                        _ = try await machine.execute(.init(name: "advance"))
+                        _ = try await machine.execute(CounterScreenModel.Observable.ActionLabel.advance.toInvocation())
+                        state = machine.state
                         observation = await machine.machineObservation()
                         diagnostic = ""
                     } catch {
@@ -25,17 +24,20 @@ struct CounterView: View {
                     }
                 }
             }
-            if let invocations = observation.availableInvocations {
+            if let invocations = observation?.availableInvocations {
                 ForEach(invocations, id: \.self) { invocation in
                     Text(invocation.description)
                 }
-            } else if let diagnostic = observation.availabilityDiagnostic {
+            } else if let diagnostic = observation?.availabilityDiagnostic {
                 Text(diagnostic.message)
             }
             if !diagnostic.isEmpty {
                 Text(diagnostic)
             }
         }
-        .task { observation = await machine.machineObservation() }
+        .task {
+            state = machine.state
+            observation = await machine.machineObservation()
+        }
     }
 }

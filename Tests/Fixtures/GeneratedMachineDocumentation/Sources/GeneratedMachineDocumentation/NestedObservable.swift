@@ -25,5 +25,6 @@ func runObservable() async throws {
         assert(before.value == 0)
         assert(after.value == 1)
     }
-    _ = try await observable.execute(.init(name: "advance"))
+    let result = try await observable.execute(CounterScreenModel.Observable.ActionLabel.advance.toInvocation())
+    assert(result.action == CounterScreenModel.Observable.ActionLabel.advance)
 }
