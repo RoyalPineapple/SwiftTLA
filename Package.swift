@@ -15,7 +15,8 @@ let package = Package(
         .library(name: "SwiftTLA", targets: ["SwiftTLA"]),
         .library(name: "SwiftTLAMacros", targets: ["SwiftTLAMacros"]),
         .library(name: "SwiftTLAModels", targets: ["SwiftTLAModels"]),
-        .library(name: "UpstreamParity", targets: ["UpstreamParity"])
+        .library(name: "UpstreamParity", targets: ["UpstreamParity"]),
+        .executable(name: "FormalTypeIdentityProbe", targets: ["FormalTypeIdentityProbe"])
     ],
     dependencies: [
         .package(url: "https://github.com/swiftlang/swift-syntax", from: "600.0.0")
@@ -38,6 +39,7 @@ let package = Package(
             .product(name: "SwiftParser", package: "swift-syntax")
         ]),
         .target(name: "SwiftTLAModels", dependencies: ["SwiftTLA", "SwiftTLAMacros"], swiftSettings: settings),
+        .executableTarget(name: "FormalTypeIdentityProbe", dependencies: ["SwiftTLA"], path: "Tests/Fixtures/FormalTypeIdentityProbe"),
         .target(
             name: "UpstreamParity",
             dependencies: [
