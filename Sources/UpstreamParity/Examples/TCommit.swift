@@ -20,6 +20,15 @@ static func tCommitSpec() -> TLASpec {
         func st(_ rm: String) -> StateExpr {
             .functionApply(.variable("rmState"), .value(.string(rm)))
         }
+        func isPreparedOrCommitted(_ rm: String) -> StateExpr {
+            st(rm) == "prepared" || st(rm) == "committed"
+        }
+        func noResourceManagerHasCommitted() -> StateExpr {
+            st("r1") != "committed" && st("r2") != "committed" && st("r3") != "committed"
+        }
+        func abortAndCommitAreMutuallyExclusive(_ aborted: String, _ committed: String) -> StateExpr {
+            !(st(aborted) == "aborted" && st(committed) == "committed")
+        }
         return TLASpec("TCommit") {
             Extends("Integers")
             Variable(rmState, initFun)
@@ -30,24 +39,24 @@ static func tCommitSpec() -> TLASpec {
                 }
                 Action("Commit_\(rm)") {
                     st(rm) == "prepared"
-                        && (st("r1") == "prepared" || st("r1") == "committed")
-                        && (st("r2") == "prepared" || st("r2") == "committed")
-                        && (st("r3") == "prepared" || st("r3") == "committed")
+                        && isPreparedOrCommitted("r1")
+                        && isPreparedOrCommitted("r2")
+                        && isPreparedOrCommitted("r3")
                         && .assign(rmState.name, rmState.stateExpr.updated(at: rm, to: "committed"))
                 }
                 Action("Abort_\(rm)") {
                     (st(rm) == "working" || st(rm) == "prepared")
-                        && st("r1") != "committed" && st("r2") != "committed" && st("r3") != "committed"
+                        && noResourceManagerHasCommitted()
                         && .assign(rmState.name, rmState.stateExpr.updated(at: rm, to: "aborted"))
                 }
             }
             Invariant("TCConsistent") {
-                !((st("r1") == "aborted" && st("r2") == "committed")
-                    || (st("r1") == "aborted" && st("r3") == "committed")
-                    || (st("r2") == "aborted" && st("r1") == "committed")
-                    || (st("r2") == "aborted" && st("r3") == "committed")
-                    || (st("r3") == "aborted" && st("r1") == "committed")
-                    || (st("r3") == "aborted" && st("r2") == "committed"))
+                abortAndCommitAreMutuallyExclusive("r1", "r2")
+                    && abortAndCommitAreMutuallyExclusive("r1", "r3")
+                    && abortAndCommitAreMutuallyExclusive("r2", "r1")
+                    && abortAndCommitAreMutuallyExclusive("r2", "r3")
+                    && abortAndCommitAreMutuallyExclusive("r3", "r1")
+                    && abortAndCommitAreMutuallyExclusive("r3", "r2")
             }
         }
     }
