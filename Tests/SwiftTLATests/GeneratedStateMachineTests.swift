@@ -19,6 +19,51 @@ struct CounterNoInvs {
     }
 }
 
+@TLAModel
+struct GeneratedAlgorithmCounter {
+    enum Node: String, FiniteDomainKey {
+        case left
+        case right
+
+        static let formalDomain: [Node] = [.left, .right]
+        static let formalTypeIdentity = FormalTypeIdentity(rawValue: "test.generated-algorithm-node")
+
+        var tlaValue: TLAValue { .string(rawValue) }
+    }
+
+    static var spec: TLASpec {
+        TLASpec("GeneratedAlgorithmCounter") {
+            let count = Var<Int>("count")
+            Algorithm("GeneratedAlgorithmCounter") {
+                Shared(count, initial: 0)
+                Each(Node.all) { _ in
+                    Do("increment") {
+                        Await(count < 2)
+                        Assign(count, to: count + 1)
+                    }
+                }
+            }
+        }
+    }
+}
+
+struct GeneratedAlgorithmMachineTests {
+    @Test("a bounded Algorithm generates the ordinary typed state machine")
+    func generatedAlgorithmUsesTheSharedLowering() throws {
+        var model = GeneratedAlgorithmCounter()
+        #expect(model.state.count == 0)
+        let left = GeneratedAlgorithmCounter.ActionLabel.increment(process: "left")
+        let result = try model.apply(left)
+        #expect(result.before.count == 0)
+        #expect(result.after.count == 1)
+        #expect(model.state.count == 1)
+        #expect(result.after.pc == .function([
+            .string("left"): .string("Done"),
+            .string("right"): .string("increment")
+        ]))
+    }
+}
+
 struct NestedAdapterConcurrencyTests {
     @Test("Nested adapters observe and execute through their canonical model")
     @MainActor

@@ -15,6 +15,38 @@ private func parseExpression(_ source: String) -> ExprSyntax {
     Parser.parse(source: source).statements.first!.item.as(ExprSyntax.self)!
 }
 
+@Suite(.serialized) struct AlgorithmBuilderParsingTests {
+    @Test("Algorithm Each Do syntax lowers through the ordinary parser AST")
+    func parsesBoundedAlgorithm() {
+        let source = """
+        {
+            let count = Var<Int>("count")
+            Algorithm("Counter") {
+                Shared(count, initial: 0)
+                Each(Node.all) { node in
+                    Do("increment") {
+                        Await(count < 2)
+                        Assign(count, to: count + 1)
+                    }
+                }
+            }
+        }
+        """
+        let closure = Parser.parse(source: source).statements.first!.item.as(ClosureExprSyntax.self)!
+        let parsed = SpecParser.parseSpecClosure(
+            closure,
+            enumDomains: ["Node": [.string("left"), .string("right")]]
+        )
+
+        #expect(parsed.diagnostics.isEmpty)
+        #expect(parsed.variables.map(\.name) == ["count", "pc"])
+        #expect(parsed.actions.map(\.name) == ["increment", "Terminating"])
+        #expect(parsed.actions.first?.bindings == [
+            ActionBinding(name: "process", values: [.string("left"), .string("right")])
+        ])
+    }
+}
+
 // MARK: - StateExpr: literals
 
 @Suite(.serialized) struct StateExprLiteralTests {

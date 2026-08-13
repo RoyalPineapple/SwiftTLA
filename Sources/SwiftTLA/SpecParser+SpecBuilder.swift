@@ -315,6 +315,8 @@ extension SpecParser {
         guard let name = call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text else { return }
 
         switch name {
+        case "Algorithm":
+            parseAlgorithm(call, into: &result)
         case "SymmetricCollection":
             parseSymmetricCollectionDecl(call, into: &result, collectionTypes: collectionTypes)
         case "CollectionAction":

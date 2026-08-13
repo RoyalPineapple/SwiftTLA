@@ -93,7 +93,7 @@ struct AlgorithmBuilderTests {
         #expect(spec.variables.map(\.name) == ["value", "pc"])
         #expect(spec.actions.map(\.name) == ["receive", "done", "Terminating"])
         for action in spec.actions where action.name != "Terminating" {
-            #expect(action.bindings == [ActionBinding(name: "self", values: Node.formalDomain.map(\.tlaValue))])
+            #expect(action.bindings == [ActionBinding(name: "process", values: Node.formalDomain.map(\.tlaValue))])
         }
 
         let initial = try #require(computeInitialStates(spec).first)

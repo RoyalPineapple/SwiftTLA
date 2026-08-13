@@ -6,9 +6,9 @@ extension Algorithm {
     }
 }
 
-private enum AlgorithmLowerer {
+enum AlgorithmLowerer {
     private static let controlVariable = "pc"
-    private static let processBinding = "self"
+    private static let processBinding = "process"
     private static let builderProcessIdentifier = "__pcal_self"
     private static let doneLabel = "Done"
     private static let terminatingAction = "Terminating"

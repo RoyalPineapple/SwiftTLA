@@ -446,7 +446,10 @@ enum TLASpecVerifier {
                 $0.type.as(IdentifierTypeSyntax.self)?.name.text
             }
 
-            guard inheritedNames.contains("TLAValueType") || inheritedNames.contains("FiniteTLAValueDomain") else { continue }
+            guard inheritedNames.contains("TLAValueType")
+                || inheritedNames.contains("FiniteTLAValueDomain")
+                || inheritedNames.contains("FiniteDomainKey")
+            else { continue }
 
             let intBacked = inheritedNames.contains("Int")
             let stringBacked = inheritedNames.contains("String")
