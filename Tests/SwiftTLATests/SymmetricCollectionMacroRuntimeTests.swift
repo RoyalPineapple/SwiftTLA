@@ -181,6 +181,9 @@ struct SymmetricCollectionMacroRuntimeTests {
     """
     let closure = Parser.parse(source: source).statements.first!.item.as(ClosureExprSyntax.self)!
     let parsed = SpecParser.parseSpecClosure(closure)
+    let runtimeSpec = TLASpec("RuntimeDictionaryParity") {
+      DictionaryVar<Device, Int>("devicePhases", scope: 4)
+    }
     let spec = TLASpec(
       name: "DictionaryEnabledRegression",
       variables: parsed.variables.map { NamedVar(name: $0.name, initial: $0.initial, initialSet: $0.initialSet) },
@@ -193,6 +196,8 @@ struct SymmetricCollectionMacroRuntimeTests {
     #expect(parsed.variables.map(\.name) == ["cPhase", "devicePhases"])
     #expect(parsed.symmetricCollections.map(\.name) == ["devicePhases"])
     #expect(parsed.symmetricCollections.map(\.verificationScope) == [4])
+    #expect(parsed.variables[1].initial == runtimeSpec.variables[0].initial)
+    #expect(parsed.symmetricCollections[0].declaration.metadata == runtimeSpec.symmetricCollections[0].metadata)
     #expect(try ModelChecker(spec: spec).check().description.contains("OK"))
   }
 

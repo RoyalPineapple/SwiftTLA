@@ -140,6 +140,10 @@ extension SpecParser {
                   let fc = initializer.as(FunctionCallExprSyntax.self)
             else { continue }
 
+            if parseDictionaryVarDecl(binding, into: &result) {
+                continue
+            }
+
             let stateVarInfo = resolveVarCall(fc)
             let varTypeName = stateVarInfo?.1 ?? resolveVarTypeArg(fc)
             let callName = stateVarInfo?.0 ?? (resolveVarTypeArg(fc) != nil ? "Var" : nil)
