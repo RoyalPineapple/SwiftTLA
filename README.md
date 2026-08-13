@@ -136,18 +136,17 @@ failed. The command retains its current report at
 `.build/core-support-gate/support-admission.json` and each run below
 `.build/core-support-gate/runs/`.
 
-Run the complete local verification gate with:
+Run the fast local PR validation with:
 
 ```bash
 make ci-local
 ```
 
-It runs tests, coverage, builds, and the locked finite TLC comparison plus the
-core-support gate. It writes fresh evidence below `.build/`. SwiftLint remains
-an advisory warning. These commands run locally; they do not require a hosted
-or paid GitHub runner. This is a bounded claim for the declared cases only. It
-does not prove arbitrary bounds, temporal properties, liveness, fairness, or
-symmetry reduction.
+It validates the release code-check contract, runs advisory SwiftLint, tests
+once, and builds the package and macro plugin. It does not run coverage or the
+release qualification gates. Use `make ci-release-qualification` before a
+release. These commands run locally; they do not require a hosted or paid
+GitHub runner.
 
 ### Temporal and symmetry support
 
@@ -205,6 +204,29 @@ State counts alone do not establish behavioral equivalence. A successful bounded
 swift test
 make parity
 ```
+
+## Local validation
+
+Use the fast PR command during normal development:
+
+```bash
+make ci-pr
+```
+
+It validates the release code-check contract, runs advisory SwiftLint, tests the
+package once, and builds the package and macro plugin. `make ci-local` remains a
+compatibility alias for this fast path.
+
+Before release, run the complete qualification command:
+
+```bash
+make ci-release-qualification
+```
+
+It includes the PR validation checks, coverage, the core-conformance and
+temporal-symmetry workflow contracts, temporal/symmetry conformance, and
+public-workflow qualification. These gates are intentionally excluded from the
+fast PR path. Release qualification fails instead of skipping a required gate.
 
 ## Requirements
 

@@ -4,7 +4,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../../../.." && pwd)"
 WORKFLOW="$ROOT/.github/workflows/public-workflow-conformance.yml"
 PORTABLE_CONTRACT="$ROOT/Tests/Fixtures/PublicWorkflowConformance/CI/PORTABLE_INVOCATION.md"
-LOCAL_RELEASE="$ROOT/scripts/run_ci_locally.sh"
+RELEASE_QUALIFICATION="$ROOT/scripts/run_release_qualification.sh"
 
 require() {
     grep -Fq -- "$1" "$WORKFLOW" || { echo "missing public-workflow CI contract: $1" >&2; exit 1; }
@@ -28,8 +28,8 @@ require "public-workflow-evidence-\${{ github.run_id }}"
 ! grep -Fq -- "pull_request:" "$WORKFLOW" || { echo "public workflow must not run on pull requests" >&2; exit 1; }
 [ -f "$PORTABLE_CONTRACT" ] || { echo "missing portable public-workflow invocation contract" >&2; exit 1; }
 grep -Fq -- "project-relative" "$PORTABLE_CONTRACT" || { echo "portable invocation contract lacks project-relative paths" >&2; exit 1; }
-[ -f "$LOCAL_RELEASE" ] || { echo "missing local release contract" >&2; exit 1; }
-grep -Fq -- "make public-workflow-release-check" "$LOCAL_RELEASE" || { echo "local release path omits public-workflow gate" >&2; exit 1; }
-! grep -Fq -- "public-workflow-release-check --hosted-ci" "$LOCAL_RELEASE" || { echo "local release path must retain diagnostic authority" >&2; exit 1; }
+[ -f "$RELEASE_QUALIFICATION" ] || { echo "missing local release contract" >&2; exit 1; }
+grep -Fq -- "make public-workflow-release-check" "$RELEASE_QUALIFICATION" || { echo "local release path omits public-workflow gate" >&2; exit 1; }
+! grep -Fq -- "public-workflow-release-check --hosted-ci" "$RELEASE_QUALIFICATION" || { echo "local release path must retain diagnostic authority" >&2; exit 1; }
 
 echo "public-workflow CI contract checks passed"

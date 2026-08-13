@@ -1,7 +1,6 @@
-.PHONY: test tlc parity build examples core-conformance core-support-gate temporal-symmetry-support-gate temporal-symmetry-release-check public-workflow-release-check ci-local
+.PHONY: test tlc parity build examples core-conformance core-support-gate temporal-symmetry-support-gate temporal-symmetry-release-check public-workflow-release-check ci-pr ci-release-qualification ci-local
 
 TEMPORAL_SYMMETRY_OUTPUT ?= .build/temporal-symmetry-support-gate
-
 test:
 	swift test
 
@@ -34,5 +33,10 @@ temporal-symmetry-release-check:
 public-workflow-release-check:
 	./scripts/run_public_workflow_support_gate.sh --output .build/public-workflow-support-gate
 
-ci-local:
-	./scripts/run_ci_locally.sh
+ci-pr:
+	./scripts/run_pr_validation.sh
+
+ci-release-qualification:
+	./scripts/run_release_qualification.sh
+
+ci-local: ci-pr

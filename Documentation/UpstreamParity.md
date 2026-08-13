@@ -31,13 +31,16 @@ Run the support-admission gate with:
 make core-support-gate
 ```
 
-Run all local required checks, including the conformance command, with:
+Run the release qualification, including the temporal/symmetry and
+public-workflow gates, with:
 
 ```sh
-make ci-local
+make ci-release-qualification
 ```
 
-The latter creates fresh conformance and admission evidence below `.build/`.
+The release qualification creates fresh temporal/symmetry and public-workflow
+admission evidence below `.build/`. Run `make core-conformance` and
+`make core-support-gate` directly when refreshing core graph evidence.
 Committed passing baselines are under `Verification/CoreConformance/baselines`.
 The same-count edge-mismatch and violation fixtures are deliberate negative
 controls; their expected failures show that the comparison does not accept
