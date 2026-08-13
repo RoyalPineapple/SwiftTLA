@@ -532,6 +532,7 @@ public enum SpecBuilder {
   public static func buildExpression(_ expr: NamedValueDecl) -> [SpecComponent] { [] }
   public static func buildExpression(_ expr: OpDecl) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: OpUse) -> [SpecComponent] { [expr] }
+  public static func buildExpression(_ expr: Algorithm) -> [SpecComponent] { [expr] }
   public static func buildExpression<T: TLAValueType>(_ expr: Var<T>) -> [SpecComponent] {
     guard let initial = expr.initial else { return [] }
     return [VarDecl(expr.name, initial)]

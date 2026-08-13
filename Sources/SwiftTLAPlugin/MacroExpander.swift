@@ -8,6 +8,10 @@ import SwiftParser
 import SwiftTLA
 
 enum MacroExpander {
+    static func swiftType(for action: SpecParser.ParsedAction, binding: ActionBinding) -> String {
+        action.bindingSwiftTypes[binding.name] ?? swiftType(for: binding.values[0])
+    }
+
     static func generate(mode: GenerationMode, model: ParsedMacroModel) -> [DeclSyntax] {
         switch mode {
         case .model, .actor:
@@ -107,6 +111,7 @@ enum MacroExpander {
     }
 
     static func generateParserTreeCheck(model: ParsedMacroModel) -> [DeclSyntax] {
+        let variableNames = model.variables.map { "\"\($0.name)\"" }.joined(separator: ", ")
         let treeVars = model.variables.map { v in
             "(\"\(v.name)\", \(codegenTLAValue(v.initial)))"
         }.joined(separator: ", ")
@@ -115,7 +120,7 @@ enum MacroExpander {
             let bindings = a.bindings.map {
                 "ActionBinding(name: \"\($0.name)\", values: [\($0.values.map(codegenTLAValue).joined(separator: ", "))])"
             }.joined(separator: ", ")
-            return "(\"\(a.name)\", \(codegenActionExpr(a.body)), [\(bindings)])"
+            return "(\"\(a.name)\", completeAction(\(codegenActionExpr(a.body)), allVars: [\(variableNames)]), [\(bindings)])"
         }.joined(separator: ", ")
 
         let treeInvs = model.invariants.map { i in
@@ -137,8 +142,11 @@ enum MacroExpander {
                 actions: builtSpec.actions.map { ($0.name, $0.body, $0.bindings) },
                 invariants: builtSpec.invariants.map { ($0.name, $0.body) }
             )
-            if built != _parserTree {
-                print("⚠ SpecParser tree mismatch")
+            if !_tlaAlphaEquivalent(built, _parserTree) {
+                preconditionFailure(
+                    "SwiftTLA parser tree mismatch for " + String(reflecting: Self.self) + ". " +
+                    _tlaFidelityDiagnostic(_parserTree, built)
+                )
             }
         }
         """
@@ -214,8 +222,13 @@ enum MacroExpander {
             let patterns = ps.map(cg).joined(separator: ", ")
             let fallback = fb.map { cg($0) } ?? "nil"
             return "StateExpr.caseExpr([\(patterns)], \(fallback))"
-        case .forAll, .exists, .choose, .sequenceFromSet, .setSum, .functionSet,
-             .recursiveCall, .enabledAction:
+        case .forAll(let set, let variable, let predicate):
+            return "StateExpr.forAll(\(cg(set)), \"\(variable)\", \(cg(predicate)))"
+        case .exists(let set, let variable, let predicate):
+            return "StateExpr.exists(\(cg(set)), \"\(variable)\", \(cg(predicate)))"
+        case .choose(let set, let variable, let predicate):
+            return "StateExpr.choose(\(cg(set)), \"\(variable)\", \(cg(predicate)))"
+        case .sequenceFromSet, .setSum, .functionSet, .recursiveCall, .enabledAction:
             return "StateExpr.value(.int(0))"
         }
     }
@@ -279,35 +292,41 @@ enum MacroExpander {
     }
 
     static func generateActionLabel(actions: [SpecParser.ParsedAction]) -> DeclSyntax {
-        func swiftType(for binding: ActionBinding) -> String {
-            Self.swiftType(for: binding.values[0])
+        func swiftType(for action: SpecParser.ParsedAction, binding: ActionBinding) -> String {
+            Self.swiftType(for: action, binding: binding)
         }
 
-        func argumentConstructor(for binding: ActionBinding) -> String {
-            tlaValueConstructor(for: swiftType(for: binding), value: binding.name)
+        func argumentConstructor(for action: SpecParser.ParsedAction, binding: ActionBinding) -> String {
+            switch swiftType(for: action, binding: binding) {
+            case "Int": return ".int(\(binding.name))"
+            case "Bool": return ".bool(\(binding.name))"
+            case "String": return ".string(\(binding.name))"
+            case "TLAValue": return binding.name
+            default: return ".string(\(binding.name).rawValue)"
+            }
         }
 
-        func invocationPattern(for binding: ActionBinding, index: Int) -> String {
+        func invocationPattern(for action: SpecParser.ParsedAction, binding: ActionBinding, index: Int) -> String {
             let argument = "invocation.arguments[\(index)]"
-            switch swiftType(for: binding) {
+            switch swiftType(for: action, binding: binding) {
             case "Int": return "case .int(let \(binding.name)) = \(argument)"
             case "Bool": return "case .bool(let \(binding.name)) = \(argument)"
             case "String": return "case .string(let \(binding.name)) = \(argument)"
             case "TLAValue": return "let \(binding.name) = \(argument)"
             default:
                 return "case .string(let \(binding.name)Raw) = \(argument), "
-                    + "let \(binding.name) = \(swiftType(for: binding))(rawValue: \(binding.name)Raw)"
+                    + "let \(binding.name) = \(swiftType(for: action, binding: binding))(rawValue: \(binding.name)Raw)"
             }
         }
 
         let cases = actions.map { action in
             guard !action.bindings.isEmpty else { return "case \(action.name)" }
-            let parameters = action.bindings.map { "\($0.name): \(swiftType(for: $0))" }.joined(separator: ", ")
+            let parameters = action.bindings.map { "\($0.name): \(swiftType(for: action, binding: $0))" }.joined(separator: ", ")
             return "case \(action.name)(\(parameters))"
         }.joined(separator: "\n    ")
 
         let toInvocationCases = actions.map { action in
-            let arguments = action.bindings.map(argumentConstructor).joined(separator: ", ")
+            let arguments = action.bindings.map { argumentConstructor(for: action, binding: $0) }.joined(separator: ", ")
             let pattern = action.bindings.isEmpty
                 ? ".\(action.name)"
                 : ".\(action.name)(\(action.bindings.map { "let \($0.name)" }.joined(separator: ", ")))"
@@ -318,7 +337,7 @@ enum MacroExpander {
             if action.bindings.isEmpty {
                 return "case \"\(action.name)\" where invocation.arguments.isEmpty: self = .\(action.name)"
             }
-            let patterns = action.bindings.enumerated().map { invocationPattern(for: $0.element, index: $0.offset) }.joined(separator: ", ")
+            let patterns = action.bindings.enumerated().map { invocationPattern(for: action, binding: $0.element, index: $0.offset) }.joined(separator: ", ")
             let arguments = action.bindings.map { "\($0.name): \($0.name)" }.joined(separator: ", ")
             return "case \"\(action.name)\" where invocation.arguments.count == \(action.bindings.count): "
                 + "guard \(patterns) else { return nil }; self = .\(action.name)(\(arguments))"
@@ -611,7 +630,7 @@ extension MacroExpander {
                 return DeclSyntax(stringLiteral: source).as(FunctionDeclSyntax.self)!
             }
             let parameters = action.bindings.map { binding in
-                "\(binding.name): \(swiftType(for: binding.values[0]))"
+                "\(binding.name): \(swiftType(for: action, binding: binding))"
             }.joined(separator: ", ")
             let labels = action.bindings.map { "\($0.name): \($0.name)" }.joined(separator: ", ")
             let methodName = isActor ? "_\(action.name)" : "apply\(action.name)"

@@ -446,7 +446,10 @@ enum TLASpecVerifier {
                 $0.type.as(IdentifierTypeSyntax.self)?.name.text
             }
 
-            guard inheritedNames.contains("TLAValueType") || inheritedNames.contains("FiniteTLAValueDomain") else { continue }
+            guard inheritedNames.contains("TLAValueType")
+                || inheritedNames.contains("FiniteTLAValueDomain")
+                || inheritedNames.contains("FiniteDomainKey")
+            else { continue }
 
             let intBacked = inheritedNames.contains("Int")
             let stringBacked = inheritedNames.contains("String")
@@ -532,7 +535,10 @@ private final class EnumDotRewriter: SyntaxRewriter {
         "cardinality", "count", "isEmpty", "flattened", "subsets", "domain",
         "head", "tail", "stays", "zero", "max", "min", "default", "init", "value",
         "variable",
-        "int", "bool", "string", "set", "tuple", "record", "function", "constant"
+        "int", "bool", "string", "set", "tuple", "record", "function", "constant",
+        // These are DSL enum cases, not user-state enum cases. They remain
+        // unqualified so Algorithm's parser can recognize its public syntax.
+        "none", "weak", "strong"
     ]
 }
 

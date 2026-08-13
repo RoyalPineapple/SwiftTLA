@@ -181,12 +181,11 @@ public struct LivenessChecker {
         }
 
         let names = Set(actions.map(\.name))
-        let referencedNames = Set(fairness.map { condition in
-            switch condition {
-            case .weakFairness(let name), .strongFairness(let name): return name
-            }
-        })
-        guard referencedNames.isSubset(of: names), graphHasOnlyKnownActions(names) else {
+        let referencedNames = Set(fairness.map(\.actionIdentity))
+        let knownIdentities = names.union(Set(actions.flatMap { action in
+            actionInvocations(action).map { $0.invocation.description }
+        }))
+        guard referencedNames.isSubset(of: knownIdentities), graphHasOnlyKnownActions(knownIdentities) else {
             return .init(status: .unavailable, reason: .unknownAction)
         }
 
@@ -278,12 +277,17 @@ public struct LivenessChecker {
     }
 
     private func enabledness(for actions: [NamedAction]) -> [String: [StateGraph.StateID: Bool]] {
-        Dictionary(uniqueKeysWithValues: actions.map { action in
-            let states = Dictionary(uniqueKeysWithValues: graph.states.keys.map { state in
-                (state, explicitEdges(from: state).contains { $0.action == action.name && $0.target != state })
-            })
-            return (action.name, states)
-        })
+        Dictionary(
+            uniqueKeysWithValues: actions.flatMap { action in
+                actionInvocations(action).map { variant in
+                    let identity = variant.invocation.description
+                    let states = Dictionary(uniqueKeysWithValues: graph.states.keys.map { state in
+                        (state, explicitEdges(from: state).contains { $0.action == identity && $0.target != state })
+                    })
+                    return (identity, states)
+                }
+            }
+        )
     }
 
     private func fairComponents(
@@ -297,8 +301,8 @@ public struct LivenessChecker {
         func prune(_ candidates: Set<StateGraph.StateID>) {
             for component in stronglyConnectedComponents(in: candidates) where !component.isEmpty {
                 if let action = fairness.compactMap({ condition -> String? in
-                    guard case .strongFairness(let name) = condition else { return nil }
-                    return isFair(condition, in: component, enabled: enabled) ? nil : name
+                    guard condition.isStrong else { return nil }
+                    return isFair(condition, in: component, enabled: enabled) ? nil : condition.actionIdentity
                 }).first {
                     rejected.append(component)
                     let reduced = component.filter { enabled[action]?[$0] != true }
@@ -322,12 +326,8 @@ public struct LivenessChecker {
         in component: Set<StateGraph.StateID>,
         enabled: [String: [StateGraph.StateID: Bool]]
     ) -> Bool {
-        let name: String
-        let isStrong: Bool
-        switch condition {
-        case .weakFairness(let value): name = value; isStrong = false
-        case .strongFairness(let value): name = value; isStrong = true
-        }
+        let name = condition.actionIdentity
+        let isStrong = condition.isStrong
         let taken = component.contains { state in
             explicitEdges(from: state).contains { $0.action == name && $0.target != state && component.contains($0.target) }
         }
@@ -390,11 +390,7 @@ extension LivenessChecker {
         fairness: [FairnessCondition],
         enabled: [String: [StateGraph.StateID: Bool]]
     ) -> ([StateGraph.StateID], [String])? {
-        let actionNames = Set(fairness.map { condition in
-            switch condition {
-            case .weakFairness(let name), .strongFairness(let name): return name
-            }
-        })
+        let actionNames = Set(fairness.map(\.actionIdentity))
         func advance(
             _ configuration: CycleSearchConfiguration,
             state: StateGraph.StateID,
@@ -415,12 +411,10 @@ extension LivenessChecker {
         func isFair(_ configuration: CycleSearchConfiguration) -> Bool {
             guard requiredStates.isEmpty || configuration.visitedRequiredState else { return false }
             return fairness.allSatisfy { condition in
-                switch condition {
-                case .weakFairness(let name):
-                    return configuration.takenActions.contains(name) || configuration.disabledActions.contains(name)
-                case .strongFairness(let name):
-                    return configuration.takenActions.contains(name) || !configuration.enabledActions.contains(name)
-                }
+                let name = condition.actionIdentity
+                return condition.isStrong
+                    ? configuration.takenActions.contains(name) || !configuration.enabledActions.contains(name)
+                    : configuration.takenActions.contains(name) || configuration.disabledActions.contains(name)
             }
         }
 

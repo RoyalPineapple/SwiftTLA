@@ -115,7 +115,7 @@ extension MacroExpander {
             let callbackName = "on" + a.name.prefix(1).capitalized + a.name.dropFirst()
             let callbackType: String
             if !a.bindings.isEmpty {
-                let parameterTypes = a.bindings.map { swiftType(for: $0.values[0]) }.joined(separator: ", ")
+                let parameterTypes = a.bindings.map { swiftType(for: a, binding: $0) }.joined(separator: ", ")
                 callbackType = "(@Sendable (\(parameterTypes), State, State) -> Void)?"
             } else {
                 callbackType = "(@Sendable (State, State) async -> Void)?"
@@ -169,7 +169,7 @@ extension MacroExpander {
             let callbackName = "on" + a.name.prefix(1).capitalized + a.name.dropFirst()
             if !a.bindings.isEmpty {
                 let parameters = a.bindings.map { binding in
-                    "\(binding.name): \(swiftType(for: binding.values[0]))"
+                    "\(binding.name): \(swiftType(for: a, binding: binding))"
                 }.joined(separator: ", ")
                 let callbackArguments = a.bindings.map(\.name).joined(separator: ", ")
                 let source = """

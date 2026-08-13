@@ -23,11 +23,18 @@ extension SpecParser {
         public let name: String
         public let body: ActionExpr
         public let bindings: [ActionBinding]
+        public let bindingSwiftTypes: [String: String]
 
-        public init(name: String, body: ActionExpr, bindings: [ActionBinding] = []) {
+        public init(
+            name: String,
+            body: ActionExpr,
+            bindings: [ActionBinding] = [],
+            bindingSwiftTypes: [String: String] = [:]
+        ) {
             self.name = name
             self.body = body
             self.bindings = bindings
+            self.bindingSwiftTypes = bindingSwiftTypes
         }
     }
 
@@ -315,6 +322,8 @@ extension SpecParser {
         guard let name = call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text else { return }
 
         switch name {
+        case "Algorithm":
+            parseAlgorithm(call, into: &result)
         case "SymmetricCollection":
             parseSymmetricCollectionDecl(call, into: &result, collectionTypes: collectionTypes)
         case "CollectionAction":

@@ -46,6 +46,16 @@ extension TLASpec {
         symmetricCollections.append(s)
       } else if let a = comp as? ActionDecl {
         actions.append(NamedAction(name: a.name, body: a.body, bindings: a.bindings))
+      } else if let algorithm = comp as? Algorithm {
+        do {
+          let lowered = try algorithm.lower()
+          variables += lowered.variables
+          actions += lowered.actions
+          invariants += lowered.invariants
+          fairness += lowered.fairness
+        } catch {
+          preconditionFailure("Invalid algorithm '\(algorithm.model.name)': \(error)")
+        }
       } else if let i = comp as? InvDecl {
         invariants.append(NamedInvariant(name: i.name, body: i.body))
       } else if let t = comp as? TemporalDecl {
