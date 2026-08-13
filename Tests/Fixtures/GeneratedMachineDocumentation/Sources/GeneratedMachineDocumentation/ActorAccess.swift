@@ -20,7 +20,7 @@ struct CounterHost {
 
 func runActorAccess() async throws {
     let actor = CounterHost.Actor()
-    let state = await actor.state()
+    let state = await actor.state
     let result = try await actor.execute(CounterHost.Actor.ActionLabel.advance.toInvocation())
 
     assert(state.value == 0)

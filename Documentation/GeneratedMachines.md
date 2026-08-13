@@ -2,7 +2,7 @@
 
 `@TLAModel` turns a verified `TLASpec` declaration into a Swift machine.
 This guide documents the current generated-machine public contract. The
-contract covers generated models, standalone adapters, and nested adapters.
+contract covers generated models and their model-owned adapters.
 Read [the SwiftTLA DocC catalog](../Sources/SwiftTLA/SwiftTLA.docc/SwiftTLA.md)
 for the symbol-oriented reference.
 
@@ -132,7 +132,7 @@ struct CounterHost {
 
 func runActorAccess() async throws {
     let actor = CounterHost.Actor()
-    let state = await actor.state()
+    let state = await actor.state
     let result = try await actor.execute(CounterHost.Actor.ActionLabel.advance.toInvocation())
 
     assert(state.value == 0)
@@ -150,11 +150,9 @@ Nested adapters expose the enclosing model's `State`, `ActionLabel`, and
 
 ## Isolation and callbacks
 
-Only a nested `@TLAObservable` adapter is main-actor isolated. It must be
-nested in one `@TLAModel` struct. A standalone `@TLAObservable` declaration
-contains its own `static var spec` and generates an observable model. It is not
-made main-actor isolated by this macro. Do not apply the nested adapter
-isolation rule to a standalone observable.
+`@TLAObservable` is main-actor isolated. It must be nested in one `@TLAModel`
+struct. `@TLAActor` has the same nesting requirement. Neither adapter owns a
+formal specification or generates an independent machine.
 
 A nested observable owns its own canonical model and provides async action
 execution. It does not provide automatic SwiftUI invalidation or shared state
@@ -203,24 +201,9 @@ commits the successful transition, then awaits the matching callback, then
 returns its transition result. A failed execution does not call the callback.
 
 Do not depend on callback scheduling beyond main-actor isolation. Do not infer
-a global order between callbacks on separate adapters. The standalone
-observable's underscored convenience methods have different callback behavior.
-They are not part of this contract.
-
-A standalone `@TLAActor` owns a model declared by its own `spec`. Its actor
-boundary requires `await` for observation and `try await` for
-`execute(_ invocation: TLAActionInvocation)`. A standalone `@TLAObservable`
-also owns a model declared by its own `spec`, but it has no generated
-main-actor isolation. Use `apply(_ label: ActionLabel)` for synchronous
-execution, or convert a label with `toInvocation()` before calling async
-`execute(_ invocation: TLAActionInvocation)`.
-
-Standalone observables generate `on<Action>` callback properties and
-underscored action helpers. The public
-`execute(_ invocation: TLAActionInvocation)` method does not call those
-callbacks. Use a nested observable when callback ordering is part of the
-integration. The current generated names that start with `_` are not part of
-this guide's supported public integration surface.
+a global order between callbacks on separate adapters. The generated names
+that start with `_` are convenience methods, not the supported public
+integration surface.
 
 ## Test an integration
 
@@ -355,8 +338,8 @@ The following table is the public inventory for this guide. Sources identify the
 | Name | Role and observable contract | Source |
 |---|---|---|
 | `@TLAModel` | Attaches generated machine members to a struct, class, or actor with a `TLASpec`. | [Macros.swift](../Sources/SwiftTLAMacros/Macros.swift), [ModelMacro.swift](../Sources/SwiftTLAPlugin/ModelMacro.swift) |
-| `@TLAActor` | On a nested type, attaches an actor adapter for the enclosing model type. As a standalone declaration with `spec`, generates an actor model. | [Macros.swift](../Sources/SwiftTLAMacros/Macros.swift), [ModelMacro.swift](../Sources/SwiftTLAPlugin/ModelMacro.swift) |
-| `@TLAObservable` | On a nested type, attaches a main-actor adapter for the enclosing model type. As a standalone declaration with `spec`, generates an observable model without this nested main-actor guarantee. | [Macros.swift](../Sources/SwiftTLAMacros/Macros.swift), [ModelMacro.swift](../Sources/SwiftTLAPlugin/ModelMacro.swift), [MacroExpander+Adapters.swift](../Sources/SwiftTLAPlugin/MacroExpander+Adapters.swift) |
+| `@TLAActor` | Requires a nested type. It attaches an actor adapter for the enclosing model type. | [Macros.swift](../Sources/SwiftTLAMacros/Macros.swift), [ModelMacro.swift](../Sources/SwiftTLAPlugin/ModelMacro.swift) |
+| `@TLAObservable` | Requires a nested type. It attaches a main-actor adapter for the enclosing model type. | [Macros.swift](../Sources/SwiftTLAMacros/Macros.swift), [ModelMacro.swift](../Sources/SwiftTLAPlugin/ModelMacro.swift), [MacroExpander+Adapters.swift](../Sources/SwiftTLAPlugin/MacroExpander+Adapters.swift) |
 | Generated `Variables` | `String`, `CaseIterable` enum of declared variables. Each case supplies its raw variable name. | [MacroExpander.swift](../Sources/SwiftTLAPlugin/MacroExpander.swift) |
 | Generated `Actions` | `String`, `CaseIterable` enum of declared action names. Each case supplies its declared action name. | [MacroExpander.swift](../Sources/SwiftTLAPlugin/MacroExpander.swift) |
 | `TLAStateProjection` | Provides guarded token-based access to a formal state. It owns its internal representation. | [CanonicalMachine.swift](../Sources/SwiftTLA/CanonicalMachine.swift) |
@@ -378,7 +361,7 @@ The following table is the public inventory for this guide. Sources identify the
 | Generated `State` | Holds model variables with generated Swift types. Application code reads this type through `state`, before, and after. | [MacroExpander.swift](../Sources/SwiftTLAPlugin/MacroExpander.swift) |
 | Generated `ActionLabel` | Represents declared actions with typed parameters. `toInvocation()` writes a `TLAActionInvocation`. `init?(invocation:)` reads a valid one. | [MacroExpander+Generation.swift](../Sources/SwiftTLAPlugin/MacroExpander+Generation.swift) |
 | Generated `TransitionResult` | Records the typed action and typed state before and after a successful transition. | [MacroExpander+CanonicalMachine.swift](../Sources/SwiftTLAPlugin/MacroExpander+CanonicalMachine.swift) |
-| Generated `tlaSnapshot()` | Returns `TLAStateProjectionResult` on a standalone generated model. Nested adapters do not expose this method. | [MacroExpander+CanonicalMachine.swift](../Sources/SwiftTLAPlugin/MacroExpander+CanonicalMachine.swift) |
+| Generated `tlaSnapshot()` | Returns `TLAStateProjectionResult` on a generated model and its model-owned adapters. | [MacroExpander+CanonicalMachine.swift](../Sources/SwiftTLAPlugin/MacroExpander+CanonicalMachine.swift) |
 | Generated `availableActions()` | Returns typed available action labels for a model that declares actions. | [MacroExpander+CanonicalMachine.swift](../Sources/SwiftTLAPlugin/MacroExpander+CanonicalMachine.swift) |
 | Generated `availableInvocations()` | Returns runtime `TLAActionInvocation` values on a generated model without declared actions. `TLAMachineObservation` reports runtime availability for every generated machine. | [MacroExpander+CanonicalMachine.swift](../Sources/SwiftTLAPlugin/MacroExpander+CanonicalMachine.swift) |
 | Generated `apply(_:)` | Executes a typed label or `TLAActionInvocation`. It returns `TransitionResult` or throws. | [MacroExpander+CanonicalMachine.swift](../Sources/SwiftTLAPlugin/MacroExpander+CanonicalMachine.swift) |

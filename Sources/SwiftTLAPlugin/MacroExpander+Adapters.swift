@@ -41,9 +41,16 @@ extension MacroExpander {
             declarations.append(contentsOf: generateNestedObservableMembers(model: canonicalModel))
         } else {
             declarations.append(DeclSyntax(stringLiteral: """
-            public func state() async -> State {
+            public var state: State {
+                get async {
+                    await withCanonicalMachine { canonical in
+                        canonical.state
+                    }
+                }
+            }
+            public func tlaSnapshot() async -> TLAStateProjectionResult {
                 await withCanonicalMachine { canonical in
-                    canonical.state
+                    canonical.tlaSnapshot()
                 }
             }
             """))
@@ -67,7 +74,7 @@ extension MacroExpander {
                 arguments = "evidence.before, evidence.after"
             } else {
                 let names = action.bindings.map(\.name)
-                pattern = ".\(action.name)(\(names.joined(separator: ", ")))"
+                pattern = ".\(action.name)(\(names.map { "let \($0)" }.joined(separator: ", ")))"
                 arguments = (names + ["evidence.before", "evidence.after"]).joined(separator: ", ")
             }
             return """
@@ -102,6 +109,9 @@ extension MacroExpander {
                 await withCanonicalMachine { canonical in
                     canonical.synchronousMachineObservation()
                 }
+            }
+            @MainActor public func tlaSnapshot() -> TLAStateProjectionResult {
+                _canonical.tlaSnapshot()
             }
             """),
             DeclSyntax(stringLiteral: """

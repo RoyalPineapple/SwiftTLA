@@ -64,8 +64,8 @@ struct NestedComposableMacroConformanceTests {
         let runtime = EndToEndThreeParameterActionMachine.runtime
         let initial = try #require(runtime.initialStates().first)
         let available = try runtime.availableInvocations(in: initial)
-        let observable = ObservableThreeParameterMachine()
-        let actor = ThreeParameterActionActor()
+        let observable = ThreeParameterActionMachine.Observable()
+        let actor = ThreeParameterActionMachine.Actor()
 
         #expect(first != selected)
         #expect(Set(available).count == 8)
@@ -110,7 +110,7 @@ struct NestedComposableMacroConformanceTests {
         let result = try runSwift(["build", "--package-path", fixture.path])
 
         #expect(result.status != 0)
-        #expect(result.output.contains("Adapter without a spec must be enclosed by one @TLAModel"))
+        #expect(result.output.contains("@TLAActor and @TLAObservable require an enclosing @TLAModel"))
         #expect(result.output.contains("Adapter must be enclosed by exactly one @TLAModel"))
         #expect(result.output.contains("Nested adapters require an enclosing @TLAModel struct"))
     }
@@ -127,7 +127,7 @@ struct NestedComposableMacroConformanceTests {
         requireSendable(NestedComposedCounter.ActionLabel.self)
         requireSendable(NestedComposedCounter.TransitionResult.self)
         requireSendable(GeneratedSymmetricRuntime.self)
-        requireSendable(ObservableTwoCarElevator.self)
+        requireSendable(TwoCarElevatorMachine.Observable.self)
         requireSendable(TLAMachineObservation.self)
 
         for ownedDirectory in ["Sources", "Tests"] {
@@ -208,8 +208,8 @@ struct NestedComposableMacroConformanceTests {
         #expect(result.output.contains("@TLAModel models cannot declare instance stored properties"))
     }
 
-    @Test("Standalone observable executes typed transitions under strict concurrency")
-    func standaloneObservableExecutesAsSendable() throws {
+    @Test("Model-owned observable executes typed transitions under strict concurrency")
+    func modelOwnedObservableExecutesAsSendable() throws {
         let fixture = packageRoot().appendingPathComponent("Tests/Fixtures/StandaloneObservableSendable")
         let result = try runSwift(["run", "--package-path", fixture.path])
 
@@ -252,21 +252,21 @@ struct NestedComposableMacroConformanceTests {
         )
     }
 
-    @Test("External standalone actor cannot expose raw generated state")
-    func standaloneActorRawStateAndLegacyEvidenceDoNotCompileExternally() throws {
+    @Test("Standalone actor declaration is rejected")
+    func standaloneActorDeclarationDoesNotCompileExternally() throws {
         try assertExternalSurfaceIsForbidden(
             fixture: "InvalidStandaloneActorRawSurface",
             typeName: "StandaloneActorSurface",
-            stateDiagnostic: "cannot convert value of type 'TLAStateProjectionResult' to specified type '[String : TLAValue]'"
+            stateDiagnostic: "@TLAActor and @TLAObservable require an enclosing @TLAModel"
         )
     }
 
-    @Test("External standalone observable cannot expose raw generated state")
-    func standaloneObservableRawStateAndLegacyEvidenceDoNotCompileExternally() throws {
+    @Test("Standalone observable declaration is rejected")
+    func standaloneObservableDeclarationDoesNotCompileExternally() throws {
         try assertExternalSurfaceIsForbidden(
             fixture: "InvalidStandaloneObservableRawSurface",
             typeName: "StandaloneObservableSurface",
-            stateDiagnostic: "cannot convert value of type 'TLAStateProjectionResult' to specified type '[String : TLAValue]'"
+            stateDiagnostic: "@TLAActor and @TLAObservable require an enclosing @TLAModel"
         )
     }
 

@@ -1,8 +1,8 @@
 import SwiftTLA
 import SwiftTLAMacros
 
-@TLAObservable
-final class StandaloneObservableSendable {
+@TLAModel
+struct ObservableHost {
   static var spec: TLASpec {
     TLASpec("StandaloneObservableSendable") {
       let count = Var<Int>("count")
@@ -10,28 +10,31 @@ final class StandaloneObservableSendable {
       Action("advance") { count.becomes(count + 1).when(count < 1) }
     }
   }
+
+  @TLAObservable
+  final class Observable {}
 }
 
 private func requireSendable<Value: Sendable>(_: Value.Type) {}
 
-requireSendable(StandaloneObservableSendable.self)
-requireSendable(StandaloneObservableSendable.State.self)
-requireSendable(StandaloneObservableSendable.Variables.self)
-requireSendable(StandaloneObservableSendable.ActionLabel.self)
-requireSendable(StandaloneObservableSendable.TransitionResult.self)
+requireSendable(ObservableHost.Observable.self)
+requireSendable(ObservableHost.Observable.State.self)
+requireSendable(ObservableHost.Observable.Variables.self)
+requireSendable(ObservableHost.Observable.ActionLabel.self)
+requireSendable(ObservableHost.Observable.TransitionResult.self)
 
-let observable = StandaloneObservableSendable()
-let result = try observable._advance()
+let observable = await MainActor.run { ObservableHost.Observable() }
+let result = try await observable._advance()
 
 precondition(result.action == .advance)
 precondition(result.before.count == 0)
 precondition(result.after.count == 1)
-precondition(observable.state.count == 1)
+precondition(await observable.state.count == 1)
 
-let beforeRejectedAction = observable.tlaSnapshot()
+let beforeRejectedAction = await observable.tlaSnapshot()
 do {
-  _ = try observable._advance()
+  _ = try await observable._advance()
   fatalError("Expected disabled action")
 } catch {
-  precondition(observable.tlaSnapshot() == beforeRejectedAction)
+  precondition(await observable.tlaSnapshot() == beforeRejectedAction)
 }

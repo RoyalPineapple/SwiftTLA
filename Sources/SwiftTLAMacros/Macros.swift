@@ -8,7 +8,7 @@ import SwiftTLA
 @attached(extension, conformances: Sendable, TLAModelType, TLAMachineExecuting, TLAMachineAdapterCanonicalModel, names: arbitrary)
 public macro TLAModel() = #externalMacro(module: "SwiftTLAPlugin", type: "ModelMacro")
 
-/// Generates an actor machine or a nested actor adapter for a `@TLAModel`.
+/// Requires a nested actor and generates an adapter for its enclosing `@TLAModel`.
 ///
 /// A nested adapter exposes the enclosing model's typed state and transition
 /// result through type aliases.
@@ -16,7 +16,8 @@ public macro TLAModel() = #externalMacro(module: "SwiftTLAPlugin", type: "ModelM
 @attached(extension, conformances: TLAModelType, TLAMachineAdapterAccess, names: arbitrary)
 public macro TLAActor() = #externalMacro(module: "SwiftTLAPlugin", type: "TLAActorMacro")
 
-/// Generates an observable machine or a nested main-actor observable adapter.
+/// Requires a nested type and generates a main-actor observable adapter for
+/// its enclosing `@TLAModel`.
 ///
 /// A nested adapter calls its typed `on<Action>` callback after a successful
 /// transition commits.

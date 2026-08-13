@@ -1,8 +1,8 @@
 import SwiftTLA
 import SwiftTLAMacros
 
-@TLAActor
-actor InvalidActor {
+@TLAModel
+struct InvalidActorHost {
   static var spec: TLASpec {
     TLASpec("InvalidActor") {
       let counter = Var("counter", 0)
@@ -11,4 +11,7 @@ actor InvalidActor {
       Invariant("withinBounds") { counter <= 1 }
     }
   }
+
+  @TLAActor
+  actor Actor {}
 }

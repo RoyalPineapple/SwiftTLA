@@ -1,8 +1,8 @@
 import SwiftTLA
 import SwiftTLAMacros
 
-@TLAActor
-actor ValidActor {
+@TLAModel
+struct ValidActorHost {
   static var spec: TLASpec {
     TLASpec("ValidActor") {
       let counter = Var("counter", 0)
@@ -11,12 +11,15 @@ actor ValidActor {
       Invariant("withinBounds") { counter >= 0 && counter <= 1 }
     }
   }
+
+  @TLAActor
+  actor Actor {}
 }
 
 @main
 struct ValidActorFixture {
   static func main() async throws {
-    try await ValidActor.verifyTransitions()
-    try await ValidActor.verifyInvariants()
+    try await ValidActorHost.verifyTransitions()
+    try await ValidActorHost.verifyInvariants()
   }
 }

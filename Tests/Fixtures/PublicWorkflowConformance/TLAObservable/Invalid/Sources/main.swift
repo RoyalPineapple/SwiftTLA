@@ -1,8 +1,8 @@
 import SwiftTLA
 import SwiftTLAMacros
 
-@TLAObservable
-final class InvalidObservable {
+@TLAModel
+struct InvalidObservableHost {
   static var spec: TLASpec {
     TLASpec("InvalidObservable") {
       let counter = Var("counter", 0)
@@ -11,4 +11,7 @@ final class InvalidObservable {
       Invariant("withinBounds") { counter <= 1 }
     }
   }
+
+  @TLAObservable
+  final class Observable {}
 }

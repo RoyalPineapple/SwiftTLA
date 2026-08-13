@@ -589,13 +589,7 @@ public struct TLAActorMacro: MemberMacro, ExtensionMacro {
             return [ext]
         case .invalid:
             return []
-        case .standalone:
-            break
         }
-        guard let ext = ("""
-            extension \(type.trimmed): TLAModelType {}
-            """ as DeclSyntax).as(ExtensionDeclSyntax.self) else { return [] }
-        return [ext]
     }
 
     public static func expansion(of node: AttributeSyntax, providingMembersOf declaration: some DeclGroupSyntax, in context: some MacroExpansionContext) throws -> [DeclSyntax] {
@@ -614,17 +608,7 @@ public struct TLAActorMacro: MemberMacro, ExtensionMacro {
             )
         case .invalid:
             return []
-        case .standalone:
-            break
         }
-        let parsed: ParsedMacroModel
-        do {
-            parsed = try TLASpecVerifier.parseAndVerify(declaration)
-        } catch let diagnostic as SpecParser.SymmetricCollectionParseDiagnostic {
-            context.diagnose(parserDiagnostic(diagnostic, in: declaration))
-            return []
-        }
-        return MacroExpander.generate(mode: .actor, model: parsed)
     }
 }
 
@@ -634,11 +618,6 @@ public struct TLAObservableMacro: MemberMacro, ExtensionMacro {
         case .nested:
             guard let ext = ("""
                 @MainActor extension \(type.trimmed): Sendable, TLAMachineAdapterAccess {}
-                """ as DeclSyntax).as(ExtensionDeclSyntax.self) else { return [] }
-            return [ext]
-        case .standalone:
-            guard let ext = ("""
-                extension \(type.trimmed): Sendable {}
                 """ as DeclSyntax).as(ExtensionDeclSyntax.self) else { return [] }
             return [ext]
         case .invalid:
@@ -662,17 +641,7 @@ public struct TLAObservableMacro: MemberMacro, ExtensionMacro {
             )
         case .invalid:
             return []
-        case .standalone:
-            break
         }
-        let parsed: ParsedMacroModel
-        do {
-            parsed = try TLASpecVerifier.parseAndVerify(declaration)
-        } catch let diagnostic as SpecParser.SymmetricCollectionParseDiagnostic {
-            context.diagnose(parserDiagnostic(diagnostic, in: declaration))
-            return []
-        }
-        return MacroExpander.generate(mode: .observable, model: parsed)
     }
 }
 
@@ -716,7 +685,6 @@ private func isInstanceStoredBinding(_ binding: PatternBindingSyntax) -> Bool {
 }
 
 private enum AdapterNestingMode {
-    case standalone
     case nested(StructDeclSyntax)
     case invalid
 }
@@ -744,14 +712,11 @@ private func adapterNestingMode(
         }
         return .nested(structModel)
     }
-    if TLASpecVerifier.findSpec(in: declaration.memberBlock.members) == nil {
-        context.diagnose(Diagnostic(
-            node: Syntax(attribute),
-            message: AdapterNestingDiagnostic(message: "Adapter without a spec must be enclosed by one @TLAModel")
-        ))
-        return .invalid
-    }
-    return .standalone
+    context.diagnose(Diagnostic(
+        node: Syntax(attribute),
+        message: AdapterNestingDiagnostic(message: "@TLAActor and @TLAObservable require an enclosing @TLAModel; put the formal spec on that model")
+    ))
+    return .invalid
 }
 
 private func enclosingModelDeclarations(in context: some MacroExpansionContext) -> [DeclGroupSyntax] {

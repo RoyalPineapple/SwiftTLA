@@ -31,11 +31,11 @@ struct GeneratedMachineDocumentationTests {
             await recorder.record(before: before, after: after)
         }
 
-        #expect(await actor.state().value == 0)
+        #expect(await actor.state.value == 0)
         _ = try await actor.execute(CounterHost.Actor.ActionLabel.advance.toInvocation())
         _ = try await observable.execute(CounterScreenModel.Observable.ActionLabel.advance.toInvocation())
 
-        #expect(await actor.state().value == 1)
+        #expect(await actor.state.value == 1)
         #expect(await recorder.transitions == [.init(before: 0, after: 1)])
     }
 }
