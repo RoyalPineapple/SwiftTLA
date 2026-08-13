@@ -1,9 +1,34 @@
 import Foundation
+import PublicWorkflowGeneratedFixtures
+import SwiftTLA
 import Testing
 import UpstreamParity
 
 @Suite(.serialized)
 struct PublicWorkflowGeneratedBehaviorTests {
+  @Test("public workflow fixture executes through nested generated adapters")
+  @MainActor
+  func nestedFixtureAdaptersMatchTheCanonicalCounter() async throws {
+    let invocation = TLAActionInvocation(name: "advance")
+    var model = P4GeneratedCounter()
+    let observable = P4GeneratedCounter.Observable()
+    let actor = P4GeneratedCounter.Actor()
+
+    let modelEvidence = try await model.execute(invocation)
+    let observableEvidence = try await observable.execute(invocation)
+    let actorEvidence = try await actor.execute(invocation)
+
+    #expect(modelEvidence.action == .advance)
+    #expect(observableEvidence.action == .advance)
+    #expect(actorEvidence.action == .advance)
+    #expect(modelEvidence.before.value == 0)
+    #expect(modelEvidence.after.value == 1)
+    #expect(observableEvidence.before == modelEvidence.before)
+    #expect(observableEvidence.after == modelEvidence.after)
+    #expect(actorEvidence.before == modelEvidence.before)
+    #expect(actorEvidence.after == modelEvidence.after)
+  }
+
   @Test("compiled registry writes and verifies exact generated observations")
   func exactFixtureMatchesRetainedObservations() throws {
     let fixture = try Fixture()
@@ -76,6 +101,30 @@ struct PublicWorkflowGeneratedBehaviorTests {
     }
   }
 
+  @Test("canonical project roots accept an equivalent symlinked output spelling")
+  func acceptsEquivalentSymlinkedOutputDirectory() throws {
+    let fixture = try Fixture()
+    let equivalentRoot = try #require(Self.privateTmpSpelling(of: fixture.repository))
+    let output = equivalentRoot.appending(path: "Tests/Fixtures/PublicWorkflowConformance/Generated/.test-output-\(UUID().uuidString)")
+    defer { try? FileManager.default.removeItem(at: output) }
+
+    let run = try PublicWorkflowGeneratedBehaviorAdapterV1().run(
+      manifestURL: fixture.manifestURL,
+      projectRoot: fixture.repository,
+      outputDirectory: output,
+      correlation: try fixture.correlation(for: "p4-generated-counter"))
+
+    #expect(run.comparison.outcome == .exact)
+  }
+
+  private static func privateTmpSpelling(of root: URL) -> URL? {
+    guard root.path.hasPrefix("/tmp/"),
+          URL(fileURLWithPath: "/private" + root.path).resolvingSymlinksInPath().standardizedFileURL == root else {
+      return nil
+    }
+    return URL(fileURLWithPath: "/private" + root.path)
+  }
+
   private struct Fixture {
     let repository: URL
     let manifestURL: URL
@@ -85,6 +134,8 @@ struct PublicWorkflowGeneratedBehaviorTests {
         .deletingLastPathComponent()
         .deletingLastPathComponent()
         .deletingLastPathComponent()
+        .resolvingSymlinksInPath()
+        .standardizedFileURL
       manifestURL = repository.appending(path: "Verification/PublicWorkflowConformance/generated-behavior.json")
       _ = try PublicWorkflowGeneratedBehaviorManifestV1.load(Data(contentsOf: manifestURL))
     }

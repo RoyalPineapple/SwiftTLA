@@ -30,9 +30,9 @@ enum MacroExpander {
         decls.append(DeclSyntax(stringLiteral: """
         private var _machine = CanonicalMachine(
             runtime: \(model.typeName).runtime,
-            initial: State(from: \(model.typeName).runtime.initialStates().first!),
+            initial: try! State(formalDictionary: \(model.typeName).runtime.initialStates().first!),
             stateDictionary: { $0.asDictionary },
-            snapshotFromDictionary: { State(from: $0) }
+            snapshotFromDictionary: { try State(formalDictionary: $0) }
         )
         """))
 
@@ -42,12 +42,11 @@ enum MacroExpander {
             decls.append(DeclSyntax(generateActionLabel(actions: model.actions)))
         }
         decls.append(DeclSyntax(generateStateStruct(variables: model.variables, enumInfos: model.enumInfos)))
-        if !model.actions.isEmpty {
-            decls.append(contentsOf: generateCanonicalMachineMembers(
-                isActor: isActor,
-                symmetricCollections: model.symmetricCollections
-            ))
-        }
+        decls.append(contentsOf: generateCanonicalMachineMembers(
+            isActor: isActor,
+            hasActions: !model.actions.isEmpty,
+            symmetricCollections: model.symmetricCollections
+        ))
         decls.append(contentsOf: generateCollectionRuntimeMembers(model.symmetricCollections))
         let ordinaryVariables = model.variables.filter { variable in
             !model.symmetricCollections.contains(where: { $0.name == variable.name })
@@ -83,16 +82,16 @@ enum MacroExpander {
             decls.append(DeclSyntax(stringLiteral: """
             public static func generatedActionOutcome(
                 actionName: String,
-                in state: [String: TLAValue]
+                in state: State
             ) -> SpecRuntime.RuntimeActionOutcome {
-                Self.runtime.actionOutcome(named: actionName, in: state)
+                Self.runtime.actionOutcome(named: actionName, in: state.asDictionary)
             }
             """))
             decls.append(DeclSyntax(stringLiteral: """
             public static func generatedPropertyOutcomes(
-                in state: [String: TLAValue]
+                in state: State
             ) -> [SpecRuntime.RuntimePropertyOutcome] {
-                Self.runtime.propertyOutcomes(in: state)
+                Self.runtime.propertyOutcomes(in: state.asDictionary)
             }
             """))
         }
@@ -245,6 +244,7 @@ enum MacroExpander {
                 InheritedTypeListSyntax {
                     InheritedTypeSyntax(type: IdentifierTypeSyntax(name: "String"))
                     InheritedTypeSyntax(type: IdentifierTypeSyntax(name: "CaseIterable"))
+                    InheritedTypeSyntax(type: IdentifierTypeSyntax(name: "Sendable"))
                 }
             },
             memberBlock: MemberBlockSyntax {
@@ -325,7 +325,7 @@ enum MacroExpander {
         }.joined(separator: "\n        ")
 
         return DeclSyntax(stringLiteral: """
-        public enum ActionLabel: Hashable {
+        public enum ActionLabel: Hashable, Sendable {
             \(cases)
 
             public func toInvocation() -> TLAActionInvocation {
@@ -344,58 +344,6 @@ enum MacroExpander {
         """)
     }
 
-    static func generateCanonicalMachineMembers(
-        isActor: Bool,
-        symmetricCollections: [SpecParser.ParsedSymmetricCollection] = []
-    ) -> [DeclSyntax] {
-        let modifier = isActor ? "" : "mutating "
-        let liveProjection = symmetricCollections.map {
-            "state[Variables.\($0.name).rawValue] = \($0.name).projection().modelValue"
-        }.joined(separator: "\n                ")
-        let stateWithLiveCollections = symmetricCollections.isEmpty
-            ? "_machine.tlaSnapshot()"
-            : """
-            var state = _machine.tlaSnapshot()
-                            \(liveProjection)
-                            return state
-            """
-        return [
-            DeclSyntax(stringLiteral: """
-            public struct TransitionEvidence {
-                public let label: ActionLabel
-                public let before: [String: TLAValue]
-                public let after: [String: TLAValue]
-            }
-            """),
-            DeclSyntax(stringLiteral: """
-            private func _stateWithLiveCollections() -> [String: TLAValue] {
-                \(stateWithLiveCollections)
-            }
-            """),
-            DeclSyntax(stringLiteral: """
-            public func tlaSnapshot() -> [String: TLAValue] {
-                _stateWithLiveCollections()
-            }
-            """),
-            DeclSyntax(stringLiteral: """
-            public func availableActions() throws -> [ActionLabel] {
-                try _machine.availableInvocations(in: _stateWithLiveCollections()).map { invocation in
-                    guard let label = ActionLabel(invocation: invocation) else {
-                        throw GeneratedMachineError.unrepresentableActionLabel(invocation)
-                    }
-                    return label
-                }
-            }
-            """),
-            DeclSyntax(stringLiteral: """
-            public \(modifier)func apply(_ label: ActionLabel) throws -> TransitionEvidence {
-                let evidence = try _machine.apply(label.toInvocation(), from: _stateWithLiveCollections()) { _ in true }
-                return TransitionEvidence(label: label, before: evidence.before.asDictionary, after: evidence.after.asDictionary)
-            }
-            """)
-        ]
-    }
-
 }
 
 extension MacroExpander {
@@ -405,6 +353,7 @@ extension MacroExpander {
             name: "State",
             inheritanceClause: InheritanceClauseSyntax {
                 InheritedTypeSyntax(type: IdentifierTypeSyntax(name: "Equatable"))
+                InheritedTypeSyntax(type: IdentifierTypeSyntax(name: "Sendable"))
             },
             memberBlock: MemberBlockSyntax {
                 for v in variables {
@@ -423,48 +372,39 @@ extension MacroExpander {
                     modifiers: [DeclModifierSyntax(name: .keyword(.public))],
                     signature: FunctionSignatureSyntax(
                         parameterClause: FunctionParameterClauseSyntax {
-                            FunctionParameterSyntax(
-                                firstName: "from", secondName: "dict",
-                                type: TypeSyntax(stringLiteral: "[String: TLAValue]")
-                            )
+                            for v in variables {
+                                FunctionParameterSyntax(
+                                    firstName: .identifier(v.name),
+                                    type: TypeSyntax(stringLiteral: stateType(for: v, enumInfos: enumInfos))
+                                )
+                            }
                         }
                     ),
                     body: CodeBlockSyntax {
                         for v in variables {
-                if let typeName = v.swiftTypeName,
-                   let info = enumInfos.first(where: { $0.typeName == typeName }) {
-                    let caseLines = info.cases.map { c in
-                        "case \"\(c.name)\": return \(typeName).\(c.name)"
-                    }.joined(separator: "\n                    ")
-                    ExprSyntax(stringLiteral: """
-                    self.\(v.name) = {
-                        guard case .string(let s) = dict[Variables.\(v.name).rawValue] else { fatalError("Invalid enum value for \(v.name)") }
-                        switch s {
-                        \(caseLines)
-                        default: fatalError("Unknown \(typeName): \\(s)")
-                        }
-                    }()
-                    """)
-                } else if let typeName = v.swiftTypeName,
-                          !["Int", "Bool", "String", "TLAValue"].contains(typeName) {
-                    ExprSyntax(stringLiteral:
-                        "self.\(v.name) = \(typeName)(rawValue: "
-                            + "dict[Variables.\(v.name).rawValue]!.\(extractor(for: v.initial)))!"
-                    )
-                } else {
-                    let st = stateType(for: v, enumInfos: enumInfos)
-                    if st == "TLAValue" {
-                        ExprSyntax(stringLiteral: "self.\(v.name) = dict[Variables.\(v.name).rawValue]!")
-                    } else {
-                        let extractor = v.swiftTypeName.map(extractor(forSwiftType:)) ?? extractor(for: v.initial)
-                        ExprSyntax(stringLiteral: "self.\(v.name) = dict[Variables.\(v.name).rawValue]!.\(extractor)")
-                    }
-                }
+                            ExprSyntax(stringLiteral: "self.\(v.name) = \(v.name)")
                         }
                     }
                 )
+                InitializerDeclSyntax(
+                    modifiers: [DeclModifierSyntax(name: .keyword(.fileprivate))],
+                    signature: FunctionSignatureSyntax(
+                        parameterClause: FunctionParameterClauseSyntax {
+                            FunctionParameterSyntax(
+                                firstName: "formalDictionary", secondName: "dict",
+                                type: TypeSyntax(stringLiteral: "[String: TLAValue]")
+                            )
+                        },
+                        effectSpecifiers: FunctionEffectSpecifiersSyntax(
+                            throwsClause: ThrowsClauseSyntax(throwsSpecifier: .keyword(.throws))
+                        )
+                    ),
+                    body: CodeBlockSyntax {
+                        ExprSyntax(stringLiteral: stateDecodingStatements(variables: variables, enumInfos: enumInfos))
+                    }
+                )
                 VariableDeclSyntax(
-                    modifiers: [DeclModifierSyntax(name: .keyword(.public))],
+                    modifiers: [DeclModifierSyntax(name: .keyword(.fileprivate))],
                     bindingSpecifier: .keyword(.var),
                     bindings: [PatternBindingSyntax(
                         pattern: IdentifierPatternSyntax(identifier: "asDictionary"),
@@ -511,6 +451,86 @@ extension MacroExpander {
         }
     }
 
+    static func tlaValuePattern(for initial: TLAValue, binding: String) -> String {
+        switch initial {
+        case .int: "case .int(let \(binding)) = rawValue"
+        case .bool: "case .bool(let \(binding)) = rawValue"
+        case .string, .constant: "case .string(let \(binding)) = rawValue"
+        case .set: "case .set(let \(binding)) = rawValue"
+        case .tuple: "case .tuple(let \(binding)) = rawValue"
+        case .record: "case .record(let \(binding)) = rawValue"
+        case .function: "case .function(let \(binding)) = rawValue"
+        }
+    }
+
+    static func stateDecodingStatements(
+        variables: [(name: String, initial: TLAValue, initialSet: StateExpr?, swiftTypeName: String?)],
+        enumInfos: [ParsedEnumInfo]
+    ) -> String {
+        variables.map { variable in
+            let key = "Variables.\(variable.name).rawValue"
+            if let typeName = variable.swiftTypeName,
+               let info = enumInfos.first(where: { $0.typeName == typeName }) {
+                let cases = info.cases.map { "case \"\($0.name)\": self.\(variable.name) = \(typeName).\($0.name)" }
+                    .joined(separator: "\n")
+                return """
+                guard let rawValue = dict[\(key)] else {
+                    throw TLAStateProjectionDiagnostic.missingValue(path: \(key))
+                }
+                guard case .string(let value) = rawValue else {
+                    throw TLAStateProjectionDiagnostic.invalidValue(path: \(key))
+                }
+                switch value {
+                \(cases)
+                default:
+                    throw TLAStateProjectionDiagnostic.invalidValue(path: \(key))
+                }
+                """
+            }
+            if let typeName = variable.swiftTypeName,
+               !["Int", "Bool", "String", "TLAValue"].contains(typeName) {
+                let pattern = tlaValuePattern(for: variable.initial, binding: "raw")
+                return """
+                guard let rawValue = dict[\(key)] else {
+                    throw TLAStateProjectionDiagnostic.missingValue(path: \(key))
+                }
+                guard \(pattern), let value = \(typeName)(rawValue: raw) else {
+                    throw TLAStateProjectionDiagnostic.invalidValue(path: \(key))
+                }
+                self.\(variable.name) = value
+                """
+            }
+            let type = stateType(for: variable, enumInfos: enumInfos)
+            if type == "TLAValue" {
+                return """
+                guard let value = dict[\(key)] else {
+                    throw TLAStateProjectionDiagnostic.missingValue(path: \(key))
+                }
+                self.\(variable.name) = value
+                """
+            }
+            let pattern = tlaValuePattern(forSwiftType: type, binding: "value")
+            return """
+            guard let rawValue = dict[\(key)] else {
+                throw TLAStateProjectionDiagnostic.missingValue(path: \(key))
+            }
+            guard \(pattern) else {
+                throw TLAStateProjectionDiagnostic.invalidValue(path: \(key))
+            }
+            self.\(variable.name) = value
+            """
+        }.joined(separator: "\n")
+    }
+
+    static func tlaValuePattern(forSwiftType swiftType: String, binding: String) -> String {
+        switch swiftType {
+        case "Int": "case .int(let \(binding)) = rawValue"
+        case "Bool": "case .bool(let \(binding)) = rawValue"
+        case "String": "case .string(let \(binding)) = rawValue"
+        default: "let \(binding) = rawValue"
+        }
+    }
+
     static func generateActionMethods(
         isActor: Bool = false,
         actions: [SpecParser.ParsedAction],
@@ -533,7 +553,8 @@ extension MacroExpander {
                         """
                         let projectedValue = \(expression)
                         let evidence = try _machine.apply(.init(name: \"\(action.name)\"), from: _stateWithLiveCollections()) { candidate in
-                            guard case .function(let values) = candidate[Variables.\(collection.name).rawValue] else { return false }
+                            guard let token = TLAStateProjection.Token(validating: Variables.\(collection.name).rawValue),
+                                  case .function(let values) = candidate.value(for: token) else { return false }
                             return values[targetKey] == projectedValue.tlaValue
                         }
                         do {
@@ -541,11 +562,19 @@ extension MacroExpander {
                         } catch {
                             throw GeneratedMachineError.unexpected(error)
                         }
-                        return TransitionEvidence(label: .\(action.name), before: evidence.before.asDictionary, after: evidence.after.asDictionary)
+                        return TransitionResult(
+                            action: .\(action.name),
+                            before: evidence.before,
+                            after: evidence.after
+                        )
                         """
                     } ?? """
                     let evidence = try _machine.apply(.init(name: \"\(action.name)\"), from: _stateWithLiveCollections()) { _ in true }
-                    return TransitionEvidence(label: .\(action.name), before: evidence.before.asDictionary, after: evidence.after.asDictionary)
+                    return TransitionResult(
+                        action: .\(action.name),
+                        before: evidence.before,
+                        after: evidence.after
+                    )
                     """
                     return """
                     if \(condition) {
@@ -560,7 +589,7 @@ extension MacroExpander {
                     : ""
                 let source = """
                 @discardableResult
-                \(isActor ? "fileprivate" : "public mutating") func \(action.name)(id: \(collection.elementType).ID) throws -> TransitionEvidence {
+                \(isActor ? "fileprivate" : "public mutating") func \(action.name)(id: \(collection.elementType).ID) throws -> TransitionResult {
                     let projection = \(collection.name).projection()
                     let targetKey: TLAValue
                     do {
@@ -588,7 +617,7 @@ extension MacroExpander {
             let methodName = isActor ? "_\(action.name)" : "apply\(action.name)"
             if action.bindings.isEmpty {
                 let source = """
-                \(isActor ? "fileprivate" : "public mutating") func \(methodName)() throws -> TransitionEvidence {
+                \(isActor ? "fileprivate" : "public mutating") func \(methodName)() throws -> TransitionResult {
                     try apply(.\(action.name))
                 }
                 """
@@ -596,7 +625,7 @@ extension MacroExpander {
             }
             let modifier = isActor ? "fileprivate" : "public mutating"
             let source = """
-            \(modifier) func \(methodName)(\(parameters)) throws -> TransitionEvidence {
+            \(modifier) func \(methodName)(\(parameters)) throws -> TransitionResult {
                 try apply(.\(action.name)\(labels.isEmpty ? "" : "(\(labels))"))
             }
             """

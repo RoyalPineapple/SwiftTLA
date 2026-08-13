@@ -4,7 +4,7 @@ import SwiftTLA
 import SwiftTLAMacros
 import Testing
 
-public struct MacroDevice: Identifiable {
+public struct MacroDevice: Identifiable, Sendable {
   public let id: Int
 
   public init(id: Int) {
@@ -12,7 +12,7 @@ public struct MacroDevice: Identifiable {
   }
 }
 
-public struct StringMacroDevice: Identifiable {
+public struct StringMacroDevice: Identifiable, Sendable {
   public let id: String
 
   public init(id: String) {
@@ -327,9 +327,12 @@ struct SymmetricCollectionMacroRuntimeTests {
     let device = MacroDevice(id: 42)
 
     model.devices.insert(device)
-    try model.begin(id: device.id)
+    let result = try model.begin(id: device.id)
 
     #expect(model.devices[device.id] == 1)
+    #expect(result.action == .begin)
+    #expect(result.before.devices != result.after.devices)
+    #expect(result.after.devices == model.state.devices)
     #expect(GeneratedSymmetricRuntime.symmetricCollectionScopes == [
       SymmetricCollectionScope(collectionName: "devices", verificationScope: 1)
     ])
@@ -493,7 +496,7 @@ struct SymmetricCollectionMacroRuntimeTests {
 
     let allowedEvidence = try allowed.applyadvance()
     #expect(allowed.phase == 1)
-    #expect(allowedEvidence.before["devices"] == allowed.tlaSnapshot()["devices"])
+    #expect(allowedEvidence.before.devices == allowed.state.devices)
 
     var rejected = GeneratedAllSatisfyPredicateRuntime()
     let peers = ["one", "two", "three"].map(StringMacroDevice.init)
@@ -536,7 +539,7 @@ struct SymmetricCollectionMacroRuntimeTests {
     let evidence = try model.applyadvance()
 
     #expect(model.phase == 1)
-    #expect(evidence.after == model.tlaSnapshot())
+    #expect(evidence.after.devices == model.state.devices)
     #expect(model.devices.count == 4)
     #expect(model.devices[matching.id] == 1)
     for device in devices {

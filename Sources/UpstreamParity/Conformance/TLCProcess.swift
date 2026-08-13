@@ -1,5 +1,6 @@
 import Darwin
 import Foundation
+import os
 
 public enum TLCTraceModeV1: Equatable, Sendable {
   case none
@@ -439,14 +440,13 @@ private func drain(_ handle: FileHandle, into append: (Data) -> Void) {
   }
 }
 
-private final class ProcessOutputBuffersV1: @unchecked Sendable {
-  private let lock = NSLock()
-  private var storedStdout = Data()
-  private var storedStderr = Data()
+private final class ProcessOutputBuffersV1: Sendable {
+  private let stdoutBuffer = OSAllocatedUnfairLock(initialState: Data())
+  private let stderrBuffer = OSAllocatedUnfairLock(initialState: Data())
 
-  var stdout: Data { lock.withLock { storedStdout } }
-  var stderr: Data { lock.withLock { storedStderr } }
+  var stdout: Data { stdoutBuffer.withLock { $0 } }
+  var stderr: Data { stderrBuffer.withLock { $0 } }
 
-  func appendStdout(_ data: Data) { lock.withLock { storedStdout.append(data) } }
-  func appendStderr(_ data: Data) { lock.withLock { storedStderr.append(data) } }
+  func appendStdout(_ data: Data) { stdoutBuffer.withLock { $0.append(data) } }
+  func appendStderr(_ data: Data) { stderrBuffer.withLock { $0.append(data) } }
 }

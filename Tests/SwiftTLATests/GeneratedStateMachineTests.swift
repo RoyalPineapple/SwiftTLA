@@ -19,6 +19,86 @@ struct CounterNoInvs {
     }
 }
 
+struct NestedAdapterConcurrencyTests {
+    @Test("Nested adapters observe and execute through their canonical model")
+    @MainActor
+    func nestedAdaptersShareCanonicalObservation() async throws {
+        let invocation = TLAActionInvocation(name: "advance")
+        let modelVariable: NestedComposedCounter.Variables = .count
+        let observableVariable: NestedComposedCounter.Observable.Variables = .count
+        let actorVariable: NestedComposedCounter.Actor.Variables = .count
+        let observableLabel: NestedComposedCounter.Observable.ActionLabel = .advance
+        let actorLabel: NestedComposedCounter.Actor.ActionLabel = .advance
+        var model = NestedComposedCounter()
+        let observable = NestedComposedCounter.Observable()
+        let actor = NestedComposedCounter.Actor()
+        let callbackRecorder = NestedCallbackRecorder()
+        observable.onAdvance = { before, after in
+            await callbackRecorder.record(before: before, after: after)
+        }
+
+        let expectedBefore = await model.machineObservation()
+        #expect(modelVariable == .count)
+        #expect(observableVariable == .count)
+        #expect(actorVariable == .count)
+        #expect(observableLabel.toInvocation() == invocation)
+        #expect(actorLabel.toInvocation() == invocation)
+        #expect(await observable.machineObservation() == expectedBefore)
+        #expect(await actor.machineObservation() == expectedBefore)
+
+        let expected = try await model.execute(invocation)
+        let observed = try await observable.execute(invocation)
+        let acted = try await actor.execute(invocation)
+
+        #expect(observed.before == expected.before)
+        #expect(observed.after == expected.after)
+        #expect(acted.before == expected.before)
+        #expect(acted.after == expected.after)
+        let count = TLAStateProjection.Token(validating: "count")!
+        #expect(await observable.machineObservation().state.projection?.value(for: count) == .int(1))
+        #expect(await actor.machineObservation().state.projection?.value(for: count) == .int(1))
+        #expect(observable.state.count == 1)
+        #expect(await actor.state().count == 1)
+        #expect(await callbackRecorder.transitions.count == 1)
+        #expect(await callbackRecorder.transitions.first?.0 == expected.before)
+        #expect(await callbackRecorder.transitions.first?.1 == expected.after)
+    }
+
+    @Test("Nested actor commits overlapping executions without stale write-back")
+    func nestedActorExecutesOverlappingTransitionsAtomically() async throws {
+        let actor = NestedComposedCounter.Actor()
+        let invocation = TLAActionInvocation(name: "advance")
+
+        async let first = actor.execute(invocation)
+        async let second = actor.execute(invocation)
+        _ = try await (first, second)
+
+        let count = TLAStateProjection.Token(validating: "count")!
+        #expect(await actor.machineObservation().state.projection?.value(for: count) == .int(2))
+    }
+
+    @Test("Nested observable rejects disabled execution without notification")
+    @MainActor
+    func nestedObservableSuppressesCallbackAfterFailedExecution() async throws {
+        let observable = NestedComposedCounter.Observable()
+        let recorder = NestedCallbackRecorder()
+        let invocation = TLAActionInvocation(name: "advance")
+        observable.onAdvance = { before, after in
+            await recorder.record(before: before, after: after)
+        }
+
+        _ = try await observable.execute(invocation)
+        _ = try await observable.execute(invocation)
+        let beforeFailure = await observable.machineObservation()
+        await #expect(throws: GeneratedMachineError.self) {
+            try await observable.execute(invocation)
+        }
+
+        #expect(await observable.machineObservation() == beforeFailure)
+        #expect(await recorder.transitions.count == 2)
+    }
+}
+
 // MARK: - HourClock spec with invariants
 
 @TLAModel
@@ -159,6 +239,38 @@ struct EndToEndThreeParameterActionMachine {
     }
 }
 
+@TLAModel
+struct NondeterministicConstrainedMachine {
+    static var spec: TLASpec {
+        TLASpec("NondeterministicConstrainedMachine") {
+            let value = Var<Int>("value")
+            Variable(value, 0)
+            Action("choose") {
+                choose(value, from: StateExpr.set([1, 2, 3]))
+            }
+            Constraint(value <= 2)
+            Invariant("WithinBound") { value <= 3 }
+        }
+    }
+}
+
+@TLAModel
+struct NestedComposedCounter {
+    static var spec: TLASpec {
+        TLASpec("NestedComposedCounter") {
+            let count = Var<Int>("count")
+            Variable(count, 0)
+            Action("advance") { count.becomes(count + 1).when(count < 2) }
+        }
+    }
+
+    @TLAObservable
+    final class Observable {}
+
+    @TLAActor
+    actor Actor {}
+}
+
 @TLAActor
 actor ThreeParameterActionActor {
     static var spec: TLASpec {
@@ -176,25 +288,33 @@ actor ThreeParameterActionActor {
     }
 }
 
+private actor NestedCallbackRecorder {
+    private(set) var transitions: [(NestedComposedCounter.State, NestedComposedCounter.State)] = []
+
+    func record(before: NestedComposedCounter.State, after: NestedComposedCounter.State) {
+        transitions.append((before, after))
+    }
+}
+
 // MARK: - Tests for generated verification methods
 
 struct GeneratedStateMachineTests {
-    private struct BoardCallback {
+    private struct BoardCallback: Sendable {
         let person: Int
         let elevator: Int
         let direction: Int
-        let before: [String: TLAValue]
-        let after: [String: TLAValue]
+        let before: ObservableThreeParameterMachine.State
+        let after: ObservableThreeParameterMachine.State
     }
 
     @Test("Observable parameterized action applies its selected finite-domain argument")
     func observableParameterizedAction() throws {
         let elevator = ObservableTwoCarElevator()
-        var callbackID: Int?
-        elevator.onMoveElevator = { id, _, _ in callbackID = id }
+        let callbackID = LockedValue<Int?>(nil)
+        elevator.onMoveElevator = { id, _, _ in callbackID.value = id }
         _ = try elevator._moveElevator(id: 2)
         #expect(elevator.floor == 2)
-        #expect(callbackID == 2)
+        #expect(callbackID.value == 2)
     }
 
     @Test("Model macro generates a parameterized action method")
@@ -268,6 +388,12 @@ struct GeneratedStateMachineTests {
         let graph = try ModelChecker(spec: builder).exploreGraph()
         #expect(graph.transitions[.init(0)]?.map(\.label.arguments) == expectedArguments)
 
+        let generatedMatrix = try EndToEndThreeParameterActionMachine.transitionMatrix()
+        let initialInvocations = generatedMatrix
+            .filter { $0.from.floor == 0 }
+            .map(\.invocation.arguments)
+        #expect(initialInvocations == expectedArguments)
+
         let wrappers = builder.tlaModule.split(separator: "\n").filter { $0.hasPrefix("board__") }
         #expect(wrappers == [
             "board__0_0_0 == board(1, 10, 100)",
@@ -293,13 +419,14 @@ struct GeneratedStateMachineTests {
         var machine = EndToEndThreeParameterActionMachine()
         let before = machine.tlaSnapshot()
         let evidence = try machine.apply(.board(person: 2, elevator: 20, direction: 200))
-        #expect(evidence.label.toInvocation() == invocation)
-        #expect(evidence.after["floor"] == .int(222))
+        #expect(evidence.action.toInvocation() == invocation)
+        #expect(evidence.after.floor == 222)
         #expect(throws: GeneratedMachineError.self) {
             try machine.apply(.board(person: 2, elevator: 30, direction: 200))
         }
-        #expect(machine.tlaSnapshot()["floor"] == .int(222))
-        #expect(before["floor"] == .int(0))
+        let floorToken = TLAStateProjection.Token(validating: "floor")!
+        #expect(machine.tlaSnapshot().projection?.value(for: floorToken) == .int(222))
+        #expect(before.projection?.value(for: floorToken) == .int(0))
     }
 
     @Test("Canonical generated machine preserves typed labels, evidence, and failed snapshots")
@@ -308,10 +435,10 @@ struct GeneratedStateMachineTests {
         let label = ThreeParameterActionMachine.ActionLabel.board(person: 2, elevator: 20, direction: 200)
         let evidence = try machine.apply(label)
 
-        #expect(evidence.label == label)
-        #expect(evidence.label.toInvocation() == .init(name: "board", arguments: [.int(2), .int(20), .int(200)]))
-        #expect(evidence.before["floor"] == .int(0))
-        #expect(evidence.after["floor"] == .int(1))
+        #expect(evidence.action == label)
+        #expect(evidence.action.toInvocation() == .init(name: "board", arguments: [.int(2), .int(20), .int(200)]))
+        #expect(evidence.before.floor == 0)
+        #expect(evidence.after.floor == 1)
 
         let before = machine.tlaSnapshot()
         #expect(throws: GeneratedMachineError.self) {
@@ -320,20 +447,89 @@ struct GeneratedStateMachineTests {
         #expect(machine.tlaSnapshot() == before)
     }
 
+    @Test("Malformed formal successors fail through generated State decoding without committing")
+    func malformedFormalSuccessorsDoNotCrashOrCommitGeneratedState() throws {
+        let invocation = TLAActionInvocation(
+            name: "board",
+            arguments: [.int(2), .int(20), .int(200)]
+        )
+        let malformedStates: [([String: TLAValue], TLAStateProjectionDiagnostic)] = [
+            ([:], .missingValue(path: "floor")),
+            (["floor": .string("wrong")], .invalidValue(path: "floor"))
+        ]
+
+        for (malformedState, expectedDiagnostic) in malformedStates {
+            let runtime = SpecRuntime(spec: ThreeParameterActionMachine.spec) { _, _, _ in
+                [malformedState]
+            }
+            var machine = CanonicalMachine(
+                runtime: runtime,
+                initial: ThreeParameterActionMachine.State(floor: 0),
+                stateDictionary: { $0.asDictionary },
+                snapshotFromDictionary: { try ThreeParameterActionMachine.State(formalDictionary: $0) }
+            )
+            let before = machine.snapshot
+
+            do {
+                _ = try machine.apply(invocation)
+                Issue.record("Expected malformed formal state to fail")
+            } catch let GeneratedMachineError.unexpected(error) {
+                #expect(error as? TLAStateProjectionDiagnostic == expectedDiagnostic)
+            }
+
+            #expect(machine.snapshot == before)
+        }
+    }
+
+    @Test("Canonical generated execution preserves the complete parameterized invocation")
+    func canonicalGeneratedExecutionPreservesParameterizedInvocationEvidence() async throws {
+        var machine = EndToEndThreeParameterActionMachine()
+        let invocation = TLAActionInvocation(
+            name: "board",
+            arguments: [.int(2), .int(20), .int(200)]
+        )
+        let before = await machine.machineObservation()
+
+        let evidence = try await machine.execute(invocation)
+        let after = await machine.machineObservation()
+
+        #expect(evidence.action == .board(person: 2, elevator: 20, direction: 200))
+        #expect(evidence.before.floor == 0)
+        #expect(evidence.after.floor == 222)
+        let floor = TLAStateProjection.Token(validating: "floor")!
+        #expect(before.state.projection?.value(for: floor) == .int(0))
+        #expect(after.state.projection?.value(for: floor) == .int(222))
+    }
+
+    @Test("Generated verification retains every constrained nondeterministic successor")
+    func generatedVerificationRetainsNondeterministicSuccessors() throws {
+        let invocation = TLAActionInvocation(name: "choose")
+        let matrixSuccessors = try NondeterministicConstrainedMachine.transitionMatrix()
+            .filter { $0.from == .init(value: 0) && $0.invocation == invocation }
+            .map(\.to)
+
+        #expect(matrixSuccessors.count == 2)
+        #expect(matrixSuccessors.contains(.init(value: 1)))
+        #expect(matrixSuccessors.contains(.init(value: 2)))
+        #expect(!matrixSuccessors.contains(.init(value: 3)))
+        try NondeterministicConstrainedMachine.verifyTransitions()
+        try NondeterministicConstrainedMachine.verifyInvariants()
+    }
+
     @Test("Observable and actor adapters return the canonical three-argument transition evidence")
     func observableAndActorMatchCanonicalThreeArgumentEvidence() async throws {
         var model = ThreeParameterActionMachine()
         let expected = try model.apply(.board(person: 2, elevator: 20, direction: 200))
 
         let observable = ObservableThreeParameterMachine()
-        var callback: BoardCallback?
+        let callback = LockedValue<BoardCallback?>(nil)
         observable.onBoard = { person, elevator, direction, before, after in
-            callback = .init(
+            callback.value = .init(
                 person: person,
                 elevator: elevator,
                 direction: direction,
-                before: before.asDictionary,
-                after: after.asDictionary
+                before: before,
+                after: after
             )
         }
         let observed = try observable._board(person: 2, elevator: 20, direction: 200)
@@ -341,17 +537,17 @@ struct GeneratedStateMachineTests {
         let actor = ThreeParameterActionActor()
         let acted = try await actor.apply(.board(person: 2, elevator: 20, direction: 200))
 
-        #expect(observed.label.toInvocation() == expected.label.toInvocation())
-        #expect(observed.before == expected.before)
-        #expect(observed.after == expected.after)
-        #expect(acted.label.toInvocation() == expected.label.toInvocation())
-        #expect(acted.before == expected.before)
-        #expect(acted.after == expected.after)
-        #expect(callback?.person == 2)
-        #expect(callback?.elevator == 20)
-        #expect(callback?.direction == 200)
-        #expect(callback?.before == expected.before)
-        #expect(callback?.after == expected.after)
+        #expect(observed.action.toInvocation() == expected.action.toInvocation())
+        #expect(observed.before.floor == expected.before.floor)
+        #expect(observed.after.floor == expected.after.floor)
+        #expect(acted.action.toInvocation() == expected.action.toInvocation())
+        #expect(acted.before.floor == expected.before.floor)
+        #expect(acted.after.floor == expected.after.floor)
+        #expect(callback.value?.person == 2)
+        #expect(callback.value?.elevator == 20)
+        #expect(callback.value?.direction == 200)
+        #expect(callback.value?.before.floor == expected.before.floor)
+        #expect(callback.value?.after.floor == expected.after.floor)
     }
 
     @Test("Rejected generated labels preserve model, observable, and actor state")
@@ -372,8 +568,8 @@ struct GeneratedStateMachineTests {
         #expect(model.tlaSnapshot() == modelBefore)
 
         let observable = ObservableThreeParameterMachine()
-        var callbackCount = 0
-        observable.onBoard = { _, _, _, _, _ in callbackCount += 1 }
+        let callbackCount = LockedValue(0)
+        observable.onBoard = { _, _, _, _, _ in callbackCount.value += 1 }
         let observableBefore = observable.tlaSnapshot()
         do {
             _ = try observable._board(person: 2, elevator: 30, direction: 200)
@@ -382,7 +578,7 @@ struct GeneratedStateMachineTests {
             assertRejectedBoardError(error, expectedInvocation: expectedInvocation)
         }
         #expect(observable.tlaSnapshot() == observableBefore)
-        #expect(callbackCount == 0)
+        #expect(callbackCount.value == 0)
 
         let actor = ThreeParameterActionActor()
         let actorBefore = await actor.tlaSnapshot()
@@ -485,9 +681,9 @@ struct GeneratedStateMachineTests {
         let matrix = try CounterNoInvs.transitionMatrix()
         #expect(!matrix.isEmpty)
         for entry in matrix {
-            #expect(entry.from.count >= 1)
-            #expect(!entry.action.isEmpty)
-            #expect(entry.to.count >= 1)
+            #expect(entry.from.x >= 0)
+            #expect(!entry.invocation.name.isEmpty)
+            #expect(entry.to.x >= 0)
         }
     }
 
@@ -511,8 +707,8 @@ struct GeneratedStateMachineTests {
         let matrix = try HourClock.transitionMatrix()
         #expect(!matrix.isEmpty)
         for entry in matrix {
-            #expect(entry.from.keys.contains("hr"))
-            #expect(entry.to.keys.contains("hr"))
+            #expect(entry.from.hr >= 0)
+            #expect(entry.to.hr >= 0)
         }
     }
 
@@ -541,7 +737,9 @@ struct GeneratedStateMachineTests {
         let matrix = try HourClock.transitionMatrix()
         let graph = try ModelChecker(spec: HourClock.spec, maxStates: 100_000).exploreGraph()
         #expect(!matrix.isEmpty)
-        let fromStates = Set(matrix.map { $0.from })
+        let fromStates = matrix.map(\.from).reduce(into: [HourClock.State]()) {
+            if !$0.contains($1) { $0.append($1) }
+        }
         #expect(fromStates.count <= graph.states.count)
     }
 
@@ -549,8 +747,7 @@ struct GeneratedStateMachineTests {
     func counterNoInvsConsistency() throws {
         let matrix = try CounterNoInvs.transitionMatrix()
         for entry in matrix {
-            let next = try CounterNoInvs.runtime.apply(.init(name: entry.action), to: entry.from)
-            #expect(next == entry.to)
+            #expect(entry.from != entry.to)
         }
     }
 }

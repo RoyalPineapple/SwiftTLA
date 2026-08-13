@@ -30,6 +30,23 @@ struct ParsedMacroModel {
     let invariants: [(String, StateExpr)]
 }
 
+enum NestedAdapterModelRegistry {
+    private static let lock = NSLock()
+    nonisolated(unsafe) private static var models: [String: ParsedMacroModel] = [:]
+
+    static func record(_ model: ParsedMacroModel) {
+        lock.lock()
+        models[model.typeName] = model
+        lock.unlock()
+    }
+
+    static func model(named typeName: String) -> ParsedMacroModel? {
+        lock.lock()
+        defer { lock.unlock() }
+        return models[typeName]
+    }
+}
+
 enum TLASpecVerifier {
     typealias EnumPhaseMap = [String: [String: TLAValue]]
 
@@ -534,8 +551,11 @@ struct SimpleError: Error, CustomStringConvertible {
 
 public struct ModelMacro: MemberMacro, ExtensionMacro {
     public static func expansion(of node: AttributeSyntax, attachedTo declaration: some DeclGroupSyntax, providingExtensionsOf type: some TypeSyntaxProtocol, conformingTo protocols: [TypeSyntax], in context: some MacroExpansionContext) throws -> [ExtensionDeclSyntax] {
+        guard diagnoseStoredInstanceState(in: declaration, context: context) == false else {
+            return []
+        }
         guard let ext = ("""
-            extension \(type.trimmed): TLAModelType {}
+            extension \(type.trimmed): Sendable, TLAModelType, TLAMachineExecuting, TLAMachineAdapterCanonicalModel {}
             """ as DeclSyntax).as(ExtensionDeclSyntax.self) else { return [] }
         return [ext]
     }
@@ -548,12 +568,24 @@ public struct ModelMacro: MemberMacro, ExtensionMacro {
             context.diagnose(parserDiagnostic(diagnostic, in: declaration))
             return []
         }
+        NestedAdapterModelRegistry.record(parsed)
         return MacroExpander.generate(mode: .model, model: parsed)
     }
 }
 
 public struct TLAActorMacro: MemberMacro, ExtensionMacro {
     public static func expansion(of node: AttributeSyntax, attachedTo declaration: some DeclGroupSyntax, providingExtensionsOf type: some TypeSyntaxProtocol, conformingTo protocols: [TypeSyntax], in context: some MacroExpansionContext) throws -> [ExtensionDeclSyntax] {
+        switch adapterNestingMode(for: declaration, at: node, in: context) {
+        case .nested:
+            guard let ext = ("""
+                extension \(type.trimmed): TLAMachineAdapterAccess {}
+                """ as DeclSyntax).as(ExtensionDeclSyntax.self) else { return [] }
+            return [ext]
+        case .invalid:
+            return []
+        case .standalone:
+            break
+        }
         guard let ext = ("""
             extension \(type.trimmed): TLAModelType {}
             """ as DeclSyntax).as(ExtensionDeclSyntax.self) else { return [] }
@@ -561,6 +593,24 @@ public struct TLAActorMacro: MemberMacro, ExtensionMacro {
     }
 
     public static func expansion(of node: AttributeSyntax, providingMembersOf declaration: some DeclGroupSyntax, in context: some MacroExpansionContext) throws -> [DeclSyntax] {
+        switch adapterNestingMode(for: declaration, at: node, in: context) {
+        case .nested(let model):
+            guard let parsed = NestedAdapterModelRegistry.model(named: model.name.text) else {
+                context.diagnose(Diagnostic(
+                    node: Syntax(node),
+                    message: AdapterNestingDiagnostic(message: "Nested adapter could not resolve its enclosing @TLAModel")
+                ))
+                return []
+            }
+            return MacroExpander.generateNestedAdapterMembers(
+                kind: .actor,
+                canonicalModel: parsed
+            )
+        case .invalid:
+            return []
+        case .standalone:
+            break
+        }
         let parsed: ParsedMacroModel
         do {
             parsed = try TLASpecVerifier.parseAndVerify(declaration)
@@ -572,8 +622,43 @@ public struct TLAActorMacro: MemberMacro, ExtensionMacro {
     }
 }
 
-public struct TLAObservableMacro: MemberMacro {
+public struct TLAObservableMacro: MemberMacro, ExtensionMacro {
+    public static func expansion(of node: AttributeSyntax, attachedTo declaration: some DeclGroupSyntax, providingExtensionsOf type: some TypeSyntaxProtocol, conformingTo protocols: [TypeSyntax], in context: some MacroExpansionContext) throws -> [ExtensionDeclSyntax] {
+        switch adapterNestingMode(for: declaration, at: node, in: context) {
+        case .nested:
+            guard let ext = ("""
+                @MainActor extension \(type.trimmed): Sendable, TLAMachineAdapterAccess {}
+                """ as DeclSyntax).as(ExtensionDeclSyntax.self) else { return [] }
+            return [ext]
+        case .standalone:
+            guard let ext = ("""
+                extension \(type.trimmed): Sendable {}
+                """ as DeclSyntax).as(ExtensionDeclSyntax.self) else { return [] }
+            return [ext]
+        case .invalid:
+            return []
+        }
+    }
+
     public static func expansion(of node: AttributeSyntax, providingMembersOf declaration: some DeclGroupSyntax, in context: some MacroExpansionContext) throws -> [DeclSyntax] {
+        switch adapterNestingMode(for: declaration, at: node, in: context) {
+        case .nested(let model):
+            guard let parsed = NestedAdapterModelRegistry.model(named: model.name.text) else {
+                context.diagnose(Diagnostic(
+                    node: Syntax(node),
+                    message: AdapterNestingDiagnostic(message: "Nested adapter could not resolve its enclosing @TLAModel")
+                ))
+                return []
+            }
+            return MacroExpander.generateNestedAdapterMembers(
+                kind: .observable,
+                canonicalModel: parsed
+            )
+        case .invalid:
+            return []
+        case .standalone:
+            break
+        }
         let parsed: ParsedMacroModel
         do {
             parsed = try TLASpecVerifier.parseAndVerify(declaration)
@@ -582,6 +667,105 @@ public struct TLAObservableMacro: MemberMacro {
             return []
         }
         return MacroExpander.generate(mode: .observable, model: parsed)
+    }
+}
+
+private struct AdapterNestingDiagnostic: DiagnosticMessage {
+    let message: String
+    let diagnosticID = MessageID(domain: "SwiftTLA", id: "invalid-adapter-nesting")
+    let severity: DiagnosticSeverity = .error
+}
+
+private struct ModelStoredStateDiagnostic: DiagnosticMessage {
+    let message = "@TLAModel models cannot declare instance stored properties; model state belongs in the static specification"
+    let diagnosticID = MessageID(domain: "SwiftTLA", id: "model-instance-stored-state")
+    let severity: DiagnosticSeverity = .error
+}
+
+private func diagnoseStoredInstanceState(
+    in declaration: some DeclGroupSyntax,
+    context: some MacroExpansionContext
+) -> Bool {
+    for member in declaration.memberBlock.members {
+        guard let variable = member.decl.as(VariableDeclSyntax.self),
+              !variable.modifiers.contains(where: { $0.name.text == "static" || $0.name.text == "class" }),
+              let binding = variable.bindings.first(where: isInstanceStoredBinding) else {
+            continue
+        }
+        context.diagnose(Diagnostic(
+            node: Syntax(binding.pattern),
+            message: ModelStoredStateDiagnostic()
+        ))
+        return true
+    }
+    return false
+}
+
+private func isInstanceStoredBinding(_ binding: PatternBindingSyntax) -> Bool {
+    guard let accessorBlock = binding.accessorBlock else { return true }
+    guard case .accessors(let accessors) = accessorBlock.accessors else { return false }
+    return accessors.contains { accessor in
+        accessor.accessorSpecifier.text == "willSet" || accessor.accessorSpecifier.text == "didSet"
+    }
+}
+
+private enum AdapterNestingMode {
+    case standalone
+    case nested(StructDeclSyntax)
+    case invalid
+}
+
+private func adapterNestingMode(
+    for declaration: some DeclGroupSyntax,
+    at attribute: AttributeSyntax,
+    in context: some MacroExpansionContext
+) -> AdapterNestingMode {
+    let ancestors = enclosingModelDeclarations(in: context)
+    if ancestors.count > 1 {
+        context.diagnose(Diagnostic(
+            node: Syntax(attribute),
+            message: AdapterNestingDiagnostic(message: "Adapter must be enclosed by exactly one @TLAModel")
+        ))
+        return .invalid
+    }
+    if let model = ancestors.first {
+        guard let structModel = model.as(StructDeclSyntax.self) else {
+            context.diagnose(Diagnostic(
+                node: Syntax(attribute),
+                message: AdapterNestingDiagnostic(message: "Nested adapters require an enclosing @TLAModel struct")
+            ))
+            return .invalid
+        }
+        return .nested(structModel)
+    }
+    if TLASpecVerifier.findSpec(in: declaration.memberBlock.members) == nil {
+        context.diagnose(Diagnostic(
+            node: Syntax(attribute),
+            message: AdapterNestingDiagnostic(message: "Adapter without a spec must be enclosed by one @TLAModel")
+        ))
+        return .invalid
+    }
+    return .standalone
+}
+
+private func enclosingModelDeclarations(in context: some MacroExpansionContext) -> [DeclGroupSyntax] {
+    var enclosing: [DeclGroupSyntax] = []
+    for node in context.lexicalContext {
+        if let candidate = node.as(StructDeclSyntax.self), hasTLAModelAttribute(candidate.attributes) {
+            enclosing.append(candidate)
+        } else if let candidate = node.as(ClassDeclSyntax.self), hasTLAModelAttribute(candidate.attributes) {
+            enclosing.append(candidate)
+        } else if let candidate = node.as(ActorDeclSyntax.self), hasTLAModelAttribute(candidate.attributes) {
+            enclosing.append(candidate)
+        }
+    }
+    return enclosing
+}
+
+private func hasTLAModelAttribute(_ attributes: AttributeListSyntax) -> Bool {
+    attributes.contains { element in
+        guard let attribute = element.as(AttributeSyntax.self) else { return false }
+        return attribute.attributeName.trimmedDescription == "TLAModel"
     }
 }
 

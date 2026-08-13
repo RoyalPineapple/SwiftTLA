@@ -1,4 +1,5 @@
 import Foundation
+import os
 import SwiftTLA
 import Testing
 import UpstreamParity
@@ -536,24 +537,25 @@ private struct FixtureTLCExecutorV1: TLCProcessExecuting {
     )
   }
 }
-private final class PublicationRaceBarrierV1: @unchecked Sendable {
-  private let condition = NSCondition()
+private final class PublicationRaceBarrierV1: Sendable {
+  private let arrivals = OSAllocatedUnfairLock(initialState: 0)
+  private let release = DispatchSemaphore(value: 0)
   private let parties: Int
-  private var arrivals = 0
   init(parties: Int) {
     self.parties = parties
   }
   func waitForAll() {
-    condition.lock()
-    arrivals += 1
-    if arrivals == parties {
-      condition.broadcast()
-    } else {
-      while arrivals < parties {
-        condition.wait()
-      }
+    let isLast = arrivals.withLock {
+      $0 += 1
+      return $0 == parties
     }
-    condition.unlock()
+    if isLast {
+      for _ in 1..<parties {
+        release.signal()
+      }
+    } else {
+      release.wait()
+    }
   }
 }
 private struct BarrierTLCExecutorV1: TLCProcessExecuting {
@@ -583,23 +585,23 @@ private struct FailingTLCExecutorV1: TLCProcessExecuting {
       partialStdout: "partial stdout TOKEN=secret", partialStderr: "partial stderr")
   }
 }
-private final class SequencedTLCExecutorV1: TLCProcessExecuting, @unchecked Sendable {
+private final class SequencedTLCExecutorV1: TLCProcessExecuting, Sendable {
   let stream: Data
-  var results: [TLCProcessResultV1]
+  private let results: OSAllocatedUnfairLock<[TLCProcessResultV1]>
   init(stream: Data, results: [TLCProcessResultV1]) {
     self.stream = stream
-    self.results = results
+    self.results = OSAllocatedUnfairLock(initialState: results)
   }
   func execute(_ request: TLCProcessRequestV1) throws -> TLCProcessResultV1 {
     try stream.write(to: request.graphEvents)
-    return results.removeFirst()
+    return results.withLock { $0.removeFirst() }
   }
 }
-private enum FollowupFailureV1 {
+private enum FollowupFailureV1: Sendable {
   case trace
   case replay
 }
-private final class ThrowingFollowupTLCExecutorV1: TLCProcessExecuting, @unchecked Sendable {
+private final class ThrowingFollowupTLCExecutorV1: TLCProcessExecuting, Sendable {
   let stream: Data
   let failure: FollowupFailureV1
   init(stream: Data, failure: FollowupFailureV1) {
@@ -622,10 +624,10 @@ private final class ThrowingFollowupTLCExecutorV1: TLCProcessExecuting, @uncheck
     }
   }
 }
-private enum ArbitraryTLCExecutorFailureV1: Error {
+private enum ArbitraryTLCExecutorFailureV1: Error, Sendable {
   case launchValidation
 }
-private final class ArbitraryFollowupFailureTLCExecutorV1: TLCProcessExecuting, @unchecked Sendable {
+private final class ArbitraryFollowupFailureTLCExecutorV1: TLCProcessExecuting, Sendable {
   let stream: Data
   let failure: FollowupFailureV1
   init(stream: Data, failure: FollowupFailureV1) {
@@ -646,14 +648,13 @@ private final class ArbitraryFollowupFailureTLCExecutorV1: TLCProcessExecuting, 
     }
   }
 }
-private final class ResultBoxV1: @unchecked Sendable {
-  private let lock = NSLock()
-  private var storage: [CoreConformanceRunResultV1] = []
+private final class ResultBoxV1: Sendable {
+  private let storage = OSAllocatedUnfairLock(initialState: [CoreConformanceRunResultV1]())
   var values: [CoreConformanceRunResultV1] {
-    lock.withLock { storage }
+    storage.withLock { $0 }
   }
   func append(_ value: CoreConformanceRunResultV1) {
-    lock.withLock { storage.append(value) }
+    storage.withLock { $0.append(value) }
   }
 }
 private func exactSwiftExploration() -> ModelExplorationResult {

@@ -5,7 +5,7 @@ SwiftTLA is a compile-time spec validator and behavioral compiler. Swift types c
 It also exports TLA+ and a TLC configuration. For declared finite cases, TLC is a
 pinned executable reference. Published TLA+ semantics remain authoritative.
 
-See [the supported language fragment](Documentation/Design.md) and the [symmetric collections guide](Documentation/SymmetricCollections.md) for the identity and proof boundary.
+See [the supported language fragment](Documentation/Design.md), the [generated-machine guide](Documentation/GeneratedMachines.md), and the [symmetric collections guide](Documentation/SymmetricCollections.md). The generated-machine API reference is in [SwiftTLA DocC](Sources/SwiftTLA/SwiftTLA.docc/SwiftTLA.md).
 
 ## Compiler pipeline
 
@@ -18,7 +18,7 @@ Typed Swift DSL ──► TLASpec ──► compile-time model checking ──�
        └── types constrain legal variables, values, and collection operations
 ```
 
-The release-facing macro examples use the same model-checking pipeline before they generate code. `@TLAModel` produces an executable model type. `@TLAActor` applies the pipeline to an actor. `@TLAObservable` generates an `@Observable` class with callbacks. The runtime behavior, the compile-time check, and the TLA+ export all come from one DSL model. The current public-workflow evidence covers only the bounded fixtures and package matrix described in [public workflow conformance](Documentation/PublicWorkflowConformance.md); it is not a claim about every accepted macro input.
+The release-facing macro examples use the same model-checking pipeline before they generate code. `@TLAModel` produces an executable model type. `@TLAActor` produces an actor or a nested actor adapter. `@TLAObservable` produces an observable model or a nested main-actor adapter with typed callbacks. The runtime behavior, the compile-time check, and the TLA+ export all come from one DSL model. The current public-workflow evidence covers only the bounded fixtures and package matrix described in [public workflow conformance](Documentation/PublicWorkflowConformance.md); it is not a claim about every accepted macro input.
 
 ## Usage
 
@@ -45,7 +45,8 @@ public struct HourClock {
 }
 
 var clock = HourClock()
-clock.applytick()
+let result = try clock.apply(.Tick)
+print(result.after.hour)
 ```
 
 ## Symmetric collections

@@ -187,7 +187,7 @@ public func substituteConstants(_ spec: TLASpec) -> TLASpec {
   let invs = spec.invariants.map { i in
     NamedInvariant(name: i.name, body: substituteInState(i.body, constants: constants))
   }
-  return TLASpec(
+  var resolved = TLASpec(
     name: spec.name,
     variables: vars,
     constants: [:],
@@ -209,6 +209,9 @@ public func substituteConstants(_ spec: TLASpec) -> TLASpec {
     symmetryGroups: spec.symmetryGroups,
     symmetricCollections: spec.symmetricCollections
   )
+  resolved.runtimeFuncs = spec.runtimeFuncs
+  resolved.runtimeFuncBodies = spec.runtimeFuncBodies
+  return resolved
 }
 
 private func substituteActionVar(_ name: String, with value: TLAValue, in expr: ActionExpr)

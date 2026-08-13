@@ -217,7 +217,7 @@ struct TLCTemporalAdapterTests {
     #expect(FileManager.default.fileExists(atPath: traceAlias.path))
   }
 
-  private final class FixtureExecutor: TLCProcessExecuting, @unchecked Sendable {
+  private final class FixtureExecutor: TLCProcessExecuting, Sendable {
     private let stream: Data?
     private let result: TLCProcessResultV1
 
@@ -232,7 +232,7 @@ struct TLCTemporalAdapterTests {
     }
   }
 
-  private final class TemporalFixtureExecutor: TLCProcessExecuting, @unchecked Sendable {
+  private final class TemporalFixtureExecutor: TLCProcessExecuting, Sendable {
     let primaryStream: Data
     let trace: Data
 
@@ -251,7 +251,7 @@ struct TLCTemporalAdapterTests {
     }
   }
 
-  private final class TraceFailingExecutor: TLCProcessExecuting, @unchecked Sendable {
+  private final class TraceFailingExecutor: TLCProcessExecuting, Sendable {
     let primaryStream: Data
 
     init(primaryStream: Data) { self.primaryStream = primaryStream }

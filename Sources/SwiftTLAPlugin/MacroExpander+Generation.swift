@@ -36,17 +36,22 @@ extension MacroExpander {
     }
     static func generateTransitionMatrix() -> [DeclSyntax] {
         [DeclSyntax(stringLiteral: """
-        public static func transitionMatrix() throws -> [(from: [String: TLAValue], action: String, to: [String: TLAValue])] {
+        private static func _formalTransitionMatrix() throws -> [(from: [String: TLAValue], invocation: TLAActionInvocation, to: [String: TLAValue])] {
             let graph = try ModelChecker(spec: Self.spec, maxStates: 100_000).exploreGraph()
-            var matrix: [(from: [String: TLAValue], action: String, to: [String: TLAValue])] = []
+            var matrix: [(from: [String: TLAValue], invocation: TLAActionInvocation, to: [String: TLAValue])] = []
             for (fromID, transitions) in graph.transitions {
                 guard let fromState = graph.states[fromID] else { continue }
                 for t in transitions {
                     guard let toState = graph.states[t.target] else { continue }
-                    matrix.append((from: fromState, action: t.action, to: toState))
+                    matrix.append((from: fromState, invocation: t.label.invocation, to: toState))
                 }
             }
             return matrix
+        }
+        public static func transitionMatrix() throws -> [(from: State, invocation: TLAActionInvocation, to: State)] {
+            try _formalTransitionMatrix().map {
+                (from: try State(formalDictionary: $0.from), invocation: $0.invocation, to: try State(formalDictionary: $0.to))
+            }
         }
         """)]
     }
@@ -54,11 +59,26 @@ extension MacroExpander {
         if actions.isEmpty { return [] }
         return [DeclSyntax(stringLiteral: """
         public static func verifyTransitions() throws {
-            let matrix = try Self.transitionMatrix()
-            for (from, actionName, expected) in matrix {
-                let result = try Self.runtime.apply(.init(name: actionName), to: from)
-                guard result == expected else {
-                    throw VerificationError("\\(actionName): expected \\(expected), got \\(result)")
+            let matrix = try Self._formalTransitionMatrix()
+            var verified = Array(repeating: false, count: matrix.count)
+            for index in matrix.indices where !verified[index] {
+                let (from, invocation, _) = matrix[index]
+                let expected = matrix.indices.compactMap { candidate -> [String: TLAValue]? in
+                    guard matrix[candidate].from == from, matrix[candidate].invocation == invocation else {
+                        return nil
+                    }
+                    verified[candidate] = true
+                    return matrix[candidate].to
+                }
+                var actual = try Self.runtime.successors(invocation, from: from)
+                guard actual.count == expected.count else {
+                    throw VerificationError("\\(invocation): expected \\(expected.count) successors, got \\(actual.count)")
+                }
+                for successor in expected {
+                    guard let match = actual.firstIndex(of: successor) else {
+                        throw VerificationError("\\(invocation): missing successor \\(successor)")
+                    }
+                    actual.remove(at: match)
                 }
             }
         }
@@ -67,17 +87,16 @@ extension MacroExpander {
     static func generateInvariantsTest() -> [DeclSyntax] {
         [DeclSyntax(stringLiteral: """
         public static func verifyInvariants() throws {
-            let matrix = try Self.transitionMatrix()
+            let matrix = try Self._formalTransitionMatrix()
             let runtime = Self.runtime
-            for (from, actionName, _) in matrix {
-                let result = try runtime.apply(.init(name: actionName), to: from)
+            for (_, invocation, successor) in matrix {
                 for inv in runtime.spec.invariants {
                     guard try inv.body.evaluateBool(
-                        in: result,
+                        in: successor,
                         runtimeFuncs: runtime.spec.runtimeFuncs,
                         recursiveFuncs: runtime.spec.recursiveFuncs
                     ) else {
-                        throw VerificationError("\\(inv.name) violated by \\(actionName)")
+                        throw VerificationError("\\(inv.name) violated by \\(invocation)")
                     }
                 }
             }
@@ -97,35 +116,34 @@ extension MacroExpander {
             let callbackType: String
             if !a.bindings.isEmpty {
                 let parameterTypes = a.bindings.map { swiftType(for: $0.values[0]) }.joined(separator: ", ")
-                callbackType = "((\(parameterTypes), State, State) -> Void)?"
+                callbackType = "(@Sendable (\(parameterTypes), State, State) -> Void)?"
             } else {
-                callbackType = "((State, State) async -> Void)?"
+                callbackType = "(@Sendable (State, State) async -> Void)?"
             }
-            let callbackVar = DeclSyntax(
-                VariableDeclSyntax(
-                    modifiers: [DeclModifierSyntax(name: .keyword(.public))],
-                    bindingSpecifier: .keyword(.var),
-                    bindings: [PatternBindingSyntax(
-                        pattern: IdentifierPatternSyntax(identifier: .identifier(callbackName)),
-                        typeAnnotation: TypeAnnotationSyntax(type: TypeSyntax(stringLiteral: callbackType))
-                    )]
-                )
-            )
-            decls.append(callbackVar)
+            decls.append(DeclSyntax(stringLiteral: "private let _\(callbackName) = LockedValue<\(callbackType)>(nil)"))
+            decls.append(DeclSyntax(stringLiteral: """
+            public var \(callbackName): \(callbackType) {
+                get { _\(callbackName).value }
+                set { _\(callbackName).value = newValue }
+            }
+            """))
         }
         decls.append(DeclSyntax(generateVariablesEnum(variables: variables)))
         decls.append(DeclSyntax(generateActionsEnum(actions: actions)))
         decls.append(DeclSyntax(generateActionLabel(actions: actions)))
         decls.append(DeclSyntax(generateStateStruct(variables: variables, enumInfos: enumInfos)))
         decls.append(DeclSyntax(stringLiteral: """
-        private var _machine = CanonicalMachine(
+        private let _machine = CanonicalMachineStorage(CanonicalMachine(
             runtime: \(typeName).runtime,
-            initial: State(from: \(typeName).runtime.initialStates().first!),
+            initial: try! State(formalDictionary: \(typeName).runtime.initialStates().first!),
             stateDictionary: { $0.asDictionary },
-            snapshotFromDictionary: { State(from: $0) }
-        )
+            snapshotFromDictionary: { try State(formalDictionary: $0) }
+        ))
         """))
-        decls.append(contentsOf: generateCanonicalMachineMembers(isActor: true))
+        decls.append(contentsOf: generateCanonicalMachineMembers(
+            isActor: true,
+            hasActions: !actions.isEmpty
+        ))
         decls.append(contentsOf: generateVariableProperties(variables: variables).map(DeclSyntax.init))
         decls.append(contentsOf: generateObservableActionMethods(variables: variables, actions: actions).map(DeclSyntax.init))
         decls.append(DeclSyntax(
@@ -155,18 +173,18 @@ extension MacroExpander {
                 }.joined(separator: ", ")
                 let callbackArguments = a.bindings.map(\.name).joined(separator: ", ")
                 let source = """
-                public func _\(a.name)(\(parameters)) throws -> TransitionEvidence {
+                public func _\(a.name)(\(parameters)) throws -> TransitionResult {
                     let evidence = try apply(.\(a.name)(\(a.bindings.map { "\($0.name): \($0.name)" }.joined(separator: ", "))))
-                    if let h = \(callbackName) { h(\(callbackArguments), State(from: evidence.before), State(from: evidence.after)) }
+                    if let h = \(callbackName) { h(\(callbackArguments), evidence.before, evidence.after) }
                     return evidence
                 }
                 """
                 return DeclSyntax(stringLiteral: source).as(FunctionDeclSyntax.self)!
             }
             let source = """
-            public func _\(a.name)() throws -> TransitionEvidence {
+                public func _\(a.name)() throws -> TransitionResult {
                 let evidence = try apply(.\(a.name))
-                if let h = \(callbackName) { Task { await h(State(from: evidence.before), State(from: evidence.after)) } }
+                if let h = \(callbackName) { Task { await h(evidence.before, evidence.after) } }
                 return evidence
             }
             """

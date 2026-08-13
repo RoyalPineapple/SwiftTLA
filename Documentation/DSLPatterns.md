@@ -4,7 +4,7 @@
 
 Every construct in the DSL serves **two roles**:
 1. **TLA+ output** — `.tlaModule` renders it as valid TLA+/SANY source
-2. **Runtime evaluation** — `Evaluator` interprets it against a `[String: TLAValue]` state
+2. **Runtime evaluation** — `Evaluator` interprets it against an internal formal state
 
 There is never a raw TLA+ string where a DSL construct could express the same thing.
 The DSL body IS the implementation.
@@ -93,10 +93,14 @@ No bare string literals in pattern-matching switches.
 
 ## Type safety rule: no bare-string-keyed collections
 
-`[String: TLAValue]` is the core state representation but raw strings as keys
-are fragile — a typo in a variable name is a silent bug. Every string key must
-be derived from a typed source (`Var<T>.name`, `RecursiveFunc.name`, etc.),
-never written as a bare string literal.
+The formal engine uses `[String: TLAValue]` internally. This representation is
+not an application-facing API. Engine code derives every key from a typed source
+such as `Var<T>.name` or `RecursiveFunc.name`; it never writes a bare key.
+
+Generated application APIs expose typed `State`, `Variables`, `ActionLabel`,
+and `TransitionResult` values. `TLAStateProjection` is the guarded bridge for
+formal tooling that must inspect a formal state. See
+[Generated machines](GeneratedMachines.md) for the public contract.
 
 ## Construct rule: one way to build
 

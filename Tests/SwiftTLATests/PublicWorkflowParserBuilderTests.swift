@@ -57,6 +57,31 @@ struct PublicWorkflowParserBuilderTests {
     }
   }
 
+  @Test("canonical project roots accept an equivalent symlinked output spelling")
+  func acceptsEquivalentSymlinkedOutputDirectory() throws {
+    let root = try Fixture.packageRoot().resolvingSymlinksInPath().standardizedFileURL
+    let equivalentRoot = try #require(Self.privateTmpSpelling(of: root))
+    let output = equivalentRoot.appendingPathComponent(".build/PublicWorkflowParserBuilderTests-\(UUID())")
+    defer { try? FileManager.default.removeItem(at: output) }
+
+    let run = try PublicWorkflowParserBuilderAdapterV1().run(
+      manifestURL: root.appendingPathComponent("Tests/Fixtures/PublicWorkflowConformance/ParserBuilder/manifest.json"),
+      projectRoot: root,
+      outputDirectory: output,
+      correlation: try PublicWorkflowCaseRunCorrelationV1(
+        caseID: "parser-builder-bounded-counter", gateRunID: UUID(), fixtureRunID: UUID(), comparisonRunID: UUID()))
+
+    #expect(run.comparison.outcome == .exact)
+  }
+
+  private static func privateTmpSpelling(of root: URL) -> URL? {
+    guard root.path.hasPrefix("/tmp/"),
+          URL(fileURLWithPath: "/private" + root.path).resolvingSymlinksInPath().standardizedFileURL == root else {
+      return nil
+    }
+    return URL(fileURLWithPath: "/private" + root.path)
+  }
+
   private enum Attack: CaseIterable {
     case source, configuration, parserObservation, builderObservation, sourcePin, provenanceMismatch
     case swiftSyntaxPin, swiftTLAPackagePin, bridgeSourcePin, adapterSourceEvidencePin, nonApplicablePin, pathEscape
@@ -103,11 +128,11 @@ struct PublicWorkflowParserBuilderTests {
       case .swiftSyntaxPin:
         try replaceFirst("\"sha256\": \"cfdc69e87cdcea8681bfa8b117d599eef34e6f986fe23d9ad5eb4a320a1a18d7\"", with: "\"sha256\": \"\(String(repeating: "0", count: 64))\"")
       case .swiftTLAPackagePin:
-        try replaceFirst("\"sha256\": \"89d24e43dc0762347c8463a45fd8c4489a1fe03fe67915050cae69a80adfed7b\"", with: "\"sha256\": \"\(String(repeating: "0", count: 64))\"")
+        try replaceFirst("\"sha256\": \"9dd427098bbacebacb55a8d16d23853352a4af7dc41a78c3f771db6e2a896442\"", with: "\"sha256\": \"\(String(repeating: "0", count: 64))\"")
       case .bridgeSourcePin:
-        try replaceFirst("\"bridgeSourceSHA256\": \"e3e17551100713e99457d59289d5d3a5d8c17925f690dcc534825f5efd1bc70f\"", with: "\"bridgeSourceSHA256\": \"\(String(repeating: "0", count: 64))\"")
+        try replaceFirst("\"bridgeSourceSHA256\": \"363be60962a3921039c9c2068150214c23524949035ae902078441df96947a94\"", with: "\"bridgeSourceSHA256\": \"\(String(repeating: "0", count: 64))\"")
       case .adapterSourceEvidencePin:
-        try replaceFirst("\"adapterSource\", \"evidence\": { \"path\": \"Sources/UpstreamParity/Conformance/PublicWorkflowParserBuilderAdapter.swift\", \"sha256\": \"e3e17551100713e99457d59289d5d3a5d8c17925f690dcc534825f5efd1bc70f\"", with: "\"adapterSource\", \"evidence\": { \"path\": \"Sources/UpstreamParity/Conformance/PublicWorkflowParserBuilderAdapter.swift\", \"sha256\": \"\(String(repeating: "0", count: 64))\"")
+        try replaceFirst("\"adapterSource\", \"evidence\": { \"path\": \"Sources/UpstreamParity/Conformance/PublicWorkflowParserBuilderAdapter.swift\", \"sha256\": \"363be60962a3921039c9c2068150214c23524949035ae902078441df96947a94\"", with: "\"adapterSource\", \"evidence\": { \"path\": \"Sources/UpstreamParity/Conformance/PublicWorkflowParserBuilderAdapter.swift\", \"sha256\": \"\(String(repeating: "0", count: 64))\"")
       case .nonApplicablePin:
         try replaceFirst("\"tlcJarSHA256\": \"95f89bf42ce10922c7a60ed4e026ac0a2dc8550fae2a518e8d842f5836518a75\"", with: "\"tlcJarSHA256\": \"\(String(repeating: "0", count: 64))\"")
       case .pathEscape:

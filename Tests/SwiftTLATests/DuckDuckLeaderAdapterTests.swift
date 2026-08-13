@@ -73,11 +73,14 @@ struct DuckDuckLeaderAdapterTests {
             let expected = try canonical.apply(canonicalLabel)
             let actual = try await actor.apply(actorLabel)
 
-            #expect(actual.label.toInvocation() == invocation)
-            #expect(actual.label.toInvocation() == expected.label.toInvocation())
-            #expect(actual.before == expected.before)
-            #expect(actual.after == expected.after)
-            #expect(await actor.tlaSnapshot() == expected.after)
+            #expect(actual.action.toInvocation() == invocation)
+            #expect(actual.action.toInvocation() == expected.action.toInvocation())
+            #expect(actual.before.leader == expected.before.leader)
+            #expect(actual.before.turn == expected.before.turn)
+            #expect(actual.after.leader == expected.after.leader)
+            #expect(actual.after.turn == expected.after.turn)
+            #expect(await actor.state.leader == expected.after.leader)
+            #expect(await actor.state.turn == expected.after.turn)
         }
     }
 
@@ -116,12 +119,15 @@ struct DuckDuckLeaderAdapterTests {
 
         #expect(successful.count == 1)
         #expect(rejected.count == 1)
-        #expect(successful[0].invocation == expected.label.toInvocation())
-        #expect(successful[0].before == expected.before)
-        #expect(successful[0].after == expected.after)
+        #expect(successful[0].invocation == expected.action.toInvocation())
+        #expect(successful[0].before.leader == expected.before.leader)
+        #expect(successful[0].before.turn == expected.before.turn)
+        #expect(successful[0].after.leader == expected.after.leader)
+        #expect(successful[0].after.turn == expected.after.turn)
         #expect(rejected[0].invocation == invocation)
         #expect(rejected[0].available == expectedAvailable)
-        #expect(await actor.tlaSnapshot() == expected.after)
+        #expect(await actor.state.leader == expected.after.leader)
+        #expect(await actor.state.turn == expected.after.turn)
     }
 
     private func submit(
@@ -132,7 +138,7 @@ struct DuckDuckLeaderAdapterTests {
             let label = try #require(DuckDuckLeaderActor.ActionLabel(invocation: invocation))
             let evidence = try await actor.apply(label)
             return .applied(.init(
-                invocation: evidence.label.toInvocation(),
+                invocation: evidence.action.toInvocation(),
                 before: evidence.before,
                 after: evidence.after
             ))
@@ -161,8 +167,8 @@ struct DuckDuckLeaderAdapterTests {
 
     private struct Evidence: Sendable {
         let invocation: TLAActionInvocation
-        let before: [String: TLAValue]
-        let after: [String: TLAValue]
+        let before: DuckDuckLeaderActor.State
+        let after: DuckDuckLeaderActor.State
     }
 
     private struct Rejection: Sendable {

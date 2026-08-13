@@ -81,6 +81,7 @@ public struct ModelChecker {
             )
         }
         let substituted = substituteConstants(self.spec)
+        let transitionRelation = TransitionRelation(resolvedSpec: substituted)
         let variableNames = substituted.variables.map(\.name)
         let actions = substituted.actions.isEmpty
             ? [NamedAction(name: "", body: .guard_(.value(.bool(false))))]
@@ -107,13 +108,7 @@ public struct ModelChecker {
         let exploration = try bfs(
             seeds: seeds,
             variableNames: variableNames,
-            expand: buildExpander(
-                actions,
-                variableNames: variableNames,
-                constraint: substituted.constraint,
-                runtimeFuncs: substituted.runtimeFuncs,
-                recursiveFuncs: substituted.recursiveFuncs
-            ),
+            expand: buildExpander(transitionRelation),
             evaluate: buildEvaluator(runtimeFuncs: substituted.runtimeFuncs, recursiveFuncs: substituted.recursiveFuncs),
             actions: actions,
             invariants: substituted.invariants,
@@ -132,33 +127,12 @@ public struct ModelChecker {
     }
 
     private func buildExpander(
-        _ actions: [NamedAction],
-        variableNames: [String],
-        constraint: StateExpr? = nil,
-        runtimeFuncs: [String: StateExpr.RuntimeFunc] = [:],
-        recursiveFuncs: [RecursiveFunc] = []
+        _ transitionRelation: TransitionRelation
     ) -> (State) throws -> [(StateGraph.TransitionLabel, State)] {
         { state in
-            var result: [(StateGraph.TransitionLabel, State)] = []
-            for action in actions {
-                do {
-                    for variant in actionInvocations(action) {
-                        let successors = try ActionEnumerator.enumerate(
-                            variant.body, from: state, varNames: variableNames
-                        )
-                        let label = StateGraph.TransitionLabel(variant.invocation)
-                        result.append(contentsOf: successors.map { (label, $0) })
-                    }
-                } catch {
-                    throw CheckerEvalError.action(action.name, error)
-                }
+            try transitionRelation.successors(from: state).map {
+                (StateGraph.TransitionLabel($0.invocation), $0.state)
             }
-            if let c = constraint {
-                result = try result.filter {
-                    try c.evaluateBool(in: $0.1, runtimeFuncs: runtimeFuncs, recursiveFuncs: recursiveFuncs)
-                }
-            }
-            return result
         }
     }
 

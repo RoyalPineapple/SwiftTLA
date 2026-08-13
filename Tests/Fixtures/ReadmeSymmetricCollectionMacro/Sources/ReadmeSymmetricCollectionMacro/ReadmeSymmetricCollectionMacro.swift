@@ -27,7 +27,21 @@ struct DeviceContract {
 let device = Device(id: UUID())
 var contract = DeviceContract()
 contract.phases.insert(device)
-try contract.beginConnect(id: device.id)
+let result = try contract.beginConnect(id: device.id)
+
+guard case .function = contract.state.phases else {
+    fatalError("Generated typed state did not retain phases")
+}
+guard case .function = result.after.phases else {
+    fatalError("Generated transition result did not retain typed state")
+}
+
+let phases = TLAStateProjection.Token(validating: "phases")!
+guard case .projected(let snapshot) = contract.tlaSnapshot(),
+      case .function = snapshot.value(for: phases)
+else {
+    fatalError("Generated state projection was unavailable")
+}
 
 let generatedSpec = DeviceContract.runtime.spec
 precondition(generatedSpec.invariants.count == 1)

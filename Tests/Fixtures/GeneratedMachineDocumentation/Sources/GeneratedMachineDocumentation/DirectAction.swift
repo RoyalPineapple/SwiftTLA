@@ -1,0 +1,15 @@
+// Example ID: generated-machine-direct-action
+
+import SwiftTLA
+
+func runDirectAction() throws {
+    var machine = BoundedCounter()
+    let actions = try machine.availableActions()
+    let result = try machine.apply(.advance)
+
+    assert(actions == [.advance])
+    assert(result.action == .advance)
+    assert(result.before.value == 0)
+    assert(result.after.value == 1)
+    assert(machine.state.value == 1)
+}
