@@ -72,6 +72,7 @@ public struct TemporalSymmetryConformanceRunnerV1: Sendable {
 
   @discardableResult
   public func run(_ input: TemporalSymmetryConformanceRunnerInputV1) throws -> [TemporalSymmetryCaseRunV1] {
+    _ = try relativePath(input.outputDirectory, projectRoot: input.projectRoot)
     guard !FileManager.default.fileExists(atPath: input.outputDirectory.path) else {
       throw TemporalSymmetryConformanceRunnerErrorV1.outputAlreadyExists(input.outputDirectory.path)
     }
@@ -505,13 +506,19 @@ extension TemporalSymmetryConformanceRunnerV1 {
       path: try relativePath(url, projectRoot: projectRoot), sha256: SHA256V1.hex(Data(contentsOf: url)))
   }
 
-  private func relativePath(_ url: URL, projectRoot: URL) throws -> String {
-    let root = projectRoot.resolvingSymlinksInPath().standardizedFileURL.path
-    let value = url.resolvingSymlinksInPath().standardizedFileURL.path
+  func relativePath(_ url: URL, projectRoot: URL) throws -> String {
+    let root = normalizedProjectPath(projectRoot)
+    let value = normalizedProjectPath(url)
     guard value.hasPrefix(root + "/") else {
       throw TemporalSymmetryConformanceRunnerErrorV1.sourceOutsideProject(value)
     }
     return String(value.dropFirst(root.count + 1))
+  }
+
+  private func normalizedProjectPath(_ url: URL) -> String {
+    let path = url.resolvingSymlinksInPath().standardizedFileURL.path
+    guard path == "/tmp" || path.hasPrefix("/tmp/") else { return path }
+    return "/private" + path
   }
 
   private func write<T: Encodable>(_ value: T, to url: URL) throws {
