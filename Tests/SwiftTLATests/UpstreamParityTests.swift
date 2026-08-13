@@ -96,7 +96,7 @@ struct UpstreamParityNativeTests {
     func nativeSelfConsistency() throws {
         func check(_ matrix: [(from: [String: TLAValue], action: String, to: [String: TLAValue])], runtime: SpecRuntime) throws {
             for entry in matrix {
-                let next = try runtime.apply(actionName: entry.action, to: entry.from)
+                let next = try runtime.apply(.init(name: entry.action), to: entry.from)
                 #expect(next == entry.to)
             }
         }

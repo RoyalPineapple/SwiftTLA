@@ -14,7 +14,7 @@ public struct Queue<Element: Sendable>: Sendable {
             Variable(phase)
 
             Action("enqueue") { phase == 0 && queued.cardinality < 4 && phase.stays }
-            Action("drain")   { phase == 0 && phase.becomes(1) }
+            Action("drain") { phase == 0 && phase.becomes(1) }
 
             Invariant("capacity") { queued.cardinality <= 4 }
         }

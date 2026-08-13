@@ -9,8 +9,8 @@
         "cfgSHA256": "5fc99b8399ad0227b0afbf25ff802c3582d4347dd06e26461313ecef6d5253f8",
         "argumentsSHA256": "5a29989b077aadf61edf04f0b0cc435c5f9ef27fe0b75daa01cb703ee9ce89b5",
         "tlcTag": "v1.8.0",
-        "tlcCommit": "30cc3601321c3fc02e044d0ecb5c58d8921e18df",
-        "tlcJarSHA256": "e22f8ffb4bacdea0a871f444dd94fe5fb0d8013b3388ae39e82e26f852c735d5",
+        "tlcCommit": "0894c3407f4717fec7cc18bde3bf3c857fa47333",
+        "tlcJarSHA256": "ab323b79802aedc3203b3f9af37c6aca3ed43f4e0225b36f2aa77b26de46c05f",
         "javaDistribution": "Eclipse Temurin",
         "javaVersion": "17.0.19+10",
         "javaArchiveSHA256": "8fa1eff40bb637a33613b2ccb8b12c70dc3661cc22cf8e784943715769a05336",
@@ -32,7 +32,7 @@
       },
       "originalEvidence": {
         "path": "Verification/CoreConformance/fixtures/hour-clock-edge-mismatch/evidence/comparison.json",
-        "sha256": "3acbcb82a4caa9fb68075f091ee51a1988bd7184217abf24225b8398c41cb604"
+        "sha256": "877f17d2b114f4c448d8f7e37c7269b32d0bf3d07b8f1abd9594e814c29e327d"
       },
       "permanentRegressionCaseID": "hour-clock-edge-mismatch",
       "classification": "harnessOrConfigurationDefect",
@@ -41,7 +41,7 @@
       "latestComparison": {
         "evidence": {
           "path": "Verification/CoreConformance/fixtures/hour-clock-edge-mismatch/evidence/comparison.json",
-          "sha256": "3acbcb82a4caa9fb68075f091ee51a1988bd7184217abf24225b8398c41cb604"
+          "sha256": "877f17d2b114f4c448d8f7e37c7269b32d0bf3d07b8f1abd9594e814c29e327d"
         },
         "outcome": "difference",
         "normalizedDifferenceFingerprint": "4191a035e62b2f264f35cf8adbe8e29714d0fedd82ee823b11d31f0cc3f5fb53"
@@ -55,8 +55,8 @@
         "cfgSHA256": "59fca38d703a0b17f967b35267fad8581e305b442c72147f1b2a530ea0ba6547",
         "argumentsSHA256": "5a29989b077aadf61edf04f0b0cc435c5f9ef27fe0b75daa01cb703ee9ce89b5",
         "tlcTag": "v1.8.0",
-        "tlcCommit": "30cc3601321c3fc02e044d0ecb5c58d8921e18df",
-        "tlcJarSHA256": "e22f8ffb4bacdea0a871f444dd94fe5fb0d8013b3388ae39e82e26f852c735d5",
+        "tlcCommit": "0894c3407f4717fec7cc18bde3bf3c857fa47333",
+        "tlcJarSHA256": "ab323b79802aedc3203b3f9af37c6aca3ed43f4e0225b36f2aa77b26de46c05f",
         "javaDistribution": "Eclipse Temurin",
         "javaVersion": "17.0.19+10",
         "javaArchiveSHA256": "8fa1eff40bb637a33613b2ccb8b12c70dc3661cc22cf8e784943715769a05336",
@@ -79,7 +79,7 @@
       },
       "originalEvidence": {
         "path": "Verification/CoreConformance/fixtures/die-hard-violation/evidence/comparison.json",
-        "sha256": "2dbc87b2e02c66b9f79c796a107cb37d31acd058d23305e2f95e0a0fc407b7c9"
+        "sha256": "56be7878916ea4ea616200f25d3a8f51ba1f3c74b2b1aac8a1163c08edadc30f"
       },
       "permanentRegressionCaseID": "die-hard-violation",
       "classification": "harnessOrConfigurationDefect",
@@ -88,10 +88,60 @@
       "latestComparison": {
         "evidence": {
           "path": "Verification/CoreConformance/fixtures/die-hard-violation/evidence/comparison.json",
-          "sha256": "2dbc87b2e02c66b9f79c796a107cb37d31acd058d23305e2f95e0a0fc407b7c9"
+          "sha256": "56be7878916ea4ea616200f25d3a8f51ba1f3c74b2b1aac8a1163c08edadc30f"
         },
         "outcome": "difference",
         "normalizedDifferenceFingerprint": "7bd47a3941b836684ce33fcef619777c90657dbf423ed7a54989f04e6298452d"
+      }
+    },
+    {
+      "id": "multicar-elevator-edge-mismatch",
+      "provenance": {
+        "caseID": "multicar-elevator-edge-mismatch",
+        "moduleSHA256": "974c63c379431e6800af7f4d05dfa8ee93a84db3ba3072f9ddc15fd6cc599a98",
+        "cfgSHA256": "280ad5e348229375fdfa102db511108fe5bd2237fd4e5f52d0218b2f3e7ec593",
+        "argumentsSHA256": "5a29989b077aadf61edf04f0b0cc435c5f9ef27fe0b75daa01cb703ee9ce89b5",
+        "tlcTag": "v1.8.0",
+        "tlcCommit": "0894c3407f4717fec7cc18bde3bf3c857fa47333",
+        "tlcJarSHA256": "ab323b79802aedc3203b3f9af37c6aca3ed43f4e0225b36f2aa77b26de46c05f",
+        "javaDistribution": "Eclipse Temurin",
+        "javaVersion": "17.0.19+10",
+        "javaArchiveSHA256": "8fa1eff40bb637a33613b2ccb8b12c70dc3661cc22cf8e784943715769a05336",
+        "bridgeClass": "org.swifttla.conformance.LosslessStateWriter",
+        "bridgeSourceSHA256": "f921b202205dde3d34e626f7801676cc0635de58f503c3dddd3affcc893532ee",
+        "bridgeBinarySHA256": "a50ae51e9c540a3c0eb9386b05bb0c0f677cefa62bcfdc48545c6046ccb12d64"
+      },
+      "semanticCitations": [
+        "Verification/CoreConformance/fixtures/multicar-elevator-edge-mismatch/MultiCarElevator.tla: request__0_0_0 deliberately disabled",
+        "Verification/CoreConformance/fixtures/multicar-elevator-edge-mismatch/control.json"
+      ],
+      "reproducer": {
+        "summary": "Deliberate bounded MultiCarElevator negative control: two people, two cars, floors 0...2, and the request__0_0_0 wrapper disabled.",
+        "limits": {
+          "people": 2,
+          "cars": 2,
+          "floors": 3,
+          "directions": 2,
+          "states": 3276,
+          "variables": 3,
+          "wrappers": 80
+        }
+      },
+      "originalEvidence": {
+        "path": "Verification/CoreConformance/baselines/multicar-elevator-edge-mismatch/comparison.json",
+        "sha256": "3e830df3fa0cdb00b7bd7227ef1d7688e89a6f6a642d0fab6671b24269b8aae3"
+      },
+      "permanentRegressionCaseID": "multicar-elevator-edge-mismatch",
+      "classification": "harnessOrConfigurationDefect",
+      "disposition": "unsupported",
+      "normalizedDifferenceFingerprint": "b9b341af04cff0ea34a04e0053496b1fa3a7b14102ef891da84d2e44820846a5",
+      "latestComparison": {
+        "evidence": {
+          "path": "Verification/CoreConformance/baselines/multicar-elevator-edge-mismatch/comparison.json",
+          "sha256": "3e830df3fa0cdb00b7bd7227ef1d7688e89a6f6a642d0fab6671b24269b8aae3"
+        },
+        "outcome": "difference",
+        "normalizedDifferenceFingerprint": "b9b341af04cff0ea34a04e0053496b1fa3a7b14102ef891da84d2e44820846a5"
       }
     }
   ]

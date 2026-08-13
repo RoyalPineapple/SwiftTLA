@@ -21,7 +21,7 @@ extension Example {
             Variable(sm, false); Variable(sp, false); Variable(st, false)
             Variable(dealer, in: 1...3)
             Action("start_1") {
-                dealer == 1 && st.becomes(true) && dealer.becomes(0) && sm.stays && sp.stays
+                dealer == 1 && .assign(st.name, true) && dealer.becomes(0) && sm.stays && sp.stays
             }
             Action("start_2") {
                 dealer == 2 && sp.becomes(true) && dealer.becomes(0) && sm.stays && st.stays
@@ -35,9 +35,9 @@ extension Example {
             Action("stop_p1") { dealer == 0 && sp == true && sp.becomes(false) && dealer.becomes(1) }
             Action("stop_p2") { dealer == 0 && sp == true && sp.becomes(false) && dealer.becomes(2) }
             Action("stop_p3") { dealer == 0 && sp == true && sp.becomes(false) && dealer.becomes(3) }
-            Action("stop_t1") { dealer == 0 && st == true && st.becomes(false) && dealer.becomes(1) }
-            Action("stop_t2") { dealer == 0 && st == true && st.becomes(false) && dealer.becomes(2) }
-            Action("stop_t3") { dealer == 0 && st == true && st.becomes(false) && dealer.becomes(3) }
+            Action("stop_t1") { dealer == 0 && st == true && .assign(st.name, false) && dealer.becomes(1) }
+            Action("stop_t2") { dealer == 0 && st == true && .assign(st.name, false) && dealer.becomes(2) }
+            Action("stop_t3") { dealer == 0 && st == true && .assign(st.name, false) && dealer.becomes(3) }
             Invariant("AtMostOne") {
                 !(sm == true && sp == true)
                 !(sm == true && st == true)

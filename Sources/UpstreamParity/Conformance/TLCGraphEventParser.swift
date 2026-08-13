@@ -46,11 +46,19 @@ public struct TLCGraphEventParserV1: Sendable {
     private let expectedPin: TLCReferencePinV1
     private let expectedCaseID: String
     private let expectedCase: CoreConformanceCaseV1
+    private let invocationWrappers: [String: String]
+    private let valueNormalizations: [String: CoreConformanceValueNormalizationV1]
 
     public init(expectedCase: CoreConformanceCaseV1) {
         self.expectedPin = expectedCase.pin
         self.expectedCaseID = expectedCase.id
         self.expectedCase = expectedCase
+        self.invocationWrappers = Dictionary(
+            uniqueKeysWithValues: expectedCase.invocationMappings.map {
+                ($0.locationIdentity, $0.wrapper)
+            })
+        self.valueNormalizations = Dictionary(
+            uniqueKeysWithValues: expectedCase.valueNormalizations.map { ($0.binding, $0) })
     }
 
     public func parse(_ data: Data) throws -> TLCGraphEventStreamV1 {
@@ -95,38 +103,58 @@ public struct TLCGraphEventParserV1: Sendable {
                 try registerRepresentative(state, in: &representatives, line: line)
                 initialStates.append(state)
             case "transition":
-                try exactKeys(object, ["schema", "version", "type", "callback", "seq", "runId", "caseId", "source", "target", "action", "stateFlags", "visualization", "predicateLocation", "reachable"], line)
-                guard try string(object, "callback", line) == "writeState.action",
-                      try string(object, "reachable", line) == "reachable",
+                try exactKeys(object, [
+                    "schema", "version", "type", "callback", "seq", "runId", "caseId", "source",
+                    "target", "action", "stateFlags", "visualization", "predicateLocation", "reachable"
+                ], line)
+                let callback = try string(object, "callback", line)
+                guard callback == "writeState.action" || callback == "writeState.actionPredicate",
                       try string(object, "visualization", line) == "none"
                 else { throw TLCGraphEventErrorV1.invalidRecord(line: line, reason: "unsupported transition transport") }
                 let action = try dictionary(object, "action", line)
                 try exactKeys(action, ["name", "location", "named"], line)
                 let actionName = try string(action, "name", line)
-                _ = try string(action, "location", line)
+                let actionLocation = try string(action, "location", line)
                 guard try bool(action, "named", line), !actionName.isEmpty else {
                     throw TLCGraphEventErrorV1.invalidRecord(line: line, reason: "unnamed action")
                 }
+                let resolvedAction = try resolvedAction(
+                    name: actionName, location: actionLocation, line: line)
                 let flags = try dictionary(object, "stateFlags", line)
                 try exactKeys(flags, ["raw", "seen", "notInModel"], line)
-                _ = try int(flags, "raw", line)
-                _ = try bool(flags, "notInModel", line)
+                let rawFlags = try int(flags, "raw", line)
+                let notInModel = try bool(flags, "notInModel", line)
                 let source = try parseState(try dictionary(object, "source", line), line: line)
                 let target = try parseState(try dictionary(object, "target", line), line: line)
                 let seen = try bool(flags, "seen", line)
-                if seen {
-                    guard representatives[target.fingerprint] != nil else {
-                        throw TLCGraphEventErrorV1.invalidRecord(line: line, reason: "seen fingerprint without representative")
-                    }
+                if callback == "writeState.actionPredicate" {
+                    guard try string(object, "reachable", line) == "excluded",
+                          rawFlags == 2, !seen, notInModel,
+                          let predicateLocation = object["predicateLocation"] as? String,
+                          predicateLocation.hasPrefix("line "), predicateLocation.contains(" of module "),
+                          actionLocation.hasPrefix("<\(actionName)(")
+                    else { throw TLCGraphEventErrorV1.invalidRecord(line: line, reason: "invalid excluded predicate transition") }
+                    _ = source
+                    _ = target
                 } else {
-                    try registerRepresentative(target, in: &representatives, line: line)
+                    guard try string(object, "reachable", line) == "reachable",
+                          object["predicateLocation"] is NSNull,
+                          !notInModel
+                    else { throw TLCGraphEventErrorV1.invalidRecord(line: line, reason: "invalid reachable transition") }
+                    if seen {
+                        guard representatives[target.fingerprint] != nil else {
+                            throw TLCGraphEventErrorV1.invalidRecord(line: line, reason: "seen fingerprint without representative")
+                        }
+                    } else {
+                        try registerRepresentative(target, in: &representatives, line: line)
+                    }
+                    transitions.append(TLCGraphTransitionV1(
+                        source: source,
+                        target: target,
+                        action: resolvedAction,
+                        seen: seen
+                    ))
                 }
-                transitions.append(TLCGraphTransitionV1(
-                    source: source,
-                    target: target,
-                    action: actionName,
-                    seen: seen
-                ))
             case "unsupported":
                 try exactKeys(object, ["schema", "version", "type", "callback", "seq", "runId", "caseId", "reason"], line)
                 guard try string(object, "callback", line) == "writeState.visualization",
@@ -135,7 +163,10 @@ public struct TLCGraphEventParserV1: Sendable {
                     throw TLCGraphEventErrorV1.unsupportedCallback(try string(object, "callback", line))
                 }
             case "footer":
-                try exactKeys(object, ["schema", "version", "type", "callback", "seq", "runId", "caseId", "status", "counts", "lastBodySeq", "bodySha256"], line)
+                try exactKeys(object, [
+                    "schema", "version", "type", "callback", "seq", "runId", "caseId", "status",
+                    "counts", "lastBodySeq", "bodySha256"
+                ], line)
                 footer = object
             default:
                 throw TLCGraphEventErrorV1.invalidRecord(line: line, reason: "unknown record type")
@@ -149,7 +180,9 @@ public struct TLCGraphEventParserV1: Sendable {
 
         guard let footer else { throw TLCGraphEventErrorV1.missingFooter }
         guard try string(footer, "status", records.count) == "closed" else { throw TLCGraphEventErrorV1.invalidFooter("not closed") }
-        guard try int(footer, "lastBodySeq", records.count) == records.count - 2 else { throw TLCGraphEventErrorV1.invalidFooter("last body sequence") }
+        guard try int(footer, "lastBodySeq", records.count) == records.count - 2 else {
+            throw TLCGraphEventErrorV1.invalidFooter("last body sequence")
+        }
         guard try string(footer, "bodySha256", records.count) == SHA256V1.hex(body) else { throw TLCGraphEventErrorV1.invalidFooter("body digest") }
         let footerCounts = try dictionary(footer, "counts", records.count)
         for (type, count) in counts {
@@ -176,24 +209,26 @@ public struct TLCGraphEventParserV1: Sendable {
 
     public func parseCanonicalRun(_ data: Data, result: TLCProcessResultV1) throws -> CanonicalRunV1 {
         let stream = try parse(data)
-        let initialStates = try stream.initialStates.map(canonicalState)
-        let transitionStates = try stream.transitions.flatMap { transition in
-            [try canonicalState(transition.source), try canonicalState(transition.target)]
+        var canonicalStatesByFingerprint: [String: CanonicalStateV1] = [:]
+        func canonicalRepresentative(_ state: TLCGraphStateV1) throws -> CanonicalStateV1 {
+            if let existing = canonicalStatesByFingerprint[state.fingerprint] {
+                return existing
+            }
+            let parsed = try canonicalState(state)
+            canonicalStatesByFingerprint[state.fingerprint] = parsed
+            return parsed
         }
-        var uniqueStates: [CanonicalStateKeyV1: CanonicalStateV1] = [:]
-        for state in initialStates + transitionStates {
-            uniqueStates[state.key] = state
-        }
+        let initialStates = try stream.initialStates.map(canonicalRepresentative)
         let edges = try stream.transitions.map { transition in
             CanonicalEdgeV1(
-                source: try canonicalState(transition.source).key,
+                source: try canonicalRepresentative(transition.source).key,
                 action: transition.action,
-                target: try canonicalState(transition.target).key
+                target: try canonicalRepresentative(transition.target).key
             )
         }
         let graph = try CanonicalGraphV1(
             initialStates: initialStates,
-            states: Array(uniqueStates.values),
+            states: Array(canonicalStatesByFingerprint.values),
             edges: edges
         )
         return try CanonicalRunV1(
@@ -227,7 +262,9 @@ public struct TLCGraphEventParserV1: Sendable {
         }
         guard try int(object, "seq", line) == expectedSequence else { throw TLCGraphEventErrorV1.invalidRecord(line: line, reason: "sequence gap") }
         guard try string(object, "caseId", line) == expectedCaseID else { throw TLCGraphEventErrorV1.invalidRecord(line: line, reason: "case ID") }
-        guard let parsed = UUID(uuidString: try string(object, "runId", line)) else { throw TLCGraphEventErrorV1.invalidRecord(line: line, reason: "run ID") }
+        guard let parsed = UUID(uuidString: try string(object, "runId", line)) else {
+            throw TLCGraphEventErrorV1.invalidRecord(line: line, reason: "run ID")
+        }
         guard runID == nil || runID == parsed else { throw TLCGraphEventErrorV1.invalidRecord(line: line, reason: "run ID changed") }
         runID = parsed
     }
@@ -272,9 +309,16 @@ public struct TLCGraphEventParserV1: Sendable {
                 throw TLCGraphEventErrorV1.invalidRecord(line: line, reason: "binding digest")
             }
             guard try int(object, "ordinal", line) == index else { throw TLCGraphEventErrorV1.invalidRecord(line: line, reason: "binding ordinal") }
-            return TLCBindingV1(ordinal: index, name: try string(object, "name", line), tla: text, tlaSHA256: try string(object, "tlaSha256", line))
+            return TLCBindingV1(
+                ordinal: index,
+                name: try string(object, "name", line),
+                tla: text,
+                tlaSHA256: try string(object, "tlaSha256", line)
+            )
         }
-        guard Set(bindings.map(\.name)).count == bindings.count else { throw TLCGraphEventErrorV1.invalidRecord(line: line, reason: "duplicate binding") }
+        guard Set(bindings.map(\.name)).count == bindings.count else {
+            throw TLCGraphEventErrorV1.invalidRecord(line: line, reason: "duplicate binding")
+        }
         return TLCGraphStateV1(fingerprint: try string(value, "fingerprint", line), level: try int(value, "level", line), bindings: bindings)
     }
 
@@ -293,9 +337,74 @@ public struct TLCGraphEventParserV1: Sendable {
             guard bindings[binding.name] == nil else {
                 throw TLCGraphEventErrorV1.invalidRecord(line: 0, reason: "duplicate binding")
             }
-            bindings[binding.name] = try TLCValueParserV1.parse(binding.tla)
+            let value = try TLCValueParserV1.parse(binding.tla)
+            if let normalization = valueNormalizations[binding.name] {
+                bindings[binding.name] = try normalize(value, using: normalization)
+            } else {
+                bindings[binding.name] = value
+            }
         }
         return CanonicalStateV1(bindings: bindings)
+    }
+
+    private func resolvedAction(name: String, location: String, line: Int) throws -> String {
+        guard !invocationWrappers.isEmpty else { return name }
+        let identity = try actionLocationIdentity(name: name, location: location, line: line)
+        guard let wrapper = invocationWrappers[identity] else {
+            throw TLCGraphEventErrorV1.invalidRecord(line: line, reason: "undeclared invocation identity")
+        }
+        return wrapper
+    }
+
+    private func actionLocationIdentity(name: String, location: String, line: Int) throws -> String {
+        let prefix = "<\(name)("
+        guard location.hasPrefix(prefix),
+              let suffix = location.range(of: ") line ", options: .backwards),
+              suffix.lowerBound >= location.index(location.startIndex, offsetBy: prefix.count) else {
+            throw TLCGraphEventErrorV1.invalidRecord(line: line, reason: "invalid action location")
+        }
+        let argumentsStart = location.index(location.startIndex, offsetBy: prefix.count)
+        let arguments = String(location[argumentsStart..<suffix.lowerBound])
+        do {
+            return tlaInvocationLocationIdentity(
+                action: name, arguments: try TLCValueParserV1.components(arguments))
+        } catch {
+            throw TLCGraphEventErrorV1.invalidRecord(line: line, reason: "invalid action location")
+        }
+    }
+
+    private func normalize(
+        _ value: CanonicalValueV1,
+        using normalization: CoreConformanceValueNormalizationV1
+    ) throws -> CanonicalValueV1 {
+        var fields: [String: CanonicalValueV1] = [:]
+        switch value {
+        case .orderedFunction(let entries):
+            for entry in entries {
+                let encodedKey = entry.key.canonicalEncoding
+                let field = normalization.functionKeys.first { key, _ in
+                    guard let normalizedKey = try? TLCValueParserV1.parse(key) else { return false }
+                    return normalizedKey.canonicalEncoding == encodedKey
+                }?.value
+                guard let field, fields[field] == nil else {
+                    throw TLCGraphEventErrorV1.invalidRecord(line: 0, reason: "normalized function keys")
+                }
+                fields[field] = entry.value
+            }
+        case .orderedRecord(let entries):
+            for entry in entries {
+                guard normalization.functionKeys.values.contains(entry.name), fields[entry.name] == nil else {
+                    throw TLCGraphEventErrorV1.invalidRecord(line: 0, reason: "normalized function keys")
+                }
+                fields[entry.name] = entry.value
+            }
+        default:
+            throw TLCGraphEventErrorV1.invalidRecord(line: 0, reason: "normalized binding is not a function")
+        }
+        guard fields.count == normalization.functionKeys.count else {
+            throw TLCGraphEventErrorV1.invalidRecord(line: 0, reason: "normalized function keys")
+        }
+        return .record(fields)
     }
 }
 
@@ -348,7 +457,7 @@ enum TLCValueParserV1 {
         return .constant(value)
     }
 
-    private static func components(_ text: String) throws -> [String] {
+    static func components(_ text: String) throws -> [String] {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? [] : try splitTopLevel(trimmed, separator: ",")
     }
@@ -398,9 +507,13 @@ enum TLCValueParserV1 {
 
 private func decodeObject(_ data: Data, line: Int) throws -> [String: Any] {
     var scanner = JSONDuplicateKeyScannerV1(data: data)
-    do { try scanner.validate() }
-    catch let error as TLCGraphEventErrorV1 { throw error }
-    catch { throw TLCGraphEventErrorV1.malformedJSON(line: line) }
+    do {
+        try scanner.validate()
+    } catch let error as TLCGraphEventErrorV1 {
+        throw error
+    } catch {
+        throw TLCGraphEventErrorV1.malformedJSON(line: line)
+    }
     guard let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { throw TLCGraphEventErrorV1.malformedJSON(line: line) }
     return object
 }
@@ -485,7 +598,13 @@ private struct JSONDuplicateKeyScannerV1 {
     }
     private mutating func list() throws {
         index += 1; skip(); if consume(93) { return }
-        while true { try value(); skip(); if consume(93) { return }; guard consume(44) else { throw TLCGraphEventErrorV1.malformedJSON(line: 0) }; skip() }
+        while true {
+            try value()
+            skip()
+            if consume(93) { return }
+            guard consume(44) else { throw TLCGraphEventErrorV1.malformedJSON(line: 0) }
+            skip()
+        }
     }
     private mutating func text() throws -> String {
         guard consume(34) else { throw TLCGraphEventErrorV1.malformedJSON(line: 0) }

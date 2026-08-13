@@ -1,17 +1,17 @@
-TLC2 Version 2026.07.31.184830 (rev: 30cc360)
+TLC2 Version 2026.08.11.125311 (rev: 0894c34)
 Warning: Please run the Java VM, which executes TLC with a throughput optimized garbage collector, by passing the "-XX:+UseParallelGC" property.
 (Use the -nowarning option to disable this warning.)
-Running breadth-first search Model-Checking with fp 1 and seed 1 with 1 worker on 12 cores with 24576MB heap and 64MB offheap memory [pid: 60026] (Mac OS X 27.0 aarch64, Eclipse Adoptium 17.0.19 64bit, MSBDiskFPSet, DiskStateQueue).
-Parsing file /Users/alex/.codex/worktrees/8ca0/SwiftTLA/Tools/TLCGraphBridge/spike/BridgeViolation.tla
-Parsing file /private/var/folders/8x/556rhpjs29xd9_287yf0j55w0000gp/T/tlc-13357219696394508693/Naturals.tla (jar:file:/Users/alex/.codex/worktrees/8ca0/SwiftTLA/Tools/TLCGraphBridge/.tool-cache/tla2tools-1.8.0.jar!/tla2sany/StandardModules/Naturals.tla)
-Parsing file /private/var/folders/8x/556rhpjs29xd9_287yf0j55w0000gp/T/tlc-13357219696394508693/_JsonTrace.tla (jar:file:/Users/alex/.codex/worktrees/8ca0/SwiftTLA/Tools/TLCGraphBridge/.tool-cache/tla2tools-1.8.0.jar!/tla2sany/StandardModules/_JsonTrace.tla)
-Parsing file /private/var/folders/8x/556rhpjs29xd9_287yf0j55w0000gp/T/tlc-13357219696394508693/_TLCTrace.tla (jar:file:/Users/alex/.codex/worktrees/8ca0/SwiftTLA/Tools/TLCGraphBridge/.tool-cache/tla2tools-1.8.0.jar!/tla2sany/StandardModules/_TLCTrace.tla)
-Parsing file /private/var/folders/8x/556rhpjs29xd9_287yf0j55w0000gp/T/tlc-13357219696394508693/TLC.tla (jar:file:/Users/alex/.codex/worktrees/8ca0/SwiftTLA/Tools/TLCGraphBridge/.tool-cache/tla2tools-1.8.0.jar!/tla2sany/StandardModules/TLC.tla)
-Parsing file /private/var/folders/8x/556rhpjs29xd9_287yf0j55w0000gp/T/tlc-13357219696394508693/TLCExt.tla (jar:file:/Users/alex/.codex/worktrees/8ca0/SwiftTLA/Tools/TLCGraphBridge/.tool-cache/tla2tools-1.8.0.jar!/tla2sany/StandardModules/TLCExt.tla)
-Parsing file /private/var/folders/8x/556rhpjs29xd9_287yf0j55w0000gp/T/tlc-13357219696394508693/Json.tla (jar:file:/Users/alex/.codex/worktrees/8ca0/SwiftTLA/Tools/TLCGraphBridge/.tool-cache/tla2tools-1.8.0.jar!/tla2sany/StandardModules/Json.tla)
-Parsing file /private/var/folders/8x/556rhpjs29xd9_287yf0j55w0000gp/T/tlc-13357219696394508693/Sequences.tla (jar:file:/Users/alex/.codex/worktrees/8ca0/SwiftTLA/Tools/TLCGraphBridge/.tool-cache/tla2tools-1.8.0.jar!/tla2sany/StandardModules/Sequences.tla)
-Parsing file /private/var/folders/8x/556rhpjs29xd9_287yf0j55w0000gp/T/tlc-13357219696394508693/FiniteSets.tla (jar:file:/Users/alex/.codex/worktrees/8ca0/SwiftTLA/Tools/TLCGraphBridge/.tool-cache/tla2tools-1.8.0.jar!/tla2sany/StandardModules/FiniteSets.tla)
-Parsing file /private/var/folders/8x/556rhpjs29xd9_287yf0j55w0000gp/T/tlc-13357219696394508693/Integers.tla (jar:file:/Users/alex/.codex/worktrees/8ca0/SwiftTLA/Tools/TLCGraphBridge/.tool-cache/tla2tools-1.8.0.jar!/tla2sany/StandardModules/Integers.tla)
+Running breadth-first search Model-Checking with fp 1 and seed 1 with 1 worker on 12 cores with 24576MB heap and 64MB offheap memory [pid: 63145] (Mac OS X 27.0 aarch64, Eclipse Adoptium 17.0.19 64bit, MSBDiskFPSet, DiskStateQueue).
+Parsing file /Users/alex/.codex/worktrees/117b/SwiftTLA/Tools/TLCGraphBridge/spike/BridgeViolation.tla
+Parsing file /private/var/folders/8x/556rhpjs29xd9_287yf0j55w0000gp/T/tlc-1441727494967429820/Naturals.tla (jar:file:/Users/alex/.codex/worktrees/117b/SwiftTLA/Tools/TLCGraphBridge/.tool-cache/tla2tools-1.8.0.jar!/tla2sany/StandardModules/Naturals.tla)
+Parsing file /private/var/folders/8x/556rhpjs29xd9_287yf0j55w0000gp/T/tlc-1441727494967429820/_JsonTrace.tla (jar:file:/Users/alex/.codex/worktrees/117b/SwiftTLA/Tools/TLCGraphBridge/.tool-cache/tla2tools-1.8.0.jar!/tla2sany/StandardModules/_JsonTrace.tla)
+Parsing file /private/var/folders/8x/556rhpjs29xd9_287yf0j55w0000gp/T/tlc-1441727494967429820/_TLCTrace.tla (jar:file:/Users/alex/.codex/worktrees/117b/SwiftTLA/Tools/TLCGraphBridge/.tool-cache/tla2tools-1.8.0.jar!/tla2sany/StandardModules/_TLCTrace.tla)
+Parsing file /private/var/folders/8x/556rhpjs29xd9_287yf0j55w0000gp/T/tlc-1441727494967429820/TLC.tla (jar:file:/Users/alex/.codex/worktrees/117b/SwiftTLA/Tools/TLCGraphBridge/.tool-cache/tla2tools-1.8.0.jar!/tla2sany/StandardModules/TLC.tla)
+Parsing file /private/var/folders/8x/556rhpjs29xd9_287yf0j55w0000gp/T/tlc-1441727494967429820/TLCExt.tla (jar:file:/Users/alex/.codex/worktrees/117b/SwiftTLA/Tools/TLCGraphBridge/.tool-cache/tla2tools-1.8.0.jar!/tla2sany/StandardModules/TLCExt.tla)
+Parsing file /private/var/folders/8x/556rhpjs29xd9_287yf0j55w0000gp/T/tlc-1441727494967429820/Json.tla (jar:file:/Users/alex/.codex/worktrees/117b/SwiftTLA/Tools/TLCGraphBridge/.tool-cache/tla2tools-1.8.0.jar!/tla2sany/StandardModules/Json.tla)
+Parsing file /private/var/folders/8x/556rhpjs29xd9_287yf0j55w0000gp/T/tlc-1441727494967429820/Sequences.tla (jar:file:/Users/alex/.codex/worktrees/117b/SwiftTLA/Tools/TLCGraphBridge/.tool-cache/tla2tools-1.8.0.jar!/tla2sany/StandardModules/Sequences.tla)
+Parsing file /private/var/folders/8x/556rhpjs29xd9_287yf0j55w0000gp/T/tlc-1441727494967429820/FiniteSets.tla (jar:file:/Users/alex/.codex/worktrees/117b/SwiftTLA/Tools/TLCGraphBridge/.tool-cache/tla2tools-1.8.0.jar!/tla2sany/StandardModules/FiniteSets.tla)
+Parsing file /private/var/folders/8x/556rhpjs29xd9_287yf0j55w0000gp/T/tlc-1441727494967429820/Integers.tla (jar:file:/Users/alex/.codex/worktrees/117b/SwiftTLA/Tools/TLCGraphBridge/.tool-cache/tla2tools-1.8.0.jar!/tla2sany/StandardModules/Integers.tla)
 Semantic processing of module Naturals
 Semantic processing of module Sequences
 Semantic processing of module FiniteSets
@@ -27,9 +27,9 @@ Linting of module Json
 Linting of module _JsonTrace
 Linting of module _TLCTrace
 Linting of module BridgeViolation
-Starting... (2026-08-12 09:42:19)
+Starting... (2026-08-12 20:19:42)
 Computing initial states...
-Finished computing initial states: 1 distinct state generated at 2026-08-12 09:42:19.
+Finished computing initial states: 1 distinct state generated at 2026-08-12 20:19:42.
 Error: Invariant FailsAtThree is violated.
 Error: The behavior up to this point is:
 State 1: <Initial predicate>
@@ -44,13 +44,13 @@ x = 2
 State 4: <Next line 7, col 9 to line 7, col 27 of module BridgeViolation>
 x = 3
 
-"CounterExample written: /Users/alex/.codex/worktrees/8ca0/SwiftTLA/.build/bridge-spike-migration.zzgxOg/violation/counterexample.json"
+"CounterExample written: /var/folders/8x/556rhpjs29xd9_287yf0j55w0000gp/T/tmp.nOUVbYCg7C/violation/counterexample.json"
 Error: Evaluating postcondition _TLCTraceSilent at line 28, col 5 to line 28, col 21 of module _TLCTrace failed.
 Attempted to apply the operator overridden by the Java method
 public static final tlc2.value.IValue tlc2.module._TLCTrace.ioSerialize(tlc2.value.IValue,tlc2.value.impl.StringValue) throws java.io.IOException,
 but it produced the following error:
-/Users/alex/.codex/worktrees/8ca0/SwiftTLA/.build/bridge-spike-migration.zzgxOg/violation/te-spec/BridgeViolation_TTrace_1786520539.bin (No such file or directory)
+/var/folders/8x/556rhpjs29xd9_287yf0j55w0000gp/T/tmp.nOUVbYCg7C/violation/te-spec/BridgeViolation_TTrace_1786558782.bin (No such file or directory)
 4 states generated, 4 distinct states found, 0 states left on queue.
 The depth of the complete state graph search is 4.
-Finished in 00s at (2026-08-12 09:42:19)
-Trace exploration spec path: /Users/alex/.codex/worktrees/8ca0/SwiftTLA/.build/bridge-spike-migration.zzgxOg/violation/te-spec/BridgeViolation_TTrace_1786520539.tla
+Finished in 00s at (2026-08-12 20:19:42)
+Trace exploration spec path: /var/folders/8x/556rhpjs29xd9_287yf0j55w0000gp/T/tmp.nOUVbYCg7C/violation/te-spec/BridgeViolation_TTrace_1786558782.tla

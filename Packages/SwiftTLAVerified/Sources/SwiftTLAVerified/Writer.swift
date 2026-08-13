@@ -11,13 +11,13 @@ extension Media {
                 let phase = Var("phase", 0)
             Variable(phase)
 
-                Action("configure")  { phase == 0 && phase.becomes(1) }
-                Action("start")      { phase == 1 && phase.becomes(2) }
-                Action("write")      { phase == 2 && phase.stays }
-                Action("pause")      { phase == 2 && phase.becomes(3) }
-                Action("resume")     { phase == 3 && phase.becomes(2) }
-                Action("finish")     { phase == 1 && phase.becomes(4) }
-                Action("cancel")     { (phase == 2 || phase == 3) && phase.becomes(5) }
+                Action("configure") { phase == 0 && phase.becomes(1) }
+                Action("start") { phase == 1 && phase.becomes(2) }
+                Action("write") { phase == 2 && phase.stays }
+                Action("pause") { phase == 2 && phase.becomes(3) }
+                Action("resume") { phase == 3 && phase.becomes(2) }
+                Action("finish") { phase == 1 && phase.becomes(4) }
+                Action("cancel") { (phase == 2 || phase == 3) && phase.becomes(5) }
 
                 Invariant("validPhase") { phase >= 0 && phase <= 5 }
             }

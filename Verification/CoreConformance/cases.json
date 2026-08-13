@@ -9,7 +9,12 @@
       "configuration": "hour-clock/HourClock.cfg",
       "moduleSHA256": "985903176db4725f9cf25df84ad84dcd53ba94be80d26298b87ec86fbc9b08b3",
       "cfgSHA256": "c1e28ec8c38919b15577a0a7148840ba1d4e4c6541ea43e36edd482c5ff16687",
-      "arguments": ["-workers", "1", "-fp", "1"],
+      "arguments": [
+        "-workers",
+        "1",
+        "-fp",
+        "1"
+      ],
       "argumentsSHA256": "5a29989b077aadf61edf04f0b0cc435c5f9ef27fe0b75daa01cb703ee9ce89b5",
       "workers": 1,
       "fingerprintPolynomial": 1,
@@ -24,8 +29,12 @@
         "configuration": "Verification/CoreConformance/fixtures/hour-clock/HourClock.cfg"
       },
       "identityMapping": {
-        "variables": { "hr": "hr" },
-        "actions": { "HCnxt": "HCnxt" }
+        "variables": {
+          "hr": "hr"
+        },
+        "actions": {
+          "HCnxt": "HCnxt"
+        }
       },
       "semanticCitations": [
         "specifications/SpecifyingSystems/HourClock/HourClock.tla: HCini, HCnxt, HC",
@@ -56,7 +65,12 @@
       "configuration": "die-hard-type-ok/DieHard.cfg",
       "moduleSHA256": "295495de6509d86a82b88757835b95e3f91fad8691d764ece4d98886dcf42b66",
       "cfgSHA256": "d653a6add3e94b67cd6ccdc7e7473ab0a381df7931ecaf3c8760fad4bcabdc7d",
-      "arguments": ["-workers", "1", "-fp", "1"],
+      "arguments": [
+        "-workers",
+        "1",
+        "-fp",
+        "1"
+      ],
       "argumentsSHA256": "5a29989b077aadf61edf04f0b0cc435c5f9ef27fe0b75daa01cb703ee9ce89b5",
       "workers": 1,
       "fingerprintPolynomial": 1,
@@ -71,7 +85,10 @@
         "configuration": "Verification/CoreConformance/fixtures/die-hard-type-ok/DieHard.cfg"
       },
       "identityMapping": {
-        "variables": { "big": "big", "small": "small" },
+        "variables": {
+          "big": "big",
+          "small": "small"
+        },
         "actions": {
           "FillSmallJug": "FillSmallJug",
           "FillBigJug": "FillBigJug",
@@ -111,7 +128,12 @@
       "configuration": "hour-clock-edge-mismatch/HourClock.cfg",
       "moduleSHA256": "d9095b5892b817e41c8dfb11129703d8d4da6e67e2a2e23fbb57a30ae51c6a8f",
       "cfgSHA256": "5fc99b8399ad0227b0afbf25ff802c3582d4347dd06e26461313ecef6d5253f8",
-      "arguments": ["-workers", "1", "-fp", "1"],
+      "arguments": [
+        "-workers",
+        "1",
+        "-fp",
+        "1"
+      ],
       "argumentsSHA256": "5a29989b077aadf61edf04f0b0cc435c5f9ef27fe0b75daa01cb703ee9ce89b5",
       "workers": 1,
       "fingerprintPolynomial": 1,
@@ -127,8 +149,12 @@
         "configuration": "Verification/CoreConformance/fixtures/hour-clock-edge-mismatch/HourClock.cfg"
       },
       "identityMapping": {
-        "variables": { "hr": "hr" },
-        "actions": { "HCnxt": "HCnxt" }
+        "variables": {
+          "hr": "hr"
+        },
+        "actions": {
+          "HCnxt": "HCnxt"
+        }
       },
       "semanticCitations": [
         "Verification/CoreConformance/fixtures/hour-clock-edge-mismatch/HourClock.tla: HCnxt changes only 12 -> 1 to 12 -> 2",
@@ -159,7 +185,12 @@
       "configuration": "die-hard-violation/DieHard.cfg",
       "moduleSHA256": "59eac00c38748568ee17c85b994b5fbd2864ff8562fb5b1bdd5db786eb6f09bf",
       "cfgSHA256": "59fca38d703a0b17f967b35267fad8581e305b442c72147f1b2a530ea0ba6547",
-      "arguments": ["-workers", "1", "-fp", "1"],
+      "arguments": [
+        "-workers",
+        "1",
+        "-fp",
+        "1"
+      ],
       "argumentsSHA256": "5a29989b077aadf61edf04f0b0cc435c5f9ef27fe0b75daa01cb703ee9ce89b5",
       "workers": 1,
       "fingerprintPolynomial": 1,
@@ -175,7 +206,10 @@
         "configuration": "Verification/CoreConformance/fixtures/die-hard-violation/DieHard.cfg"
       },
       "identityMapping": {
-        "variables": { "big": "big", "small": "small" },
+        "variables": {
+          "big": "big",
+          "small": "small"
+        },
         "actions": {
           "FillSmallJug": "FillSmallJug",
           "FillBigJug": "FillBigJug",
@@ -207,6 +241,2407 @@
         "expectedRegressionOutcome": "difference"
       },
       "expectedArtifacts": "Verification/CoreConformance/fixtures/die-hard-violation/evidence"
+    },
+    {
+      "id": "multicar-elevator",
+      "swiftSpec": "multicar-elevator",
+      "module": "multicar-elevator/MultiCarElevator.tla",
+      "configuration": "multicar-elevator/MultiCarElevator.cfg",
+      "moduleSHA256": "af971fe32f8e8fe62e39985201894929beb0e85c99504d6db56350701bcaead5",
+      "cfgSHA256": "280ad5e348229375fdfa102db511108fe5bd2237fd4e5f52d0218b2f3e7ec593",
+      "arguments": [
+        "-workers",
+        "1",
+        "-fp",
+        "1"
+      ],
+      "argumentsSHA256": "5a29989b077aadf61edf04f0b0cc435c5f9ef27fe0b75daa01cb703ee9ce89b5",
+      "workers": 1,
+      "fingerprintPolynomial": 1,
+      "deadlock": false,
+      "replay": "none",
+      "upstream": {
+        "repository": "https://github.com/RoyalPineapple/SwiftTLA.git",
+        "commit": "7004177ab7a6351d9cd1ab8db6b947b8de9dd6ad"
+      },
+      "fixtures": {
+        "module": "Verification/CoreConformance/fixtures/multicar-elevator/MultiCarElevator.tla",
+        "configuration": "Verification/CoreConformance/fixtures/multicar-elevator/MultiCarElevator.cfg"
+      },
+      "identityMapping": {
+        "variables": {
+          "cars": "cars",
+          "calls": "calls",
+          "lastMoveDoorClosed": "lastMoveDoorClosed"
+        },
+        "actions": {
+          "request": "request",
+          "assign": "assign",
+          "move": "move",
+          "openDoor": "openDoor",
+          "board": "board",
+          "closeDoor": "closeDoor",
+          "completeRide": "completeRide"
+        }
+      },
+      "invocationMappings": [
+        {
+          "wrapper": "request__0_0_0",
+          "action": "request",
+          "arguments": [
+            "\"alice\"",
+            "0",
+            "\"up\""
+          ],
+          "indices": [
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "wrapper": "request__0_0_1",
+          "action": "request",
+          "arguments": [
+            "\"alice\"",
+            "0",
+            "\"down\""
+          ],
+          "indices": [
+            0,
+            0,
+            1
+          ]
+        },
+        {
+          "wrapper": "request__0_1_0",
+          "action": "request",
+          "arguments": [
+            "\"alice\"",
+            "1",
+            "\"up\""
+          ],
+          "indices": [
+            0,
+            1,
+            0
+          ]
+        },
+        {
+          "wrapper": "request__0_1_1",
+          "action": "request",
+          "arguments": [
+            "\"alice\"",
+            "1",
+            "\"down\""
+          ],
+          "indices": [
+            0,
+            1,
+            1
+          ]
+        },
+        {
+          "wrapper": "request__0_2_0",
+          "action": "request",
+          "arguments": [
+            "\"alice\"",
+            "2",
+            "\"up\""
+          ],
+          "indices": [
+            0,
+            2,
+            0
+          ]
+        },
+        {
+          "wrapper": "request__0_2_1",
+          "action": "request",
+          "arguments": [
+            "\"alice\"",
+            "2",
+            "\"down\""
+          ],
+          "indices": [
+            0,
+            2,
+            1
+          ]
+        },
+        {
+          "wrapper": "request__1_0_0",
+          "action": "request",
+          "arguments": [
+            "\"bob\"",
+            "0",
+            "\"up\""
+          ],
+          "indices": [
+            1,
+            0,
+            0
+          ]
+        },
+        {
+          "wrapper": "request__1_0_1",
+          "action": "request",
+          "arguments": [
+            "\"bob\"",
+            "0",
+            "\"down\""
+          ],
+          "indices": [
+            1,
+            0,
+            1
+          ]
+        },
+        {
+          "wrapper": "request__1_1_0",
+          "action": "request",
+          "arguments": [
+            "\"bob\"",
+            "1",
+            "\"up\""
+          ],
+          "indices": [
+            1,
+            1,
+            0
+          ]
+        },
+        {
+          "wrapper": "request__1_1_1",
+          "action": "request",
+          "arguments": [
+            "\"bob\"",
+            "1",
+            "\"down\""
+          ],
+          "indices": [
+            1,
+            1,
+            1
+          ]
+        },
+        {
+          "wrapper": "request__1_2_0",
+          "action": "request",
+          "arguments": [
+            "\"bob\"",
+            "2",
+            "\"up\""
+          ],
+          "indices": [
+            1,
+            2,
+            0
+          ]
+        },
+        {
+          "wrapper": "request__1_2_1",
+          "action": "request",
+          "arguments": [
+            "\"bob\"",
+            "2",
+            "\"down\""
+          ],
+          "indices": [
+            1,
+            2,
+            1
+          ]
+        },
+        {
+          "wrapper": "assign__0_0_0",
+          "action": "assign",
+          "arguments": [
+            "\"alice\"",
+            "\"carA\"",
+            "\"up\""
+          ],
+          "indices": [
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "wrapper": "assign__0_0_1",
+          "action": "assign",
+          "arguments": [
+            "\"alice\"",
+            "\"carA\"",
+            "\"down\""
+          ],
+          "indices": [
+            0,
+            0,
+            1
+          ]
+        },
+        {
+          "wrapper": "assign__0_1_0",
+          "action": "assign",
+          "arguments": [
+            "\"alice\"",
+            "\"carB\"",
+            "\"up\""
+          ],
+          "indices": [
+            0,
+            1,
+            0
+          ]
+        },
+        {
+          "wrapper": "assign__0_1_1",
+          "action": "assign",
+          "arguments": [
+            "\"alice\"",
+            "\"carB\"",
+            "\"down\""
+          ],
+          "indices": [
+            0,
+            1,
+            1
+          ]
+        },
+        {
+          "wrapper": "assign__1_0_0",
+          "action": "assign",
+          "arguments": [
+            "\"bob\"",
+            "\"carA\"",
+            "\"up\""
+          ],
+          "indices": [
+            1,
+            0,
+            0
+          ]
+        },
+        {
+          "wrapper": "assign__1_0_1",
+          "action": "assign",
+          "arguments": [
+            "\"bob\"",
+            "\"carA\"",
+            "\"down\""
+          ],
+          "indices": [
+            1,
+            0,
+            1
+          ]
+        },
+        {
+          "wrapper": "assign__1_1_0",
+          "action": "assign",
+          "arguments": [
+            "\"bob\"",
+            "\"carB\"",
+            "\"up\""
+          ],
+          "indices": [
+            1,
+            1,
+            0
+          ]
+        },
+        {
+          "wrapper": "assign__1_1_1",
+          "action": "assign",
+          "arguments": [
+            "\"bob\"",
+            "\"carB\"",
+            "\"down\""
+          ],
+          "indices": [
+            1,
+            1,
+            1
+          ]
+        },
+        {
+          "wrapper": "move__0_0_0",
+          "action": "move",
+          "arguments": [
+            "\"carA\"",
+            "\"up\"",
+            "0"
+          ],
+          "indices": [
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "wrapper": "move__0_0_1",
+          "action": "move",
+          "arguments": [
+            "\"carA\"",
+            "\"up\"",
+            "1"
+          ],
+          "indices": [
+            0,
+            0,
+            1
+          ]
+        },
+        {
+          "wrapper": "move__0_0_2",
+          "action": "move",
+          "arguments": [
+            "\"carA\"",
+            "\"up\"",
+            "2"
+          ],
+          "indices": [
+            0,
+            0,
+            2
+          ]
+        },
+        {
+          "wrapper": "move__0_1_0",
+          "action": "move",
+          "arguments": [
+            "\"carA\"",
+            "\"down\"",
+            "0"
+          ],
+          "indices": [
+            0,
+            1,
+            0
+          ]
+        },
+        {
+          "wrapper": "move__0_1_1",
+          "action": "move",
+          "arguments": [
+            "\"carA\"",
+            "\"down\"",
+            "1"
+          ],
+          "indices": [
+            0,
+            1,
+            1
+          ]
+        },
+        {
+          "wrapper": "move__0_1_2",
+          "action": "move",
+          "arguments": [
+            "\"carA\"",
+            "\"down\"",
+            "2"
+          ],
+          "indices": [
+            0,
+            1,
+            2
+          ]
+        },
+        {
+          "wrapper": "move__1_0_0",
+          "action": "move",
+          "arguments": [
+            "\"carB\"",
+            "\"up\"",
+            "0"
+          ],
+          "indices": [
+            1,
+            0,
+            0
+          ]
+        },
+        {
+          "wrapper": "move__1_0_1",
+          "action": "move",
+          "arguments": [
+            "\"carB\"",
+            "\"up\"",
+            "1"
+          ],
+          "indices": [
+            1,
+            0,
+            1
+          ]
+        },
+        {
+          "wrapper": "move__1_0_2",
+          "action": "move",
+          "arguments": [
+            "\"carB\"",
+            "\"up\"",
+            "2"
+          ],
+          "indices": [
+            1,
+            0,
+            2
+          ]
+        },
+        {
+          "wrapper": "move__1_1_0",
+          "action": "move",
+          "arguments": [
+            "\"carB\"",
+            "\"down\"",
+            "0"
+          ],
+          "indices": [
+            1,
+            1,
+            0
+          ]
+        },
+        {
+          "wrapper": "move__1_1_1",
+          "action": "move",
+          "arguments": [
+            "\"carB\"",
+            "\"down\"",
+            "1"
+          ],
+          "indices": [
+            1,
+            1,
+            1
+          ]
+        },
+        {
+          "wrapper": "move__1_1_2",
+          "action": "move",
+          "arguments": [
+            "\"carB\"",
+            "\"down\"",
+            "2"
+          ],
+          "indices": [
+            1,
+            1,
+            2
+          ]
+        },
+        {
+          "wrapper": "openDoor__0_0_0",
+          "action": "openDoor",
+          "arguments": [
+            "\"carA\"",
+            "0",
+            "\"up\""
+          ],
+          "indices": [
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "wrapper": "openDoor__0_0_1",
+          "action": "openDoor",
+          "arguments": [
+            "\"carA\"",
+            "0",
+            "\"down\""
+          ],
+          "indices": [
+            0,
+            0,
+            1
+          ]
+        },
+        {
+          "wrapper": "openDoor__0_1_0",
+          "action": "openDoor",
+          "arguments": [
+            "\"carA\"",
+            "1",
+            "\"up\""
+          ],
+          "indices": [
+            0,
+            1,
+            0
+          ]
+        },
+        {
+          "wrapper": "openDoor__0_1_1",
+          "action": "openDoor",
+          "arguments": [
+            "\"carA\"",
+            "1",
+            "\"down\""
+          ],
+          "indices": [
+            0,
+            1,
+            1
+          ]
+        },
+        {
+          "wrapper": "openDoor__0_2_0",
+          "action": "openDoor",
+          "arguments": [
+            "\"carA\"",
+            "2",
+            "\"up\""
+          ],
+          "indices": [
+            0,
+            2,
+            0
+          ]
+        },
+        {
+          "wrapper": "openDoor__0_2_1",
+          "action": "openDoor",
+          "arguments": [
+            "\"carA\"",
+            "2",
+            "\"down\""
+          ],
+          "indices": [
+            0,
+            2,
+            1
+          ]
+        },
+        {
+          "wrapper": "openDoor__1_0_0",
+          "action": "openDoor",
+          "arguments": [
+            "\"carB\"",
+            "0",
+            "\"up\""
+          ],
+          "indices": [
+            1,
+            0,
+            0
+          ]
+        },
+        {
+          "wrapper": "openDoor__1_0_1",
+          "action": "openDoor",
+          "arguments": [
+            "\"carB\"",
+            "0",
+            "\"down\""
+          ],
+          "indices": [
+            1,
+            0,
+            1
+          ]
+        },
+        {
+          "wrapper": "openDoor__1_1_0",
+          "action": "openDoor",
+          "arguments": [
+            "\"carB\"",
+            "1",
+            "\"up\""
+          ],
+          "indices": [
+            1,
+            1,
+            0
+          ]
+        },
+        {
+          "wrapper": "openDoor__1_1_1",
+          "action": "openDoor",
+          "arguments": [
+            "\"carB\"",
+            "1",
+            "\"down\""
+          ],
+          "indices": [
+            1,
+            1,
+            1
+          ]
+        },
+        {
+          "wrapper": "openDoor__1_2_0",
+          "action": "openDoor",
+          "arguments": [
+            "\"carB\"",
+            "2",
+            "\"up\""
+          ],
+          "indices": [
+            1,
+            2,
+            0
+          ]
+        },
+        {
+          "wrapper": "openDoor__1_2_1",
+          "action": "openDoor",
+          "arguments": [
+            "\"carB\"",
+            "2",
+            "\"down\""
+          ],
+          "indices": [
+            1,
+            2,
+            1
+          ]
+        },
+        {
+          "wrapper": "board__0_0_0",
+          "action": "board",
+          "arguments": [
+            "\"alice\"",
+            "\"carA\"",
+            "0"
+          ],
+          "indices": [
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "wrapper": "board__0_0_1",
+          "action": "board",
+          "arguments": [
+            "\"alice\"",
+            "\"carA\"",
+            "1"
+          ],
+          "indices": [
+            0,
+            0,
+            1
+          ]
+        },
+        {
+          "wrapper": "board__0_0_2",
+          "action": "board",
+          "arguments": [
+            "\"alice\"",
+            "\"carA\"",
+            "2"
+          ],
+          "indices": [
+            0,
+            0,
+            2
+          ]
+        },
+        {
+          "wrapper": "board__0_1_0",
+          "action": "board",
+          "arguments": [
+            "\"alice\"",
+            "\"carB\"",
+            "0"
+          ],
+          "indices": [
+            0,
+            1,
+            0
+          ]
+        },
+        {
+          "wrapper": "board__0_1_1",
+          "action": "board",
+          "arguments": [
+            "\"alice\"",
+            "\"carB\"",
+            "1"
+          ],
+          "indices": [
+            0,
+            1,
+            1
+          ]
+        },
+        {
+          "wrapper": "board__0_1_2",
+          "action": "board",
+          "arguments": [
+            "\"alice\"",
+            "\"carB\"",
+            "2"
+          ],
+          "indices": [
+            0,
+            1,
+            2
+          ]
+        },
+        {
+          "wrapper": "board__1_0_0",
+          "action": "board",
+          "arguments": [
+            "\"bob\"",
+            "\"carA\"",
+            "0"
+          ],
+          "indices": [
+            1,
+            0,
+            0
+          ]
+        },
+        {
+          "wrapper": "board__1_0_1",
+          "action": "board",
+          "arguments": [
+            "\"bob\"",
+            "\"carA\"",
+            "1"
+          ],
+          "indices": [
+            1,
+            0,
+            1
+          ]
+        },
+        {
+          "wrapper": "board__1_0_2",
+          "action": "board",
+          "arguments": [
+            "\"bob\"",
+            "\"carA\"",
+            "2"
+          ],
+          "indices": [
+            1,
+            0,
+            2
+          ]
+        },
+        {
+          "wrapper": "board__1_1_0",
+          "action": "board",
+          "arguments": [
+            "\"bob\"",
+            "\"carB\"",
+            "0"
+          ],
+          "indices": [
+            1,
+            1,
+            0
+          ]
+        },
+        {
+          "wrapper": "board__1_1_1",
+          "action": "board",
+          "arguments": [
+            "\"bob\"",
+            "\"carB\"",
+            "1"
+          ],
+          "indices": [
+            1,
+            1,
+            1
+          ]
+        },
+        {
+          "wrapper": "board__1_1_2",
+          "action": "board",
+          "arguments": [
+            "\"bob\"",
+            "\"carB\"",
+            "2"
+          ],
+          "indices": [
+            1,
+            1,
+            2
+          ]
+        },
+        {
+          "wrapper": "closeDoor__0_0_0",
+          "action": "closeDoor",
+          "arguments": [
+            "\"carA\"",
+            "0",
+            "\"up\""
+          ],
+          "indices": [
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "wrapper": "closeDoor__0_0_1",
+          "action": "closeDoor",
+          "arguments": [
+            "\"carA\"",
+            "0",
+            "\"down\""
+          ],
+          "indices": [
+            0,
+            0,
+            1
+          ]
+        },
+        {
+          "wrapper": "closeDoor__0_1_0",
+          "action": "closeDoor",
+          "arguments": [
+            "\"carA\"",
+            "1",
+            "\"up\""
+          ],
+          "indices": [
+            0,
+            1,
+            0
+          ]
+        },
+        {
+          "wrapper": "closeDoor__0_1_1",
+          "action": "closeDoor",
+          "arguments": [
+            "\"carA\"",
+            "1",
+            "\"down\""
+          ],
+          "indices": [
+            0,
+            1,
+            1
+          ]
+        },
+        {
+          "wrapper": "closeDoor__0_2_0",
+          "action": "closeDoor",
+          "arguments": [
+            "\"carA\"",
+            "2",
+            "\"up\""
+          ],
+          "indices": [
+            0,
+            2,
+            0
+          ]
+        },
+        {
+          "wrapper": "closeDoor__0_2_1",
+          "action": "closeDoor",
+          "arguments": [
+            "\"carA\"",
+            "2",
+            "\"down\""
+          ],
+          "indices": [
+            0,
+            2,
+            1
+          ]
+        },
+        {
+          "wrapper": "closeDoor__1_0_0",
+          "action": "closeDoor",
+          "arguments": [
+            "\"carB\"",
+            "0",
+            "\"up\""
+          ],
+          "indices": [
+            1,
+            0,
+            0
+          ]
+        },
+        {
+          "wrapper": "closeDoor__1_0_1",
+          "action": "closeDoor",
+          "arguments": [
+            "\"carB\"",
+            "0",
+            "\"down\""
+          ],
+          "indices": [
+            1,
+            0,
+            1
+          ]
+        },
+        {
+          "wrapper": "closeDoor__1_1_0",
+          "action": "closeDoor",
+          "arguments": [
+            "\"carB\"",
+            "1",
+            "\"up\""
+          ],
+          "indices": [
+            1,
+            1,
+            0
+          ]
+        },
+        {
+          "wrapper": "closeDoor__1_1_1",
+          "action": "closeDoor",
+          "arguments": [
+            "\"carB\"",
+            "1",
+            "\"down\""
+          ],
+          "indices": [
+            1,
+            1,
+            1
+          ]
+        },
+        {
+          "wrapper": "closeDoor__1_2_0",
+          "action": "closeDoor",
+          "arguments": [
+            "\"carB\"",
+            "2",
+            "\"up\""
+          ],
+          "indices": [
+            1,
+            2,
+            0
+          ]
+        },
+        {
+          "wrapper": "closeDoor__1_2_1",
+          "action": "closeDoor",
+          "arguments": [
+            "\"carB\"",
+            "2",
+            "\"down\""
+          ],
+          "indices": [
+            1,
+            2,
+            1
+          ]
+        },
+        {
+          "wrapper": "completeRide__0_0_0",
+          "action": "completeRide",
+          "arguments": [
+            "\"alice\"",
+            "\"carA\"",
+            "0"
+          ],
+          "indices": [
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "wrapper": "completeRide__0_0_1",
+          "action": "completeRide",
+          "arguments": [
+            "\"alice\"",
+            "\"carA\"",
+            "1"
+          ],
+          "indices": [
+            0,
+            0,
+            1
+          ]
+        },
+        {
+          "wrapper": "completeRide__0_0_2",
+          "action": "completeRide",
+          "arguments": [
+            "\"alice\"",
+            "\"carA\"",
+            "2"
+          ],
+          "indices": [
+            0,
+            0,
+            2
+          ]
+        },
+        {
+          "wrapper": "completeRide__0_1_0",
+          "action": "completeRide",
+          "arguments": [
+            "\"alice\"",
+            "\"carB\"",
+            "0"
+          ],
+          "indices": [
+            0,
+            1,
+            0
+          ]
+        },
+        {
+          "wrapper": "completeRide__0_1_1",
+          "action": "completeRide",
+          "arguments": [
+            "\"alice\"",
+            "\"carB\"",
+            "1"
+          ],
+          "indices": [
+            0,
+            1,
+            1
+          ]
+        },
+        {
+          "wrapper": "completeRide__0_1_2",
+          "action": "completeRide",
+          "arguments": [
+            "\"alice\"",
+            "\"carB\"",
+            "2"
+          ],
+          "indices": [
+            0,
+            1,
+            2
+          ]
+        },
+        {
+          "wrapper": "completeRide__1_0_0",
+          "action": "completeRide",
+          "arguments": [
+            "\"bob\"",
+            "\"carA\"",
+            "0"
+          ],
+          "indices": [
+            1,
+            0,
+            0
+          ]
+        },
+        {
+          "wrapper": "completeRide__1_0_1",
+          "action": "completeRide",
+          "arguments": [
+            "\"bob\"",
+            "\"carA\"",
+            "1"
+          ],
+          "indices": [
+            1,
+            0,
+            1
+          ]
+        },
+        {
+          "wrapper": "completeRide__1_0_2",
+          "action": "completeRide",
+          "arguments": [
+            "\"bob\"",
+            "\"carA\"",
+            "2"
+          ],
+          "indices": [
+            1,
+            0,
+            2
+          ]
+        },
+        {
+          "wrapper": "completeRide__1_1_0",
+          "action": "completeRide",
+          "arguments": [
+            "\"bob\"",
+            "\"carB\"",
+            "0"
+          ],
+          "indices": [
+            1,
+            1,
+            0
+          ]
+        },
+        {
+          "wrapper": "completeRide__1_1_1",
+          "action": "completeRide",
+          "arguments": [
+            "\"bob\"",
+            "\"carB\"",
+            "1"
+          ],
+          "indices": [
+            1,
+            1,
+            1
+          ]
+        },
+        {
+          "wrapper": "completeRide__1_1_2",
+          "action": "completeRide",
+          "arguments": [
+            "\"bob\"",
+            "\"carB\"",
+            "2"
+          ],
+          "indices": [
+            1,
+            1,
+            2
+          ]
+        }
+      ],
+      "valueNormalizations": [
+        {
+          "binding": "cars",
+          "functionKeys": {
+            "\"carA\"": "carA",
+            "\"carB\"": "carB"
+          }
+        }
+      ],
+      "semanticCitations": [
+        "Sources/UpstreamParity/Examples/MultiCarElevator.swift: bounded builder fixture and ordered ActionParameter declarations",
+        "Verification/CoreConformance/fixtures/multicar-elevator/MultiCarElevator.tla: generated wrapper operators and Next",
+        "Verification/CoreConformance/fixtures/multicar-elevator/MultiCarElevator.cfg: bounded safety configuration"
+      ],
+      "governance": {
+        "role": "requiredComparison",
+        "finiteBounds": {
+          "summary": "Bounded MultiCarElevator: two people, two cars, floors 0...2, two directions, 3,276 reachable states, and explicit ordered three-argument action wrappers.",
+          "limits": {
+            "people": 2,
+            "cars": 2,
+            "floors": 3,
+            "directions": 2,
+            "states": 3276,
+            "variables": 3,
+            "wrappers": 80
+          }
+        },
+        "semanticCitations": [
+          "Sources/UpstreamParity/Examples/MultiCarElevator.swift: bounded builder fixture and ordered ActionParameter declarations",
+          "Verification/CoreConformance/fixtures/multicar-elevator/MultiCarElevator.tla: generated wrapper operators and Next",
+          "Verification/CoreConformance/fixtures/multicar-elevator/MultiCarElevator.cfg: bounded safety configuration"
+        ],
+        "expectedRegressionOutcome": "exact"
+      },
+      "expectedArtifacts": "Verification/CoreConformance/baselines/multicar-elevator"
+    },
+    {
+      "id": "multicar-elevator-edge-mismatch",
+      "swiftSpec": "multicar-elevator-edge-mismatch",
+      "module": "multicar-elevator-edge-mismatch/MultiCarElevator.tla",
+      "configuration": "multicar-elevator-edge-mismatch/MultiCarElevator.cfg",
+      "moduleSHA256": "974c63c379431e6800af7f4d05dfa8ee93a84db3ba3072f9ddc15fd6cc599a98",
+      "cfgSHA256": "280ad5e348229375fdfa102db511108fe5bd2237fd4e5f52d0218b2f3e7ec593",
+      "arguments": [
+        "-workers",
+        "1",
+        "-fp",
+        "1"
+      ],
+      "argumentsSHA256": "5a29989b077aadf61edf04f0b0cc435c5f9ef27fe0b75daa01cb703ee9ce89b5",
+      "workers": 1,
+      "fingerprintPolynomial": 1,
+      "deadlock": false,
+      "replay": "none",
+      "upstream": {
+        "repository": "https://github.com/RoyalPineapple/SwiftTLA.git",
+        "commit": "7004177ab7a6351d9cd1ab8db6b947b8de9dd6ad"
+      },
+      "fixtures": {
+        "module": "Verification/CoreConformance/fixtures/multicar-elevator-edge-mismatch/MultiCarElevator.tla",
+        "configuration": "Verification/CoreConformance/fixtures/multicar-elevator-edge-mismatch/MultiCarElevator.cfg"
+      },
+      "identityMapping": {
+        "variables": {
+          "cars": "cars",
+          "calls": "calls",
+          "lastMoveDoorClosed": "lastMoveDoorClosed"
+        },
+        "actions": {
+          "request": "request",
+          "assign": "assign",
+          "move": "move",
+          "openDoor": "openDoor",
+          "board": "board",
+          "closeDoor": "closeDoor",
+          "completeRide": "completeRide"
+        }
+      },
+      "invocationMappings": [
+        {
+          "wrapper": "request__0_0_0",
+          "action": "request",
+          "arguments": [
+            "\"alice\"",
+            "0",
+            "\"up\""
+          ],
+          "indices": [
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "wrapper": "request__0_0_1",
+          "action": "request",
+          "arguments": [
+            "\"alice\"",
+            "0",
+            "\"down\""
+          ],
+          "indices": [
+            0,
+            0,
+            1
+          ]
+        },
+        {
+          "wrapper": "request__0_1_0",
+          "action": "request",
+          "arguments": [
+            "\"alice\"",
+            "1",
+            "\"up\""
+          ],
+          "indices": [
+            0,
+            1,
+            0
+          ]
+        },
+        {
+          "wrapper": "request__0_1_1",
+          "action": "request",
+          "arguments": [
+            "\"alice\"",
+            "1",
+            "\"down\""
+          ],
+          "indices": [
+            0,
+            1,
+            1
+          ]
+        },
+        {
+          "wrapper": "request__0_2_0",
+          "action": "request",
+          "arguments": [
+            "\"alice\"",
+            "2",
+            "\"up\""
+          ],
+          "indices": [
+            0,
+            2,
+            0
+          ]
+        },
+        {
+          "wrapper": "request__0_2_1",
+          "action": "request",
+          "arguments": [
+            "\"alice\"",
+            "2",
+            "\"down\""
+          ],
+          "indices": [
+            0,
+            2,
+            1
+          ]
+        },
+        {
+          "wrapper": "request__1_0_0",
+          "action": "request",
+          "arguments": [
+            "\"bob\"",
+            "0",
+            "\"up\""
+          ],
+          "indices": [
+            1,
+            0,
+            0
+          ]
+        },
+        {
+          "wrapper": "request__1_0_1",
+          "action": "request",
+          "arguments": [
+            "\"bob\"",
+            "0",
+            "\"down\""
+          ],
+          "indices": [
+            1,
+            0,
+            1
+          ]
+        },
+        {
+          "wrapper": "request__1_1_0",
+          "action": "request",
+          "arguments": [
+            "\"bob\"",
+            "1",
+            "\"up\""
+          ],
+          "indices": [
+            1,
+            1,
+            0
+          ]
+        },
+        {
+          "wrapper": "request__1_1_1",
+          "action": "request",
+          "arguments": [
+            "\"bob\"",
+            "1",
+            "\"down\""
+          ],
+          "indices": [
+            1,
+            1,
+            1
+          ]
+        },
+        {
+          "wrapper": "request__1_2_0",
+          "action": "request",
+          "arguments": [
+            "\"bob\"",
+            "2",
+            "\"up\""
+          ],
+          "indices": [
+            1,
+            2,
+            0
+          ]
+        },
+        {
+          "wrapper": "request__1_2_1",
+          "action": "request",
+          "arguments": [
+            "\"bob\"",
+            "2",
+            "\"down\""
+          ],
+          "indices": [
+            1,
+            2,
+            1
+          ]
+        },
+        {
+          "wrapper": "assign__0_0_0",
+          "action": "assign",
+          "arguments": [
+            "\"alice\"",
+            "\"carA\"",
+            "\"up\""
+          ],
+          "indices": [
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "wrapper": "assign__0_0_1",
+          "action": "assign",
+          "arguments": [
+            "\"alice\"",
+            "\"carA\"",
+            "\"down\""
+          ],
+          "indices": [
+            0,
+            0,
+            1
+          ]
+        },
+        {
+          "wrapper": "assign__0_1_0",
+          "action": "assign",
+          "arguments": [
+            "\"alice\"",
+            "\"carB\"",
+            "\"up\""
+          ],
+          "indices": [
+            0,
+            1,
+            0
+          ]
+        },
+        {
+          "wrapper": "assign__0_1_1",
+          "action": "assign",
+          "arguments": [
+            "\"alice\"",
+            "\"carB\"",
+            "\"down\""
+          ],
+          "indices": [
+            0,
+            1,
+            1
+          ]
+        },
+        {
+          "wrapper": "assign__1_0_0",
+          "action": "assign",
+          "arguments": [
+            "\"bob\"",
+            "\"carA\"",
+            "\"up\""
+          ],
+          "indices": [
+            1,
+            0,
+            0
+          ]
+        },
+        {
+          "wrapper": "assign__1_0_1",
+          "action": "assign",
+          "arguments": [
+            "\"bob\"",
+            "\"carA\"",
+            "\"down\""
+          ],
+          "indices": [
+            1,
+            0,
+            1
+          ]
+        },
+        {
+          "wrapper": "assign__1_1_0",
+          "action": "assign",
+          "arguments": [
+            "\"bob\"",
+            "\"carB\"",
+            "\"up\""
+          ],
+          "indices": [
+            1,
+            1,
+            0
+          ]
+        },
+        {
+          "wrapper": "assign__1_1_1",
+          "action": "assign",
+          "arguments": [
+            "\"bob\"",
+            "\"carB\"",
+            "\"down\""
+          ],
+          "indices": [
+            1,
+            1,
+            1
+          ]
+        },
+        {
+          "wrapper": "move__0_0_0",
+          "action": "move",
+          "arguments": [
+            "\"carA\"",
+            "\"up\"",
+            "0"
+          ],
+          "indices": [
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "wrapper": "move__0_0_1",
+          "action": "move",
+          "arguments": [
+            "\"carA\"",
+            "\"up\"",
+            "1"
+          ],
+          "indices": [
+            0,
+            0,
+            1
+          ]
+        },
+        {
+          "wrapper": "move__0_0_2",
+          "action": "move",
+          "arguments": [
+            "\"carA\"",
+            "\"up\"",
+            "2"
+          ],
+          "indices": [
+            0,
+            0,
+            2
+          ]
+        },
+        {
+          "wrapper": "move__0_1_0",
+          "action": "move",
+          "arguments": [
+            "\"carA\"",
+            "\"down\"",
+            "0"
+          ],
+          "indices": [
+            0,
+            1,
+            0
+          ]
+        },
+        {
+          "wrapper": "move__0_1_1",
+          "action": "move",
+          "arguments": [
+            "\"carA\"",
+            "\"down\"",
+            "1"
+          ],
+          "indices": [
+            0,
+            1,
+            1
+          ]
+        },
+        {
+          "wrapper": "move__0_1_2",
+          "action": "move",
+          "arguments": [
+            "\"carA\"",
+            "\"down\"",
+            "2"
+          ],
+          "indices": [
+            0,
+            1,
+            2
+          ]
+        },
+        {
+          "wrapper": "move__1_0_0",
+          "action": "move",
+          "arguments": [
+            "\"carB\"",
+            "\"up\"",
+            "0"
+          ],
+          "indices": [
+            1,
+            0,
+            0
+          ]
+        },
+        {
+          "wrapper": "move__1_0_1",
+          "action": "move",
+          "arguments": [
+            "\"carB\"",
+            "\"up\"",
+            "1"
+          ],
+          "indices": [
+            1,
+            0,
+            1
+          ]
+        },
+        {
+          "wrapper": "move__1_0_2",
+          "action": "move",
+          "arguments": [
+            "\"carB\"",
+            "\"up\"",
+            "2"
+          ],
+          "indices": [
+            1,
+            0,
+            2
+          ]
+        },
+        {
+          "wrapper": "move__1_1_0",
+          "action": "move",
+          "arguments": [
+            "\"carB\"",
+            "\"down\"",
+            "0"
+          ],
+          "indices": [
+            1,
+            1,
+            0
+          ]
+        },
+        {
+          "wrapper": "move__1_1_1",
+          "action": "move",
+          "arguments": [
+            "\"carB\"",
+            "\"down\"",
+            "1"
+          ],
+          "indices": [
+            1,
+            1,
+            1
+          ]
+        },
+        {
+          "wrapper": "move__1_1_2",
+          "action": "move",
+          "arguments": [
+            "\"carB\"",
+            "\"down\"",
+            "2"
+          ],
+          "indices": [
+            1,
+            1,
+            2
+          ]
+        },
+        {
+          "wrapper": "openDoor__0_0_0",
+          "action": "openDoor",
+          "arguments": [
+            "\"carA\"",
+            "0",
+            "\"up\""
+          ],
+          "indices": [
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "wrapper": "openDoor__0_0_1",
+          "action": "openDoor",
+          "arguments": [
+            "\"carA\"",
+            "0",
+            "\"down\""
+          ],
+          "indices": [
+            0,
+            0,
+            1
+          ]
+        },
+        {
+          "wrapper": "openDoor__0_1_0",
+          "action": "openDoor",
+          "arguments": [
+            "\"carA\"",
+            "1",
+            "\"up\""
+          ],
+          "indices": [
+            0,
+            1,
+            0
+          ]
+        },
+        {
+          "wrapper": "openDoor__0_1_1",
+          "action": "openDoor",
+          "arguments": [
+            "\"carA\"",
+            "1",
+            "\"down\""
+          ],
+          "indices": [
+            0,
+            1,
+            1
+          ]
+        },
+        {
+          "wrapper": "openDoor__0_2_0",
+          "action": "openDoor",
+          "arguments": [
+            "\"carA\"",
+            "2",
+            "\"up\""
+          ],
+          "indices": [
+            0,
+            2,
+            0
+          ]
+        },
+        {
+          "wrapper": "openDoor__0_2_1",
+          "action": "openDoor",
+          "arguments": [
+            "\"carA\"",
+            "2",
+            "\"down\""
+          ],
+          "indices": [
+            0,
+            2,
+            1
+          ]
+        },
+        {
+          "wrapper": "openDoor__1_0_0",
+          "action": "openDoor",
+          "arguments": [
+            "\"carB\"",
+            "0",
+            "\"up\""
+          ],
+          "indices": [
+            1,
+            0,
+            0
+          ]
+        },
+        {
+          "wrapper": "openDoor__1_0_1",
+          "action": "openDoor",
+          "arguments": [
+            "\"carB\"",
+            "0",
+            "\"down\""
+          ],
+          "indices": [
+            1,
+            0,
+            1
+          ]
+        },
+        {
+          "wrapper": "openDoor__1_1_0",
+          "action": "openDoor",
+          "arguments": [
+            "\"carB\"",
+            "1",
+            "\"up\""
+          ],
+          "indices": [
+            1,
+            1,
+            0
+          ]
+        },
+        {
+          "wrapper": "openDoor__1_1_1",
+          "action": "openDoor",
+          "arguments": [
+            "\"carB\"",
+            "1",
+            "\"down\""
+          ],
+          "indices": [
+            1,
+            1,
+            1
+          ]
+        },
+        {
+          "wrapper": "openDoor__1_2_0",
+          "action": "openDoor",
+          "arguments": [
+            "\"carB\"",
+            "2",
+            "\"up\""
+          ],
+          "indices": [
+            1,
+            2,
+            0
+          ]
+        },
+        {
+          "wrapper": "openDoor__1_2_1",
+          "action": "openDoor",
+          "arguments": [
+            "\"carB\"",
+            "2",
+            "\"down\""
+          ],
+          "indices": [
+            1,
+            2,
+            1
+          ]
+        },
+        {
+          "wrapper": "board__0_0_0",
+          "action": "board",
+          "arguments": [
+            "\"alice\"",
+            "\"carA\"",
+            "0"
+          ],
+          "indices": [
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "wrapper": "board__0_0_1",
+          "action": "board",
+          "arguments": [
+            "\"alice\"",
+            "\"carA\"",
+            "1"
+          ],
+          "indices": [
+            0,
+            0,
+            1
+          ]
+        },
+        {
+          "wrapper": "board__0_0_2",
+          "action": "board",
+          "arguments": [
+            "\"alice\"",
+            "\"carA\"",
+            "2"
+          ],
+          "indices": [
+            0,
+            0,
+            2
+          ]
+        },
+        {
+          "wrapper": "board__0_1_0",
+          "action": "board",
+          "arguments": [
+            "\"alice\"",
+            "\"carB\"",
+            "0"
+          ],
+          "indices": [
+            0,
+            1,
+            0
+          ]
+        },
+        {
+          "wrapper": "board__0_1_1",
+          "action": "board",
+          "arguments": [
+            "\"alice\"",
+            "\"carB\"",
+            "1"
+          ],
+          "indices": [
+            0,
+            1,
+            1
+          ]
+        },
+        {
+          "wrapper": "board__0_1_2",
+          "action": "board",
+          "arguments": [
+            "\"alice\"",
+            "\"carB\"",
+            "2"
+          ],
+          "indices": [
+            0,
+            1,
+            2
+          ]
+        },
+        {
+          "wrapper": "board__1_0_0",
+          "action": "board",
+          "arguments": [
+            "\"bob\"",
+            "\"carA\"",
+            "0"
+          ],
+          "indices": [
+            1,
+            0,
+            0
+          ]
+        },
+        {
+          "wrapper": "board__1_0_1",
+          "action": "board",
+          "arguments": [
+            "\"bob\"",
+            "\"carA\"",
+            "1"
+          ],
+          "indices": [
+            1,
+            0,
+            1
+          ]
+        },
+        {
+          "wrapper": "board__1_0_2",
+          "action": "board",
+          "arguments": [
+            "\"bob\"",
+            "\"carA\"",
+            "2"
+          ],
+          "indices": [
+            1,
+            0,
+            2
+          ]
+        },
+        {
+          "wrapper": "board__1_1_0",
+          "action": "board",
+          "arguments": [
+            "\"bob\"",
+            "\"carB\"",
+            "0"
+          ],
+          "indices": [
+            1,
+            1,
+            0
+          ]
+        },
+        {
+          "wrapper": "board__1_1_1",
+          "action": "board",
+          "arguments": [
+            "\"bob\"",
+            "\"carB\"",
+            "1"
+          ],
+          "indices": [
+            1,
+            1,
+            1
+          ]
+        },
+        {
+          "wrapper": "board__1_1_2",
+          "action": "board",
+          "arguments": [
+            "\"bob\"",
+            "\"carB\"",
+            "2"
+          ],
+          "indices": [
+            1,
+            1,
+            2
+          ]
+        },
+        {
+          "wrapper": "closeDoor__0_0_0",
+          "action": "closeDoor",
+          "arguments": [
+            "\"carA\"",
+            "0",
+            "\"up\""
+          ],
+          "indices": [
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "wrapper": "closeDoor__0_0_1",
+          "action": "closeDoor",
+          "arguments": [
+            "\"carA\"",
+            "0",
+            "\"down\""
+          ],
+          "indices": [
+            0,
+            0,
+            1
+          ]
+        },
+        {
+          "wrapper": "closeDoor__0_1_0",
+          "action": "closeDoor",
+          "arguments": [
+            "\"carA\"",
+            "1",
+            "\"up\""
+          ],
+          "indices": [
+            0,
+            1,
+            0
+          ]
+        },
+        {
+          "wrapper": "closeDoor__0_1_1",
+          "action": "closeDoor",
+          "arguments": [
+            "\"carA\"",
+            "1",
+            "\"down\""
+          ],
+          "indices": [
+            0,
+            1,
+            1
+          ]
+        },
+        {
+          "wrapper": "closeDoor__0_2_0",
+          "action": "closeDoor",
+          "arguments": [
+            "\"carA\"",
+            "2",
+            "\"up\""
+          ],
+          "indices": [
+            0,
+            2,
+            0
+          ]
+        },
+        {
+          "wrapper": "closeDoor__0_2_1",
+          "action": "closeDoor",
+          "arguments": [
+            "\"carA\"",
+            "2",
+            "\"down\""
+          ],
+          "indices": [
+            0,
+            2,
+            1
+          ]
+        },
+        {
+          "wrapper": "closeDoor__1_0_0",
+          "action": "closeDoor",
+          "arguments": [
+            "\"carB\"",
+            "0",
+            "\"up\""
+          ],
+          "indices": [
+            1,
+            0,
+            0
+          ]
+        },
+        {
+          "wrapper": "closeDoor__1_0_1",
+          "action": "closeDoor",
+          "arguments": [
+            "\"carB\"",
+            "0",
+            "\"down\""
+          ],
+          "indices": [
+            1,
+            0,
+            1
+          ]
+        },
+        {
+          "wrapper": "closeDoor__1_1_0",
+          "action": "closeDoor",
+          "arguments": [
+            "\"carB\"",
+            "1",
+            "\"up\""
+          ],
+          "indices": [
+            1,
+            1,
+            0
+          ]
+        },
+        {
+          "wrapper": "closeDoor__1_1_1",
+          "action": "closeDoor",
+          "arguments": [
+            "\"carB\"",
+            "1",
+            "\"down\""
+          ],
+          "indices": [
+            1,
+            1,
+            1
+          ]
+        },
+        {
+          "wrapper": "closeDoor__1_2_0",
+          "action": "closeDoor",
+          "arguments": [
+            "\"carB\"",
+            "2",
+            "\"up\""
+          ],
+          "indices": [
+            1,
+            2,
+            0
+          ]
+        },
+        {
+          "wrapper": "closeDoor__1_2_1",
+          "action": "closeDoor",
+          "arguments": [
+            "\"carB\"",
+            "2",
+            "\"down\""
+          ],
+          "indices": [
+            1,
+            2,
+            1
+          ]
+        },
+        {
+          "wrapper": "completeRide__0_0_0",
+          "action": "completeRide",
+          "arguments": [
+            "\"alice\"",
+            "\"carA\"",
+            "0"
+          ],
+          "indices": [
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "wrapper": "completeRide__0_0_1",
+          "action": "completeRide",
+          "arguments": [
+            "\"alice\"",
+            "\"carA\"",
+            "1"
+          ],
+          "indices": [
+            0,
+            0,
+            1
+          ]
+        },
+        {
+          "wrapper": "completeRide__0_0_2",
+          "action": "completeRide",
+          "arguments": [
+            "\"alice\"",
+            "\"carA\"",
+            "2"
+          ],
+          "indices": [
+            0,
+            0,
+            2
+          ]
+        },
+        {
+          "wrapper": "completeRide__0_1_0",
+          "action": "completeRide",
+          "arguments": [
+            "\"alice\"",
+            "\"carB\"",
+            "0"
+          ],
+          "indices": [
+            0,
+            1,
+            0
+          ]
+        },
+        {
+          "wrapper": "completeRide__0_1_1",
+          "action": "completeRide",
+          "arguments": [
+            "\"alice\"",
+            "\"carB\"",
+            "1"
+          ],
+          "indices": [
+            0,
+            1,
+            1
+          ]
+        },
+        {
+          "wrapper": "completeRide__0_1_2",
+          "action": "completeRide",
+          "arguments": [
+            "\"alice\"",
+            "\"carB\"",
+            "2"
+          ],
+          "indices": [
+            0,
+            1,
+            2
+          ]
+        },
+        {
+          "wrapper": "completeRide__1_0_0",
+          "action": "completeRide",
+          "arguments": [
+            "\"bob\"",
+            "\"carA\"",
+            "0"
+          ],
+          "indices": [
+            1,
+            0,
+            0
+          ]
+        },
+        {
+          "wrapper": "completeRide__1_0_1",
+          "action": "completeRide",
+          "arguments": [
+            "\"bob\"",
+            "\"carA\"",
+            "1"
+          ],
+          "indices": [
+            1,
+            0,
+            1
+          ]
+        },
+        {
+          "wrapper": "completeRide__1_0_2",
+          "action": "completeRide",
+          "arguments": [
+            "\"bob\"",
+            "\"carA\"",
+            "2"
+          ],
+          "indices": [
+            1,
+            0,
+            2
+          ]
+        },
+        {
+          "wrapper": "completeRide__1_1_0",
+          "action": "completeRide",
+          "arguments": [
+            "\"bob\"",
+            "\"carB\"",
+            "0"
+          ],
+          "indices": [
+            1,
+            1,
+            0
+          ]
+        },
+        {
+          "wrapper": "completeRide__1_1_1",
+          "action": "completeRide",
+          "arguments": [
+            "\"bob\"",
+            "\"carB\"",
+            "1"
+          ],
+          "indices": [
+            1,
+            1,
+            1
+          ]
+        },
+        {
+          "wrapper": "completeRide__1_1_2",
+          "action": "completeRide",
+          "arguments": [
+            "\"bob\"",
+            "\"carB\"",
+            "2"
+          ],
+          "indices": [
+            1,
+            1,
+            2
+          ]
+        }
+      ],
+      "valueNormalizations": [
+        {
+          "binding": "cars",
+          "functionKeys": {
+            "\"carA\"": "carA",
+            "\"carB\"": "carB"
+          }
+        }
+      ],
+      "semanticCitations": [
+        "Verification/CoreConformance/fixtures/multicar-elevator-edge-mismatch/MultiCarElevator.tla: request__0_0_0 deliberately disabled",
+        "Verification/CoreConformance/fixtures/multicar-elevator-edge-mismatch/control.json"
+      ],
+      "governance": {
+        "role": "permanentRegression",
+        "finiteBounds": {
+          "summary": "Bounded MultiCarElevator: two people, two cars, floors 0...2, two directions, 3,276 reachable states, and explicit ordered three-argument action wrappers.",
+          "limits": {
+            "people": 2,
+            "cars": 2,
+            "floors": 3,
+            "directions": 2,
+            "states": 3276,
+            "variables": 3,
+            "wrappers": 80
+          }
+        },
+        "semanticCitations": [
+          "Verification/CoreConformance/fixtures/multicar-elevator-edge-mismatch/MultiCarElevator.tla: request__0_0_0 deliberately disabled",
+          "Verification/CoreConformance/fixtures/multicar-elevator-edge-mismatch/control.json"
+        ],
+        "expectedRegressionOutcome": "difference"
+      },
+      "expectedArtifacts": "Verification/CoreConformance/baselines/multicar-elevator-edge-mismatch",
+      "expectedExit": 1
     }
   ]
 }

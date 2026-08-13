@@ -9,10 +9,10 @@ public actor DiskStore {
             let phase = Var("phase", 0)
             Variable(phase)
 
-            Action("ready")   { phase == 0 && phase.becomes(1) }
-            Action("write")   { phase == 1 && phase.stays }
-            Action("delete")  { phase == 1 && phase.stays }
-            Action("clear")   { phase == 1 && phase.stays }
+            Action("ready") { phase == 0 && phase.becomes(1) }
+            Action("write") { phase == 1 && phase.stays }
+            Action("delete") { phase == 1 && phase.stays }
+            Action("clear") { phase == 1 && phase.stays }
 
             Invariant("validPhase") { phase >= 0 && phase <= 1 }
         }

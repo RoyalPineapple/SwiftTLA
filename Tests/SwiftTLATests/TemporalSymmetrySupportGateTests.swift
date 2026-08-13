@@ -2,6 +2,14 @@ import Foundation
 import Testing
 import UpstreamParity
 
+private struct EvidenceFailure {
+  let evidence: TemporalSymmetryCaseEvidenceV1?
+  let gateRunID: UUID
+  let manifest: String
+  let toolchain: String
+  let reason: TemporalSymmetryReasonCodeV1
+}
+
 struct TemporalSymmetrySupportGateTests {
   @Test("complete current exact temporal evidence admits only declared bounds")
   func admitsCurrentExactTemporalEvidence() throws {
@@ -18,20 +26,26 @@ struct TemporalSymmetrySupportGateTests {
   @Test("missing, partial, foreign, and stale evidence produce unavailable reports")
   func evidenceFailuresAreUnavailable() throws {
     let fixture = try Fixture()
-    let failures: [(TemporalSymmetryCaseEvidenceV1?, UUID, String, String, TemporalSymmetryReasonCodeV1)] = [
-      (nil, fixture.gateRunID, fixture.digest, fixture.digest, .missingEvidence),
-      (try fixture.evidence(status: .partial), fixture.gateRunID, fixture.digest, fixture.digest, .partialEvidence),
-      (try fixture.evidence(correlation: try fixture.correlation(gateRunID: UUID())), fixture.gateRunID, fixture.digest, fixture.digest, .foreignRun),
-      (try fixture.evidence(), fixture.gateRunID, String(repeating: "b", count: 64), fixture.digest, .manifestDigestMismatch)
+    let failures: [EvidenceFailure] = [
+      .init(evidence: nil, gateRunID: fixture.gateRunID, manifest: fixture.digest,
+            toolchain: fixture.digest, reason: .missingEvidence),
+      .init(evidence: try fixture.evidence(status: .partial), gateRunID: fixture.gateRunID,
+            manifest: fixture.digest, toolchain: fixture.digest, reason: .partialEvidence),
+      .init(evidence: try fixture.evidence(correlation: try fixture.correlation(gateRunID: UUID())),
+            gateRunID: fixture.gateRunID, manifest: fixture.digest, toolchain: fixture.digest,
+            reason: .foreignRun),
+      .init(evidence: try fixture.evidence(), gateRunID: fixture.gateRunID,
+            manifest: String(repeating: "b", count: 64), toolchain: fixture.digest,
+            reason: .manifestDigestMismatch)
     ]
-    for (evidence, gateRunID, manifest, toolchain, reason) in failures {
+    for failure in failures {
       let report = TemporalSymmetrySupportGateV1().evaluate(try fixture.input(
-        gateRunID: gateRunID,
-        evidence: evidence.map { [$0] } ?? [],
-        manifestSHA256: manifest,
-        toolchainSHA256: toolchain))
+        gateRunID: failure.gateRunID,
+        evidence: failure.evidence.map { [$0] } ?? [],
+        manifestSHA256: failure.manifest,
+        toolchainSHA256: failure.toolchain))
       #expect(report.finalExitClass == .unavailable)
-      #expect(report.entries[0].reasonCodes.contains(reason))
+      #expect(report.entries[0].reasonCodes.contains(failure.reason))
     }
   }
 
@@ -120,7 +134,11 @@ struct TemporalSymmetrySupportGateTests {
     let digestMismatch = try TemporalSymmetryCoreAdmissionContextV1(
       temporalSymmetryGateRunID: fixture.gateRunID, reportID: core.reportID, coreGateRunID: core.gateRunID,
       reportPath: core.report.path, reportSHA256: String(repeating: "b", count: 64))
-    for (context, reason) in [(stale, TemporalSymmetryReasonCodeV1.missingPrerequisite), (foreign, .foreignRun), (digestMismatch, .manifestDigestMismatch)] {
+    for (context, reason) in [
+      (stale, TemporalSymmetryReasonCodeV1.missingPrerequisite),
+      (foreign, .foreignRun),
+      (digestMismatch, .manifestDigestMismatch)
+    ] {
       let report = TemporalSymmetrySupportGateV1().evaluate(try fixture.input(
         coreAdmission: core, coreAdmissionContext: context))
       #expect(report.finalExitClass == .unavailable)
@@ -147,7 +165,14 @@ struct TemporalSymmetrySupportGateTests {
       let source = try Self.makeCase(id: caseIDs[0], expectedOutcome: expectedOutcome, bounds: bounds, digest: digest)
       let regression = try Self.makeCase(id: "temporal-regression", expectedOutcome: .difference, bounds: bounds, digest: digest)
       self.bounds = bounds
-      let declaredCases = try caseIDs.map { try Self.makeCase(id: $0, expectedOutcome: $0 == caseIDs[0] ? expectedOutcome : .exact, bounds: bounds, digest: digest) }
+      let declaredCases = try caseIDs.map {
+        try Self.makeCase(
+          id: $0,
+          expectedOutcome: $0 == caseIDs[0] ? expectedOutcome : .exact,
+          bounds: bounds,
+          digest: digest
+        )
+      }
       cases = try TemporalSymmetryCasesV1(cases: includeOpenDivergence ? declaredCases + [regression] : declaredCases)
       let supportCases = supportCases ?? [[source.id]]
       if includeOpenDivergence {

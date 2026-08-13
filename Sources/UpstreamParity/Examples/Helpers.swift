@@ -21,39 +21,46 @@ func coffeeCans(maxBeanCount: Int) -> [TLAValue] {
     }
 
 func coffeeCanSpec(maxBeanCount: Int) -> TLASpec {
-        let can = Var<TLARecordType>("can")
+        let can = Var<TLAValue>("can")
         let cans = coffeeCans(maxBeanCount: maxBeanCount)
         return TLASpec("CoffeeCan") {
             Extends("Naturals")
             Variable(can, in: cans)
             Action("PickSameColorBlack") {
-                can.black + can.white > 1 && can.black >= 2
-                    && can.becomes(can.updated(at: "black", to: can.black - 1))
+                StateExpr.recordAccess(can.stateExpr, "black")
+                    + StateExpr.recordAccess(can.stateExpr, "white") > 1
+                    && StateExpr.recordAccess(can.stateExpr, "black") >= 2
+                    && .assign(can.name, can.stateExpr.updated(at: "black", to: StateExpr.recordAccess(can.stateExpr, "black") - 1))
             }
             Action("PickSameColorWhite") {
-                can.black + can.white > 1 && can.white >= 2
-                    && can.becomes(
+                StateExpr.recordAccess(can.stateExpr, "black")
+                    + StateExpr.recordAccess(can.stateExpr, "white") > 1
+                    && StateExpr.recordAccess(can.stateExpr, "white") >= 2
+                    && .assign(can.name,
                         StateExpr.except(
                             StateExpr.except(
                                 .variable("can"),
                                 .value(.string("black")),
-                                can.black + 1
+                                StateExpr.recordAccess(can.stateExpr, "black") + 1
                             ),
                             .value(.string("white")),
-                            can.white - 2
+                            StateExpr.recordAccess(can.stateExpr, "white") - 2
                         )
                     )
             }
             Action("PickDifferentColor") {
-                can.black + can.white > 1 && can.black >= 1 && can.white >= 1
-                    && can.becomes(can.updated(at: "black", to: can.black - 1))
+                StateExpr.recordAccess(can.stateExpr, "black")
+                    + StateExpr.recordAccess(can.stateExpr, "white") > 1
+                    && StateExpr.recordAccess(can.stateExpr, "black") >= 1
+                    && StateExpr.recordAccess(can.stateExpr, "white") >= 1
+                    && .assign(can.name, can.stateExpr.updated(at: "black", to: StateExpr.recordAccess(can.stateExpr, "black") - 1))
             }
             Action("Termination") {
-                can.black + can.white == 1
+                StateExpr.recordAccess(can.stateExpr, "black") + StateExpr.recordAccess(can.stateExpr, "white") == 1
             }
             Invariant("TypeInvariant") {
-                can.black >= 0 && can.black <= maxBeanCount
-                    && can.white >= 0 && can.white <= maxBeanCount
+                StateExpr.recordAccess(can.stateExpr, "black") >= 0 && StateExpr.recordAccess(can.stateExpr, "black") <= maxBeanCount
+                    && StateExpr.recordAccess(can.stateExpr, "white") >= 0 && StateExpr.recordAccess(can.stateExpr, "white") <= maxBeanCount
             }
         }
     }

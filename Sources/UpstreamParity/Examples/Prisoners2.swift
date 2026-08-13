@@ -25,7 +25,7 @@ private func prisoners4Spec() -> TLASpec {
 
     let switchAUp = Var<Bool>("switchAUp")
     let switchBUp = Var<Bool>("switchBUp")
-    let timesSwitched = Var<TLAFunctionType>("timesSwitched")
+    let timesSwitched = Var<TLAValue>("timesSwitched")
     let count = Var<Int>("count")
 
     let others = StateExpr.setLiteral(otherPrisoners.map { .value($0) })
@@ -83,11 +83,14 @@ private func prisoners4Spec() -> TLASpec {
 
         Action("NonCounter") {
             ActionExpr.exists("p", from: others) { p in
-                let signalA: ActionExpr = StateExpr.not(switchAUp.stateExpr) && timesSwitched.applying(p) < 2
+                let signalA: ActionExpr = StateExpr.not(switchAUp.stateExpr) && timesSwitched.stateExpr.applying(p) < 2
                     && switchAUp.becomes(true)
-                    && timesSwitched.becomes(timesSwitched.updated(at: p, to: StateExpr.add(timesSwitched.applying(p), .int(1))))
+                    && .assign(timesSwitched.name, timesSwitched.stateExpr.updated(
+                        at: p,
+                        to: StateExpr.add(timesSwitched.stateExpr.applying(p), .int(1))
+                    ))
                     && switchBUp.stays && count.stays
-                let flipB: ActionExpr = StateExpr.not(StateExpr.not(switchAUp.stateExpr) && timesSwitched.applying(p) < 2)
+                let flipB: ActionExpr = StateExpr.not(StateExpr.not(switchAUp.stateExpr) && timesSwitched.stateExpr.applying(p) < 2)
                     && switchBUp.becomes(Expr(.not(switchBUp.stateExpr)))
                     && switchAUp.stays && timesSwitched.stays && count.stays
 

@@ -20,13 +20,13 @@ public actor Device: Identifiable {
             Variable(servicesDiscovered)
 
             // 0=disconnected 1=connected 2=discovering 3=ready
-            Action("didConnect")       { phase == 0 && phase.becomes(1) }
-            Action("beginDiscover")    { phase == 1 && phase.becomes(2) }
-            Action("finishDiscover")   { phase == 2 && phase.becomes(3) && servicesDiscovered.becomes(true) }
-            Action("disconnect")       { phase == 3 && phase.becomes(0) && servicesDiscovered.becomes(false) }
+            Action("didConnect") { phase == 0 && phase.becomes(1) }
+            Action("beginDiscover") { phase == 1 && phase.becomes(2) }
+            Action("finishDiscover") { phase == 2 && phase.becomes(3) && servicesDiscovered.becomes(true) }
+            Action("disconnect") { phase == 3 && phase.becomes(0) && servicesDiscovered.becomes(false) }
 
-            Invariant("validPhase")              { phase >= 0 && phase <= 3 }
-            Invariant("readyImpliesDiscovered")  { (phase != 3) || servicesDiscovered }
+            Invariant("validPhase") { phase >= 0 && phase <= 3 }
+            Invariant("readyImpliesDiscovered") { (phase != 3) || servicesDiscovered }
         }
     }
 
@@ -75,8 +75,7 @@ public actor Device: Identifiable {
 
     func handleDiscoverServices(_ e: (any Error)?) {
         _finishDiscover()
-        if let e { servicesCont?.resume(throwing: e) }
-        else { servicesCont?.resume(returning: backingPeripheral?.services ?? []) }
+        if let e { servicesCont?.resume(throwing: e) } else { servicesCont?.resume(returning: backingPeripheral?.services ?? []) }
         servicesCont = nil
     }
 }

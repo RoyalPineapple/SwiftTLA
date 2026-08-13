@@ -2,7 +2,6 @@ import Foundation
 import SwiftTLA
 import Testing
 import UpstreamParity
-
 struct CoreConformanceRunnerTests {
   @Test("runner retains separate engine evidence and reports same-count edge differences")
   func retainsIndependentRunsAtomically() throws {
@@ -10,13 +9,11 @@ struct CoreConformanceRunnerTests {
     let root = fileManager.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? fileManager.removeItem(at: root) }
     try fileManager.createDirectory(at: root, withIntermediateDirectories: true)
-
     let request = temporaryRequest(in: root)
     let executor = FixtureTLCExecutorV1(
       stream: try graphStream(for: request.expectedCase, runID: request.runID))
     let runner = CoreConformanceRunnerV1(tlcAdapter: TLCProcessAdapterV1(executor: executor))
     let output = root.appendingPathComponent("evidence")
-
     let result = runner.run(
       case: request.expectedCase,
       swiftExploration: { swiftEvidence(for: request.expectedCase) },
@@ -24,7 +21,6 @@ struct CoreConformanceRunnerTests {
       replay: .none,
       outputDirectory: output
     )
-
     #expect(result.exitCode == .semanticDifference)
     #expect(result.comparison?.differences.contains { $0.category == .edges } == true)
     #expect(fileManager.fileExists(atPath: output.appendingPathComponent("swift.json").path))
@@ -34,7 +30,6 @@ struct CoreConformanceRunnerTests {
     #expect(fileManager.fileExists(atPath: output.appendingPathComponent("case.json").path))
     #expect(fileManager.fileExists(atPath: output.appendingPathComponent("toolchain.json").path))
     #expect(fileManager.fileExists(atPath: output.appendingPathComponent("arguments.json").path))
-
     let swift = try json(at: output.appendingPathComponent("swift.json"))
     let tlc = try json(at: output.appendingPathComponent("tlc.json"))
     let comparison = try json(at: output.appendingPathComponent("comparison.json"))
@@ -48,19 +43,16 @@ struct CoreConformanceRunnerTests {
     #expect((edgeDifference["expected"] as? [[String: Any]])?.isEmpty == false)
     #expect((edgeDifference["actual"] as? [[String: Any]])?.isEmpty == false)
   }
-
   @Test("runner publishes partial evidence and a diagnostic after TLC capture failure")
   func retainsFailureEvidenceAtomically() throws {
     let fileManager = FileManager.default
     let root = fileManager.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? fileManager.removeItem(at: root) }
     try fileManager.createDirectory(at: root, withIntermediateDirectories: true)
-
     let request = temporaryRequest(in: root)
     let runner = CoreConformanceRunnerV1(
       tlcAdapter: TLCProcessAdapterV1(executor: FailingTLCExecutorV1()))
     let output = root.appendingPathComponent("failed-evidence")
-
     let result = runner.run(
       case: request.expectedCase,
       swiftExploration: { swiftEvidence(for: request.expectedCase) },
@@ -68,7 +60,6 @@ struct CoreConformanceRunnerTests {
       replay: .none,
       outputDirectory: output
     )
-
     #expect(result.exitCode == .failure)
     #expect(result.evidenceDirectory == output)
     #expect(fileManager.fileExists(atPath: output.appendingPathComponent("swift.json").path))
@@ -93,14 +84,12 @@ struct CoreConformanceRunnerTests {
       !(try String(contentsOf: output.appendingPathComponent("logs/tlc.stdout.log"))).contains(
         "secret"))
   }
-
   @Test("runner rejects Swift evidence bound to another declared case")
   func rejectsWrongSwiftCaseBinding() throws {
     let fileManager = FileManager.default
     let root = fileManager.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? fileManager.removeItem(at: root) }
     try fileManager.createDirectory(at: root, withIntermediateDirectories: true)
-
     let request = temporaryRequest(in: root)
     let output = root.appendingPathComponent("wrong-swift-case")
     let result = CoreConformanceRunnerV1().run(
@@ -112,21 +101,18 @@ struct CoreConformanceRunnerTests {
       replay: .none,
       outputDirectory: output
     )
-
     #expect(result.exitCode == .failure)
     #expect(result.evidenceDirectory == output)
     let diagnostic = try json(at: output.appendingPathComponent("diagnostic.json"))
     #expect(diagnostic["code"] as? String == "swift-adaptation-failed")
     #expect(fileManager.fileExists(atPath: output.appendingPathComponent("case.json").path))
   }
-
   @Test("runner isolates a stale staging directory and retains trace replay evidence")
   func isolatesStagingAndRetainsTraceReplayEvidence() throws {
     let fileManager = FileManager.default
     let root = fileManager.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? fileManager.removeItem(at: root) }
     try fileManager.createDirectory(at: root, withIntermediateDirectories: true)
-
     let request = temporaryRequest(in: root)
     let stale = root.appendingPathComponent(
       ".fixture.\(request.runID.uuidString.lowercased()).staging")
@@ -149,7 +135,6 @@ struct CoreConformanceRunnerTests {
       replay: .required,
       outputDirectory: output
     )
-
     #expect(result.evidenceDirectory == output)
     #expect(
       !fileManager.fileExists(atPath: output.appendingPathComponent("contamination.txt").path))
@@ -164,14 +149,12 @@ struct CoreConformanceRunnerTests {
       fileManager.fileExists(atPath: output.appendingPathComponent("counterexample.json").path))
     #expect(fileManager.fileExists(atPath: output.appendingPathComponent("replay.json").path))
   }
-
   @Test("runner rejects a complete graph stream from another TLC run")
   func rejectsWrongTLCStreamRunBinding() throws {
     let fileManager = FileManager.default
     let root = fileManager.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? fileManager.removeItem(at: root) }
     try fileManager.createDirectory(at: root, withIntermediateDirectories: true)
-
     let request = temporaryRequest(in: root)
     let otherRun = UUID(uuidString: "00000000-0000-4000-8000-000000000006")!
     let runner = CoreConformanceRunnerV1(
@@ -179,7 +162,6 @@ struct CoreConformanceRunnerTests {
         executor: FixtureTLCExecutorV1(
           stream: try graphStream(for: request.expectedCase, runID: otherRun))))
     let output = root.appendingPathComponent("wrong-tlc-run")
-
     let result = runner.run(
       case: request.expectedCase,
       swiftExploration: { swiftEvidence(for: request.expectedCase) },
@@ -187,21 +169,18 @@ struct CoreConformanceRunnerTests {
       replay: .none,
       outputDirectory: output
     )
-
     #expect(result.exitCode == .failure)
     #expect(result.evidenceDirectory == output)
     let diagnostic = try json(at: output.appendingPathComponent("diagnostic.json"))
     #expect(diagnostic["phase"] as? String == "tlc-parsing")
     #expect(fileManager.fileExists(atPath: output.appendingPathComponent("graph-events.jsonl").path))
   }
-
   @Test("runner replaces stale raw output and serializes canonical observations")
   func replacesStaleRawOutputAndRetainsObservations() throws {
     let fileManager = FileManager.default
     let root = fileManager.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? fileManager.removeItem(at: root) }
     try fileManager.createDirectory(at: root, withIntermediateDirectories: true)
-
     let request = temporaryRequest(in: root)
     try Data("stale graph stream".utf8).write(to: request.graphEvents)
     let stream = try graphStream(for: request.expectedCase, runID: request.runID)
@@ -218,7 +197,6 @@ struct CoreConformanceRunnerTests {
       replay: .none,
       outputDirectory: output
     )
-
     #expect(result.exitCode == .exact)
     #expect(try Data(contentsOf: output.appendingPathComponent("graph-events.jsonl")) == stream)
     let tlc = try json(at: output.appendingPathComponent("tlc.json"))
@@ -227,14 +205,15 @@ struct CoreConformanceRunnerTests {
     #expect(observations.contains { ($0["enabledActions"] as? [String]) == ["Next"] })
     #expect(observations.contains { ($0["isTerminal"] as? Bool) == true })
   }
+}
 
+extension CoreConformanceRunnerTests {
   @Test("runner retains completed TLC invocations when required replay fails")
   func retainsCompletedInvocationsAfterReplayFailure() throws {
     let fileManager = FileManager.default
     let root = fileManager.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? fileManager.removeItem(at: root) }
     try fileManager.createDirectory(at: root, withIntermediateDirectories: true)
-
     let request = temporaryRequest(in: root)
     let violation = TLCProcessResultV1(status: 12, stdout: "Error: invariant", stderr: "")
     let replayFailure = TLCProcessResultV1(status: 1, stdout: "replay output", stderr: "replay error")
@@ -251,7 +230,6 @@ struct CoreConformanceRunnerTests {
         replay: .required,
         outputDirectory: output
       )
-
     #expect(result.exitCode == .failure)
     let process = try json(at: output.appendingPathComponent("tlc-process.json"))
     #expect((process["primary"] as? [String: Any])?["status"] as? Int == 12)
@@ -261,14 +239,12 @@ struct CoreConformanceRunnerTests {
     #expect(fileManager.fileExists(atPath: output.appendingPathComponent("logs/tlc.trace.stdout.log").path))
     #expect(fileManager.fileExists(atPath: output.appendingPathComponent("logs/tlc.replay.stdout.log").path))
   }
-
   @Test("runner preserves primary logs and the trace stream after a thrown trace execution failure")
   func retainsThrownTraceExecutionEvidenceByPhase() throws {
     let fileManager = FileManager.default
     let root = fileManager.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? fileManager.removeItem(at: root) }
     try fileManager.createDirectory(at: root, withIntermediateDirectories: true)
-
     let request = temporaryRequest(in: root)
     let output = root.appendingPathComponent("trace-execution-failure")
     let runner = CoreConformanceRunnerV1(
@@ -279,7 +255,6 @@ struct CoreConformanceRunnerTests {
         )
       )
     )
-
     let result = runner.run(
       case: request.expectedCase,
       swiftExploration: { swiftEvidence(for: request.expectedCase) },
@@ -287,7 +262,6 @@ struct CoreConformanceRunnerTests {
       replay: .none,
       outputDirectory: output
     )
-
     #expect(result.exitCode == .failure)
     let primaryLog = try String(contentsOf: output.appendingPathComponent("logs/tlc.stdout.log"))
     let traceLog = try String(contentsOf: output.appendingPathComponent("logs/tlc.trace.stdout.log"))
@@ -301,14 +275,12 @@ struct CoreConformanceRunnerTests {
     #expect((process["primary"] as? [String: Any])?["status"] as? Int == 12)
     #expect((process["trace"] as? [String: Any])?["executionError"] as? String != nil)
   }
-
   @Test("runner preserves completed trace logs and the replay stream after a thrown replay failure")
   func retainsThrownReplayExecutionEvidenceByPhase() throws {
     let fileManager = FileManager.default
     let root = fileManager.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? fileManager.removeItem(at: root) }
     try fileManager.createDirectory(at: root, withIntermediateDirectories: true)
-
     let request = temporaryRequest(in: root)
     let output = root.appendingPathComponent("replay-execution-failure")
     let runner = CoreConformanceRunnerV1(
@@ -319,7 +291,6 @@ struct CoreConformanceRunnerTests {
         )
       )
     )
-
     let result = runner.run(
       case: request.expectedCase,
       swiftExploration: { swiftEvidence(for: request.expectedCase) },
@@ -327,7 +298,6 @@ struct CoreConformanceRunnerTests {
       replay: .required,
       outputDirectory: output
     )
-
     #expect(result.exitCode == .failure)
     #expect((try String(contentsOf: output.appendingPathComponent("logs/tlc.stdout.log"))).contains("primary stdout"))
     #expect((try String(contentsOf: output.appendingPathComponent("logs/tlc.trace.stdout.log"))).contains("trace stdout"))
@@ -340,14 +310,12 @@ struct CoreConformanceRunnerTests {
     #expect((process["trace"] as? [String: Any])?["status"] as? Int == 12)
     #expect((process["replay"] as? [String: Any])?["executionError"] as? String != nil)
   }
-
   @Test("runner retains completed primary evidence after an arbitrary trace execution error")
   func retainsArbitraryTraceExecutionEvidenceByPhase() throws {
     let fileManager = FileManager.default
     let root = fileManager.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? fileManager.removeItem(at: root) }
     try fileManager.createDirectory(at: root, withIntermediateDirectories: true)
-
     let request = temporaryRequest(in: root)
     let output = root.appendingPathComponent("arbitrary-trace-execution-failure")
     let result = CoreConformanceRunnerV1(
@@ -364,7 +332,6 @@ struct CoreConformanceRunnerTests {
       replay: .none,
       outputDirectory: output
     )
-
     #expect(result.exitCode == .failure)
     #expect((try String(contentsOf: output.appendingPathComponent("logs/tlc.stdout.log"))).contains("primary stdout"))
     #expect(fileManager.fileExists(atPath: output.appendingPathComponent("logs/tlc.trace.failure.log").path))
@@ -373,14 +340,12 @@ struct CoreConformanceRunnerTests {
     #expect((process["primary"] as? [String: Any])?["status"] as? Int == 12)
     #expect((process["trace"] as? [String: Any])?["executionError"] as? String != nil)
   }
-
   @Test("runner retains completed trace evidence after an arbitrary replay execution error")
   func retainsArbitraryReplayExecutionEvidenceByPhase() throws {
     let fileManager = FileManager.default
     let root = fileManager.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? fileManager.removeItem(at: root) }
     try fileManager.createDirectory(at: root, withIntermediateDirectories: true)
-
     let request = temporaryRequest(in: root)
     let output = root.appendingPathComponent("arbitrary-replay-execution-failure")
     let result = CoreConformanceRunnerV1(
@@ -397,7 +362,6 @@ struct CoreConformanceRunnerTests {
       replay: .required,
       outputDirectory: output
     )
-
     #expect(result.exitCode == .failure)
     #expect((try String(contentsOf: output.appendingPathComponent("logs/tlc.stdout.log"))).contains("primary stdout"))
     #expect((try String(contentsOf: output.appendingPathComponent("logs/tlc.trace.stdout.log"))).contains("trace stdout"))
@@ -407,14 +371,12 @@ struct CoreConformanceRunnerTests {
     #expect((process["trace"] as? [String: Any])?["status"] as? Int == 12)
     #expect((process["replay"] as? [String: Any])?["executionError"] as? String != nil)
   }
-
   @Test("runner retains a separate preflight failure record when output already exists")
   func retainsOutputExistsFailureWithoutTouchingExistingOutput() throws {
     let fileManager = FileManager.default
     let root = fileManager.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? fileManager.removeItem(at: root) }
     try fileManager.createDirectory(at: root, withIntermediateDirectories: true)
-
     let request = temporaryRequest(in: root)
     let output = root.appendingPathComponent("existing-evidence")
     try fileManager.createDirectory(at: output, withIntermediateDirectories: true)
@@ -422,7 +384,6 @@ struct CoreConformanceRunnerTests {
     let secondaryStream = request.graphEvents.deletingPathExtension().appendingPathExtension("trace.jsonl")
     try Data("primary".utf8).write(to: request.graphEvents)
     try Data("trace".utf8).write(to: secondaryStream)
-
     let result = CoreConformanceRunnerV1().run(
       case: request.expectedCase,
       swiftExploration: { swiftEvidence(for: request.expectedCase) },
@@ -430,7 +391,6 @@ struct CoreConformanceRunnerTests {
       replay: .none,
       outputDirectory: output
     )
-
     let evidence = try #require(result.evidenceDirectory)
     #expect(result.exitCode == .failure)
     #expect(evidence != output)
@@ -441,14 +401,15 @@ struct CoreConformanceRunnerTests {
     #expect(fileManager.fileExists(atPath: evidence.appendingPathComponent("graph-events.jsonl").path))
     #expect(fileManager.fileExists(atPath: evidence.appendingPathComponent("graph-events.trace.jsonl").path))
   }
+}
 
+extension CoreConformanceRunnerTests {
   @Test("a post-preflight publication loser preserves completed TLC evidence")
   func publicationRaceRetainsPhaseCorrectCompletedEvidence() throws {
     let fileManager = FileManager.default
     let root = fileManager.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? fileManager.removeItem(at: root) }
     try fileManager.createDirectory(at: root, withIntermediateDirectories: true)
-
     let request = temporaryRequest(in: root)
     let stream = try graphStream(for: request.expectedCase, runID: request.runID)
     let barrier = PublicationRaceBarrierV1(parties: 2)
@@ -456,7 +417,6 @@ struct CoreConformanceRunnerTests {
       tlcAdapter: TLCProcessAdapterV1(
         executor: BarrierTLCExecutorV1(stream: stream, barrier: barrier)))
     let output = root.appendingPathComponent("shared-evidence")
-
     let results = ResultBoxV1()
     DispatchQueue.concurrentPerform(iterations: 2) { _ in
       results.append(
@@ -471,7 +431,6 @@ struct CoreConformanceRunnerTests {
           outputDirectory: output
         ))
     }
-
     #expect(results.values.count == 2)
     #expect(results.values.filter { $0.exitCode == .semanticDifference }.count == 1)
     #expect(results.values.filter { $0.exitCode == .failure }.count == 1)
@@ -504,12 +463,9 @@ struct CoreConformanceRunnerTests {
     let exitCode = try #require(run["exitCode"] as? Int)
     #expect(exitCode == CoreConformanceExitCodeV1.semanticDifference.rawValue)
   }
-
-  private func swiftEvidence(for declaredCase: CoreConformanceCaseV1) -> SwiftExplorationEvidenceV1
-  {
+  private func swiftEvidence(for declaredCase: CoreConformanceCaseV1) -> SwiftExplorationEvidenceV1 {
     SwiftExplorationEvidenceV1(caseID: declaredCase.id, exploration: swiftExploration())
   }
-
   private func swiftExploration(action: String = "SwiftNext") -> ModelExplorationResult {
     let first = StateGraph.StateID(0)
     let second = StateGraph.StateID(1)
@@ -517,14 +473,13 @@ struct CoreConformanceRunnerTests {
       graph: StateGraph(
         specName: "Fixture",
         variableNames: ["x"],
-        transitions: [first: [.init(action: action, target: second)]],
+        transitions: [first: [.init(label: .init(.init(name: action)), target: second)]],
         states: [first: ["x": .int(1)], second: ["x": .int(2)]]
       ),
       initialStateIDs: [first],
       result: .ok(statesCount: 2)
     )
   }
-
   private func temporaryRequest(in root: URL) -> TLCProcessRequestV1 {
     let module = root.appendingPathComponent("Fixture.tla")
     let configuration = root.appendingPathComponent("Fixture.cfg")
@@ -560,12 +515,10 @@ struct CoreConformanceRunnerTests {
     )
   }
 }
-
 private struct FixtureTLCExecutorV1: TLCProcessExecuting {
   let stream: Data
   let status: Int32
   let stdout: String
-
   init(
     stream: Data, status: Int32 = 0,
     stdout: String = "Model checking completed. No error has been found."
@@ -574,7 +527,6 @@ private struct FixtureTLCExecutorV1: TLCProcessExecuting {
     self.status = status
     self.stdout = stdout
   }
-
   func execute(_ request: TLCProcessRequestV1) throws -> TLCProcessResultV1 {
     try stream.write(to: request.graphEvents)
     return TLCProcessResultV1(
@@ -584,16 +536,13 @@ private struct FixtureTLCExecutorV1: TLCProcessExecuting {
     )
   }
 }
-
 private final class PublicationRaceBarrierV1: @unchecked Sendable {
   private let condition = NSCondition()
   private let parties: Int
   private var arrivals = 0
-
   init(parties: Int) {
     self.parties = parties
   }
-
   func waitForAll() {
     condition.lock()
     arrivals += 1
@@ -607,11 +556,9 @@ private final class PublicationRaceBarrierV1: @unchecked Sendable {
     condition.unlock()
   }
 }
-
 private struct BarrierTLCExecutorV1: TLCProcessExecuting {
   let stream: Data
   let barrier: PublicationRaceBarrierV1
-
   func execute(_ request: TLCProcessRequestV1) throws -> TLCProcessResultV1 {
     try stream.write(to: request.graphEvents)
     if request.traceMode == .none {
@@ -630,43 +577,35 @@ private struct BarrierTLCExecutorV1: TLCProcessExecuting {
     )
   }
 }
-
 private struct FailingTLCExecutorV1: TLCProcessExecuting {
   func execute(_ request: TLCProcessRequestV1) throws -> TLCProcessResultV1 {
     throw TLCProcessErrorV1.timedOut(
       partialStdout: "partial stdout TOKEN=secret", partialStderr: "partial stderr")
   }
 }
-
 private final class SequencedTLCExecutorV1: TLCProcessExecuting, @unchecked Sendable {
   let stream: Data
   var results: [TLCProcessResultV1]
-
   init(stream: Data, results: [TLCProcessResultV1]) {
     self.stream = stream
     self.results = results
   }
-
   func execute(_ request: TLCProcessRequestV1) throws -> TLCProcessResultV1 {
     try stream.write(to: request.graphEvents)
     return results.removeFirst()
   }
 }
-
 private enum FollowupFailureV1 {
   case trace
   case replay
 }
-
 private final class ThrowingFollowupTLCExecutorV1: TLCProcessExecuting, @unchecked Sendable {
   let stream: Data
   let failure: FollowupFailureV1
-
   init(stream: Data, failure: FollowupFailureV1) {
     self.stream = stream
     self.failure = failure
   }
-
   func execute(_ request: TLCProcessRequestV1) throws -> TLCProcessResultV1 {
     try stream.write(to: request.graphEvents)
     switch request.traceMode {
@@ -683,20 +622,16 @@ private final class ThrowingFollowupTLCExecutorV1: TLCProcessExecuting, @uncheck
     }
   }
 }
-
 private enum ArbitraryTLCExecutorFailureV1: Error {
   case launchValidation
 }
-
 private final class ArbitraryFollowupFailureTLCExecutorV1: TLCProcessExecuting, @unchecked Sendable {
   let stream: Data
   let failure: FollowupFailureV1
-
   init(stream: Data, failure: FollowupFailureV1) {
     self.stream = stream
     self.failure = failure
   }
-
   func execute(_ request: TLCProcessRequestV1) throws -> TLCProcessResultV1 {
     try stream.write(to: request.graphEvents)
     switch request.traceMode {
@@ -711,20 +646,16 @@ private final class ArbitraryFollowupFailureTLCExecutorV1: TLCProcessExecuting, 
     }
   }
 }
-
 private final class ResultBoxV1: @unchecked Sendable {
   private let lock = NSLock()
   private var storage: [CoreConformanceRunResultV1] = []
-
   var values: [CoreConformanceRunResultV1] {
     lock.withLock { storage }
   }
-
   func append(_ value: CoreConformanceRunResultV1) {
     lock.withLock { storage.append(value) }
   }
 }
-
 private func exactSwiftExploration() -> ModelExplorationResult {
   let first = StateGraph.StateID(0)
   let second = StateGraph.StateID(1)
@@ -732,22 +663,19 @@ private func exactSwiftExploration() -> ModelExplorationResult {
     graph: StateGraph(
       specName: "Fixture",
       variableNames: ["x"],
-      transitions: [first: [.init(action: "Next", target: second)]],
+      transitions: [first: [.init(label: .init(.init(name: "Next")), target: second)]],
       states: [first: ["x": .int(1)], second: ["x": .int(2)]]
     ),
     initialStateIDs: [first],
     result: .ok(statesCount: 2)
   )
 }
-
 private func json(at url: URL) throws -> [String: Any] {
   try #require(JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any])
 }
-
 private func correlation(in object: [String: Any]) -> [String: Any] {
   object["correlation"] as? [String: Any] ?? [:]
 }
-
 private func graphStream(for declaredCase: CoreConformanceCaseV1, runID: UUID) throws -> Data {
   let first = state(fingerprint: "1", value: "1")
   let second = state(fingerprint: "2", value: "2")
@@ -770,27 +698,26 @@ private func graphStream(for declaredCase: CoreConformanceCaseV1, runID: UUID) t
     "deadlock": declaredCase.deadlock,
     "os": declaredCase.operatingSystem,
     "architecture": declaredCase.architecture,
-    "environment": declaredCase.environment,
+    "environment": declaredCase.environment
   ]
   let common: [String: Any] = [
     "schema": "swifttla.tlc.graph-events",
     "version": 1,
     "runId": runID.uuidString.lowercased(),
-    "caseId": declaredCase.id,
+    "caseId": declaredCase.id
   ]
   let records: [[String: Any]] = [
     common.merging([
-      "type": "header", "callback": "writer.header", "seq": 0, "provenance": provenance,
+      "type": "header", "callback": "writer.header", "seq": 0, "provenance": provenance
     ]) { $1 },
-    common.merging(["type": "initial", "callback": "writeState.initial", "seq": 1, "state": first])
-    { $1 },
+    common.merging(["type": "initial", "callback": "writeState.initial", "seq": 1, "state": first]) { $1 },
     common.merging([
       "type": "transition", "callback": "writeState.action", "seq": 2,
       "source": first, "target": second,
       "action": ["name": "Next", "location": "Fixture:1", "named": true],
       "stateFlags": ["raw": 0, "seen": false, "notInModel": false],
-      "visualization": "none", "predicateLocation": NSNull(), "reachable": "reachable",
-    ]) { $1 },
+      "visualization": "none", "predicateLocation": NSNull(), "reachable": "reachable"
+    ]) { $1 }
   ]
   let body = try records.reduce(into: Data()) { data, record in
     data.append(try JSONSerialization.data(withJSONObject: record, options: [.sortedKeys]))
@@ -799,12 +726,11 @@ private func graphStream(for declaredCase: CoreConformanceCaseV1, runID: UUID) t
   let footer = common.merging([
     "type": "footer", "callback": "writer.footer", "seq": 3, "status": "closed",
     "counts": ["header": 1, "initial": 1, "transition": 1], "lastBodySeq": 2,
-    "bodySha256": SHA256V1.hex(body),
+    "bodySha256": SHA256V1.hex(body)
   ]) { $1 }
   let footerData = try JSONSerialization.data(withJSONObject: footer, options: [.sortedKeys])
   return body + footerData + Data([10])
 }
-
 private func state(fingerprint: String, value: String) -> [String: Any] {
   [
     "fingerprint": fingerprint,
@@ -814,8 +740,8 @@ private func state(fingerprint: String, value: String) -> [String: Any] {
         "ordinal": 0,
         "name": "x",
         "tla": value,
-        "tlaSha256": SHA256V1.hex(Data(value.utf8)),
+        "tlaSha256": SHA256V1.hex(Data(value.utf8))
       ]
-    ],
+    ]
   ]
 }

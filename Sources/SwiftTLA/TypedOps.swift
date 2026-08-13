@@ -75,45 +75,6 @@ extension Var where T == String {
     public static func !=(_ lhs: Var, _ rhs: String) -> StateExpr { .notEqual(lhs.stateExpr, .value(.string(rhs))) }
 }
 
-extension Var where T == TLAFunctionType {
-    public func updated(at key: some StateExprConvertible, to value: some StateExprConvertible) -> Expr<T> {
-        Expr(.except(stateExpr, key.stateExpr, value.stateExpr))
-    }
-    public func applying(_ key: some StateExprConvertible) -> StateExpr {
-        .functionApply(stateExpr, key.stateExpr)
-    }
-    public func union(_ other: some StateExprConvertible) -> Expr<T> {
-        Expr(.union(stateExpr, other.stateExpr))
-    }
-}
-
-extension Expr where T == TLAFunctionType {
-    public func updated(at key: some StateExprConvertible, to value: some StateExprConvertible) -> Expr<T> {
-        Expr(.except(raw, key.stateExpr, value.stateExpr))
-    }
-    public func applying(_ key: some StateExprConvertible) -> StateExpr {
-        .functionApply(raw, key.stateExpr)
-    }
-}
-
-extension Var where T == TLARecordType {
-    public func updated(at key: some StateExprConvertible, to value: some StateExprConvertible) -> Expr<T> {
-        Expr(.except(stateExpr, key.stateExpr, value.stateExpr))
-    }
-}
-
-extension Expr where T == TLARecordType {
-    public func updated(at key: some StateExprConvertible, to value: some StateExprConvertible) -> Expr<T> {
-        Expr(.except(raw, key.stateExpr, value.stateExpr))
-    }
-}
-
-extension Var where T == TLASetType {
-    public func union(_ other: some StateExprConvertible) -> Expr<T> {
-        Expr(.union(stateExpr, other.stateExpr))
-    }
-}
-
 // MARK: - Free-floating
 
 extension Expr where T == Bool {

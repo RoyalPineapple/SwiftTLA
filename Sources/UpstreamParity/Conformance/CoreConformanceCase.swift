@@ -37,7 +37,7 @@ public struct TLCReferencePinV1: Equatable, Sendable {
         bridgeSourceSHA256: String,
         bridgeBinarySHA256: String
     ) throws {
-        guard tag == "v1.8.0", commit == "30cc3601321c3fc02e044d0ecb5c58d8921e18df" else {
+        guard tag == "v1.8.0", commit == "0894c3407f4717fec7cc18bde3bf3c857fa47333" else {
             throw CoreConformanceCaseErrorV1.invalidIdentifier("TLC release")
         }
         guard javaDistribution == "Eclipse Temurin", javaVersion == "17.0.19+10" else {
@@ -77,8 +77,8 @@ public struct TLCReferencePinV1: Equatable, Sendable {
 
     public static let fixture = try! Self(
         tag: "v1.8.0",
-        commit: "30cc3601321c3fc02e044d0ecb5c58d8921e18df",
-        jarSHA256: "e22f8ffb4bacdea0a871f444dd94fe5fb0d8013b3388ae39e82e26f852c735d5",
+        commit: "0894c3407f4717fec7cc18bde3bf3c857fa47333",
+        jarSHA256: "ab323b79802aedc3203b3f9af37c6aca3ed43f4e0225b36f2aa77b26de46c05f",
         javaDistribution: "Eclipse Temurin",
         javaVersion: "17.0.19+10",
         javaArchiveSHA256: "8fa1eff40bb637a33613b2ccb8b12c70dc3661cc22cf8e784943715769a05336",
@@ -87,19 +87,19 @@ public struct TLCReferencePinV1: Equatable, Sendable {
         bridgeBinarySHA256: "a50ae51e9c540a3c0eb9386b05bb0c0f677cefa62bcfdc48545c6046ccb12d64"
     )
 
-    public static let lockedJarSHA256 = "e22f8ffb4bacdea0a871f444dd94fe5fb0d8013b3388ae39e82e26f852c735d5"
+    public static let lockedJarSHA256 = "ab323b79802aedc3203b3f9af37c6aca3ed43f4e0225b36f2aa77b26de46c05f"
     public static let lockedJavaArchiveSHA256s = [
         "arm64": "8fa1eff40bb637a33613b2ccb8b12c70dc3661cc22cf8e784943715769a05336",
         "x86_64": "03632d1fbf139ab3719a9f4b47dc206251449b87557143c822336dbf8c06560f"
     ]
     public static let lockedBridgeSourceSHA256 = "f921b202205dde3d34e626f7801676cc0635de58f503c3dddd3affcc893532ee"
     public static let lockedBridgeBinarySHA256 = "a50ae51e9c540a3c0eb9386b05bb0c0f677cefa62bcfdc48545c6046ccb12d64"
-    public static let lockedTLCBanner = "TLC2 Version 2026.07.31.184830 (rev: 30cc360)"
+    public static let lockedTLCBanner = "TLC2 Version 2026.08.11.125311 (rev: 0894c34)"
 
     public func validate(_ artifacts: TLCReferenceArtifactsV1) throws {
         try Self.verify(artifacts.jar, expected: jarSHA256, name: "TLC JAR")
-        guard artifacts.jarManifest.contains("X-Git-Tag: ") && artifacts.jarManifest.contains("v1.8.0"),
-              artifacts.jarManifest.contains("X-Git-Revision: 30cc3601321c3fc02e044d0ecb5c58d8921e18df")
+        guard artifacts.jarManifest.contains("Implementation-Title: TLA+ Tools"),
+              artifacts.jarManifest.contains("X-Git-Revision: 0894c3407f4717fec7cc18bde3bf3c857fa47333")
         else { throw CoreConformanceCaseErrorV1.pinMismatch("TLC JAR manifest") }
         guard artifacts.runtime.version == javaVersion,
               artifacts.runtime.vendor.contains("Eclipse Adoptium"),
@@ -148,6 +148,8 @@ public struct CoreConformanceCaseV1: Equatable, Sendable {
     public let environment: [String: String]
     public let pin: TLCReferencePinV1
     public let governance: CoreConformanceCaseGovernanceV1?
+    public let invocationMappings: [CoreConformanceInvocationMappingV1]
+    public let valueNormalizations: [CoreConformanceValueNormalizationV1]
 
     public init(
         id: String,
@@ -162,7 +164,9 @@ public struct CoreConformanceCaseV1: Equatable, Sendable {
         architecture: String,
         environment: [String: String],
         pin: TLCReferencePinV1,
-        governance: CoreConformanceCaseGovernanceV1? = nil
+        governance: CoreConformanceCaseGovernanceV1? = nil,
+        invocationMappings: [CoreConformanceInvocationMappingV1] = [],
+        valueNormalizations: [CoreConformanceValueNormalizationV1] = []
     ) throws {
         guard !id.isEmpty else { throw CoreConformanceCaseErrorV1.invalidIdentifier("case ID") }
         guard TLCReferencePinV1.isSHA256(moduleSHA256) else { throw CoreConformanceCaseErrorV1.invalidSHA256(field: "moduleSHA256") }
@@ -183,6 +187,8 @@ public struct CoreConformanceCaseV1: Equatable, Sendable {
         self.environment = environment
         self.pin = pin
         self.governance = governance
+        self.invocationMappings = invocationMappings
+        self.valueNormalizations = valueNormalizations
     }
 
     public static func argumentsDigest(_ arguments: [String]) -> String {
@@ -204,6 +210,79 @@ public struct CoreConformanceCaseV1: Equatable, Sendable {
     }
 }
 
+public struct CoreConformanceInvocationMappingV1: Equatable, Sendable {
+    public let wrapper: String
+    public let action: String
+    public let arguments: [String]
+    public let indices: [Int]
+
+    public init(wrapper: String, action: String, arguments: [String], indices: [Int]) throws {
+        guard !wrapper.isEmpty, !action.isEmpty,
+              !arguments.contains(where: \.isEmpty),
+              indices.count == arguments.count,
+              indices.allSatisfy({ $0 >= 0 }) else {
+            throw CoreConformanceCaseErrorV1.invalidIdentifier("invocation mapping")
+        }
+        self.wrapper = wrapper
+        self.action = action
+        self.arguments = arguments
+        self.indices = indices
+    }
+
+    public var swiftLabel: String {
+        arguments.isEmpty ? action : "\(action)(\(arguments.joined(separator: ", ")))"
+    }
+
+    public var locationIdentity: String {
+        tlaInvocationLocationIdentity(action: action, arguments: arguments)
+    }
+}
+
+public struct CoreConformanceValueNormalizationV1: Equatable, Sendable {
+    public let binding: String
+    public let functionKeys: [String: String]
+
+    public init(binding: String, functionKeys: [String: String]) throws {
+        guard !binding.isEmpty,
+              !functionKeys.isEmpty,
+              !functionKeys.keys.contains(where: \.isEmpty),
+              !functionKeys.values.contains(where: \.isEmpty),
+              Set(functionKeys.values).count == functionKeys.count else {
+            throw CoreConformanceCaseErrorV1.invalidIdentifier("value normalization")
+        }
+        self.binding = binding
+        self.functionKeys = functionKeys
+    }
+}
+
+func tlaInvocationLocationIdentity(action: String, arguments: [String]) -> String {
+    "\(action)(\(arguments.map(tlaLocationArgumentIdentity).joined(separator: ",")))"
+}
+
+func tlaLocationArgumentIdentity(_ argument: String) -> String {
+    var result = String()
+    var quoted = false
+    var escaped = false
+    for character in argument.trimmingCharacters(in: .whitespacesAndNewlines) {
+        if quoted {
+            result.append(character)
+            if escaped {
+                escaped = false
+            } else if character == "\\" {
+                escaped = true
+            } else if character == "\"" {
+                quoted = false
+            }
+        } else if character == "\"" {
+            quoted = true
+            result.append(character)
+        } else if !character.isWhitespace {
+            result.append(character)
+        }
+    }
+    return result
+}
+
 /// The source-controlled declaration for a finite conformance case.
 ///
 /// This is deliberately separate from `CoreConformanceCaseV1`: the latter is
@@ -218,45 +297,11 @@ public struct CoreConformanceCasesManifestV1: Decodable, Sendable {
     public let cases: [Entry]
 
     public struct Entry: Decodable, Sendable {
-        public struct IdentityMapping: Decodable, Sendable {
-            public let variables: [String: String]
-            public let actions: [String: String]
-
-            private enum CodingKeys: String, CodingKey, CaseIterable { case variables, actions }
-
-            public init(from decoder: Decoder) throws {
-                let container = try CoreGovernanceDecodingV1.container(decoder, keyedBy: CodingKeys.self)
-                variables = try container.decode([String: String].self, forKey: .variables)
-                actions = try container.decode([String: String].self, forKey: .actions)
-            }
-        }
-
-        public struct Upstream: Decodable, Sendable {
-            public let repository: String
-            public let commit: String
-
-            private enum CodingKeys: String, CodingKey, CaseIterable { case repository, commit }
-
-            public init(from decoder: Decoder) throws {
-                let container = try CoreGovernanceDecodingV1.container(decoder, keyedBy: CodingKeys.self)
-                repository = try container.decode(String.self, forKey: .repository)
-                commit = try container.decode(String.self, forKey: .commit)
-            }
-        }
-
-        public struct Fixtures: Decodable, Sendable {
-            public let module: String
-            public let configuration: String
-
-            private enum CodingKeys: String, CodingKey, CaseIterable { case module, configuration }
-
-            public init(from decoder: Decoder) throws {
-                let container = try CoreGovernanceDecodingV1.container(decoder, keyedBy: CodingKeys.self)
-                module = try container.decode(String.self, forKey: .module)
-                configuration = try container.decode(String.self, forKey: .configuration)
-            }
-        }
-
+        public typealias IdentityMapping = CoreConformanceCaseManifestIdentityMappingV1
+        public typealias InvocationMapping = CoreConformanceCaseManifestInvocationMappingV1
+        public typealias ValueNormalization = CoreConformanceCaseManifestValueNormalizationV1
+        public typealias Upstream = CoreConformanceCaseManifestUpstreamV1
+        public typealias Fixtures = CoreConformanceCaseManifestFixturesV1
         public let id: String
         public let swiftSpec: String
         public let module: String
@@ -273,6 +318,8 @@ public struct CoreConformanceCasesManifestV1: Decodable, Sendable {
         public let upstream: Upstream
         public let fixtures: Fixtures
         public let identityMapping: IdentityMapping
+        public let invocationMappings: [InvocationMapping]
+        public let valueNormalizations: [ValueNormalization]
         public let semanticCitations: [String]
         public let governance: CoreConformanceCaseGovernanceV1
         public let expectedArtifacts: String
@@ -280,7 +327,7 @@ public struct CoreConformanceCasesManifestV1: Decodable, Sendable {
         private enum CodingKeys: String, CodingKey, CaseIterable {
             case id, swiftSpec, module, configuration, moduleSHA256, cfgSHA256
             case arguments, argumentsSHA256, workers, fingerprintPolynomial, deadlock, replay
-            case expectedExit, upstream, fixtures, identityMapping, semanticCitations, governance
+            case expectedExit, upstream, fixtures, identityMapping, invocationMappings, valueNormalizations, semanticCitations, governance
             case expectedArtifacts
         }
 
@@ -302,6 +349,8 @@ public struct CoreConformanceCasesManifestV1: Decodable, Sendable {
             upstream = try container.decode(Upstream.self, forKey: .upstream)
             fixtures = try container.decode(Fixtures.self, forKey: .fixtures)
             identityMapping = try container.decode(IdentityMapping.self, forKey: .identityMapping)
+            invocationMappings = try container.decodeIfPresent([InvocationMapping].self, forKey: .invocationMappings) ?? []
+            valueNormalizations = try container.decodeIfPresent([ValueNormalization].self, forKey: .valueNormalizations) ?? []
             semanticCitations = try container.decode([String].self, forKey: .semanticCitations)
             governance = try container.decode(CoreConformanceCaseGovernanceV1.self, forKey: .governance)
             expectedArtifacts = try container.decode(String.self, forKey: .expectedArtifacts)
@@ -319,6 +368,16 @@ public struct CoreConformanceCasesManifestV1: Decodable, Sendable {
                   argumentsSHA256 == CoreConformanceCaseV1.argumentsDigest(arguments), workers == 1,
                   fingerprintPolynomial >= 0 else {
                 throw CoreGovernanceErrorV1.invalidField(record: id, field: "launch contract")
+            }
+            let wrappers = invocationMappings.map(\.wrapper)
+            let labels = invocationMappings.map(\.runtimeValue.swiftLabel)
+            let locations = invocationMappings.map(\.runtimeValue.locationIdentity)
+            let normalizedBindings = valueNormalizations.map(\.binding)
+            guard Set(wrappers).count == wrappers.count,
+                  Set(labels).count == labels.count,
+                  Set(locations).count == locations.count,
+                  Set(normalizedBindings).count == normalizedBindings.count else {
+                throw CoreGovernanceErrorV1.invalidField(record: id, field: "invocationMappings")
             }
             let expectedOutcome: CoreRegressionOutcomeV1 = expectedExit == nil || expectedExit == 0
                 ? .exact : .difference
@@ -367,6 +426,17 @@ public struct CoreConformanceCasesManifestV1: Decodable, Sendable {
                   original.argumentsSHA256 == record.provenance.argumentsSHA256,
                   Set(record.semanticCitations).isSubset(of: Set(original.governance.semanticCitations)) else {
                 throw CoreGovernanceErrorV1.invalidField(record: record.id, field: "case governance correlation")
+            }
+            guard record.provenance.tlcTag == TLCReferencePinV1.fixture.tag,
+                  record.provenance.tlcCommit == TLCReferencePinV1.fixture.commit,
+                  record.provenance.tlcJarSHA256 == TLCReferencePinV1.fixture.jarSHA256,
+                  record.provenance.javaDistribution == TLCReferencePinV1.fixture.javaDistribution,
+                  record.provenance.javaVersion == TLCReferencePinV1.fixture.javaVersion,
+                  record.provenance.javaArchiveSHA256 == TLCReferencePinV1.fixture.javaArchiveSHA256,
+                  record.provenance.bridgeClass == TLCReferencePinV1.fixture.bridgeClass,
+                  record.provenance.bridgeSourceSHA256 == TLCReferencePinV1.fixture.bridgeSourceSHA256,
+                  record.provenance.bridgeBinarySHA256 == TLCReferencePinV1.fixture.bridgeBinarySHA256 else {
+                throw CoreGovernanceErrorV1.invalidField(record: record.id, field: "TLC reference pin")
             }
         }
     }

@@ -18,6 +18,8 @@ extension CoreSupportGateV1 {
       && (object["environment"] as? [String: String]) == expected.environment
       && pinMatches(object["pin"] as? [String: Any])
       && governanceMatches(object["governance"] as? [String: Any], declared.governance)
+      && invocationMappingsMatch(object["invocationMappings"], declared: expected.invocationMappings)
+      && valueNormalizationsMatch(object["valueNormalizations"], declared: expected.valueNormalizations)
   }
 
   func argumentsMatch(_ object: [String: Any], _ declared: CoreConformanceCasesManifestV1.Entry) -> Bool {
@@ -34,7 +36,7 @@ extension CoreSupportGateV1 {
   func pinMatches(_ pin: [String: Any]?) -> Bool {
     guard let pin else { return false }
     return pin["tag"] as? String == "v1.8.0"
-      && pin["commit"] as? String == "30cc3601321c3fc02e044d0ecb5c58d8921e18df"
+      && pin["commit"] as? String == "0894c3407f4717fec7cc18bde3bf3c857fa47333"
       && pin["jarSHA256"] as? String == TLCReferencePinV1.lockedJarSHA256
       && pin["javaDistribution"] as? String == TLCReferencePinV1.fixture.javaDistribution
       && pin["javaVersion"] as? String == TLCReferencePinV1.fixture.javaVersion
@@ -50,7 +52,44 @@ extension CoreSupportGateV1 {
       arguments: declared.arguments, argumentsSHA256: declared.argumentsSHA256,
       workers: declared.workers, fingerprintPolynomial: declared.fingerprintPolynomial,
       deadlock: declared.deadlock, operatingSystem: "macos", architecture: "arm64", environment: [:],
-      pin: .fixture, governance: declared.governance)
+      pin: .fixture, governance: declared.governance,
+      invocationMappings: try declared.invocationMappings.map { mapping in
+        try CoreConformanceInvocationMappingV1(
+          wrapper: mapping.wrapper, action: mapping.action,
+          arguments: mapping.arguments, indices: mapping.indices)
+      },
+      valueNormalizations: try declared.valueNormalizations.map { normalization in
+        try CoreConformanceValueNormalizationV1(
+          binding: normalization.binding, functionKeys: normalization.functionKeys)
+      })
+  }
+
+  func invocationMappingsMatch(
+    _ object: Any?, declared: [CoreConformanceInvocationMappingV1]
+  ) -> Bool {
+    guard let mappings = object as? [[String: Any]], mappings.count == declared.count else {
+      return false
+    }
+    return zip(mappings, declared).allSatisfy { object, declared in
+      Set(object.keys) == ["wrapper", "action", "arguments", "indices"]
+        && object["wrapper"] as? String == declared.wrapper
+        && object["action"] as? String == declared.action
+        && object["arguments"] as? [String] == declared.arguments
+        && object["indices"] as? [Int] == declared.indices
+    }
+  }
+
+  func valueNormalizationsMatch(
+    _ object: Any?, declared: [CoreConformanceValueNormalizationV1]
+  ) -> Bool {
+    guard let normalizations = object as? [[String: Any]], normalizations.count == declared.count else {
+      return false
+    }
+    return zip(normalizations, declared).allSatisfy { object, declared in
+      Set(object.keys) == ["binding", "functionKeys"]
+        && object["binding"] as? String == declared.binding
+        && object["functionKeys"] as? [String: String] == declared.functionKeys
+    }
   }
 
   func governanceMatches(_ object: [String: Any]?, _ governance: CoreConformanceCaseGovernanceV1) -> Bool {
@@ -71,8 +110,8 @@ extension CoreSupportGateV1 {
           let bridgeSource = object["bridgeSource"] as? String, !bridgeSource.isEmpty,
           let bridgeBinary = object["bridgeBinary"] as? String, !bridgeBinary.isEmpty,
           let manifest = object["jarManifest"] as? String,
-          manifest.contains("X-Git-Tag: "), manifest.contains("v1.8.0"),
-          manifest.contains("X-Git-Revision: 30cc3601321c3fc02e044d0ecb5c58d8921e18df"),
+          manifest.contains("Implementation-Title: TLA+ Tools"),
+          manifest.contains("X-Git-Revision: 0894c3407f4717fec7cc18bde3bf3c857fa47333"),
           let runtime = object["runtime"] as? [String: Any],
           runtime["version"] as? String == TLCReferencePinV1.fixture.javaVersion,
           (runtime["vendor"] as? String)?.contains("Eclipse Adoptium") == true,
@@ -268,9 +307,62 @@ extension CoreSupportGateV1 {
   }
 
   private func graphMatchesCanonicalTLC(_ graph: ParsedPhaseGraph, tlc: [String: Any]) -> Bool {
-    let projection = canonicalGraphProjection(graph.run)
-    let fields = ["schema", "initialStates", "states", "edges", "observations", "observableActions"]
-    return fields.allSatisfy { canonicalValue(projection[$0]) == canonicalValue(tlc[$0]) }
+    guard tlc["schema"] as? String == graph.run.schema.rawValue,
+          let initialStates = tlc["initialStates"] as? [String],
+          let states = tlc["states"] as? [String],
+          let edges = tlc["edges"] as? [[String: Any]],
+          let observations = tlc["observations"] as? [[String: Any]],
+          let actions = tlc["observableActions"] as? [String],
+          strictlySortedUnique(initialStates),
+          strictlySortedUnique(states),
+          strictlySortedUnique(actions),
+          initialStates == graph.run.graph.initialStateKeys.map(\.canonicalEncoding).sorted(),
+          states == graph.run.graph.states.keys.map(\.canonicalEncoding).sorted(),
+          actions == graph.run.observableActions.sorted()
+    else { return false }
+
+    var actualEdges: [String: Int] = [:]
+    for (edge, count) in graph.run.graph.edgeOccurrences {
+      let encoded = edge.canonicalEncoding
+      guard actualEdges.updateValue(count, forKey: encoded) == nil else { return false }
+    }
+    guard edges.count == actualEdges.count else { return false }
+    var previousEdge: String?
+    for edge in edges {
+      guard Set(edge.keys) == ["edge", "count"],
+            let encoded = edge["edge"] as? String,
+            let count = edge["count"] as? Int, count > 0,
+            previousEdge.map({ $0 < encoded }) ?? true,
+            actualEdges.removeValue(forKey: encoded) == count
+      else { return false }
+      previousEdge = encoded
+    }
+    guard actualEdges.isEmpty else { return false }
+
+    var actualObservations = Dictionary(
+      uniqueKeysWithValues: graph.run.graph.observations.map { state, observation in
+        (state.canonicalEncoding, observation)
+      })
+    guard observations.count == actualObservations.count else { return false }
+    var previousState: String?
+    for row in observations {
+      guard Set(row.keys) == ["state", "enabledActions", "isTerminal"],
+            let state = row["state"] as? String,
+            let enabledActions = row["enabledActions"] as? [String],
+            let isTerminal = row["isTerminal"] as? Bool,
+            strictlySortedUnique(enabledActions),
+            previousState.map({ $0 < state }) ?? true,
+            let observation = actualObservations.removeValue(forKey: state),
+            enabledActions == observation.enabledActions.sorted(),
+            isTerminal == observation.isTerminal
+      else { return false }
+      previousState = state
+    }
+    return actualObservations.isEmpty
+  }
+
+  private func strictlySortedUnique(_ values: [String]) -> Bool {
+    zip(values, values.dropFirst()).allSatisfy { $0 < $1 }
   }
 
   private func canonicalGraph(at url: URL, expectedCase: CoreConformanceCaseV1) throws -> ParsedPhaseGraph {
@@ -525,22 +617,23 @@ extension CoreSupportGateV1 {
   }
 
   private func canonicalGraphProjection(_ run: CanonicalRunV1) -> [String: Any] {
-    let occurrences = run.graph.edgeOccurrences.keys.sorted().map { edge in
-      ["edge": edge.canonicalEncoding, "count": run.graph.edgeOccurrences[edge]!] as [String: Any]
+    let occurrences = run.graph.edgeOccurrences.map { edge, count in
+      (edge.canonicalEncoding, count)
+    }.sorted { $0.0 < $1.0 }.map { edge, count in
+      ["edge": edge, "count": count] as [String: Any]
     }
     return [
       "schema": run.schema.rawValue,
-      "initialStates": run.graph.initialStateKeys.sorted().map(\.canonicalEncoding),
-      "states": run.graph.states.keys.sorted().map(\.canonicalEncoding),
+      "initialStates": run.graph.initialStateKeys.map(\.canonicalEncoding).sorted(),
+      "states": run.graph.states.keys.map(\.canonicalEncoding).sorted(),
       "edges": occurrences,
-      "observations": run.graph.observations.keys.sorted().map { state in
-        let observation = run.graph.observations[state]!
-        return [
+      "observations": run.graph.observations.map { state, observation in
+        [
           "state": state.canonicalEncoding,
           "enabledActions": observation.enabledActions.sorted(),
           "isTerminal": observation.isTerminal
         ] as [String: Any]
-      },
+      }.sorted { ($0["state"] as! String) < ($1["state"] as! String) },
       "observableActions": run.observableActions.sorted()
     ]
   }

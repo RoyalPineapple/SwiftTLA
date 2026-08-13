@@ -72,9 +72,9 @@ struct TemporalSymmetryRegisterTests {
     let graph = StateGraph(
       specName: "intermittent-fairness-boundary", variableNames: ["x"],
       transitions: [
-        start: [.init(action: "A", target: accepting), .init(action: "B", target: alternate)],
-        alternate: [.init(action: "C", target: start)],
-        accepting: [.init(action: "Stay", target: accepting)]
+        start: [.init(label: .init(.init(name: "A")), target: accepting), .init(label: .init(.init(name: "B")), target: alternate)],
+        alternate: [.init(label: .init(.init(name: "C")), target: start)],
+        accepting: [.init(label: .init(.init(name: "Stay")), target: accepting)]
       ],
       states: [
         start: ["x": .int(0)], alternate: ["x": .int(1)], accepting: ["x": .int(2)]

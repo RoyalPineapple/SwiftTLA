@@ -26,11 +26,11 @@ public enum Media {
             TLASpec("Capture") {
                 let phase = Var("phase", 0)
             Variable(phase)
-                Action("configure")  { phase == 0 && phase.becomes(1) }
-                Action("start")      { phase == 1 && phase.becomes(2) }
-                Action("stop")       { (phase == 2 || phase == 3) && phase.becomes(0) }
-                Action("interrupt")  { phase == 2 && phase.becomes(3) }
-                Action("resume")     { phase == 3 && phase.becomes(2) }
+                Action("configure") { phase == 0 && phase.becomes(1) }
+                Action("start") { phase == 1 && phase.becomes(2) }
+                Action("stop") { (phase == 2 || phase == 3) && phase.becomes(0) }
+                Action("interrupt") { phase == 2 && phase.becomes(3) }
+                Action("resume") { phase == 3 && phase.becomes(2) }
                 Invariant("validPhase") { phase >= 0 && phase <= 3 }
             }
         }
@@ -85,9 +85,13 @@ public enum Media {
         }
 
         func didCapture(_ photo: AVCapturePhoto?, _ error: Error?) {
-            if let error { photoCont?.resume(throwing: error) }
-            else if let data = photo?.fileDataRepresentation() { photoCont?.resume(returning: data) }
-            else { photoCont?.resume(throwing: MediaError.noData) }
+            if let error {
+                photoCont?.resume(throwing: error)
+            } else if let data = photo?.fileDataRepresentation() {
+                photoCont?.resume(returning: data)
+            } else {
+                photoCont?.resume(throwing: MediaError.noData)
+            }
             photoCont = nil
         }
     }

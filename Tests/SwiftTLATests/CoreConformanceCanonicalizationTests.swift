@@ -1,3 +1,4 @@
+import SwiftTLA
 import Testing
 import UpstreamParity
 
@@ -45,5 +46,59 @@ struct CoreConformanceCanonicalizationTests {
 
         #expect(left == right)
         #expect(left.canonicalEncoding == right.canonicalEncoding)
+    }
+
+    @Test("Swift normalization canonicalizes complete graph state references")
+    func normalizesStatesEdgesAndObservations() throws {
+        let first = StateGraph.StateID(0)
+        let second = StateGraph.StateID(1)
+        let firstCars: TLAValue = .record(["carA": .int(0), "carB": .int(1)])
+        let secondCars: TLAValue = .record(["carA": .int(1), "carB": .int(1)])
+        let exploration = ModelExplorationResult(
+            graph: StateGraph(
+                specName: "NormalizedFixture",
+                variableNames: ["cars"],
+                transitions: [first: [.init(label: .init(.init(name: "move")), target: second)]],
+                states: [first: ["cars": firstCars], second: ["cars": secondCars]]
+            ),
+            initialStateIDs: [first],
+            result: .ok(statesCount: 2)
+        )
+        let declaredCase = try CoreConformanceCaseV1(
+            id: "normalized-fixture",
+            moduleSHA256: String(repeating: "a", count: 64),
+            cfgSHA256: String(repeating: "b", count: 64),
+            arguments: [],
+            argumentsSHA256: CoreConformanceCaseV1.argumentsDigest([]),
+            workers: 1,
+            fingerprintPolynomial: 1,
+            deadlock: false,
+            operatingSystem: "macos",
+            architecture: "arm64",
+            environment: [:],
+            pin: .fixture,
+            valueNormalizations: [
+                try CoreConformanceValueNormalizationV1(
+                    binding: "cars", functionKeys: ["\"carA\"": "carA", "\"carB\"": "carB"])
+            ]
+        )
+
+        let run = try SwiftGraphAdapterV1().adapt(
+            SwiftExplorationEvidenceV1(caseID: declaredCase.id, exploration: exploration),
+            for: declaredCase
+        )
+        let expectedFirst = CanonicalStateV1(bindings: [
+            "cars": .record(["carA": .integer(0), "carB": .integer(1)])
+        ])
+        let expectedSecond = CanonicalStateV1(bindings: [
+            "cars": .record(["carA": .integer(1), "carB": .integer(1)])
+        ])
+
+        #expect(Set(run.graph.states.values) == Set([expectedFirst, expectedSecond]))
+        #expect(run.graph.initialStateKeys == Set([expectedFirst.key]))
+        #expect(run.graph.edgeOccurrences == [
+            .init(source: expectedFirst.key, action: "move", target: expectedSecond.key): 1
+        ])
+        #expect(run.graph.observations[expectedFirst.key]?.enabledActions == ["move"])
     }
 }

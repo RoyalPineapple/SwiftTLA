@@ -3,6 +3,26 @@ import Testing
 import UpstreamParity
 
 struct CoreConformanceFixtureContractTests {
+  @Test("bounded elevator wrapper provenance is ordered and declares its only value normalization")
+  func declaresOrderedElevatorInvocationMappings() throws {
+    let manifest = try JSONDecoder().decode(
+      CoreConformanceCasesManifestV1.self,
+      from: fixtureData("cases.json"))
+    let elevator = try #require(manifest.cases.first { $0.id == "multicar-elevator" })
+
+    #expect(elevator.invocationMappings.count == 80)
+    #expect(elevator.invocationMappings.first?.wrapper == "request__0_0_0")
+    #expect(elevator.invocationMappings.first?.action == "request")
+    #expect(elevator.invocationMappings.first?.arguments == ["\"alice\"", "0", "\"up\""])
+    #expect(elevator.invocationMappings.last?.wrapper == "completeRide__1_1_2")
+    #expect(Set(elevator.invocationMappings.map(\.wrapper)).count == 80)
+    #expect(Set(elevator.invocationMappings.map(\.runtimeValue.swiftLabel)).count == 80)
+    #expect(elevator.valueNormalizations.count == 1)
+    #expect(elevator.valueNormalizations.first?.binding == "cars")
+    #expect(elevator.valueNormalizations.first?.functionKeys == ["\"carA\"": "carA", "\"carB\"": "carB"])
+
+  }
+
   @Test("retained adversarial fixture preserves the complete labeled graph relation")
   func preservesAdversarialGraphContract() throws {
     let expectedCase = adversarialFixtureCase()
@@ -78,7 +98,7 @@ struct CoreConformanceFixtureContractTests {
       "truncated",
       "unknown-field",
       "unknown-type",
-      "unsupported",
+      "unsupported"
     ]
 
     for name in corruptFixtures {

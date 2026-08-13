@@ -11,12 +11,12 @@ extension Media {
                 let phase = Var("phase", 0)
             Variable(phase)
 
-                Action("load")     { phase == 0 && phase.becomes(1) }
-                Action("ready")    { phase == 1 && phase.becomes(2) }
-                Action("play")     { (phase == 2 || phase == 4) && phase.becomes(3) }
-                Action("pause")    { phase == 3 && phase.becomes(4) }
-                Action("seek")     { (phase == 2 || phase == 3 || phase == 4) && phase.stays }
-                Action("finish")   { phase == 3 && phase.becomes(5) }
+                Action("load") { phase == 0 && phase.becomes(1) }
+                Action("ready") { phase == 1 && phase.becomes(2) }
+                Action("play") { (phase == 2 || phase == 4) && phase.becomes(3) }
+                Action("pause") { phase == 3 && phase.becomes(4) }
+                Action("seek") { (phase == 2 || phase == 3 || phase == 4) && phase.stays }
+                Action("finish") { phase == 3 && phase.becomes(5) }
 
                 Invariant("validPhase") { phase >= 0 && phase <= 5 }
             }
@@ -54,4 +54,3 @@ extension Media {
         }
     }
 }
-

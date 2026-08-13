@@ -24,9 +24,9 @@ private func prisonerSpec() -> TLASpec {
 
     let count = Var<Int>("count")
     let announced = Var<Bool>("announced")
-    let signalled = Var<TLAFunctionType>("signalled")
+    let signalled = Var<TLAValue>("signalled")
     let light = Var<String>("light")
-    let hasVisited = Var<TLASetType>("has_visited")
+    let hasVisited = Var<TLAValue>("has_visited")
     let counter = Var<String>("counter")
 
     let lightOff = StateExpr.value(.string("off"))
@@ -52,11 +52,11 @@ private func prisonerSpec() -> TLASpec {
                                                 let h = StateExpr.variable("has_visited")
             let c = StateExpr.variable("count")
             c >= 1 && c <= threshold + 1
-                && announced.isIn(StateExpr.set([trueE, falseE]))
-                && light.isIn(StateExpr.set([lightOff, lightOn]))
+                && announced.stateExpr.isIn(StateExpr.set([trueE, falseE]))
+                && light.stateExpr.isIn(StateExpr.set([lightOff, lightOn]))
                 && h.isSubset(of: pSet)
             for p in ["Alice", "Bob", "Eve"] {
-                signalled.applying(StateExpr.value(.string(p))).isIn(rng02)
+                signalled.stateExpr.applying(StateExpr.value(.string(p))).isIn(rng02)
             }
         }
 
@@ -86,10 +86,10 @@ private func prisonerSpec() -> TLASpec {
                         .unchanged("signalled")))
 
                 let sigAct: ActionExpr = .and(.assign("light", lightOn),
-                    .assign("signalled", signalled.updated(at: p, to: signalled.applying(p) + 1).raw))
+                    .assign("signalled", signalled.stateExpr.updated(at: p, to: signalled.stateExpr.applying(p) + 1)))
                 let noSigAct: ActionExpr = .and(.unchanged("light"),
                     .unchanged("signalled"))
-                let canSignal = StateExpr.equal(l, lightOff) && signalled.applying(p) < 1
+                let canSignal = StateExpr.equal(l, lightOff) && signalled.stateExpr.applying(p) < 1
                 let standardBody: ActionExpr = .and(.guard_(StateExpr.notEqual(p, ct)),
                     .and(.or(.and(.guard_(canSignal), sigAct),
                              .and(.guard_(StateExpr.not(canSignal)), noSigAct)),

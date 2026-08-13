@@ -16,12 +16,12 @@ public struct Retry: Sendable {
             Variable(attempts)
             // 0=idle, 1=attempting, 2=backingOff, 3=succeeded, 4=failed, 5=cancelled
 
-            Action("start")            { phase == 0 && attempts == 0 && phase.becomes(1) && attempts.becomes(1) }
-            Action("succeed")          { phase == 1 && phase.becomes(3) }
-            Action("failAndBackoff")   { phase == 1 && attempts < 3 && phase.becomes(2) }
-            Action("failTerminal")     { phase == 1 && attempts == 3 && phase.becomes(4) }
-            Action("retry")            { phase == 2 && phase.becomes(1) && attempts.becomes(attempts + 1) }
-            Action("cancelFromIdle")    { phase == 0 && phase.becomes(5) }
+            Action("start") { phase == 0 && attempts == 0 && phase.becomes(1) && attempts.becomes(1) }
+            Action("succeed") { phase == 1 && phase.becomes(3) }
+            Action("failAndBackoff") { phase == 1 && attempts < 3 && phase.becomes(2) }
+            Action("failTerminal") { phase == 1 && attempts == 3 && phase.becomes(4) }
+            Action("retry") { phase == 2 && phase.becomes(1) && attempts.becomes(attempts + 1) }
+            Action("cancelFromIdle") { phase == 0 && phase.becomes(5) }
             Action("cancelFromAttempt") { phase == 1 && phase.becomes(5) }
             Action("cancelFromBackoff") { phase == 2 && phase.becomes(5) }
 

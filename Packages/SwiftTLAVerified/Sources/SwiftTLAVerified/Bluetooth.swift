@@ -21,13 +21,13 @@ public actor Bluetooth {
         TLASpec("Bluetooth") {
             let phase = Var("phase", 0)
             Variable(phase)
-            Action("toPoweredOn")    { (phase == 0 || phase == 1 || phase == 4) && phase.becomes(5) }
-            Action("toPoweredOff")   { (phase == 0 || phase == 1 || phase == 5) && phase.becomes(4) }
-            Action("toUnsupported")  { phase == 0 && phase.becomes(2) }
+            Action("toPoweredOn") { (phase == 0 || phase == 1 || phase == 4) && phase.becomes(5) }
+            Action("toPoweredOff") { (phase == 0 || phase == 1 || phase == 5) && phase.becomes(4) }
+            Action("toUnsupported") { phase == 0 && phase.becomes(2) }
             Action("toUnauthorized") { phase == 0 && phase.becomes(3) }
-            Action("toResetting")    { (phase == 4 || phase == 5) && phase.becomes(1) }
-            Action("startScan")      { phase == 5 && phase.becomes(6) }
-            Action("stopScan")       { phase == 6 && phase.becomes(5) }
+            Action("toResetting") { (phase == 4 || phase == 5) && phase.becomes(1) }
+            Action("startScan") { phase == 5 && phase.becomes(6) }
+            Action("stopScan") { phase == 6 && phase.becomes(5) }
             Invariant("validPhase") { phase >= 0 && phase <= 6 }
         }
     }
@@ -77,6 +77,5 @@ public actor Bluetooth {
 
     func didDiscover(_ device: Device) { scanCont?.yield(device) }
 }
-
 
 public enum BleError: Error { case notReady }

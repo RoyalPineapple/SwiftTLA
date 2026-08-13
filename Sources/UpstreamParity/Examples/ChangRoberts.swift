@@ -16,10 +16,10 @@ extension Example {
         let nodes = Array(1...N)
         func successor(_ i: Int) -> Int { i == N ? 1 : i + 1 }
 
-        let initiator = Var<TLAFunctionType>("initiator")
-        let processState = Var<TLAFunctionType>("state")
-        let pc = Var<TLAFunctionType>("pc")
-        let msgs = Var<TLAFunctionType>("msgs")
+        let initiator = Var<TLAValue>("initiator")
+        let processState = Var<TLAValue>("state")
+        let pc = Var<TLAValue>("pc")
+        let msgs = Var<TLAValue>("msgs")
 
         let bools: [TLAValue] = [.bool(false), .bool(true)]
         var initFuncs: [TLAValue] = []
@@ -54,23 +54,23 @@ extension Example {
                 .int(1): .set([]), .int(2): .set([]), .int(3): .set([])]))
 
             Invariant("NoFalseWinner") {
-                !(processState.applying(1) == "won" && initiator.applying(1) == false)
-                && !(processState.applying(2) == "won" && initiator.applying(2) == false)
-                && !(processState.applying(3) == "won" && initiator.applying(3) == false)
+                !(processState.stateExpr.applying(1) == "won" && initiator.stateExpr.applying(1) == false)
+                && !(processState.stateExpr.applying(2) == "won" && initiator.stateExpr.applying(2) == false)
+                && !(processState.stateExpr.applying(3) == "won" && initiator.stateExpr.applying(3) == false)
             }
 
             for i in nodes {
                 let s = successor(i)
 
                 Action("n0_\(i)") {
-                    let send = pc.applying(i) == "n0" && initiator.applying(i) == true
-                        && msgs.becomes(msgs.updated(at: s,
-                            to: msgs.applying(s).union(StateExpr.singleton(i))))
-                        && pc.becomes(pc.updated(at: i, to: "n1"))
+                    let send = pc.stateExpr.applying(i) == "n0" && initiator.stateExpr.applying(i) == true
+                        && .assign(msgs.name, msgs.stateExpr.updated(at: s,
+                            to: msgs.stateExpr.applying(s).union(StateExpr.singleton(i))))
+                        && .assign(pc.name, pc.stateExpr.updated(at: i, to: "n1"))
                         && initiator.stays && processState.stays
 
-                    let skip = pc.applying(i) == "n0" && initiator.applying(i) == false
-                        && pc.becomes(pc.updated(at: i, to: "n1"))
+                    let skip = pc.stateExpr.applying(i) == "n0" && initiator.stateExpr.applying(i) == false
+                        && .assign(pc.name, pc.stateExpr.updated(at: i, to: "n1"))
                         && initiator.stays && processState.stays && msgs.stays
 
                     send || skip
@@ -80,15 +80,15 @@ extension Example {
                     var branches: [ActionExpr] = []
                     for picked in nodes {
                         branches.append(
-                            pc.applying(i) == "n1"
-                                && processState.applying(i) == "lost"
+                            pc.stateExpr.applying(i) == "n1"
+                                && processState.stateExpr.applying(i) == "lost"
                                 && guardContains(i, picked)
-                                && msgs.becomes(
-                                    msgs.updated(at: i,
-                                        to: msgs.applying(i).subtracting(
+                                && .assign(msgs.name,
+                                    msgs.stateExpr.updated(at: i,
+                                        to: msgs.stateExpr.applying(i).subtracting(
                                             StateExpr.singleton(picked)))
                                          .updated(at: s,
-                                        to: msgs.applying(s).union(
+                                        to: msgs.stateExpr.applying(s).union(
                                             StateExpr.singleton(picked))))
                                 && initiator.stays
                                 && processState.stays
@@ -96,31 +96,31 @@ extension Example {
                         )
 
                         branches.append(
-                            pc.applying(i) == "n1"
-                                && processState.applying(i) == "cand"
+                            pc.stateExpr.applying(i) == "n1"
+                                && processState.stateExpr.applying(i) == "cand"
                                 && guardContains(i, picked)
                                 && picked < i
-                                && msgs.becomes(
-                                    msgs.updated(at: i,
-                                        to: msgs.applying(i).subtracting(
+                                && .assign(msgs.name,
+                                    msgs.stateExpr.updated(at: i,
+                                        to: msgs.stateExpr.applying(i).subtracting(
                                             StateExpr.singleton(picked)))
                                          .updated(at: s,
-                                        to: msgs.applying(s).union(
+                                        to: msgs.stateExpr.applying(s).union(
                                             StateExpr.singleton(picked))))
-                                && processState.becomes(
-                                    processState.updated(at: i, to: "lost"))
+                                && .assign(processState.name,
+                                    processState.stateExpr.updated(at: i, to: "lost"))
                                 && initiator.stays
                                 && pc.stays
                         )
 
                         branches.append(
-                            pc.applying(i) == "n1"
-                                && processState.applying(i) == "cand"
+                            pc.stateExpr.applying(i) == "n1"
+                                && processState.stateExpr.applying(i) == "cand"
                                 && guardContains(i, picked)
                                 && picked > i
-                                && msgs.becomes(
-                                    msgs.updated(at: i,
-                                        to: msgs.applying(i).subtracting(
+                                && .assign(msgs.name,
+                                    msgs.stateExpr.updated(at: i,
+                                        to: msgs.stateExpr.applying(i).subtracting(
                                             StateExpr.singleton(picked))))
                                 && initiator.stays
                                 && processState.stays
@@ -128,16 +128,16 @@ extension Example {
                         )
 
                         branches.append(
-                            pc.applying(i) == "n1"
-                                && processState.applying(i) == "cand"
+                            pc.stateExpr.applying(i) == "n1"
+                                && processState.stateExpr.applying(i) == "cand"
                                 && guardContains(i, picked)
                                 && picked == i
-                                && msgs.becomes(
-                                    msgs.updated(at: i,
-                                        to: msgs.applying(i).subtracting(
+                                && .assign(msgs.name,
+                                    msgs.stateExpr.updated(at: i,
+                                        to: msgs.stateExpr.applying(i).subtracting(
                                             StateExpr.singleton(picked))))
-                                && processState.becomes(
-                                    processState.updated(at: i, to: "won"))
+                                && .assign(processState.name,
+                                    processState.stateExpr.updated(at: i, to: "won"))
                                 && initiator.stays
                                 && pc.stays
                         )
@@ -149,8 +149,8 @@ extension Example {
                 WeakFairness("n1_\(i)")
             }
             LeadsTo("Liveness",
-                StateExpr.existsIn(nodeSet) { n in processState.applying(n) == "cand" },
-                StateExpr.existsIn(nodeSet) { n in processState.applying(n) == "won" })
+                StateExpr.existsIn(nodeSet) { n in processState.stateExpr.applying(n) == "cand" },
+                StateExpr.existsIn(nodeSet) { n in processState.stateExpr.applying(n) == "won" })
         }
     }
 

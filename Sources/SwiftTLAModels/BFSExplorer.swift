@@ -8,9 +8,9 @@ public enum BFSExplorer {
         let maxExplore = 2
         let statesSet = StateExpr.set(Array(0..<maxState))
 
-        let q = Var<TLASetType>("q")
-        let visited = Var<TLASetType>("visited")
-        let explored = Var<TLASetType>("explored")
+        let q = Var<TLAValue>("q")
+        let visited = Var<TLAValue>("visited")
+        let explored = Var<TLAValue>("explored")
         let ok = Var<Bool>("ok")
         let picked = Var<Int>("picked")
 
@@ -22,8 +22,8 @@ public enum BFSExplorer {
             Variable(picked, 0)
 
             Action("process") {
-                q.cardinality > 0
-                    && explored.cardinality < maxExplore
+                q.stateExpr.cardinality > 0
+                    && explored.stateExpr.cardinality < maxExplore
                     && choose(picked, from: q)
                     && q.becomes(Expr(.union(
                         StateExpr.setDifference(q.stateExpr, StateExpr.singleton(picked.stateExpr)),
@@ -36,14 +36,14 @@ public enum BFSExplorer {
             }
 
             Invariant("TypeOK") {
-                q.isSubset(of: statesSet)
-                    && visited.isSubset(of: statesSet)
-                    && explored.isSubset(of: statesSet)
-                    && explored.isSubset(of: visited)
+                q.stateExpr.isSubset(of: statesSet)
+                    && visited.stateExpr.isSubset(of: statesSet)
+                    && explored.stateExpr.isSubset(of: statesSet)
+                    && explored.stateExpr.isSubset(of: visited.stateExpr)
             }
 
             Invariant("BoundOK") {
-                explored.cardinality <= maxExplore
+                explored.stateExpr.cardinality <= maxExplore
             }
         }
     }

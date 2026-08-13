@@ -206,7 +206,8 @@ final class CapturePreviewNSView: NSView {
         wantsLayer = true
         layer?.addSublayer(previewLayer)
     }
-    required init?(coder: NSCoder) { fatalError() }
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
     override func layout() {
         super.layout()
         CATransaction.begin()
@@ -231,7 +232,8 @@ final class PlayerNSView: NSView {
         l.videoGravity = .resizeAspectFill
         layer?.addSublayer(l)
     }
-    required init?(coder: NSCoder) { fatalError() }
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
     override func layout() {
         super.layout()
         (layer?.sublayers?.first as? AVPlayerLayer)?.frame = bounds
@@ -274,11 +276,11 @@ final class CameraModel {
             let phase = Var("phase", 0)
             Variable(phase)
 
-            Action("ready")  { phase == 0 && phase.becomes(1) }
+            Action("ready") { phase == 0 && phase.becomes(1) }
             Action("record") { phase == 1 && phase.becomes(2) }
-            Action("stop")   { phase == 2 && phase.becomes(1) }
-            Action("play")   { phase == 1 && phase.becomes(3) }
-            Action("live")   { phase == 3 && phase.becomes(1) }
+            Action("stop") { phase == 2 && phase.becomes(1) }
+            Action("play") { phase == 1 && phase.becomes(3) }
+            Action("live") { phase == 3 && phase.becomes(1) }
 
             Invariant("validPhase") { phase >= 0 && phase <= 3 }
         }
@@ -292,45 +294,45 @@ final class CameraModel {
     var currentPlayer: AVPlayer?
     private let disk = DiskStore(name: "camera")
     private var movieOutput: AVCaptureMovieFileOutput?
-    private let recordDelegate = RecordingDelegate()
+    private let recordingHandler = RecordingDelegate()
 
     init() {
-        onReady = { [weak self] from, to in
+        onReady = { [weak self] _, _ in
             guard let self, let device = AVCaptureDevice.default(for: .video) else { return }
             do {
-                try await self.capture.configure(device: device)
-                let sess = await self.capture.session
+                try await capture.configure(device: device)
+                let sess = await capture.session
                 let mo = AVCaptureMovieFileOutput()
                 sess.addOutput(mo)
-                self.movieOutput = mo
-                try await self.capture.start()
+                movieOutput = mo
+                try await capture.start()
             } catch {
                 print("Camera error: \(error)")
             }
         }
-        onRecord = { [weak self] from, to in
-            guard let self, let mo = self.movieOutput else { return }
+        onRecord = { [weak self] _, _ in
+            guard let self, let mo = movieOutput else { return }
             let url = FileManager.default.temporaryDirectory
                 .appendingPathComponent("recording-\(UUID().uuidString).mov")
-            self.recordedURL = url
-            mo.startRecording(to: url, recordingDelegate: self.recordDelegate)
+            recordedURL = url
+        mo.startRecording(to: url, recordingDelegate: recordingHandler)
         }
-        onStop = { [weak self] from, to in
+        onStop = { [weak self] _, _ in
             self?.movieOutput?.stopRecording()
             if let url = self?.recordedURL { self?.roll.append(.video(url)) }
             self?.recordedURL = nil
         }
-        onPlay = { [weak self] from, to in
-            guard let self, let u = self.recordedURL else { return }
+        onPlay = { [weak self] _, _ in
+            guard let self, let u = recordedURL else { return }
             let player = AVPlayer(url: u)
-            self.currentPlayer = player
+            currentPlayer = player
             player.play()
             NotificationCenter.default.addObserver(forName: .AVPlayerItemDidPlayToEndTime,
                                                    object: player.currentItem, queue: .main) { [weak self] _ in
                 self?._live()
             }
         }
-        onLive = { [weak self] from, to in
+        onLive = { [weak self] _, _ in
             self?.currentPlayer?.pause()
             self?.currentPlayer = nil
         }
@@ -350,8 +352,7 @@ final class CameraModel {
     }
 
     func toggleRecording() {
-        if phase == 2 { _stop() }
-        else if phase == 1 { _record() }
+        if phase == 2 { _stop() } else if phase == 1 { _record() }
     }
 
     func playRecording(url: URL? = nil) {
@@ -377,7 +378,6 @@ final class CameraModel {
 private final class RecordingDelegate: NSObject, AVCaptureFileOutputRecordingDelegate {
     func fileOutput(_: AVCaptureFileOutput, didFinishRecordingTo url: URL,
                     from _: [AVCaptureConnection], error: Error?) {
-        if let error { print("Record error: \(error)") }
-        else { print("Recorded: \(url.path)") }
+        if let error { print("Record error: \(error)") } else { print("Recorded: \(url.path)") }
     }
 }

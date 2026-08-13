@@ -9,17 +9,17 @@ let package = Package(
     products: [
         .library(name: "SwiftTLAVerified", targets: ["SwiftTLAVerified"]),
         .executable(name: "ble-scan", targets: ["BLEScan"]),
-        .executable(name: "camera", targets: ["MediaScan"]),
+        .executable(name: "camera", targets: ["MediaScan"])
     ],
     dependencies: [
-        .package(path: "../../"),
+        .package(path: "../../")
     ],
     targets: [
         .target(
             name: "SwiftTLAVerified",
             dependencies: [
                 .product(name: "SwiftTLA", package: "SwiftTLA"),
-                .product(name: "SwiftTLAMacros", package: "SwiftTLA"),
+                .product(name: "SwiftTLAMacros", package: "SwiftTLA")
             ]
         ),
         .executableTarget(

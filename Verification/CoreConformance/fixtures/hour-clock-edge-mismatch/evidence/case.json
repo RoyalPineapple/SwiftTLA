@@ -30,18 +30,24 @@
     ]
   },
   "id" : "hour-clock-edge-mismatch",
+  "invocationMappings" : [
+
+  ],
   "moduleSHA256" : "d9095b5892b817e41c8dfb11129703d8d4da6e67e2a2e23fbb57a30ae51c6a8f",
   "operatingSystem" : "macos",
   "pin" : {
     "bridgeBinarySHA256" : "a50ae51e9c540a3c0eb9386b05bb0c0f677cefa62bcfdc48545c6046ccb12d64",
     "bridgeClass" : "org.swifttla.conformance.LosslessStateWriter",
     "bridgeSourceSHA256" : "f921b202205dde3d34e626f7801676cc0635de58f503c3dddd3affcc893532ee",
-    "commit" : "30cc3601321c3fc02e044d0ecb5c58d8921e18df",
-    "jarSHA256" : "e22f8ffb4bacdea0a871f444dd94fe5fb0d8013b3388ae39e82e26f852c735d5",
+    "commit" : "0894c3407f4717fec7cc18bde3bf3c857fa47333",
+    "jarSHA256" : "ab323b79802aedc3203b3f9af37c6aca3ed43f4e0225b36f2aa77b26de46c05f",
     "javaArchiveSHA256" : "8fa1eff40bb637a33613b2ccb8b12c70dc3661cc22cf8e784943715769a05336",
     "javaDistribution" : "Eclipse Temurin",
     "javaVersion" : "17.0.19+10",
     "tag" : "v1.8.0"
   },
+  "valueNormalizations" : [
+
+  ],
   "workers" : 1
 }

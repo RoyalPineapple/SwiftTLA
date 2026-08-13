@@ -42,7 +42,7 @@ struct TemporalSymmetryConformanceRunnerTests {
       "temporal-eventually-always-weak": false,
       "temporal-leads-to-strong": false,
       "temporal-weak-fairness-boundary": false,
-      "temporal-strong-fairness-boundary": false,
+      "temporal-strong-fairness-boundary": false
     ]
     for declaredCase in cases.cases where declaredCase.kind == .temporal {
       let model = try #require(TemporalSymmetryModelCatalogV1.model(for: declaredCase))

@@ -86,7 +86,7 @@ public struct CheckableSpec: Checkable {
     }
 
     public func enabled(in state: [String: TLAValue]) throws -> [String] {
-        runtime.availableActions(in: state).filter { !$0.hasPrefix("_") }
+        try runtime.availableInvocations(in: state).map(\.description).filter { !$0.hasPrefix("_") }
     }
 
     public func successors(of action: String, from state: [String: TLAValue]) throws -> [[String: TLAValue]] {

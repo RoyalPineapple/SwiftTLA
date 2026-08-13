@@ -106,25 +106,31 @@ extension TLASpec {
         }
         lines.append("")
 
-        for act in actions where !act.name.isEmpty {
-            let header = act.binding.map { "\(act.name)(\($0.name))" } ?? act.name
-            lines.append("\(header) == \(act.body)")
+        for action in actions where !action.name.isEmpty {
+            let parameters = action.bindings.map(\.name).joined(separator: ", ")
+            let header = parameters.isEmpty ? action.name : "\(action.name)(\(parameters))"
+            lines.append("\(header) == \(action.body)")
+            for variant in actionInvocations(action) where !variant.indices.isEmpty {
+                let suffix = variant.indices.map(String.init).joined(separator: "_")
+                lines.append("\(action.name)__\(suffix) == \(variant.invocation)")
+            }
         }
         lines.append("")
 
         let actionNames = actions.filter { !$0.name.isEmpty }
-        if actionNames.count == 1 && actionNames[0].name == "Next" {
+        let invocations = actionNames.flatMap { action in
+            actionInvocations(action).map { variant -> String in
+                guard !variant.indices.isEmpty else { return action.name }
+                return "\(action.name)__\(variant.indices.map(String.init).joined(separator: "_"))"
+            }
+        }
+        if invocations.count == 1 && invocations[0] == "Next" {
             // Single action already named Next — no separate disjunction needed
-        } else if actionNames.count == 1 {
-            let action = actionNames[0]
-            let invocation = action.binding.map {
-                "\\E \($0.name) \\in {\($0.values.map(\.description).joined(separator: ", "))}: \(action.name)(\($0.name))"
-            } ?? action.name
-            lines.append("Next == \(invocation)")
+        } else if invocations.count == 1 {
+            lines.append("Next == \(invocations[0])")
         } else {
             lines.append("Next ==")
-            for a in actions where !a.name.isEmpty {
-                let invocation = a.binding.map { "\\E \($0.name) \\in {\($0.values.map(\.description).joined(separator: ", "))}: \(a.name)(\($0.name))" } ?? a.name
+            for invocation in invocations {
                 lines.append("  \\/ \(invocation)")
             }
         }

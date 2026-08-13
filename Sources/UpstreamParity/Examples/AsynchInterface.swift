@@ -9,7 +9,7 @@ extension Example {
         expectedDistinct: 12,
         spec: {
             let data = ["d1", "d2", "d3"]
-            let st = Var<TLARecordType>("st")
+            let st = Var<TLAValue>("st")
             var records: [TLAValue] = []
             for v in data {
                 for r in 0...1 {
@@ -22,20 +22,29 @@ extension Example {
                 Extends("Naturals")
                 Variable(st, in: records)
                 Invariant("TypeInvariant") {
-                    (st.val == "d1" || st.val == "d2" || st.val == "d3")
-                        && st.rdy >= 0 && st.rdy <= 1
-                        && st.ack >= 0 && st.ack <= 1
+                    (StateExpr.recordAccess(st.stateExpr, "val") == "d1"
+                        || StateExpr.recordAccess(st.stateExpr, "val") == "d2"
+                        || StateExpr.recordAccess(st.stateExpr, "val") == "d3")
+                        && StateExpr.recordAccess(st.stateExpr, "rdy") >= 0 && StateExpr.recordAccess(st.stateExpr, "rdy") <= 1
+                        && StateExpr.recordAccess(st.stateExpr, "ack") >= 0 && StateExpr.recordAccess(st.stateExpr, "ack") <= 1
                 }
                 Action("Send") {
-                    st.rdy == st.ack && (
-                        st.becomes(st.updated(at: "val", to: "d1").updated(at: "rdy", to: StateExpr.subtract(.int(1), st.rdy)))
-                        || st.becomes(st.updated(at: "val", to: "d2").updated(at: "rdy", to: StateExpr.subtract(.int(1), st.rdy)))
-                        || st.becomes(st.updated(at: "val", to: "d3").updated(at: "rdy", to: StateExpr.subtract(.int(1), st.rdy)))
+                    StateExpr.recordAccess(st.stateExpr, "rdy") == StateExpr.recordAccess(st.stateExpr, "ack") && (
+                        .assign(st.name, st.stateExpr
+                            .updated(at: "val", to: "d1")
+                            .updated(at: "rdy", to: StateExpr.subtract(.int(1), StateExpr.recordAccess(st.stateExpr, "rdy"))))
+                        || .assign(st.name, st.stateExpr
+                            .updated(at: "val", to: "d2")
+                            .updated(at: "rdy", to: StateExpr.subtract(.int(1), StateExpr.recordAccess(st.stateExpr, "rdy"))))
+                        || .assign(st.name, st.stateExpr
+                            .updated(at: "val", to: "d3")
+                            .updated(at: "rdy", to: StateExpr.subtract(.int(1), StateExpr.recordAccess(st.stateExpr, "rdy"))))
                     )
                 }
                 Action("Rcv") {
-                    st.rdy != st.ack
-                        && st.becomes(st.updated(at: "ack", to: StateExpr.subtract(.int(1), st.ack)))
+                    StateExpr.recordAccess(st.stateExpr, "rdy") != StateExpr.recordAccess(st.stateExpr, "ack")
+                        && .assign(st.name, st.stateExpr
+                            .updated(at: "ack", to: StateExpr.subtract(.int(1), StateExpr.recordAccess(st.stateExpr, "ack"))))
                 }
             }
         }(),

@@ -87,10 +87,10 @@ file_length:
   warning: 800
 
 function_body_length:
-  warning: 100
+  warning: 175
 
 function_parameter_count:
-  warning: 8
+  warning: 9
 
 identifier_name:
   min_length: 1

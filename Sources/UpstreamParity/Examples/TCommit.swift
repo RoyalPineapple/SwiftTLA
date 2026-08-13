@@ -13,7 +13,7 @@ extension Example {
 
 static func tCommitSpec() -> TLASpec {
         let rms = ["r1", "r2", "r3"]
-        let rmState = Var<TLAFunctionType>("rmState")
+        let rmState = Var<TLAValue>("rmState")
         let initFun = TLAValue.function(Dictionary(uniqueKeysWithValues: rms.map {
             (.string($0), .string("working"))
         }))
@@ -26,19 +26,19 @@ static func tCommitSpec() -> TLASpec {
             for rm in rms {
                 Action("Prepare_\(rm)") {
                     st(rm) == "working"
-                        && rmState.becomes(rmState.updated(at: rm, to: "prepared"))
+                        && .assign(rmState.name, rmState.stateExpr.updated(at: rm, to: "prepared"))
                 }
                 Action("Commit_\(rm)") {
                     st(rm) == "prepared"
                         && (st("r1") == "prepared" || st("r1") == "committed")
                         && (st("r2") == "prepared" || st("r2") == "committed")
                         && (st("r3") == "prepared" || st("r3") == "committed")
-                        && rmState.becomes(rmState.updated(at: rm, to: "committed"))
+                        && .assign(rmState.name, rmState.stateExpr.updated(at: rm, to: "committed"))
                 }
                 Action("Abort_\(rm)") {
                     (st(rm) == "working" || st(rm) == "prepared")
                         && st("r1") != "committed" && st("r2") != "committed" && st("r3") != "committed"
-                        && rmState.becomes(rmState.updated(at: rm, to: "aborted"))
+                        && .assign(rmState.name, rmState.stateExpr.updated(at: rm, to: "aborted"))
                 }
             }
             Invariant("TCConsistent") {

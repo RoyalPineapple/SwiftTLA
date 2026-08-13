@@ -15,40 +15,59 @@ public struct SpecRuntime: Sendable {
         computeInitialStates(spec)
     }
 
-    public func apply(actionName: String, to state: [String: TLAValue]) throws -> [String: TLAValue] {
-        guard let action = actions.first(where: { $0.name == actionName }) else {
-            throw RuntimeError.actionNotFound(actionName)
-        }
-        guard action.binding == nil else { throw RuntimeError.actionRequiresArgument(actionName) }
-        return try apply(actionName: actionName, argument: nil, to: state)
-    }
-
-    public func apply(actionName: String, argument: TLAValue?, to state: [String: TLAValue]) throws -> [String: TLAValue] {
-        guard let action = actions.first(where: { $0.name == actionName }) else {
-            throw RuntimeError.actionNotFound(actionName)
-        }
-        let body: ActionExpr
-        if let binding = action.binding {
-            guard let argument else { throw RuntimeError.actionRequiresArgument(actionName) }
-            guard binding.values.contains(argument) else { throw RuntimeError.invalidActionArgument(actionName, argument) }
-            body = action.body.substituteVar(binding.name, with: argument, in: action.body)
-        } else {
-            guard argument == nil else { throw RuntimeError.invalidActionArgument(actionName, argument!) }
-            body = action.body
-        }
-        let successors = try ActionEnumerator.enumerate(body, from: state, varNames: varNames)
+    public func apply(_ invocation: TLAActionInvocation, to state: [String: TLAValue]) throws -> [String: TLAValue] {
+        let successors = try successors(invocation, from: state)
         guard let next = successors.first else {
-            throw RuntimeError.actionNotEnabled(actionName)
+            throw RuntimeError.actionNotEnabled(invocation, available: try availableInvocations(in: state, requested: invocation))
         }
         return next
     }
 
-    public func availableActions(in state: [String: TLAValue]) -> [String] {
-        actions.compactMap { action in
-            let bodies = action.binding?.values.map { action.body.substituteVar(action.binding!.name, with: $0, in: action.body) } ?? [action.body]
-            guard bodies.contains(where: { (try? ActionEnumerator.enumerate($0, from: state, varNames: varNames).isEmpty) == false }) else { return nil }
-            return action.name
+    public func successors(_ invocation: TLAActionInvocation, from state: [String: TLAValue]) throws -> [[String: TLAValue]] {
+        guard let action = actions.first(where: { $0.name == invocation.name }) else {
+            throw RuntimeError.actionNotFound(invocation, available: try availableInvocations(in: state, requested: invocation))
         }
+        guard let variant = actionInvocations(action).first(where: { $0.invocation == invocation }) else {
+            throw RuntimeError.invalidActionArguments(invocation, available: try availableInvocations(in: state, requested: invocation))
+        }
+        let successors: [[String: TLAValue]]
+        do {
+            successors = try ActionEnumerator.enumerate(variant.body, from: state, varNames: varNames)
+        } catch {
+            throw RuntimeError.enumerationFailed(
+                requested: invocation,
+                evaluated: variant.invocation,
+                underlying: error
+            )
+        }
+        return successors
+    }
+
+    public func availableInvocations(in state: [String: TLAValue]) throws -> [TLAActionInvocation] {
+        try availableInvocations(in: state, requested: nil)
+    }
+
+    private func availableInvocations(
+        in state: [String: TLAValue],
+        requested: TLAActionInvocation?
+    ) throws -> [TLAActionInvocation] {
+        var available: [TLAActionInvocation] = []
+        for action in actions {
+            for variant in actionInvocations(action) {
+                do {
+                    if try !ActionEnumerator.enumerate(variant.body, from: state, varNames: varNames).isEmpty {
+                        available.append(variant.invocation)
+                    }
+                } catch {
+                    throw RuntimeError.enumerationFailed(
+                        requested: requested,
+                        evaluated: variant.invocation,
+                        underlying: error
+                    )
+                }
+            }
+        }
+        return available
     }
 
     public func check(_ invariantName: String, in state: [String: TLAValue]) throws -> Bool {
@@ -58,12 +77,12 @@ public struct SpecRuntime: Sendable {
         return try inv.body.evaluateBool(in: state, runtimeFuncs: spec.runtimeFuncs, recursiveFuncs: spec.recursiveFuncs)
     }
 
-    public func step(_ actionName: String, from state: [String: TLAValue]) throws -> StepResult {
-        let available = availableActions(in: state)
-        guard available.contains(actionName) else {
-            return .actionNotEnabled(actionName, available: available)
+    public func step(_ invocation: TLAActionInvocation, from state: [String: TLAValue]) throws -> StepResult {
+        let available = try availableInvocations(in: state, requested: invocation)
+        guard available.contains(invocation) else {
+            return .actionNotEnabled(invocation, available: available)
         }
-        let next = try apply(actionName: actionName, to: state)
+        let next = try apply(invocation, to: state)
         var violations: [String] = []
         for inv in invariants {
             if !(try inv.body.evaluateBool(in: next, runtimeFuncs: spec.runtimeFuncs, recursiveFuncs: spec.recursiveFuncs)) {
@@ -78,15 +97,19 @@ public struct SpecRuntime: Sendable {
 
     public enum StepResult {
         case ok([String: TLAValue])
-        case actionNotEnabled(String, available: [String])
+        case actionNotEnabled(TLAActionInvocation, available: [TLAActionInvocation])
         case invariantViolated([String])
     }
 
     public enum RuntimeError: Error {
-        case actionNotFound(String)
-        case actionNotEnabled(String)
-        case actionRequiresArgument(String)
-        case invalidActionArgument(String, TLAValue)
+        case actionNotFound(TLAActionInvocation, available: [TLAActionInvocation])
+        case actionNotEnabled(TLAActionInvocation, available: [TLAActionInvocation])
+        case invalidActionArguments(TLAActionInvocation, available: [TLAActionInvocation])
+        case enumerationFailed(
+            requested: TLAActionInvocation?,
+            evaluated: TLAActionInvocation,
+            underlying: any Error
+        )
         case invariantNotFound(String)
     }
 }

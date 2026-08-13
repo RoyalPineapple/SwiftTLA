@@ -31,8 +31,8 @@ public struct SimpleAllocatorModel {
 
         return TLASpec("SimpleAllocator") {
             Extends("Integers, FiniteSets")
-            let unsat = Var<TLAFunctionType>("unsat")
-            let alloc = Var<TLAFunctionType>("alloc")
+            let unsat = Var<TLAValue>("unsat")
+            let alloc = Var<TLAValue>("alloc")
             Variable(unsat, emptyFun)
             Variable(alloc, emptyFun)
 
@@ -41,17 +41,17 @@ public struct SimpleAllocatorModel {
                     let subset = StateExpr.value(sVal)
                     Action("Request_\(c)_S\(si)") {
                         unsatOf(c).cardinality == 0 && allocOf(c).cardinality == 0
-                            && unsat.becomes(unsat.updated(at: c, to: subset))
+                            && .assign(unsat.name, unsat.stateExpr.updated(at: c, to: subset))
                     }
                     Action("Allocate_\(c)_S\(si)") {
                         subset.cardinality > 0
                             && subset.isSubset(of: available.intersection(unsatOf(c)))
-                            && alloc.becomes(alloc.updated(at: c, to: allocOf(c).union(subset)))
-                            && unsat.becomes(unsat.updated(at: c, to: unsatOf(c).subtracting(subset)))
+                            && .assign(alloc.name, alloc.stateExpr.updated(at: c, to: allocOf(c).union(subset)))
+                            && .assign(unsat.name, unsat.stateExpr.updated(at: c, to: unsatOf(c).subtracting(subset)))
                     }
                     Action("Return_\(c)_S\(si)") {
                         subset.cardinality > 0 && subset.isSubset(of: allocOf(c))
-                            && alloc.becomes(alloc.updated(at: c, to: allocOf(c).subtracting(subset)))
+                            && .assign(alloc.name, alloc.stateExpr.updated(at: c, to: allocOf(c).subtracting(subset)))
                     }
                 }
             }

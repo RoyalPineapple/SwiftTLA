@@ -1,23 +1,19 @@
 import Foundation
-
 public enum TemporalSymmetrySupportRequestV1: String, Codable, Sendable {
   case requested
   case unsupported
   case blocked
 }
-
 public enum TemporalSymmetrySupportDecisionV1: String, Codable, Sendable {
   case admitted
   case blocked
   case unsupported
 }
-
 public enum TemporalSymmetryAdmissionExitClassV1: String, Codable, Sendable {
   case success
   case blocked
   case unavailable
 }
-
 public enum TemporalSymmetryReasonCodeV1: String, CaseIterable, Codable, Sendable {
   case invalidRegister
   case explicitlyUnsupported
@@ -36,7 +32,6 @@ public enum TemporalSymmetryReasonCodeV1: String, CaseIterable, Codable, Sendabl
   case unresolvedDivergence
   case unexplainedDivergence
   case missingReportIdentity
-
   public var makesEvaluationUnavailable: Bool {
     switch self {
     case .invalidRegister, .missingPrerequisite, .missingEvidence, .partialEvidence, .foreignRun,
@@ -50,7 +45,6 @@ public enum TemporalSymmetryReasonCodeV1: String, CaseIterable, Codable, Sendabl
     }
   }
 }
-
 /// The retention state of one P3 comparison. A comparison is only usable for
 /// admission when its complete raw artifacts were retained by the runner.
 public enum TemporalSymmetryEvidenceStatusV1: String, Codable, Sendable {
@@ -58,41 +52,35 @@ public enum TemporalSymmetryEvidenceStatusV1: String, Codable, Sendable {
   case partial
   case executionFailed
 }
-
 /// A comparison is deliberately typed by its conformance category. This keeps
 /// a temporal result from being used as symmetry evidence, or vice versa.
 public enum TemporalSymmetryComparisonEvidenceV1: Sendable {
   case temporal(TemporalComparisonV1)
   case symmetry(SymmetryOrbitComparisonV1)
-
   public var caseID: String {
     switch self {
     case let .temporal(comparison): comparison.caseID
     case let .symmetry(comparison): comparison.caseID
     }
   }
-
   public var kind: TemporalSymmetryCaseKindV1 {
     switch self {
     case .temporal: .temporal
     case .symmetry: .symmetry
     }
   }
-
   public var configuration: TemporalSymmetryConfigurationV1 {
     switch self {
     case let .temporal(comparison): comparison.configuration
     case let .symmetry(comparison): comparison.configuration
     }
   }
-
   public var correlation: TemporalSymmetryCaseRunCorrelationV1 {
     switch self {
     case let .temporal(comparison): comparison.correlation
     case let .symmetry(comparison): comparison.correlation
     }
   }
-
   public var outcome: TemporalSymmetryExpectedOutcomeV1 {
     switch self {
     case let .temporal(comparison): comparison.outcome
@@ -100,7 +88,6 @@ public enum TemporalSymmetryComparisonEvidenceV1: Sendable {
     }
   }
 }
-
 /// The runner supplies one retained comparison record per case. The gate uses
 /// the digest bindings and retention state here instead of guessing from a
 /// successful process exit.
@@ -111,7 +98,6 @@ public struct TemporalSymmetryCaseEvidenceV1: Sendable {
   public let toolchainSHA256: String
   public let status: TemporalSymmetryEvidenceStatusV1
   public let normalizedDifferenceFingerprint: String?
-
   public init(
     comparison: TemporalSymmetryComparisonEvidenceV1,
     comparisonEvidence: CoreEvidenceReferenceV1,
@@ -136,7 +122,6 @@ public struct TemporalSymmetryCaseEvidenceV1: Sendable {
     self.normalizedDifferenceFingerprint = normalizedDifferenceFingerprint
   }
 }
-
 /// All gate inputs describe exactly one report and one P3 invocation.
 public struct TemporalSymmetryGateInputV1: Sendable {
   public let reportID: UUID
@@ -150,7 +135,6 @@ public struct TemporalSymmetryGateInputV1: Sendable {
   public let manifestSHA256: String
   public let toolchainSHA256: String
   public let prerequisiteAvailable: Bool
-
   public init(
     reportID: UUID = UUID(),
     gateRunID: UUID,
@@ -177,12 +161,10 @@ public struct TemporalSymmetryGateInputV1: Sendable {
     self.prerequisiteAvailable = prerequisiteAvailable
   }
 }
-
 /// Evaluates the declared finite P3 surface. It never converts a malformed,
 /// stale, partial, or unaccounted result into an admitted support claim.
 public struct TemporalSymmetrySupportGateV1: Sendable {
   public init() {}
-
   public func evaluate(_ input: TemporalSymmetryGateInputV1) -> TemporalSymmetryAdmissionV1 {
     let casesByID = Dictionary(uniqueKeysWithValues: input.cases.cases.map { ($0.id, $0) })
     let evidenceGroups = Dictionary(grouping: input.evidence, by: { $0.comparison.caseID })
@@ -197,11 +179,9 @@ public struct TemporalSymmetrySupportGateV1: Sendable {
     } catch {
       registerIsValid = false
     }
-
     guard registerIsValid, !input.surface.entries.isEmpty else {
       return invalidRegisterReport(input)
     }
-
     let observations = casesByID.mapValues {
       inspect($0, evidence: evidenceByCaseID[$0.id], input: input)
     }
@@ -232,7 +212,6 @@ public struct TemporalSymmetrySupportGateV1: Sendable {
     try! report.validate(supportSurface: input.surface, cases: input.cases, ledger: input.ledger)
     return report
   }
-
   private func invalidRegisterReport(_ input: TemporalSymmetryGateInputV1) -> TemporalSymmetryAdmissionV1 {
     let entry = try! TemporalSymmetryAdmissionEntryV1(
       supportID: "governance-register",
@@ -252,7 +231,6 @@ public struct TemporalSymmetrySupportGateV1: Sendable {
       unexplainedDivergenceCaseIDs: [],
       finalExitClass: .unavailable)
   }
-
   private func inspect(
     _ declaredCase: TemporalSymmetryCaseV1,
     evidence: TemporalSymmetryCaseEvidenceV1?,
@@ -277,8 +255,8 @@ public struct TemporalSymmetrySupportGateV1: Sendable {
     }
     if case let .temporal(temporal) = comparison,
        comparison.outcome == .exact,
-       (temporal.swiftResult.outcome == .violated && temporal.swiftResult.lasso == nil
-         || temporal.tlcResult.outcome == .violated && temporal.tlcResult.lasso == nil) {
+       temporal.swiftResult.outcome == .violated && temporal.swiftResult.lasso == nil
+         || temporal.tlcResult.outcome == .violated && temporal.tlcResult.lasso == nil {
       reasons.insert(.missingTemporalWitness)
     }
     if case let .symmetry(symmetry) = comparison,
@@ -292,7 +270,6 @@ public struct TemporalSymmetrySupportGateV1: Sendable {
       reference: evidence.comparisonEvidence,
       correlation: comparison.correlation)
   }
-
   private func decision(
     for entry: TemporalSymmetrySupportSurfaceEntryV1,
     observations: [String: CaseObservation],
@@ -339,7 +316,6 @@ public struct TemporalSymmetrySupportGateV1: Sendable {
       evidence: references,
       caseRunCorrelations: correlations)
   }
-
   private func unexplainedDifferenceCaseIDs(
     observations: [String: CaseObservation], ledger: TemporalSymmetryDivergenceLedgerV1
   ) -> Set<String> {
@@ -353,7 +329,6 @@ public struct TemporalSymmetrySupportGateV1: Sendable {
       return nil
     })
   }
-
   private func coreAdmissionReasons(_ input: TemporalSymmetryGateInputV1) -> Set<TemporalSymmetryReasonCodeV1> {
     let core = input.coreAdmission
     let context = input.coreAdmissionContext
@@ -372,23 +347,19 @@ public struct TemporalSymmetrySupportGateV1: Sendable {
     }
     return reasons
   }
-
   private func exitClass(for entries: [TemporalSymmetryAdmissionEntryV1]) -> TemporalSymmetryAdmissionExitClassV1 {
     if entries.contains(where: { $0.reasonCodes.contains(where: \.makesEvaluationUnavailable) }) { return .unavailable }
     return entries.contains(where: { $0.decision == .blocked }) ? .blocked : .success
   }
-
   private func validDigest(_ value: String) -> String {
     TLCReferencePinV1.isSHA256(value) ? value : String(repeating: "0", count: 64)
   }
-
   private struct CaseObservation {
     let reasons: Set<TemporalSymmetryReasonCodeV1>
     let comparisonIsDifference: Bool
     let fingerprint: String?
     let reference: CoreEvidenceReferenceV1?
     let correlation: TemporalSymmetryCaseRunCorrelationV1?
-
     init(
       reasons: Set<TemporalSymmetryReasonCodeV1>,
       comparisonIsDifference: Bool = false,
@@ -404,14 +375,12 @@ public struct TemporalSymmetrySupportGateV1: Sendable {
     }
   }
 }
-
 public enum TemporalSymmetryDeclaredReasonV1: String, Codable, Sendable {
   case outsideDeclaredScope
   case combinedTemporalSymmetryUnsupported
   case awaitingRequiredEvidence
   case blockedByKnownDivergence
 }
-
 public struct TemporalSymmetrySupportSurfaceEntryV1: Equatable, Codable, Sendable {
   public let id: String
   public let behavior: String
@@ -422,7 +391,6 @@ public struct TemporalSymmetrySupportSurfaceEntryV1: Equatable, Codable, Sendabl
   public let requestedStatus: TemporalSymmetrySupportRequestV1
   public let linkedDivergenceIDs: [String]
   public let reason: TemporalSymmetryDeclaredReasonV1?
-
   public init(
     id: String,
     behavior: String,
@@ -445,7 +413,6 @@ public struct TemporalSymmetrySupportSurfaceEntryV1: Equatable, Codable, Sendabl
     self.reason = reason
     try validate()
   }
-
   public func validate() throws {
     try finiteBounds.validate()
     try configuration.validate()
@@ -468,11 +435,9 @@ public struct TemporalSymmetrySupportSurfaceEntryV1: Equatable, Codable, Sendabl
       }
     }
   }
-
   private enum CodingKeys: String, CodingKey, CaseIterable {
     case id, behavior, kind, finiteBounds, configuration, mandatoryCaseIDs, requestedStatus, linkedDivergenceIDs, reason
   }
-
   public init(from decoder: Decoder) throws {
     let container = try TemporalSymmetryGovernanceDecodingV1.container(decoder, keyedBy: CodingKeys.self)
     try self.init(
@@ -487,16 +452,13 @@ public struct TemporalSymmetrySupportSurfaceEntryV1: Equatable, Codable, Sendabl
       reason: try container.decodeIfPresent(TemporalSymmetryDeclaredReasonV1.self, forKey: .reason))
   }
 }
-
 public struct TemporalSymmetrySupportSurfaceV1: Equatable, Codable, Sendable {
   public static let schema = "TemporalSymmetrySupportSurfaceV1"
   public let schema: String
   public let entries: [TemporalSymmetrySupportSurfaceEntryV1]
-
   public init(entries: [TemporalSymmetrySupportSurfaceEntryV1]) throws {
     try self.init(schema: Self.schema, entries: entries)
   }
-
   public init(schema: String, entries: [TemporalSymmetrySupportSurfaceEntryV1]) throws {
     guard schema == Self.schema else { throw TemporalSymmetryGovernanceErrorV1.invalidSchema(schema) }
     var ids = Set<String>()
@@ -509,16 +471,13 @@ public struct TemporalSymmetrySupportSurfaceV1: Equatable, Codable, Sendable {
     self.schema = schema
     self.entries = entries
   }
-
   private enum CodingKeys: String, CodingKey, CaseIterable { case schema, entries }
-
   public init(from decoder: Decoder) throws {
     let container = try TemporalSymmetryGovernanceDecodingV1.container(decoder, keyedBy: CodingKeys.self)
     try self.init(
       schema: container.decode(String.self, forKey: .schema),
       entries: container.decode([TemporalSymmetrySupportSurfaceEntryV1].self, forKey: .entries))
   }
-
   public func validate(cases: TemporalSymmetryCasesV1, ledger: TemporalSymmetryDivergenceLedgerV1) throws {
     let casesByID = Dictionary(uniqueKeysWithValues: cases.cases.map { ($0.id, $0) })
     try ledger.validate(cases: cases)
@@ -548,21 +507,17 @@ public struct TemporalSymmetrySupportSurfaceV1: Equatable, Codable, Sendable {
     }
   }
 }
-
 public struct TemporalSymmetryCoreAdmissionReferenceV1: Equatable, Codable, Sendable {
   public let reportID: UUID
   public let gateRunID: UUID
   public let report: CoreEvidenceReferenceV1
-
   public init(reportID: UUID, gateRunID: UUID, report: CoreEvidenceReferenceV1) throws {
     self.reportID = reportID
     self.gateRunID = gateRunID
     self.report = report
     try report.validate()
   }
-
   private enum CodingKeys: String, CodingKey, CaseIterable { case reportID, gateRunID, report }
-
   public init(from decoder: Decoder) throws {
     let container = try TemporalSymmetryGovernanceDecodingV1.container(decoder, keyedBy: CodingKeys.self)
     try self.init(
@@ -571,7 +526,6 @@ public struct TemporalSymmetryCoreAdmissionReferenceV1: Equatable, Codable, Send
       report: container.decode(CoreEvidenceReferenceV1.self, forKey: .report))
   }
 }
-
 /// Binds the required core-admission artifact to the P3 invocation consuming
 /// it. The runner obtains these values from the current core gate, rather than
 /// accepting an arbitrary retained report reference.
@@ -581,7 +535,6 @@ public struct TemporalSymmetryCoreAdmissionContextV1: Equatable, Sendable {
   public let coreGateRunID: UUID
   public let reportPath: String
   public let reportSHA256: String
-
   public init(
     temporalSymmetryGateRunID: UUID,
     reportID: UUID,
@@ -599,7 +552,6 @@ public struct TemporalSymmetryCoreAdmissionContextV1: Equatable, Sendable {
     self.reportSHA256 = reportSHA256
   }
 }
-
 public struct TemporalSymmetryAdmissionEntryV1: Equatable, Codable, Sendable {
   public let supportID: String
   public let decision: TemporalSymmetrySupportDecisionV1
@@ -608,7 +560,6 @@ public struct TemporalSymmetryAdmissionEntryV1: Equatable, Codable, Sendable {
   public let divergenceIDs: [String]
   public let evidence: [CoreEvidenceReferenceV1]
   public let caseRunCorrelations: [TemporalSymmetryCaseRunCorrelationV1]
-
   public init(
     supportID: String,
     decision: TemporalSymmetrySupportDecisionV1,
@@ -627,7 +578,6 @@ public struct TemporalSymmetryAdmissionEntryV1: Equatable, Codable, Sendable {
     self.caseRunCorrelations = caseRunCorrelations
     try validate()
   }
-
   public func validate() throws {
     guard !supportID.isEmpty, !mandatoryCaseIDs.isEmpty,
           Set(reasonCodes).count == reasonCodes.count,
@@ -646,11 +596,9 @@ public struct TemporalSymmetryAdmissionEntryV1: Equatable, Codable, Sendable {
     }
     try evidence.forEach { try $0.validate() }
   }
-
   private enum CodingKeys: String, CodingKey, CaseIterable {
     case supportID, decision, reasonCodes, mandatoryCaseIDs, divergenceIDs, evidence, caseRunCorrelations
   }
-
   public init(from decoder: Decoder) throws {
     let container = try TemporalSymmetryGovernanceDecodingV1.container(decoder, keyedBy: CodingKeys.self)
     try self.init(
@@ -663,13 +611,11 @@ public struct TemporalSymmetryAdmissionEntryV1: Equatable, Codable, Sendable {
       caseRunCorrelations: container.decode([TemporalSymmetryCaseRunCorrelationV1].self, forKey: .caseRunCorrelations))
   }
 }
-
 public struct TemporalSymmetryAdmissionV1: Equatable, Codable, Sendable {
   public static let schema = "TemporalSymmetryAdmissionV1"
   public static let authorityBoundary =
     "Published TLA+ semantics are authoritative; TLC is a pinned executable reference; "
       + "TLC source and tests are diagnostic evidence; no hidden checker or oracle is claimed."
-
   public let schema: String
   public let reportID: UUID
   public let gateRunID: UUID
@@ -682,7 +628,6 @@ public struct TemporalSymmetryAdmissionV1: Equatable, Codable, Sendable {
   public let unexplainedDivergenceCount: Int
   public let unexplainedDivergenceCaseIDs: [String]
   public let finalExitClass: TemporalSymmetryAdmissionExitClassV1
-
   public init(
     reportID: UUID,
     gateRunID: UUID,
@@ -709,7 +654,6 @@ public struct TemporalSymmetryAdmissionV1: Equatable, Codable, Sendable {
       unexplainedDivergenceCaseIDs: unexplainedDivergenceCaseIDs,
       finalExitClass: finalExitClass)
   }
-
   public init(
     schema: String,
     reportID: UUID,
@@ -773,7 +717,6 @@ public struct TemporalSymmetryAdmissionV1: Equatable, Codable, Sendable {
     self.unexplainedDivergenceCaseIDs = unexplainedDivergenceCaseIDs.sorted()
     self.finalExitClass = finalExitClass
   }
-
   public func validate(
     supportSurface: TemporalSymmetrySupportSurfaceV1,
     cases: TemporalSymmetryCasesV1,
@@ -823,12 +766,10 @@ public struct TemporalSymmetryAdmissionV1: Equatable, Codable, Sendable {
       }
     }
   }
-
   private enum CodingKeys: String, CodingKey, CaseIterable {
     case schema, reportID, gateRunID, coreAdmission, authority, manifestSHA256, toolchainSHA256, entries
     case admittedBounds, unexplainedDivergenceCount, unexplainedDivergenceCaseIDs, finalExitClass
   }
-
   public init(from decoder: Decoder) throws {
     let container = try TemporalSymmetryGovernanceDecodingV1.container(decoder, keyedBy: CodingKeys.self)
     try self.init(

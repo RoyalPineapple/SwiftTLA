@@ -22,13 +22,13 @@ public actor MediaContract {
             Variable(wPhase)
             Variable(pPhase)
 
-            Action("cStop")     { (cPhase == 2 || cPhase == 3) && (wPhase != 2 && wPhase != 3) && cPhase.becomes(0) }
+            Action("cStop") { (cPhase == 2 || cPhase == 3) && (wPhase != 2 && wPhase != 3) && cPhase.becomes(0) }
             Action("cInterrupt") { cPhase == 2 && (wPhase != 2 && wPhase != 3) && cPhase.becomes(3) }
-            Action("wStart")     { wPhase == 1 && cPhase == 2 && wPhase.becomes(2) }
-            Action("pPlay")      { (pPhase == 2 || pPhase == 4) && wPhase == 4 && pPhase.becomes(3) }
+            Action("wStart") { wPhase == 1 && cPhase == 2 && wPhase.becomes(2) }
+            Action("pPlay") { (pPhase == 2 || pPhase == 4) && wPhase == 4 && pPhase.becomes(3) }
 
             Invariant("writerRequiresCapture") { (wPhase != 2 && wPhase != 3) || (cPhase == 2) }
-            Invariant("playerRequiresWriter")  { (pPhase != 3) || (wPhase == 4) }
+            Invariant("playerRequiresWriter") { (pPhase != 3) || (wPhase == 4) }
         }
     }
 
