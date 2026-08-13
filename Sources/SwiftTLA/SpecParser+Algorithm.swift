@@ -45,7 +45,20 @@ extension SpecParser {
                 result.variables.append((variable.name, variable.initial, variable.initialSet, nil))
             }
         }
-        result.actions += lowered.actions.map { .init(name: $0.name, body: $0.body, bindings: $0.bindings) }
+        let processTypes = Dictionary(uniqueKeysWithValues: model.processes.map { process in
+            (process.domain, process.typeName)
+        })
+        result.actions += lowered.actions.map { action in
+            let bindingTypes = action.bindings.reduce(into: [String: String]()) { types, binding in
+                if let type = processTypes[binding.values] { types[binding.name] = type }
+            }
+            return .init(
+                name: action.name,
+                body: action.body,
+                bindings: action.bindings,
+                bindingSwiftTypes: bindingTypes
+            )
+        }
     }
 
     private static func parseAlgorithmComponent(_ expression: ExprSyntax) -> AlgorithmComponentModel? {

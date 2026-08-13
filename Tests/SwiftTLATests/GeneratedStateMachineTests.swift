@@ -52,7 +52,7 @@ struct GeneratedAlgorithmMachineTests {
     func generatedAlgorithmUsesTheSharedLowering() throws {
         var model = GeneratedAlgorithmCounter()
         #expect(model.state.count == 0)
-        let left = GeneratedAlgorithmCounter.ActionLabel.increment(process: "left")
+        let left = GeneratedAlgorithmCounter.ActionLabel.increment(process: .left)
         let result = try model.apply(left)
         #expect(result.before.count == 0)
         #expect(result.after.count == 1)
