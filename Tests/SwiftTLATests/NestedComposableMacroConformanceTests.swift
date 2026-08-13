@@ -1,0 +1,163 @@
+import Foundation
+import SwiftTLA
+import Testing
+
+private enum AvailabilityEvaluationFailure: Error {
+    case unavailable
+}
+
+struct NestedComposableMacroConformanceTests {
+    @Test("Runtime successor relation preserves parameterized nondeterministic checked edges")
+    func runtimeSuccessorsPreserveEveryCheckedParameterizedSuccessor() throws {
+        let value = Var<Int>("value")
+        let spec = TLASpec("ConstrainedParameterizedChoice") {
+            Variable(value, 0)
+            Action("choose", parameters: [ActionParameter("branch", values: [1, 2])]) {
+                choose(value, from: StateExpr.set([1, 2, 3]))
+            }
+            Constraint(value <= 2)
+        }
+        let graph = try ModelChecker(spec: spec).exploreGraph()
+        let runtime = SpecRuntime(spec: spec)
+
+        for (sourceID, source) in graph.states {
+            let checked = (graph.transitions[sourceID] ?? []).compactMap { transition -> (TLAActionInvocation, [String: TLAValue])? in
+                guard let successor = graph.states[transition.target] else { return nil }
+                return (transition.label.invocation, successor)
+            }
+            let runtimeSuccessors = try runtime.availableInvocations(in: source).flatMap { invocation in
+                try runtime.successors(invocation, from: source).map { (invocation, $0) }
+            }
+
+            #expect(multiset(runtimeSuccessors) == multiset(checked))
+            #expect(!runtimeSuccessors.contains { $0.1 == ["value": .int(3)] })
+        }
+    }
+
+    @Test("Nested model and adapters expose matching protocol-generic observations")
+    @MainActor
+    func nestedSurfacesShareCanonicalExecution() async throws {
+        let invocation = TLAActionInvocation(name: "advance")
+        var model = NestedComposedCounter()
+        var observable = NestedComposedCounter.Observable()
+        var actor = NestedComposedCounter.Actor()
+
+        let modelResult = try await executeAndObserve(&model, invocation: invocation)
+        let observableResult = try await executeAndObserve(&observable, invocation: invocation)
+        let actorResult = try await executeAndObserve(&actor, invocation: invocation)
+
+        #expect(modelResult.before == observableResult.before)
+        #expect(modelResult.before == actorResult.before)
+        #expect(modelResult.after == observableResult.after)
+        #expect(modelResult.after == actorResult.after)
+        #expect(modelResult.before.availableInvocations == [invocation])
+        #expect(modelResult.after.availableInvocations == [invocation])
+    }
+
+    @Test("Three-parameter invocation identity survives canonical and nested adapter execution")
+    @MainActor
+    func threeParameterIdentityRemainsDistinctAcrossNestedSurfaces() async throws {
+        let first = TLAActionInvocation(name: "board", arguments: [.int(1), .int(10), .int(100)])
+        let selected = TLAActionInvocation(name: "board", arguments: [.int(2), .int(20), .int(200)])
+        let runtime = EndToEndThreeParameterActionMachine.runtime
+        let initial = try #require(runtime.initialStates().first)
+        let available = try runtime.availableInvocations(in: initial)
+        let observable = ObservableThreeParameterMachine()
+        let actor = ThreeParameterActionActor()
+
+        #expect(first != selected)
+        #expect(Set(available).count == 8)
+        #expect(available.contains(first))
+        #expect(available.contains(selected))
+        #expect(try runtime.apply(selected, to: initial)["floor"] == .int(222))
+        #expect(try await observable.execute(selected).invocation == selected)
+        #expect(try await actor.execute(selected).invocation == selected)
+    }
+
+    @Test("Availability evaluation failures retain invocation context")
+    func availabilityEvaluationFailureReportsTheEvaluatedInvocation() {
+        let count = Var<Int>("count")
+        let invocation = TLAActionInvocation(name: "advance")
+        let spec = TLASpec("UnavailableAvailability") {
+            Variable(count, 0)
+            Action("advance") { count.becomes(count + 1) }
+        }
+        let runtime = SpecRuntime(spec: spec) { _, _, _ in
+            throw AvailabilityEvaluationFailure.unavailable
+        }
+        let state = runtime.initialStates()[0]
+
+        do {
+            _ = try runtime.availableInvocations(in: state)
+            Issue.record("Expected availability evaluation to fail")
+        } catch let error as SpecRuntime.RuntimeError {
+            guard case .enumerationFailed(let requested, let evaluated, _) = error else {
+                Issue.record("Expected enumerationFailed, got \(error)")
+                return
+            }
+            #expect(requested == nil)
+            #expect(evaluated == invocation)
+        } catch {
+            Issue.record("Expected runtime error, got \(error)")
+        }
+    }
+
+    @Test("Invalid nested macro composition emits enclosure diagnostics")
+    func invalidNestedMacroCompositionDoesNotTypeCheck() throws {
+        let fixture = packageRoot().appendingPathComponent("Tests/Fixtures/InvalidNestedMacroComposition")
+        let result = try runSwift(["build", "--package-path", fixture.path])
+
+        #expect(result.status != 0)
+        #expect(result.output.contains("Adapter without a spec must be enclosed by one @TLAModel"))
+        #expect(result.output.contains("Adapter must be enclosed by exactly one @TLAModel"))
+        #expect(result.output.contains("Nested adapters require an enclosing @TLAModel struct"))
+    }
+
+    private func executeAndObserve<Machine: TLAMachineExecuting>(
+        _ machine: inout Machine,
+        invocation: TLAActionInvocation
+    ) async throws -> (before: TLAMachineObservation, after: TLAMachineObservation) {
+        let before = await machine.machineObservation()
+        _ = try await machine.execute(invocation)
+        return (before, await machine.machineObservation())
+    }
+
+    private func multiset(
+        _ transitions: [(TLAActionInvocation, [String: TLAValue])]
+    ) -> [String: Int] {
+        Dictionary(
+            transitions.map { ("\($0.0.description) -> \($0.1)", 1) },
+            uniquingKeysWith: +
+        )
+    }
+
+    private func runSwift(_ arguments: [String]) throws -> (status: Int32, output: String) {
+        let scratch = FileManager.default.temporaryDirectory
+            .appendingPathComponent("SwiftTLA-invalid-nested-macro-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: scratch) }
+        try FileManager.default.createDirectory(at: scratch, withIntermediateDirectories: true)
+
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+        process.arguments = ["swift"] + arguments + ["--scratch-path", scratch.path]
+        let output = Pipe()
+        process.standardOutput = output
+        process.standardError = output
+        try process.run()
+        let outputData = output.fileHandleForReading.readDataToEndOfFile()
+        process.waitUntilExit()
+
+        return (
+            process.terminationStatus,
+            String(data: outputData, encoding: .utf8) ?? ""
+        )
+    }
+
+    private func packageRoot() -> URL {
+        var directory = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+        while !FileManager.default.fileExists(atPath: directory.appendingPathComponent("Package.swift").path) {
+            directory.deleteLastPathComponent()
+        }
+        return directory
+    }
+}
