@@ -16,8 +16,8 @@ if [ "$lint_status" -ne 0 ]; then
   echo "warning: SwiftLint violations found; continuing because lint is advisory" >&2
 fi
 
-echo "Run tests"
-swift test
+echo "Run PR smoke tests"
+./scripts/run_pr_smoke_tests.sh
 
 echo "Build package"
 swift build
