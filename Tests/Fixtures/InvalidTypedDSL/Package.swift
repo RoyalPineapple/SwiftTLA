@@ -4,19 +4,19 @@ import CompilerPluginSupport
 import PackageDescription
 
 let package = Package(
-  name: "InvalidTypedElevatorDSL",
+  name: "InvalidTypedDSL",
   platforms: [.macOS(.v14)],
   dependencies: [.package(name: "SwiftTLA", path: "../../..")],
   targets: [
     .executableTarget(
-      name: "InvalidTypedElevatorDSL",
+      name: "InvalidTypedDSL",
       dependencies: [
         .product(name: "SwiftTLA", package: "SwiftTLA"),
         .product(name: "SwiftTLAMacros", package: "SwiftTLA")
       ]
     ),
     .executableTarget(
-      name: "InvalidTypedElevatorDSLUnknownField",
+      name: "InvalidTypedDSLUnknownField",
       dependencies: [
         .product(name: "SwiftTLA", package: "SwiftTLA"),
         .product(name: "SwiftTLAMacros", package: "SwiftTLA")

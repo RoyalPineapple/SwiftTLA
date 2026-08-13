@@ -162,32 +162,32 @@ struct MultiCarElevatorDSLTests {
     }
   }
 
-  @Test("typed elevator invalid fixture reports each source-local diagnostic")
-  func invalidTypedElevatorDSLReportsSourceLocalDiagnostics() throws {
-    let fixture = packageRoot().appendingPathComponent("Tests/Fixtures/InvalidTypedElevatorDSL")
+  @Test("typed DSL invalid fixture reports each source-local diagnostic")
+  func invalidTypedDSLReportsSourceLocalDiagnostics() throws {
+    let fixture = packageRoot().appendingPathComponent("Tests/Fixtures/InvalidTypedDSL")
     let result = try runSwift([
-      "build", "--package-path", fixture.path, "--target", "InvalidTypedElevatorDSL"
+      "build", "--package-path", fixture.path, "--target", "InvalidTypedDSL"
     ])
 
     #expect(result.status != 0)
     for expected in [
-      "InvalidTypedElevatorDSL.swift:40:",
+      "InvalidTypedDSL.swift:40:",
       "parameter 'person' requires an explicitly written finite values array",
-      "InvalidTypedElevatorDSL.swift:57:",
+      "InvalidTypedDSL.swift:57:",
       "parameter 'car' requires a non-empty finite values array",
-      "InvalidTypedElevatorDSL.swift:74:",
+      "InvalidTypedDSL.swift:74:",
       "parameter 'direction' has duplicate finite-domain values",
-      "InvalidTypedElevatorDSL.swift:94:",
+      "InvalidTypedDSL.swift:94:",
       "Parameterized action 'unsupportedUpdate' contains an unsupported typed update; use a directly written finite enum case or schema field token."
     ] {
       #expect(result.output.contains(expected))
     }
 
     let unknownField = try runSwift([
-      "build", "--package-path", fixture.path, "--target", "InvalidTypedElevatorDSLUnknownField"
+      "build", "--package-path", fixture.path, "--target", "InvalidTypedDSLUnknownField"
     ])
     #expect(unknownField.status != 0)
-    #expect(unknownField.output.contains("InvalidTypedElevatorDSLUnknownField.swift:35:"))
+    #expect(unknownField.output.contains("InvalidTypedDSLUnknownField.swift:35:"))
     #expect(unknownField.output.contains("type 'CarSchema' has no member 'person'"))
   }
 
