@@ -77,6 +77,12 @@ struct P4GeneratedCounterFixture {
       Invariant("withinBounds") { value >= 0 && value <= 1 }
     }
   }
+
+  @TLAObservable
+  final class Observable {}
+
+  @TLAActor
+  actor Actor {}
 }
 
 @TLAModel
@@ -89,6 +95,12 @@ struct P4GeneratedCounterMismatchFixture {
       Invariant("withinBounds") { value >= 0 && value <= 1 }
     }
   }
+
+  @TLAObservable
+  final class Observable {}
+
+  @TLAActor
+  actor Actor {}
 
   static func intentionalMismatchActionOutcome(
     actionName: String,

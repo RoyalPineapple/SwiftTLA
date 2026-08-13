@@ -5,7 +5,7 @@
       "id": "parser-builder-bounded-counter",
       "manifest": {
         "path": "Tests/Fixtures/PublicWorkflowConformance/ParserBuilder/manifest.json",
-        "sha256": "a31fa2719e927197cb4a8bd330aa72f477d52c26ffb9e019db539d53fe046c05"
+        "sha256": "07d2c2e56f555a9a46076390ced338e350223f1cf0f0716c3ea4e0048216fb5c"
       },
       "expectedOutcome": "exact"
     },
@@ -13,13 +13,13 @@
       "id": "parser-builder-bounded-counter-mismatch",
       "manifest": {
         "path": "Tests/Fixtures/PublicWorkflowConformance/ParserBuilder/Mismatch/manifest.json",
-        "sha256": "29a2c97253b8632469d9bb907881494ed8d105008dce1089fba47605a0d898d8"
+        "sha256": "87d98964b01b49b58ba677be6937c2ffc4cbb37124e60b25ebcfda1fa38bf550"
       },
       "expectedOutcome": "difference"
     }
   ],
   "generatedBehavior": {
     "path": "Verification/PublicWorkflowConformance/generated-behavior.json",
-    "sha256": "78029f8009b8215bb96798c21da4cd32dbd81ca6abffb64f525390e71ce9c3d9"
+    "sha256": "f05ad2c3ff8111a126104b73302b75d69bd9ca8fb8983fd7ebd99aff670d0206"
   }
 }

@@ -1,8 +1,6 @@
-import Observation
 import SwiftTLA
 import SwiftTLAMacros
 
-@Observable
 @TLAObservable
 final class InvalidObservable {
   static var spec: TLASpec {

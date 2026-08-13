@@ -469,13 +469,21 @@ public struct PublicWorkflowGeneratedBehaviorAdapterV1: Sendable {
   }
 
   private func resolved(_ url: URL, beneath root: URL) throws -> URL {
-    guard !url.path.hasPrefix("/") || url.path.hasPrefix(root.path + "/") || url == root else {
-      throw PublicWorkflowGovernanceErrorV1.invalidField(record: url.path, field: "path outside project root")
-    }
     let candidate = url.path.hasPrefix("/") ? url : root.appendingPathComponent(url.path)
-    let resolved = candidate.resolvingSymlinksInPath().standardizedFileURL
+    var existing = candidate
+    var suffix = [String]()
+    while !FileManager.default.fileExists(atPath: existing.path) {
+      let parent = existing.deletingLastPathComponent()
+      guard parent != existing else { break }
+      suffix.append(existing.lastPathComponent)
+      existing = parent
+    }
+    let resolved = suffix.reversed().reduce(existing.resolvingSymlinksInPath().standardizedFileURL) {
+      $0.appendingPathComponent($1)
+    }.standardizedFileURL
     guard resolved.path == root.path || resolved.path.hasPrefix(root.path + "/") else {
-      throw PublicWorkflowGovernanceErrorV1.invalidField(record: url.path, field: "path escape")
+      let field = url.path.hasPrefix("/") ? "path outside project root" : "path escape"
+      throw PublicWorkflowGovernanceErrorV1.invalidField(record: url.path, field: field)
     }
     return resolved
   }
