@@ -1,4 +1,6 @@
-public struct CanonicalTransitionEvidence<Snapshot: Equatable>: Equatable {
+import os
+
+public struct CanonicalTransitionEvidence<Snapshot: Equatable & Sendable>: Equatable, Sendable {
     public let invocation: TLAActionInvocation
     public let before: Snapshot
     public let after: Snapshot
@@ -113,17 +115,17 @@ public extension TLAMachineAdapterAccess where TransitionEvidence == CanonicalMo
     }
 }
 
-public struct CanonicalMachine<Snapshot: Equatable> {
+public struct CanonicalMachine<Snapshot: Equatable & Sendable>: Sendable {
     public let runtime: SpecRuntime
-    private let stateDictionary: (Snapshot) -> [String: TLAValue]
-    private let snapshotFromDictionary: ([String: TLAValue]) -> Snapshot
+    private let stateDictionary: @Sendable (Snapshot) -> [String: TLAValue]
+    private let snapshotFromDictionary: @Sendable ([String: TLAValue]) -> Snapshot
     public private(set) var snapshot: Snapshot
 
     public init(
         runtime: SpecRuntime,
         initial: Snapshot,
-        stateDictionary: @escaping (Snapshot) -> [String: TLAValue],
-        snapshotFromDictionary: @escaping ([String: TLAValue]) -> Snapshot
+        stateDictionary: @escaping @Sendable (Snapshot) -> [String: TLAValue],
+        snapshotFromDictionary: @escaping @Sendable ([String: TLAValue]) -> Snapshot
     ) {
         self.runtime = runtime
         self.snapshot = initial
@@ -188,5 +190,50 @@ public struct CanonicalMachine<Snapshot: Equatable> {
         let after = snapshotFromDictionary(next)
         snapshot = after
         return CanonicalTransitionEvidence(invocation: invocation, before: before, after: after)
+    }
+}
+
+public final class LockedValue<Value: Sendable>: Sendable {
+    private let storage: OSAllocatedUnfairLock<Value>
+
+    public init(_ value: Value) {
+        storage = OSAllocatedUnfairLock(initialState: value)
+    }
+
+    public var value: Value {
+        get { storage.withLock { $0 } }
+        set { storage.withLock { $0 = newValue } }
+    }
+}
+
+public final class CanonicalMachineStorage<Snapshot: Equatable & Sendable>: Sendable {
+    private let storage: OSAllocatedUnfairLock<CanonicalMachine<Snapshot>>
+
+    public init(_ machine: CanonicalMachine<Snapshot>) {
+        storage = OSAllocatedUnfairLock(initialState: machine)
+    }
+
+    public var snapshot: Snapshot {
+        storage.withLock { $0.snapshot }
+    }
+
+    public func tlaSnapshot() -> [String: TLAValue] {
+        storage.withLock { $0.tlaSnapshot() }
+    }
+
+    public func availableInvocations() throws -> [TLAActionInvocation] {
+        try storage.withLock { try $0.availableInvocations() }
+    }
+
+    public func availableInvocations(in state: [String: TLAValue]) throws -> [TLAActionInvocation] {
+        try storage.withLock { try $0.availableInvocations(in: state) }
+    }
+
+    public func apply(
+        _ invocation: TLAActionInvocation,
+        from state: [String: TLAValue],
+        selecting successor: @Sendable ([String: TLAValue]) -> Bool
+    ) throws -> CanonicalTransitionEvidence<Snapshot> {
+        try storage.withLock { try $0.apply(invocation, from: state, selecting: successor) }
     }
 }

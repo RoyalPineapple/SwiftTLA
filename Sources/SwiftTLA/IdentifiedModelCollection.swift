@@ -125,6 +125,10 @@ public struct IdentifiedModelCollection<Element: Identifiable, Value: TLAValueTy
   }
 }
 
+extension IdentifiedModelCollection.Entry: Sendable where Element: Sendable, Value: Sendable {}
+
+extension IdentifiedModelCollection: Sendable where Element: Sendable, Element.ID: Sendable, Value: Sendable {}
+
 public enum SymmetricCollectionRuntimeError: Error, Equatable, CustomStringConvertible {
   case unknownMember(collection: String, action: String)
   case actionNotEnabled(collection: String, action: String)

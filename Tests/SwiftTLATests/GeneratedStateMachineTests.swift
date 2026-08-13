@@ -289,7 +289,7 @@ private actor NestedCallbackRecorder {
 // MARK: - Tests for generated verification methods
 
 struct GeneratedStateMachineTests {
-    private struct BoardCallback {
+    private struct BoardCallback: Sendable {
         let person: Int
         let elevator: Int
         let direction: Int
@@ -300,11 +300,11 @@ struct GeneratedStateMachineTests {
     @Test("Observable parameterized action applies its selected finite-domain argument")
     func observableParameterizedAction() throws {
         let elevator = ObservableTwoCarElevator()
-        var callbackID: Int?
-        elevator.onMoveElevator = { id, _, _ in callbackID = id }
+        let callbackID = LockedValue<Int?>(nil)
+        elevator.onMoveElevator = { id, _, _ in callbackID.value = id }
         _ = try elevator._moveElevator(id: 2)
         #expect(elevator.floor == 2)
-        #expect(callbackID == 2)
+        #expect(callbackID.value == 2)
     }
 
     @Test("Model macro generates a parameterized action method")
@@ -481,9 +481,9 @@ struct GeneratedStateMachineTests {
         let expected = try model.apply(.board(person: 2, elevator: 20, direction: 200))
 
         let observable = ObservableThreeParameterMachine()
-        var callback: BoardCallback?
+        let callback = LockedValue<BoardCallback?>(nil)
         observable.onBoard = { person, elevator, direction, before, after in
-            callback = .init(
+            callback.value = .init(
                 person: person,
                 elevator: elevator,
                 direction: direction,
@@ -502,11 +502,11 @@ struct GeneratedStateMachineTests {
         #expect(acted.label.toInvocation() == expected.label.toInvocation())
         #expect(acted.before == expected.before)
         #expect(acted.after == expected.after)
-        #expect(callback?.person == 2)
-        #expect(callback?.elevator == 20)
-        #expect(callback?.direction == 200)
-        #expect(callback?.before == expected.before)
-        #expect(callback?.after == expected.after)
+        #expect(callback.value?.person == 2)
+        #expect(callback.value?.elevator == 20)
+        #expect(callback.value?.direction == 200)
+        #expect(callback.value?.before == expected.before)
+        #expect(callback.value?.after == expected.after)
     }
 
     @Test("Rejected generated labels preserve model, observable, and actor state")
@@ -527,8 +527,8 @@ struct GeneratedStateMachineTests {
         #expect(model.tlaSnapshot() == modelBefore)
 
         let observable = ObservableThreeParameterMachine()
-        var callbackCount = 0
-        observable.onBoard = { _, _, _, _, _ in callbackCount += 1 }
+        let callbackCount = LockedValue(0)
+        observable.onBoard = { _, _, _, _, _ in callbackCount.value += 1 }
         let observableBefore = observable.tlaSnapshot()
         do {
             _ = try observable._board(person: 2, elevator: 30, direction: 200)
@@ -537,7 +537,7 @@ struct GeneratedStateMachineTests {
             assertRejectedBoardError(error, expectedInvocation: expectedInvocation)
         }
         #expect(observable.tlaSnapshot() == observableBefore)
-        #expect(callbackCount == 0)
+        #expect(callbackCount.value == 0)
 
         let actor = ThreeParameterActionActor()
         let actorBefore = await actor.tlaSnapshot()

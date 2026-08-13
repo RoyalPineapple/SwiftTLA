@@ -551,8 +551,11 @@ struct SimpleError: Error, CustomStringConvertible {
 
 public struct ModelMacro: MemberMacro, ExtensionMacro {
     public static func expansion(of node: AttributeSyntax, attachedTo declaration: some DeclGroupSyntax, providingExtensionsOf type: some TypeSyntaxProtocol, conformingTo protocols: [TypeSyntax], in context: some MacroExpansionContext) throws -> [ExtensionDeclSyntax] {
+        guard diagnoseStoredInstanceState(in: declaration, context: context) == false else {
+            return []
+        }
         guard let ext = ("""
-            extension \(type.trimmed): @unchecked Sendable, TLAModelType, TLAMachineExecuting, TLAMachineAdapterCanonicalModel {}
+            extension \(type.trimmed): Sendable, TLAModelType, TLAMachineExecuting, TLAMachineAdapterCanonicalModel {}
             """ as DeclSyntax).as(ExtensionDeclSyntax.self) else { return [] }
         return [ext]
     }
@@ -621,11 +624,20 @@ public struct TLAActorMacro: MemberMacro, ExtensionMacro {
 
 public struct TLAObservableMacro: MemberMacro, ExtensionMacro {
     public static func expansion(of node: AttributeSyntax, attachedTo declaration: some DeclGroupSyntax, providingExtensionsOf type: some TypeSyntaxProtocol, conformingTo protocols: [TypeSyntax], in context: some MacroExpansionContext) throws -> [ExtensionDeclSyntax] {
-        guard case .nested = adapterNestingMode(for: declaration, at: node, in: context),
-              let ext = ("""
+        switch adapterNestingMode(for: declaration, at: node, in: context) {
+        case .nested:
+            guard let ext = ("""
                 @MainActor extension \(type.trimmed): Sendable, TLAMachineAdapterAccess {}
                 """ as DeclSyntax).as(ExtensionDeclSyntax.self) else { return [] }
-        return [ext]
+            return [ext]
+        case .standalone:
+            guard let ext = ("""
+                extension \(type.trimmed): Sendable {}
+                """ as DeclSyntax).as(ExtensionDeclSyntax.self) else { return [] }
+            return [ext]
+        case .invalid:
+            return []
+        }
     }
 
     public static func expansion(of node: AttributeSyntax, providingMembersOf declaration: some DeclGroupSyntax, in context: some MacroExpansionContext) throws -> [DeclSyntax] {
@@ -662,6 +674,39 @@ private struct AdapterNestingDiagnostic: DiagnosticMessage {
     let message: String
     let diagnosticID = MessageID(domain: "SwiftTLA", id: "invalid-adapter-nesting")
     let severity: DiagnosticSeverity = .error
+}
+
+private struct ModelStoredStateDiagnostic: DiagnosticMessage {
+    let message = "@TLAModel models cannot declare instance stored properties; model state belongs in the static specification"
+    let diagnosticID = MessageID(domain: "SwiftTLA", id: "model-instance-stored-state")
+    let severity: DiagnosticSeverity = .error
+}
+
+private func diagnoseStoredInstanceState(
+    in declaration: some DeclGroupSyntax,
+    context: some MacroExpansionContext
+) -> Bool {
+    for member in declaration.memberBlock.members {
+        guard let variable = member.decl.as(VariableDeclSyntax.self),
+              !variable.modifiers.contains(where: { $0.name.text == "static" || $0.name.text == "class" }),
+              let binding = variable.bindings.first(where: isInstanceStoredBinding) else {
+            continue
+        }
+        context.diagnose(Diagnostic(
+            node: Syntax(binding.pattern),
+            message: ModelStoredStateDiagnostic()
+        ))
+        return true
+    }
+    return false
+}
+
+private func isInstanceStoredBinding(_ binding: PatternBindingSyntax) -> Bool {
+    guard let accessorBlock = binding.accessorBlock else { return true }
+    guard case .accessors(let accessors) = accessorBlock.accessors else { return false }
+    return accessors.contains { accessor in
+        accessor.accessorSpecifier.text == "willSet" || accessor.accessorSpecifier.text == "didSet"
+    }
 }
 
 private enum AdapterNestingMode {

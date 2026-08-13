@@ -111,35 +111,34 @@ extension MacroExpander {
             let callbackType: String
             if !a.bindings.isEmpty {
                 let parameterTypes = a.bindings.map { swiftType(for: $0.values[0]) }.joined(separator: ", ")
-                callbackType = "((\(parameterTypes), State, State) -> Void)?"
+                callbackType = "(@Sendable (\(parameterTypes), State, State) -> Void)?"
             } else {
-                callbackType = "((State, State) async -> Void)?"
+                callbackType = "(@Sendable (State, State) async -> Void)?"
             }
-            let callbackVar = DeclSyntax(
-                VariableDeclSyntax(
-                    modifiers: [DeclModifierSyntax(name: .keyword(.public))],
-                    bindingSpecifier: .keyword(.var),
-                    bindings: [PatternBindingSyntax(
-                        pattern: IdentifierPatternSyntax(identifier: .identifier(callbackName)),
-                        typeAnnotation: TypeAnnotationSyntax(type: TypeSyntax(stringLiteral: callbackType))
-                    )]
-                )
-            )
-            decls.append(callbackVar)
+            decls.append(DeclSyntax(stringLiteral: "private let _\(callbackName) = LockedValue<\(callbackType)>(nil)"))
+            decls.append(DeclSyntax(stringLiteral: """
+            public var \(callbackName): \(callbackType) {
+                get { _\(callbackName).value }
+                set { _\(callbackName).value = newValue }
+            }
+            """))
         }
         decls.append(DeclSyntax(generateVariablesEnum(variables: variables)))
         decls.append(DeclSyntax(generateActionsEnum(actions: actions)))
         decls.append(DeclSyntax(generateActionLabel(actions: actions)))
         decls.append(DeclSyntax(generateStateStruct(variables: variables, enumInfos: enumInfos)))
         decls.append(DeclSyntax(stringLiteral: """
-        private var _machine = CanonicalMachine(
+        private let _machine = CanonicalMachineStorage(CanonicalMachine(
             runtime: \(typeName).runtime,
             initial: State(from: \(typeName).runtime.initialStates().first!),
             stateDictionary: { $0.asDictionary },
             snapshotFromDictionary: { State(from: $0) }
-        )
+        ))
         """))
-        decls.append(contentsOf: generateCanonicalMachineMembers(isActor: true, hasActions: !actions.isEmpty))
+        decls.append(contentsOf: generateCanonicalMachineMembers(
+            isActor: true,
+            hasActions: !actions.isEmpty
+        ))
         decls.append(contentsOf: generateVariableProperties(variables: variables).map(DeclSyntax.init))
         decls.append(contentsOf: generateObservableActionMethods(variables: variables, actions: actions).map(DeclSyntax.init))
         decls.append(DeclSyntax(

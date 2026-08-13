@@ -113,6 +113,58 @@ struct NestedComposableMacroConformanceTests {
         #expect(result.output.contains("Nested adapters require an enclosing @TLAModel struct"))
     }
 
+    @Test("Generated macro surfaces are structurally Sendable without unchecked conformance")
+    @MainActor
+    func generatedMacroSurfacesAreSendable() throws {
+        requireSendable(NestedComposedCounter.self)
+        requireSendable(NestedComposedCounter.Actor.self)
+        requireSendable(NestedComposedCounter.Observable.self)
+        requireSendable(NestedComposedCounter.ActionLabel.self)
+        requireSendable(NestedComposedCounter.TransitionEvidence.self)
+        requireSendable(GeneratedSymmetricRuntime.self)
+        requireSendable(ObservableTwoCarElevator.self)
+        requireSendable(TLAMachineObservation.self)
+
+        for ownedDirectory in ["Sources", "Tests"] {
+            let directory = packageRoot().appendingPathComponent(ownedDirectory)
+            let sourceFiles = try #require(FileManager.default.enumerator(
+                at: directory,
+                includingPropertiesForKeys: nil
+            ))
+            for case let sourceFile as URL in sourceFiles
+                where sourceFile.pathExtension == "swift" && !sourceFile.pathComponents.contains(".build") {
+                let source = try String(contentsOf: sourceFile)
+                #expect(!source.contains("@unchecked" + " Sendable"))
+            }
+        }
+    }
+
+    @Test("Model macro rejects arbitrary instance state")
+    func modelWithInstanceStoredStateDoesNotTypeCheck() throws {
+        let fixture = packageRoot().appendingPathComponent("Tests/Fixtures/InvalidModelStoredState")
+        let result = try runSwift(["build", "--package-path", fixture.path])
+
+        #expect(result.status != 0)
+        #expect(result.output.contains("@TLAModel models cannot declare instance stored properties"))
+    }
+
+    @Test("Model macro rejects observer-backed instance state")
+    func modelWithObservedInstanceStateDoesNotTypeCheck() throws {
+        let fixture = packageRoot().appendingPathComponent("Tests/Fixtures/InvalidObservedModelState")
+        let result = try runSwift(["build", "--package-path", fixture.path])
+
+        #expect(result.status != 0)
+        #expect(result.output.contains("@TLAModel models cannot declare instance stored properties"))
+    }
+
+    @Test("Standalone observable compiles as Sendable under strict concurrency")
+    func standaloneObservableCompilesAsSendable() throws {
+        let fixture = packageRoot().appendingPathComponent("Tests/Fixtures/StandaloneObservableSendable")
+        let result = try runSwift(["build", "--package-path", fixture.path])
+
+        #expect(result.status == 0)
+    }
+
     private func executeAndObserve<Machine: TLAMachineExecuting>(
         _ machine: inout Machine,
         invocation: TLAActionInvocation
@@ -121,6 +173,8 @@ struct NestedComposableMacroConformanceTests {
         _ = try await machine.execute(invocation)
         return (before, await machine.machineObservation())
     }
+
+    private func requireSendable<Value: Sendable>(_: Value.Type) {}
 
     private func multiset(
         _ transitions: [(TLAActionInvocation, [String: TLAValue])]

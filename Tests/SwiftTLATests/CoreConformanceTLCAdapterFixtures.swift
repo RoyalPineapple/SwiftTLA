@@ -1,5 +1,6 @@
 import Darwin
 import Foundation
+import os
 import Testing
 import UpstreamParity
 
@@ -391,14 +392,18 @@ func header(_ expectedCase: CoreConformanceCaseV1) -> String {
   ]
   return String(data: try! JSONSerialization.data(withJSONObject: record), encoding: .utf8)!
 }
-final class RecordingTLCExecutorV1: TLCProcessExecuting, @unchecked Sendable {
-  private var pending: [TLCProcessResultV1]
-  private(set) var requests: [TLCProcessRequestV1] = []
+final class RecordingTLCExecutorV1: TLCProcessExecuting, Sendable {
+  private let storage: OSAllocatedUnfairLock<(pending: [TLCProcessResultV1], requests: [TLCProcessRequestV1])>
   init(results: [TLCProcessResultV1]) {
-    pending = results
+    storage = OSAllocatedUnfairLock(initialState: (pending: results, requests: []))
+  }
+  var requests: [TLCProcessRequestV1] {
+    storage.withLock { $0.requests }
   }
   func execute(_ request: TLCProcessRequestV1) throws -> TLCProcessResultV1 {
-    requests.append(request)
-    return pending.removeFirst()
+    storage.withLock {
+      $0.requests.append(request)
+      return $0.pending.removeFirst()
+    }
   }
 }

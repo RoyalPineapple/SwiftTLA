@@ -5,7 +5,7 @@ import SwiftTLA
 import SwiftTLAMacros
 import Testing
 
-public struct PredicateMacroDevice: Identifiable {
+public struct PredicateMacroDevice: Identifiable, Sendable {
   public let id: Int
 
   public init(id: Int) {

@@ -4,7 +4,7 @@ import SwiftTLA
 import SwiftTLAMacros
 import Testing
 
-public struct MacroDevice: Identifiable {
+public struct MacroDevice: Identifiable, Sendable {
   public let id: Int
 
   public init(id: Int) {
@@ -12,7 +12,7 @@ public struct MacroDevice: Identifiable {
   }
 }
 
-public struct StringMacroDevice: Identifiable {
+public struct StringMacroDevice: Identifiable, Sendable {
   public let id: String
 
   public init(id: String) {
