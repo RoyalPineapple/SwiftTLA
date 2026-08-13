@@ -51,6 +51,25 @@ evidence. `@TypedVar` is not release-facing or admitted, and `@TLAValidated`
 was removed because it had no implementation. The P4 report does not widen the
 finite core language claim in this document.
 
+## Generated-machine boundary
+
+The macro derives a canonical Swift machine from the parsed `TLASpec`. The
+machine generates typed `State`, `Variables`, `ActionLabel`, and
+`TransitionResult` types. A transition result records the typed action and
+typed state before and after one successful transition.
+
+The formal engine retains its string-keyed state representation internally.
+Application-facing APIs do not expose that map. `TLAStateProjection` validates
+formal keys and values before formal tooling can inspect a state. A failed
+projection produces a typed diagnostic instead of a partially valid map.
+
+Nested `@TLAActor` and `@TLAObservable` declarations adapt the same canonical
+model type. The actor provides isolated access. The nested observable is
+main-actor isolated and invokes a typed callback after a transition commits.
+Every public generated value is `Sendable`. See
+[Generated machines](GeneratedMachines.md) and the SwiftTLA DocC catalog for
+the supported surface.
+
 ## DSL philosophy
 
 - **Builders everywhere.** Every nested scope has a result builder: `Action { }`,
