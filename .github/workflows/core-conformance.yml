@@ -42,6 +42,22 @@ jobs:
       CORE_CONFORMANCE_TOOL_ROOT: ${{ github.workspace }}/.build/core-conformance-tools
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Validate pinned core-conformance baseline
+        run: |
+          baseline_path="Verification/CoreConformance/baselines"
+          if ! git -C "$baseline_path" rev-parse --verify HEAD >/dev/null 2>&1; then
+            echo "::error::Pinned core-conformance baseline is unavailable."
+            exit 1
+          fi
+          expected_baseline="$(git ls-tree HEAD "$baseline_path" | awk '{print $3}')"
+          actual_baseline="$(git -C "$baseline_path" rev-parse HEAD)"
+          if [ -z "$expected_baseline" ] || [ "$actual_baseline" != "$expected_baseline" ]; then
+            echo "::error::Pinned core-conformance baseline does not match the repository checkout."
+            exit 1
+          fi
 
       - name: Validate focused workflow contract
         run: Tests/Fixtures/CoreConformance/CI/assert_workflow.sh
