@@ -283,6 +283,84 @@ import UpstreamParity
     #expect(available.contains(.init(name: "Tick")))
   }
 
+  @Test("Runtime successor relation matches checked transitions from every reachable state")
+  func runtimeSuccessorsMatchCheckedTransitions() throws {
+    let counter = Var<Int>("counter")
+    let step = Var<Int>("step")
+    let spec = TLASpec("ConstrainedParameterizedCounter") {
+      Constant("limit", 2)
+      Variable(counter, 0)
+      Action("advance", parameters: [ActionParameter("step", values: [1, 2])]) {
+        counter.becomes(counter + step)
+      }
+      Constraint(counter <= StateExpr.value(.constant("limit")))
+    }
+    let graph = try ModelChecker(spec: spec).exploreGraph()
+    let runtime = SpecRuntime(spec: spec)
+
+    for (sourceID, source) in graph.states {
+      let checked = (graph.transitions[sourceID] ?? []).compactMap { transition -> (TLAActionInvocation, [String: TLAValue])? in
+        guard let successor = graph.states[transition.target] else { return nil }
+        return (transition.label.invocation, successor)
+      }
+      let runtimeSuccessors = try runtime.availableInvocations(in: source).flatMap { invocation in
+        try runtime.successors(invocation, from: source).map { (invocation, $0) }
+      }
+
+      #expect(multiset(runtimeSuccessors) == multiset(checked))
+    }
+  }
+
+  @Test("Runtime functions survive constant resolution in constraints and invariant checks")
+  func runtimeFunctionsSurviveConstantResolution() throws {
+    let counter = Var<Int>("counter")
+    let increment = Var<Int>("step")
+    let isAtMostLimit = StateExpr.recursiveCall("IsAtMostLimit", [
+      counter.stateExpr,
+      .value(.constant("limit")),
+    ])
+    let spec = TLASpec("RuntimeFunctionConstraint") {
+      Constant("limit", 2)
+      Variable(counter, 0)
+      RuntimeFunc("IsAtMostLimit", tlaBody: "IsAtMostLimit(value, limit) == value <= limit") { values in
+        guard case .int(let value) = values[0], case .int(let limit) = values[1] else {
+          return .bool(false)
+        }
+        return .bool(value <= limit)
+      }
+      Action("advance", parameters: [ActionParameter("step", values: [1, 2])]) {
+        counter.becomes(counter + increment)
+      }
+      Constraint(isAtMostLimit)
+      Invariant("AtMostLimit") { isAtMostLimit }
+    }
+    let graph = try ModelChecker(spec: spec).exploreGraph()
+    let runtime = SpecRuntime(spec: spec)
+
+    for (sourceID, source) in graph.states {
+      let checked = (graph.transitions[sourceID] ?? []).compactMap { transition -> (TLAActionInvocation, [String: TLAValue])? in
+        guard let successor = graph.states[transition.target] else { return nil }
+        return (transition.label.invocation, successor)
+      }
+      let runtimeSuccessors = try runtime.availableInvocations(in: source).flatMap { invocation in
+        try runtime.successors(invocation, from: source).map { (invocation, $0) }
+      }
+
+      #expect(multiset(runtimeSuccessors) == multiset(checked))
+      #expect(try runtime.check("AtMostLimit", in: source))
+      #expect(runtime.propertyOutcomes(in: source) == [.satisfied(name: "AtMostLimit")])
+    }
+  }
+
+  private func multiset(
+    _ transitions: [(TLAActionInvocation, [String: TLAValue])]
+  ) -> [String: Int] {
+    Dictionary(
+      transitions.map { ("\($0.0.description) -> \($0.1)", 1) },
+      uniquingKeysWith: +
+    )
+  }
+
   @Test("Runtime errors retain invocation and complete availability context")
   func runtimeErrorsRetainInvocationAndAvailabilityContext() throws {
     let counter = Var<Int>("counter")
