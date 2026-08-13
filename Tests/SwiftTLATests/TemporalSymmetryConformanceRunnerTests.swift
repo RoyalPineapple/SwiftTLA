@@ -79,6 +79,29 @@ struct TemporalSymmetryConformanceRunnerTests {
     #expect(!FileManager.default.fileExists(atPath: outside.path))
   }
 
+  @Test("the temporal gate accepts an equivalent prospective evidence path")
+  func temporalGateAcceptsEquivalentProspectiveEvidencePath() throws {
+    let physicalRoot = projectRoot().resolvingSymlinksInPath().standardizedFileURL
+    let canonicalRoot = URL(
+      fileURLWithPath: physicalRoot.path.replacingOccurrences(of: "/private/tmp/", with: "/tmp/"),
+      isDirectory: true)
+    guard canonicalRoot != physicalRoot else { return }
+
+    let scratch = physicalRoot.appendingPathComponent(".build/temporal-symmetry-gate-alias-\(UUID())")
+    defer { try? FileManager.default.removeItem(at: scratch) }
+    let evidence = scratch.appendingPathComponent("evidence", isDirectory: true)
+    try FileManager.default.createDirectory(at: evidence, withIntermediateDirectories: true)
+
+    let result = try runTemporalGate(
+      from: canonicalRoot,
+      evidence: evidence,
+      report: scratch.appendingPathComponent("support-admission.json"),
+      coreAdmission: scratch.appendingPathComponent("missing-core-admission.json"))
+
+    #expect(result.status == 2)
+    #expect(!result.output.contains("evidence must be retained inside the project"))
+  }
+
   private func registeredCases() throws -> TemporalSymmetryCasesV1 {
     try JSONDecoder().decode(
       TemporalSymmetryCasesV1.self,
@@ -90,5 +113,36 @@ struct TemporalSymmetryConformanceRunnerTests {
       .deletingLastPathComponent()
       .deletingLastPathComponent()
       .deletingLastPathComponent()
+  }
+
+  private func runTemporalGate(
+    from root: URL,
+    evidence: URL,
+    report: URL,
+    coreAdmission: URL
+  ) throws -> (status: Int32, output: String) {
+    let executable = root.appendingPathComponent(".build/out/Products/Debug/tlc-validate")
+    guard FileManager.default.isExecutableFile(atPath: executable.path) else {
+      throw CocoaError(.executableNotLoadable)
+    }
+    let process = Process()
+    let pipe = Pipe()
+    process.executableURL = executable
+    process.currentDirectoryURL = root
+    process.arguments = [
+      "temporal-symmetry", "gate",
+      "--evidence", evidence.path,
+      "--report", report.path,
+      "--run-id", UUID().uuidString,
+      "--core-admission", coreAdmission.path,
+      "--core-report-id", UUID().uuidString,
+      "--prerequisite", "available"
+    ]
+    process.standardOutput = pipe
+    process.standardError = pipe
+    try process.run()
+    process.waitUntilExit()
+    let output = String(decoding: pipe.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
+    return (process.terminationStatus, output)
   }
 }

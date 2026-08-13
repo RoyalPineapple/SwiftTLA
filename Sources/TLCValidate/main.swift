@@ -814,8 +814,8 @@ private func temporalSymmetryExitCode(_ exitClass: TemporalSymmetryAdmissionExit
     }
 }
 private func projectRelativePath(_ path: URL, projectRoot: URL) throws -> String {
-    let resolved = path.resolvingSymlinksInPath().standardizedFileURL
-    let root = projectRoot.resolvingSymlinksInPath().standardizedFileURL
+    let resolved = resolvedProspectivePath(path)
+    let root = resolvedProspectivePath(projectRoot)
     guard resolved.path.hasPrefix(root.path + "/") else {
         throw TemporalSymmetryCLIError.evidenceOutsideProject(path.path)
     }
