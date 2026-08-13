@@ -1,0 +1,7 @@
+{
+  "schema": "PublicWorkflowGeneratedFixtureConfigurationV1",
+  "fixtureID": "p4-generated-counter",
+  "maxStates": 2,
+  "actionNames": ["advance"],
+  "expectedOutcome": "exact"
+}

@@ -35,3 +35,6 @@ Tests/Fixtures/TemporalSymmetryConformance/CI/assert_workflow.sh
 
 echo "Run mandatory temporal-symmetry release check"
 CORE_CONFORMANCE_TOOL_ROOT="$tool_root" make temporal-symmetry-release-check
+
+echo "Run public-workflow diagnostic check"
+make public-workflow-release-check

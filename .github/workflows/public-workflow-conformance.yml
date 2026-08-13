@@ -1,0 +1,59 @@
+name: Public Workflow Conformance
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/public-workflow-conformance.yml'
+      - 'Package.swift'
+      - 'Package.resolved'
+      - 'scripts/run_public_workflow_*'
+      - 'Sources/SwiftTLA/**'
+      - 'Sources/SwiftTLAPlugin/**'
+      - 'Sources/SwiftTLAMacros/**'
+      - 'Sources/UpstreamParity/Conformance/PublicWorkflow*'
+      - 'Sources/TLCValidate/**'
+      - 'Verification/PublicWorkflowConformance/**'
+      - 'Tests/Fixtures/PublicWorkflowConformance/**'
+      - 'Tests/SwiftTLATests/PublicWorkflow*'
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/public-workflow-conformance.yml'
+      - 'Package.swift'
+      - 'Package.resolved'
+      - 'scripts/run_public_workflow_*'
+      - 'Sources/SwiftTLA/**'
+      - 'Sources/SwiftTLAPlugin/**'
+      - 'Sources/SwiftTLAMacros/**'
+      - 'Sources/UpstreamParity/Conformance/PublicWorkflow*'
+      - 'Sources/TLCValidate/**'
+      - 'Verification/PublicWorkflowConformance/**'
+      - 'Tests/Fixtures/PublicWorkflowConformance/**'
+      - 'Tests/SwiftTLATests/PublicWorkflow*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  public-workflow-conformance:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check aggregate workflow contract
+        run: bash Tests/Fixtures/PublicWorkflowConformance/CI/assert_workflow.sh
+
+      - name: Run correlated public-workflow validation
+        run: |
+          scripts/run_public_workflow_support_gate.sh --hosted-ci \
+            --output ".build/public-workflow-ci/${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+
+      - name: Upload aggregate public-workflow evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: public-workflow-evidence-${{ github.run_id }}
+          path: .build/public-workflow-ci
+          if-no-files-found: error

@@ -45,6 +45,56 @@ private func parseExpression(_ source: String) -> ExprSyntax {
     }
 }
 
+@Suite(.serialized) struct SpecVariableDeclarationParsingTests {
+    @Test func oneArgumentVariableReferencesPreserveBindingMetadataAndOrder() {
+        let source = """
+        {
+            let queued = Var("queued", TLAValue.set([]))
+            Variable(queued)
+            let phase = Var("phase", 0)
+            Variable(phase)
+        }
+        """
+        let closure = Parser.parse(source: source).statements.first!.item.as(ClosureExprSyntax.self)!
+        let parsed = SpecParser.parseSpecClosure(closure)
+
+        #expect(parsed.diagnostics.isEmpty)
+        #expect(parsed.variables.count == 2)
+        #expect(parsed.variables[0].name == "queued")
+        #expect(parsed.variables[0].initial == .set([]))
+        #expect(parsed.variables[0].swiftTypeName == "TLAValue")
+        #expect(parsed.variables[1].name == "phase")
+        #expect(parsed.variables[1].initial == .int(0))
+        #expect(parsed.variables[1].swiftTypeName == "Int")
+    }
+
+    @Test func oneArgumentVariableRejectsUnboundReference() {
+        let source = """
+        {
+            Variable(missing)
+        }
+        """
+        let closure = Parser.parse(source: source).statements.first!.item.as(ClosureExprSyntax.self)!
+        let parsed = SpecParser.parseSpecClosure(closure)
+
+        #expect(parsed.variables.isEmpty)
+        #expect(parsed.diagnostics.map(\.message) == ["Variable 'missing' is not bound by a prior Var declaration"])
+    }
+
+    @Test func variableReferenceRejectsMalformedDeclaration() {
+        let source = """
+        {
+            let phase = Var("phase", 0)
+            Variable(phase, bogus: 1)
+        }
+        """
+        let closure = Parser.parse(source: source).statements.first!.item.as(ClosureExprSyntax.self)!
+        let parsed = SpecParser.parseSpecClosure(closure)
+
+        #expect(parsed.diagnostics.map(\.message) == ["Malformed Variable declaration"])
+    }
+}
+
 // MARK: - StateExpr: arithmetic operators
 
 @Suite(.serialized) struct StateExprArithmeticTests {
