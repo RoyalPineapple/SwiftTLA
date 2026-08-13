@@ -21,9 +21,20 @@ extension SpecParser {
 
         var components: [AlgorithmComponentModel] = []
         for statement in closure.statements {
-            guard case .expr(let expression) = statement.item,
-                  let component = parseAlgorithmComponent(expression)
-            else { continue }
+            guard case .expr(let expression) = statement.item else {
+                result.diagnostics.append(.init(
+                    message: "Unsupported Algorithm declaration. Supported declarations are Shared and Each.",
+                    source: statement
+                ))
+                return
+            }
+            guard let component = parseAlgorithmComponent(expression) else {
+                result.diagnostics.append(.init(
+                    message: "Unsupported Algorithm declaration. Supported declarations are Shared and Each.",
+                    source: expression
+                ))
+                return
+            }
             components.append(component)
         }
 
@@ -88,9 +99,10 @@ extension SpecParser {
         let parameter = closureParameterNames(in: closure).first ?? "__pcal_self"
         var components: [AlgorithmComponentModel] = []
         for statement in closure.statements {
-            guard case .expr(let expression) = statement.item,
-                  let component = parseEachComponent(expression, processParameter: parameter)
-            else { continue }
+            guard case .expr(let expression) = statement.item else { return nil }
+            guard let component = parseEachComponent(expression, processParameter: parameter) else {
+                return nil
+            }
             components.append(component)
         }
         return .process(.init(typeName: domain.typeName, domain: domain.values, components: components))

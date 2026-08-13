@@ -44,6 +44,24 @@ private func parseExpression(_ source: String) -> ExprSyntax {
         #expect(parsed.actions.first?.bindings == [
             ActionBinding(name: "process", values: [.string("left"), .string("right")])
         ])
+        #expect(parsed.actions.first?.bindingSwiftTypes == ["process": "Node"])
+    }
+
+    @Test("Algorithm parser rejects declarations it does not lower")
+    func rejectsUnsupportedAlgorithmDeclaration() {
+        let source = """
+        {
+            Algorithm("Unsupported") {
+                UnsupportedAlgorithmConstruct()
+            }
+        }
+        """
+        let closure = Parser.parse(source: source).statements.first!.item.as(ClosureExprSyntax.self)!
+        let parsed = SpecParser.parseSpecClosure(closure)
+
+        #expect(parsed.variables.isEmpty)
+        #expect(parsed.actions.isEmpty)
+        #expect(parsed.diagnostics.first?.message == "Unsupported Algorithm declaration. Supported declarations are Shared and Each.")
     }
 }
 
