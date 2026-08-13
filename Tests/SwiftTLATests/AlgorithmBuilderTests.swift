@@ -12,26 +12,26 @@ struct AlgorithmBuilderTests {
             Shared(maximum, initial: 0)
             Process(Node.all) { node in
                 Local(inbox, initial: 0)
-                Atomic(Label.receive) {
+                Do(AlgorithmLabel.receive) {
                     Await(inbox > 0)
                     Choose(Node.all) { candidate in
                         If(candidate > node) {
                             Assign(maximum, to: candidate)
-                            Goto(Label.forward)
+                            Goto(AlgorithmLabel.forward)
                         } else: {
-                            Goto(Label.receive)
+                            Goto(AlgorithmLabel.receive)
                         }
                     }
                 }
-                Atomic(Label.forward) {
+                Do(AlgorithmLabel.forward) {
                     Either {
                         Assign(maximum, to: maximum + 1)
-                        Goto(Label.receive)
+                        Goto(AlgorithmLabel.receive)
                     } or: {
-                        Goto(Label.done)
+                        Goto(AlgorithmLabel.done)
                     }
                 }
-                Atomic(Label.done) {
+                Do(AlgorithmLabel.done) {
                     Stop()
                 }
             }
@@ -48,12 +48,12 @@ struct AlgorithmBuilderTests {
         let value = Var<Int>("value", 0)
         let invalid = Algorithm("__pcal_invalid") {
             Process(EmptyNode.all) { _ in
-                Atomic(Label.receive) {
+                Do(AlgorithmLabel.receive) {
                     Assign(value, to: 1)
                     Assign(value, to: 2)
-                    Goto(Label.forward)
+                    Goto(AlgorithmLabel.forward)
                 }
-                Atomic(Label.receive) {
+                Do(AlgorithmLabel.receive) {
                     Stop()
                 }
             }
@@ -70,6 +70,107 @@ struct AlgorithmBuilderTests {
         #expect(throws: AlgorithmValidationError.self) {
             try invalid.requireValid()
         }
+    }
+
+    @Test("lowering initializes pc and binds every atomic action to a process")
+    func lowersControlStateAndActionBindings() throws {
+        let value = Var<Int>("value", 0)
+        let algorithm = Algorithm("BoundedCounter") {
+            Shared(value, initial: 0)
+            Process(Node.all) { _ in
+                Do(AlgorithmLabel.receive) {
+                    Assign(value, to: value + 1)
+                    Goto(AlgorithmLabel.done)
+                }
+                Do(AlgorithmLabel.done) {
+                    Stop()
+                }
+            }
+        }
+
+        let spec = try algorithm.lower()
+
+        #expect(spec.variables.map(\.name) == ["value", "pc"])
+        #expect(spec.actions.map(\.name) == ["receive", "done"])
+        for action in spec.actions {
+            #expect(action.bindings == [ActionBinding(name: "self", values: Node.formalDomain.map(\.tlaValue))])
+        }
+
+        let initial = try #require(computeInitialStates(spec).first)
+        #expect(initial["pc"] == .function([
+            .string("first"): .string("receive"),
+            .string("second"): .string("receive")
+        ]))
+    }
+
+    @Test("lowered atomic actions advance pc and stop with a self loop")
+    func lowersAtomicSemantics() throws {
+        let value = Var<Int>("value", 0)
+        let algorithm = Algorithm("BoundedCounter") {
+            Shared(value, initial: 0)
+            Process(Node.all) { _ in
+                Do(AlgorithmLabel.receive) {
+                    Assign(value, to: value + 1)
+                    Goto(AlgorithmLabel.done)
+                }
+                Do(AlgorithmLabel.done) {
+                    Stop()
+                }
+            }
+        }
+
+        let spec = try algorithm.lower()
+        let initial = try #require(computeInitialStates(spec).first)
+        let receive = try #require(spec.actions.first { $0.name == "receive" })
+        let firstReceive = try #require(actionInvocations(receive).first { $0.invocation.arguments == [.string("first")] })
+        let advanced = try #require(
+            ActionEnumerator.enumerate(firstReceive.body, from: initial, varNames: spec.variables.map(\.name)).first)
+
+        #expect(advanced["value"] == .int(1))
+        #expect(advanced["pc"] == .function([
+            .string("first"): .string("done"),
+            .string("second"): .string("receive")
+        ]))
+
+        let done = try #require(spec.actions.first { $0.name == "done" })
+        let firstDone = try #require(actionInvocations(done).first { $0.invocation.arguments == [.string("first")] })
+        let stopped = try #require(
+            ActionEnumerator.enumerate(firstDone.body, from: advanced, varNames: spec.variables.map(\.name)).first)
+        #expect(stopped == advanced)
+    }
+
+    @Test("lowering represents process-local state as a function of self")
+    func lowersLocalState() throws {
+        let inbox = Var<Int>("inbox", 0)
+        let algorithm = Algorithm("LocalCounter") {
+            Process(Node.all) { _ in
+                Local(inbox, initial: 0)
+                Do(AlgorithmLabel.receive) {
+                    Await(inbox == 0)
+                    Assign(inbox, to: inbox + 1)
+                    Goto(AlgorithmLabel.done)
+                }
+                Do(AlgorithmLabel.done) {
+                    Stop()
+                }
+            }
+        }
+
+        let spec = try algorithm.lower()
+        let initial = try #require(computeInitialStates(spec).first)
+        #expect(initial["inbox"] == .function([
+            .string("first"): .int(0),
+            .string("second"): .int(0)
+        ]))
+
+        let receive = try #require(spec.actions.first { $0.name == "receive" })
+        let firstReceive = try #require(actionInvocations(receive).first { $0.invocation.arguments == [.string("first")] })
+        let advanced = try #require(
+            ActionEnumerator.enumerate(firstReceive.body, from: initial, varNames: spec.variables.map(\.name)).first)
+        #expect(advanced["inbox"] == .function([
+            .string("first"): .int(1),
+            .string("second"): .int(0)
+        ]))
     }
 }
 
@@ -92,7 +193,7 @@ private enum EmptyNode: String, FiniteDomainKey {
     var tlaValue: TLAValue { .string(rawValue) }
 }
 
-private enum Label: String, PlusCalLabel {
+private enum AlgorithmLabel: String, PlusCalLabel {
     case receive
     case forward
     case done

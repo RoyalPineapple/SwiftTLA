@@ -183,10 +183,10 @@ public func Process<Value: FiniteDomainKey>(
 ///
 /// All statements in the body read the same pre-state and produce one
 /// transition. The label is the program-counter destination for `Goto`.
-public func Atomic<Label: PlusCalLabel & RawRepresentable>(
-    _ label: Label,
+public func Do<Name: PlusCalLabel & RawRepresentable>(
+    _ label: Name,
     @StepBuilder _ body: () -> [StepStatement]
-) -> AlgorithmElement where Label.RawValue == String {
+) -> AlgorithmElement where Name.RawValue == String {
     AlgorithmElement(model: .step(AlgorithmStepModel(label: AlgorithmLabelModel(name: label.rawValue), statements: body().map(\.model))))
 }
 
