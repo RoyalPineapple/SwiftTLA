@@ -70,6 +70,8 @@ extension SpecParser {
                 bindingSwiftTypes: bindingTypes
             )
         }
+        result.invariants += lowered.invariants.map { ($0.name, $0.body) }
+        result.fairness += lowered.fairness
     }
 
     private static func parseAlgorithmComponent(_ expression: ExprSyntax) -> AlgorithmComponentModel? {
@@ -105,7 +107,19 @@ extension SpecParser {
             }
             components.append(component)
         }
-        return .process(.init(typeName: domain.typeName, domain: domain.values, components: components))
+        let fairness: AlgorithmFairness
+        if let expression = call.arguments.first(where: { $0.label?.text == "fairness" })?.expression,
+           let access = expression.as(MemberAccessExprSyntax.self) {
+            switch access.declName.baseName.text {
+            case "none": fairness = .none
+            case "weak": fairness = .weak
+            case "strong": fairness = .strong
+            default: return nil
+            }
+        } else {
+            fairness = .none
+        }
+        return .process(.init(typeName: domain.typeName, domain: domain.values, fairness: fairness, components: components))
     }
 
     private static func parseEachComponent(
@@ -123,12 +137,21 @@ extension SpecParser {
                   let initial = literalAlgorithmValue(initialSyntax)
             else { return nil }
             return .local(.init(root: reference, initial: initial))
-        case "Do":
+        case "Do", "While":
             guard let label = algorithmLabel(call.arguments.first?.expression),
                   let closure = call.trailingClosure,
                   let statements = parseAlgorithmStatements(closure.statements, processParameter: processParameter)
             else { return nil }
-            return .step(.init(label: .init(name: label), statements: statements))
+            let loopCondition: StateExpr?
+            if name == "While" {
+                guard let conditionSyntax = call.arguments.dropFirst().first?.expression,
+                      let condition = decodeStateExpr(conditionSyntax)
+                else { return nil }
+                loopCondition = replacingProcessParameter(in: condition, named: processParameter)
+            } else {
+                loopCondition = nil
+            }
+            return .step(.init(label: .init(name: label), statements: statements, loopCondition: loopCondition))
         default:
             return nil
         }
@@ -157,11 +180,16 @@ extension SpecParser {
         else { return nil }
 
         switch name {
-        case "Await":
+        case "Await", "When":
             guard let expression = call.arguments.first?.expression,
                   let condition = decodeStateExpr(expression)
             else { return nil }
             return .await(replacingProcessParameter(in: condition, named: processParameter))
+        case "Assert":
+            guard let expression = call.arguments.first?.expression,
+                  let condition = decodeStateExpr(expression)
+            else { return nil }
+            return .assert(replacingProcessParameter(in: condition, named: processParameter))
         case "Assign":
             guard let target = algorithmTarget(call.arguments.first?.expression),
                   let valueSyntax = call.arguments.first(where: { $0.label?.text == "to" })?.expression,
@@ -201,6 +229,21 @@ extension SpecParser {
                 variable: replacement,
                 domain: domain.values,
                 body.map { replaceAlgorithmVariable($0, from: choice, to: replacement) }
+            )
+        case "With":
+            guard let sourceSyntax = call.arguments.first?.expression,
+                  let source = (finiteAlgorithmDomain(sourceSyntax).map { domain in
+                      StateExpr.setLiteral(domain.values.map(StateExpr.value))
+                  } ?? decodeStateExpr(sourceSyntax)),
+                  let closure = call.trailingClosure,
+                  let bound = closureParameterNames(in: closure).first,
+                  let body = parseAlgorithmStatements(closure.statements, processParameter: processParameter)
+            else { return nil }
+            let replacement = "__pcal_with"
+            return .with(
+                variable: replacement,
+                source: replacingProcessParameter(in: source, named: processParameter),
+                body.map { replaceAlgorithmVariable($0, from: bound, to: replacement) }
             )
         default:
             return nil
@@ -261,6 +304,7 @@ extension SpecParser {
     ) -> AlgorithmStatementModel {
         switch statement {
         case .await(let expression): return .await(renameVar(from, to: to, in: expression))
+        case .assert(let expression): return .assert(renameVar(from, to: to, in: expression))
         case .set(let target, let value):
             let rewrittenTarget: AlgorithmLValueModel
             switch target {
@@ -268,13 +312,19 @@ extension SpecParser {
             case .function(let root, let key): rewrittenTarget = .function(root: root, key: renameVar(from, to: to, in: key))
             }
             return .set(target: rewrittenTarget, value: renameVar(from, to: to, in: value))
+        case .with(let variable, let source, let body):
+            return .with(
+                variable: variable,
+                source: renameVar(from, to: to, in: source),
+                body.map { replaceAlgorithmVariable($0, from: from, to: to) }
+            )
         case .ifElse(let condition, let then, let otherwise):
             return .ifElse(renameVar(from, to: to, in: condition), then.map { replaceAlgorithmVariable($0, from: from, to: to) }, otherwise.map { replaceAlgorithmVariable($0, from: from, to: to) })
         case .either(let first, let second):
             return .either(first.map { replaceAlgorithmVariable($0, from: from, to: to) }, second.map { replaceAlgorithmVariable($0, from: from, to: to) })
         case .choose(let variable, let domain, let body):
             return .choose(variable: variable, domain: domain, body.map { replaceAlgorithmVariable($0, from: from, to: to) })
-        case .goto, .stop: return statement
+        case .goto, .stop, .skip: return statement
         }
     }
 }

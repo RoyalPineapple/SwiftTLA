@@ -18,8 +18,17 @@ extension TLAValue: FormalValue {
     public static let formalTypeIdentity = FormalTypeIdentity(rawValue: "swift-tla.TLAValue")
 }
 
-public protocol FiniteDomainKey: FormalValue {
+public protocol FiniteDomainKey: FormalValue, TLAValueType {
     static var formalDomain: [Self] { get }
+}
+
+extension FiniteDomainKey {
+    /// The first declared member is only the Swift construction default.
+    /// Formal initial state is always supplied explicitly by `Shared` or `Local`.
+    public static var defaultValue: Self {
+        precondition(!formalDomain.isEmpty, "A finite domain needs at least one member.")
+        return formalDomain[0]
+    }
 }
 
 public enum FormalShapeValidationError: Error, Sendable, Equatable {

@@ -21,6 +21,7 @@ internal indirect enum AlgorithmComponentModel: Sendable {
 internal struct AlgorithmProcessModel: Sendable {
     let typeName: String
     let domain: [TLAValue]
+    let fairness: AlgorithmFairness
     let components: [AlgorithmComponentModel]
 
     var steps: [AlgorithmStepModel] {
@@ -31,6 +32,12 @@ internal struct AlgorithmProcessModel: Sendable {
     }
 }
 
+internal enum AlgorithmFairness: Sendable {
+    case none
+    case weak
+    case strong
+}
+
 internal struct AlgorithmStateModel: Sendable {
     let root: String
     let initial: TLAValue
@@ -39,6 +46,15 @@ internal struct AlgorithmStateModel: Sendable {
 internal struct AlgorithmStepModel: Sendable {
     let label: AlgorithmLabelModel
     let statements: [AlgorithmStatementModel]
+    /// A labeled PlusCal `while` loop. A true condition returns to `label`; a
+    /// false condition advances to the following step.
+    let loopCondition: StateExpr?
+
+    init(label: AlgorithmLabelModel, statements: [AlgorithmStatementModel], loopCondition: StateExpr? = nil) {
+        self.label = label
+        self.statements = statements
+        self.loopCondition = loopCondition
+    }
 }
 
 internal struct AlgorithmLabelModel: Sendable, Hashable {
@@ -59,10 +75,13 @@ internal enum AlgorithmLValueModel: Sendable {
 
 internal indirect enum AlgorithmStatementModel: Sendable {
     case await(StateExpr)
+    case assert(StateExpr)
     case set(target: AlgorithmLValueModel, value: StateExpr)
+    case with(variable: String, source: StateExpr, [AlgorithmStatementModel])
     case ifElse(StateExpr, [AlgorithmStatementModel], [AlgorithmStatementModel])
     case either([AlgorithmStatementModel], [AlgorithmStatementModel])
     case choose(variable: String, domain: [TLAValue], [AlgorithmStatementModel])
     case goto(AlgorithmLabelModel)
     case stop
+    case skip
 }

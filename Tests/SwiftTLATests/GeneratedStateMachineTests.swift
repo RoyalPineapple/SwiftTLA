@@ -36,9 +36,10 @@ struct GeneratedAlgorithmCounter {
             let count = Var<Int>("count")
             Algorithm("GeneratedAlgorithmCounter") {
                 Shared(count, initial: 0)
-                Each(Node.all) { _ in
-                    Do("increment") {
-                        Await(count < 2)
+                Each(Node.all, fairness: .weak) { _ in
+                    While("increment", count < 2) {
+                        When(count < 2)
+                        Assert(count >= 0)
                         Assign(count, to: count + 1)
                     }
                 }
@@ -58,7 +59,7 @@ struct GeneratedAlgorithmMachineTests {
         #expect(result.after.count == 1)
         #expect(model.state.count == 1)
         #expect(result.after.pc == .function([
-            .string("left"): .string("Done"),
+            .string("left"): .string("increment"),
             .string("right"): .string("increment")
         ]))
     }

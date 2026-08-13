@@ -63,6 +63,95 @@ private func parseExpression(_ source: String) -> ExprSyntax {
         #expect(parsed.actions.isEmpty)
         #expect(parsed.diagnostics.first?.message == "Unsupported Algorithm declaration. Supported declarations are Shared and Each.")
     }
+
+    @Test("parser lowers the mechanical PlusCal statements through the shared IR")
+    func parsesMechanicalPlusCalStatements() {
+        let source = """
+        {
+            let count = Var<Int>("count")
+            Algorithm("Counter") {
+                Shared(count, initial: 0)
+                Each(Node.all, fairness: .strong) { node in
+                    While("increment", count < 2) {
+                        When(count >= 0)
+                        With(Node.all) { choice in
+                            Assert(choice == node)
+                            Assign(count, to: count + 1)
+                        }
+                    }
+                }
+            }
+        }
+        """
+        let closure = Parser.parse(source: source).statements.first!.item.as(ClosureExprSyntax.self)!
+        let parsed = SpecParser.parseSpecClosure(
+            closure,
+            enumDomains: ["Node": [.string("left"), .string("right")]]
+        )
+
+        #expect(parsed.diagnostics.isEmpty)
+        #expect(parsed.invariants.map(\.name) == ["__pcal_assert_increment_0_0", "__pcal_assert_increment_0_1"])
+        #expect(parsed.fairness == [
+            .strongFairnessInvocation(.init(name: "increment", arguments: [.string("left")])),
+            .strongFairnessInvocation(.init(name: "increment", arguments: [.string("right")]))
+        ])
+    }
+
+    @Test("parsed Algorithm actions match runtime-builder normalization")
+    func parserTreeMatchesRuntimeAlgorithm() {
+        let source = """
+        {
+            let count = Var<Int>("count")
+            Algorithm("Counter") {
+                Shared(count, initial: 0)
+                Each(Node.all) { _ in
+                    Do("increment") {
+                        Await(count < 2)
+                        Assign(count, to: count + 1)
+                    }
+                }
+            }
+        }
+        """
+        let closure = Parser.parse(source: source).statements.first!.item.as(ClosureExprSyntax.self)!
+        let parsed = SpecParser.parseSpecClosure(
+            closure,
+            enumDomains: ["Node": [.string("left"), .string("right")]]
+        )
+        let count = Var<Int>("count")
+        let runtime = TLASpec("Counter") {
+            Algorithm("Counter") {
+                Shared(count, initial: 0)
+                Each(ParserNode.all) { _ in
+                    Do("increment") {
+                        Await(count < 2)
+                        Assign(count, to: count + 1)
+                    }
+                }
+            }
+        }
+        let runtimeTree = ParsedSpecModel(
+            variables: runtime.variables.map { ($0.name, $0.initial) },
+            actions: runtime.actions.map { ($0.name, $0.body, $0.bindings) },
+            invariants: runtime.invariants.map { ($0.name, $0.body) }
+        )
+        let parserTree = ParsedSpecModel(
+            variables: parsed.variables.map { ($0.name, $0.initial) },
+            actions: parsed.actions.map { ($0.name, $0.body, $0.bindings) },
+            invariants: parsed.invariants
+        )
+        #expect(parserTree == runtimeTree)
+    }
+}
+
+private enum ParserNode: String, FiniteDomainKey {
+    case left
+    case right
+
+    static let formalDomain: [ParserNode] = [.left, .right]
+    static let formalTypeIdentity = FormalTypeIdentity(rawValue: "test.parser-node")
+
+    var tlaValue: TLAValue { .string(rawValue) }
 }
 
 // MARK: - StateExpr: literals

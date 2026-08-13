@@ -51,6 +51,8 @@ extension TLASpec {
           let lowered = try algorithm.lower()
           variables += lowered.variables
           actions += lowered.actions
+          invariants += lowered.invariants
+          fairness += lowered.fairness
         } catch {
           preconditionFailure("Invalid algorithm '\(algorithm.model.name)': \(error)")
         }

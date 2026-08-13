@@ -281,6 +281,119 @@ struct AlgorithmBuilderTests {
         #expect(spec.actions.map(\.name) == ["finish", "Terminating"])
         #expect(spec.invariants.map(\.name) == ["nonNegative"])
     }
+
+    @Test("When, Assert, With, and process fairness lower as formal semantics")
+    func lowersMechanicalPlusCalStatements() throws {
+        let count = Var<Int>("count", 0)
+        let selected = Var<Int>("selected", 0)
+        let algorithm = Algorithm("Mechanical") {
+            Shared(count, initial: 0)
+            Shared(selected, initial: 0)
+            Each(Node.all, fairness: .weak) { node in
+                Do("choose") {
+                    When(count == 0)
+                    With(SetExpr<Int>.literal(1, 2)) { choice in
+                        Assert(choice > 0)
+                        Assign(selected, to: choice)
+                    }
+                    Assign(count, to: count + 1)
+                }
+            }
+        }
+
+        #expect(algorithm.validate().isEmpty)
+        let spec = try algorithm.lower()
+        #expect(spec.invariants.map(\.name) == ["__pcal_assert_choose_0_0", "__pcal_assert_choose_0_1"])
+        #expect(spec.fairness == [FairnessCondition.weakFairnessInvocation(.init(name: "choose", arguments: [.string("first")])),
+            .weakFairnessInvocation(.init(name: "choose", arguments: [.string("second")]))
+        ])
+        let rendered = spec.tlaModule
+        #expect(rendered.contains("WF_<<count, selected, pc>>(choose__0)"))
+        #expect(rendered.contains("WF_<<count, selected, pc>>(choose__1)"))
+
+        let initial = try #require(computeInitialStates(spec).first)
+        let choose = try #require(spec.actions.first { $0.name == "choose" })
+        let first = try #require(actionInvocations(choose).first { $0.invocation.arguments == [.string("first")] })
+        let states = try ActionEnumerator.enumerate(first.body, from: initial, varNames: spec.variables.map(\.name))
+        #expect(states.count == 2)
+        #expect(Set(states.compactMap { $0["selected"] }) == Set([.int(1), .int(2)]))
+    }
+
+    @Test("a false While condition advances control and a true condition loops")
+    func lowersWhileAsFormalControl() throws {
+        let count = Var<Int>("count", 0)
+        let algorithm = Algorithm("Loop") {
+            Shared(count, initial: 0)
+            Each(Node.all) { _ in
+                While("repeat", count < 2) {
+                    Assign(count, to: count + 1)
+                }
+                Do("finish") { Stop() }
+            }
+        }
+
+        let spec = try algorithm.lower()
+        let initial = try #require(computeInitialStates(spec).first)
+        let repeatAction = try #require(spec.actions.first { $0.name == "repeat" })
+        let first = try #require(actionInvocations(repeatAction).first { $0.invocation.arguments == [.string("first")] })
+        let looped = try #require(ActionEnumerator.enumerate(first.body, from: initial, varNames: spec.variables.map(\.name)).first)
+        #expect(looped["count"] == .int(1))
+        #expect(looped["pc"] == .function([
+            .string("first"): .string("repeat"),
+            .string("second"): .string("repeat")
+        ]))
+
+        let atLimit = looped.merging(["count": .int(2)]) { _, replacement in replacement }
+        let exited = try #require(ActionEnumerator.enumerate(first.body, from: atLimit, varNames: spec.variables.map(\.name)).first)
+        #expect(exited["pc"] == .function([
+            .string("first"): .string("finish"),
+            .string("second"): .string("repeat")
+        ]))
+    }
+
+    @Test("Assert is required only on the branch that reaches it")
+    func scopesAssertToItsConditionalBranch() throws {
+        let count = Var<Int>("count", 0)
+        let algorithm = Algorithm("ConditionalAssert") {
+            Shared(count, initial: 0)
+            Each(Node.all) { _ in
+                Do("check") {
+                    If(count == 0) {
+                        Assert(count == 0)
+                    } else: {
+                        Assert(count == 1)
+                    }
+                }
+            }
+        }
+
+        let spec = try algorithm.lower()
+        let initial = try #require(computeInitialStates(spec).first)
+        #expect(try spec.invariants.allSatisfy { try $0.body.evaluateBool(in: initial) })
+        let alternate = initial.merging(["count": .int(1)]) { _, replacement in replacement }
+        #expect(try spec.invariants.allSatisfy { try $0.body.evaluateBool(in: alternate) })
+    }
+
+    @Test("Assert becomes a model-checker safety obligation")
+    func checksAssertAsAnInvariant() throws {
+        let count = Var<Int>("count", 0)
+        let algorithm = Algorithm("BrokenAssertion") {
+            Shared(count, initial: 0)
+            Each(Node.all) { _ in
+                Do("check") {
+                    Assert(count == 1)
+                    Stop()
+                }
+            }
+        }
+
+        let result = try ModelChecker(spec: algorithm.lower()).check().underlyingOutcome
+        guard case .invariantViolated(let name, _, _) = result else {
+            Issue.record("Expected Assert to produce an invariant violation, got \(result)")
+            return
+        }
+        #expect(name == "__pcal_assert_check_0_0")
+    }
 }
 
 private enum Node: String, FiniteDomainKey, PlusCalLabel {

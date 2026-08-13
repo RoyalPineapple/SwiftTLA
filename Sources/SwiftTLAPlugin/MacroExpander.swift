@@ -111,6 +111,7 @@ enum MacroExpander {
     }
 
     static func generateParserTreeCheck(model: ParsedMacroModel) -> [DeclSyntax] {
+        let variableNames = model.variables.map { "\"\($0.name)\"" }.joined(separator: ", ")
         let treeVars = model.variables.map { v in
             "(\"\(v.name)\", \(codegenTLAValue(v.initial)))"
         }.joined(separator: ", ")
@@ -119,7 +120,7 @@ enum MacroExpander {
             let bindings = a.bindings.map {
                 "ActionBinding(name: \"\($0.name)\", values: [\($0.values.map(codegenTLAValue).joined(separator: ", "))])"
             }.joined(separator: ", ")
-            return "(\"\(a.name)\", \(codegenActionExpr(a.body)), [\(bindings)])"
+            return "(\"\(a.name)\", completeAction(\(codegenActionExpr(a.body)), allVars: [\(variableNames)]), [\(bindings)])"
         }.joined(separator: ", ")
 
         let treeInvs = model.invariants.map { i in
@@ -141,8 +142,11 @@ enum MacroExpander {
                 actions: builtSpec.actions.map { ($0.name, $0.body, $0.bindings) },
                 invariants: builtSpec.invariants.map { ($0.name, $0.body) }
             )
-            if built != _parserTree {
-                print("⚠ SpecParser tree mismatch")
+            if !_tlaAlphaEquivalent(built, _parserTree) {
+                preconditionFailure(
+                    "SwiftTLA parser tree mismatch for " + String(reflecting: Self.self) + ". " +
+                    _tlaFidelityDiagnostic(_parserTree, built)
+                )
             }
         }
         """
@@ -218,8 +222,13 @@ enum MacroExpander {
             let patterns = ps.map(cg).joined(separator: ", ")
             let fallback = fb.map { cg($0) } ?? "nil"
             return "StateExpr.caseExpr([\(patterns)], \(fallback))"
-        case .forAll, .exists, .choose, .sequenceFromSet, .setSum, .functionSet,
-             .recursiveCall, .enabledAction:
+        case .forAll(let set, let variable, let predicate):
+            return "StateExpr.forAll(\(cg(set)), \"\(variable)\", \(cg(predicate)))"
+        case .exists(let set, let variable, let predicate):
+            return "StateExpr.exists(\(cg(set)), \"\(variable)\", \(cg(predicate)))"
+        case .choose(let set, let variable, let predicate):
+            return "StateExpr.choose(\(cg(set)), \"\(variable)\", \(cg(predicate)))"
+        case .sequenceFromSet, .setSum, .functionSet, .recursiveCall, .enabledAction:
             return "StateExpr.value(.int(0))"
         }
     }

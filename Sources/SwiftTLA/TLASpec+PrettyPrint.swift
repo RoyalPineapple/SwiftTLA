@@ -140,7 +140,7 @@ extension TLASpec {
         lines.append("  /\\ Init")
         lines.append("  /\\ [][Next]_\(varsTuple)")
         for f in fairness {
-            lines.append("  /\\ \(f.tlaForm(vars: varsTuple))")
+            lines.append("  /\\ \(fairnessForm(f, vars: varsTuple))")
         }
         lines.append("")
 
@@ -156,6 +156,24 @@ extension TLASpec {
 
         lines.append("====")
         return lines.joined(separator: "\n") + "\n"
+    }
+
+    private func fairnessForm(_ condition: FairnessCondition, vars: String) -> String {
+        switch condition {
+        case .weakFairness, .strongFairness:
+            return condition.tlaForm(vars: vars)
+        case .weakFairnessInvocation(let invocation), .strongFairnessInvocation(let invocation):
+            let operatorName = actions.lazy
+                .flatMap(actionInvocations)
+                .first(where: { $0.invocation == invocation })
+                .map { variant in
+                    guard !variant.indices.isEmpty else { return invocation.name }
+                    return "\(invocation.name)__\(variant.indices.map(String.init).joined(separator: "_"))"
+                } ?? invocation.name
+            return condition.isStrong
+                ? "SF_\(vars)(\(operatorName))"
+                : "WF_\(vars)(\(operatorName))"
+        }
     }
 
     /// Auto-generated TLC configuration matching the module.

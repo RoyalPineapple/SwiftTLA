@@ -535,7 +535,10 @@ private final class EnumDotRewriter: SyntaxRewriter {
         "cardinality", "count", "isEmpty", "flattened", "subsets", "domain",
         "head", "tail", "stays", "zero", "max", "min", "default", "init", "value",
         "variable",
-        "int", "bool", "string", "set", "tuple", "record", "function", "constant"
+        "int", "bool", "string", "set", "tuple", "record", "function", "constant",
+        // These are DSL enum cases, not user-state enum cases. They remain
+        // unqualified so Algorithm's parser can recognize its public syntax.
+        "none", "weak", "strong"
     ]
 }
 

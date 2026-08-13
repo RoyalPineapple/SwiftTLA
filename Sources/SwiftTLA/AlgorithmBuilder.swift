@@ -46,8 +46,36 @@ public struct ProcessIdentifier<Value: FiniteDomainKey>: StateExprConvertible, S
     }
 }
 
+/// A value bound for one atomic `With` body.
+///
+/// It exists only while constructing the algorithm IR. The lowerer turns it
+/// into a scoped TLA+ action binding; it is never runtime Swift state.
+public struct WithValue<Value: TLAValueType>: StateExprConvertible, Sendable {
+    fileprivate let expression: StateExpr
+
+    public var stateExpr: StateExpr { expression }
+}
+
 public struct AlgorithmLValue<Value: TLAValueType>: Sendable {
     fileprivate let model: AlgorithmLValueModel
+}
+
+/// Scheduling policy for one `Each` process family.
+///
+/// `.weak` is the PlusCal `fair process` spelling. The lowerer applies it to
+/// every generated atomic action for every concrete process identifier.
+public enum ProcessFairness: Sendable {
+    case none
+    case weak
+    case strong
+
+    fileprivate var model: AlgorithmFairness {
+        switch self {
+        case .none: .none
+        case .weak: .weak
+        case .strong: .strong
+        }
+    }
 }
 
 extension Var {
@@ -186,6 +214,15 @@ public func Local<Value: TLAValueType>(_ variable: Var<Value>, initial: Value) -
 /// `Each` is concurrent: its bodies do not run as a sequential Swift loop.
 public func Each<Value: FiniteDomainKey>(
     _ domain: FiniteDomain<Value>,
+    fairness: ProcessFairness = .none,
+    @AlgorithmBuilder _ body: (ProcessIdentifier<Value>) -> [AlgorithmElement]
+) -> AlgorithmElement {
+    process(domain, fairness: fairness.model, body)
+}
+
+private func process<Value: FiniteDomainKey>(
+    _ domain: FiniteDomain<Value>,
+    fairness: AlgorithmFairness,
     @AlgorithmBuilder _ body: (ProcessIdentifier<Value>) -> [AlgorithmElement]
 ) -> AlgorithmElement {
     let identifier = ProcessIdentifier<Value>(expression: .variable("__pcal_self"))
@@ -194,6 +231,7 @@ public func Each<Value: FiniteDomainKey>(
             AlgorithmProcessModel(
                 typeName: String(reflecting: Value.self),
                 domain: domain.values.map(\.tlaValue),
+                fairness: fairness,
                 components: body(identifier).map(\.model)
             )
         )
@@ -218,8 +256,82 @@ public func Do(
     AlgorithmElement(model: .step(AlgorithmStepModel(label: AlgorithmLabelModel(name: label.rawValue), statements: body().map(\.model))))
 }
 
+/// Defines a labeled bounded `while` loop.
+///
+/// Each execution of the body is one atomic transition. When `condition` is
+/// false, control advances to the next `Do` or `While` block.
+public func While<Name: PlusCalLabel & RawRepresentable>(
+    _ label: Name,
+    _ condition: some StateExprConvertible,
+    @DoBuilder _ body: () -> [StepStatement]
+) -> AlgorithmElement where Name.RawValue == String {
+    AlgorithmElement(model: .step(AlgorithmStepModel(
+        label: AlgorithmLabelModel(name: label.rawValue),
+        statements: body().map(\.model),
+        loopCondition: condition.stateExpr
+    )))
+}
+
+public func While(
+    _ label: ProgramLabel,
+    _ condition: some StateExprConvertible,
+    @DoBuilder _ body: () -> [StepStatement]
+) -> AlgorithmElement {
+    AlgorithmElement(model: .step(AlgorithmStepModel(
+        label: AlgorithmLabelModel(name: label.rawValue),
+        statements: body().map(\.model),
+        loopCondition: condition.stateExpr
+    )))
+}
+
 public func Await(_ condition: some StateExprConvertible) -> StepStatement {
     StepStatement(model: .await(condition.stateExpr))
+}
+
+/// PlusCal `when`: a guarded atomic step. `When` and `Await` have the same
+/// transition semantics; the different spelling is author intent only.
+public func When(_ condition: some StateExprConvertible) -> StepStatement {
+    Await(condition)
+}
+
+/// A PlusCal assertion. A false assertion becomes a generated formal safety
+/// check at this atomic program-counter location; it is not a Swift debug
+/// assertion and cannot be compiled out.
+public func Assert(_ condition: some StateExprConvertible) -> StepStatement {
+    StepStatement(model: .assert(condition.stateExpr))
+}
+
+/// Binds a nondeterministically chosen member of a bounded formal set for one
+/// atomic block. An empty set disables that block, as PlusCal `with (x \in S)`.
+public func With<Value: TLAValueType>(
+    _ source: Expr<SetExpr<Value>>,
+    @DoBuilder _ body: (WithValue<Value>) -> [StepStatement]
+) -> StepStatement {
+    let variable = "__pcal_with"
+    let value = WithValue<Value>(expression: .variable(variable))
+    return StepStatement(model: .with(variable: variable, source: source.raw, body(value).map(\.model)))
+}
+
+public func With<Value: TLAValueType>(
+    _ source: Var<SetExpr<Value>>,
+    @DoBuilder _ body: (WithValue<Value>) -> [StepStatement]
+) -> StepStatement {
+    With(Expr<SetExpr<Value>>(source.stateExpr), body)
+}
+
+/// Binds one member of a finite Swift domain. This is the most direct Swift
+/// spelling of PlusCal `with (value \in Type)`.
+public func With<Value: FiniteDomainKey>(
+    _ source: FiniteDomain<Value>,
+    @DoBuilder _ body: (WithValue<Value>) -> [StepStatement]
+) -> StepStatement {
+    let variable = "__pcal_with"
+    let value = WithValue<Value>(expression: .variable(variable))
+    return StepStatement(model: .with(
+        variable: variable,
+        source: .setLiteral(source.values.map { .value($0.tlaValue) }),
+        body(value).map(\.model)
+    ))
 }
 
 public func Assign<Value: TLAValueType>(
@@ -270,6 +382,11 @@ public func Goto(_ label: ProgramLabel) -> StepStatement {
 
 public func Stop() -> StepStatement {
     StepStatement(model: .stop)
+}
+
+/// A PlusCal no-op. It changes no user state but still advances control.
+public func Skip() -> StepStatement {
+    StepStatement(model: .skip)
 }
 
 internal enum AlgorithmValidator {
@@ -346,8 +463,10 @@ internal enum AlgorithmValidator {
     ) {
         for statement in statements {
             switch statement {
-            case .await:
+            case .await, .assert, .skip:
                 break
+            case .with(_, _, let body):
+                validateStatements(body, at: anchor, labels: labels, diagnostics: &diagnostics)
             case .set(let target, _):
                 validateName(target.root, at: anchor, diagnostics: &diagnostics)
             case .ifElse(_, let then, let otherwise), .either(let then, let otherwise):
@@ -376,8 +495,10 @@ internal enum AlgorithmValidator {
                 statementPaths = writePaths(then) + writePaths(otherwise)
             case .choose(_, _, let body):
                 statementPaths = writePaths(body)
-            case .await, .goto, .stop:
+            case .await, .assert, .goto, .stop, .skip:
                 statementPaths = [[]]
+            case .with(_, _, let body):
+                statementPaths = writePaths(body)
             }
             paths = paths.flatMap { path in statementPaths.map { path + $0 } }
         }

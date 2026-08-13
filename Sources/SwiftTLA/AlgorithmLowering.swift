@@ -43,6 +43,8 @@ enum AlgorithmLowerer {
 
         let variableNames = variables.map(\.name)
         let localRoots = Set(localStates.map(\.root))
+        var generatedAssertionInvariants: [NamedInvariant] = []
+        var fairness: [FairnessCondition] = []
         var actions = processes.flatMap { process in
             process.steps.enumerated().map { index, atomic in
                 let guardExpression = StateExpr.equal(
@@ -51,16 +53,38 @@ enum AlgorithmLowerer {
                 let nextLabel = process.steps.indices.contains(index + 1)
                     ? process.steps[index + 1].label.name
                     : doneLabel
-                let body = completingControl(
-                    lower(
+                let loweredStatements = lower(
                     atomic.statements,
                     localRoots: localRoots,
-                    processDomain: process.domain),
-                    fallthrough: nextLabel)
-                return NamedAction(
+                    processDomain: process.domain
+                )
+                let body: ActionExpr
+                if let loopCondition = atomic.loopCondition {
+                    body = .ifElse(
+                        rewrite(loopCondition, localRoots: localRoots),
+                        completingControl(loweredStatements, fallthrough: atomic.label.name),
+                        transfer(to: nextLabel)
+                    )
+                } else {
+                    body = completingControl(loweredStatements, fallthrough: nextLabel)
+                }
+                let generatedAction = NamedAction(
                     name: atomic.label.name,
                     body: completeAction(.and(.guard_(guardExpression), body), allVars: variableNames),
-                    bindings: [ActionBinding(name: processBinding, values: process.domain)])
+                    bindings: [ActionBinding(name: processBinding, values: process.domain)]
+                )
+                let actionAssertions = assertionInvariants(
+                    in: atomic.statements,
+                    process: process,
+                    label: atomic.label.name,
+                    localRoots: localRoots,
+                    executionCondition: atomic.loopCondition.map { rewrite($0, localRoots: localRoots) },
+                    pathCondition: .value(.bool(true)),
+                    quantifiedBindings: []
+                )
+                generatedAssertionInvariants += uniquelyNamed(actionAssertions)
+                fairness += fairnessConditions(for: generatedAction, policy: process.fairness)
+                return generatedAction
             }
         }
 
@@ -85,7 +109,8 @@ enum AlgorithmLowerer {
             name: algorithm.name,
             variables: variables,
             actions: actions,
-            invariants: [])
+            invariants: generatedAssertionInvariants,
+            fairness: fairness)
     }
 
     private static func constantFunction(domain: [TLAValue], value: TLAValue) -> TLAValue {
@@ -135,6 +160,10 @@ enum AlgorithmLowerer {
         switch statement {
         case .await(let condition):
             return .guard_(rewrite(condition, localRoots: localRoots))
+        case .assert:
+            // `Assert` is checked through a generated invariant at its program
+            // location. It remains a no-op in the transition relation.
+            return .guard_(.value(.bool(true)))
         case .set(let target, let value):
             let value = rewrite(value, localRoots: localRoots)
             switch target {
@@ -152,6 +181,11 @@ enum AlgorithmLowerer {
                         rewrite(key, localRoots: localRoots),
                         value))
             }
+        case .with(let variable, let source, let body):
+            return .existsAction(
+                variable,
+                rewrite(source, localRoots: localRoots),
+                lower(body, localRoots: localRoots, processDomain: processDomain))
         case .ifElse(let condition, let then, let otherwise):
             return .ifElse(
                 rewrite(condition, localRoots: localRoots),
@@ -175,6 +209,120 @@ enum AlgorithmLowerer {
                     .value(.string(label.name))))
         case .stop:
             return stopAction()
+        case .skip:
+            return .guard_(.value(.bool(true)))
+        }
+    }
+
+    private static func assertionInvariants(
+        in statements: [AlgorithmStatementModel],
+        process: AlgorithmProcessModel,
+        label: String,
+        localRoots: Set<String>,
+        executionCondition: StateExpr?,
+        pathCondition: StateExpr,
+        quantifiedBindings: [(variable: String, source: StateExpr)]
+    ) -> [NamedInvariant] {
+        let pcAtLabel = StateExpr.equal(
+            .functionApply(.variable(controlVariable), .variable(processBinding)),
+            .value(.string(label))
+        )
+        let executedAtLabel = StateExpr.and(
+            executionCondition.map { .and(pcAtLabel, $0) } ?? pcAtLabel,
+            pathCondition
+        )
+        return statements.enumerated().flatMap { statementIndex, statement in
+            switch statement {
+            case .assert(let condition):
+                return process.domain.enumerated().map { offset, identifier in
+                    let assertion = quantifiedBindings.reversed().reduce(
+                        rewrite(condition, localRoots: localRoots)
+                    ) { predicate, binding in
+                        .forAll(
+                            rewrite(binding.source, localRoots: localRoots),
+                            binding.variable,
+                            predicate
+                        )
+                    }
+                    let predicate = StateExpr.substituteVariable(
+                        processBinding,
+                        identifier,
+                        in: .or(.not(executedAtLabel), assertion)
+                    )
+                    return NamedInvariant(
+                        name: "__pcal_assert_\(label)_\(statementIndex)_\(offset)",
+                        body: predicate
+                    )
+                }
+            case .ifElse(let condition, let then, let otherwise):
+                let condition = rewrite(condition, localRoots: localRoots)
+                return assertionInvariants(
+                    in: then,
+                    process: process,
+                    label: label,
+                    localRoots: localRoots,
+                    executionCondition: executionCondition,
+                    pathCondition: .and(pathCondition, condition),
+                    quantifiedBindings: quantifiedBindings
+                ) + assertionInvariants(
+                    in: otherwise,
+                    process: process,
+                    label: label,
+                    localRoots: localRoots,
+                    executionCondition: executionCondition,
+                    pathCondition: .and(pathCondition, .not(condition)),
+                    quantifiedBindings: quantifiedBindings
+                )
+            case .either(let then, let otherwise):
+                return assertionInvariants(in: then, process: process, label: label, localRoots: localRoots, executionCondition: executionCondition, pathCondition: pathCondition, quantifiedBindings: quantifiedBindings)
+                    + assertionInvariants(in: otherwise, process: process, label: label, localRoots: localRoots, executionCondition: executionCondition, pathCondition: pathCondition, quantifiedBindings: quantifiedBindings)
+            case .choose(let variable, let domain, let body):
+                return assertionInvariants(
+                    in: body,
+                    process: process,
+                    label: label,
+                    localRoots: localRoots,
+                    executionCondition: executionCondition,
+                    pathCondition: pathCondition,
+                    quantifiedBindings: quantifiedBindings + [(variable, .setLiteral(domain.map(StateExpr.value)))]
+                )
+            case .with(let variable, let source, let body):
+                return assertionInvariants(
+                    in: body,
+                    process: process,
+                    label: label,
+                    localRoots: localRoots,
+                    executionCondition: executionCondition,
+                    pathCondition: pathCondition,
+                    quantifiedBindings: quantifiedBindings + [(variable, source)]
+                )
+            case .await, .set, .goto, .stop, .skip:
+                return []
+            }
+        }
+    }
+
+    private static func fairnessConditions(
+        for action: NamedAction,
+        policy: AlgorithmFairness
+    ) -> [FairnessCondition] {
+        switch policy {
+        case .none:
+            []
+        case .weak:
+            actionInvocations(action).map { .weakFairnessInvocation($0.invocation) }
+        case .strong:
+            actionInvocations(action).map { .strongFairnessInvocation($0.invocation) }
+        }
+    }
+
+    private static func uniquelyNamed(_ invariants: [NamedInvariant]) -> [NamedInvariant] {
+        var occurrences: [String: Int] = [:]
+        return invariants.map { invariant in
+            let occurrence = occurrences[invariant.name, default: 0]
+            occurrences[invariant.name] = occurrence + 1
+            guard occurrence > 0 else { return invariant }
+            return NamedInvariant(name: "\(invariant.name)_\(occurrence)", body: invariant.body)
         }
     }
 
