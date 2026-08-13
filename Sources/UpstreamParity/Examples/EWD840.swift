@@ -25,8 +25,8 @@ static func ewd840Spec() -> TLASpec {
             colorFuncs.append(.function([.int(0): c0, .int(1): c1, .int(2): c2]))
         }}}
 
-        let active = Var<TLAFunctionType>("active")
-        let color = Var<TLAFunctionType>("color")
+        let active = Var<TLAValue>("active")
+        let color = Var<TLAValue>("color")
         let tpos = Var<Int>("tpos")
         let tcolor = Var<String>("tcolor")
 
@@ -47,7 +47,7 @@ static func ewd840Spec() -> TLASpec {
             Action("InitiateProbe") {
                 tpos == 0 && (tcolor == "black" || colorOf(0) == "black")
                 && tpos.becomes(N - 1) && tcolor.becomes("white")
-                && color.becomes(color.updated(at: 0, to: "white"))
+                && .assign(color.name, color.stateExpr.updated(at: 0, to: "white"))
                 && active.stays
             }
 
@@ -61,7 +61,7 @@ static func ewd840Spec() -> TLASpec {
                         "black",
                         tcolor.stateExpr
                     )))
-                         && color.becomes(color.updated(at: i, to: "white"))
+                         && .assign(color.name, color.stateExpr.updated(at: i, to: "white"))
                     && active.stays
                 }
             }
@@ -70,12 +70,12 @@ static func ewd840Spec() -> TLASpec {
                 for j in nodes where j != i {
                     Action("SendMsg_\(i)_to_\(j)") {
                         activeOf(i) == true
-                        && active.becomes(active.updated(at: j, to: true))
-                        && color.becomes(Expr(.ifThenElse(
+                        && .assign(active.name, active.stateExpr.updated(at: j, to: true))
+                        && .assign(color.name, .ifThenElse(
                             j > i,
-                            color.updated(at: i, to: "black").stateExpr,
+                            color.stateExpr.updated(at: i, to: "black"),
                             color.stateExpr
-                        )))
+                        ))
                         && tpos.stays && tcolor.stays
                     }
                 }

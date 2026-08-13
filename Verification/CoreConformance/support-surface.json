@@ -53,6 +53,67 @@
       "linkedDivergenceIDs": []
     },
     {
+      "id": "multicar-elevator-reachable-state-space",
+      "behavior": "Bounded MultiCarElevator reachable finite state-space enumeration",
+      "category": "stateSpace",
+      "finiteBounds": {
+        "summary": "Two people, two cars, floors 0...2, and 3,276 reachable states with cars normalized from TLC functions to Swift records.",
+        "limits": {
+          "people": 2,
+          "cars": 2,
+          "floors": 3,
+          "states": 3276,
+          "variables": 3,
+          "wrappers": 80
+        }
+      },
+      "relation": "exactFiniteTLCGraphV1",
+      "mandatoryCaseIDs": ["multicar-elevator"],
+      "requestedStatus": "requested",
+      "linkedDivergenceIDs": []
+    },
+    {
+      "id": "multicar-elevator-transition-relation",
+      "behavior": "Bounded MultiCarElevator ordered-invocation labeled transition relation",
+      "category": "transitionRelation",
+      "finiteBounds": {
+        "summary": "Two people, two cars, floors 0...2, 80 ordered wrapper labels, and an exact complete graph comparison.",
+        "limits": {
+          "people": 2,
+          "cars": 2,
+          "floors": 3,
+          "states": 3276,
+          "variables": 3,
+          "wrappers": 80
+        }
+      },
+      "relation": "exactFiniteTLCGraphV1",
+      "mandatoryCaseIDs": ["multicar-elevator"],
+      "requestedStatus": "requested",
+      "linkedDivergenceIDs": []
+    },
+    {
+      "id": "multicar-elevator-altered-transition-control",
+      "behavior": "Altered MultiCarElevator request wrapper transition semantics",
+      "category": "transitionRelation",
+      "finiteBounds": {
+        "summary": "Two people, two cars, floors 0...2, and the deliberately disabled request__0_0_0 wrapper.",
+        "limits": {
+          "people": 2,
+          "cars": 2,
+          "floors": 3,
+          "states": 3276,
+          "variables": 3,
+          "wrappers": 80
+        }
+      },
+      "relation": "exactFiniteTLCGraphV1",
+      "mandatoryCaseIDs": ["multicar-elevator-edge-mismatch"],
+      "requestedStatus": "unsupported",
+      "linkedDivergenceIDs": ["multicar-elevator-edge-mismatch"],
+      "reason": "This retained negative control deliberately disables one ordered wrapper and cannot substantiate support."
+    },
+    {
       "id": "hour-clock-altered-transition-control",
       "behavior": "Altered HourClock HCnxt transition semantics",
       "category": "transitionRelation",

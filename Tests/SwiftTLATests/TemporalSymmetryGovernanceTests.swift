@@ -209,6 +209,9 @@ struct TemporalSymmetryGovernanceTests {
     }
   }
 
+}
+
+extension TemporalSymmetryGovernanceTests {
   @Test("P3 symmetry evidence requires a complete orbit partition and all graph relations")
   func symmetryEvidenceCannotOmitStatesOrTransitions() throws {
     let orbit = try SymmetryOrbitV1(

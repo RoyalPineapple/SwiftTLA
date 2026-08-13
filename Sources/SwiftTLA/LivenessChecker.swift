@@ -336,6 +336,9 @@ public struct LivenessChecker {
         return isStrong ? enabledStates.isEmpty : enabledStates.count < component.count
     }
 
+}
+
+extension LivenessChecker {
     private func findWitness(
         _ components: [Set<StateGraph.StateID>],
         initialStates: [StateGraph.StateID],
@@ -498,8 +501,12 @@ public struct LivenessChecker {
         func visit(_ state: StateGraph.StateID) {
             indices[state] = index; lowlinks[state] = index; index += 1; stack.append(state); onStack.insert(state)
             for edge in edges(from: state).sorted(by: edgeOrder) where allowed.contains(edge.target) {
-                if indices[edge.target] == nil { visit(edge.target); lowlinks[state] = min(lowlinks[state]!, lowlinks[edge.target]!) }
-                else if onStack.contains(edge.target) { lowlinks[state] = min(lowlinks[state]!, indices[edge.target]!) }
+                if indices[edge.target] == nil {
+                    visit(edge.target)
+                    lowlinks[state] = min(lowlinks[state]!, lowlinks[edge.target]!)
+                } else if onStack.contains(edge.target) {
+                    lowlinks[state] = min(lowlinks[state]!, indices[edge.target]!)
+                }
             }
             if lowlinks[state] == indices[state] {
                 var component: Set<StateGraph.StateID> = []

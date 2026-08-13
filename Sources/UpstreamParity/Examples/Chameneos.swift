@@ -20,7 +20,7 @@ extension Example {
 private func chameneosSpec() -> TLASpec {
     let M = 4; let N = 4
 
-    let chameneoses = Var<TLAFunctionType>("chameneoses")
+    let chameneoses = Var<TLAValue>("chameneoses")
     let meetingPlace = Var<Int>("meetingPlace")
     let numMeetings = Var<Int>("numMeetings")
 

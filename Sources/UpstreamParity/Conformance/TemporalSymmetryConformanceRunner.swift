@@ -282,7 +282,7 @@ public struct TemporalSymmetryConformanceRunnerV1: Sendable {
     let configurationURL = outputDirectory.appendingPathComponent("symmetry-configuration.json")
     try writeJSON([
       "raw": ["path": try relativePath(rawConfig, projectRoot: projectRoot), "sha256": SHA256V1.hex(Data(contentsOf: rawConfig))],
-      "reduced": ["path": try relativePath(reducedConfig, projectRoot: projectRoot), "sha256": SHA256V1.hex(Data(contentsOf: reducedConfig))],
+      "reduced": ["path": try relativePath(reducedConfig, projectRoot: projectRoot), "sha256": SHA256V1.hex(Data(contentsOf: reducedConfig))]
     ], to: configurationURL)
     let rawSwiftURL = outputDirectory.appendingPathComponent("swift-raw-graph.json")
     let reducedSwiftURL = outputDirectory.appendingPathComponent("swift-reduced-graph.json")
@@ -309,6 +309,9 @@ public struct TemporalSymmetryConformanceRunnerV1: Sendable {
     return true
   }
 
+}
+
+extension TemporalSymmetryConformanceRunnerV1 {
   private func launchCase(id: String, module: URL, configuration: URL, pin: TLCReferencePinV1, architecture: String) throws -> CoreConformanceCaseV1 {
     let arguments = ["-workers", "1", "-fp", "1"]
     return try CoreConformanceCaseV1(
@@ -364,7 +367,8 @@ public struct TemporalSymmetryConformanceRunnerV1: Sendable {
       return state
     }
     let edges = Set(raw.graph.edgeOccurrences.keys.compactMap { edge -> CanonicalEdgeV1? in
-      guard let source = derivation.representativeForState[edge.source], let target = derivation.representativeForState[edge.target] else { return nil }
+      guard let source = derivation.representativeForState[edge.source],
+            let target = derivation.representativeForState[edge.target] else { return nil }
       return CanonicalEdgeV1(source: source, action: edge.action, target: target)
     })
     guard initial.count == raw.graph.initialStateKeys.count, edges.isEmpty == false else {
@@ -382,7 +386,7 @@ public struct TemporalSymmetryConformanceRunnerV1: Sendable {
       "stateIDs": run.graph.states.keys.sorted().map(\.canonicalEncoding),
       "transitions": run.graph.edgeOccurrences.keys.sorted().map {
         ["source": $0.source.canonicalEncoding, "action": $0.action, "target": $0.target.canonicalEncoding]
-      },
+      }
     ], to: url)
   }
 
@@ -394,7 +398,12 @@ public struct TemporalSymmetryConformanceRunnerV1: Sendable {
       engine: engine, reduced: reduced, runID: runID, graphID: TLCTemporalAdapterV1.graphID(run),
       initialStateIDs: run.graph.initialStateKeys.map(\.canonicalEncoding), stateIDs: run.graph.states.keys.map(\.canonicalEncoding),
       transitions: try run.graph.edgeOccurrences.keys.map {
-        try SymmetryRawTransitionWitnessV1(engine: engine, sourceStateID: $0.source.canonicalEncoding, action: $0.action, targetStateID: $0.target.canonicalEncoding)
+        try SymmetryRawTransitionWitnessV1(
+          engine: engine,
+          sourceStateID: $0.source.canonicalEncoding,
+          action: $0.action,
+          targetStateID: $0.target.canonicalEncoding
+        )
       }, declaredConfigurationSHA256: configurationSHA256, graphEvidence: try reference(graphURL, projectRoot: projectRoot),
       invariantOutcome: .notApplicable, deadlockOutcome: .notApplicable)
   }
@@ -420,13 +429,13 @@ public struct TemporalSymmetryConformanceRunnerV1: Sendable {
       "caseID": declaredCase.id,
       "correlation": correlation.tlcRunID.uuidString.lowercased(),
       "status": String(describing: analysis.status),
-      "graphID": TLCTemporalAdapterV1.graphID(swiftRun),
+      "graphID": TLCTemporalAdapterV1.graphID(swiftRun)
     ], to: resultURL)
     try writeJSON([
       "caseID": declaredCase.id,
       "enabledActions": analysis.enabledActions.mapValues { states in
         states.mapKeys { "s\($0.id)" }.mapValues { $0 }
-      },
+      }
     ], to: enablednessURL)
     let initial = swiftRun.graph.initialStateKeys.sorted().map(\.canonicalEncoding)
     switch analysis.status {
@@ -475,7 +484,7 @@ public struct TemporalSymmetryConformanceRunnerV1: Sendable {
       "temporal-eventually-always-weak": "eventually-always-weak.cfg",
       "temporal-leads-to-strong": "leads-to-strong.cfg",
       "temporal-weak-fairness-boundary": "weak-boundary.cfg",
-      "temporal-strong-fairness-boundary": "strong-boundary.cfg",
+      "temporal-strong-fairness-boundary": "strong-boundary.cfg"
     ]
     guard let name = names[declaredCase.id] else {
       throw TemporalSymmetryGovernanceErrorV1.invalidField(record: declaredCase.id, field: "TLC configuration")
@@ -544,8 +553,7 @@ private struct TLCContext {
 }
 
 private extension Dictionary where Key == StateGraph.StateID, Value == Bool {
-  func mapKeys<T: Hashable>(_ transform: (Key) -> T) -> [T: Bool] {
-    Dictionary<T, Bool>(uniqueKeysWithValues: map { (transform($0.key), $0.value) })
+  func mapKeys<T: Hashable>(_ transform: (Key) -> T) -> [T: Bool] {[T: Bool](uniqueKeysWithValues: map { (transform($0.key), $0.value) })
   }
 }
 
@@ -585,7 +593,7 @@ public enum TemporalSymmetryModelCatalogV1 {
         NamedAction(name: "A", body: .and(.guard_(x == 0), x.becomes(2))),
         NamedAction(name: "B", body: .and(.guard_(x == 0), x.becomes(1))),
         NamedAction(name: "C", body: .and(.guard_(x == 1), x.becomes(0))),
-        NamedAction(name: "Stay", body: .and(.guard_(x == 2), x.becomes(2))),
+        NamedAction(name: "Stay", body: .and(.guard_(x == 2), x.becomes(2)))
       ],
       invariants: [],
       temporalProperties: temporal.map { [NamedTemporal(name: $0.0, expr: $0.1)] } ?? [],

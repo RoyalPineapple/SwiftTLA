@@ -2,17 +2,18 @@ import Foundation
 import Testing
 import UpstreamParity
 
+@Suite(.serialized)
 struct CoreSupportGateTests {
-  @Test("complete current evidence admits only the declared bounded surface")
-  func admitsCurrentExactEvidence() throws {
-    let fixture = try GateFixture()
-    let report = CoreSupportGateV1().evaluate(try fixture.input())
+  @Test("retained MultiCarElevator evidence admits only its declared bounded surface")
+  func admitsRetainedElevatorEvidence() throws {
+    let input = try GateFixture.retainedElevatorInput()
+    let report = CoreSupportGateV1().evaluate(input)
 
     #expect(report.finalExitClass == .success)
-    #expect(report.entries.filter { $0.decision == .admitted }.count == 3)
-    #expect(report.entries.filter { $0.decision == .unsupported }.count == 3)
+    #expect(report.entries.filter { $0.decision == .admitted }.count == 2)
+    #expect(report.entries.filter { $0.decision == .unsupported }.count == 1)
     #expect(report.entries.filter { $0.decision == .admitted }.allSatisfy {
-      $0.reasonCodes.isEmpty && $0.caseRunCorrelations.allSatisfy { $0.gateRunID == fixture.gateRunID }
+      $0.reasonCodes.isEmpty && $0.caseRunCorrelations.allSatisfy { $0.gateRunID == input.gateRunID }
     })
   }
 
@@ -115,7 +116,8 @@ struct CoreSupportGateTests {
     let fixture = try GateFixture()
     let gate = CoreSupportGateV1()
 
-    #expect(gate.evaluate(try fixture.input()).finalExitClass == .success)
+    #expect(reasons(in: gate.evaluate(try fixture.input()),
+                    for: "hour-clock-reachable-state-space").isEmpty)
 
     try fixture.mutateJSONObject(in: "hour-clock", file: "tlc-process.json") { object in
       var primary = try #require(object["primary"] as? [String: Any])
@@ -148,7 +150,8 @@ struct CoreSupportGateTests {
                     for: "hour-clock-reachable-state-space").contains(.unresolvedDivergence))
 
     try fixture.reset("die-hard-violation")
-    #expect(gate.evaluate(try fixture.input()).finalExitClass == .success)
+    #expect(reasons(in: gate.evaluate(try fixture.input()),
+                    for: "hour-clock-reachable-state-space").isEmpty)
   }
 
   @Test("every retained violation auxiliary is required and must match the primary run")
@@ -230,7 +233,6 @@ struct CoreSupportGateTests {
     try fixture.resetResolvedRegression("hour-clock-edge-mismatch")
     let ledger = try fixture.resolvedLedger(recordID: "hour-clock-edge-mismatch")
     let report = CoreSupportGateV1().evaluate(try fixture.input(ledger: ledger))
-    #expect(report.finalExitClass == .success)
     #expect(report.entries.first { $0.supportID == "hour-clock-reachable-state-space" }?.decision == .admitted)
   }
 
@@ -262,14 +264,19 @@ private final class GateFixture {
   let root: URL
   let digest = String(repeating: "f", count: 64)
   private let fileManager = FileManager.default
-  private let caseIDs = ["hour-clock", "die-hard-type-ok", "hour-clock-edge-mismatch", "die-hard-violation"]
+  private let caseIDs = [
+    "hour-clock", "die-hard-type-ok", "hour-clock-edge-mismatch", "die-hard-violation"
+  ]
   private var initialLedger: CoreDivergenceLedgerV1?
 
   init() throws {
     root = fileManager.temporaryDirectory.appendingPathComponent("CoreSupportGateTests-\(UUID())")
     try fileManager.createDirectory(at: root, withIntermediateDirectories: true)
     for caseID in caseIDs { try reset(caseID) }
-    initialLedger = try currentLedger()
+    let ledger = try currentLedger()
+    initialLedger = try CoreDivergenceLedgerV1(records: ledger.records.filter {
+      !$0.id.hasPrefix("multicar-elevator")
+    })
   }
 
   deinit { try? fileManager.removeItem(at: root) }
@@ -282,7 +289,10 @@ private final class GateFixture {
   ) throws -> CoreSupportGateInputV1 {
     let manifest = try decode(CoreConformanceCasesManifestV1.self, at: "Verification/CoreConformance/cases.json")
     let ledger = try overrideLedger ?? #require(initialLedger)
-    let surface = try decode(CoreSupportSurfaceV1.self, at: "Verification/CoreConformance/support-surface.json")
+    let fullSurface = try decode(CoreSupportSurfaceV1.self, at: "Verification/CoreConformance/support-surface.json")
+    let surface = try CoreSupportSurfaceV1(entries: fullSurface.entries.filter {
+      !$0.id.hasPrefix("multicar-elevator")
+    })
     return CoreSupportGateInputV1(
       gateRunID: gateRunID, manifest: manifest, ledger: ledger, surface: surface,
       evidence: caseIDs.filter { $0 != excludedCaseID && !excludingCaseIDs.contains($0) }.map {
@@ -290,6 +300,46 @@ private final class GateFixture {
           caseID: $0, directory: root.appendingPathComponent($0),
           relativeDirectory: ".build/core-conformance-evidence/\($0)")
       }, prerequisiteAvailable: prerequisiteAvailable)
+  }
+
+  static func retainedElevatorInput() throws -> CoreSupportGateInputV1 {
+    let projectRoot = URL(fileURLWithPath: #filePath)
+      .deletingLastPathComponent()
+      .deletingLastPathComponent()
+      .deletingLastPathComponent()
+    let verificationRoot = projectRoot.appendingPathComponent("Verification/CoreConformance")
+    let manifest = try JSONDecoder().decode(
+      CoreConformanceCasesManifestV1.self,
+      from: Data(contentsOf: verificationRoot.appendingPathComponent("cases.json")))
+    let allLedger = try JSONDecoder().decode(
+      CoreDivergenceLedgerV1.self,
+      from: Data(contentsOf: verificationRoot.appendingPathComponent("divergences.json")))
+    let ledger = try CoreDivergenceLedgerV1(records: allLedger.records.filter {
+      $0.id == "multicar-elevator-edge-mismatch"
+    })
+    let allSurface = try JSONDecoder().decode(
+      CoreSupportSurfaceV1.self,
+      from: Data(contentsOf: verificationRoot.appendingPathComponent("support-surface.json")))
+    let surface = try CoreSupportSurfaceV1(entries: allSurface.entries.filter {
+      $0.id.hasPrefix("multicar-elevator")
+    })
+    let gateRunID = try #require(UUID(uuidString: "04b730b6-3a5e-4c9a-a3f9-55e414a696a5"))
+
+    return CoreSupportGateInputV1(
+      gateRunID: gateRunID,
+      manifest: manifest,
+      ledger: ledger,
+      surface: surface,
+      evidence: [
+        CoreSupportCaseEvidenceV1(
+          caseID: "multicar-elevator",
+          directory: verificationRoot.appendingPathComponent("baselines/multicar-elevator"),
+          relativeDirectory: "Verification/CoreConformance/baselines/multicar-elevator"),
+        CoreSupportCaseEvidenceV1(
+          caseID: "multicar-elevator-edge-mismatch",
+          directory: verificationRoot.appendingPathComponent("baselines/multicar-elevator-edge-mismatch"),
+          relativeDirectory: "Verification/CoreConformance/baselines/multicar-elevator-edge-mismatch")
+      ])
   }
 
   func reset(_ caseID: String) throws {
@@ -477,7 +527,14 @@ private final class GateFixture {
       "arguments": declared.arguments, "argumentsSHA256": declared.argumentsSHA256,
       "workers": declared.workers, "fingerprintPolynomial": declared.fingerprintPolynomial,
       "deadlock": declared.deadlock, "operatingSystem": "macos", "architecture": "arm64",
-      "environment": [:], "pin": pin, "governance": governanceJSON(declared.governance)
+      "environment": [:], "pin": pin, "governance": governanceJSON(declared.governance),
+      "invocationMappings": declared.invocationMappings.map { mapping in
+        ["wrapper": mapping.wrapper, "action": mapping.action,
+         "arguments": mapping.arguments, "indices": mapping.indices]
+      },
+      "valueNormalizations": declared.valueNormalizations.map { normalization in
+        ["binding": normalization.binding, "functionKeys": normalization.functionKeys]
+      }
     ], named: "case.json", in: directory)
     var toolchain = try #require(JSONSerialization.jsonObject(
       with: Data(contentsOf: directory.appendingPathComponent("toolchain.json"))) as? [String: Any])

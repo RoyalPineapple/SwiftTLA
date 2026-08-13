@@ -98,8 +98,8 @@ import sys
 expected = {
     "schema": "TLCReferencePinV1",
     "tlc.tag": "v1.8.0",
-    "tlc.commit": "30cc3601321c3fc02e044d0ecb5c58d8921e18df",
-    "tlc.jar.sha256": "e22f8ffb4bacdea0a871f444dd94fe5fb0d8013b3388ae39e82e26f852c735d5",
+    "tlc.commit": "0894c3407f4717fec7cc18bde3bf3c857fa47333",
+    "tlc.jar.sha256": "ab323b79802aedc3203b3f9af37c6aca3ed43f4e0225b36f2aa77b26de46c05f",
     "java.distribution": "Eclipse Temurin",
     "java.version": "17.0.19+10",
     "java.archives.arm64.sha256": "8fa1eff40bb637a33613b2ccb8b12c70dc3661cc22cf8e784943715769a05336",

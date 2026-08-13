@@ -9,7 +9,7 @@ extension Example {
         expectedDistinct: 12,
         spec: {
             let data = ["d1", "d2", "d3"]
-            let chan = Var<TLARecordType>("chan")
+            let chan = Var<TLAValue>("chan")
             var records: [TLAValue] = []
             for v in data {
                 for r in 0...1 {
@@ -22,20 +22,29 @@ extension Example {
                 Extends("Naturals")
                 Variable(chan, in: records)
                 Invariant("TypeInvariant") {
-                    (chan.val == "d1" || chan.val == "d2" || chan.val == "d3")
-                        && chan.rdy >= 0 && chan.rdy <= 1
-                        && chan.ack >= 0 && chan.ack <= 1
+                    (StateExpr.recordAccess(chan.stateExpr, "val") == "d1"
+                        || StateExpr.recordAccess(chan.stateExpr, "val") == "d2"
+                        || StateExpr.recordAccess(chan.stateExpr, "val") == "d3")
+                        && StateExpr.recordAccess(chan.stateExpr, "rdy") >= 0 && StateExpr.recordAccess(chan.stateExpr, "rdy") <= 1
+                        && StateExpr.recordAccess(chan.stateExpr, "ack") >= 0 && StateExpr.recordAccess(chan.stateExpr, "ack") <= 1
                 }
                 Action("Send") {
-                    chan.rdy == chan.ack && (
-                        chan.becomes(chan.updated(at: "val", to: "d1").updated(at: "rdy", to: StateExpr.subtract(.int(1), chan.rdy)))
-                        || chan.becomes(chan.updated(at: "val", to: "d2").updated(at: "rdy", to: StateExpr.subtract(.int(1), chan.rdy)))
-                        || chan.becomes(chan.updated(at: "val", to: "d3").updated(at: "rdy", to: StateExpr.subtract(.int(1), chan.rdy)))
+                    StateExpr.recordAccess(chan.stateExpr, "rdy") == StateExpr.recordAccess(chan.stateExpr, "ack") && (
+                        .assign(chan.name, chan.stateExpr
+                            .updated(at: "val", to: "d1")
+                            .updated(at: "rdy", to: StateExpr.subtract(.int(1), StateExpr.recordAccess(chan.stateExpr, "rdy"))))
+                        || .assign(chan.name, chan.stateExpr
+                            .updated(at: "val", to: "d2")
+                            .updated(at: "rdy", to: StateExpr.subtract(.int(1), StateExpr.recordAccess(chan.stateExpr, "rdy"))))
+                        || .assign(chan.name, chan.stateExpr
+                            .updated(at: "val", to: "d3")
+                            .updated(at: "rdy", to: StateExpr.subtract(.int(1), StateExpr.recordAccess(chan.stateExpr, "rdy"))))
                     )
                 }
                 Action("Rcv") {
-                    chan.rdy != chan.ack
-                        && chan.becomes(chan.updated(at: "ack", to: StateExpr.subtract(.int(1), chan.ack)))
+                    StateExpr.recordAccess(chan.stateExpr, "rdy") != StateExpr.recordAccess(chan.stateExpr, "ack")
+                        && .assign(chan.name, chan.stateExpr
+                            .updated(at: "ack", to: StateExpr.subtract(.int(1), StateExpr.recordAccess(chan.stateExpr, "ack"))))
                 }
             }
         }(),

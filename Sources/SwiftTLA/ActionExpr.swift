@@ -11,16 +11,25 @@ public indirect enum ActionExpr: Hashable, Sendable, CustomStringConvertible {
 
     public var description: String {
         switch self {
-        case .assign(let v, let e): return "\(v)' = \(e)"
-        case .unchanged(let v): return "UNCHANGED \(v)"
-        case .guard_(let e): return "\(e)"
-        case .chooseAction(let v, let s): return "\(v)' \\in \(s)"
-        case .existsAction(let v, let s, let b): return "\\E \(v) \\in \(s): \(b)"
-        case .define(let v, let e, let b): return "LET \(v) == \(e) IN \(b)"
-        case .ifElse(let c, let t, let e): return "IF \(c) THEN (\(t)) ELSE (\(e))"
-        case .and(let a, let b): return "(\(a) /\\ \(b))"
-        case .or(let a, let b): return "(\(a) \\/ \(b))"
-    }
+        case .assign(let v, let e):
+            return "\(v)' = \(e)"
+        case .unchanged(let v):
+            return "UNCHANGED \(v)"
+        case .guard_(let e):
+            return "\(e)"
+        case .chooseAction(let v, let s):
+            return "\(v)' \\in \(s)"
+        case .existsAction(let v, let s, let b):
+            return "\\E \(v) \\in \(s): \(b)"
+        case .define(let v, let e, let b):
+            return "LET \(v) == \(e) IN \(b)"
+        case .ifElse(let c, let t, let e):
+            return "IF \(c) THEN (\(t)) ELSE (\(e))"
+        case .and(let a, let b):
+            return "(\(a) /\\ \(b))"
+        case .or(let a, let b):
+            return "(\(a) \\/ \(b))"
+        }
 }
 
 /// Substitute a variable reference with a concrete value in an ActionExpr.

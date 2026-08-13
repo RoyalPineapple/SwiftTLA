@@ -1,6 +1,9 @@
+import Foundation
 import Testing
 import SwiftTLA
 import SwiftTLAMacros
+import SwiftParser
+import SwiftSyntax
 
 // MARK: - Minimal spec: counter with no invariants
 
@@ -82,8 +85,25 @@ final class ObservableTwoCarElevator {
         TLASpec("ObservableTwoCarElevator") {
             let floor = Var<Int>("floor")
             Variable(floor, 0)
-            Action("moveElevator", id: [1, 2]) { id in
-                floor.becomes(id)
+            Action("moveElevator", parameters: [ActionParameter("id", values: [1, 2])]) {
+                floor.becomes(2)
+            }
+        }
+    }
+}
+
+@TLAObservable
+final class ObservableThreeParameterMachine {
+    static var spec: TLASpec {
+        TLASpec("ObservableThreeParameterMachine") {
+            let floor = Var<Int>("floor")
+            Variable(floor, 0)
+            Action("board", parameters: [
+                ActionParameter("person", values: [1, 2]),
+                ActionParameter("elevator", values: [10, 20]),
+                ActionParameter("direction", values: [100, 200])
+            ]) {
+                floor.becomes(1)
             }
         }
     }
@@ -95,8 +115,62 @@ struct TwoCarElevatorMachine {
         TLASpec("TwoCarElevatorMachine") {
             let floor = Var<Int>("floor")
             Variable(floor, 0)
-            Action("moveElevator", id: [1, 2]) { id in
-                floor.becomes(id)
+            Action("moveElevator", parameters: [ActionParameter("id", values: [1, 2])]) {
+                floor.becomes(1)
+            }
+        }
+    }
+}
+
+@TLAModel
+struct ThreeParameterActionMachine {
+    static var spec: TLASpec {
+        TLASpec("ThreeParameterActionMachine") {
+            let floor = Var<Int>("floor")
+            Variable(floor, 0)
+            Action("board", parameters: [
+                ActionParameter("person", values: [1, 2]),
+                ActionParameter("elevator", values: [10, 20]),
+                ActionParameter("direction", values: [100, 200])
+            ]) {
+                floor.becomes(1)
+            }
+        }
+    }
+}
+
+@TLAModel
+struct EndToEndThreeParameterActionMachine {
+    static var spec: TLASpec {
+        TLASpec("EndToEndThreeParameterActionMachine") {
+            let floor = Var<Int>("floor")
+            let person = Var<Int>("person")
+            let elevator = Var<Int>("elevator")
+            let direction = Var<Int>("direction")
+            Variable(floor, 0)
+            Action("board", parameters: [
+                ActionParameter("person", values: [1, 2]),
+                ActionParameter("elevator", values: [10, 20]),
+                ActionParameter("direction", values: [100, 200])
+            ]) {
+                floor.becomes(person + elevator + direction)
+            }
+        }
+    }
+}
+
+@TLAActor
+actor ThreeParameterActionActor {
+    static var spec: TLASpec {
+        TLASpec("ThreeParameterActionActor") {
+            let floor = Var<Int>("floor")
+            Variable(floor, 0)
+            Action("board", parameters: [
+                ActionParameter("person", values: [1, 2]),
+                ActionParameter("elevator", values: [10, 20]),
+                ActionParameter("direction", values: [100, 200])
+            ]) {
+                floor.becomes(1)
             }
         }
     }
@@ -105,21 +179,235 @@ struct TwoCarElevatorMachine {
 // MARK: - Tests for generated verification methods
 
 struct GeneratedStateMachineTests {
+    private struct BoardCallback {
+        let person: Int
+        let elevator: Int
+        let direction: Int
+        let before: [String: TLAValue]
+        let after: [String: TLAValue]
+    }
+
     @Test("Observable parameterized action applies its selected finite-domain argument")
-    func observableParameterizedAction() {
+    func observableParameterizedAction() throws {
         let elevator = ObservableTwoCarElevator()
         var callbackID: Int?
         elevator.onMoveElevator = { id, _, _ in callbackID = id }
-        elevator._moveElevator(id: 2)
+        _ = try elevator._moveElevator(id: 2)
         #expect(elevator.floor == 2)
         #expect(callbackID == 2)
     }
 
     @Test("Model macro generates a parameterized action method")
-    func modelParameterizedAction() {
+    func modelParameterizedAction() throws {
         var elevator = TwoCarElevatorMachine()
-        elevator.applymoveElevator(id: 1)
+        _ = try elevator.applymoveElevator(id: 1)
         #expect(elevator.floor == 1)
+    }
+
+    @Test("Model macro forwards every list parameter to the runtime invocation")
+    func modelMacroForwardsEveryVariadicParameter() throws {
+        var enabled = ThreeParameterActionMachine()
+        _ = try enabled.applyboard(person: 2, elevator: 20, direction: 200)
+        #expect(enabled.floor == 1)
+        #expect(ThreeParameterActionMachine.spec.actions[0].bindings.map(\.name) == [
+            "person", "elevator", "direction"
+        ])
+
+        var invalidMiddleParameter = ThreeParameterActionMachine()
+        let before = invalidMiddleParameter.tlaSnapshot()
+        #expect(throws: GeneratedMachineError.self) {
+            try invalidMiddleParameter.apply(.board(person: 2, elevator: 30, direction: 200))
+        }
+        #expect(invalidMiddleParameter.floor == 0)
+        #expect(invalidMiddleParameter.tlaSnapshot() == before)
+    }
+
+    @Test("Three-parameter actions preserve one ordered contract across builder, parser, macro, runtime, and export")
+    func threeParameterActionIsConsistentAcrossEveryExecutionPath() throws {
+        let source = """
+        {
+            Action("board", parameters: [
+                ActionParameter("person", values: [1, 2]),
+                ActionParameter("elevator", values: [10, 20]),
+                ActionParameter("direction", values: [100, 200])
+            ]) {
+                floor.becomes(person + elevator + direction)
+            }
+        }
+        """
+        let closure = try #require(Parser.parse(source: source).statements.first?.item.as(ClosureExprSyntax.self))
+        let parsed = SpecParser.parseSpecClosure(closure)
+        let floor = Var<Int>("floor")
+        let person = Var<Int>("person")
+        let elevator = Var<Int>("elevator")
+        let direction = Var<Int>("direction")
+        let builder = TLASpec("EndToEndThreeParameterActionMachine") {
+            Variable(floor, 0)
+            Action("board", parameters: [
+                ActionParameter("person", values: [1, 2]),
+                ActionParameter("elevator", values: [10, 20]),
+                ActionParameter("direction", values: [100, 200])
+            ]) {
+                floor.becomes(person + elevator + direction)
+            }
+        }
+
+        #expect(parsed.diagnostics.isEmpty)
+        #expect(parsed.actions.count == 1)
+        #expect(parsed.actions[0].name == builder.actions[0].name)
+        #expect(parsed.actions[0].body == builder.actions[0].body)
+        #expect(parsed.actions[0].bindings == builder.actions[0].bindings)
+        #expect(EndToEndThreeParameterActionMachine.spec.actions == builder.actions)
+
+        let expectedArguments: [[TLAValue]] = [
+            [.int(1), .int(10), .int(100)], [.int(1), .int(10), .int(200)],
+            [.int(1), .int(20), .int(100)], [.int(1), .int(20), .int(200)],
+            [.int(2), .int(10), .int(100)], [.int(2), .int(10), .int(200)],
+            [.int(2), .int(20), .int(100)], [.int(2), .int(20), .int(200)]
+        ]
+        let graph = try ModelChecker(spec: builder).exploreGraph()
+        #expect(graph.transitions[.init(0)]?.map(\.label.arguments) == expectedArguments)
+
+        let wrappers = builder.tlaModule.split(separator: "\n").filter { $0.hasPrefix("board__") }
+        #expect(wrappers == [
+            "board__0_0_0 == board(1, 10, 100)",
+            "board__0_0_1 == board(1, 10, 200)",
+            "board__0_1_0 == board(1, 20, 100)",
+            "board__0_1_1 == board(1, 20, 200)",
+            "board__1_0_0 == board(2, 10, 100)",
+            "board__1_0_1 == board(2, 10, 200)",
+            "board__1_1_0 == board(2, 20, 100)",
+            "board__1_1_1 == board(2, 20, 200)"
+        ])
+
+        let runtime = SpecRuntime(spec: builder)
+        let initial = try #require(runtime.initialStates().first)
+        let invocation = TLAActionInvocation(
+            name: "board", arguments: [.int(2), .int(20), .int(200)])
+        #expect(try runtime.apply(invocation, to: initial)["floor"] == .int(222))
+        #expect(throws: SpecRuntime.RuntimeError.self) {
+            try runtime.apply(.init(name: "board", arguments: [.int(2), .int(30), .int(200)]), to: initial)
+        }
+        #expect(initial["floor"] == .int(0))
+
+        var machine = EndToEndThreeParameterActionMachine()
+        let before = machine.tlaSnapshot()
+        let evidence = try machine.apply(.board(person: 2, elevator: 20, direction: 200))
+        #expect(evidence.label.toInvocation() == invocation)
+        #expect(evidence.after["floor"] == .int(222))
+        #expect(throws: GeneratedMachineError.self) {
+            try machine.apply(.board(person: 2, elevator: 30, direction: 200))
+        }
+        #expect(machine.tlaSnapshot()["floor"] == .int(222))
+        #expect(before["floor"] == .int(0))
+    }
+
+    @Test("Canonical generated machine preserves typed labels, evidence, and failed snapshots")
+    func canonicalGeneratedMachineUsesCheckedThreeArgumentInvocations() throws {
+        var machine = ThreeParameterActionMachine()
+        let label = ThreeParameterActionMachine.ActionLabel.board(person: 2, elevator: 20, direction: 200)
+        let evidence = try machine.apply(label)
+
+        #expect(evidence.label == label)
+        #expect(evidence.label.toInvocation() == .init(name: "board", arguments: [.int(2), .int(20), .int(200)]))
+        #expect(evidence.before["floor"] == .int(0))
+        #expect(evidence.after["floor"] == .int(1))
+
+        let before = machine.tlaSnapshot()
+        #expect(throws: GeneratedMachineError.self) {
+            try machine.apply(.board(person: 2, elevator: 30, direction: 200))
+        }
+        #expect(machine.tlaSnapshot() == before)
+    }
+
+    @Test("Observable and actor adapters return the canonical three-argument transition evidence")
+    func observableAndActorMatchCanonicalThreeArgumentEvidence() async throws {
+        var model = ThreeParameterActionMachine()
+        let expected = try model.apply(.board(person: 2, elevator: 20, direction: 200))
+
+        let observable = ObservableThreeParameterMachine()
+        var callback: BoardCallback?
+        observable.onBoard = { person, elevator, direction, before, after in
+            callback = .init(
+                person: person,
+                elevator: elevator,
+                direction: direction,
+                before: before.asDictionary,
+                after: after.asDictionary
+            )
+        }
+        let observed = try observable._board(person: 2, elevator: 20, direction: 200)
+
+        let actor = ThreeParameterActionActor()
+        let acted = try await actor.apply(.board(person: 2, elevator: 20, direction: 200))
+
+        #expect(observed.label.toInvocation() == expected.label.toInvocation())
+        #expect(observed.before == expected.before)
+        #expect(observed.after == expected.after)
+        #expect(acted.label.toInvocation() == expected.label.toInvocation())
+        #expect(acted.before == expected.before)
+        #expect(acted.after == expected.after)
+        #expect(callback?.person == 2)
+        #expect(callback?.elevator == 20)
+        #expect(callback?.direction == 200)
+        #expect(callback?.before == expected.before)
+        #expect(callback?.after == expected.after)
+    }
+
+    @Test("Rejected generated labels preserve model, observable, and actor state")
+    func rejectedActionsDoNotMutateOrNotify() async throws {
+        let expectedInvocation = TLAActionInvocation(
+            name: "board",
+            arguments: [.int(2), .int(30), .int(200)]
+        )
+
+        var model = ThreeParameterActionMachine()
+        let modelBefore = model.tlaSnapshot()
+        do {
+            _ = try model.apply(.board(person: 2, elevator: 30, direction: 200))
+            Issue.record("Expected rejected model action")
+        } catch {
+            assertRejectedBoardError(error, expectedInvocation: expectedInvocation)
+        }
+        #expect(model.tlaSnapshot() == modelBefore)
+
+        let observable = ObservableThreeParameterMachine()
+        var callbackCount = 0
+        observable.onBoard = { _, _, _, _, _ in callbackCount += 1 }
+        let observableBefore = observable.tlaSnapshot()
+        do {
+            _ = try observable._board(person: 2, elevator: 30, direction: 200)
+            Issue.record("Expected rejected observable action")
+        } catch {
+            assertRejectedBoardError(error, expectedInvocation: expectedInvocation)
+        }
+        #expect(observable.tlaSnapshot() == observableBefore)
+        #expect(callbackCount == 0)
+
+        let actor = ThreeParameterActionActor()
+        let actorBefore = await actor.tlaSnapshot()
+        do {
+            _ = try await actor.apply(.board(person: 2, elevator: 30, direction: 200))
+            Issue.record("Expected rejected actor action")
+        } catch {
+            assertRejectedBoardError(error, expectedInvocation: expectedInvocation)
+        }
+        #expect(await actor.tlaSnapshot() == actorBefore)
+    }
+
+    @Test("Removed fixed-arity action syntax does not type check")
+    func legacyParameterizedActionSyntaxIsUnavailable() throws {
+        let fixture = packageRoot().appendingPathComponent("Tests/Fixtures/InvalidActionParameterAPI")
+        let result = try runSwift(["build", "--package-path", fixture.path])
+
+        #expect(result.status != 0)
+        #expect(result.output.contains("Parameterized action 'legacyParameter' requires a parameters list"))
+        #expect(result.output.contains("Parameterized action 'legacyTwoParameters' requires a parameters list"))
+        #expect(result.output.contains("Parameterized action 'legacyID' requires a parameters list"))
+        #expect(result.output.contains("Parameterized action 'legacyPair' requires a parameters list"))
+        #expect(result.output.contains("value of type 'NamedAction' has no member 'binding'"))
+        #expect(result.output.contains("value of type 'ActionDecl' has no member 'binding'"))
+        #expect(result.output.contains("incorrect argument label in call (have 'name:body:binding:', expected 'name:body:bindings:')"))
     }
 
     @Test("Builder path: TLASpec from Var with initial, no explicit Variable")
@@ -134,13 +422,57 @@ struct GeneratedStateMachineTests {
         #expect(spec.variables[0].name == "hr")
         #expect(spec.variables[0].initial == .int(1))
         let result = try ModelChecker(spec: spec, maxStates: 100).check()
-        if case .ok(let count) = result { #expect(count == 12) }
-        else { #expect(Bool(false), "Expected 12 states") }
+        if case .ok(let count) = result { #expect(count == 12) } else {
+            #expect(Bool(false), "Expected 12 states")
+        }
     }
 
     @Test("verifySpec passes for CounterNoInvs")
     func counterNoInvsVerifySpec() throws {
         try CounterNoInvs.verifySpec()
+    }
+
+    private func runSwift(_ arguments: [String]) throws -> (status: Int32, output: String) {
+        let scratch = FileManager.default.temporaryDirectory
+            .appendingPathComponent("SwiftTLA-invalid-action-parameter-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: scratch) }
+        try FileManager.default.createDirectory(at: scratch, withIntermediateDirectories: true)
+
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+        process.arguments = ["swift"] + arguments + ["--scratch-path", scratch.path]
+        let output = Pipe()
+        process.standardOutput = output
+        process.standardError = output
+        try process.run()
+        let outputData = output.fileHandleForReading.readDataToEndOfFile()
+        process.waitUntilExit()
+
+        return (
+            process.terminationStatus,
+            String(data: outputData, encoding: .utf8) ?? ""
+        )
+    }
+
+    private func packageRoot() -> URL {
+        var directory = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+        while !FileManager.default.fileExists(atPath: directory.appendingPathComponent("Package.swift").path) {
+            directory.deleteLastPathComponent()
+        }
+        return directory
+    }
+
+    private func assertRejectedBoardError(
+        _ error: any Error,
+        expectedInvocation: TLAActionInvocation
+    ) {
+        guard case .runtime(.invalidActionArguments(let invocation, let available)) = error as? GeneratedMachineError else {
+            Issue.record("Expected invalidActionArguments runtime context, got \(error)")
+            return
+        }
+
+        #expect(invocation == expectedInvocation)
+        #expect(!available.contains(expectedInvocation))
     }
 
     @Test("verifyTransitions passes for CounterNoInvs")
@@ -217,7 +549,7 @@ struct GeneratedStateMachineTests {
     func counterNoInvsConsistency() throws {
         let matrix = try CounterNoInvs.transitionMatrix()
         for entry in matrix {
-            let next = try CounterNoInvs.runtime.apply(actionName: entry.action, to: entry.from)
+            let next = try CounterNoInvs.runtime.apply(.init(name: entry.action), to: entry.from)
             #expect(next == entry.to)
         }
     }

@@ -107,7 +107,13 @@ public struct ModelChecker {
         let exploration = try bfs(
             seeds: seeds,
             variableNames: variableNames,
-            expand: buildExpander(actions, variableNames: variableNames, constraint: substituted.constraint, runtimeFuncs: substituted.runtimeFuncs, recursiveFuncs: substituted.recursiveFuncs),
+            expand: buildExpander(
+                actions,
+                variableNames: variableNames,
+                constraint: substituted.constraint,
+                runtimeFuncs: substituted.runtimeFuncs,
+                recursiveFuncs: substituted.recursiveFuncs
+            ),
             evaluate: buildEvaluator(runtimeFuncs: substituted.runtimeFuncs, recursiveFuncs: substituted.recursiveFuncs),
             actions: actions,
             invariants: substituted.invariants,
@@ -136,21 +142,11 @@ public struct ModelChecker {
             var result: [(StateGraph.TransitionLabel, State)] = []
             for action in actions {
                 do {
-                    if let binding = action.binding {
-                        for value in binding.values {
-                            let successors = try ActionEnumerator.enumerate(
-                                action.body.substituteVar(binding.name, with: value, in: action.body),
-                                from: state,
-                                varNames: variableNames
-                            )
-                            let label = StateGraph.TransitionLabel(action: action.name, argument: value)
-                            result.append(contentsOf: successors.map { (label, $0) })
-                        }
-                    } else {
+                    for variant in actionInvocations(action) {
                         let successors = try ActionEnumerator.enumerate(
-                            action.body, from: state, varNames: variableNames
+                            variant.body, from: state, varNames: variableNames
                         )
-                        let label = StateGraph.TransitionLabel(action: action.name)
+                        let label = StateGraph.TransitionLabel(variant.invocation)
                         result.append(contentsOf: successors.map { (label, $0) })
                     }
                 } catch {
@@ -362,25 +358,21 @@ private func bfs(
 
         for (successorLabel, successorState) in successors {
             let key = canonicalKey(successorState)
-            if let targetID = stateToID[key] {
-                transitions[currentID, default: []] += [
-                    StateGraph.Transition(label: successorLabel, target: targetID)
-                ]
+            let targetID: StateGraph.StateID
+            if let existing = stateToID[key] {
+                targetID = existing
+            } else {
+                targetID = StateGraph.StateID(nextID)
+                stateToID[key] = targetID
+                idToState[targetID] = successorState
+                predecessors[successorState] = (current, successorLabel.description)
+                queue.append(successorState)
+                visited.insert(key)
+                nextID += 1
             }
-        }
-
-        for successor in successors where !visited.contains(canonicalKey(successor.1)) {
-            let key = canonicalKey(successor.1)
-            let targetID = StateGraph.StateID(nextID)
             transitions[currentID, default: []] += [
-                StateGraph.Transition(label: successor.0, target: targetID)
+                StateGraph.Transition(label: successorLabel, target: targetID)
             ]
-            stateToID[key] = targetID
-            idToState[targetID] = successor.1
-            predecessors[successor.1] = (current, successor.0.description)
-            queue.append(successor.1)
-            visited.insert(key)
-            nextID += 1
         }
     }
 
@@ -399,13 +391,11 @@ private func enabledState(
     var result = state
     for action in actions where !action.name.isEmpty {
         do {
-            let bodies = action.binding?.values.map { action.body.substituteVar(action.binding!.name, with: $0, in: action.body) } ?? [action.body]
-            var enabled = false
-            for body in bodies {
-                if try !ActionEnumerator.enumerate(body, from: state, varNames: variableNames).isEmpty {
-                    enabled = true
-                    break
+            let enabled = try actionInvocations(action).contains { variant in
+                if try !ActionEnumerator.enumerate(variant.body, from: state, varNames: variableNames).isEmpty {
+                    return true
                 }
+                return false
             }
             result["_enabled_" + action.name] = .bool(enabled)
         } catch {

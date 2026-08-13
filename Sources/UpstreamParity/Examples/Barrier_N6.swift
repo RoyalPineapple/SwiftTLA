@@ -4,7 +4,7 @@ import SwiftTLAMacros
 @TLAModel
 public struct BarrierModel {
     public static var spec: TLASpec {
-        return TLASpec("Barrier") {
+        TLASpec("Barrier") {
             Extends("Integers")
             let pc1 = Var<String>("pc1")
             let pc2 = Var<String>("pc2")

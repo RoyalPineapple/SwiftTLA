@@ -18,10 +18,10 @@ public struct TwoPhaseModel {
 
         return TLASpec("TwoPhase") {
             Extends("Integers")
-            let rmState = Var<TLAFunctionType>("rmState")
+            let rmState = Var<TLAValue>("rmState")
             let tmState = Var<String>("tmState")
-            let tmPrepared = Var<TLASetType>("tmPrepared")
-            let msgs = Var<TLASetType>("msgs")
+            let tmPrepared = Var<TLAValue>("tmPrepared")
+            let msgs = Var<TLAValue>("msgs")
             let initRMState = TLAValue.function(Dictionary(uniqueKeysWithValues: rms.map {
                 (TLAValue.string($0), TLAValue.string("working"))
             }))
@@ -34,52 +34,52 @@ public struct TwoPhaseModel {
                 Action("RcvPrepared_\(rm)") {
                     tmState == "init"
                     && preparedMsg(rm).isIn(msgs)
-                    && tmPrepared.becomes(Expr(.union(tmPrepared.stateExpr, StateExpr.singleton(StateExpr.value(.string(rm))))))
+                    && .assign(tmPrepared.name, .union(tmPrepared.stateExpr, StateExpr.singleton(StateExpr.value(.string(rm)))))
                     && rmState.stays && tmState.stays && msgs.stays
                 }
             }
 
             Action("TMCommit") {
                 tmState == "init"
-                && tmPrepared.cardinality == 3
+                && tmPrepared.stateExpr.cardinality == 3
                 && tmState.becomes("committed")
-                && msgs.becomes(Expr(.union(msgs.stateExpr, StateExpr.singleton(commitMsg()))))
+                && .assign(msgs.name, .union(msgs.stateExpr, StateExpr.singleton(commitMsg())))
                 && rmState.stays && tmPrepared.stays
             }
 
             Action("TMAbort") {
                 tmState == "init"
                 && tmState.becomes("aborted")
-                && msgs.becomes(Expr(.union(msgs.stateExpr, StateExpr.singleton(abortMsg()))))
+                && .assign(msgs.name, .union(msgs.stateExpr, StateExpr.singleton(abortMsg())))
                 && rmState.stays && tmPrepared.stays
             }
 
             for rm in rms {
                 Action("Prepare_\(rm)") {
                     rmSt(rm) == "working"
-                    && rmState.becomes(rmState.updated(at: rm, to: "prepared"))
-                    && msgs.becomes(Expr(.union(msgs.stateExpr, StateExpr.singleton(preparedMsg(rm)))))
+                    && .assign(rmState.name, rmState.stateExpr.updated(at: rm, to: "prepared"))
+                    && .assign(msgs.name, .union(msgs.stateExpr, StateExpr.singleton(preparedMsg(rm))))
                     && tmState.stays && tmPrepared.stays
                 }
                 Action("Abort_\(rm)") {
                     rmSt(rm) == "working"
-                    && rmState.becomes(rmState.updated(at: rm, to: "aborted"))
+                    && .assign(rmState.name, rmState.stateExpr.updated(at: rm, to: "aborted"))
                     && tmState.stays && tmPrepared.stays && msgs.stays
                 }
                 Action("RcvCommit_\(rm)") {
                     commitMsg().isIn(msgs)
-                    && rmState.becomes(rmState.updated(at: rm, to: "committed"))
+                    && .assign(rmState.name, rmState.stateExpr.updated(at: rm, to: "committed"))
                     && tmState.stays && tmPrepared.stays && msgs.stays
                 }
                 Action("RcvAbort_\(rm)") {
                     abortMsg().isIn(msgs)
-                    && rmState.becomes(rmState.updated(at: rm, to: "aborted"))
+                    && .assign(rmState.name, rmState.stateExpr.updated(at: rm, to: "aborted"))
                     && tmState.stays && tmPrepared.stays && msgs.stays
                 }
             }
 
             Invariant("TPTypeOK") {
-                tmState.isIn(StateExpr.set(["init", "committed", "aborted"]))
+                tmState.stateExpr.isIn(StateExpr.set(["init", "committed", "aborted"]))
             }
         }
     }

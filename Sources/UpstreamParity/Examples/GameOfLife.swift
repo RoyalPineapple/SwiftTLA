@@ -16,7 +16,7 @@ extension Example {
 
 private func gameOfLifeSpec() -> TLASpec {
     let N = 4
-    let grid = Var<TLAFunctionType>("grid")
+    let grid = Var<TLAValue>("grid")
     let positions = (1...N).flatMap { x in (1...N).map { y in (x, y) } }
     let allTiles: [StateExpr] = positions.map { .tupleLiteral([.int($0.0), .int($0.1)]) }
 
@@ -32,18 +32,24 @@ private func gameOfLifeSpec() -> TLASpec {
     func nextValue(at p: StateExpr) -> StateExpr {
         let x = StateExpr.tupleAccess(p, 1)
         let y = StateExpr.tupleAccess(p, 2)
-        let alive = grid.applying(p)
-        var score: StateExpr = StateExpr.int(0)
+        let alive = grid.stateExpr.applying(p)
+        var score = StateExpr.int(0)
         for dx in -1...1 {
             for dy in -1...1 where !(dx == 0 && dy == 0) {
                 let nx = StateExpr.add(x, StateExpr.int(dx)); let ny = StateExpr.add(y, StateExpr.int(dy))
-                let inBounds = StateExpr.greaterOrEqual(nx, StateExpr.int(1)) && StateExpr.lessOrEqual(nx, StateExpr.int(N)) && StateExpr.greaterOrEqual(ny, StateExpr.int(1)) && StateExpr.lessOrEqual(ny, StateExpr.int(N))
+                let inBounds = StateExpr.greaterOrEqual(nx, StateExpr.int(1))
+                    && StateExpr.lessOrEqual(nx, StateExpr.int(N))
+                    && StateExpr.greaterOrEqual(ny, StateExpr.int(1))
+                    && StateExpr.lessOrEqual(ny, StateExpr.int(N))
                 let neighbor = StateExpr.tupleLiteral([nx, ny])
                 score = StateExpr.add(score, StateExpr.ifThenElse(inBounds,
-                    StateExpr.ifThenElse(grid.applying(neighbor), StateExpr.int(1), StateExpr.int(0)), StateExpr.int(0)))
+                    StateExpr.ifThenElse(grid.stateExpr.applying(neighbor), StateExpr.int(1), StateExpr.int(0)), StateExpr.int(0)))
             }
         }
-        return (alive && StateExpr.greaterOrEqual(score, StateExpr.int(2)) && StateExpr.lessOrEqual(score, StateExpr.int(3))) || StateExpr.not(alive) && StateExpr.equal(score, StateExpr.int(3))
+        return (alive
+            && StateExpr.greaterOrEqual(score, StateExpr.int(2))
+            && StateExpr.lessOrEqual(score, StateExpr.int(3)))
+            || StateExpr.not(alive) && StateExpr.equal(score, StateExpr.int(3))
     }
 
     return TLASpec("GameOfLife") {
@@ -52,7 +58,7 @@ private func gameOfLifeSpec() -> TLASpec {
 
         Invariant("TypeOK") {
             for (x, y) in positions {
-                StateExpr.in(grid.applying(StateExpr.tupleLiteral([.int(x), .int(y)])),
+                StateExpr.in(grid.stateExpr.applying(StateExpr.tupleLiteral([.int(x), .int(y)])),
                     StateExpr.setLiteral([.bool(false), .bool(true)]))
             }
         }
@@ -60,8 +66,8 @@ private func gameOfLifeSpec() -> TLASpec {
         // grid' = [p \in Pos |-> nextValue(p)]  — the upstream pattern
         let pVar = Var<Int>("p")
         Action("Next") {
-            grid.becomes(StateExpr.functionLiteral(pVar, in: StateExpr.setLiteral(allTiles),
-                nextValue(at: pVar.stateExpr)))
+            grid.becomes(Expr<TLAValue>(StateExpr.functionLiteral(pVar, in: StateExpr.setLiteral(allTiles),
+                nextValue(at: pVar.stateExpr))))
         }
     }
 }

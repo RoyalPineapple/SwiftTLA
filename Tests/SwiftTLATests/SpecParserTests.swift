@@ -2,11 +2,12 @@ import Testing
 import SwiftSyntax
 import SwiftParser
 import SwiftTLA
+import SwiftTLAMacros
 
-/// Proves SpecParser's compact decoder produces the same AST as the runtime
-/// builder for every expression form in the DSL. Each test parses a source
-/// string and compares the result to the equivalent value built through
-/// Swift's type system (operator overloads and method calls).
+// Proves SpecParser's compact decoder produces the same AST as the runtime
+// builder for every expression form in the DSL. Each test parses a source
+// string and compares the result to the equivalent value built through
+// Swift's type system (operator overloads and method calls).
 
 // MARK: - Helpers
 
@@ -208,7 +209,10 @@ private func parseExpression(_ source: String) -> ExprSyntax {
 
 @Suite(.serialized) struct StateExprStaticCallTests {
     @Test func parseStaticSet() {
-        #expect(SpecParser.decodeStateExpr(parseExpression("StateExpr.set([1, 2, 3])")) == StateExpr.setLiteral([.value(.int(1)), .value(.int(2)), .value(.int(3))]))
+        #expect(
+            SpecParser.decodeStateExpr(parseExpression("StateExpr.set([1, 2, 3])"))
+                == StateExpr.setLiteral([.value(.int(1)), .value(.int(2)), .value(.int(3))])
+        )
     }
 
     @Test func parseStaticTuple() {
@@ -216,7 +220,10 @@ private func parseExpression(_ source: String) -> ExprSyntax {
     }
 
     @Test func parseStaticRecord() {
-        #expect(SpecParser.decodeStateExpr(parseExpression("StateExpr.record(name: x, age: 42)")) == StateExpr.recordLiteral(["name": .variable("x"), "age": .value(.int(42))]))
+        #expect(
+            SpecParser.decodeStateExpr(parseExpression("StateExpr.record(name: x, age: 42)"))
+                == StateExpr.recordLiteral(["name": .variable("x"), "age": .value(.int(42))])
+        )
     }
 
     @Test func parseStaticIf() {
@@ -301,7 +308,10 @@ private func parseExpression(_ source: String) -> ExprSyntax {
 @Suite(.serialized) struct ActionExprBasicTests {
     @Test func parseBecomes() {
         #expect(SpecParser.decodeActionExpr(parseExpression("x.becomes(5)")) == ActionExpr.assign("x", .value(.int(5))))
-        #expect(SpecParser.decodeActionExpr(parseExpression("x.becomes(x + 1)")) == ActionExpr.assign("x", StateExpr.add(.variable("x"), .value(.int(1)))))
+        #expect(
+            SpecParser.decodeActionExpr(parseExpression("x.becomes(x + 1)"))
+                == ActionExpr.assign("x", StateExpr.add(.variable("x"), .value(.int(1))))
+        )
     }
 
     @Test func parseStays() {
@@ -422,7 +432,10 @@ private func parseClosure(_ source: String) -> ClosureExprSyntax {
 
 @Suite(.serialized) struct TemporalExprTests {
     @Test func parseLeadsTo() {
-        #expect(SpecParser.decodeTemporal(parseExpression("x.leadsTo(y)").as(FunctionCallExprSyntax.self)!) == TemporalExpr.leadsTo(.variable("x"), .variable("y")))
+        #expect(
+            SpecParser.decodeTemporal(parseExpression("x.leadsTo(y)").as(FunctionCallExprSyntax.self)!)
+                == TemporalExpr.leadsTo(.variable("x"), .variable("y"))
+        )
     }
 
     @Test func parseLeadsToWithExpressions() {
@@ -438,11 +451,17 @@ private func parseClosure(_ source: String) -> ClosureExprSyntax {
 
 @Suite(.serialized) struct FairnessConditionTests {
     @Test func parseWeakFairness() {
-        #expect(SpecParser.decodeFairness(parseExpression("x.weakFairness(\"Tick\")").as(FunctionCallExprSyntax.self)!) == FairnessCondition.weakFairness("Tick"))
+        #expect(
+            SpecParser.decodeFairness(parseExpression("x.weakFairness(\"Tick\")").as(FunctionCallExprSyntax.self)!)
+                == FairnessCondition.weakFairness("Tick")
+        )
     }
 
     @Test func parseStrongFairness() {
-        #expect(SpecParser.decodeFairness(parseExpression("x.strongFairness(\"Tick\")").as(FunctionCallExprSyntax.self)!) == FairnessCondition.strongFairness("Tick"))
+        #expect(
+            SpecParser.decodeFairness(parseExpression("x.strongFairness(\"Tick\")").as(FunctionCallExprSyntax.self)!)
+                == FairnessCondition.strongFairness("Tick")
+        )
     }
 
     @Test func parseUnknownReturnsNil() {
@@ -490,34 +509,183 @@ private let cameraModePhases: [String: [String: TLAValue]] = [
         #expect(parsed.actions[0].body == .assign("mode", .value(.string("live"))))
     }
 
-    @Test func parsesParameterizedActionWithExplicitFiniteDomain() {
+    @Test func parsesVariadicActionParametersInDeclarationOrder() {
         let source = """
         {
-            Action("moveElevator", id: [1, 2]) { id in
-                floor.becomes(id)
+            Action("moveElevator", parameters: [
+                ActionParameter("person", values: [1, 2]),
+                ActionParameter("elevator", values: [10, 20]),
+                ActionParameter("direction", values: [100, 200])
+            ]) {
+                floor.becomes(1)
             }
         }
         """
         let closure = Parser.parse(source: source).statements.first!.item.as(ClosureExprSyntax.self)!
         let parsed = SpecParser.parseSpecClosure(closure)
         #expect(parsed.actions.count == 1)
-        #expect(parsed.actions[0].binding?.name == "id")
-        #expect(parsed.actions[0].binding?.values == [.int(1), .int(2)])
-        #expect(parsed.actions[0].body == .assign("floor", .variable("id")))
+        #expect(parsed.actions[0].bindings.map(\.name) == ["person", "elevator", "direction"])
+        #expect(parsed.actions[0].bindings.map(\.values) == [
+            [.int(1), .int(2)], [.int(10), .int(20)], [.int(100), .int(200)]
+        ])
+        #expect(parsed.actions[0].body == .assign("floor", .value(.int(1))))
     }
 
-    @Test func rejectsParameterizedActionWithoutExplicitFiniteDomain() {
+    @Test func diagnosesInvalidDomainsAtEveryParameterPosition() {
         let source = """
         {
-            Action("moveElevator", id: elevatorIDs) { id in
-                floor.becomes(id)
+            Action("moveElevator", parameters: [
+                ActionParameter("person", values: personIDs),
+                ActionParameter("elevator", values: []),
+                ActionParameter("direction", values: [1, 1])
+            ]) {
+                floor.becomes(1)
             }
         }
         """
         let closure = Parser.parse(source: source).statements.first!.item.as(ClosureExprSyntax.self)!
         let parsed = SpecParser.parseSpecClosure(closure)
         #expect(parsed.actions.isEmpty)
-        #expect(parsed.diagnostics.map(\.message) == ["Parameterized action 'moveElevator' requires an explicitly written non-empty finite array domain."])
+        #expect(parsed.diagnostics.map(\.message) == [
+            "Parameterized action 'moveElevator' parameter 'person' requires an explicitly written finite values array.",
+            "Parameterized action 'moveElevator' parameter 'elevator' requires a non-empty finite values array.",
+            "Parameterized action 'moveElevator' parameter 'direction' has duplicate finite-domain values."
+        ])
+    }
+
+    @Test func normalizesTypedFacadeAndEnumDomainsToBuilderAST() {
+        let source = """
+        {
+            let floor = Var<Int>("floor")
+            let cars = Var<Function<CarID, Record<CarSchema>>>("cars")
+            let calls = Var<SetExpr<Record<CarSchema>>>("calls")
+            Variable(floor, 0)
+            Variable(cars)
+            Variable(calls)
+            Action("move", parameters: [
+                ActionParameter("person", values: PersonID.finiteValues),
+                ActionParameter("car", values: CarID.finiteValues),
+                ActionParameter("direction", values: Direction.finiteValues)
+            ]) {
+                cars.becomes(cars.updating(CarID.carA) { car in
+                    car.updating(CarSchema.floor, to: 2)
+                })
+            }
+            Action("readCar") {
+                floor.becomes(cars[CarID.carA][CarSchema.floor])
+            }
+            Action("initialize") {
+                cars.becomes(Function<CarID, Record<CarSchema>>.literal(
+                    (CarID.carA, Record<CarSchema>.literal(
+                        .init(CarSchema.floor, 0),
+                        .init(CarSchema.doorsOpen, false)
+                    )),
+                    (CarID.carB, Record<CarSchema>.literal(
+                        .init(CarSchema.floor, 1),
+                        .init(CarSchema.doorsOpen, true)
+                    ))
+                ))
+            }
+            Action("insertCall") {
+                calls.inserting(Record<CarSchema>.literal(
+                    .init(CarSchema.floor, 0),
+                    .init(CarSchema.doorsOpen, false)
+                ))
+            }
+            Action("removeCall") {
+                calls.removing(Record<CarSchema>.literal(
+                    .init(CarSchema.floor, 0),
+                    .init(CarSchema.doorsOpen, false)
+                ))
+            }
+            Action("containsCall") {
+                calls.contains(Record<CarSchema>.literal(
+                    .init(CarSchema.floor, 0),
+                    .init(CarSchema.doorsOpen, false)
+                )) && floor.becomes(1)
+            }
+        }
+        """
+        let phases: [String: [String: TLAValue]] = [
+            "PersonID": ["alice": .string("alice"), "bob": .string("bob")],
+            "CarID": ["carA": .string("carA"), "carB": .string("carB")],
+            "Direction": ["up": .string("up"), "down": .string("down")]
+        ]
+        let closure = Parser.parse(source: source).statements.first!.item.as(ClosureExprSyntax.self)!
+        let parsed = SpecParser.parseSpecClosure(
+            closure,
+            enumPhases: phases,
+            enumDomains: [
+                "PersonID": [.string("alice"), .string("bob")],
+                "CarID": [.string("carA"), .string("carB")],
+                "Direction": [.string("up"), .string("down")]
+            ]
+        )
+
+        let floor = Var<Int>("floor")
+        let cars = Var<Function<TestCarID, Record<TestCarSchema>>>("cars")
+        let calls = Var<SetExpr<Record<TestCarSchema>>>("calls")
+        let closed = Record<TestCarSchema>.literal(
+            .init(TestCarSchema.floor, 0),
+            .init(TestCarSchema.doorsOpen, false)
+        )
+        let open = Record<TestCarSchema>.literal(
+            .init(TestCarSchema.floor, 1),
+            .init(TestCarSchema.doorsOpen, true)
+        )
+        let bindings = [
+            ActionParameter("person", values: TestPersonID.finiteValues).actionBinding,
+            ActionParameter("car", values: TestCarID.finiteValues).actionBinding,
+            ActionParameter("direction", values: TestDirection.finiteValues).actionBinding
+        ]
+        let builderActions: [(String, ActionExpr, [ActionBinding])] = [
+            ("move", cars.becomes(cars.updating(.carA) { car in
+                car.updating(TestCarSchema.floor, to: 2)
+            }), bindings),
+            ("readCar", floor.becomes(cars[.carA][TestCarSchema.floor]), []),
+            ("initialize", cars.becomes(
+                Function<TestCarID, Record<TestCarSchema>>.literal((.carA, closed), (.carB, open))), []),
+            ("insertCall", calls.inserting(closed), []),
+            ("removeCall", calls.removing(closed), []),
+            ("containsCall", calls.contains(closed) && floor.becomes(1), [])
+        ]
+
+        #expect(parsed.diagnostics.isEmpty)
+        #expect(Set(parsed.variables.map(\.name)) == ["floor", "cars", "calls"])
+        #expect(parsed.actions.count == builderActions.count)
+        for (parsedAction, builtAction) in zip(parsed.actions, builderActions) {
+            #expect(parsedAction.name == builtAction.0)
+            #expect(parsedAction.body == builtAction.1)
+            #expect(parsedAction.bindings == builtAction.2)
+        }
+    }
+
+    @Test func diagnosesUnsupportedTypedUpdateAtItsSource() {
+        let source = """
+        {
+            Action("update", parameters: [
+                ActionParameter("person", values: ["alice", "bob"])
+            ]) {
+                car.becomes(car.updating(CarSchema.field(dynamicKeyPath), to: 2))
+            }
+        }
+        """
+        let closure = Parser.parse(source: source).statements.first!.item.as(ClosureExprSyntax.self)!
+        let parsed = SpecParser.parseSpecClosure(closure)
+
+        #expect(parsed.actions.isEmpty)
+        #expect(parsed.diagnostics.map(\.message) == [
+            "Parameterized action 'update' contains an unsupported typed update; use a directly written finite enum case or schema field token."
+        ])
+        #expect(parsed.diagnostics.first?.source.contains("dynamicKeyPath") == true)
+    }
+
+    @Test func macroAcceptsLocalEnumFiniteDomainsInOrderedBindings() {
+        #expect(TypedFacadeEnumDomainMacro.spec.actions.first?.bindings == [
+            ActionBinding(name: "person", values: [.string("alice"), .string("bob")]),
+            ActionBinding(name: "car", values: [.string("carA"), .string("carB")]),
+            ActionBinding(name: "direction", values: [.string("up"), .string("down")])
+        ])
     }
 
     @Test func parseInvalidEnumCaseReturnsNilForInvariant() {
@@ -564,4 +732,71 @@ private let cameraModePhases: [String: [String: TLAValue]] = [
         #expect(parsed.variables[0].initial == .string("idle"))
         #expect(parsed.variables[0].swiftTypeName == "CameraMode")
     }
+}
+
+private enum TestPersonID: String, FiniteTLAValueDomain {
+    case alice, bob
+    static let finiteValues = [Self.alice, .bob]
+}
+
+@TLAModel
+private struct TypedFacadeEnumDomainMacro {
+    enum PersonID: String, FiniteTLAValueDomain {
+        case alice, bob
+        static let finiteValues = [Self.alice, .bob]
+    }
+
+    enum CarID: String, FiniteTLAValueDomain {
+        case carA, carB
+        static let finiteValues = [Self.carA, .carB]
+    }
+
+    enum Direction: String, FiniteTLAValueDomain {
+        case up, down
+        static let finiteValues = [Self.up, .down]
+    }
+
+    static var spec: TLASpec {
+        TLASpec("TypedFacadeEnumDomainMacro") {
+            let floor = Var<Int>("floor")
+            Variable(floor, 0)
+            Action("move", parameters: [
+                ActionParameter("person", values: PersonID.finiteValues),
+                ActionParameter("car", values: CarID.finiteValues),
+                ActionParameter("direction", values: Direction.finiteValues)
+            ]) {
+                floor.becomes(1)
+            }
+        }
+    }
+}
+
+private enum TestCarID: String, FiniteTLAValueDomain {
+    case carA, carB
+    static let finiteValues = [Self.carA, .carB]
+}
+
+private enum TestDirection: String, FiniteTLAValueDomain {
+    case up, down
+    static let finiteValues = [Self.up, .down]
+}
+
+private struct TestCarFields {
+    let floor: Int
+    let doorsOpen: Bool
+}
+
+private enum TestCarSchema: TLARecordSchema {
+    typealias Fields = TestCarFields
+    static let fieldNames: Set<String> = ["floor", "doorsOpen"]
+
+    static func fieldName<Value>(for field: KeyPath<TestCarFields, Value>) -> String? {
+        let key = field as AnyKeyPath
+        if key == \TestCarFields.floor { return "floor" }
+        if key == \TestCarFields.doorsOpen { return "doorsOpen" }
+        return nil
+    }
+
+    static let floor = field(\TestCarFields.floor)
+    static let doorsOpen = field(\TestCarFields.doorsOpen)
 }

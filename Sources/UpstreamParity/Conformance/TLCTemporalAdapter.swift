@@ -342,6 +342,9 @@ public struct TLCTemporalAdapterV1: Sendable {
     try writeJSON(processJSON(result), to: input.outputDirectory.appendingPathComponent("tlc-result.json"))
   }
 
+}
+
+extension TLCTemporalAdapterV1 {
   private func temporalResult(
     run: TLCProcessRunV1,
     graphID: String,

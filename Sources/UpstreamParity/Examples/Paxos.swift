@@ -19,10 +19,10 @@ private func paxosSpec() -> TLASpec {
     let none = TLAValue.string("None")
     let sentinel = TLAValue.int(-1)
 
-    let maxBal = Var<TLAFunctionType>("maxBal")
-    let maxVBal = Var<TLAFunctionType>("maxVBal")
-    let maxVal = Var<TLAFunctionType>("maxVal")
-    let msgs = Var<TLAFunctionType>("msgs")
+    let maxBal = Var<TLAValue>("maxBal")
+    let maxVBal = Var<TLAValue>("maxVBal")
+    let maxVal = Var<TLAValue>("maxVal")
+    let msgs = Var<TLAValue>("msgs")
 
     let initFunc: TLAValue = .function(["a1": sentinel])
     let initValFunc: TLAValue = .function(["a1": none])
@@ -42,7 +42,7 @@ private func paxosSpec() -> TLASpec {
     }
 
     func addMsg(_ m: StateExpr) -> ActionExpr {
-        msgs.becomes(Expr(.union(msgs.stateExpr, StateExpr.singleton(m))))
+        .assign(msgs.name, .union(msgs.stateExpr, StateExpr.singleton(m)))
     }
 
     return TLASpec("Paxos") {
@@ -56,15 +56,15 @@ private func paxosSpec() -> TLASpec {
         Invariant("TypeOK") {
             let ballotSet = StateExpr.setLiteral([.int(0), .int(1), .value(sentinel)])
             let valSet = StateExpr.setLiteral([sv("v1"), .value(none)])
-            StateExpr.in(maxBal.applying("a1"), ballotSet)
-                && StateExpr.in(maxVBal.applying("a1"), ballotSet)
-                && StateExpr.in(maxVal.applying("a1"), valSet)
+            StateExpr.in(maxBal.stateExpr.applying("a1"), ballotSet)
+                && StateExpr.in(maxVBal.stateExpr.applying("a1"), ballotSet)
+                && StateExpr.in(maxVal.stateExpr.applying("a1"), valSet)
         }
 
         Invariant("Inv") {
             StateExpr.ifThenElse(
-                maxVBal.applying("a1") == -1,
-                maxVal.applying("a1") == "None",
+                maxVBal.stateExpr.applying("a1") == -1,
+                maxVal.stateExpr.applying("a1") == "None",
                 .value(.bool(true))
             )
         }
@@ -75,15 +75,15 @@ private func paxosSpec() -> TLASpec {
 
         // Phase 1b: acceptor responds
         Action("Phase1b_a1_0") {
-            StateExpr.in(msg1a(0), msgs.stateExpr) && 0 > maxBal.applying("a1")
-                && maxBal.becomes(maxBal.updated(at: "a1", to: 0))
-                && addMsg(msg1b(0, maxVBal.applying("a1"), maxVal.applying("a1")))
+            StateExpr.in(msg1a(0), msgs.stateExpr) && 0 > maxBal.stateExpr.applying("a1")
+                && .assign(maxBal.name, maxBal.stateExpr.updated(at: "a1", to: 0))
+                && addMsg(msg1b(0, maxVBal.stateExpr.applying("a1"), maxVal.stateExpr.applying("a1")))
                 && maxVBal.stays && maxVal.stays
         }
         Action("Phase1b_a1_1") {
-            StateExpr.in(msg1a(1), msgs.stateExpr) && 1 > maxBal.applying("a1")
-                && maxBal.becomes(maxBal.updated(at: "a1", to: 1))
-                && addMsg(msg1b(1, maxVBal.applying("a1"), maxVal.applying("a1")))
+            StateExpr.in(msg1a(1), msgs.stateExpr) && 1 > maxBal.stateExpr.applying("a1")
+                && .assign(maxBal.name, maxBal.stateExpr.updated(at: "a1", to: 1))
+                && addMsg(msg1b(1, maxVBal.stateExpr.applying("a1"), maxVal.stateExpr.applying("a1")))
                 && maxVBal.stays && maxVal.stays
         }
 
@@ -101,17 +101,17 @@ private func paxosSpec() -> TLASpec {
 
         // Phase 2b: acceptor votes (2 actions: ballot 0 + ballot 1)
         Action("Phase2b_a1_0") {
-            StateExpr.in(msg2a(0, "v1"), msgs.stateExpr) && 0 >= maxBal.applying("a1")
-                && maxBal.becomes(maxBal.updated(at: "a1", to: 0))
-                && maxVBal.becomes(maxVBal.updated(at: "a1", to: 0))
-                && maxVal.becomes(maxVal.updated(at: "a1", to: sv("v1")))
+            StateExpr.in(msg2a(0, "v1"), msgs.stateExpr) && 0 >= maxBal.stateExpr.applying("a1")
+                && .assign(maxBal.name, maxBal.stateExpr.updated(at: "a1", to: 0))
+                && .assign(maxVBal.name, maxVBal.stateExpr.updated(at: "a1", to: 0))
+                && .assign(maxVal.name, maxVal.stateExpr.updated(at: "a1", to: sv("v1")))
                 && addMsg(msg2b(0, "v1"))
         }
         Action("Phase2b_a1_1") {
-            StateExpr.in(msg2a(1, "v1"), msgs.stateExpr) && 1 >= maxBal.applying("a1")
-                && maxBal.becomes(maxBal.updated(at: "a1", to: 1))
-                && maxVBal.becomes(maxVBal.updated(at: "a1", to: 1))
-                && maxVal.becomes(maxVal.updated(at: "a1", to: sv("v1")))
+            StateExpr.in(msg2a(1, "v1"), msgs.stateExpr) && 1 >= maxBal.stateExpr.applying("a1")
+                && .assign(maxBal.name, maxBal.stateExpr.updated(at: "a1", to: 1))
+                && .assign(maxVBal.name, maxVBal.stateExpr.updated(at: "a1", to: 1))
+                && .assign(maxVal.name, maxVal.stateExpr.updated(at: "a1", to: sv("v1")))
                 && addMsg(msg2b(1, "v1"))
         }
     }

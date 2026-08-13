@@ -37,10 +37,10 @@ struct LivenessConformanceTests {
             specName: "nonterminal-subcycle",
             variableNames: ["x"],
             transitions: [
-                initial: [.init(action: "enter", target: left)],
-                left: [.init(action: "right", target: right), .init(action: "finish", target: terminal)],
-                right: [.init(action: "left", target: left)],
-                terminal: [.init(action: "done", target: terminal)]
+                initial: [.init(label: .init(.init(name: "enter")), target: left)],
+                left: [.init(label: .init(.init(name: "right")), target: right), .init(label: .init(.init(name: "finish")), target: terminal)],
+                right: [.init(label: .init(.init(name: "left")), target: left)],
+                terminal: [.init(label: .init(.init(name: "done")), target: terminal)]
             ],
             states: [
                 initial: ["x": .int(0)],
@@ -103,11 +103,11 @@ struct LivenessConformanceTests {
         let cycle = StateGraph.StateID(4)
         let graph = graph(
             transitions: [
-                initial: [.init(action: "trigger", target: trigger)],
-                trigger: [.init(action: "A", target: qState), .init(action: "B", target: safe)],
-                qState: [.init(action: "fromQ", target: cycle)],
-                safe: [.init(action: "safeCycle", target: cycle)],
-                cycle: [.init(action: "loop", target: cycle)]
+                initial: [.init(label: .init(.init(name: "trigger")), target: trigger)],
+                trigger: [.init(label: .init(.init(name: "A")), target: qState), .init(label: .init(.init(name: "B")), target: safe)],
+                qState: [.init(label: .init(.init(name: "fromQ")), target: cycle)],
+                safe: [.init(label: .init(.init(name: "safeCycle")), target: cycle)],
+                cycle: [.init(label: .init(.init(name: "loop")), target: cycle)]
             ],
             values: [initial: 0, qState: 2, trigger: 1, safe: 0, cycle: 0]
         )
@@ -140,10 +140,10 @@ struct LivenessConformanceTests {
         let bridge = StateGraph.StateID(3)
         let graph = graph(
             transitions: [
-                initial: [.init(action: "bridge", target: bridge), .init(action: "near", target: near)],
-                bridge: [.init(action: "far", target: far)],
-                far: [.init(action: "toNear", target: near)],
-                near: [.init(action: "toFar", target: far)]
+                initial: [.init(label: .init(.init(name: "bridge")), target: bridge), .init(label: .init(.init(name: "near")), target: near)],
+                bridge: [.init(label: .init(.init(name: "far")), target: far)],
+                far: [.init(label: .init(.init(name: "toNear")), target: near)],
+                near: [.init(label: .init(.init(name: "toFar")), target: far)]
             ],
             values: [initial: 1, far: 0, near: 0, bridge: 1]
         )
@@ -162,7 +162,7 @@ struct LivenessConformanceTests {
     func eventuallyDoesNotTreatPostSatisfactionLoopAsAViolation() {
         let avoiding = StateGraph.StateID(1)
         let graph = graph(
-            transitions: [initial: [.init(action: "leave", target: avoiding)]],
+            transitions: [initial: [.init(label: .init(.init(name: "leave")), target: avoiding)]],
             values: [initial: 1, avoiding: 0]
         )
 
@@ -186,12 +186,12 @@ struct LivenessConformanceTests {
         let shortB = StateGraph.StateID(11)
         let graph = graph(
             transitions: [
-                initial: [.init(action: "long", target: longA), .init(action: "short", target: shortA)],
-                longA: [.init(action: "A", target: longB)],
-                longB: [.init(action: "A", target: longC)],
-                longC: [.init(action: "A", target: longA)],
-                shortA: [.init(action: "A", target: shortB)],
-                shortB: [.init(action: "A", target: shortA)]
+                initial: [.init(label: .init(.init(name: "long")), target: longA), .init(label: .init(.init(name: "short")), target: shortA)],
+                longA: [.init(label: .init(.init(name: "A")), target: longB)],
+                longB: [.init(label: .init(.init(name: "A")), target: longC)],
+                longC: [.init(label: .init(.init(name: "A")), target: longA)],
+                shortA: [.init(label: .init(.init(name: "A")), target: shortB)],
+                shortB: [.init(label: .init(.init(name: "A")), target: shortA)]
             ],
             values: [initial: 1, longA: 0, longB: 0, longC: 0, shortA: 0, shortB: 0]
         )
@@ -216,11 +216,11 @@ struct LivenessConformanceTests {
         let short = StateGraph.StateID(4)
         let graph = graph(
             transitions: [
-                initial: [.init(action: "A", target: longA), .init(action: "A", target: short)],
-                longA: [.init(action: "loop", target: longB)],
-                longB: [.init(action: "loop", target: longC)],
-                longC: [.init(action: "loop", target: initial)],
-                short: [.init(action: "loop", target: initial)]
+                initial: [.init(label: .init(.init(name: "A")), target: longA), .init(label: .init(.init(name: "A")), target: short)],
+                longA: [.init(label: .init(.init(name: "loop")), target: longB)],
+                longB: [.init(label: .init(.init(name: "loop")), target: longC)],
+                longC: [.init(label: .init(.init(name: "loop")), target: initial)],
+                short: [.init(label: .init(.init(name: "loop")), target: initial)]
             ],
             values: [initial: 0, longA: 0, longB: 0, longC: 0, short: 0]
         )
@@ -242,8 +242,8 @@ struct LivenessConformanceTests {
         let enabled = StateGraph.StateID(1)
         let graph = graph(
             transitions: [
-                initial: [.init(action: "B", target: enabled)],
-                enabled: [.init(action: "A", target: initial)]
+                initial: [.init(label: .init(.init(name: "B")), target: enabled)],
+                enabled: [.init(label: .init(.init(name: "A")), target: initial)]
             ],
             values: [initial: 0, enabled: 0]
         )
@@ -269,9 +269,9 @@ struct LivenessConformanceTests {
         let disabled = StateGraph.StateID(1)
         let graph = graph(
             transitions: [
-                initial: [.init(action: "A", target: terminal), .init(action: "B", target: disabled)],
-                disabled: [.init(action: "C", target: initial)],
-                terminal: [.init(action: "done", target: terminal)]
+                initial: [.init(label: .init(.init(name: "A")), target: terminal), .init(label: .init(.init(name: "B")), target: disabled)],
+                disabled: [.init(label: .init(.init(name: "C")), target: initial)],
+                terminal: [.init(label: .init(.init(name: "done")), target: terminal)]
             ],
             values: [initial: 0, disabled: 0, terminal: 1]
         )
@@ -299,7 +299,7 @@ struct LivenessConformanceTests {
     @Test("unavailable evidence is explicit for unknown actions, evaluation errors, and incomplete exploration")
     func unavailableEvidenceMatrix() {
         let graph = graph(
-            transitions: [initial: [.init(action: "unknown", target: initial)]],
+            transitions: [initial: [.init(label: .init(.init(name: "unknown")), target: initial)]],
             values: [initial: 0]
         )
         let checker = LivenessChecker(graph: graph)

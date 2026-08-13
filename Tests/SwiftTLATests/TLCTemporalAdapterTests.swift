@@ -447,8 +447,8 @@ private func numberedStutteringTrace(action: String = "UnnamedAction") throws ->
     "vars": ["x"],
     "counterexample": [
       "state": [state],
-      "action": [[state, ["name": action], state]],
-    ],
+      "action": [[state, ["name": action], state]]
+    ]
   ], options: [.sortedKeys])
 }
 

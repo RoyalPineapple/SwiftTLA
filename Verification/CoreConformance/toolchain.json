@@ -2,10 +2,10 @@
   "schema": "TLCReferencePinV1",
   "tlc": {
     "tag": "v1.8.0",
-    "commit": "30cc3601321c3fc02e044d0ecb5c58d8921e18df",
+    "commit": "0894c3407f4717fec7cc18bde3bf3c857fa47333",
     "jar": {
       "url": "https://github.com/tlaplus/tlaplus/releases/download/v1.8.0/tla2tools.jar",
-      "sha256": "e22f8ffb4bacdea0a871f444dd94fe5fb0d8013b3388ae39e82e26f852c735d5"
+      "sha256": "ab323b79802aedc3203b3f9af37c6aca3ed43f4e0225b36f2aa77b26de46c05f"
     }
   },
   "java": {

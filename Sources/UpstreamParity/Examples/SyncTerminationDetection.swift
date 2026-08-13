@@ -20,7 +20,7 @@ static func syncTDSpec() -> TLASpec {
             activeFuncs.append(.function([.int(0): a0, .int(1): a1, .int(2): a2]))
         }}}
 
-        let active = Var<TLAFunctionType>("active")
+        let active = Var<TLAValue>("active")
         let terminatedDetected = Var<Bool>("terminationDetected")
 
         func activeOf(_ i: Int) -> StateExpr {
@@ -44,7 +44,7 @@ static func syncTDSpec() -> TLASpec {
             for i in nodes {
                 Action("Terminate_\(i)") {
                     activeOf(i) == true
-                    && active.becomes(active.updated(at: i, to: false))
+                    && .assign(active.name, active.stateExpr.updated(at: i, to: false))
                     && terminatedDetected.stays
                 }
             }
@@ -53,7 +53,7 @@ static func syncTDSpec() -> TLASpec {
                 for j in nodes where j != i {
                     Action("Wakeup_\(i)_to_\(j)") {
                         activeOf(i) == true
-                        && active.becomes(active.updated(at: j, to: true))
+                        && .assign(active.name, active.stateExpr.updated(at: j, to: true))
                         && terminatedDetected.stays
                     }
                 }

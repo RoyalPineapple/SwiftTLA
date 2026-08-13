@@ -105,7 +105,7 @@ public struct TLCProcessRequestV1: Equatable, Sendable {
       "-Dswifttla.tlc.graph.run-id=\(runID.uuidString.lowercased())",
       "-Dswifttla.tlc.graph.case-id=\(caseID)",
       "-cp", "\(jar.path):\(bridgeClasses.path)",
-      "tlc2.TLC", "-dump", "class,org.swifttla.conformance.LosslessStateWriter",
+      "tlc2.TLC", "-dump", "class,org.swifttla.conformance.LosslessStateWriter"
     ] + traceArguments(mode) + arguments + ["-config", configuration.path, module.path]
   }
 
@@ -116,8 +116,7 @@ public struct TLCProcessRequestV1: Equatable, Sendable {
   }
 
   public func validateReferenceBinding(pin: TLCReferencePinV1, artifacts: TLCReferenceArtifactsV1)
-    throws
-  {
+    throws {
     guard expectedCase.pin == pin else {
       throw CoreConformanceCaseErrorV1.pinMismatch("declared case reference pin")
     }
@@ -144,7 +143,7 @@ public struct TLCProcessRequestV1: Equatable, Sendable {
       "arguments": expectedCase.arguments, "argumentsSha256": expectedCase.argumentsSHA256,
       "workers": expectedCase.workers, "fingerprintPolynomial": expectedCase.fingerprintPolynomial,
       "deadlock": expectedCase.deadlock, "os": expectedCase.operatingSystem,
-      "architecture": expectedCase.architecture, "environment": expectedCase.environment,
+      "architecture": expectedCase.architecture, "environment": expectedCase.environment
     ]
     let data = try JSONSerialization.data(withJSONObject: provenance, options: [.sortedKeys])
     return String(decoding: data, as: UTF8.self)
@@ -259,8 +258,7 @@ public struct TLCProcessAdapterV1: Sendable {
   }
 
   public func run(_ request: TLCProcessRequestV1, replay: TLCReplayPolicyV1) throws
-    -> TLCProcessRunV1
-  {
+    -> TLCProcessRunV1 {
     let primary = try executor.execute(request)
     guard primary.isViolation else {
       return TLCProcessRunV1(primary: primary, trace: nil, replay: nil)
@@ -299,8 +297,7 @@ public struct TLCProcessAdapterV1: Sendable {
   }
 
   private func updating(_ request: TLCProcessRequestV1, traceMode: TLCTraceModeV1)
-    -> TLCProcessRequestV1
-  {
+    -> TLCProcessRequestV1 {
     TLCProcessRequestV1(
       javaExecutable: request.javaExecutable, jar: request.jar,
       bridgeClasses: request.bridgeClasses,
@@ -333,8 +330,7 @@ public enum TLCReferenceInspectorV1 {
     javaExecutable: URL,
     directory: URL
   )
-    throws -> TLCReferenceArtifactsV1
-  {
+    throws -> TLCReferenceArtifactsV1 {
     let manifest = try executeProcess(
       executable: URL(fileURLWithPath: "/usr/bin/unzip"),
       arguments: ["-p", artifacts.jar.path, "META-INF/MANIFEST.MF"], directory: directory,

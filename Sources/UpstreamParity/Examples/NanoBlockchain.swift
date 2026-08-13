@@ -20,8 +20,8 @@ public struct NanoBlockchainModel {
             Extends("Integers")
 
             let lastHash = Var<String>("lastHash")
-            let distributedLedger = Var<TLAFunctionType>("distributedLedger")
-            let received = Var<TLAFunctionType>("received")
+            let distributedLedger = Var<TLAValue>("distributedLedger")
+            let received = Var<TLAValue>("received")
             Variable(lastHash, "NoHash")
             Variable(distributedLedger, initDL)
             Variable(received, initRecv)
@@ -56,10 +56,10 @@ public struct NanoBlockchainModel {
                                 ]),
                                 "signature": .recordLiteral(["data": h, "signedWith": .value(.string(priv))])
                             ])
-                            return lastHash.becomes(h)
-                                && distributedLedger.becomes(distributedLedger
-                                    .updated(at: "n1", to: distributedLedger.applying("n1").updated(at: h, to: sb))
-                                    .updated(at: "n2", to: distributedLedger.applying("n2").updated(at: h, to: sb)))
+                            return lastHash.becomes(Expr<String>(h))
+                                && .assign(distributedLedger.name, distributedLedger.stateExpr
+                                    .updated(at: "n1", to: distributedLedger.stateExpr.applying("n1").updated(at: h, to: sb))
+                                    .updated(at: "n2", to: distributedLedger.stateExpr.applying("n2").updated(at: h, to: sb)))
                                 && received.stays
                         }
                 }
@@ -70,7 +70,7 @@ public struct NanoBlockchainModel {
                 Action("CreateSend_\(n)") {
                     lastHash != "NoHash"
                         && ActionExpr.exists("prev", from: StateExpr.setLiteral(hashes.map { .value(.string($0)) })) { prev in
-                            distributedLedger.applying(n).applying(prev) != noBlock
+                            distributedLedger.stateExpr.applying(n).applying(prev) != noBlock
                                 && ActionExpr.exists("dest", from: StateExpr.setLiteral(["pub1", "pub2"].map { .value(.string($0)) })) { dest in
                                     ActionExpr.exists("h", from: StateExpr.setLiteral(hashes.map { .value(.string($0)) })) { h in
                                         let sb = StateExpr.recordLiteral([
@@ -83,8 +83,8 @@ public struct NanoBlockchainModel {
                                             "signature": .recordLiteral(["data": h, "signedWith": .value(.string(priv))])
                                         ])
                                         return distributedLedger.stays
-                                            && received.becomes(received
-                                                .updated(at: n, to: StateExpr.union(received.applying(n),
+                                            && .assign(received.name, received.stateExpr
+                                                .updated(at: n, to: StateExpr.union(received.stateExpr.applying(n),
                                                     StateExpr.singleton(sb))))
                                             && lastHash.stays
                                     }

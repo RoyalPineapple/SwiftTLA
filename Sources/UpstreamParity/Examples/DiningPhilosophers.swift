@@ -19,9 +19,9 @@ extension Example {
 private func diningPhilosophersSpec() -> TLASpec {
     let NP = 5
 
-    let forks = Var<TLAFunctionType>("forks")
-    let pc = Var<TLAFunctionType>("pc")
-    let hungry = Var<TLAFunctionType>("hungry")
+    let forks = Var<TLAValue>("forks")
+    let pc = Var<TLAValue>("pc")
+    let hungry = Var<TLAValue>("hungry")
 
     let loop = StateExpr.value(.string("Loop"))
     let eat = StateExpr.value(.string("Eat"))
@@ -134,14 +134,14 @@ private func diningPhilosophersSpec() -> TLASpec {
             }
             Action("Think_\(p)") {
                 StateExpr.variable("pc").applying(pE) == think
-                && hungry.becomes(hSe.updated(at: pE, to: trueE))
-                && pc.becomes(StateExpr.variable("pc").updated(at: pE, to: loop))
+                && .assign(hungry.name, hSe.updated(at: pE, to: trueE))
+                && .assign(pc.name, StateExpr.variable("pc").updated(at: pE, to: loop))
             }
             Action("Eat_\(p)") {
                 StateExpr.variable("pc").applying(pE) == eat
-                && hungry.becomes(hSe.updated(at: pE, to: falseE))
-                && pc.becomes(StateExpr.variable("pc").updated(at: pE, to: loop))
-                && forks.becomes(StateExpr.variable("forks")
+                && .assign(hungry.name, hSe.updated(at: pE, to: falseE))
+                && .assign(pc.name, StateExpr.variable("pc").updated(at: pE, to: loop))
+                && .assign(forks.name, StateExpr.variable("forks")
                     .updated(at: lf, to: StateExpr.recordLiteral(["holder": hld, "clean": falseE]))
                     .updated(at: rf, to: StateExpr.recordLiteral(["holder": hrd, "clean": falseE])))
             }

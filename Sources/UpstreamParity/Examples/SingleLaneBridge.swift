@@ -37,8 +37,8 @@ public struct SingleLaneBridgeModel {
             Constant("Bridge", TLAValue.set(Set(bridge.map { TLAValue.int($0) })))
             Constant("Positions", TLAValue.set(Set((1...8).map { TLAValue.int($0) })))
 
-            let lv = Var<TLAFunctionType>("Location")
-            let wv = Var<TLATupleType>("WaitingBeforeBridge")
+            let lv = Var<TLAValue>("Location")
+            let wv = Var<TLAValue>("WaitingBeforeBridge")
 
             DefineRecursive("SeqFromSet", params: ["S"]) {
                 let s = StateExpr.variable("S")

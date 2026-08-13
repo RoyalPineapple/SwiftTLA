@@ -2,3 +2,7 @@
 	path = academic
 	url = https://github.com/RoyalPineapple/SwiftTLA-Academic.git
 	branch = main
+[submodule "validation-evidence"]
+	path = Verification/CoreConformance/baselines
+	url = https://github.com/RoyalPineapple/SwiftTLAValidationEvidence.git
+	branch = main

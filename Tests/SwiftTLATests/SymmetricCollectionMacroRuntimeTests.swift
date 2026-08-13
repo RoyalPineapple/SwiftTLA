@@ -329,7 +329,7 @@ struct SymmetricCollectionMacroRuntimeTests {
       SymmetricCollectionScope(collectionName: "devices", verificationScope: 1)
     ])
     #expect(!GeneratedSymmetricRuntime.runtime.spec.actions.description.contains("42"))
-    #expect(throws: SymmetricCollectionRuntimeError.self) {
+    #expect(throws: GeneratedMachineError.self) {
       try model.begin(id: 99)
     }
   }
@@ -355,7 +355,7 @@ struct SymmetricCollectionMacroRuntimeTests {
     model.devices.insert(wrongPhase, value: 1)
     model.devices.insert(peer, value: 4)
 
-    #expect(throws: SymmetricCollectionRuntimeError.self) {
+    #expect(throws: GeneratedMachineError.self) {
       try model.begin(id: wrongPhase.id)
     }
     #expect(model.devices[wrongPhase.id] == 1)
@@ -394,7 +394,7 @@ struct SymmetricCollectionMacroRuntimeTests {
     let device = StringMacroDevice(id: "shared-guard")
     model.devices.insert(device)
 
-    #expect(throws: SymmetricCollectionRuntimeError.self) {
+    #expect(throws: GeneratedMachineError.self) {
       try model.begin(id: device.id)
     }
     #expect(model.devices[device.id] == 0)
@@ -428,7 +428,7 @@ struct SymmetricCollectionMacroRuntimeTests {
     model.devices.insert(selected, value: 1)
     model.devices.insert(peer, value: 4)
 
-    #expect(throws: SymmetricCollectionRuntimeError.self) {
+    #expect(throws: GeneratedMachineError.self) {
       try model.advance(id: rejected.id)
     }
     #expect(model.devices[rejected.id] == 0)
@@ -467,7 +467,7 @@ struct SymmetricCollectionMacroRuntimeTests {
     model.devices.insert(rejected, value: 1)
     model.devices.insert(peer, value: 0)
 
-    #expect(throws: SymmetricCollectionRuntimeError.self) {
+    #expect(throws: GeneratedMachineError.self) {
       try model.advance(id: rejected.id)
     }
     #expect(model.devices[rejected.id] == 1)
@@ -479,15 +479,16 @@ struct SymmetricCollectionMacroRuntimeTests {
   }
 
   @Test("Ordinary allSatisfy actions use every live collection value")
-  func macroProjectsLiveCollectionsForAllSatisfyGuards() {
+  func macroProjectsLiveCollectionsForAllSatisfyGuards() throws {
     var allowed = GeneratedAllSatisfyPredicateRuntime()
     let allowedDevices = ["one", "two", "three"].map(StringMacroDevice.init)
     for device in allowedDevices {
       allowed.devices.insert(device)
     }
 
-    allowed.applyadvance()
+    let allowedEvidence = try allowed.applyadvance()
     #expect(allowed.phase == 1)
+    #expect(allowedEvidence.before["devices"] == allowed.tlaSnapshot()["devices"])
 
     var rejected = GeneratedAllSatisfyPredicateRuntime()
     let peers = ["one", "two", "three"].map(StringMacroDevice.init)
@@ -497,7 +498,11 @@ struct SymmetricCollectionMacroRuntimeTests {
     }
     rejected.devices.insert(violating, value: 1)
 
-    rejected.applyadvance()
+    let rejectedSnapshot = rejected.tlaSnapshot()
+    #expect(throws: GeneratedMachineError.self) {
+      try rejected.applyadvance()
+    }
+    #expect(rejected.tlaSnapshot() == rejectedSnapshot)
     #expect(rejected.phase == 0)
     #expect(rejected.devices.count == 4)
     #expect(rejected.devices[violating.id] == 1)
@@ -507,21 +512,26 @@ struct SymmetricCollectionMacroRuntimeTests {
   }
 
   @Test("Ordinary contains actions use live values above verification scope")
-  func macroProjectsLiveCollectionsForContainsGuards() {
+  func macroProjectsLiveCollectionsForContainsGuards() throws {
     var model = GeneratedContainsPredicateRuntime()
     let devices = ["one", "two", "three"].map(StringMacroDevice.init)
     for device in devices {
       model.devices.insert(device)
     }
 
-    model.applyadvance()
+    let rejectedSnapshot = model.tlaSnapshot()
+    #expect(throws: GeneratedMachineError.self) {
+      try model.applyadvance()
+    }
+    #expect(model.tlaSnapshot() == rejectedSnapshot)
     #expect(model.phase == 0)
 
     let matching = StringMacroDevice(id: "matching")
     model.devices.insert(matching, value: 1)
-    model.applyadvance()
+    let evidence = try model.applyadvance()
 
     #expect(model.phase == 1)
+    #expect(evidence.after == model.tlaSnapshot())
     #expect(model.devices.count == 4)
     #expect(model.devices[matching.id] == 1)
     for device in devices {

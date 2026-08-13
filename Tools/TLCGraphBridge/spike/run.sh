@@ -15,7 +15,7 @@ output_dir=$(cd "$output_dir" && pwd)
 
 jar="$bridge_root/.tool-cache/tla2tools-1.8.0.jar"
 jdk="$bridge_root/.tool-cache/temurin-17.0.19+10/Contents/Home"
-expected_jar=e22f8ffb4bacdea0a871f444dd94fe5fb0d8013b3388ae39e82e26f852c735d5
+expected_jar=ab323b79802aedc3203b3f9af37c6aca3ed43f4e0225b36f2aa77b26de46c05f
 expected_jdk=8fa1eff40bb637a33613b2ccb8b12c70dc3661cc22cf8e784943715769a05336
 test "$(shasum -a 256 "$jar" | awk '{print $1}')" = "$expected_jar"
 test "$(shasum -a 256 "$bridge_root/.tool-cache/OpenJDK17U-jdk_aarch64_mac_hotspot_17.0.19_10.tar.gz" | awk '{print $1}')" = "$expected_jdk"
@@ -39,7 +39,7 @@ run_once() {
     local module_sha cfg_sha provenance
     module_sha=$(shasum -a 256 "$bridge_root/spike/BridgeGraph.tla" | awk '{print $1}')
     cfg_sha=$(shasum -a 256 "$bridge_root/spike/BridgeGraph.cfg" | awk '{print $1}')
-    provenance="{\"tlcTag\":\"v1.8.0\",\"tlcCommit\":\"30cc3601321c3fc02e044d0ecb5c58d8921e18df\",\"tlcJarSha256\":\"$expected_jar\",\"javaDistribution\":\"Eclipse Temurin\",\"javaVersion\":\"17.0.19+10\",\"javaArchiveSha256\":\"$expected_jdk\",\"bridgeClass\":\"org.swifttla.conformance.LosslessStateWriter\",\"bridgeSourceSha256\":\"$bridge_source_digest\",\"bridgeBinarySha256\":\"$bridge_digest\",\"moduleSha256\":\"$module_sha\",\"cfgSha256\":\"$cfg_sha\",\"arguments\":$arguments,\"argumentsSha256\":\"$arguments_digest\",\"workers\":1,\"fingerprintPolynomial\":1,\"deadlock\":false,\"os\":\"macos\",\"architecture\":\"arm64\",\"environment\":{}}"
+    provenance="{\"tlcTag\":\"v1.8.0\",\"tlcCommit\":\"0894c3407f4717fec7cc18bde3bf3c857fa47333\",\"tlcJarSha256\":\"$expected_jar\",\"javaDistribution\":\"Eclipse Temurin\",\"javaVersion\":\"17.0.19+10\",\"javaArchiveSha256\":\"$expected_jdk\",\"bridgeClass\":\"org.swifttla.conformance.LosslessStateWriter\",\"bridgeSourceSha256\":\"$bridge_source_digest\",\"bridgeBinarySha256\":\"$bridge_digest\",\"moduleSha256\":\"$module_sha\",\"cfgSha256\":\"$cfg_sha\",\"arguments\":$arguments,\"argumentsSha256\":\"$arguments_digest\",\"workers\":1,\"fingerprintPolynomial\":1,\"deadlock\":false,\"os\":\"macos\",\"architecture\":\"arm64\",\"environment\":{}}"
     (
         cd "$run_dir"
         "$jdk/bin/java" \
@@ -123,4 +123,4 @@ recompute_footer "$output_dir/corrupt/invalid-utf8-source.jsonl" "$output_dir/co
 rm "$output_dir/corrupt/invalid-utf8-source.jsonl"
 
 stream_digest=$(shasum -a 256 "$stream" | awk '{print $1}')
-printf '%s\n' "{\"schema\":\"swifttla.bridge-spike-verdict\",\"version\":1,\"verdict\":\"PASS\",\"tlcTag\":\"v1.8.0\",\"tlcCommit\":\"30cc3601321c3fc02e044d0ecb5c58d8921e18df\",\"tlcJarSha256\":\"$expected_jar\",\"javaVersion\":\"17.0.19+10\",\"javaArchiveSha256\":\"$expected_jdk\",\"bridgeSourceSha256\":\"$bridge_source_digest\",\"bridgeBinarySha256\":\"$bridge_digest\",\"eventStreamSha256\":\"$stream_digest\",\"runs\":3,\"acceptance\":{\"AS-001\":\"PASS\",\"AS-002\":\"PASS\",\"AS-003\":\"PASS\",\"AS-004\":\"PASS\",\"AS-005\":\"PASS\",\"AS-006\":\"PASS\",\"AS-007\":\"PASS\",\"AS-008\":\"PASS\",\"AS-009\":\"PASS\",\"AS-010\":\"PASS\",\"AS-011\":\"PASS\"}}" > "$output_dir/BridgeSpikeVerdictV1.json"
+printf '%s\n' "{\"schema\":\"swifttla.bridge-spike-verdict\",\"version\":1,\"verdict\":\"PASS\",\"tlcTag\":\"v1.8.0\",\"tlcCommit\":\"0894c3407f4717fec7cc18bde3bf3c857fa47333\",\"tlcJarSha256\":\"$expected_jar\",\"javaVersion\":\"17.0.19+10\",\"javaArchiveSha256\":\"$expected_jdk\",\"bridgeSourceSha256\":\"$bridge_source_digest\",\"bridgeBinarySha256\":\"$bridge_digest\",\"eventStreamSha256\":\"$stream_digest\",\"runs\":3,\"acceptance\":{\"AS-001\":\"PASS\",\"AS-002\":\"PASS\",\"AS-003\":\"PASS\",\"AS-004\":\"PASS\",\"AS-005\":\"PASS\",\"AS-006\":\"PASS\",\"AS-007\":\"PASS\",\"AS-008\":\"PASS\",\"AS-009\":\"PASS\",\"AS-010\":\"PASS\",\"AS-011\":\"PASS\"}}" > "$output_dir/BridgeSpikeVerdictV1.json"
