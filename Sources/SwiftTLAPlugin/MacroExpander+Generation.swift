@@ -36,14 +36,14 @@ extension MacroExpander {
     }
     static func generateTransitionMatrix() -> [DeclSyntax] {
         [DeclSyntax(stringLiteral: """
-        public static func transitionMatrix() throws -> [(from: [String: TLAValue], action: String, to: [String: TLAValue])] {
+        public static func transitionMatrix() throws -> [(from: [String: TLAValue], invocation: TLAActionInvocation, to: [String: TLAValue])] {
             let graph = try ModelChecker(spec: Self.spec, maxStates: 100_000).exploreGraph()
-            var matrix: [(from: [String: TLAValue], action: String, to: [String: TLAValue])] = []
+            var matrix: [(from: [String: TLAValue], invocation: TLAActionInvocation, to: [String: TLAValue])] = []
             for (fromID, transitions) in graph.transitions {
                 guard let fromState = graph.states[fromID] else { continue }
                 for t in transitions {
                     guard let toState = graph.states[t.target] else { continue }
-                    matrix.append((from: fromState, action: t.action, to: toState))
+                    matrix.append((from: fromState, invocation: t.label.invocation, to: toState))
                 }
             }
             return matrix
@@ -55,10 +55,25 @@ extension MacroExpander {
         return [DeclSyntax(stringLiteral: """
         public static func verifyTransitions() throws {
             let matrix = try Self.transitionMatrix()
-            for (from, actionName, expected) in matrix {
-                let result = try Self.runtime.apply(.init(name: actionName), to: from)
-                guard result == expected else {
-                    throw VerificationError("\\(actionName): expected \\(expected), got \\(result)")
+            var verified = Array(repeating: false, count: matrix.count)
+            for index in matrix.indices where !verified[index] {
+                let (from, invocation, _) = matrix[index]
+                let expected = matrix.indices.compactMap { candidate -> [String: TLAValue]? in
+                    guard matrix[candidate].from == from, matrix[candidate].invocation == invocation else {
+                        return nil
+                    }
+                    verified[candidate] = true
+                    return matrix[candidate].to
+                }
+                var actual = try Self.runtime.successors(invocation, from: from)
+                guard actual.count == expected.count else {
+                    throw VerificationError("\\(invocation): expected \\(expected.count) successors, got \\(actual.count)")
+                }
+                for successor in expected {
+                    guard let match = actual.firstIndex(of: successor) else {
+                        throw VerificationError("\\(invocation): missing successor \\(successor)")
+                    }
+                    actual.remove(at: match)
                 }
             }
         }
@@ -69,15 +84,14 @@ extension MacroExpander {
         public static func verifyInvariants() throws {
             let matrix = try Self.transitionMatrix()
             let runtime = Self.runtime
-            for (from, actionName, _) in matrix {
-                let result = try runtime.apply(.init(name: actionName), to: from)
+            for (_, invocation, successor) in matrix {
                 for inv in runtime.spec.invariants {
                     guard try inv.body.evaluateBool(
-                        in: result,
+                        in: successor,
                         runtimeFuncs: runtime.spec.runtimeFuncs,
                         recursiveFuncs: runtime.spec.recursiveFuncs
                     ) else {
-                        throw VerificationError("\\(inv.name) violated by \\(actionName)")
+                        throw VerificationError("\\(inv.name) violated by \\(invocation)")
                     }
                 }
             }
@@ -125,7 +139,7 @@ extension MacroExpander {
             snapshotFromDictionary: { State(from: $0) }
         )
         """))
-        decls.append(contentsOf: generateCanonicalMachineMembers(isActor: true))
+        decls.append(contentsOf: generateCanonicalMachineMembers(isActor: true, hasActions: !actions.isEmpty))
         decls.append(contentsOf: generateVariableProperties(variables: variables).map(DeclSyntax.init))
         decls.append(contentsOf: generateObservableActionMethods(variables: variables, actions: actions).map(DeclSyntax.init))
         decls.append(DeclSyntax(

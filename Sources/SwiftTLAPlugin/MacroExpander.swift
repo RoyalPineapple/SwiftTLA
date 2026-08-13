@@ -42,12 +42,11 @@ enum MacroExpander {
             decls.append(DeclSyntax(generateActionLabel(actions: model.actions)))
         }
         decls.append(DeclSyntax(generateStateStruct(variables: model.variables, enumInfos: model.enumInfos)))
-        if !model.actions.isEmpty {
-            decls.append(contentsOf: generateCanonicalMachineMembers(
-                isActor: isActor,
-                symmetricCollections: model.symmetricCollections
-            ))
-        }
+        decls.append(contentsOf: generateCanonicalMachineMembers(
+            isActor: isActor,
+            hasActions: !model.actions.isEmpty,
+            symmetricCollections: model.symmetricCollections
+        ))
         decls.append(contentsOf: generateCollectionRuntimeMembers(model.symmetricCollections))
         let ordinaryVariables = model.variables.filter { variable in
             !model.symmetricCollections.contains(where: { $0.name == variable.name })
@@ -325,7 +324,7 @@ enum MacroExpander {
         }.joined(separator: "\n        ")
 
         return DeclSyntax(stringLiteral: """
-        public enum ActionLabel: Hashable {
+        public enum ActionLabel: Hashable, Sendable {
             \(cases)
 
             public func toInvocation() -> TLAActionInvocation {
@@ -344,58 +343,6 @@ enum MacroExpander {
         """)
     }
 
-    static func generateCanonicalMachineMembers(
-        isActor: Bool,
-        symmetricCollections: [SpecParser.ParsedSymmetricCollection] = []
-    ) -> [DeclSyntax] {
-        let modifier = isActor ? "" : "mutating "
-        let liveProjection = symmetricCollections.map {
-            "state[Variables.\($0.name).rawValue] = \($0.name).projection().modelValue"
-        }.joined(separator: "\n                ")
-        let stateWithLiveCollections = symmetricCollections.isEmpty
-            ? "_machine.tlaSnapshot()"
-            : """
-            var state = _machine.tlaSnapshot()
-                            \(liveProjection)
-                            return state
-            """
-        return [
-            DeclSyntax(stringLiteral: """
-            public struct TransitionEvidence {
-                public let label: ActionLabel
-                public let before: [String: TLAValue]
-                public let after: [String: TLAValue]
-            }
-            """),
-            DeclSyntax(stringLiteral: """
-            private func _stateWithLiveCollections() -> [String: TLAValue] {
-                \(stateWithLiveCollections)
-            }
-            """),
-            DeclSyntax(stringLiteral: """
-            public func tlaSnapshot() -> [String: TLAValue] {
-                _stateWithLiveCollections()
-            }
-            """),
-            DeclSyntax(stringLiteral: """
-            public func availableActions() throws -> [ActionLabel] {
-                try _machine.availableInvocations(in: _stateWithLiveCollections()).map { invocation in
-                    guard let label = ActionLabel(invocation: invocation) else {
-                        throw GeneratedMachineError.unrepresentableActionLabel(invocation)
-                    }
-                    return label
-                }
-            }
-            """),
-            DeclSyntax(stringLiteral: """
-            public \(modifier)func apply(_ label: ActionLabel) throws -> TransitionEvidence {
-                let evidence = try _machine.apply(label.toInvocation(), from: _stateWithLiveCollections()) { _ in true }
-                return TransitionEvidence(label: label, before: evidence.before.asDictionary, after: evidence.after.asDictionary)
-            }
-            """)
-        ]
-    }
-
 }
 
 extension MacroExpander {
@@ -405,6 +352,7 @@ extension MacroExpander {
             name: "State",
             inheritanceClause: InheritanceClauseSyntax {
                 InheritedTypeSyntax(type: IdentifierTypeSyntax(name: "Equatable"))
+                InheritedTypeSyntax(type: IdentifierTypeSyntax(name: "Sendable"))
             },
             memberBlock: MemberBlockSyntax {
                 for v in variables {
@@ -541,11 +489,21 @@ extension MacroExpander {
                         } catch {
                             throw GeneratedMachineError.unexpected(error)
                         }
-                        return TransitionEvidence(label: .\(action.name), before: evidence.before.asDictionary, after: evidence.after.asDictionary)
+                        return TransitionEvidence(
+                            label: .\(action.name),
+                            invocation: .init(name: "\(action.name)"),
+                            before: evidence.before.asDictionary,
+                            after: evidence.after.asDictionary
+                        )
                         """
                     } ?? """
                     let evidence = try _machine.apply(.init(name: \"\(action.name)\"), from: _stateWithLiveCollections()) { _ in true }
-                    return TransitionEvidence(label: .\(action.name), before: evidence.before.asDictionary, after: evidence.after.asDictionary)
+                    return TransitionEvidence(
+                        label: .\(action.name),
+                        invocation: .init(name: "\(action.name)"),
+                        before: evidence.before.asDictionary,
+                        after: evidence.after.asDictionary
+                    )
                     """
                     return """
                     if \(condition) {

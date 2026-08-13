@@ -1,7 +1,7 @@
 import SwiftTLA
 
 @attached(member, names: arbitrary)
-@attached(extension, conformances: TLAModelType, names: arbitrary)
+@attached(extension, conformances: Sendable, TLAModelType, TLAMachineExecuting, names: arbitrary)
 public macro TLAModel() = #externalMacro(module: "SwiftTLAPlugin", type: "ModelMacro")
 
 @attached(member, names: arbitrary)

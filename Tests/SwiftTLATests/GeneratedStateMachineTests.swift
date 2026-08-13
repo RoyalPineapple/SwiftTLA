@@ -159,6 +159,21 @@ struct EndToEndThreeParameterActionMachine {
     }
 }
 
+@TLAModel
+struct NondeterministicConstrainedMachine {
+    static var spec: TLASpec {
+        TLASpec("NondeterministicConstrainedMachine") {
+            let value = Var<Int>("value")
+            Variable(value, 0)
+            Action("choose") {
+                choose(value, from: StateExpr.set([1, 2, 3]))
+            }
+            Constraint(value <= 2)
+            Invariant("WithinBound") { value <= 3 }
+        }
+    }
+}
+
 @TLAActor
 actor ThreeParameterActionActor {
     static var spec: TLASpec {
@@ -268,6 +283,12 @@ struct GeneratedStateMachineTests {
         let graph = try ModelChecker(spec: builder).exploreGraph()
         #expect(graph.transitions[.init(0)]?.map(\.label.arguments) == expectedArguments)
 
+        let generatedMatrix = try EndToEndThreeParameterActionMachine.transitionMatrix()
+        let initialInvocations = generatedMatrix
+            .filter { $0.from["floor"] == .int(0) }
+            .map(\.invocation.arguments)
+        #expect(initialInvocations == expectedArguments)
+
         let wrappers = builder.tlaModule.split(separator: "\n").filter { $0.hasPrefix("board__") }
         #expect(wrappers == [
             "board__0_0_0 == board(1, 10, 100)",
@@ -318,6 +339,45 @@ struct GeneratedStateMachineTests {
             try machine.apply(.board(person: 2, elevator: 30, direction: 200))
         }
         #expect(machine.tlaSnapshot() == before)
+    }
+
+    @Test("Canonical generated execution preserves the complete parameterized invocation")
+    func canonicalGeneratedExecutionPreservesParameterizedInvocationEvidence() async throws {
+        var machine = EndToEndThreeParameterActionMachine()
+        let invocation = TLAActionInvocation(
+            name: "board",
+            arguments: [.int(2), .int(20), .int(200)]
+        )
+        let before = await machine.machineObservation()
+
+        let evidence = try await machine.execute(invocation)
+        let after = await machine.machineObservation()
+
+        #expect(evidence.invocation == invocation)
+        #expect(evidence.label == .board(person: 2, elevator: 20, direction: 200))
+        #expect(evidence.before["floor"] == .int(0))
+        #expect(evidence.after["floor"] == .int(222))
+        #expect(before.state == evidence.before)
+        #expect(after.state == evidence.after)
+    }
+
+    @Test("Generated verification retains every constrained nondeterministic successor")
+    func generatedVerificationRetainsNondeterministicSuccessors() throws {
+        let initial = ["value": TLAValue.int(0)]
+        let invocation = TLAActionInvocation(name: "choose")
+        let runtimeSuccessors = try NondeterministicConstrainedMachine.runtime.successors(
+            invocation,
+            from: initial
+        )
+        let matrixSuccessors = try NondeterministicConstrainedMachine.transitionMatrix()
+            .filter { $0.from == initial && $0.invocation == invocation }
+            .map(\.to)
+
+        #expect(matrixSuccessors.count == 2)
+        #expect(Set(matrixSuccessors) == Set(runtimeSuccessors))
+        #expect(!matrixSuccessors.contains(["value": .int(3)]))
+        try NondeterministicConstrainedMachine.verifyTransitions()
+        try NondeterministicConstrainedMachine.verifyInvariants()
     }
 
     @Test("Observable and actor adapters return the canonical three-argument transition evidence")
@@ -486,7 +546,7 @@ struct GeneratedStateMachineTests {
         #expect(!matrix.isEmpty)
         for entry in matrix {
             #expect(entry.from.count >= 1)
-            #expect(!entry.action.isEmpty)
+            #expect(!entry.invocation.name.isEmpty)
             #expect(entry.to.count >= 1)
         }
     }
@@ -549,7 +609,7 @@ struct GeneratedStateMachineTests {
     func counterNoInvsConsistency() throws {
         let matrix = try CounterNoInvs.transitionMatrix()
         for entry in matrix {
-            let next = try CounterNoInvs.runtime.apply(.init(name: entry.action), to: entry.from)
+            let next = try CounterNoInvs.runtime.apply(entry.invocation, to: entry.from)
             #expect(next == entry.to)
         }
     }

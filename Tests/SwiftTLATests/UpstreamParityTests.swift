@@ -94,9 +94,9 @@ struct UpstreamParityNativeTests {
     // Self-consistency
     @Test("Native codegen self-consistency")
     func nativeSelfConsistency() throws {
-        func check(_ matrix: [(from: [String: TLAValue], action: String, to: [String: TLAValue])], runtime: SpecRuntime) throws {
+        func check(_ matrix: [(from: [String: TLAValue], invocation: TLAActionInvocation, to: [String: TLAValue])], runtime: SpecRuntime) throws {
             for entry in matrix {
-                let next = try runtime.apply(.init(name: entry.action), to: entry.from)
+                let next = try runtime.apply(entry.invocation, to: entry.from)
                 #expect(next == entry.to)
             }
         }
