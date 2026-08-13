@@ -78,7 +78,7 @@ extension MacroExpander {
             }
             """),
             DeclSyntax(stringLiteral: """
-            public func machineObservation() async -> TLAMachineObservation {
+            public func synchronousMachineObservation() -> TLAMachineObservation {
                 let state = _stateWithLiveCollections()
                 do {
                     return .init(state: state, availability: .available(try _machine.availableInvocations(in: state)))
@@ -88,6 +88,16 @@ extension MacroExpander {
                         availability: .unavailable(.init(code: .evaluationFailed, message: String(describing: error)))
                     )
                 }
+            }
+            """),
+            DeclSyntax(stringLiteral: """
+            public func machineObservation() async -> TLAMachineObservation {
+                synchronousMachineObservation()
+            }
+            """),
+            DeclSyntax(stringLiteral: """
+            public \(modifier)func executeSynchronously(_ invocation: TLAActionInvocation) throws -> TransitionEvidence {
+                try apply(invocation)
             }
             """),
             DeclSyntax(stringLiteral: """

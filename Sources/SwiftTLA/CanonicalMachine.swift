@@ -75,25 +75,41 @@ public protocol TLAMachineExecuting: TLAMachineObserving {
     mutating func execute(_ invocation: TLAActionInvocation) async throws -> TransitionEvidence
 }
 
+public protocol TLAMachineAdapterCanonicalModel: TLAMachineExecuting, Sendable {
+    func synchronousMachineObservation() -> TLAMachineObservation
+
+    mutating func executeSynchronously(
+        _ invocation: TLAActionInvocation
+    ) throws -> TransitionEvidence
+}
+
 public protocol TLAMachineAdapterAccess: AnyObject, TLAMachineExecuting {
-    associatedtype CanonicalModel: TLAMachineExecuting
+    associatedtype CanonicalModel: TLAMachineAdapterCanonicalModel
 
     func withCanonicalMachine<Result: Sendable>(
-        _ operation: @escaping @Sendable (inout CanonicalModel) async throws -> Result
+        _ operation: @escaping @Sendable (inout CanonicalModel) throws -> Result
     ) async rethrows -> Result
 }
 
 public extension TLAMachineAdapterAccess where TransitionEvidence == CanonicalModel.TransitionEvidence {
-    func machineObservation() async -> TLAMachineObservation {
+    func canonicalMachineObservation() async -> TLAMachineObservation {
         await withCanonicalMachine { canonical in
-            await canonical.machineObservation()
+            canonical.synchronousMachineObservation()
         }
     }
 
-    func execute(_ invocation: TLAActionInvocation) async throws -> TransitionEvidence {
+    func executeCanonical(_ invocation: TLAActionInvocation) async throws -> TransitionEvidence {
         try await withCanonicalMachine { canonical in
-            try await canonical.execute(invocation)
+            try canonical.executeSynchronously(invocation)
         }
+    }
+
+    func machineObservation() async -> TLAMachineObservation {
+        await canonicalMachineObservation()
+    }
+
+    func execute(_ invocation: TLAActionInvocation) async throws -> TransitionEvidence {
+        try await executeCanonical(invocation)
     }
 }
 

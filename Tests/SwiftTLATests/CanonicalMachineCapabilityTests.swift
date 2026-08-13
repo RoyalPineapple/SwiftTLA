@@ -26,7 +26,7 @@ private struct AdapterTransitionEvidence: Sendable, Equatable {
     let after: Int
 }
 
-private struct MutableCanonicalMachine: TLAMachineExecuting {
+private struct MutableCanonicalMachine: TLAMachineAdapterCanonicalModel {
     private var count = 0
 
     func machineObservation() async -> TLAMachineObservation {
@@ -41,6 +41,21 @@ private struct MutableCanonicalMachine: TLAMachineExecuting {
     }
 
     mutating func execute(_ invocation: TLAActionInvocation) async throws -> AdapterTransitionEvidence {
+        try executeSynchronously(invocation)
+    }
+
+    func synchronousMachineObservation() -> TLAMachineObservation {
+        .init(
+            state: ["count": .int(count)],
+            availability: .available(
+                count == 0
+                    ? [TLAActionInvocation(name: "advance")]
+                    : []
+            )
+        )
+    }
+
+    mutating func executeSynchronously(_ invocation: TLAActionInvocation) throws -> AdapterTransitionEvidence {
         guard invocation == TLAActionInvocation(name: "advance"), count == 0 else {
             throw AdapterExecutionFailure.rejected
         }
@@ -59,12 +74,9 @@ private final class ClassMachineAdapter: TLAMachineAdapterAccess {
     private var canonical = MutableCanonicalMachine()
 
     func withCanonicalMachine<Result: Sendable>(
-        _ operation: @escaping @Sendable (inout MutableCanonicalMachine) async throws -> Result
+        _ operation: @escaping @Sendable (inout MutableCanonicalMachine) throws -> Result
     ) async rethrows -> Result {
-        var updatedCanonical = canonical
-        let result = try await operation(&updatedCanonical)
-        canonical = updatedCanonical
-        return result
+        try operation(&canonical)
     }
 }
 
@@ -75,12 +87,9 @@ private actor ActorMachineAdapter: TLAMachineAdapterAccess {
     private var canonical = MutableCanonicalMachine()
 
     func withCanonicalMachine<Result: Sendable>(
-        _ operation: @escaping @Sendable (inout MutableCanonicalMachine) async throws -> Result
+        _ operation: @escaping @Sendable (inout MutableCanonicalMachine) throws -> Result
     ) async rethrows -> Result {
-        var updatedCanonical = canonical
-        let result = try await operation(&updatedCanonical)
-        canonical = updatedCanonical
-        return result
+        try operation(&canonical)
     }
 }
 

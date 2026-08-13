@@ -19,6 +19,76 @@ struct CounterNoInvs {
     }
 }
 
+struct NestedAdapterConcurrencyTests {
+    @Test("Nested adapters observe and execute through their canonical model")
+    @MainActor
+    func nestedAdaptersShareCanonicalObservation() async throws {
+        let invocation = TLAActionInvocation(name: "advance")
+        let observableLabel: NestedComposedCounter.Observable.ActionLabel = .advance
+        let actorLabel: NestedComposedCounter.Actor.ActionLabel = .advance
+        var model = NestedComposedCounter()
+        let observable = NestedComposedCounter.Observable()
+        let actor = NestedComposedCounter.Actor()
+        let callbackRecorder = NestedCallbackRecorder()
+        observable.onAdvance = { before, after in
+            await callbackRecorder.record(before: before, after: after)
+        }
+
+        let expectedBefore = await model.machineObservation()
+        #expect(observableLabel.toInvocation() == invocation)
+        #expect(actorLabel.toInvocation() == invocation)
+        #expect(await observable.machineObservation() == expectedBefore)
+        #expect(await actor.machineObservation() == expectedBefore)
+
+        let expected = try await model.execute(invocation)
+        let observed = try await observable.execute(invocation)
+        let acted = try await actor.execute(invocation)
+
+        #expect(observed.before == expected.before)
+        #expect(observed.after == expected.after)
+        #expect(acted.before == expected.before)
+        #expect(acted.after == expected.after)
+        #expect(await observable.machineObservation().state == expected.after)
+        #expect(await actor.machineObservation().state == expected.after)
+        #expect(await callbackRecorder.transitions.count == 1)
+        #expect(await callbackRecorder.transitions.first?.0.asDictionary == expected.before)
+        #expect(await callbackRecorder.transitions.first?.1.asDictionary == expected.after)
+    }
+
+    @Test("Nested actor commits overlapping executions without stale write-back")
+    func nestedActorExecutesOverlappingTransitionsAtomically() async throws {
+        let actor = NestedComposedCounter.Actor()
+        let invocation = TLAActionInvocation(name: "advance")
+
+        async let first = actor.execute(invocation)
+        async let second = actor.execute(invocation)
+        _ = try await (first, second)
+
+        #expect(await actor.machineObservation().state == ["count": .int(2)])
+    }
+
+    @Test("Nested observable rejects disabled execution without notification")
+    @MainActor
+    func nestedObservableSuppressesCallbackAfterFailedExecution() async throws {
+        let observable = NestedComposedCounter.Observable()
+        let recorder = NestedCallbackRecorder()
+        let invocation = TLAActionInvocation(name: "advance")
+        observable.onAdvance = { before, after in
+            await recorder.record(before: before, after: after)
+        }
+
+        _ = try await observable.execute(invocation)
+        _ = try await observable.execute(invocation)
+        let beforeFailure = await observable.machineObservation()
+        await #expect(throws: GeneratedMachineError.self) {
+            try await observable.execute(invocation)
+        }
+
+        #expect(await observable.machineObservation() == beforeFailure)
+        #expect(await recorder.transitions.count == 2)
+    }
+}
+
 // MARK: - HourClock spec with invariants
 
 @TLAModel
@@ -174,6 +244,23 @@ struct NondeterministicConstrainedMachine {
     }
 }
 
+@TLAModel
+struct NestedComposedCounter {
+    static var spec: TLASpec {
+        TLASpec("NestedComposedCounter") {
+            let count = Var<Int>("count")
+            Variable(count, 0)
+            Action("advance") { count.becomes(count + 1).when(count < 2) }
+        }
+    }
+
+    @TLAObservable
+    final class Observable {}
+
+    @TLAActor
+    actor Actor {}
+}
+
 @TLAActor
 actor ThreeParameterActionActor {
     static var spec: TLASpec {
@@ -188,6 +275,14 @@ actor ThreeParameterActionActor {
                 floor.becomes(1)
             }
         }
+    }
+}
+
+private actor NestedCallbackRecorder {
+    private(set) var transitions: [(NestedComposedCounter.State, NestedComposedCounter.State)] = []
+
+    func record(before: NestedComposedCounter.State, after: NestedComposedCounter.State) {
+        transitions.append((before, after))
     }
 }
 
