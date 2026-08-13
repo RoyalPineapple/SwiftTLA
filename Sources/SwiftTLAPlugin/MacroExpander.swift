@@ -30,9 +30,9 @@ enum MacroExpander {
         decls.append(DeclSyntax(stringLiteral: """
         private var _machine = CanonicalMachine(
             runtime: \(model.typeName).runtime,
-            initial: State(formalDictionary: \(model.typeName).runtime.initialStates().first!),
+            initial: try! State(formalDictionary: \(model.typeName).runtime.initialStates().first!),
             stateDictionary: { $0.asDictionary },
-            snapshotFromDictionary: { State(formalDictionary: $0) }
+            snapshotFromDictionary: { try State(formalDictionary: $0) }
         )
         """))
 
@@ -394,40 +394,13 @@ extension MacroExpander {
                                 firstName: "formalDictionary", secondName: "dict",
                                 type: TypeSyntax(stringLiteral: "[String: TLAValue]")
                             )
-                        }
+                        },
+                        effectSpecifiers: FunctionEffectSpecifiersSyntax(
+                            throwsClause: ThrowsClauseSyntax(throwsSpecifier: .keyword(.throws))
+                        )
                     ),
                     body: CodeBlockSyntax {
-                        for v in variables {
-                if let typeName = v.swiftTypeName,
-                   let info = enumInfos.first(where: { $0.typeName == typeName }) {
-                    let caseLines = info.cases.map { c in
-                        "case \"\(c.name)\": return \(typeName).\(c.name)"
-                    }.joined(separator: "\n                    ")
-                    ExprSyntax(stringLiteral: """
-                    self.\(v.name) = {
-                        guard case .string(let s) = dict[Variables.\(v.name).rawValue] else { fatalError("Invalid enum value for \(v.name)") }
-                        switch s {
-                        \(caseLines)
-                        default: fatalError("Unknown \(typeName): \\(s)")
-                        }
-                    }()
-                    """)
-                } else if let typeName = v.swiftTypeName,
-                          !["Int", "Bool", "String", "TLAValue"].contains(typeName) {
-                    ExprSyntax(stringLiteral:
-                        "self.\(v.name) = \(typeName)(rawValue: "
-                            + "dict[Variables.\(v.name).rawValue]!.\(extractor(for: v.initial)))!"
-                    )
-                } else {
-                    let st = stateType(for: v, enumInfos: enumInfos)
-                    if st == "TLAValue" {
-                        ExprSyntax(stringLiteral: "self.\(v.name) = dict[Variables.\(v.name).rawValue]!")
-                    } else {
-                        let extractor = v.swiftTypeName.map(extractor(forSwiftType:)) ?? extractor(for: v.initial)
-                        ExprSyntax(stringLiteral: "self.\(v.name) = dict[Variables.\(v.name).rawValue]!.\(extractor)")
-                    }
-                }
-                        }
+                        ExprSyntax(stringLiteral: stateDecodingStatements(variables: variables, enumInfos: enumInfos))
                     }
                 )
                 VariableDeclSyntax(
@@ -475,6 +448,86 @@ extension MacroExpander {
                     ))
                 )]
             )
+        }
+    }
+
+    static func tlaValuePattern(for initial: TLAValue, binding: String) -> String {
+        switch initial {
+        case .int: "case .int(let \(binding)) = rawValue"
+        case .bool: "case .bool(let \(binding)) = rawValue"
+        case .string, .constant: "case .string(let \(binding)) = rawValue"
+        case .set: "case .set(let \(binding)) = rawValue"
+        case .tuple: "case .tuple(let \(binding)) = rawValue"
+        case .record: "case .record(let \(binding)) = rawValue"
+        case .function: "case .function(let \(binding)) = rawValue"
+        }
+    }
+
+    static func stateDecodingStatements(
+        variables: [(name: String, initial: TLAValue, initialSet: StateExpr?, swiftTypeName: String?)],
+        enumInfos: [ParsedEnumInfo]
+    ) -> String {
+        variables.map { variable in
+            let key = "Variables.\(variable.name).rawValue"
+            if let typeName = variable.swiftTypeName,
+               let info = enumInfos.first(where: { $0.typeName == typeName }) {
+                let cases = info.cases.map { "case \"\($0.name)\": self.\(variable.name) = \(typeName).\($0.name)" }
+                    .joined(separator: "\n")
+                return """
+                guard let rawValue = dict[\(key)] else {
+                    throw TLAStateProjectionDiagnostic.missingValue(path: \(key))
+                }
+                guard case .string(let value) = rawValue else {
+                    throw TLAStateProjectionDiagnostic.invalidValue(path: \(key))
+                }
+                switch value {
+                \(cases)
+                default:
+                    throw TLAStateProjectionDiagnostic.invalidValue(path: \(key))
+                }
+                """
+            }
+            if let typeName = variable.swiftTypeName,
+               !["Int", "Bool", "String", "TLAValue"].contains(typeName) {
+                let pattern = tlaValuePattern(for: variable.initial, binding: "raw")
+                return """
+                guard let rawValue = dict[\(key)] else {
+                    throw TLAStateProjectionDiagnostic.missingValue(path: \(key))
+                }
+                guard \(pattern), let value = \(typeName)(rawValue: raw) else {
+                    throw TLAStateProjectionDiagnostic.invalidValue(path: \(key))
+                }
+                self.\(variable.name) = value
+                """
+            }
+            let type = stateType(for: variable, enumInfos: enumInfos)
+            if type == "TLAValue" {
+                return """
+                guard let value = dict[\(key)] else {
+                    throw TLAStateProjectionDiagnostic.missingValue(path: \(key))
+                }
+                self.\(variable.name) = value
+                """
+            }
+            let pattern = tlaValuePattern(forSwiftType: type, binding: "value")
+            return """
+            guard let rawValue = dict[\(key)] else {
+                throw TLAStateProjectionDiagnostic.missingValue(path: \(key))
+            }
+            guard \(pattern) else {
+                throw TLAStateProjectionDiagnostic.invalidValue(path: \(key))
+            }
+            self.\(variable.name) = value
+            """
+        }.joined(separator: "\n")
+    }
+
+    static func tlaValuePattern(forSwiftType swiftType: String, binding: String) -> String {
+        switch swiftType {
+        case "Int": "case .int(let \(binding)) = rawValue"
+        case "Bool": "case .bool(let \(binding)) = rawValue"
+        case "String": "case .string(let \(binding)) = rawValue"
+        default: "let \(binding) = rawValue"
         }
     }
 

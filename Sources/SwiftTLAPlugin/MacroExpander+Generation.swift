@@ -50,7 +50,7 @@ extension MacroExpander {
         }
         public static func transitionMatrix() throws -> [(from: State, invocation: TLAActionInvocation, to: State)] {
             try _formalTransitionMatrix().map {
-                (from: State(formalDictionary: $0.from), invocation: $0.invocation, to: State(formalDictionary: $0.to))
+                (from: try State(formalDictionary: $0.from), invocation: $0.invocation, to: try State(formalDictionary: $0.to))
             }
         }
         """)]
@@ -135,9 +135,9 @@ extension MacroExpander {
         decls.append(DeclSyntax(stringLiteral: """
         private let _machine = CanonicalMachineStorage(CanonicalMachine(
             runtime: \(typeName).runtime,
-            initial: State(formalDictionary: \(typeName).runtime.initialStates().first!),
+            initial: try! State(formalDictionary: \(typeName).runtime.initialStates().first!),
             stateDictionary: { $0.asDictionary },
-            snapshotFromDictionary: { State(formalDictionary: $0) }
+            snapshotFromDictionary: { try State(formalDictionary: $0) }
         ))
         """))
         decls.append(contentsOf: generateCanonicalMachineMembers(

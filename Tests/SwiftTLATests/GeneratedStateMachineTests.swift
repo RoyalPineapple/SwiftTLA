@@ -447,6 +447,40 @@ struct GeneratedStateMachineTests {
         #expect(machine.tlaSnapshot() == before)
     }
 
+    @Test("Malformed formal successors fail through generated State decoding without committing")
+    func malformedFormalSuccessorsDoNotCrashOrCommitGeneratedState() throws {
+        let invocation = TLAActionInvocation(
+            name: "board",
+            arguments: [.int(2), .int(20), .int(200)]
+        )
+        let malformedStates: [([String: TLAValue], TLAStateProjectionDiagnostic)] = [
+            ([:], .missingValue(path: "floor")),
+            (["floor": .string("wrong")], .invalidValue(path: "floor"))
+        ]
+
+        for (malformedState, expectedDiagnostic) in malformedStates {
+            let runtime = SpecRuntime(spec: ThreeParameterActionMachine.spec) { _, _, _ in
+                [malformedState]
+            }
+            var machine = CanonicalMachine(
+                runtime: runtime,
+                initial: ThreeParameterActionMachine.State(floor: 0),
+                stateDictionary: { $0.asDictionary },
+                snapshotFromDictionary: { try ThreeParameterActionMachine.State(formalDictionary: $0) }
+            )
+            let before = machine.snapshot
+
+            do {
+                _ = try machine.apply(invocation)
+                Issue.record("Expected malformed formal state to fail")
+            } catch let GeneratedMachineError.unexpected(error) {
+                #expect(error as? TLAStateProjectionDiagnostic == expectedDiagnostic)
+            }
+
+            #expect(machine.snapshot == before)
+        }
+    }
+
     @Test("Canonical generated execution preserves the complete parameterized invocation")
     func canonicalGeneratedExecutionPreservesParameterizedInvocationEvidence() async throws {
         var machine = EndToEndThreeParameterActionMachine()

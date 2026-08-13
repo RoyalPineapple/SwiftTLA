@@ -3,6 +3,8 @@ import os
 public enum TLAStateProjectionDiagnostic: Error, Sendable, Equatable, CustomStringConvertible {
     case invalidKey(path: String)
     case invalidConstant(path: String)
+    case missingValue(path: String)
+    case invalidValue(path: String)
 
     public var description: String {
         switch self {
@@ -10,6 +12,10 @@ public enum TLAStateProjectionDiagnostic: Error, Sendable, Equatable, CustomStri
             return "Invalid TLA state key at \(path)"
         case .invalidConstant(let path):
             return "Invalid TLA constant at \(path)"
+        case .missingValue(let path):
+            return "Missing TLA state value at \(path)"
+        case .invalidValue(let path):
+            return "Invalid TLA state value at \(path)"
         }
     }
 }
@@ -306,14 +312,14 @@ public extension TLAMachineAdapterAccess where TransitionResult == CanonicalMode
 public struct CanonicalMachine<Snapshot: Equatable & Sendable>: Sendable {
     public let runtime: SpecRuntime
     private let stateDictionary: @Sendable (Snapshot) -> [String: TLAValue]
-    private let snapshotFromDictionary: @Sendable ([String: TLAValue]) -> Snapshot
+    private let snapshotFromDictionary: @Sendable ([String: TLAValue]) throws -> Snapshot
     public private(set) var snapshot: Snapshot
 
     public init(
         runtime: SpecRuntime,
         initial: Snapshot,
         stateDictionary: @escaping @Sendable (Snapshot) -> [String: TLAValue],
-        snapshotFromDictionary: @escaping @Sendable ([String: TLAValue]) -> Snapshot
+        snapshotFromDictionary: @escaping @Sendable ([String: TLAValue]) throws -> Snapshot
     ) {
         self.runtime = runtime
         self.snapshot = initial
@@ -403,7 +409,12 @@ public struct CanonicalMachine<Snapshot: Equatable & Sendable>: Sendable {
         from state: TLAStateProjection,
         selecting successor: (TLAStateProjection) -> Bool
     ) throws -> CanonicalTransitionEvidence<Snapshot> {
-        let before = snapshotFromDictionary(state.values)
+        let before: Snapshot
+        do {
+            before = try snapshotFromDictionary(state.values)
+        } catch {
+            throw GeneratedMachineError.unexpected(error)
+        }
         let successors: [[String: TLAValue]]
         do {
             successors = try runtime.successors(invocation, from: state.values)
@@ -420,7 +431,12 @@ public struct CanonicalMachine<Snapshot: Equatable & Sendable>: Sendable {
                 throw GeneratedMachineError.unexpected(diagnostic)
             }
             guard successor(projection) else { continue }
-            let after = snapshotFromDictionary(candidate)
+            let after: Snapshot
+            do {
+                after = try snapshotFromDictionary(candidate)
+            } catch {
+                throw GeneratedMachineError.unexpected(error)
+            }
             snapshot = after
             return CanonicalTransitionEvidence(invocation: invocation, before: before, after: after)
         }
@@ -433,7 +449,12 @@ public struct CanonicalMachine<Snapshot: Equatable & Sendable>: Sendable {
         from state: [String: TLAValue],
         selecting successor: ([String: TLAValue]) -> Bool
     ) throws -> CanonicalTransitionEvidence<Snapshot> {
-        let before = snapshotFromDictionary(state)
+        let before: Snapshot
+        do {
+            before = try snapshotFromDictionary(state)
+        } catch {
+            throw GeneratedMachineError.unexpected(error)
+        }
         let successors: [[String: TLAValue]]
         do {
             successors = try runtime.successors(invocation, from: state)
@@ -446,7 +467,12 @@ public struct CanonicalMachine<Snapshot: Equatable & Sendable>: Sendable {
             let available = try availableInvocations(in: state)
             throw GeneratedMachineError.runtime(.actionNotEnabled(invocation, available: available))
         }
-        let after = snapshotFromDictionary(next)
+        let after: Snapshot
+        do {
+            after = try snapshotFromDictionary(next)
+        } catch {
+            throw GeneratedMachineError.unexpected(error)
+        }
         snapshot = after
         return CanonicalTransitionEvidence(invocation: invocation, before: before, after: after)
     }

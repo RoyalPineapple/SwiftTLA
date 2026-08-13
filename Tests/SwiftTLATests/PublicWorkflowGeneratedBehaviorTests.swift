@@ -18,6 +18,11 @@ struct PublicWorkflowGeneratedBehaviorTests {
     let observableEvidence = try await observable.execute(invocation)
     let actorEvidence = try await actor.execute(invocation)
 
+    #expect(modelEvidence.action == .advance)
+    #expect(observableEvidence.action == .advance)
+    #expect(actorEvidence.action == .advance)
+    #expect(modelEvidence.before.value == 0)
+    #expect(modelEvidence.after.value == 1)
     #expect(observableEvidence.before == modelEvidence.before)
     #expect(observableEvidence.after == modelEvidence.after)
     #expect(actorEvidence.before == modelEvidence.before)

@@ -327,9 +327,12 @@ struct SymmetricCollectionMacroRuntimeTests {
     let device = MacroDevice(id: 42)
 
     model.devices.insert(device)
-    try model.begin(id: device.id)
+    let result = try model.begin(id: device.id)
 
     #expect(model.devices[device.id] == 1)
+    #expect(result.action == .begin)
+    #expect(result.before.devices != result.after.devices)
+    #expect(result.after.devices == model.state.devices)
     #expect(GeneratedSymmetricRuntime.symmetricCollectionScopes == [
       SymmetricCollectionScope(collectionName: "devices", verificationScope: 1)
     ])
