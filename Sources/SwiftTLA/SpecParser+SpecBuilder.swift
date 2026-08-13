@@ -175,11 +175,11 @@ extension SpecParser {
             if let stringLit = args[0].expression.as(StringLiteralExprSyntax.self) {
                 let varName = stringLit.segments.description.replacingOccurrences(of: "\"", with: "")
                 let initial: TLAValue = args.count >= 2 ? parseInitialExpr(args[1].expression) : .int(0)
-                let inferredType = args.count >= 2 ? enumCaseTypeName(from: args[1].expression) : nil
+                let inferredType = args.count >= 2 ? initialValueTypeName(from: args[1].expression) : nil
                 result.variables.append((varName, initial, nil, varTypeName ?? inferredType))
             } else {
                 let initial: TLAValue = parseInitialExpr(args[0].expression)
-                let inferredType = enumCaseTypeName(from: args[0].expression)
+                let inferredType = initialValueTypeName(from: args[0].expression)
                 result.variables.append((patternName, initial, nil, varTypeName ?? inferredType))
             }
         }
@@ -189,17 +189,17 @@ extension SpecParser {
     /// Returns nil if the call is not a StateVar constructor.
     static func resolveVarCall(_ fc: FunctionCallExprSyntax) -> (String, String?)? {
         if let ref = fc.calledExpression.as(DeclReferenceExprSyntax.self) {
-            guard ref.baseName.text == "StateVar" else { return nil }
-            return ("StateVar", nil)
+            guard ["StateVar", "Var"].contains(ref.baseName.text) else { return nil }
+            return (ref.baseName.text, nil)
         }
         if let generic = fc.calledExpression.as(GenericSpecializationExprSyntax.self),
            let ref = generic.expression.as(DeclReferenceExprSyntax.self) {
-            guard ref.baseName.text == "StateVar" else { return nil }
+            guard ["StateVar", "Var"].contains(ref.baseName.text) else { return nil }
             let typeArgs = Array(generic.genericArgumentClause.arguments)
             let swiftTypeName = typeArgs.count >= 1
                 ? typeArgs[0].argument.description.trimmingCharacters(in: .whitespacesAndNewlines)
                 : nil
-            return ("StateVar", swiftTypeName)
+            return (ref.baseName.text, swiftTypeName)
         }
         return nil
     }
@@ -289,6 +289,18 @@ extension SpecParser {
         return nil
     }
 
+    static func initialValueTypeName(from expression: ExprSyntax) -> String? {
+        if expression.is(IntegerLiteralExprSyntax.self) { return "Int" }
+        if expression.is(BooleanLiteralExprSyntax.self) { return "Bool" }
+        if expression.is(StringLiteralExprSyntax.self) { return "String" }
+        if let call = expression.as(FunctionCallExprSyntax.self),
+           let memberAccess = call.calledExpression.as(MemberAccessExprSyntax.self),
+           memberAccess.base?.as(DeclReferenceExprSyntax.self)?.baseName.text == "TLAValue" {
+            return "TLAValue"
+        }
+        return enumCaseTypeName(from: expression)
+    }
+
     static func parseBuilderCall(
         _ call: FunctionCallExprSyntax,
         into result: inout ParsedSpecComponents,
@@ -304,7 +316,13 @@ extension SpecParser {
         case "CollectionAction":
             parseCollectionAction(call, into: &result)
         case "Variable":
+            let existingVariable = call.arguments.first?.expression
+                .as(DeclReferenceExprSyntax.self)?.baseName.text
             parseVariableDecl(call, into: &result)
+            if let existingVariable {
+                mergeVariableDeclaration(named: existingVariable, into: &result)
+            }
+            validateVariableDeclaration(call, into: &result)
         case "Action":
             parseAction(call, into: &result, loopVar: loopVar, loopValue: loopValue)
         case "Invariant":
@@ -331,6 +349,43 @@ extension SpecParser {
             }
         default:
             break
+        }
+    }
+
+    static func mergeVariableDeclaration(
+        named name: String,
+        into result: inout ParsedSpecComponents
+    ) {
+        let matchingIndices = result.variables.indices.filter { result.variables[$0].name == name }
+        guard matchingIndices.count > 1, let latest = matchingIndices.last else { return }
+        let existing = result.variables[matchingIndices[0]]
+        let replacement = result.variables[latest]
+        result.variables.remove(at: latest)
+        result.variables[matchingIndices[0]] = (
+            replacement.name,
+            replacement.initial,
+            replacement.initialSet,
+            replacement.swiftTypeName ?? existing.swiftTypeName
+        )
+    }
+
+    static func validateVariableDeclaration(
+        _ call: FunctionCallExprSyntax,
+        into result: inout ParsedSpecComponents
+    ) {
+        let arguments = Array(call.arguments)
+        guard let reference = arguments.first?.expression.as(DeclReferenceExprSyntax.self)?.baseName.text else { return }
+        guard arguments.count == 1 else {
+            if arguments.count == 2, [nil, "in"].contains(arguments[1].label?.text) { return }
+            result.diagnostics.append(.init(message: "Malformed Variable declaration", source: call))
+            return
+        }
+        guard result.variables.contains(where: { $0.name == reference }) else {
+            result.diagnostics.append(.init(
+                message: "Variable '\(reference)' is not bound by a prior Var declaration",
+                source: call
+            ))
+            return
         }
     }
 

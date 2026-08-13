@@ -25,6 +25,13 @@ require "check-head:"
 require "listWorkflowRuns"
 require "workflow_id: 'core-conformance.yml'"
 require "run_expensive"
+require "submodules: recursive"
+require "Validate pinned core-conformance baseline"
+require 'baseline_path="Verification/CoreConformance/baselines"'
+require 'git -C "$baseline_path" rev-parse --verify HEAD'
+require 'git ls-tree HEAD "$baseline_path"'
+require 'Pinned core-conformance baseline is unavailable'
+require 'Pinned core-conformance baseline does not match the repository checkout'
 require "make core-support-gate"
 require ".build/core-support-gate"
 require "if: always()"
@@ -38,7 +45,6 @@ require "enforcement_exit=0"
 require "exact external verifier or evidence was unavailable"
 require "exit 1"
 require "exit 2"
-forbid "baseline"
 forbid "validate_upstream_parity.sh"
 forbid "swift test --filter UpstreamParity"
 forbid "make core-conformance"

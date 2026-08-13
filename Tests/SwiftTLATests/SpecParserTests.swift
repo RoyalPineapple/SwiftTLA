@@ -46,6 +46,24 @@ private func parseExpression(_ source: String) -> ExprSyntax {
 }
 
 @Suite(.serialized) struct SpecVariableDeclarationParsingTests {
+    @Test func plainVarDeclarationIsParsedWithoutGenericSpecialization() {
+        let source = """
+        {
+            let counter = Var("counter", 0)
+            Variable(counter, in: 0...1)
+        }
+        """
+        let closure = Parser.parse(source: source).statements.first!.item.as(ClosureExprSyntax.self)!
+        let parsed = SpecParser.parseSpecClosure(closure)
+
+        #expect(parsed.diagnostics.isEmpty)
+        #expect(parsed.variables.count == 1)
+        guard parsed.variables.count == 1 else { return }
+        #expect(parsed.variables[0].name == "counter")
+        #expect(parsed.variables[0].initial == .set([]))
+        #expect(parsed.variables[0].swiftTypeName == "Int")
+    }
+
     @Test func oneArgumentVariableReferencesPreserveBindingMetadataAndOrder() {
         let source = """
         {
