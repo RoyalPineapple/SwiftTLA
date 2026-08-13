@@ -30,9 +30,9 @@ enum MacroExpander {
         decls.append(DeclSyntax(stringLiteral: """
         private var _machine = CanonicalMachine(
             runtime: \(model.typeName).runtime,
-            initial: State(from: \(model.typeName).runtime.initialStates().first!),
+            initial: State(formalDictionary: \(model.typeName).runtime.initialStates().first!),
             stateDictionary: { $0.asDictionary },
-            snapshotFromDictionary: { State(from: $0) }
+            snapshotFromDictionary: { State(formalDictionary: $0) }
         )
         """))
 
@@ -82,16 +82,16 @@ enum MacroExpander {
             decls.append(DeclSyntax(stringLiteral: """
             public static func generatedActionOutcome(
                 actionName: String,
-                in state: [String: TLAValue]
+                in state: State
             ) -> SpecRuntime.RuntimeActionOutcome {
-                Self.runtime.actionOutcome(named: actionName, in: state)
+                Self.runtime.actionOutcome(named: actionName, in: state.asDictionary)
             }
             """))
             decls.append(DeclSyntax(stringLiteral: """
             public static func generatedPropertyOutcomes(
-                in state: [String: TLAValue]
+                in state: State
             ) -> [SpecRuntime.RuntimePropertyOutcome] {
-                Self.runtime.propertyOutcomes(in: state)
+                Self.runtime.propertyOutcomes(in: state.asDictionary)
             }
             """))
         }
@@ -244,6 +244,7 @@ enum MacroExpander {
                 InheritedTypeListSyntax {
                     InheritedTypeSyntax(type: IdentifierTypeSyntax(name: "String"))
                     InheritedTypeSyntax(type: IdentifierTypeSyntax(name: "CaseIterable"))
+                    InheritedTypeSyntax(type: IdentifierTypeSyntax(name: "Sendable"))
                 }
             },
             memberBlock: MemberBlockSyntax {
@@ -371,8 +372,26 @@ extension MacroExpander {
                     modifiers: [DeclModifierSyntax(name: .keyword(.public))],
                     signature: FunctionSignatureSyntax(
                         parameterClause: FunctionParameterClauseSyntax {
+                            for v in variables {
+                                FunctionParameterSyntax(
+                                    firstName: .identifier(v.name),
+                                    type: TypeSyntax(stringLiteral: stateType(for: v, enumInfos: enumInfos))
+                                )
+                            }
+                        }
+                    ),
+                    body: CodeBlockSyntax {
+                        for v in variables {
+                            ExprSyntax(stringLiteral: "self.\(v.name) = \(v.name)")
+                        }
+                    }
+                )
+                InitializerDeclSyntax(
+                    modifiers: [DeclModifierSyntax(name: .keyword(.fileprivate))],
+                    signature: FunctionSignatureSyntax(
+                        parameterClause: FunctionParameterClauseSyntax {
                             FunctionParameterSyntax(
-                                firstName: "from", secondName: "dict",
+                                firstName: "formalDictionary", secondName: "dict",
                                 type: TypeSyntax(stringLiteral: "[String: TLAValue]")
                             )
                         }
@@ -412,7 +431,7 @@ extension MacroExpander {
                     }
                 )
                 VariableDeclSyntax(
-                    modifiers: [DeclModifierSyntax(name: .keyword(.public))],
+                    modifiers: [DeclModifierSyntax(name: .keyword(.fileprivate))],
                     bindingSpecifier: .keyword(.var),
                     bindings: [PatternBindingSyntax(
                         pattern: IdentifierPatternSyntax(identifier: "asDictionary"),
@@ -490,20 +509,18 @@ extension MacroExpander {
                         } catch {
                             throw GeneratedMachineError.unexpected(error)
                         }
-                        return TransitionEvidence(
-                            label: .\(action.name),
-                            invocation: .init(name: "\(action.name)"),
-                            before: evidence.before.asDictionary,
-                            after: evidence.after.asDictionary
+                        return TransitionResult(
+                            action: .\(action.name),
+                            before: evidence.before,
+                            after: evidence.after
                         )
                         """
                     } ?? """
                     let evidence = try _machine.apply(.init(name: \"\(action.name)\"), from: _stateWithLiveCollections()) { _ in true }
-                    return TransitionEvidence(
-                        label: .\(action.name),
-                        invocation: .init(name: "\(action.name)"),
-                        before: evidence.before.asDictionary,
-                        after: evidence.after.asDictionary
+                    return TransitionResult(
+                        action: .\(action.name),
+                        before: evidence.before,
+                        after: evidence.after
                     )
                     """
                     return """
@@ -519,7 +536,7 @@ extension MacroExpander {
                     : ""
                 let source = """
                 @discardableResult
-                \(isActor ? "fileprivate" : "public mutating") func \(action.name)(id: \(collection.elementType).ID) throws -> TransitionEvidence {
+                \(isActor ? "fileprivate" : "public mutating") func \(action.name)(id: \(collection.elementType).ID) throws -> TransitionResult {
                     let projection = \(collection.name).projection()
                     let targetKey: TLAValue
                     do {
@@ -547,7 +564,7 @@ extension MacroExpander {
             let methodName = isActor ? "_\(action.name)" : "apply\(action.name)"
             if action.bindings.isEmpty {
                 let source = """
-                \(isActor ? "fileprivate" : "public mutating") func \(methodName)() throws -> TransitionEvidence {
+                \(isActor ? "fileprivate" : "public mutating") func \(methodName)() throws -> TransitionResult {
                     try apply(.\(action.name))
                 }
                 """
@@ -555,7 +572,7 @@ extension MacroExpander {
             }
             let modifier = isActor ? "fileprivate" : "public mutating"
             let source = """
-            \(modifier) func \(methodName)(\(parameters)) throws -> TransitionEvidence {
+            \(modifier) func \(methodName)(\(parameters)) throws -> TransitionResult {
                 try apply(.\(action.name)\(labels.isEmpty ? "" : "(\(labels))"))
             }
             """

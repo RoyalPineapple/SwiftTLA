@@ -44,7 +44,7 @@ public struct P4GeneratedCounterIntentionalMismatch {
         actionName: String,
         in state: [String: TLAValue]
     ) -> SpecRuntime.RuntimeActionOutcome {
-        switch generatedActionOutcome(actionName: actionName, in: state) {
+        switch runtime.generatedActionOutcome(actionName: actionName, in: state) {
         case .enabled(let actionName, _):
             return .enabled(actionName: actionName, successors: [["value": .int(2)]])
         case let outcome:

@@ -20,8 +20,9 @@ extension MacroExpander {
         var declarations: [DeclSyntax] = [
             DeclSyntax(stringLiteral: "public typealias CanonicalModel = \(modelType)"),
             DeclSyntax(stringLiteral: "public typealias State = \(modelType).State"),
+            DeclSyntax(stringLiteral: "public typealias Variables = \(modelType).Variables"),
             DeclSyntax(stringLiteral: "public typealias ActionLabel = \(modelType).ActionLabel"),
-            DeclSyntax(stringLiteral: "public typealias TransitionEvidence = \(modelType).TransitionEvidence"),
+            DeclSyntax(stringLiteral: "public typealias TransitionResult = \(modelType).TransitionResult"),
             DeclSyntax(stringLiteral: canonicalStorage),
             DeclSyntax(stringLiteral: """
             \(isolation)public func withCanonicalMachine<Result: Sendable>(
@@ -38,6 +39,14 @@ extension MacroExpander {
             }
             """))
             declarations.append(contentsOf: generateNestedObservableMembers(model: canonicalModel))
+        } else {
+            declarations.append(DeclSyntax(stringLiteral: """
+            public func state() async -> State {
+                await withCanonicalMachine { canonical in
+                    canonical.state
+                }
+            }
+            """))
         }
         return declarations
     }
@@ -55,11 +64,11 @@ extension MacroExpander {
             let arguments: String
             if action.bindings.isEmpty {
                 pattern = ".\(action.name)"
-                arguments = "State(from: evidence.before), State(from: evidence.after)"
+                arguments = "evidence.before, evidence.after"
             } else {
                 let names = action.bindings.map(\.name)
                 pattern = ".\(action.name)(\(names.joined(separator: ", ")))"
-                arguments = (names + ["State(from: evidence.before)", "State(from: evidence.after)"]).joined(separator: ", ")
+                arguments = (names + ["evidence.before", "evidence.after"]).joined(separator: ", ")
             }
             return """
                 case \(pattern):
@@ -77,12 +86,17 @@ extension MacroExpander {
                 ? "ActionLabel.\(action.name).toInvocation()"
                 : "ActionLabel.\(action.name)(\(labelArguments)).toInvocation()"
             return DeclSyntax(stringLiteral: """
-            @MainActor public func _\(action.name)(\(parameters)) async throws -> TransitionEvidence {
+            @MainActor public func _\(action.name)(\(parameters)) async throws -> TransitionResult {
                 try await execute(\(label))
             }
             """)
         }
         return callbacks + [
+            DeclSyntax(stringLiteral: """
+            @MainActor public var state: State {
+                _canonical.state
+            }
+            """),
             DeclSyntax(stringLiteral: """
             @MainActor public func machineObservation() async -> TLAMachineObservation {
                 await withCanonicalMachine { canonical in
@@ -91,11 +105,11 @@ extension MacroExpander {
             }
             """),
             DeclSyntax(stringLiteral: """
-            @MainActor public func execute(_ invocation: TLAActionInvocation) async throws -> TransitionEvidence {
+            @MainActor public func execute(_ invocation: TLAActionInvocation) async throws -> TransitionResult {
                 let evidence = try await withCanonicalMachine { canonical in
                     try canonical.executeSynchronously(invocation)
                 }
-                switch evidence.label {
+                switch evidence.action {
                 \(notifications)
                 }
                 return evidence

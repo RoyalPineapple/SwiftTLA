@@ -23,9 +23,9 @@ enum PublicWorkflowGeneratedFixtureRegistryV1 {
           initialStates: P4GeneratedCounterFixture.runtime.initialStates(),
           actionNames: ["advance"],
           apply: { state, actionName in
-            P4GeneratedCounterFixture.generatedActionOutcome(actionName: actionName, in: state)
+            P4GeneratedCounterFixture.runtime.generatedActionOutcome(actionName: actionName, in: state)
           },
-          propertyOutcomes: P4GeneratedCounterFixture.generatedPropertyOutcomes(in:)))
+          propertyOutcomes: P4GeneratedCounterFixture.runtime.propertyOutcomes(in:)))
     case "p4-generated-counter-intentional-mismatch":
       return PublicWorkflowGeneratedFixtureV1(
         builderSpec: P4GeneratedCounterMismatchFixture.spec,
@@ -35,7 +35,7 @@ enum PublicWorkflowGeneratedFixtureRegistryV1 {
           apply: { state, actionName in
             P4GeneratedCounterMismatchFixture.intentionalMismatchActionOutcome(actionName: actionName, in: state)
           },
-          propertyOutcomes: P4GeneratedCounterMismatchFixture.generatedPropertyOutcomes(in:)))
+          propertyOutcomes: P4GeneratedCounterMismatchFixture.runtime.propertyOutcomes(in:)))
     case "p4-generated-counter-evaluation-failed":
       return PublicWorkflowGeneratedFixtureV1(
         builderSpec: P4GeneratedCounterFixture.spec,
@@ -47,7 +47,7 @@ enum PublicWorkflowGeneratedFixtureRegistryV1 {
               actionName: actionName,
               diagnostic: .init(code: .evaluationError, message: "fixture failure"))
           },
-          propertyOutcomes: P4GeneratedCounterFixture.generatedPropertyOutcomes(in:)))
+          propertyOutcomes: P4GeneratedCounterFixture.runtime.propertyOutcomes(in:)))
     case "p4-generated-counter-evaluation-unavailable":
       return PublicWorkflowGeneratedFixtureV1(
         builderSpec: P4GeneratedCounterFixture.spec,
@@ -59,7 +59,7 @@ enum PublicWorkflowGeneratedFixtureRegistryV1 {
               actionName: actionName,
               diagnostic: .init(code: .evaluatorUnavailable, message: "fixture unavailable"))
           },
-          propertyOutcomes: P4GeneratedCounterFixture.generatedPropertyOutcomes(in:)))
+          propertyOutcomes: P4GeneratedCounterFixture.runtime.propertyOutcomes(in:)))
     default:
       throw PublicWorkflowGovernanceErrorV1.invalidField(
         record: id, field: "compiled generated fixture registry")
@@ -106,7 +106,7 @@ struct P4GeneratedCounterMismatchFixture {
     actionName: String,
     in state: [String: TLAValue]
   ) -> SpecRuntime.RuntimeActionOutcome {
-    switch generatedActionOutcome(actionName: actionName, in: state) {
+    switch runtime.generatedActionOutcome(actionName: actionName, in: state) {
     case .enabled(let actionName, _):
       return .enabled(actionName: actionName, successors: [["value": .int(2)]])
     case let outcome:

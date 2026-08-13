@@ -36,7 +36,7 @@ extension MacroExpander {
     }
     static func generateTransitionMatrix() -> [DeclSyntax] {
         [DeclSyntax(stringLiteral: """
-        public static func transitionMatrix() throws -> [(from: [String: TLAValue], invocation: TLAActionInvocation, to: [String: TLAValue])] {
+        private static func _formalTransitionMatrix() throws -> [(from: [String: TLAValue], invocation: TLAActionInvocation, to: [String: TLAValue])] {
             let graph = try ModelChecker(spec: Self.spec, maxStates: 100_000).exploreGraph()
             var matrix: [(from: [String: TLAValue], invocation: TLAActionInvocation, to: [String: TLAValue])] = []
             for (fromID, transitions) in graph.transitions {
@@ -48,13 +48,18 @@ extension MacroExpander {
             }
             return matrix
         }
+        public static func transitionMatrix() throws -> [(from: State, invocation: TLAActionInvocation, to: State)] {
+            try _formalTransitionMatrix().map {
+                (from: State(formalDictionary: $0.from), invocation: $0.invocation, to: State(formalDictionary: $0.to))
+            }
+        }
         """)]
     }
     static func generateTransitionsTest(_ actions: [SpecParser.ParsedAction]) -> [DeclSyntax] {
         if actions.isEmpty { return [] }
         return [DeclSyntax(stringLiteral: """
         public static func verifyTransitions() throws {
-            let matrix = try Self.transitionMatrix()
+            let matrix = try Self._formalTransitionMatrix()
             var verified = Array(repeating: false, count: matrix.count)
             for index in matrix.indices where !verified[index] {
                 let (from, invocation, _) = matrix[index]
@@ -82,7 +87,7 @@ extension MacroExpander {
     static func generateInvariantsTest() -> [DeclSyntax] {
         [DeclSyntax(stringLiteral: """
         public static func verifyInvariants() throws {
-            let matrix = try Self.transitionMatrix()
+            let matrix = try Self._formalTransitionMatrix()
             let runtime = Self.runtime
             for (_, invocation, successor) in matrix {
                 for inv in runtime.spec.invariants {
@@ -130,9 +135,9 @@ extension MacroExpander {
         decls.append(DeclSyntax(stringLiteral: """
         private let _machine = CanonicalMachineStorage(CanonicalMachine(
             runtime: \(typeName).runtime,
-            initial: State(from: \(typeName).runtime.initialStates().first!),
+            initial: State(formalDictionary: \(typeName).runtime.initialStates().first!),
             stateDictionary: { $0.asDictionary },
-            snapshotFromDictionary: { State(from: $0) }
+            snapshotFromDictionary: { State(formalDictionary: $0) }
         ))
         """))
         decls.append(contentsOf: generateCanonicalMachineMembers(
@@ -168,18 +173,18 @@ extension MacroExpander {
                 }.joined(separator: ", ")
                 let callbackArguments = a.bindings.map(\.name).joined(separator: ", ")
                 let source = """
-                public func _\(a.name)(\(parameters)) throws -> TransitionEvidence {
+                public func _\(a.name)(\(parameters)) throws -> TransitionResult {
                     let evidence = try apply(.\(a.name)(\(a.bindings.map { "\($0.name): \($0.name)" }.joined(separator: ", "))))
-                    if let h = \(callbackName) { h(\(callbackArguments), State(from: evidence.before), State(from: evidence.after)) }
+                    if let h = \(callbackName) { h(\(callbackArguments), evidence.before, evidence.after) }
                     return evidence
                 }
                 """
                 return DeclSyntax(stringLiteral: source).as(FunctionDeclSyntax.self)!
             }
             let source = """
-            public func _\(a.name)() throws -> TransitionEvidence {
+                public func _\(a.name)() throws -> TransitionResult {
                 let evidence = try apply(.\(a.name))
-                if let h = \(callbackName) { Task { await h(State(from: evidence.before), State(from: evidence.after)) } }
+                if let h = \(callbackName) { Task { await h(evidence.before, evidence.after) } }
                 return evidence
             }
             """

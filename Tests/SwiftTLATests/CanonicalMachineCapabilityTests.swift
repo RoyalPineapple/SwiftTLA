@@ -27,7 +27,7 @@ private enum AdapterExecutionFailure: Error {
     case rejected
 }
 
-private struct AdapterTransitionEvidence: Sendable, Equatable {
+private struct AdapterTransitionResult: Sendable, Equatable {
     let before: Int
     let after: Int
 }
@@ -46,7 +46,7 @@ private struct MutableCanonicalMachine: TLAMachineAdapterCanonicalModel {
         )
     }
 
-    mutating func execute(_ invocation: TLAActionInvocation) async throws -> AdapterTransitionEvidence {
+    mutating func execute(_ invocation: TLAActionInvocation) async throws -> AdapterTransitionResult {
         try executeSynchronously(invocation)
     }
 
@@ -61,21 +61,21 @@ private struct MutableCanonicalMachine: TLAMachineAdapterCanonicalModel {
         )
     }
 
-    mutating func executeSynchronously(_ invocation: TLAActionInvocation) throws -> AdapterTransitionEvidence {
+    mutating func executeSynchronously(_ invocation: TLAActionInvocation) throws -> AdapterTransitionResult {
         guard invocation == TLAActionInvocation(name: "advance"), count == 0 else {
             throw AdapterExecutionFailure.rejected
         }
 
-        let evidence = AdapterTransitionEvidence(before: count, after: count + 1)
+        let result = AdapterTransitionResult(before: count, after: count + 1)
         count += 1
-        return evidence
+        return result
     }
 }
 
 @MainActor
 private final class ClassMachineAdapter: TLAMachineAdapterAccess {
     typealias CanonicalModel = MutableCanonicalMachine
-    typealias TransitionEvidence = AdapterTransitionEvidence
+    typealias TransitionResult = AdapterTransitionResult
 
     private var canonical = MutableCanonicalMachine()
 
@@ -88,7 +88,7 @@ private final class ClassMachineAdapter: TLAMachineAdapterAccess {
 
 private actor ActorMachineAdapter: TLAMachineAdapterAccess {
     typealias CanonicalModel = MutableCanonicalMachine
-    typealias TransitionEvidence = AdapterTransitionEvidence
+    typealias TransitionResult = AdapterTransitionResult
 
     private var canonical = MutableCanonicalMachine()
 

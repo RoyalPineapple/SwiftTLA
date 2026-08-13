@@ -493,8 +493,7 @@ struct SymmetricCollectionMacroRuntimeTests {
 
     let allowedEvidence = try allowed.applyadvance()
     #expect(allowed.phase == 1)
-    let devicesToken = TLAStateProjection.Token(validating: "devices")!
-    #expect(allowedEvidence.before["devices"] == allowed.tlaSnapshot().projection?.value(for: devicesToken))
+    #expect(allowedEvidence.before.devices == allowed.state.devices)
 
     var rejected = GeneratedAllSatisfyPredicateRuntime()
     let peers = ["one", "two", "three"].map(StringMacroDevice.init)
@@ -537,8 +536,7 @@ struct SymmetricCollectionMacroRuntimeTests {
     let evidence = try model.applyadvance()
 
     #expect(model.phase == 1)
-    let devicesToken = TLAStateProjection.Token(validating: "devices")!
-    #expect(evidence.after["devices"] == model.tlaSnapshot().projection?.value(for: devicesToken))
+    #expect(evidence.after.devices == model.state.devices)
     #expect(model.devices.count == 4)
     #expect(model.devices[matching.id] == 1)
     for device in devices {

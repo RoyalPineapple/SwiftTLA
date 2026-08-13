@@ -260,9 +260,9 @@ public extension TLAMachineObserving {
 }
 
 public protocol TLAMachineExecuting: TLAMachineObserving {
-    associatedtype TransitionEvidence: Sendable
+    associatedtype TransitionResult: Sendable
 
-    mutating func execute(_ invocation: TLAActionInvocation) async throws -> TransitionEvidence
+    mutating func execute(_ invocation: TLAActionInvocation) async throws -> TransitionResult
 }
 
 public protocol TLAMachineAdapterCanonicalModel: TLAMachineExecuting, Sendable {
@@ -270,7 +270,7 @@ public protocol TLAMachineAdapterCanonicalModel: TLAMachineExecuting, Sendable {
 
     mutating func executeSynchronously(
         _ invocation: TLAActionInvocation
-    ) throws -> TransitionEvidence
+    ) throws -> TransitionResult
 }
 
 public protocol TLAMachineAdapterAccess: AnyObject, TLAMachineExecuting {
@@ -281,14 +281,14 @@ public protocol TLAMachineAdapterAccess: AnyObject, TLAMachineExecuting {
     ) async rethrows -> Result
 }
 
-public extension TLAMachineAdapterAccess where TransitionEvidence == CanonicalModel.TransitionEvidence {
+public extension TLAMachineAdapterAccess where TransitionResult == CanonicalModel.TransitionResult {
     func canonicalMachineObservation() async -> TLAMachineObservation {
         await withCanonicalMachine { canonical in
             canonical.synchronousMachineObservation()
         }
     }
 
-    func executeCanonical(_ invocation: TLAActionInvocation) async throws -> TransitionEvidence {
+    func executeCanonical(_ invocation: TLAActionInvocation) async throws -> TransitionResult {
         try await withCanonicalMachine { canonical in
             try canonical.executeSynchronously(invocation)
         }
@@ -298,7 +298,7 @@ public extension TLAMachineAdapterAccess where TransitionEvidence == CanonicalMo
         await canonicalMachineObservation()
     }
 
-    func execute(_ invocation: TLAActionInvocation) async throws -> TransitionEvidence {
+    func execute(_ invocation: TLAActionInvocation) async throws -> TransitionResult {
         try await executeCanonical(invocation)
     }
 }

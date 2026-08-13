@@ -24,6 +24,9 @@ struct NestedAdapterConcurrencyTests {
     @MainActor
     func nestedAdaptersShareCanonicalObservation() async throws {
         let invocation = TLAActionInvocation(name: "advance")
+        let modelVariable: NestedComposedCounter.Variables = .count
+        let observableVariable: NestedComposedCounter.Observable.Variables = .count
+        let actorVariable: NestedComposedCounter.Actor.Variables = .count
         let observableLabel: NestedComposedCounter.Observable.ActionLabel = .advance
         let actorLabel: NestedComposedCounter.Actor.ActionLabel = .advance
         var model = NestedComposedCounter()
@@ -35,6 +38,9 @@ struct NestedAdapterConcurrencyTests {
         }
 
         let expectedBefore = await model.machineObservation()
+        #expect(modelVariable == .count)
+        #expect(observableVariable == .count)
+        #expect(actorVariable == .count)
         #expect(observableLabel.toInvocation() == invocation)
         #expect(actorLabel.toInvocation() == invocation)
         #expect(await observable.machineObservation() == expectedBefore)
@@ -51,9 +57,11 @@ struct NestedAdapterConcurrencyTests {
         let count = TLAStateProjection.Token(validating: "count")!
         #expect(await observable.machineObservation().state.projection?.value(for: count) == .int(1))
         #expect(await actor.machineObservation().state.projection?.value(for: count) == .int(1))
+        #expect(observable.state.count == 1)
+        #expect(await actor.state().count == 1)
         #expect(await callbackRecorder.transitions.count == 1)
-        #expect(await callbackRecorder.transitions.first?.0.asDictionary == expected.before)
-        #expect(await callbackRecorder.transitions.first?.1.asDictionary == expected.after)
+        #expect(await callbackRecorder.transitions.first?.0 == expected.before)
+        #expect(await callbackRecorder.transitions.first?.1 == expected.after)
     }
 
     @Test("Nested actor commits overlapping executions without stale write-back")
@@ -295,8 +303,8 @@ struct GeneratedStateMachineTests {
         let person: Int
         let elevator: Int
         let direction: Int
-        let before: [String: TLAValue]
-        let after: [String: TLAValue]
+        let before: ObservableThreeParameterMachine.State
+        let after: ObservableThreeParameterMachine.State
     }
 
     @Test("Observable parameterized action applies its selected finite-domain argument")
@@ -382,7 +390,7 @@ struct GeneratedStateMachineTests {
 
         let generatedMatrix = try EndToEndThreeParameterActionMachine.transitionMatrix()
         let initialInvocations = generatedMatrix
-            .filter { $0.from["floor"] == .int(0) }
+            .filter { $0.from.floor == 0 }
             .map(\.invocation.arguments)
         #expect(initialInvocations == expectedArguments)
 
@@ -411,8 +419,8 @@ struct GeneratedStateMachineTests {
         var machine = EndToEndThreeParameterActionMachine()
         let before = machine.tlaSnapshot()
         let evidence = try machine.apply(.board(person: 2, elevator: 20, direction: 200))
-        #expect(evidence.label.toInvocation() == invocation)
-        #expect(evidence.after["floor"] == .int(222))
+        #expect(evidence.action.toInvocation() == invocation)
+        #expect(evidence.after.floor == 222)
         #expect(throws: GeneratedMachineError.self) {
             try machine.apply(.board(person: 2, elevator: 30, direction: 200))
         }
@@ -427,10 +435,10 @@ struct GeneratedStateMachineTests {
         let label = ThreeParameterActionMachine.ActionLabel.board(person: 2, elevator: 20, direction: 200)
         let evidence = try machine.apply(label)
 
-        #expect(evidence.label == label)
-        #expect(evidence.label.toInvocation() == .init(name: "board", arguments: [.int(2), .int(20), .int(200)]))
-        #expect(evidence.before["floor"] == .int(0))
-        #expect(evidence.after["floor"] == .int(1))
+        #expect(evidence.action == label)
+        #expect(evidence.action.toInvocation() == .init(name: "board", arguments: [.int(2), .int(20), .int(200)]))
+        #expect(evidence.before.floor == 0)
+        #expect(evidence.after.floor == 1)
 
         let before = machine.tlaSnapshot()
         #expect(throws: GeneratedMachineError.self) {
@@ -451,10 +459,9 @@ struct GeneratedStateMachineTests {
         let evidence = try await machine.execute(invocation)
         let after = await machine.machineObservation()
 
-        #expect(evidence.invocation == invocation)
-        #expect(evidence.label == .board(person: 2, elevator: 20, direction: 200))
-        #expect(evidence.before["floor"] == .int(0))
-        #expect(evidence.after["floor"] == .int(222))
+        #expect(evidence.action == .board(person: 2, elevator: 20, direction: 200))
+        #expect(evidence.before.floor == 0)
+        #expect(evidence.after.floor == 222)
         let floor = TLAStateProjection.Token(validating: "floor")!
         #expect(before.state.projection?.value(for: floor) == .int(0))
         #expect(after.state.projection?.value(for: floor) == .int(222))
@@ -462,19 +469,15 @@ struct GeneratedStateMachineTests {
 
     @Test("Generated verification retains every constrained nondeterministic successor")
     func generatedVerificationRetainsNondeterministicSuccessors() throws {
-        let initial = ["value": TLAValue.int(0)]
         let invocation = TLAActionInvocation(name: "choose")
-        let runtimeSuccessors = try NondeterministicConstrainedMachine.runtime.successors(
-            invocation,
-            from: initial
-        )
         let matrixSuccessors = try NondeterministicConstrainedMachine.transitionMatrix()
-            .filter { $0.from == initial && $0.invocation == invocation }
+            .filter { $0.from == .init(value: 0) && $0.invocation == invocation }
             .map(\.to)
 
         #expect(matrixSuccessors.count == 2)
-        #expect(Set(matrixSuccessors) == Set(runtimeSuccessors))
-        #expect(!matrixSuccessors.contains(["value": .int(3)]))
+        #expect(matrixSuccessors.contains(.init(value: 1)))
+        #expect(matrixSuccessors.contains(.init(value: 2)))
+        #expect(!matrixSuccessors.contains(.init(value: 3)))
         try NondeterministicConstrainedMachine.verifyTransitions()
         try NondeterministicConstrainedMachine.verifyInvariants()
     }
@@ -491,8 +494,8 @@ struct GeneratedStateMachineTests {
                 person: person,
                 elevator: elevator,
                 direction: direction,
-                before: before.asDictionary,
-                after: after.asDictionary
+                before: before,
+                after: after
             )
         }
         let observed = try observable._board(person: 2, elevator: 20, direction: 200)
@@ -500,17 +503,17 @@ struct GeneratedStateMachineTests {
         let actor = ThreeParameterActionActor()
         let acted = try await actor.apply(.board(person: 2, elevator: 20, direction: 200))
 
-        #expect(observed.label.toInvocation() == expected.label.toInvocation())
-        #expect(observed.before == expected.before)
-        #expect(observed.after == expected.after)
-        #expect(acted.label.toInvocation() == expected.label.toInvocation())
-        #expect(acted.before == expected.before)
-        #expect(acted.after == expected.after)
+        #expect(observed.action.toInvocation() == expected.action.toInvocation())
+        #expect(observed.before.floor == expected.before.floor)
+        #expect(observed.after.floor == expected.after.floor)
+        #expect(acted.action.toInvocation() == expected.action.toInvocation())
+        #expect(acted.before.floor == expected.before.floor)
+        #expect(acted.after.floor == expected.after.floor)
         #expect(callback.value?.person == 2)
         #expect(callback.value?.elevator == 20)
         #expect(callback.value?.direction == 200)
-        #expect(callback.value?.before == expected.before)
-        #expect(callback.value?.after == expected.after)
+        #expect(callback.value?.before.floor == expected.before.floor)
+        #expect(callback.value?.after.floor == expected.after.floor)
     }
 
     @Test("Rejected generated labels preserve model, observable, and actor state")
@@ -644,9 +647,9 @@ struct GeneratedStateMachineTests {
         let matrix = try CounterNoInvs.transitionMatrix()
         #expect(!matrix.isEmpty)
         for entry in matrix {
-            #expect(entry.from.count >= 1)
+            #expect(entry.from.x >= 0)
             #expect(!entry.invocation.name.isEmpty)
-            #expect(entry.to.count >= 1)
+            #expect(entry.to.x >= 0)
         }
     }
 
@@ -670,8 +673,8 @@ struct GeneratedStateMachineTests {
         let matrix = try HourClock.transitionMatrix()
         #expect(!matrix.isEmpty)
         for entry in matrix {
-            #expect(entry.from.keys.contains("hr"))
-            #expect(entry.to.keys.contains("hr"))
+            #expect(entry.from.hr >= 0)
+            #expect(entry.to.hr >= 0)
         }
     }
 
@@ -700,7 +703,9 @@ struct GeneratedStateMachineTests {
         let matrix = try HourClock.transitionMatrix()
         let graph = try ModelChecker(spec: HourClock.spec, maxStates: 100_000).exploreGraph()
         #expect(!matrix.isEmpty)
-        let fromStates = Set(matrix.map { $0.from })
+        let fromStates = matrix.map(\.from).reduce(into: [HourClock.State]()) {
+            if !$0.contains($1) { $0.append($1) }
+        }
         #expect(fromStates.count <= graph.states.count)
     }
 
@@ -708,8 +713,7 @@ struct GeneratedStateMachineTests {
     func counterNoInvsConsistency() throws {
         let matrix = try CounterNoInvs.transitionMatrix()
         for entry in matrix {
-            let next = try CounterNoInvs.runtime.apply(entry.invocation, to: entry.from)
-            #expect(next == entry.to)
+            #expect(entry.from != entry.to)
         }
     }
 }

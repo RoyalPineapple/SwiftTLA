@@ -70,8 +70,8 @@ struct NestedComposableMacroConformanceTests {
         #expect(available.contains(first))
         #expect(available.contains(selected))
         #expect(try runtime.apply(selected, to: initial)["floor"] == .int(222))
-        #expect(try await observable.execute(selected).invocation == selected)
-        #expect(try await actor.execute(selected).invocation == selected)
+        #expect(try await observable.execute(selected).action == .board(person: 2, elevator: 20, direction: 200))
+        #expect(try await actor.execute(selected).action == .board(person: 2, elevator: 20, direction: 200))
     }
 
     @Test("Availability evaluation failures retain invocation context")
@@ -119,8 +119,11 @@ struct NestedComposableMacroConformanceTests {
         requireSendable(NestedComposedCounter.self)
         requireSendable(NestedComposedCounter.Actor.self)
         requireSendable(NestedComposedCounter.Observable.self)
+        requireSendable(NestedComposedCounter.Variables.self)
+        requireSendable(NestedComposedCounter.Actor.Variables.self)
+        requireSendable(NestedComposedCounter.Observable.Variables.self)
         requireSendable(NestedComposedCounter.ActionLabel.self)
-        requireSendable(NestedComposedCounter.TransitionEvidence.self)
+        requireSendable(NestedComposedCounter.TransitionResult.self)
         requireSendable(GeneratedSymmetricRuntime.self)
         requireSendable(ObservableTwoCarElevator.self)
         requireSendable(TLAMachineObservation.self)
@@ -163,6 +166,24 @@ struct NestedComposableMacroConformanceTests {
         let result = try runSwift(["build", "--package-path", fixture.path])
 
         #expect(result.status == 0)
+    }
+
+    @Test("External clients compile against generated typed application surfaces")
+    func generatedTypedSurfaceCompilesExternally() throws {
+        let fixture = packageRoot().appendingPathComponent("Tests/Fixtures/GeneratedTypedSurface")
+        let result = try runSwift(["run", "--package-path", fixture.path])
+
+        #expect(result.status == 0)
+    }
+
+    @Test("External clients cannot use raw state maps or legacy transition evidence")
+    func generatedRawStateAndLegacyEvidenceDoNotCompileExternally() throws {
+        let fixture = packageRoot().appendingPathComponent("Tests/Fixtures/InvalidGeneratedRawSurface")
+        let result = try runSwift(["build", "--package-path", fixture.path])
+
+        #expect(result.status != 0)
+        #expect(result.output.contains("TLAStateProjectionResult"))
+        #expect(result.output.contains("TransitionEvidence"))
     }
 
     private func executeAndObserve<Machine: TLAMachineExecuting>(

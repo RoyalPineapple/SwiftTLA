@@ -16,8 +16,8 @@ extension MacroExpander {
         """ : ""
         let labelArgument = hasActions ? "label: label," : ""
         let typedApply = hasActions ? """
-            public \(modifier)func apply(_ label: ActionLabel) throws -> TransitionEvidence {
-                try apply(label.toInvocation())
+            public \(modifier)func apply(_ action: ActionLabel) throws -> TransitionResult {
+                try apply(action.toInvocation())
             }
             """ : ""
         let availableActions = hasActions ? """
@@ -46,11 +46,15 @@ extension MacroExpander {
             """
         return [
             DeclSyntax(stringLiteral: """
-            public struct TransitionEvidence: Sendable, Equatable {
-                \(labelField)
-                public let invocation: TLAActionInvocation
-                public let before: [String: TLAValue]
-                public let after: [String: TLAValue]
+            public struct TransitionResult: Sendable, Equatable {
+                \(labelField.replacingOccurrences(of: "label", with: "action"))
+                public let before: State
+                public let after: State
+            }
+            """),
+            DeclSyntax(stringLiteral: """
+            public var state: State {
+                _machine.snapshot
             }
             """),
             DeclSyntax(stringLiteral: """
@@ -72,14 +76,13 @@ extension MacroExpander {
             DeclSyntax(stringLiteral: availableActions),
             DeclSyntax(stringLiteral: typedApply),
             DeclSyntax(stringLiteral: """
-            public \(modifier)func apply(_ invocation: TLAActionInvocation) throws -> TransitionEvidence {
+            public \(modifier)func apply(_ invocation: TLAActionInvocation) throws -> TransitionResult {
                 \(labelValidation)
                 let evidence = try _machine.apply(invocation, from: _stateWithLiveCollections()) { _ in true }
-                return TransitionEvidence(
-                    \(labelArgument)
-                    invocation: invocation,
-                    before: evidence.before.asDictionary,
-                    after: evidence.after.asDictionary
+                return TransitionResult(
+                    \(labelArgument.replacingOccurrences(of: "label:", with: "action:"))
+                    before: evidence.before,
+                    after: evidence.after
                 )
             }
             """),
@@ -113,12 +116,12 @@ extension MacroExpander {
             }
             """),
             DeclSyntax(stringLiteral: """
-            public \(modifier)func executeSynchronously(_ invocation: TLAActionInvocation) throws -> TransitionEvidence {
+            public \(modifier)func executeSynchronously(_ invocation: TLAActionInvocation) throws -> TransitionResult {
                 try apply(invocation)
             }
             """),
             DeclSyntax(stringLiteral: """
-            public \(modifier)func execute(_ invocation: TLAActionInvocation) async throws -> TransitionEvidence {
+            public \(modifier)func execute(_ invocation: TLAActionInvocation) async throws -> TransitionResult {
                 try apply(invocation)
             }
             """)
