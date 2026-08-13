@@ -16,6 +16,87 @@ public enum GeneratedMachineError: Error {
     case unrepresentableActionLabel(TLAActionInvocation)
 }
 
+public struct TLAMachineAvailabilityDiagnostic: Sendable, Equatable {
+    public enum Code: String, Sendable, Equatable {
+        case evaluationFailed
+    }
+
+    public let code: Code
+    public let message: String
+
+    public init(code: Code, message: String) {
+        self.code = code
+        self.message = message
+    }
+}
+
+public struct TLAMachineObservation: Sendable, Equatable {
+    public enum Availability: Sendable, Equatable {
+        case available([TLAActionInvocation])
+        case unavailable(TLAMachineAvailabilityDiagnostic)
+    }
+
+    public let state: [String: TLAValue]
+    public let availability: Availability
+
+    public init(state: [String: TLAValue], availability: Availability) {
+        self.state = state
+        self.availability = availability
+    }
+
+    public var availableInvocations: [TLAActionInvocation]? {
+        guard case .available(let invocations) = availability else { return nil }
+        return invocations
+    }
+
+    public var availabilityDiagnostic: TLAMachineAvailabilityDiagnostic? {
+        guard case .unavailable(let diagnostic) = availability else { return nil }
+        return diagnostic
+    }
+}
+
+public protocol TLAMachineObserving: Sendable {
+    func machineObservation() async -> TLAMachineObservation
+}
+
+public extension TLAMachineObserving {
+    func machineState() async -> [String: TLAValue] {
+        await machineObservation().state
+    }
+
+    func machineAvailability() async -> TLAMachineObservation.Availability {
+        await machineObservation().availability
+    }
+}
+
+public protocol TLAMachineExecuting: TLAMachineObserving {
+    associatedtype TransitionEvidence: Sendable
+
+    mutating func execute(_ invocation: TLAActionInvocation) async throws -> TransitionEvidence
+}
+
+public protocol TLAMachineAdapterAccess: AnyObject, TLAMachineExecuting {
+    associatedtype CanonicalModel: TLAMachineExecuting
+
+    func withCanonicalMachine<Result: Sendable>(
+        _ operation: @escaping @Sendable (inout CanonicalModel) async throws -> Result
+    ) async rethrows -> Result
+}
+
+public extension TLAMachineAdapterAccess where TransitionEvidence == CanonicalModel.TransitionEvidence {
+    func machineObservation() async -> TLAMachineObservation {
+        await withCanonicalMachine { canonical in
+            await canonical.machineObservation()
+        }
+    }
+
+    func execute(_ invocation: TLAActionInvocation) async throws -> TransitionEvidence {
+        try await withCanonicalMachine { canonical in
+            try await canonical.execute(invocation)
+        }
+    }
+}
+
 public struct CanonicalMachine<Snapshot: Equatable> {
     public let runtime: SpecRuntime
     private let stateDictionary: (Snapshot) -> [String: TLAValue]
@@ -49,6 +130,20 @@ public struct CanonicalMachine<Snapshot: Equatable> {
             throw GeneratedMachineError.runtime(error)
         } catch {
             throw GeneratedMachineError.unexpected(error)
+        }
+    }
+
+    public func machineObservation() -> TLAMachineObservation {
+        let state = tlaSnapshot()
+        do {
+            return .init(state: state, availability: .available(try availableInvocations(in: state)))
+        } catch {
+            return .init(
+                state: state,
+                availability: .unavailable(
+                    .init(code: .evaluationFailed, message: String(describing: error))
+                )
+            )
         }
     }
 
