@@ -79,6 +79,23 @@ enum MacroExpander {
         ))
 
         decls.append(contentsOf: generateSpecTest())
+        if !isActor {
+            decls.append(DeclSyntax(stringLiteral: """
+            public static func generatedActionOutcome(
+                actionName: String,
+                in state: [String: TLAValue]
+            ) -> SpecRuntime.RuntimeActionOutcome {
+                Self.runtime.actionOutcome(named: actionName, in: state)
+            }
+            """))
+            decls.append(DeclSyntax(stringLiteral: """
+            public static func generatedPropertyOutcomes(
+                in state: [String: TLAValue]
+            ) -> [SpecRuntime.RuntimePropertyOutcome] {
+                Self.runtime.propertyOutcomes(in: state)
+            }
+            """))
+        }
         if !model.actions.isEmpty {
             decls.append(contentsOf: generateTransitionMatrix())
         }

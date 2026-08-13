@@ -110,10 +110,10 @@
   "toolchain": {
     "schema": "PublicWorkflowGeneratedBehaviorToolchainV1",
     "dependencies": [
-      { "id": "package", "evidence": { "path": "Package.swift", "sha256": "89d24e43dc0762347c8463a45fd8c4489a1fe03fe67915050cae69a80adfed7b" } },
+      { "id": "package", "evidence": { "path": "Package.swift", "sha256": "9dd427098bbacebacb55a8d16d23853352a4af7dc41a78c3f771db6e2a896442" } },
       { "id": "packageResolved", "evidence": { "path": "Package.resolved", "sha256": "cfdc69e87cdcea8681bfa8b117d599eef34e6f986fe23d9ad5eb4a320a1a18d7" } },
       { "id": "adapter", "evidence": { "path": "Sources/UpstreamParity/Conformance/PublicWorkflowGeneratedBehaviorAdapter.swift", "sha256": "6481f8d87a9bd7d5571386eb6af5e39a9d1529eae33827e95674d180943c19b9" } },
-      { "id": "macro", "evidence": { "path": "Sources/SwiftTLAPlugin/ModelMacro.swift", "sha256": "2dad82ec1b5e7dfdb367f1d3f6865b15ddb1c10bf4b5dc7ea431ba5de487ecf7" } }
+      { "id": "macro", "evidence": { "path": "Sources/SwiftTLAPlugin/ModelMacro.swift", "sha256": "fb48bc2084283de739e5d2a10bdcc7d64177a6503ae4e1f8e76de30b2212b55c" } }
     ],
     "notApplicable": [
       { "id": "tlc", "evidence": { "path": "Verification/PublicWorkflowConformance/Generated/not-applicable.json", "sha256": "53a5c9190f96e11d5273ff6e1a47becbcedd0e83913d586ce3d4651bf1589638" } },

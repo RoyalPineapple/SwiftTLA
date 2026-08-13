@@ -286,7 +286,7 @@ public struct PublicWorkflowParserBuilderAdapterV1: Sendable {
     let parsedSpec = TLASpec(name: name,
       variables: parsed.variables.map { NamedVar(name: $0.name, initial: $0.initial, initialSet: $0.initialSet) },
       constants: parsed.constants,
-      actions: parsed.actions.map { NamedAction(name: $0.name, body: $0.body, binding: $0.binding) },
+      actions: parsed.actions.map { NamedAction(name: $0.name, body: $0.body, bindings: $0.bindings) },
       invariants: parsed.invariants.map { NamedInvariant(name: $0.name, body: $0.body) },
       temporalProperties: parsed.temporal.map { NamedTemporal(name: $0.name, expr: $0.expr) }, fairness: parsed.fairness)
     return try observe(spec: parsedSpec, diagnostics: diagnostics)

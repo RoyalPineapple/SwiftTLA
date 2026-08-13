@@ -1,45 +1,42 @@
 name: Temporal and Symmetry Conformance
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/temporal-symmetry-conformance.yml'
-      - 'Makefile'
-      - 'Package.swift'
-      - 'Sources/TLCValidate/**'
-      - 'Sources/UpstreamParity/Conformance/**'
-      - 'Tests/Fixtures/TemporalSymmetryConformance/CI/**'
-      - 'Tests/Fixtures/TemporalSymmetryConformance/Release/**'
-      - 'Tools/TLCGraphBridge/**'
-      - 'Verification/CoreConformance/**'
-      - 'Verification/TemporalSymmetryConformance/**'
-      - 'scripts/run_core_support_gate.sh'
-      - 'scripts/run_temporal_symmetry_support_gate.sh'
-      - 'scripts/check_temporal_symmetry_release.sh'
-  pull_request:
-    branches: [main]
-    paths:
-      - '.github/workflows/temporal-symmetry-conformance.yml'
-      - 'Makefile'
-      - 'Package.swift'
-      - 'Sources/TLCValidate/**'
-      - 'Sources/UpstreamParity/Conformance/**'
-      - 'Tests/Fixtures/TemporalSymmetryConformance/CI/**'
-      - 'Tests/Fixtures/TemporalSymmetryConformance/Release/**'
-      - 'Tools/TLCGraphBridge/**'
-      - 'Verification/CoreConformance/**'
-      - 'Verification/TemporalSymmetryConformance/**'
-      - 'scripts/run_core_support_gate.sh'
-      - 'scripts/run_temporal_symmetry_support_gate.sh'
-      - 'scripts/check_temporal_symmetry_release.sh'
+  schedule:
+    - cron: '0 3 * * *'
   workflow_dispatch:
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
+  check-head:
+    runs-on: ubuntu-latest
+    outputs:
+      run_expensive: ${{ steps.head.outputs.run_expensive }}
+    steps:
+      - id: head
+        uses: actions/github-script@v7
+        with:
+          script: |
+            if (context.eventName === 'workflow_dispatch') {
+              core.setOutput('run_expensive', 'true')
+              return
+            }
+            const { data } = await github.rest.actions.listWorkflowRuns({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: 'temporal-symmetry-conformance.yml',
+              branch: 'main',
+              status: 'completed',
+              per_page: 1
+            })
+            const previous = data.workflow_runs[0]
+            core.setOutput('run_expensive', String(!previous || previous.head_sha !== context.sha))
+
   temporal-symmetry-conformance:
+    needs: check-head
+    if: needs.check-head.outputs.run_expensive == 'true'
     runs-on: macos-15
     env:
       CORE_CONFORMANCE_TOOL_ROOT: ${{ github.workspace }}/.build/core-conformance-tools
