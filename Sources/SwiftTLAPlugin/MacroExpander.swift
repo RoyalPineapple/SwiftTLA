@@ -481,7 +481,8 @@ extension MacroExpander {
                         """
                         let projectedValue = \(expression)
                         let evidence = try _machine.apply(.init(name: \"\(action.name)\"), from: _stateWithLiveCollections()) { candidate in
-                            guard case .function(let values) = candidate[Variables.\(collection.name).rawValue] else { return false }
+                            guard let token = TLAStateProjection.Token(validating: Variables.\(collection.name).rawValue),
+                                  case .function(let values) = candidate.value(for: token) else { return false }
                             return values[targetKey] == projectedValue.tlaValue
                         }
                         do {

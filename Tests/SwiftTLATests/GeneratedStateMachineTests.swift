@@ -48,8 +48,9 @@ struct NestedAdapterConcurrencyTests {
         #expect(observed.after == expected.after)
         #expect(acted.before == expected.before)
         #expect(acted.after == expected.after)
-        #expect(await observable.machineObservation().state == expected.after)
-        #expect(await actor.machineObservation().state == expected.after)
+        let count = TLAStateProjection.Token(validating: "count")!
+        #expect(await observable.machineObservation().state.projection?.value(for: count) == .int(1))
+        #expect(await actor.machineObservation().state.projection?.value(for: count) == .int(1))
         #expect(await callbackRecorder.transitions.count == 1)
         #expect(await callbackRecorder.transitions.first?.0.asDictionary == expected.before)
         #expect(await callbackRecorder.transitions.first?.1.asDictionary == expected.after)
@@ -64,7 +65,8 @@ struct NestedAdapterConcurrencyTests {
         async let second = actor.execute(invocation)
         _ = try await (first, second)
 
-        #expect(await actor.machineObservation().state == ["count": .int(2)])
+        let count = TLAStateProjection.Token(validating: "count")!
+        #expect(await actor.machineObservation().state.projection?.value(for: count) == .int(2))
     }
 
     @Test("Nested observable rejects disabled execution without notification")
@@ -414,8 +416,9 @@ struct GeneratedStateMachineTests {
         #expect(throws: GeneratedMachineError.self) {
             try machine.apply(.board(person: 2, elevator: 30, direction: 200))
         }
-        #expect(machine.tlaSnapshot()["floor"] == .int(222))
-        #expect(before["floor"] == .int(0))
+        let floorToken = TLAStateProjection.Token(validating: "floor")!
+        #expect(machine.tlaSnapshot().projection?.value(for: floorToken) == .int(222))
+        #expect(before.projection?.value(for: floorToken) == .int(0))
     }
 
     @Test("Canonical generated machine preserves typed labels, evidence, and failed snapshots")
@@ -452,8 +455,9 @@ struct GeneratedStateMachineTests {
         #expect(evidence.label == .board(person: 2, elevator: 20, direction: 200))
         #expect(evidence.before["floor"] == .int(0))
         #expect(evidence.after["floor"] == .int(222))
-        #expect(before.state == evidence.before)
-        #expect(after.state == evidence.after)
+        let floor = TLAStateProjection.Token(validating: "floor")!
+        #expect(before.state.projection?.value(for: floor) == .int(0))
+        #expect(after.state.projection?.value(for: floor) == .int(222))
     }
 
     @Test("Generated verification retains every constrained nondeterministic successor")

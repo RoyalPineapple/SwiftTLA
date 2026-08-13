@@ -1,5 +1,148 @@
 import os
 
+public enum TLAStateProjectionDiagnostic: Error, Sendable, Equatable, CustomStringConvertible {
+    case invalidKey(path: String)
+    case invalidConstant(path: String)
+
+    public var description: String {
+        switch self {
+        case .invalidKey(let path):
+            return "Invalid TLA state key at \(path)"
+        case .invalidConstant(let path):
+            return "Invalid TLA constant at \(path)"
+        }
+    }
+}
+
+/// An opaque, safe view of formal-engine state for application-facing APIs.
+public struct TLAStateProjection: Sendable, Equatable, CustomStringConvertible {
+    public struct Token: Sendable, Hashable, CustomStringConvertible {
+        fileprivate let identifier: String
+
+        public init?(validating identifier: String) {
+            guard let first = identifier.unicodeScalars.first,
+                  first.properties.isAlphabetic || first == "_",
+                  identifier.unicodeScalars.dropFirst().allSatisfy({
+                      $0.properties.isAlphabetic || $0.properties.isIDContinue
+                  }) else {
+                return nil
+            }
+            self.identifier = identifier
+        }
+
+        public var description: String { identifier }
+    }
+
+    public struct Entry: Sendable, Equatable {
+        public let token: Token
+        public let value: TLAValue
+
+        public init(token: Token, value: TLAValue) {
+            self.token = token
+            self.value = value
+        }
+    }
+
+    fileprivate let values: [String: TLAValue]
+
+    public init(validating entries: [Entry]) throws {
+        var values: [String: TLAValue] = [:]
+        for entry in entries {
+            guard values[entry.token.identifier] == nil else {
+                throw TLAStateProjectionDiagnostic.invalidKey(path: entry.token.identifier)
+            }
+            try Self.validate(entry.value, at: entry.token.identifier)
+            values[entry.token.identifier] = entry.value
+        }
+        self.values = values
+    }
+
+    public func value(for token: Token) -> TLAValue? {
+        values[token.identifier]
+    }
+
+    public func replacing(_ value: TLAValue, for token: Token) throws -> TLAStateProjection {
+        var entries = entries.filter { $0.token != token }
+        entries.append(.init(token: token, value: value))
+        return try .init(validating: entries)
+    }
+
+    public var entries: [Entry] {
+        values.keys.sorted().compactMap { identifier in
+            guard let token = Token(validating: identifier), let value = values[identifier] else { return nil }
+            return Entry(token: token, value: value)
+        }
+    }
+
+    public var description: String {
+        entries.map { "\($0.token) = \($0.value)" }.joined(separator: ", ")
+    }
+
+    package init(formalValues: [String: TLAValue]) throws {
+        var entries: [Entry] = []
+        for (identifier, value) in formalValues {
+            guard let token = Token(validating: identifier) else {
+                throw TLAStateProjectionDiagnostic.invalidKey(path: identifier)
+            }
+            entries.append(.init(token: token, value: value))
+        }
+        try self.init(validating: entries)
+    }
+
+    private static func validate(_ value: TLAValue, at path: String) throws {
+        switch value {
+        case .int, .bool, .string:
+            return
+        case .constant(let name):
+            guard Token(validating: name) != nil else {
+                throw TLAStateProjectionDiagnostic.invalidConstant(path: path)
+            }
+        case .set(let values):
+            for (index, value) in values.sorted().enumerated() {
+                try validate(value, at: "\(path){\(index)}")
+            }
+        case .tuple(let values):
+            for (index, value) in values.enumerated() {
+                try validate(value, at: "\(path)[\(index)]")
+            }
+        case .record(let fields):
+            for (name, value) in fields {
+                guard Token(validating: name) != nil else {
+                    throw TLAStateProjectionDiagnostic.invalidKey(path: "\(path).\(name)")
+                }
+                try validate(value, at: "\(path).\(name)")
+            }
+        case .function(let mapping):
+            for (key, value) in mapping {
+                try validate(key, at: "\(path).key")
+                try validate(value, at: "\(path).value")
+            }
+        }
+    }
+}
+
+public enum TLAStateProjectionResult: Sendable, Equatable {
+    case projected(TLAStateProjection)
+    case unavailable(TLAStateProjectionDiagnostic)
+
+    public var projection: TLAStateProjection? {
+        guard case .projected(let projection) = self else { return nil }
+        return projection
+    }
+
+    public var diagnostic: TLAStateProjectionDiagnostic? {
+        guard case .unavailable(let diagnostic) = self else { return nil }
+        return diagnostic
+    }
+
+    public func requireProjection() throws -> TLAStateProjection {
+        guard case .projected(let projection) = self else {
+            throw diagnostic ?? .invalidKey(path: "state")
+        }
+        return projection
+    }
+}
+
 public struct CanonicalTransitionEvidence<Snapshot: Equatable & Sendable>: Equatable, Sendable {
     public let invocation: TLAActionInvocation
     public let before: Snapshot
@@ -21,14 +164,21 @@ public enum GeneratedMachineError: Error {
 public struct TLAMachineAvailabilityDiagnostic: Sendable, Equatable {
     public enum Code: String, Sendable, Equatable {
         case evaluationFailed
+        case stateProjectionFailed
     }
 
     public let code: Code
     public let message: String
+    public let projectionDiagnostic: TLAStateProjectionDiagnostic?
 
-    public init(code: Code, message: String) {
+    public init(
+        code: Code,
+        message: String,
+        projectionDiagnostic: TLAStateProjectionDiagnostic? = nil
+    ) {
         self.code = code
         self.message = message
+        self.projectionDiagnostic = projectionDiagnostic
     }
 }
 
@@ -38,12 +188,46 @@ public struct TLAMachineObservation: Sendable, Equatable {
         case unavailable(TLAMachineAvailabilityDiagnostic)
     }
 
-    public let state: [String: TLAValue]
+    public let state: TLAStateProjectionResult
     public let availability: Availability
 
-    public init(state: [String: TLAValue], availability: Availability) {
+    public init(state: TLAStateProjection, availability: Availability) {
+        self.state = .projected(state)
+        self.availability = availability
+    }
+
+    public init(state: TLAStateProjectionResult, availability: Availability) {
         self.state = state
         self.availability = availability
+    }
+
+    package init(state formalState: [String: TLAValue], availability: Availability) {
+        do {
+            self.init(state: try .init(formalValues: formalState), availability: availability)
+        } catch let diagnostic as TLAStateProjectionDiagnostic {
+            self.init(
+                state: .unavailable(diagnostic),
+                availability: .unavailable(
+                    .init(
+                        code: .stateProjectionFailed,
+                        message: diagnostic.description,
+                        projectionDiagnostic: diagnostic
+                    )
+                )
+            )
+        } catch {
+            let diagnostic = TLAStateProjectionDiagnostic.invalidKey(path: "state")
+            self.init(
+                state: .unavailable(diagnostic),
+                availability: .unavailable(
+                    .init(
+                        code: .stateProjectionFailed,
+                        message: diagnostic.description,
+                        projectionDiagnostic: diagnostic
+                    )
+                )
+            )
+        }
     }
 
     public var availableInvocations: [TLAActionInvocation]? {
@@ -55,6 +239,10 @@ public struct TLAMachineObservation: Sendable, Equatable {
         guard case .unavailable(let diagnostic) = availability else { return nil }
         return diagnostic
     }
+
+    public var projection: TLAStateProjection? { state.projection }
+
+    public var projectionDiagnostic: TLAStateProjectionDiagnostic? { state.diagnostic }
 }
 
 public protocol TLAMachineObserving: Sendable {
@@ -62,7 +250,7 @@ public protocol TLAMachineObserving: Sendable {
 }
 
 public extension TLAMachineObserving {
-    func machineState() async -> [String: TLAValue] {
+    func machineState() async -> TLAStateProjectionResult {
         await machineObservation().state
     }
 
@@ -133,15 +321,29 @@ public struct CanonicalMachine<Snapshot: Equatable & Sendable>: Sendable {
         self.snapshotFromDictionary = snapshotFromDictionary
     }
 
-    public func tlaSnapshot() -> [String: TLAValue] {
+    package func tlaSnapshot() -> [String: TLAValue] {
         stateDictionary(snapshot)
+    }
+
+    public func stateProjection() -> TLAStateProjectionResult {
+        do {
+            return .projected(try .init(formalValues: tlaSnapshot()))
+        } catch let diagnostic as TLAStateProjectionDiagnostic {
+            return .unavailable(diagnostic)
+        } catch {
+            return .unavailable(.invalidKey(path: "state"))
+        }
     }
 
     public func availableInvocations() throws -> [TLAActionInvocation] {
         try availableInvocations(in: tlaSnapshot())
     }
 
-    public func availableInvocations(in state: [String: TLAValue]) throws -> [TLAActionInvocation] {
+    public func availableInvocations(in state: TLAStateProjection) throws -> [TLAActionInvocation] {
+        try availableInvocations(in: state.values)
+    }
+
+    package func availableInvocations(in state: [String: TLAValue]) throws -> [TLAActionInvocation] {
         do {
             return try runtime.availableInvocations(in: state)
         } catch let error as SpecRuntime.RuntimeError {
@@ -153,11 +355,38 @@ public struct CanonicalMachine<Snapshot: Equatable & Sendable>: Sendable {
 
     public func machineObservation() -> TLAMachineObservation {
         let state = tlaSnapshot()
+        let projection: TLAStateProjectionResult
         do {
-            return .init(state: state, availability: .available(try availableInvocations(in: state)))
+            projection = .projected(try .init(formalValues: state))
+        } catch let diagnostic as TLAStateProjectionDiagnostic {
+            return .init(
+                state: .unavailable(diagnostic),
+                availability: .unavailable(
+                    .init(
+                        code: .stateProjectionFailed,
+                        message: diagnostic.description,
+                        projectionDiagnostic: diagnostic
+                    )
+                )
+            )
+        } catch {
+            let diagnostic = TLAStateProjectionDiagnostic.invalidKey(path: "state")
+            return .init(
+                state: .unavailable(diagnostic),
+                availability: .unavailable(
+                    .init(
+                        code: .stateProjectionFailed,
+                        message: diagnostic.description,
+                        projectionDiagnostic: diagnostic
+                    )
+                )
+            )
+        }
+        do {
+            return .init(state: projection, availability: .available(try availableInvocations(in: state)))
         } catch {
             return .init(
-                state: state,
+                state: projection,
                 availability: .unavailable(
                     .init(code: .evaluationFailed, message: String(describing: error))
                 )
@@ -170,6 +399,36 @@ public struct CanonicalMachine<Snapshot: Equatable & Sendable>: Sendable {
     }
 
     public mutating func apply(
+        _ invocation: TLAActionInvocation,
+        from state: TLAStateProjection,
+        selecting successor: (TLAStateProjection) -> Bool
+    ) throws -> CanonicalTransitionEvidence<Snapshot> {
+        let before = snapshotFromDictionary(state.values)
+        let successors: [[String: TLAValue]]
+        do {
+            successors = try runtime.successors(invocation, from: state.values)
+        } catch let error as SpecRuntime.RuntimeError {
+            throw GeneratedMachineError.runtime(error)
+        } catch {
+            throw GeneratedMachineError.unexpected(error)
+        }
+        for candidate in successors {
+            let projection: TLAStateProjection
+            do {
+                projection = try .init(formalValues: candidate)
+            } catch let diagnostic as TLAStateProjectionDiagnostic {
+                throw GeneratedMachineError.unexpected(diagnostic)
+            }
+            guard successor(projection) else { continue }
+            let after = snapshotFromDictionary(candidate)
+            snapshot = after
+            return CanonicalTransitionEvidence(invocation: invocation, before: before, after: after)
+        }
+        let available = try availableInvocations(in: state)
+        throw GeneratedMachineError.runtime(.actionNotEnabled(invocation, available: available))
+    }
+
+    package mutating func apply(
         _ invocation: TLAActionInvocation,
         from state: [String: TLAValue],
         selecting successor: ([String: TLAValue]) -> Bool
@@ -217,22 +476,38 @@ public final class CanonicalMachineStorage<Snapshot: Equatable & Sendable>: Send
         storage.withLock { $0.snapshot }
     }
 
-    public func tlaSnapshot() -> [String: TLAValue] {
+    package func tlaSnapshot() -> [String: TLAValue] {
         storage.withLock { $0.tlaSnapshot() }
+    }
+
+    public func stateProjection() -> TLAStateProjectionResult {
+        storage.withLock { $0.stateProjection() }
     }
 
     public func availableInvocations() throws -> [TLAActionInvocation] {
         try storage.withLock { try $0.availableInvocations() }
     }
 
-    public func availableInvocations(in state: [String: TLAValue]) throws -> [TLAActionInvocation] {
+    public func availableInvocations(in state: TLAStateProjection) throws -> [TLAActionInvocation] {
         try storage.withLock { try $0.availableInvocations(in: state) }
+    }
+
+    package func availableInvocations(in state: [String: TLAValue]) throws -> [TLAActionInvocation] {
+        try storage.withLock { try $0.availableInvocations(in: state) }
+    }
+
+    package func apply(
+        _ invocation: TLAActionInvocation,
+        from state: [String: TLAValue],
+        selecting successor: @Sendable ([String: TLAValue]) -> Bool
+    ) throws -> CanonicalTransitionEvidence<Snapshot> {
+        try storage.withLock { try $0.apply(invocation, from: state, selecting: successor) }
     }
 
     public func apply(
         _ invocation: TLAActionInvocation,
-        from state: [String: TLAValue],
-        selecting successor: @Sendable ([String: TLAValue]) -> Bool
+        from state: TLAStateProjection,
+        selecting successor: @Sendable (TLAStateProjection) -> Bool
     ) throws -> CanonicalTransitionEvidence<Snapshot> {
         try storage.withLock { try $0.apply(invocation, from: state, selecting: successor) }
     }

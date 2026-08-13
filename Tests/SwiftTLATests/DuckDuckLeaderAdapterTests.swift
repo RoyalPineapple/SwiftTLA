@@ -77,7 +77,10 @@ struct DuckDuckLeaderAdapterTests {
             #expect(actual.label.toInvocation() == expected.label.toInvocation())
             #expect(actual.before == expected.before)
             #expect(actual.after == expected.after)
-            #expect(await actor.tlaSnapshot() == expected.after)
+            let leader = TLAStateProjection.Token(validating: "leader")!
+            let turn = TLAStateProjection.Token(validating: "turn")!
+            #expect(await actor.tlaSnapshot().projection?.value(for: leader) == expected.after["leader"])
+            #expect(await actor.tlaSnapshot().projection?.value(for: turn) == expected.after["turn"])
         }
     }
 
@@ -121,7 +124,10 @@ struct DuckDuckLeaderAdapterTests {
         #expect(successful[0].after == expected.after)
         #expect(rejected[0].invocation == invocation)
         #expect(rejected[0].available == expectedAvailable)
-        #expect(await actor.tlaSnapshot() == expected.after)
+        let leader = TLAStateProjection.Token(validating: "leader")!
+        let turn = TLAStateProjection.Token(validating: "turn")!
+        #expect(await actor.tlaSnapshot().projection?.value(for: leader) == expected.after["leader"])
+        #expect(await actor.tlaSnapshot().projection?.value(for: turn) == expected.after["turn"])
     }
 
     private func submit(

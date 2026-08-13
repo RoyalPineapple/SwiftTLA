@@ -1,6 +1,12 @@
 import Testing
 import SwiftTLA
 
+private let countToken = TLAStateProjection.Token(validating: "count")!
+
+private func countProjection(_ count: Int) -> TLAStateProjection {
+    try! .init(validating: [.init(token: countToken, value: .int(count))])
+}
+
 private actor ObservationFixture: TLAMachineObserving {
     private let observation: TLAMachineObservation
 
@@ -31,7 +37,7 @@ private struct MutableCanonicalMachine: TLAMachineAdapterCanonicalModel {
 
     func machineObservation() async -> TLAMachineObservation {
         .init(
-            state: ["count": .int(count)],
+            state: countProjection(count),
             availability: .available(
                 count == 0
                     ? [TLAActionInvocation(name: "advance")]
@@ -46,7 +52,7 @@ private struct MutableCanonicalMachine: TLAMachineAdapterCanonicalModel {
 
     func synchronousMachineObservation() -> TLAMachineObservation {
         .init(
-            state: ["count": .int(count)],
+            state: countProjection(count),
             availability: .available(
                 count == 0
                     ? [TLAActionInvocation(name: "advance")]
@@ -94,6 +100,23 @@ private actor ActorMachineAdapter: TLAMachineAdapterAccess {
 }
 
 struct CanonicalMachineCapabilityTests {
+    @Test("State projections require validated tokens and safely enumerate entries")
+    func stateProjectionGuardsFormalKeys() throws {
+        let count = TLAStateProjection.Token(validating: "count")!
+        let mode = TLAStateProjection.Token(validating: "mode")!
+        let state = try TLAStateProjection(validating: [
+            .init(token: mode, value: .string("idle")),
+            .init(token: count, value: .int(2))
+        ])
+
+        #expect(TLAStateProjection.Token(validating: "") == nil)
+        #expect(TLAStateProjection.Token(validating: "2count") == nil)
+        #expect(TLAStateProjection.Token(validating: "invalid-key") == nil)
+        #expect(state.value(for: count) == .int(2))
+        #expect(state.entries.map(\.token.description) == ["count", "mode"])
+        #expect(state.description == "count = 2, mode = \"idle\"")
+    }
+
     @Test("Protocol-generic observation retains atomic state and ordered availability")
     func protocolGenericObservationProjectsStateAndAvailability() async {
         let invocations = [
@@ -101,29 +124,29 @@ struct CanonicalMachineCapabilityTests {
             TLAActionInvocation(name: "advance", arguments: [.int(2)])
         ]
         let machine = ObservationFixture(observation: .init(
-            state: ["count": .int(0)],
+            state: countProjection(0),
             availability: .available(invocations)
         ))
 
         let observation = await observe(machine)
 
-        #expect(observation.state == ["count": .int(0)])
+        #expect(observation.state.projection?.value(for: countToken) == .int(0))
         #expect(observation.availableInvocations == invocations)
         #expect(observation.availabilityDiagnostic == nil)
-        #expect(await machine.machineState() == ["count": .int(0)])
+        #expect(await machine.machineState().projection?.value(for: countToken) == .int(0))
         #expect(await machine.machineAvailability() == .available(invocations))
     }
 
     @Test("Protocol-generic observation retains state when availability evaluation fails")
     func protocolGenericObservationRetainsAvailabilityDiagnostic() async {
         let machine = ObservationFixture(observation: .init(
-            state: ["count": .int(3)],
+            state: countProjection(3),
             availability: .unavailable(.init(code: .evaluationFailed, message: "action enumeration failed"))
         ))
 
         let observation = await observe(machine)
 
-        #expect(observation.state == ["count": .int(3)])
+        #expect(observation.state.projection?.value(for: countToken) == .int(3))
         #expect(observation.availableInvocations == nil)
         #expect(observation.availabilityDiagnostic == .init(
             code: .evaluationFailed,
@@ -150,10 +173,43 @@ struct CanonicalMachineCapabilityTests {
 
         let observation = machine.machineObservation()
 
-        #expect(observation.state == ["count": .int(0)])
+        #expect(observation.state.projection?.value(for: countToken) == .int(0))
         #expect(observation.availableInvocations == nil)
         #expect(observation.availabilityDiagnostic?.code == .evaluationFailed)
         #expect(observation.availabilityDiagnostic?.message.contains("unavailable") == true)
+    }
+
+    @Test("Canonical observation rejects invalid formal state without a projection")
+    func canonicalMachineObservationReportsProjectionFailure() {
+        let count = Var<Int>("count")
+        let spec = TLASpec("InvalidProjection") {
+            Variable(count, 0)
+            Action("advance") { count.becomes(count + 1) }
+        }
+        let invalidKeyMachine = CanonicalMachine(
+            runtime: SpecRuntime(spec: spec),
+            initial: 0,
+            stateDictionary: { _ in ["invalid-key": .constant("valid")] },
+            snapshotFromDictionary: { _ in 0 }
+        )
+        let invalidValueMachine = CanonicalMachine(
+            runtime: SpecRuntime(spec: spec),
+            initial: 0,
+            stateDictionary: { _ in ["count": .constant("invalid-constant")] },
+            snapshotFromDictionary: { _ in 0 }
+        )
+
+        let observation = invalidKeyMachine.machineObservation()
+        let invalidValueObservation = invalidValueMachine.machineObservation()
+
+        #expect(observation.state.projection == nil)
+        #expect(observation.projectionDiagnostic == .invalidKey(path: "invalid-key"))
+        #expect(observation.availableInvocations == nil)
+        #expect(observation.availabilityDiagnostic?.code == .stateProjectionFailed)
+        #expect(observation.availabilityDiagnostic?.projectionDiagnostic == .invalidKey(path: "invalid-key"))
+        #expect(invalidKeyMachine.stateProjection().projection == nil)
+        #expect(invalidValueObservation.state.projection == nil)
+        #expect(invalidValueObservation.projectionDiagnostic == .invalidConstant(path: "count"))
     }
 
     @Test("Class adapters forward mutable canonical storage and preserve it on failure")
@@ -169,10 +225,10 @@ struct CanonicalMachineCapabilityTests {
         }
         let rejected = await observe(adapter)
 
-        #expect(before.state == ["count": .int(0)])
+        #expect(before.state.projection?.value(for: countToken) == .int(0))
         #expect(before.availableInvocations == [.init(name: "advance")])
         #expect(evidence == .init(before: 0, after: 1))
-        #expect(after.state == ["count": .int(1)])
+        #expect(after.state.projection?.value(for: countToken) == .int(1))
         #expect(after.availableInvocations == [])
         #expect(rejected == after)
     }
@@ -189,10 +245,10 @@ struct CanonicalMachineCapabilityTests {
         }
         let rejected = await observe(adapter)
 
-        #expect(before.state == ["count": .int(0)])
+        #expect(before.state.projection?.value(for: countToken) == .int(0))
         #expect(before.availableInvocations == [.init(name: "advance")])
         #expect(evidence == .init(before: 0, after: 1))
-        #expect(after.state == ["count": .int(1)])
+        #expect(after.state.projection?.value(for: countToken) == .int(1))
         #expect(after.availableInvocations == [])
         #expect(rejected == after)
     }

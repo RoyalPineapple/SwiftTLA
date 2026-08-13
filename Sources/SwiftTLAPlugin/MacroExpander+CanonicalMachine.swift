@@ -35,12 +35,12 @@ extension MacroExpander {
             }
             """
         let liveProjection = symmetricCollections.map {
-            "state[Variables.\($0.name).rawValue] = \($0.name).projection().modelValue"
+            "state = try state.replacing(\($0.name).projection().modelValue, for: .init(validating: Variables.\($0.name).rawValue)!)"
         }.joined(separator: "\n                ")
         let stateWithLiveCollections = symmetricCollections.isEmpty
-            ? "_machine.tlaSnapshot()"
+            ? "try _machine.stateProjection().requireProjection()"
             : """
-            var state = _machine.tlaSnapshot()
+            var state = try _machine.stateProjection().requireProjection()
                             \(liveProjection)
                             return state
             """
@@ -54,13 +54,19 @@ extension MacroExpander {
             }
             """),
             DeclSyntax(stringLiteral: """
-            private func _stateWithLiveCollections() -> [String: TLAValue] {
+            private func _stateWithLiveCollections() throws -> TLAStateProjection {
                 \(stateWithLiveCollections)
             }
             """),
             DeclSyntax(stringLiteral: """
-            public func tlaSnapshot() -> [String: TLAValue] {
-                _stateWithLiveCollections()
+            public func tlaSnapshot() -> TLAStateProjectionResult {
+                do {
+                    return .projected(try _stateWithLiveCollections())
+                } catch let diagnostic as TLAStateProjectionDiagnostic {
+                    return .unavailable(diagnostic)
+                } catch {
+                    return .unavailable(.invalidKey(path: "state"))
+                }
             }
             """),
             DeclSyntax(stringLiteral: availableActions),
@@ -79,9 +85,20 @@ extension MacroExpander {
             """),
             DeclSyntax(stringLiteral: """
             public func synchronousMachineObservation() -> TLAMachineObservation {
-                let state = _stateWithLiveCollections()
+                let state = tlaSnapshot()
+                guard let projection = state.projection else {
+                    let diagnostic = state.diagnostic ?? .invalidKey(path: "state")
+                    return .init(
+                        state: state,
+                        availability: .unavailable(.init(
+                            code: .stateProjectionFailed,
+                            message: diagnostic.description,
+                            projectionDiagnostic: diagnostic
+                        ))
+                    )
+                }
                 do {
-                    return .init(state: state, availability: .available(try _machine.availableInvocations(in: state)))
+                    return .init(state: state, availability: .available(try _machine.availableInvocations(in: projection)))
                 } catch {
                     return .init(
                         state: state,
