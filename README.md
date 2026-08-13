@@ -148,6 +148,10 @@ release qualification gates. Use `make ci-release-qualification` before a
 release. These commands run locally; they do not require a hosted or paid
 GitHub runner.
 
+Every pull request also runs the full macOS `xcodebuild test` suite in hosted
+CI. Hosted coverage remains a manual diagnostic; it is not part of the PR
+workflow.
+
 ### Temporal and symmetry support
 
 Temporal and symmetry support is report-derived. Do not advertise a requested

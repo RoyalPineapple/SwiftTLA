@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
     inputs:
       run_hosted_diagnostics:
-        description: Run unstable hosted macOS test and coverage diagnostics.
+        description: Run hosted macOS coverage diagnostics.
         required: false
         default: false
         type: boolean
@@ -18,6 +18,22 @@ jobs:
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Validate pinned core-conformance baseline
+        run: |
+          baseline_path="Verification/CoreConformance/baselines"
+          if ! git -C "$baseline_path" rev-parse --verify HEAD >/dev/null 2>&1; then
+            echo "::error::Pinned core-conformance baseline is unavailable."
+            exit 1
+          fi
+          expected_baseline="$(git ls-tree HEAD "$baseline_path" | awk '{print $3}')"
+          actual_baseline="$(git -C "$baseline_path" rev-parse HEAD)"
+          if [ -z "$expected_baseline" ] || [ "$actual_baseline" != "$expected_baseline" ]; then
+            echo "::error::Pinned core-conformance baseline does not match the repository checkout."
+            exit 1
+          fi
 
       - name: Validate release code-check contract
         run: bash Tests/Fixtures/ReleaseCodeCheck/assert_workflow.sh
@@ -32,16 +48,8 @@ jobs:
             echo "::warning::SwiftLint violations found; see this step's diagnostics."
           fi
 
-      - name: Run tests (hosted diagnostic)
-        if: github.event_name == 'workflow_dispatch' && inputs.run_hosted_diagnostics
-        run: |
-          set +e
-          xcodebuild test -scheme SwiftTLA-Package -destination 'platform=macOS'
-          test_status=$?
-          set -e
-          if [ "$test_status" -ne 0 ]; then
-            echo "::warning::Hosted macOS test runner failed (exit $test_status). Run make ci-local before making a release claim."
-          fi
+      - name: Run full macOS test suite
+        run: xcodebuild test -scheme SwiftTLA-Package -destination 'platform=macOS'
 
       - name: Run coverage (hosted diagnostic)
         if: github.event_name == 'workflow_dispatch' && inputs.run_hosted_diagnostics
