@@ -4,6 +4,7 @@ set -euo pipefail
 root="$(cd "$(dirname "$0")/../../.." && pwd)"
 makefile="$root/Makefile"
 pr_runner="$root/scripts/run_pr_validation.sh"
+smoke_runner="$root/scripts/run_pr_smoke_tests.sh"
 release_runner="$root/scripts/run_release_qualification.sh"
 local_runner="$root/scripts/run_ci_locally.sh"
 
@@ -34,13 +35,21 @@ require "$makefile" "public-workflow-release-check:"
 require "$pr_runner" "Tests/Fixtures/LocalCI/assert_commands.sh"
 require "$pr_runner" "Tests/Fixtures/ReleaseCodeCheck/assert_workflow.sh"
 require "$pr_runner" "./scripts/lint-zero-new.sh"
-require "$pr_runner" "swift test"
+require "$pr_runner" "./scripts/run_pr_smoke_tests.sh"
 require "$pr_runner" "swift build"
 require "$pr_runner" "swift build --target SwiftTLAMacros"
 forbid "$pr_runner" "swift test --enable-code-coverage"
 forbid "$pr_runner" "core-conformance"
 forbid "$pr_runner" "temporal-symmetry"
 forbid "$pr_runner" "public-workflow"
+
+require "$smoke_runner" "swift test --filter"
+require "$smoke_runner" "GeneratedStateMachineTests"
+require "$smoke_runner" "NestedComposableMacroConformanceTests"
+require "$smoke_runner" "SpecParserTests"
+forbid "$smoke_runner" "UpstreamParityTests"
+forbid "$smoke_runner" "CoreConformance"
+forbid "$smoke_runner" "TLCTemporal"
 
 require "$local_runner" 'exec "$(dirname "$0")/run_pr_validation.sh"'
 
