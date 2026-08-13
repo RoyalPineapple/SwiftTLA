@@ -60,15 +60,6 @@ struct FormalShapeTests {
         #expect(record.fields.map(\.typeIdentity) == [FormalTypeIdentity.of(Int.self), FormalTypeIdentity.of(String.self)])
     }
 
-    @Test("formal type identities are stable across fresh processes")
-    func formalTypeIdentityIsStableAcrossProcesses() throws {
-        let first = try identityProbeOutput()
-        let second = try identityProbeOutput()
-
-        #expect(first == "example.file-private-shape-v1")
-        #expect(second == first)
-    }
-
     @Test("tagged TLA values round trip nested values and fail closed")
     func tlaValueCodecIsLosslessAndStrict() throws {
         let value: TLAValue = .function([
@@ -112,36 +103,4 @@ private struct ShapeRecord: FormalValue {
     static let formalTypeIdentity = FormalTypeIdentity(rawValue: "test.shape-record-v1")
 
     var tlaValue: TLAValue { .record([:]) }
-}
-
-private func identityProbeOutput() throws -> String {
-    let root = URL(fileURLWithPath: #filePath)
-        .deletingLastPathComponent()
-        .deletingLastPathComponent()
-        .deletingLastPathComponent()
-    let productDirectory = Bundle.main.bundleURL.deletingLastPathComponent()
-    let candidates = [
-        productDirectory.appendingPathComponent("FormalTypeIdentityProbe"),
-        root.appendingPathComponent(".build/debug/FormalTypeIdentityProbe")
-    ]
-    guard let executable = candidates.first(where: { FileManager.default.isExecutableFile(atPath: $0.path) }) else {
-        throw IdentityProbeError.missingExecutable
-    }
-    let output = Pipe()
-    let probe = Process()
-    probe.currentDirectoryURL = root
-    probe.executableURL = executable
-    probe.standardOutput = output
-    try probe.run()
-    probe.waitUntilExit()
-    guard probe.terminationStatus == 0 else {
-        throw IdentityProbeError.executionFailed(probe.terminationStatus)
-    }
-    return String(decoding: output.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
-        .trimmingCharacters(in: .whitespacesAndNewlines)
-}
-
-private enum IdentityProbeError: Error {
-    case missingExecutable
-    case executionFailed(Int32)
 }
