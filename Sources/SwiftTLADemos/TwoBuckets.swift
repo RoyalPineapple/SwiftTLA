@@ -138,4 +138,7 @@ public struct TwoBuckets {
             }
         }
     }
+
+    @TLAObservable
+    public final class Observable {}
 }
