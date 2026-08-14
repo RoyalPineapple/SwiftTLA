@@ -5,12 +5,31 @@ import SwiftTLAMacros
 
 @TLAModel
 struct BoundedCounter {
+    enum Process: String, FiniteDomainKey {
+        case only
+
+        static let formalDomain: [Process] = [.only]
+        static let formalTypeIdentity = FormalTypeIdentity(rawValue: "documentation.counter.process")
+
+        var tlaValue: TLAValue { .string(rawValue) }
+    }
+
+    enum Step: String, PlusCalLabel {
+        case advance
+    }
+
     static var spec: TLASpec {
-        TLASpec("BoundedCounter") {
-            let value = Var<Int>("value")
-            Variable(value, 0)
-            Action("advance") { value.becomes(value + 1).when(value < 1) }
-            Invariant("withinBounds") { value >= 0 && value <= 1 }
+        #spec("BoundedCounter") {
+            Algorithm("BoundedCounter") {
+                let value = SharedVar(initial: 0)
+                Each(Process.all) { _ in
+                    Do(Step.advance) {
+                        When(value < 1)
+                        Assign(value, to: value + 1)
+                        Stop()
+                    }
+                }
+            }
         }
     }
 }

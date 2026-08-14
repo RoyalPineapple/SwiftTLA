@@ -61,7 +61,7 @@ extension MacroExpander {
     static func generateNestedObservableMembers(model: ParsedMacroModel) -> [DeclSyntax] {
         let callbacks = model.actions.map { action in
             let callbackName = "on" + action.name.prefix(1).capitalized + action.name.dropFirst()
-            let parameterTypes = action.bindings.map { swiftType(for: $0.values[0]) }
+            let parameterTypes = action.bindings.map { swiftType(for: action, binding: $0) }
             let parameters = (parameterTypes + ["State", "State"]).joined(separator: ", ")
             return DeclSyntax(stringLiteral: "@MainActor public var \(callbackName): ((\(parameters)) async -> Void)?")
         }
@@ -86,7 +86,7 @@ extension MacroExpander {
         }.joined(separator: "\n")
         let typedActions = model.actions.map { action -> DeclSyntax in
             let parameters = action.bindings.map { binding in
-                "\(binding.name): \(swiftType(for: binding.values[0]))"
+                "\(binding.name): \(swiftType(for: action, binding: binding))"
             }.joined(separator: ", ")
             let labelArguments = action.bindings.map { "\($0.name): \($0.name)" }.joined(separator: ", ")
             let label = action.bindings.isEmpty

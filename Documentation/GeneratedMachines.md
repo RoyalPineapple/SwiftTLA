@@ -36,12 +36,31 @@ import SwiftTLAMacros
 
 @TLAModel
 struct BoundedCounter {
+    enum Process: String, FiniteDomainKey {
+        case only
+
+        static let formalDomain: [Process] = [.only]
+        static let formalTypeIdentity = FormalTypeIdentity(rawValue: "documentation.counter.process")
+
+        var tlaValue: TLAValue { .string(rawValue) }
+    }
+
+    enum Step: String, PlusCalLabel {
+        case advance
+    }
+
     static var spec: TLASpec {
-        TLASpec("BoundedCounter") {
-            let value = Var<Int>("value")
-            Variable(value, 0)
-            Action("advance") { value.becomes(value + 1).when(value < 1) }
-            Invariant("withinBounds") { value >= 0 && value <= 1 }
+        #spec("BoundedCounter") {
+            Algorithm("BoundedCounter") {
+                let value = SharedVar(initial: 0)
+                Each(Process.all) { _ in
+                    Do(Step.advance) {
+                        When(value < 1)
+                        Assign(value, to: value + 1)
+                        Stop()
+                    }
+                }
+            }
         }
     }
 }
@@ -68,10 +87,10 @@ import SwiftTLA
 func runDirectAction() throws {
     var machine = BoundedCounter()
     let actions = try machine.availableActions()
-    let result = try machine.apply(.advance)
+    let result = try machine.apply(.advance(process: .only))
 
-    assert(actions == [.advance])
-    assert(result.action == .advance)
+    assert(actions == [.advance(process: .only)])
+    assert(result.action == .advance(process: .only))
     assert(result.before.value == 0)
     assert(result.after.value == 1)
     assert(machine.state.value == 1)
@@ -117,12 +136,31 @@ import SwiftTLAMacros
 
 @TLAModel
 struct CounterHost {
+    enum Process: String, FiniteDomainKey {
+        case only
+
+        static let formalDomain: [Process] = [.only]
+        static let formalTypeIdentity = FormalTypeIdentity(rawValue: "documentation.actor.process")
+
+        var tlaValue: TLAValue { .string(rawValue) }
+    }
+
+    enum Step: String, PlusCalLabel {
+        case advance
+    }
+
     static var spec: TLASpec {
-        TLASpec("CounterHost") {
-            let value = Var<Int>("value")
-            Variable(value, 0)
-            Action("advance") { value.becomes(value + 1).when(value < 1) }
-            Invariant("withinBounds") { value >= 0 && value <= 1 }
+        #spec("CounterHost") {
+            Algorithm("CounterHost") {
+                let value = SharedVar(initial: 0)
+                Each(Process.all) { _ in
+                    Do(Step.advance) {
+                        When(value < 1)
+                        Assign(value, to: value + 1)
+                        Stop()
+                    }
+                }
+            }
         }
     }
 
@@ -133,10 +171,10 @@ struct CounterHost {
 func runActorAccess() async throws {
     let actor = CounterHost.Actor()
     let state = await actor.state
-    let result = try await actor.execute(CounterHost.Actor.ActionLabel.advance.toInvocation())
+    let result = try await actor.execute(CounterHost.Actor.ActionLabel.advance(process: .only).toInvocation())
 
     assert(state.value == 0)
-    assert(result.action == CounterHost.Actor.ActionLabel.advance)
+    assert(result.action == CounterHost.Actor.ActionLabel.advance(process: .only))
     assert(result.after.value == 1)
 }
 ```
@@ -171,12 +209,31 @@ import SwiftTLAMacros
 
 @TLAModel
 struct CounterScreenModel {
+    enum Process: String, FiniteDomainKey {
+        case only
+
+        static let formalDomain: [Process] = [.only]
+        static let formalTypeIdentity = FormalTypeIdentity(rawValue: "documentation.observable.process")
+
+        var tlaValue: TLAValue { .string(rawValue) }
+    }
+
+    enum Step: String, PlusCalLabel {
+        case advance
+    }
+
     static var spec: TLASpec {
-        TLASpec("CounterScreenModel") {
-            let value = Var<Int>("value")
-            Variable(value, 0)
-            Action("advance") { value.becomes(value + 1).when(value < 1) }
-            Invariant("withinBounds") { value >= 0 && value <= 1 }
+        #spec("CounterScreenModel") {
+            Algorithm("CounterScreenModel") {
+                let value = SharedVar(initial: 0)
+                Each(Process.all) { _ in
+                    Do(Step.advance) {
+                        When(value < 1)
+                        Assign(value, to: value + 1)
+                        Stop()
+                    }
+                }
+            }
         }
     }
 
@@ -187,12 +244,12 @@ struct CounterScreenModel {
 @MainActor
 func runObservable() async throws {
     let observable = CounterScreenModel.Observable()
-    observable.onAdvance = { before, after in
+    observable.onAdvance = { _, before, after in
         assert(before.value == 0)
         assert(after.value == 1)
     }
-    let result = try await observable.execute(CounterScreenModel.Observable.ActionLabel.advance.toInvocation())
-    assert(result.action == CounterScreenModel.Observable.ActionLabel.advance)
+    let result = try await observable.execute(CounterScreenModel.Observable.ActionLabel.advance(process: .only).toInvocation())
+    assert(result.action == CounterScreenModel.Observable.ActionLabel.advance(process: .only))
 }
 ```
 
@@ -298,7 +355,7 @@ struct CounterView: View {
             Button("Advance") {
                 Task { @MainActor in
                     do {
-                        _ = try await machine.execute(CounterScreenModel.Observable.ActionLabel.advance.toInvocation())
+                        _ = try await machine.execute(CounterScreenModel.Observable.ActionLabel.advance(process: .only).toInvocation())
                         state = machine.state
                         observation = await machine.machineObservation()
                         diagnostic = ""

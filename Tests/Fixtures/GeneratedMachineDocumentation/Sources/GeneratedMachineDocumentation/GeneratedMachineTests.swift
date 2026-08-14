@@ -5,15 +5,15 @@ import SwiftTLA
 func runGeneratedMachineTesting() async throws {
     var machine = BoundedCounter()
     let initial = await machine.machineObservation()
-    let result = try machine.apply(.advance)
+    let result = try machine.apply(.advance(process: .only))
     let beforeFailure = machine.state
 
     assert(initial.projection != nil)
-    assert(initial.availableInvocations == [.init(name: "advance")])
+    assert(initial.availableInvocations == [.init(name: "advance", arguments: [.string("only")])])
     assert(result.after.value == 1)
 
     do {
-        _ = try machine.apply(.advance)
+        _ = try machine.apply(.advance(process: .only))
         assertionFailure("Expected an unavailable action")
     } catch is GeneratedMachineError {
         assert(machine.state == beforeFailure)

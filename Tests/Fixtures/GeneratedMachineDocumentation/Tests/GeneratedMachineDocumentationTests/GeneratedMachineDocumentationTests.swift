@@ -7,15 +7,15 @@ struct GeneratedMachineDocumentationTests {
     func disabledActionRetainsSnapshot() async throws {
         var machine = BoundedCounter()
         let initial = await machine.machineObservation()
-        let result = try machine.apply(.advance)
+        let result = try machine.apply(.advance(process: .only))
         let beforeFailure = machine.state
 
         #expect(initial.projection != nil)
-        #expect(initial.availableInvocations == [.init(name: "advance")])
+        #expect(initial.availableInvocations == [.init(name: "advance", arguments: [.string("only")])])
         #expect(result.before.value == 0)
         #expect(result.after.value == 1)
         #expect(throws: GeneratedMachineError.self) {
-            try machine.apply(.advance)
+            try machine.apply(.advance(process: .only))
         }
         #expect(machine.state == beforeFailure)
     }
@@ -27,13 +27,13 @@ struct GeneratedMachineDocumentationTests {
         let observable = CounterScreenModel.Observable()
         let recorder = CallbackRecorder()
 
-        observable.onAdvance = { before, after in
+        observable.onAdvance = { _, before, after in
             await recorder.record(before: before, after: after)
         }
 
         #expect(await actor.state.value == 0)
-        _ = try await actor.execute(CounterHost.Actor.ActionLabel.advance.toInvocation())
-        _ = try await observable.execute(CounterScreenModel.Observable.ActionLabel.advance.toInvocation())
+        _ = try await actor.execute(CounterHost.Actor.ActionLabel.advance(process: .only).toInvocation())
+        _ = try await observable.execute(CounterScreenModel.Observable.ActionLabel.advance(process: .only).toInvocation())
 
         #expect(await actor.state.value == 1)
         #expect(await recorder.transitions == [.init(before: 0, after: 1)])
