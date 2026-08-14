@@ -119,6 +119,20 @@ public struct SharedVariable<Value: TLAValueType>: StateExprConvertible, Sendabl
         .assign(name, value.raw)
     }
 
+    /// Assigns the current value of another shared formal variable of the
+    /// same type. This keeps direct PlusCal-style state transfer typed.
+    @discardableResult
+    public func becomes(_ other: SharedVariable<Value>) -> ActionExpr {
+        .assign(name, other.stateExpr)
+    }
+
+    /// Assigns the current value of a process-local formal variable of the
+    /// same type.
+    @discardableResult
+    public func becomes(_ other: LocalVariable<Value>) -> ActionExpr {
+        .assign(name, other.stateExpr)
+    }
+
     public var stays: ActionExpr { .unchanged(name) }
 }
 
@@ -136,6 +150,28 @@ public struct LocalVariable<Value: TLAValueType>: StateExprConvertible, Sendable
     public var algorithmLValue: AlgorithmLValue<Value> {
         AlgorithmLValue(model: .root(name))
     }
+
+    @discardableResult
+    public func becomes(_ value: Value) -> ActionExpr {
+        .assign(name, .value(value.tlaValue))
+    }
+
+    @discardableResult
+    public func becomes(_ value: Expr<Value>) -> ActionExpr {
+        .assign(name, value.raw)
+    }
+
+    @discardableResult
+    public func becomes(_ other: SharedVariable<Value>) -> ActionExpr {
+        .assign(name, other.stateExpr)
+    }
+
+    @discardableResult
+    public func becomes(_ other: LocalVariable<Value>) -> ActionExpr {
+        .assign(name, other.stateExpr)
+    }
+
+    public var stays: ActionExpr { .unchanged(name) }
 }
 
 // `SharedVariable` is an authoring handle, but it must read like the typed

@@ -71,6 +71,17 @@ struct UpstreamParityTests {
         }
     }
 
+    @Test("TeachingConcurrency Simple models use typed phase state")
+    func teachingSimpleTypedPhaseParity() throws {
+        try TeachingSimpleN2Model.verifySpec()
+        try TeachingSimpleN3Model.verifySpec()
+
+        let n2 = ModelChecker(spec: TeachingSimpleN2Model.spec, maxStates: 50_000)
+        let n3 = ModelChecker(spec: TeachingSimpleN3Model.spec, maxStates: 50_000)
+        #expect(try n2.exploreGraph().states.count == Example.teachingSimpleN2.expectedDistinct)
+        #expect(try n3.exploreGraph().states.count == Example.teachingSimpleN3.expectedDistinct)
+    }
+
     @Test("Sync termination detector uses typed finite function state")
     func syncTerminationTypedFunctionParity() throws {
         try SyncTerminationDetectionModel.verifySpec()
