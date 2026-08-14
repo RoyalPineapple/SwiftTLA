@@ -24,3 +24,6 @@ swift build
 
 echo "Build macro plugin"
 swift build --target SwiftTLAMacros
+
+echo "Build downstream examples"
+make examples
