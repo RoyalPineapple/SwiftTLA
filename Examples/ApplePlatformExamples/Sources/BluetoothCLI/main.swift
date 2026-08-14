@@ -9,7 +9,17 @@ struct BluetoothCLI {
             do {
                 try BluetoothModel.verifySpec()
                 try PeripheralModel.verifySpec()
+                let central = BluetoothModel.Machine()
+                _ = try await central.execute(BluetoothModel.Machine.ActionLabel.poweredOn.toInvocation())
+                _ = try await central.execute(BluetoothModel.Machine.ActionLabel.startScan.toInvocation())
+                _ = try await central.execute(BluetoothModel.Machine.ActionLabel.stopScan.toInvocation())
+                let peripheral = PeripheralModel.Machine()
+                _ = try await peripheral.execute(PeripheralModel.Machine.ActionLabel.connected.toInvocation())
+                _ = try await peripheral.execute(PeripheralModel.Machine.ActionLabel.beginDiscovery.toInvocation())
+                _ = try await peripheral.execute(PeripheralModel.Machine.ActionLabel.finishDiscovery.toInvocation())
                 print("Bluetooth formal checks passed.")
+                print("central: \(await central.state.phase.rawValue)")
+                print("peripheral: \(await peripheral.state.phase.rawValue)")
             } catch {
                 writeError("Bluetooth validation failed: \(error)")
             }

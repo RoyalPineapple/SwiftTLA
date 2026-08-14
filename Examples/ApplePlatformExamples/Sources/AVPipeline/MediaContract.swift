@@ -12,23 +12,21 @@ public struct MediaPipelineModel {
         public static let formalTypeIdentity = FormalTypeIdentity(rawValue: "apple.av.pipeline-stage")
         public var tlaValue: TLAValue { .string(rawValue) }
     }
-    private enum Process: String, FiniteDomainKey { case pipelineEvent
-        static let formalDomain: [Self] = [.pipelineEvent]
-        static let formalTypeIdentity = FormalTypeIdentity(rawValue: "apple.av.pipeline-process")
-        var tlaValue: TLAValue { .string(rawValue) }
-    }
+    private enum BeginCaptureProcess: String, FiniteDomainKey { case beginCaptureEvent; static let formalDomain: [Self] = [.beginCaptureEvent]; static let formalTypeIdentity = FormalTypeIdentity(rawValue: "apple.av.pipeline.begin-capture"); var tlaValue: TLAValue { .string(rawValue) } }
+    private enum BeginWritingProcess: String, FiniteDomainKey { case beginWritingEvent; static let formalDomain: [Self] = [.beginWritingEvent]; static let formalTypeIdentity = FormalTypeIdentity(rawValue: "apple.av.pipeline.begin-writing"); var tlaValue: TLAValue { .string(rawValue) } }
+    private enum FinishWritingProcess: String, FiniteDomainKey { case finishWritingEvent; static let formalDomain: [Self] = [.finishWritingEvent]; static let formalTypeIdentity = FormalTypeIdentity(rawValue: "apple.av.pipeline.finish-writing"); var tlaValue: TLAValue { .string(rawValue) } }
+    private enum PlayProcess: String, FiniteDomainKey { case playEvent; static let formalDomain: [Self] = [.playEvent]; static let formalTypeIdentity = FormalTypeIdentity(rawValue: "apple.av.pipeline.play"); var tlaValue: TLAValue { .string(rawValue) } }
+    private enum StopProcess: String, FiniteDomainKey { case stopEvent; static let formalDomain: [Self] = [.stopEvent]; static let formalTypeIdentity = FormalTypeIdentity(rawValue: "apple.av.pipeline.stop"); var tlaValue: TLAValue { .string(rawValue) } }
     private enum Step: String, PlusCalLabel { case beginCapture, beginWriting, finishWriting, play, stop }
     public static var spec: TLASpec {
         #spec("MediaPipelineModel") {
             Algorithm("MediaPipelineModel") {
                 let stage = SharedVar(initial: Stage.idle)
-                Each(Process.all) { _ in
-                    Do(Step.beginCapture) { When(stage == .idle); Assign(stage, to: Stage.capturing); Goto(Step.beginCapture) }
-                    Do(Step.beginWriting) { When(stage == .capturing); Assign(stage, to: Stage.writing); Goto(Step.beginWriting) }
-                    Do(Step.finishWriting) { When(stage == .writing); Assign(stage, to: Stage.readyToPlay); Goto(Step.finishWriting) }
-                    Do(Step.play) { When(stage == .readyToPlay); Assign(stage, to: Stage.playing); Goto(Step.play) }
-                    Do(Step.stop) { When(stage == .capturing || stage == .writing || stage == .playing); Assign(stage, to: Stage.idle); Goto(Step.stop) }
-                }
+                Each(BeginCaptureProcess.all) { _ in Do(Step.beginCapture) { When(stage == .idle); Assign(stage, to: Stage.capturing); Goto(Step.beginCapture) } }
+                Each(BeginWritingProcess.all) { _ in Do(Step.beginWriting) { When(stage == .capturing); Assign(stage, to: Stage.writing); Goto(Step.beginWriting) } }
+                Each(FinishWritingProcess.all) { _ in Do(Step.finishWriting) { When(stage == .writing); Assign(stage, to: Stage.readyToPlay); Goto(Step.finishWriting) } }
+                Each(PlayProcess.all) { _ in Do(Step.play) { When(stage == .readyToPlay); Assign(stage, to: Stage.playing); Goto(Step.play) } }
+                Each(StopProcess.all) { _ in Do(Step.stop) { When(stage == .capturing || stage == .writing || stage == .playing); Assign(stage, to: Stage.idle); Goto(Step.stop) } }
                 Invariant("knownPipelineStage") { stage == .idle || stage == .capturing || stage == .writing || stage == .readyToPlay || stage == .playing }
             }
         }
