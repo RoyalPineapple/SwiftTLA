@@ -93,6 +93,17 @@ struct UpstreamParityTests {
         }
     }
 
+    @Test("EWD998 uses typed finite functions and parameterized actions")
+    func ewd998TypedFunctionParity() throws {
+        try EWD998TerminationModel.verifySpec()
+        let checker = ModelChecker(spec: EWD998TerminationModel.spec, maxStates: 50_000)
+        #expect(try checker.exploreGraph().states.count == Example.ewd998.expectedDistinct)
+        guard case .ok = try checker.check() else {
+            Issue.record("Typed EWD998 model did not verify")
+            return
+        }
+    }
+
     @Test("Moving Cat models use typed direction state")
     func movingCatTypedDirectionParity() throws {
         try CatEvenBoxesModel.verifySpec()
