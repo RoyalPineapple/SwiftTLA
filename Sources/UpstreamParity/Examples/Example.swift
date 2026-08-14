@@ -39,6 +39,7 @@ public enum Example {
         hourClock2,
         lamportMutexN2,
         multiCarElevator,
+        nQueensFour,
         paxosSmall,
         prisonerN3,
         prisoners4,

@@ -32,6 +32,17 @@ struct UpstreamParityTests {
         #expect(count == 2)
     }
 
+    @Test("N-Queens FourQueens PlusCal port matches the published TLC graph")
+    func nQueensMatchesTLC() throws {
+        try NQueensModel.verifySpec()
+        let checker = ModelChecker(spec: Example.nQueensFour.spec, maxStates: 5_000)
+        #expect(try checker.exploreGraph().states.count == Example.nQueensFour.expectedDistinct)
+        guard case .ok = try checker.check() else {
+            Issue.record("N-Queens did not verify")
+            return
+        }
+    }
+
     @Test("HourClock .tlaModule is TLC-shaped")
     func hourClockTLA() {
         let tla = Example.hourClock.spec.tlaModule
