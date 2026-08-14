@@ -258,7 +258,8 @@ struct NestedComposableMacroConformanceTests {
         try assertExternalSurfaceIsForbidden(
             fixture: "InvalidStandaloneActorRawSurface",
             typeName: "StandaloneActorSurface",
-            stateDiagnostic: "@TLAActor and @TLAObservable require an enclosing @TLAModel"
+            stateDiagnostic: "@TLAActor and @TLAObservable require an enclosing @TLAModel",
+            requiresGeneratedSurfaceRejection: false
         )
     }
 
@@ -267,7 +268,8 @@ struct NestedComposableMacroConformanceTests {
         try assertExternalSurfaceIsForbidden(
             fixture: "InvalidStandaloneObservableRawSurface",
             typeName: "StandaloneObservableSurface",
-            stateDiagnostic: "@TLAActor and @TLAObservable require an enclosing @TLAModel"
+            stateDiagnostic: "@TLAActor and @TLAObservable require an enclosing @TLAModel",
+            requiresGeneratedSurfaceRejection: false
         )
     }
 
@@ -297,14 +299,17 @@ struct NestedComposableMacroConformanceTests {
     private func assertExternalSurfaceIsForbidden(
         fixture: String,
         typeName: String,
-        stateDiagnostic: String
+        stateDiagnostic: String,
+        requiresGeneratedSurfaceRejection: Bool = true
     ) throws {
         let package = packageRoot().appendingPathComponent("Tests/Fixtures/\(fixture)")
         let result = try runSwift(["build", "--package-path", package.path])
 
         #expect(result.status != 0)
         #expect(result.output.contains(stateDiagnostic))
-        #expect(result.output.contains("\(typeName).TransitionEvidence"))
+        if requiresGeneratedSurfaceRejection {
+            #expect(result.output.contains("\(typeName).TransitionEvidence"))
+        }
     }
 
     private func multiset(

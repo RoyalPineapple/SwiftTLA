@@ -188,7 +188,7 @@ struct MultiCarElevatorDSLTests {
       "build", "--package-path", fixture.path, "--target", "InvalidTypedDSLUnknownField"
     ])
     #expect(unknownField.status != 0)
-    #expect(unknownField.output.contains("InvalidTypedDSLUnknownField.swift:35:"))
+    #expect(unknownField.output.contains("InvalidTypedDSLUnknownField.swift:36:"))
     #expect(unknownField.output.contains("type 'CarSchema' has no member 'person'"))
   }
 
