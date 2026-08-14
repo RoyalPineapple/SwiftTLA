@@ -28,6 +28,34 @@ builder-visible declaration. The source parser reads that `let` independently;
 the runtime builder constructs the corresponding `TLASpec` independently.
 Every future authoring convenience must preserve this split.
 
+## Compilation and execution phases
+
+The two paths are deliberately separate all the way to the comparison:
+
+1. The Swift compiler type-checks the `#spec` closure. Its result builders
+   accept only the supported authoring vocabulary.
+2. The `#spec` macro performs limited syntax-only desugaring. For example, it
+   makes a `let count = SharedVar(initial: 0)` declaration visible to the
+   runtime builder. It does not supply a formal model to that builder.
+3. The model macro parses the original source independently into the formal
+   AST. The checker, TLA+ emitter, and generated machine start from this AST.
+4. At runtime, the constrained builder closure runs and independently creates
+   a `TLASpec`.
+5. SwiftTLA normalizes both models and compares them with semantic
+   alpha-equivalence. A failure identifies the first declaration, action,
+   invariant, or bound expression that differs.
+6. Only after that check passes does the generated machine execute the
+   validated transition runtime.
+
+The runtime builder does not keep re-parsing source and it does not make
+product decisions. After construction and comparison, the generated machine
+holds its canonical state machine and applies enabled transitions.
+
+This is intentionally not a hash-only check. A structural fingerprint is a
+useful fast diagnostic and cache key, but alpha-equivalence is the authority:
+it can accept equivalent bound-variable names and still point to the semantic
+node that differs when the models are not equivalent.
+
 ```swift
 @TLAModel
 struct Counter {

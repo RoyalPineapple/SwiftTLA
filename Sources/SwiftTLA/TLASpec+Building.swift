@@ -144,8 +144,11 @@ extension TLASpec {
         actions: actions.map { ($0.name, $0.body, $0.bindings) },
         invariants: invariants.map { ($0.name, $0.body) }
       )
-      guard built == tree else {
-        fatalError("SpecParser tree mismatch for '\(name)'")
+      guard _tlaAlphaEquivalent(built, tree) else {
+        fatalError(
+          "SpecParser tree mismatch for '\(name)'. " +
+            _tlaFidelityDiagnostic(tree, built)
+        )
       }
     }
 
