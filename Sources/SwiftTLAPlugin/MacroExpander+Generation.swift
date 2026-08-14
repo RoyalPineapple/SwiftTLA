@@ -75,7 +75,9 @@ extension MacroExpander {
                     throw VerificationError("\\(invocation): expected \\(expected.count) successors, got \\(actual.count)")
                 }
                 for successor in expected {
-                    guard let match = actual.firstIndex(of: successor) else {
+                    guard let match = actual.firstIndex(where: {
+                        Self.spec.statesAreEquivalent($0, successor)
+                    }) else {
                         throw VerificationError("\\(invocation): missing successor \\(successor)")
                     }
                     actual.remove(at: match)

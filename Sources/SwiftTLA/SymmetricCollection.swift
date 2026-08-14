@@ -261,6 +261,38 @@ public enum SymmetricCollectionValidationError: Error, CustomStringConvertible {
 }
 
 public extension TLASpec {
+  /// Returns the representative used to compare states modulo declared symmetry.
+  ///
+  /// A symmetric collection makes its finite verification members interchangeable.
+  /// Generated transition checks use this same representative because a graph edge
+  /// may target an equivalent member permutation rather than the runtime's exact
+  /// member assignment.
+  func canonicalStateIdentity(_ state: [String: TLAValue]) -> [String: TLAValue] {
+    let groups = symmetricCollections.map {
+      SymmetricCollectionPermutationGroup(members: $0.metadata.members)
+    }
+    var candidates = [state]
+    for group in groups {
+      candidates = candidates.flatMap { candidate in
+        group.mappings.map { applySymmetricMemberPermutation(candidate, mapping: $0) }
+      }
+    }
+    let canonical = candidates.min {
+      symmetricStateEncoding($0) < symmetricStateEncoding($1)
+    } ?? state
+    return symmetryGroups.reduce(symmetrySets.reduce(canonical) { $1.canonicalize($0) }) {
+      $1.canonicalize($0)
+    }
+  }
+
+  /// Tests semantic equality under the symmetry declarations of this specification.
+  func statesAreEquivalent(
+    _ lhs: [String: TLAValue],
+    _ rhs: [String: TLAValue]
+  ) -> Bool {
+    canonicalStateIdentity(lhs) == canonicalStateIdentity(rhs)
+  }
+
   func symmetricCollectionValidationError(
     permutationProductBudget: Int = 100_000
   ) -> SymmetricCollectionValidationError? {
