@@ -23,6 +23,7 @@ public enum Example {
         nanoBlockchain,
         bakeryN2,
         barrierN6,
+        barriersN6,
         catEvenBoxes,
         catOddBoxes,
         chameneosM4N4,

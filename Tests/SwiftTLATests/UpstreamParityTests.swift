@@ -65,6 +65,11 @@ struct UpstreamParityTests {
         }
     }
 
+    @Test("N=6 two-chamber Barriers PlusCal port matches TLC")
+    func barriersMatchTLC() throws {
+        #expect(try BarriersN6Model.verifySpec() == Example.barriersN6.expectedDistinct)
+    }
+
     @Test("HourClock .tlaModule is TLC-shaped")
     func hourClockTLA() {
         let tla = Example.hourClock.spec.tlaModule
