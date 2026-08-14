@@ -3,15 +3,34 @@ import SwiftTLAMacros
 
 @TLAModel
 public struct HourClockModel {
+    public enum ClockProcess: String, CaseIterable, FiniteDomainKey {
+        case clock
+
+        public static let formalDomain = allCases
+        public static let formalTypeIdentity = FormalTypeIdentity(rawValue: "upstream.hour-clock.process")
+
+        public var tlaValue: TLAValue { .string(rawValue) }
+    }
+
     public static var spec: TLASpec {
         #spec("HourClock") {
-            Extends("Naturals")
-            let hr = SharedVar(in: 1...12)
-            Action("HCnxt") {
-                (hr != 12 && hr.becomes(hr + 1)) ||
-                (hr == 12 && hr.becomes(1))
+            Algorithm("HourClock") {
+                let hr = SharedVar(in: 1...12)
+
+                Each(ClockProcess.all) { _ in
+                    Do("HCnxt") {
+                        Assert(hr >= 1 && hr <= 12)
+                        Either {
+                            When(hr != 12)
+                            Assign(hr, to: hr + 1)
+                        } or: {
+                            When(hr == 12)
+                            Assign(hr, to: 1)
+                        }
+                        Goto("HCnxt")
+                    }
+                }
             }
-            Invariant("HCini") { hr >= 1 && hr <= 12 }
         }
     }
 }
@@ -24,6 +43,6 @@ extension Example {
         upstreamCfg: "specifications/SpecifyingSystems/HourClock/HourClock.cfg",
         expectedDistinct: 12,
         spec: HourClockModel.spec,
-        notes: "Pure DSL: typed SharedVar + builders only. TLC = 12.",
+        notes: "PlusCal-shaped singleton process. TLC = 12.",
     )
 }
