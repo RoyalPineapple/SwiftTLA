@@ -452,7 +452,11 @@ extension SpecParser {
             }
             if let expanded = parseMacroInvocation(expression, macros: macros) {
                 result += expanded.map {
-                    replaceAlgorithmVariable($0, from: "__pcal_macro_no_process", to: processParameter)
+                    replaceAlgorithmVariable(
+                        replaceAlgorithmVariable($0, from: "__pcal_macro_no_process", to: processParameter),
+                        from: processParameter,
+                        to: "__pcal_self"
+                    )
                 }
                 continue
             }

@@ -152,6 +152,16 @@ extension MacroParameter where Value == Int {
     }
 }
 
+extension MacroParameter where Value: FiniteDomainKey {
+    public static func == (lhs: MacroParameter, rhs: Value) -> StateExpr {
+        .equal(lhs.stateExpr, rhs.tlaValue.stateExpr)
+    }
+
+    public static func != (lhs: MacroParameter, rhs: Value) -> StateExpr {
+        .notEqual(lhs.stateExpr, rhs.tlaValue.stateExpr)
+    }
+}
+
 /// A one-argument PlusCal statement macro.
 ///
 /// Declare it inside `Algorithm`, then call it inside a `Do` body. The
@@ -177,6 +187,15 @@ public struct Macro<Value: TLAValueType>: Sendable {
             StepStatement(model: substituteMacroParameter($0, from: parameterName, to: argument.name))
         }
     }
+
+    /// Expands a macro using the current process identifier as its formal
+    /// argument. The expansion stays in its surrounding atomic `Do` block.
+    public func callAsFunction(_ argument: ProcessIdentifier<Value>) -> [StepStatement]
+    where Value: FiniteDomainKey {
+        statements.map {
+            StepStatement(model: substituteMacroParameter($0, from: parameterName, with: argument.stateExpr))
+        }
+    }
 }
 
 private func substituteMacroParameter(
@@ -184,45 +203,73 @@ private func substituteMacroParameter(
     from: String,
     to: String
 ) -> AlgorithmStatementModel {
-    switch statement {
-    case .await(let expression): return .await(renameVar(from, to: to, in: expression))
-    case .assert(let expression): return .assert(renameVar(from, to: to, in: expression))
-    case .set(let target, let value):
-        let rewrittenTarget: AlgorithmLValueModel
+    substituteMacroParameter(statement, from: from, with: .variable(to))
+}
+
+private func substituteMacroParameter(
+    _ statement: AlgorithmStatementModel,
+    from: String,
+    with replacement: StateExpr
+) -> AlgorithmStatementModel {
+    func substitute(_ expression: StateExpr) -> StateExpr {
+        StateExpr.substituteVariable(from, with: replacement, in: expression)
+    }
+
+    func substituteTarget(_ target: AlgorithmLValueModel) -> AlgorithmLValueModel {
         switch target {
-        case .root(let root): rewrittenTarget = .root(root == from ? to : root)
+        case .root(let root):
+            guard root == from else { return .root(root) }
+            guard case .variable(let replacementRoot) = replacement else {
+                preconditionFailure("A macro argument used as an assignment target must be a formal variable")
+            }
+            return .root(replacementRoot)
         case .function(let root, let key):
-            rewrittenTarget = .function(root: root == from ? to : root, key: renameVar(from, to: to, in: key))
+            let replacementRoot: String
+            if root == from {
+                guard case .variable(let name) = replacement else {
+                    preconditionFailure("A macro argument used as an assignment target must be a formal variable")
+                }
+                replacementRoot = name
+            } else {
+                replacementRoot = root
+            }
+            return .function(root: replacementRoot, key: substitute(key))
         }
-        return .set(target: rewrittenTarget, value: renameVar(from, to: to, in: value))
+    }
+
+    switch statement {
+    case .await(let expression): return .await(substitute(expression))
+    case .assert(let expression): return .assert(substitute(expression))
+    case .set(let target, let value):
+        return .set(target: substituteTarget(target), value: substitute(value))
     case .letBinding(let variable, let value, let body):
         return .letBinding(
             variable: variable,
-            value: renameVar(from, to: to, in: value),
-            variable == from ? body : body.map { substituteMacroParameter($0, from: from, to: to) }
+            value: substitute(value),
+            variable == from ? body : body.map { substituteMacroParameter($0, from: from, with: replacement) }
         )
     case .with(let variable, let source, let body):
         return .with(
             variable: variable,
-            source: renameVar(from, to: to, in: source),
-            variable == from ? body : body.map { substituteMacroParameter($0, from: from, to: to) }
+            source: substitute(source),
+            variable == from ? body : body.map { substituteMacroParameter($0, from: from, with: replacement) }
         )
     case .ifElse(let condition, let then, let otherwise):
         return .ifElse(
-            renameVar(from, to: to, in: condition),
-            then.map { substituteMacroParameter($0, from: from, to: to) },
-            otherwise.map { substituteMacroParameter($0, from: from, to: to) }
+            substitute(condition),
+            then.map { substituteMacroParameter($0, from: from, with: replacement) },
+            otherwise.map { substituteMacroParameter($0, from: from, with: replacement) }
         )
     case .either(let first, let second):
         return .either(
-            first.map { substituteMacroParameter($0, from: from, to: to) },
-            second.map { substituteMacroParameter($0, from: from, to: to) }
+            first.map { substituteMacroParameter($0, from: from, with: replacement) },
+            second.map { substituteMacroParameter($0, from: from, with: replacement) }
         )
     case .choose(let variable, let domain, let body):
         return .choose(
             variable: variable,
             domain: domain,
-            variable == from ? body : body.map { substituteMacroParameter($0, from: from, to: to) }
+            variable == from ? body : body.map { substituteMacroParameter($0, from: from, with: replacement) }
         )
     case .goto, .stop, .skip: return statement
     }
@@ -452,6 +499,12 @@ extension SharedVariable {
         Expr<Range>(.functionApply(stateExpr, index.stateExpr))
     }
 
+    /// Reads a finite function using a typed statement-macro parameter.
+    public subscript<Domain: FiniteDomainKey, Range>(_ index: MacroParameter<Domain>) -> Expr<Range>
+    where Value == Function<Domain, Range>, Range: TLAValueType {
+        Expr<Range>(.functionApply(stateExpr, index.stateExpr))
+    }
+
     public subscript<Domain: FiniteTLAValueDomain, Range>(_ index: Expr<Domain>) -> Expr<Range>
     where Value == Function<Domain, Range>, Range: TLAValueType {
         Expr<Range>(.functionApply(stateExpr, index.raw))
@@ -493,6 +546,22 @@ extension SharedVariable {
 
     public func updating<Domain: FiniteDomainKey, Range>(
         _ index: ProcessIdentifier<Domain>,
+        to value: Range
+    ) -> Expr<Function<Domain, Range>> where Value == Function<Domain, Range>, Range: TLAValueType {
+        updating(index, to: Expr<Range>(.value(value.tlaValue)))
+    }
+
+    /// Replaces a finite function value using a typed statement-macro parameter.
+    public func updating<Domain: FiniteDomainKey, Range>(
+        _ index: MacroParameter<Domain>,
+        to value: Expr<Range>
+    ) -> Expr<Function<Domain, Range>> where Value == Function<Domain, Range>, Range: TLAValueType {
+        Expr<Function<Domain, Range>>(.except(stateExpr, index.stateExpr, value.raw))
+    }
+
+    /// Replaces a finite function value using a typed statement-macro parameter.
+    public func updating<Domain: FiniteDomainKey, Range>(
+        _ index: MacroParameter<Domain>,
         to value: Range
     ) -> Expr<Function<Domain, Range>> where Value == Function<Domain, Range>, Range: TLAValueType {
         updating(index, to: Expr<Range>(.value(value.tlaValue)))

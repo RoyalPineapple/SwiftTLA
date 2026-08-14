@@ -126,6 +126,34 @@ private func parseExpression(_ source: String) -> ExprSyntax {
         #expect(parsed.actions.first?.body.description.contains("lock") == true)
     }
 
+    @Test("parser expands a statement macro with the current process identifier")
+    func parsesStatementMacroWithProcessIdentifier() {
+        let source = """
+        {
+            Algorithm("MacroProcess") {
+                let marked = SharedVar(initial: Function<Node, Bool>.literal((Node.left, false), (Node.right, false)))
+                let mark = Macro<Node> { node in
+                    Assign(marked, to: marked.updating(node, to: true))
+                }
+                Each(Node.all) { node in
+                    Do("mark") { mark(node) }
+                }
+            }
+        }
+        """
+        let closure = Parser.parse(source: source).statements.first!.item.as(ClosureExprSyntax.self)!
+        let parsed = SpecParser.parseSpecClosure(
+            closure,
+            enumPhases: ["Node": ["left": .string("left"), "right": .string("right")]],
+            enumDomains: ["Node": [.string("left"), .string("right")]]
+        )
+
+        #expect(parsed.diagnostics.isEmpty)
+        let body = try? #require(parsed.actions.first?.body)
+        #expect(body?.description.contains("process") == true)
+        #expect(body?.description.contains("__pcal_macro_parameter") == false)
+    }
+
     @Test("parsed Algorithm actions match runtime-builder normalization")
     func parserTreeMatchesRuntimeAlgorithm() {
         let source = """

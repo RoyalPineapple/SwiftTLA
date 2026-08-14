@@ -1,5 +1,6 @@
 import Testing
 @testable import SwiftTLA
+import SwiftTLAMacros
 
 @Suite("PlusCal algorithm builders")
 struct AlgorithmBuilderTests {
@@ -31,6 +32,46 @@ struct AlgorithmBuilderTests {
             ActionEnumerator.enumerate(invocation.body, from: initial, varNames: spec.variables.map(\.name)).first
         )
         #expect(successor["lock"] == .int(0))
+    }
+
+    @Test("statement macros accept the current typed process identifier")
+    func expandsMacroWithProcessIdentifier() throws {
+        let algorithm = Algorithm("MacroProcess") {
+            let marked = SharedVar(
+                "marked",
+                initial: Function<Node, Bool>.literal((.first, false), (.second, false))
+            )
+            marked
+            let mark = Macro<Node> { node in
+                Assign(marked, to: marked.updating(node, to: true))
+            }
+
+            Each(Node.all) { node in
+                Do("mark") { mark(node) }
+                Do("done") { Stop() }
+            }
+        }
+
+        #expect(algorithm.validate().isEmpty)
+        let spec = try algorithm.lower()
+        let initial = try #require(computeInitialStates(spec).first)
+        let mark = try #require(spec.actions.first { $0.name == "mark" })
+        let invocation = try #require(actionInvocations(mark).first {
+            $0.invocation.arguments == [.string("first")]
+        })
+        let successor = try #require(
+            ActionEnumerator.enumerate(
+                invocation.body,
+                from: initial,
+                varNames: spec.variables.map(\.name)
+            ).first
+        )
+        #expect(successor["marked"] == .function([.string("first"): .bool(true), .string("second"): .bool(false)]))
+    }
+
+    @Test("generated models compare macro process identifiers through both construction paths")
+    func generatedMacroProcessModelKeepsParserFidelity() {
+        MacroProcessGeneratedModel._checkParserTree()
     }
 
     @Test("a begin-style algorithm keeps a scalar program counter")
@@ -567,4 +608,33 @@ private enum AlgorithmLabel: String, PlusCalLabel {
     case receive
     case forward
     case done
+}
+
+@TLAModel
+private struct MacroProcessGeneratedModel {
+    enum Node: String, CaseIterable, FiniteDomainKey {
+        case first
+        case second
+
+        static let formalDomain = allCases
+        static let formalTypeIdentity = FormalTypeIdentity(rawValue: "test.pluscal.macro-process-node")
+
+        var tlaValue: TLAValue { .string(rawValue) }
+    }
+
+    static var spec: TLASpec {
+        #spec("MacroProcessGenerated") {
+            Algorithm("MacroProcessGenerated") {
+                let marked = SharedVar(initial: Function<Node, Bool>.literal((.first, false), (.second, false)))
+                let mark = Macro<Node> { node in
+                    Assign(marked, to: marked.updating(node, to: true))
+                }
+
+                Each(Node.all) { node in
+                    Do("mark") { mark(node) }
+                    Do("done") { Stop() }
+                }
+            }
+        }
+    }
 }
