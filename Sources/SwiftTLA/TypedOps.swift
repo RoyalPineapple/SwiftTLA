@@ -99,6 +99,32 @@ extension Expr {
             .value(otherwise.tlaValue)
         ))
     }
+
+    /// Builds a typed conditional when one branch is already a formal expression.
+    public static func ifThenElse(
+        _ condition: some StateExprConvertible,
+        then: T,
+        else otherwise: Expr<T>
+    ) -> Expr<T> {
+        Expr<T>(.ifThenElse(
+            condition.stateExpr,
+            .value(then.tlaValue),
+            otherwise.raw
+        ))
+    }
+
+    /// Builds a typed conditional when one branch is already a formal expression.
+    public static func ifThenElse(
+        _ condition: some StateExprConvertible,
+        then: Expr<T>,
+        else otherwise: T
+    ) -> Expr<T> {
+        Expr<T>(.ifThenElse(
+            condition.stateExpr,
+            then.raw,
+            .value(otherwise.tlaValue)
+        ))
+    }
 }
 
 extension Expr where T == String {

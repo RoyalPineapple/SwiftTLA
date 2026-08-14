@@ -240,9 +240,26 @@ extension Expr {
     Expr<SetExpr<Element>>(.union(raw, .setLiteral([.value(element.tlaValue)])))
   }
 
+  public func inserting<Element: FiniteDomainKey>(
+    _ element: ProcessIdentifier<Element>
+  ) -> Expr<SetExpr<Element>> where T == SetExpr<Element> {
+    Expr<SetExpr<Element>>(.union(raw, .setLiteral([element.stateExpr])))
+  }
+
+  public func inserting<Element: TLAValueType>(
+    _ element: WithValue<Element>
+  ) -> Expr<SetExpr<Element>> where T == SetExpr<Element> {
+    Expr<SetExpr<Element>>(.union(raw, .setLiteral([element.stateExpr])))
+  }
+
   public func removing<Element: TLAValueType>(_ element: Expr<Element>) -> Expr<SetExpr<Element>>
   where T == SetExpr<Element> {
     Expr<SetExpr<Element>>(.setDifference(raw, .setLiteral([element.raw])))
+  }
+
+  public func removing<Element: TLAValueType>(_ element: WithValue<Element>) -> Expr<SetExpr<Element>>
+  where T == SetExpr<Element> {
+    Expr<SetExpr<Element>>(.setDifference(raw, .setLiteral([element.stateExpr])))
   }
 
   public func contains<Element: TLAValueType>(_ element: Element) -> StateExpr

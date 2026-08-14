@@ -44,6 +44,16 @@ public struct ProcessIdentifier<Value: FiniteDomainKey>: StateExprConvertible, S
     public var stateExpr: StateExpr {
         expression
     }
+
+    /// Compares the current process identifier with a typed formal value.
+    public static func == (lhs: ProcessIdentifier<Value>, rhs: Value) -> StateExpr {
+        .equal(lhs.stateExpr, .value(rhs.tlaValue))
+    }
+
+    /// Compares the current process identifier with a typed formal value.
+    public static func != (lhs: ProcessIdentifier<Value>, rhs: Value) -> StateExpr {
+        .notEqual(lhs.stateExpr, .value(rhs.tlaValue))
+    }
 }
 
 /// A value bound for one atomic `With` body.

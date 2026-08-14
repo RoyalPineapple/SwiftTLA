@@ -332,7 +332,7 @@ enum MacroExpander {
             case "Bool": return ".bool(\(binding.name))"
             case "String": return ".string(\(binding.name))"
             case "TLAValue": return binding.name
-            default: return ".string(\(binding.name).rawValue)"
+            default: return "\(binding.name).tlaValue"
             }
         }
 
@@ -348,8 +348,7 @@ enum MacroExpander {
             case "String": return "case .string(let \(binding.name)) = \(argument)"
             case "TLAValue": return "let \(binding.name) = \(argument)"
             default:
-                return "case .string(let \(binding.name)Raw) = \(argument), "
-                    + "let \(binding.name) = \(swiftType(for: action, binding: binding))(rawValue: \(binding.name)Raw)"
+                return "let \(binding.name) = \(swiftType(for: action, binding: binding))(formalValue: \(argument))"
             }
         }
 
