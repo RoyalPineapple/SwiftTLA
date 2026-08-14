@@ -71,6 +71,38 @@ different scope does not type-check as a `Do` statement. That restriction is
 intentional: the builder layer is the first validation layer, not decorative
 syntax.
 
+### Typed formal data
+
+Formal data has the same boundary. A record is declared in the specification
+with a named schema, then used through a typed record expression; a finite map
+is a typed function; and a finite Swift enum provides the members of a formal
+domain. These are not UI-only descriptions. They survive parsing, lowering,
+checking, TLA+ emission, and generated Swift state.
+
+| Formal concept | SwiftTLA type | Example |
+|---|---|---|
+| finite member set | `FiniteDomainKey` enum | `CarID`, `Floor`, `Rider` |
+| named total record | `TLARecordSchema` + `Record<Schema>` | a car’s floor, door, and rider |
+| named record field | `TLAField<Schema, Value>` | `CarSchema.floor` |
+| finite total map | `Function<Domain, Range>` | `Function<CarID, Record<CarSchema>>` |
+| shared formal state | `SharedVariable<Value>` | `cars` |
+
+The working elevator model is the reference implementation of this pattern:
+`CarSchema` defines validated fields, `cars` is a typed finite function, and
+all updates use typed fields rather than string subscripts.
+
+The rule is not optional: public generated state and transition results use
+named Swift types, not `[String: TLAValue]`. String names are contained inside
+the formal implementation behind validated handles and record fields.
+
+### Adding a builder
+
+Add a new builder only when it represents a real formal scope with its own
+valid statements and lowering rule. Do not add a generic builder merely to
+make arbitrary Swift compile. A future procedure, macro, or process-local
+scope may deserve a specific builder; ordinary expressions and assignments do
+not.
+
 Finite nondeterministic initialization is also formal semantics. For example,
 `SharedVar(in: SetExpr<Record<CarSchema>>.literal(...))` means that the
 initial predicate chooses one member of that typed, finite set. Both paths
@@ -130,6 +162,19 @@ struct Counter {
 The `#spec` expansion registers `count` with the constrained runtime builder.
 The model macro parses the original declaration to the formal AST. Neither path
 receives the other's completed model.
+
+## Source language boundary and fallback
+
+PlusCal-shaped authoring is preferred when an upstream specification contains
+an algorithm: translate its shared variables, processes, and labeled atomic
+steps mechanically into `Algorithm`, `Each`, and `Do`. SwiftTLA then lowers
+that form into the same core AST and emits ordinary TLA+ for TLC.
+
+Not every published TLA+ specification began as PlusCal. A direct TLA+
+specification uses the typed `#spec` vocabulary directly. It is not forced
+through an invented algorithm just to satisfy a style rule. Both forms end at
+the same AST, checker, emitter, generated machine, and parser–builder fidelity
+gate.
 
 State-count parity does not prove runtime correctness. Equal state counts can
 hide different initial states, transitions, action labels, or outcomes.
