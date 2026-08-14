@@ -16,9 +16,19 @@ public struct PeripheralModel {
         static let formalTypeIdentity = FormalTypeIdentity(rawValue: "apple.bluetooth.peripheral-connect")
         var tlaValue: TLAValue { .string(rawValue) }
     }
-    private enum DiscoveryProcess: String, FiniteDomainKey { case discoveryEvent
-        static let formalDomain: [Self] = [.discoveryEvent]
-        static let formalTypeIdentity = FormalTypeIdentity(rawValue: "apple.bluetooth.peripheral-discovery")
+    private enum BeginDiscoveryProcess: String, FiniteDomainKey { case beginDiscoveryEvent
+        static let formalDomain: [Self] = [.beginDiscoveryEvent]
+        static let formalTypeIdentity = FormalTypeIdentity(rawValue: "apple.bluetooth.peripheral-begin-discovery")
+        var tlaValue: TLAValue { .string(rawValue) }
+    }
+    private enum FinishDiscoveryProcess: String, FiniteDomainKey { case finishDiscoveryEvent
+        static let formalDomain: [Self] = [.finishDiscoveryEvent]
+        static let formalTypeIdentity = FormalTypeIdentity(rawValue: "apple.bluetooth.peripheral-finish-discovery")
+        var tlaValue: TLAValue { .string(rawValue) }
+    }
+    private enum DisconnectProcess: String, FiniteDomainKey { case disconnectEvent
+        static let formalDomain: [Self] = [.disconnectEvent]
+        static let formalTypeIdentity = FormalTypeIdentity(rawValue: "apple.bluetooth.peripheral-disconnect")
         var tlaValue: TLAValue { .string(rawValue) }
     }
     private enum Step: String, PlusCalLabel { case connected, beginDiscovery, finishDiscovery, disconnect }
@@ -34,23 +44,9 @@ public struct PeripheralModel {
                         Goto(Step.connected)
                     }
                 }
-                Each(DiscoveryProcess.all) { _ in
-                    Do(Step.beginDiscovery) {
-                        When(phase == .connected)
-                        Assign(phase, to: Phase.discovering)
-                        Goto(Step.finishDiscovery)
-                    }
-                    Do(Step.finishDiscovery) {
-                        When(phase == .discovering)
-                        Assign(phase, to: Phase.ready)
-                        Goto(Step.disconnect)
-                    }
-                    Do(Step.disconnect) {
-                        When(phase == .ready)
-                        Assign(phase, to: Phase.disconnected)
-                        Goto(Step.beginDiscovery)
-                    }
-                }
+                Each(BeginDiscoveryProcess.all) { _ in Do(Step.beginDiscovery) { When(phase == .connected); Assign(phase, to: Phase.discovering); Goto(Step.beginDiscovery) } }
+                Each(FinishDiscoveryProcess.all) { _ in Do(Step.finishDiscovery) { When(phase == .discovering); Assign(phase, to: Phase.ready); Goto(Step.finishDiscovery) } }
+                Each(DisconnectProcess.all) { _ in Do(Step.disconnect) { When(phase == .ready); Assign(phase, to: Phase.disconnected); Goto(Step.disconnect) } }
                 Invariant("knownPeripheralPhase") { phase == .disconnected || phase == .connected || phase == .discovering || phase == .ready }
             }
         }

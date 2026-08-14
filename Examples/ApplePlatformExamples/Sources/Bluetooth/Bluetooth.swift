@@ -24,9 +24,14 @@ public struct BluetoothModel {
         static let formalTypeIdentity = FormalTypeIdentity(rawValue: "apple.bluetooth.powered-off")
         var tlaValue: TLAValue { .string(rawValue) }
     }
-    private enum ScanProcess: String, FiniteDomainKey { case scanEvent
-        static let formalDomain: [Self] = [.scanEvent]
-        static let formalTypeIdentity = FormalTypeIdentity(rawValue: "apple.bluetooth.scan")
+    private enum StartScanProcess: String, FiniteDomainKey { case startScanEvent
+        static let formalDomain: [Self] = [.startScanEvent]
+        static let formalTypeIdentity = FormalTypeIdentity(rawValue: "apple.bluetooth.start-scan")
+        var tlaValue: TLAValue { .string(rawValue) }
+    }
+    private enum StopScanProcess: String, FiniteDomainKey { case stopScanEvent
+        static let formalDomain: [Self] = [.stopScanEvent]
+        static let formalTypeIdentity = FormalTypeIdentity(rawValue: "apple.bluetooth.stop-scan")
         var tlaValue: TLAValue { .string(rawValue) }
     }
     private enum ResettingProcess: String, FiniteDomainKey { case resettingEvent
@@ -85,17 +90,11 @@ public struct BluetoothModel {
                         Goto(Step.unauthorized)
                     }
                 }
-                Each(ScanProcess.all) { _ in
-                    Do(Step.startScan) {
-                        When(phase == .poweredOn)
-                        Assign(phase, to: Phase.scanning)
-                        Goto(Step.startScan)
-                    }
-                    Do(Step.stopScan) {
-                        When(phase == .scanning)
-                        Assign(phase, to: Phase.poweredOn)
-                        Goto(Step.stopScan)
-                    }
+                Each(StartScanProcess.all) { _ in
+                    Do(Step.startScan) { When(phase == .poweredOn); Assign(phase, to: Phase.scanning); Goto(Step.startScan) }
+                }
+                Each(StopScanProcess.all) { _ in
+                    Do(Step.stopScan) { When(phase == .scanning); Assign(phase, to: Phase.poweredOn); Goto(Step.stopScan) }
                 }
                 Invariant("knownCentralPhase") { phase == .unknown || phase == .resetting || phase == .unsupported || phase == .unauthorized || phase == .poweredOff || phase == .poweredOn || phase == .scanning }
             }
