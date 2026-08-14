@@ -22,6 +22,38 @@ mismatch reports the first differing declaration, action, invariant, or
 normalized bound expression. Do not replace this with a macro that emits the
 parser AST as the runtime model: that would make the check vacuous.
 
+`#spec` is a syntax boundary, not a second semantics engine. It can rewrite
+Swift declaration sugar such as `let count = SharedVar(initial: 0)` into a
+builder-visible declaration. The source parser reads that `let` independently;
+the runtime builder constructs the corresponding `TLASpec` independently.
+Every future authoring convenience must preserve this split.
+
+```swift
+@TLAModel
+struct Counter {
+    enum Node: String, FiniteDomainKey { /* bounded members */ }
+
+    static var spec: TLASpec {
+        #spec("Counter") {
+            Algorithm("Counter") {
+                let count = SharedVar(initial: 0)
+                Each(Node.all) { _ in
+                    Do("advance") {
+                        When(count < 1)
+                        Assign(count, to: count + 1)
+                        Stop()
+                    }
+                }
+            }
+        }
+    }
+}
+```
+
+The `#spec` expansion registers `count` with the constrained runtime builder.
+The model macro parses the original declaration to the formal AST. Neither path
+receives the other's completed model.
+
 State-count parity does not prove runtime correctness. Equal state counts can
 hide different initial states, transitions, action labels, or outcomes.
 
@@ -142,7 +174,7 @@ the supported surface.
 | **Liveness** | — | Not in v1 scope |
 | **Temporal properties** | ✓ | `TemporalDecl`, `LeadsTo`, `Eventually`, `AlwaysEventually` — TLA+ output only |
 | **INSTANCE / EXTENDS custom** | — | External module dependencies; most TLC configs |
-| **PlusCal** | — | Port post-translation TLA+ (like DiningPhilosophers) |
+| **PlusCal-shaped algorithms** | ~ | Bounded `Algorithm`, `Each`, `Do`, `When`, `Assert`, `Assign`, `If`, `Either`, `Choose`, `With`, `Goto`, `Stop`; parser and runtime builder have a mandatory semantic-equivalence gate |
 | **Refinement mappings** | — | Not in v1 scope |
 | **Symmetry reduction** | ~ | `SymmetryDecl` exists; not active |
 | **LET in actions** | ✓ | Swift `let` in `Action { }` builder for StateExpr; no ActionExpr-level LET needed |
