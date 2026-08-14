@@ -122,6 +122,21 @@ public struct ChangRobertsModel {
                         Goto(Step.n1)
                     }
                 }
+
+                Invariant("NoFalseWinner") {
+                    processState[.one] != .won || initiator[.one] == true
+                    processState[.two] != .won || initiator[.two] == true
+                    processState[.three] != .won || initiator[.three] == true
+                }
+                LeadsTo(
+                    "Liveness",
+                    processState[.one] == .candidate
+                        || processState[.two] == .candidate
+                        || processState[.three] == .candidate,
+                    processState[.one] == .won
+                        || processState[.two] == .won
+                        || processState[.three] == .won
+                )
             }
         }
     }

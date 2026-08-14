@@ -28,6 +28,8 @@ struct ParsedMacroModel {
     let enumInfos: [ParsedEnumInfo]
     let hasInvariants: Bool
     let invariants: [(String, StateExpr)]
+    let temporal: [(String, TemporalExpr)]
+    let fairness: [FairnessCondition]
 }
 
 enum NestedAdapterModelRegistry {
@@ -155,7 +157,8 @@ enum TLASpecVerifier {
         return ParsedMacroModel(
             typeName: typeName, variables: parsed.variables, actions: parsed.actions,
             symmetricCollections: parsed.symmetricCollections, collectionActions: parsed.collectionActions,
-            enumInfos: enumInfos, hasInvariants: hasInvs, invariants: parsed.invariants
+            enumInfos: enumInfos, hasInvariants: hasInvs, invariants: parsed.invariants,
+            temporal: parsed.temporal, fairness: parsed.fairness
         )
     }
 

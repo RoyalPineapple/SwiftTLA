@@ -19,7 +19,6 @@ public struct HourClockModel {
 
                 Each(ClockProcess.all) { _ in
                     Do("HCnxt") {
-                        Assert(hr >= 1 && hr <= 12)
                         Either {
                             When(hr != 12)
                             Assign(hr, to: hr + 1)
@@ -30,6 +29,7 @@ public struct HourClockModel {
                         Goto("HCnxt")
                     }
                 }
+                Invariant("HCini") { hr >= 1 && hr <= 12 }
             }
         }
     }

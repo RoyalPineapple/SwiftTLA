@@ -99,6 +99,7 @@ extension SpecParser {
             )
         }
         result.invariants += lowered.invariants.map { ($0.name, $0.body) }
+        result.temporal += lowered.temporalProperties.map { ($0.name, $0.expr) }
         result.fairness += lowered.fairness
     }
 
@@ -128,9 +129,61 @@ extension SpecParser {
                 algorithmParseFailure = "Each requires a finite enum domain and a decodable process body."
             }
             return component
+        case "Invariant":
+            guard let invariant = parseAlgorithmInvariant(call) else { return nil }
+            return .invariant(invariant)
+        case "LeadsTo", "Eventually", "Always", "AlwaysEventually", "EventuallyAlways":
+            guard let temporal = parseAlgorithmTemporal(call, named: name) else { return nil }
+            return .temporal(temporal)
+        case "WeakFairness", "StrongFairness":
+            guard let fairness = decodeFairness(call) else { return nil }
+            return .fairness(fairness)
         default:
             return nil
         }
+    }
+
+    private static func parseAlgorithmTemporal(
+        _ call: FunctionCallExprSyntax,
+        named kind: String
+    ) -> NamedTemporal? {
+        guard let name = extractStringArg(call, index: 0) else { return nil }
+        let arguments = Array(call.arguments).map(\.expression)
+        let expression: TemporalExpr?
+        switch kind {
+        case "LeadsTo":
+            guard arguments.count == 3,
+                  let from = decodeStateExpr(arguments[1]),
+                  let to = decodeStateExpr(arguments[2])
+            else { return nil }
+            expression = .leadsTo(from, to)
+        case "Eventually":
+            expression = arguments.count == 2 ? decodeStateExpr(arguments[1]).map(TemporalExpr.eventually) : nil
+        case "Always":
+            expression = arguments.count == 2 ? decodeStateExpr(arguments[1]).map(TemporalExpr.always) : nil
+        case "AlwaysEventually":
+            expression = arguments.count == 2 ? decodeStateExpr(arguments[1]).map(TemporalExpr.alwaysEventually) : nil
+        case "EventuallyAlways":
+            expression = arguments.count == 2 ? decodeStateExpr(arguments[1]).map(TemporalExpr.eventuallyAlways) : nil
+        default:
+            expression = nil
+        }
+        return expression.map { .init(name: name, expr: $0) }
+    }
+
+    private static func parseAlgorithmInvariant(
+        _ call: FunctionCallExprSyntax
+    ) -> NamedInvariant? {
+        guard let name = extractStringArg(call, index: 0),
+              let closure = call.trailingClosure
+        else { return nil }
+        let expressions = closure.statements.compactMap { statement -> StateExpr? in
+            guard case .expr(let expression) = statement.item else { return nil }
+            return decodeStateExpr(expression)
+        }
+        guard !expressions.isEmpty else { return nil }
+        let body = expressions.dropFirst().reduce(expressions[0], StateExpr.and)
+        return .init(name: name, body: body)
     }
 
     private static func parseEach(_ call: FunctionCallExprSyntax) -> AlgorithmComponentModel? {

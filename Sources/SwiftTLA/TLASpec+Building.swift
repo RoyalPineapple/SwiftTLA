@@ -52,6 +52,7 @@ extension TLASpec {
           variables += lowered.variables
           actions += lowered.actions
           invariants += lowered.invariants
+          temporalProperties += lowered.temporalProperties
           fairness += lowered.fairness
         } catch {
           preconditionFailure("Invalid algorithm '\(algorithm.model.name)': \(error)")
@@ -142,7 +143,9 @@ extension TLASpec {
       let built = ParsedSpecModel(
         variables: variables.map { ($0.name, $0.initial, $0.initialSet) },
         actions: actions.map { ($0.name, $0.body, $0.bindings) },
-        invariants: invariants.map { ($0.name, $0.body) }
+        invariants: invariants.map { ($0.name, $0.body) },
+        temporal: temporalProperties.map { ($0.name, $0.expr) },
+        fairness: fairness
       )
       guard _tlaAlphaEquivalent(built, tree) else {
         fatalError(

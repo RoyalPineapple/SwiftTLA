@@ -7,7 +7,9 @@
 public func _tlaAlphaEquivalent(_ lhs: ParsedSpecModel, _ rhs: ParsedSpecModel) -> Bool {
     guard lhs.variables.elementsEqual(rhs.variables, by: variablesEquivalent),
           lhs.actions.count == rhs.actions.count,
-          lhs.invariants.count == rhs.invariants.count
+          lhs.invariants.count == rhs.invariants.count,
+          lhs.temporal.count == rhs.temporal.count,
+          lhs.fairness == rhs.fairness
     else { return false }
 
     for (left, right) in zip(lhs.actions, rhs.actions) {
@@ -17,6 +19,9 @@ public func _tlaAlphaEquivalent(_ lhs: ParsedSpecModel, _ rhs: ParsedSpecModel) 
     }
     for (left, right) in zip(lhs.invariants, rhs.invariants) {
         guard left.name == right.name, alphaKey(left.body) == alphaKey(right.body) else { return false }
+    }
+    for (left, right) in zip(lhs.temporal, rhs.temporal) {
+        guard left.name == right.name, alphaKey(left.expr) == alphaKey(right.expr) else { return false }
     }
     return true
 }
@@ -61,6 +66,20 @@ public func _tlaFidelityDiagnostic(_ expected: ParsedSpecModel, _ actual: Parsed
         guard alphaKey(left.body) == alphaKey(right.body) else {
             return "Invariant '\(left.name)' differs after normalizing local binders and logical grouping."
         }
+    }
+    guard expected.temporal.count == actual.temporal.count else {
+        return "Temporal property count differs: expected \(expected.temporal.count), got \(actual.temporal.count)."
+    }
+    for (left, right) in zip(expected.temporal, actual.temporal) {
+        guard left.name == right.name else {
+            return "Temporal property order or name differs: expected '\(left.name)', got '\(right.name)'."
+        }
+        guard alphaKey(left.expr) == alphaKey(right.expr) else {
+            return "Temporal property '\(left.name)' differs after normalizing local binders and logical grouping."
+        }
+    }
+    guard expected.fairness == actual.fairness else {
+        return "Fairness declarations differ: expected \(expected.fairness), got \(actual.fairness)."
     }
     return "The parser tree differs in an unsupported semantic field."
 }
@@ -131,6 +150,16 @@ private func semanticStateBranches(_ expression: StateExpr) -> [StateExpr] {
 private func alphaKey(_ expression: StateExpr) -> String {
     var next = 0
     return stateKey(expression, environment: [:], next: &next)
+}
+
+private func alphaKey(_ expression: TemporalExpr) -> String {
+    switch expression {
+    case .always(let state): return "always(\(alphaKey(state)))"
+    case .eventually(let state): return "eventually(\(alphaKey(state)))"
+    case .alwaysEventually(let state): return "alwaysEventually(\(alphaKey(state)))"
+    case .eventuallyAlways(let state): return "eventuallyAlways(\(alphaKey(state)))"
+    case .leadsTo(let from, let to): return "leadsTo(\(alphaKey(from)),\(alphaKey(to)))"
+    }
 }
 
 private func fresh(_ name: String, environment: [String: String], next: inout Int) -> (String, [String: String]) {

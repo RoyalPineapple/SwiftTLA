@@ -135,18 +135,26 @@ public struct ParsedSpecModel: Equatable, Sendable {
   public let variables: [(name: String, initial: TLAValue, initialSet: StateExpr?)]
   public let actions: [(name: String, body: ActionExpr, bindings: [ActionBinding])]
   public let invariants: [(name: String, body: StateExpr)]
+  public let temporal: [(name: String, expr: TemporalExpr)]
+  public let fairness: [FairnessCondition]
   public init(
     variables: [(String, TLAValue, StateExpr?)], actions: [(String, ActionExpr, [ActionBinding])],
-    invariants: [(String, StateExpr)]
+    invariants: [(String, StateExpr)],
+    temporal: [(String, TemporalExpr)] = [],
+    fairness: [FairnessCondition] = []
   ) {
     self.variables = variables
     self.actions = actions
     self.invariants = invariants
+    self.temporal = temporal
+    self.fairness = fairness
   }
   public static func == (lhs: ParsedSpecModel, rhs: ParsedSpecModel) -> Bool {
     guard lhs.variables.count == rhs.variables.count,
       lhs.actions.count == rhs.actions.count,
-      lhs.invariants.count == rhs.invariants.count
+      lhs.invariants.count == rhs.invariants.count,
+      lhs.temporal.count == rhs.temporal.count,
+      lhs.fairness == rhs.fairness
     else { return false }
     for (a, b) in zip(lhs.variables, rhs.variables) {
       if a.name != b.name || a.initial != b.initial || a.initialSet != b.initialSet { return false }
@@ -156,6 +164,9 @@ public struct ParsedSpecModel: Equatable, Sendable {
     }
     for (a, b) in zip(lhs.invariants, rhs.invariants) {
       if a.name != b.name || a.body != b.body { return false }
+    }
+    for (a, b) in zip(lhs.temporal, rhs.temporal) {
+      if a.name != b.name || a.expr != b.expr { return false }
     }
     return true
   }

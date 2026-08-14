@@ -681,15 +681,15 @@ public enum AlgorithmBuilder {
     }
 
     public static func buildExpression(_ component: InvDecl) -> [AlgorithmElement] {
-        [AlgorithmElement(model: .propertyBoundary)]
+        [AlgorithmElement(model: .invariant(.init(name: component.name, body: component.body)))]
     }
 
     public static func buildExpression(_ component: TemporalDecl) -> [AlgorithmElement] {
-        [AlgorithmElement(model: .propertyBoundary)]
+        [AlgorithmElement(model: .temporal(.init(name: component.name, expr: component.expr)))]
     }
 
     public static func buildExpression(_ component: FairnessDecl) -> [AlgorithmElement] {
-        [AlgorithmElement(model: .propertyBoundary)]
+        [AlgorithmElement(model: .fairness(component.condition))]
     }
 
     public static func buildExpression(_ component: AssumeDecl) -> [AlgorithmElement] {
@@ -978,6 +978,12 @@ internal enum AlgorithmValidator {
                 validateName(state.root, at: .algorithm, diagnostics: &diagnostics)
             case .process(let process):
                 validate(process, index: index, diagnostics: &diagnostics)
+            case .invariant(let invariant):
+                validateName(invariant.name, at: .algorithm, diagnostics: &diagnostics)
+            case .temporal(let temporal):
+                validateName(temporal.name, at: .algorithm, diagnostics: &diagnostics)
+            case .fairness:
+                break
             case .propertyBoundary:
                 diagnostics.append(AlgorithmDiagnostic(.propertyBoundary, at: .algorithm))
             case .local, .step:
@@ -1010,7 +1016,7 @@ internal enum AlgorithmValidator {
                 validateName(state.root, at: processAnchor, diagnostics: &diagnostics)
             case .step(let step):
                 validate(step, process: index, labels: Set(labels), diagnostics: &diagnostics)
-            case .propertyBoundary:
+            case .invariant, .temporal, .fairness, .propertyBoundary:
                 diagnostics.append(AlgorithmDiagnostic(.propertyBoundary, at: processAnchor))
             case .shared, .process:
                 diagnostics.append(AlgorithmDiagnostic(.invalidAlgorithmComponent, at: processAnchor))

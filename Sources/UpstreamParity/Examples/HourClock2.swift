@@ -19,11 +19,11 @@ public struct HourClock2Model {
 
                 Each(ClockProcess.all) { _ in
                     Do("HCnxt2") {
-                        Assert(hr >= 1 && hr <= 12)
                         Assign(hr, to: (hr % 12) + 1)
                         Goto("HCnxt2")
                     }
                 }
+                Invariant("HCini") { hr >= 1 && hr <= 12 }
             }
         }
     }

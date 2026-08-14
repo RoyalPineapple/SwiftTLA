@@ -156,12 +156,18 @@ enum MacroExpander {
         let treeInvs = model.invariants.map { i in
             "(\"\(i.0)\", \(codegenStateExpr(i.1)))"
         }.joined(separator: ", ")
+        let treeTemporal = model.temporal.map { property in
+            "(\"\(property.0)\", \(codegenTemporalExpr(property.1)))"
+        }.joined(separator: ", ")
+        let treeFairness = model.fairness.map(codegenFairness).joined(separator: ", ")
 
         let parserTreeSource = """
         static let _parserTree: ParsedSpecModel = ParsedSpecModel(
             variables: [\(treeVars)],
             actions: [\(treeActions)],
-            invariants: [\(treeInvs)]
+            invariants: [\(treeInvs)],
+            temporal: [\(treeTemporal)],
+            fairness: [\(treeFairness)]
         )
         """
         let checkerSource = """
@@ -170,7 +176,9 @@ enum MacroExpander {
             let built = ParsedSpecModel(
                 variables: builtSpec.variables.map { ($0.name, $0.initial, $0.initialSet) },
                 actions: builtSpec.actions.map { ($0.name, $0.body, $0.bindings) },
-                invariants: builtSpec.invariants.map { ($0.name, $0.body) }
+                invariants: builtSpec.invariants.map { ($0.name, $0.body) },
+                temporal: builtSpec.temporalProperties.map { ($0.name, $0.expr) },
+                fairness: builtSpec.fairness
             )
             if !_tlaAlphaEquivalent(built, _parserTree) {
                 preconditionFailure(
@@ -181,6 +189,31 @@ enum MacroExpander {
         }
         """
         return [DeclSyntax(stringLiteral: parserTreeSource), DeclSyntax(stringLiteral: checkerSource)]
+    }
+
+    static func codegenTemporalExpr(_ expression: TemporalExpr) -> String {
+        switch expression {
+        case .always(let state): return ".always(\(codegenStateExpr(state)))"
+        case .eventually(let state): return ".eventually(\(codegenStateExpr(state)))"
+        case .alwaysEventually(let state): return ".alwaysEventually(\(codegenStateExpr(state)))"
+        case .eventuallyAlways(let state): return ".eventuallyAlways(\(codegenStateExpr(state)))"
+        case .leadsTo(let from, let to): return ".leadsTo(\(codegenStateExpr(from)), \(codegenStateExpr(to)))"
+        }
+    }
+
+    static func codegenFairness(_ fairness: FairnessCondition) -> String {
+        switch fairness {
+        case .weakFairness(let action): return ".weakFairness(\"\(action)\")"
+        case .strongFairness(let action): return ".strongFairness(\"\(action)\")"
+        case .weakFairnessInvocation(let invocation):
+            return ".weakFairnessInvocation(\(codegenInvocation(invocation)))"
+        case .strongFairnessInvocation(let invocation):
+            return ".strongFairnessInvocation(\(codegenInvocation(invocation)))"
+        }
+    }
+
+    static func codegenInvocation(_ invocation: TLAActionInvocation) -> String {
+        ".init(name: \"\(invocation.name)\", arguments: [\(invocation.arguments.map(codegenTLAValue).joined(separator: ", "))])"
     }
 
     static func codegenTLAValue(_ value: TLAValue) -> String {

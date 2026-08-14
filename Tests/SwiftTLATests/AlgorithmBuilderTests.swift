@@ -42,6 +42,29 @@ struct AlgorithmBuilderTests {
         #expect(algorithm.model.processes[0].steps.map(\.label.name) == ["receive", "forward", "done"])
     }
 
+    @Test("algorithm-level properties lower with the executable process")
+    func lowersAlgorithmProperties() throws {
+        let algorithm = Algorithm("Properties") {
+            let value = SharedVar("value", initial: 0)
+            value
+            Each(Node.all) { _ in
+                Do(AlgorithmLabel.receive) {
+                    Assign(value, to: value + 1)
+                    Goto(AlgorithmLabel.receive)
+                }
+            }
+            Invariant("NonNegative") { value >= 0 }
+            LeadsTo("EventuallyPositive", value == 0, value > 0)
+            WeakFairness("receive")
+        }
+
+        #expect(algorithm.validate().isEmpty)
+        let spec = try algorithm.lower()
+        #expect(spec.invariants.map(\.name) == ["NonNegative"])
+        #expect(spec.temporalProperties.map(\.name) == ["EventuallyPositive"])
+        #expect(spec.fairness.contains(.weakFairness("receive")))
+    }
+
     @Test("validation fails closed for invalid bounded algorithms")
     func rejectsInvalidAlgorithms() {
         let invalid = Algorithm("__pcal_invalid") {
@@ -66,7 +89,7 @@ struct AlgorithmBuilderTests {
         #expect(codes.contains(.duplicateLabel))
         #expect(codes.contains(.invalidTarget))
         #expect(codes.contains(.duplicateRootWrite))
-        #expect(codes.contains(.propertyBoundary))
+        #expect(!codes.contains(.propertyBoundary))
         #expect(throws: AlgorithmValidationError.self) {
             try invalid.requireValid()
         }

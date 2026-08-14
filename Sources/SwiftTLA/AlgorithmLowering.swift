@@ -25,6 +25,18 @@ enum AlgorithmLowerer {
                 return state
             }
         }
+        let declaredInvariants = algorithm.components.compactMap { component -> NamedInvariant? in
+            guard case .invariant(let invariant) = component else { return nil }
+            return invariant
+        }
+        let declaredTemporal = algorithm.components.compactMap { component -> NamedTemporal? in
+            guard case .temporal(let temporal) = component else { return nil }
+            return temporal
+        }
+        let declaredFairness = algorithm.components.compactMap { component -> FairnessCondition? in
+            guard case .fairness(let fairness) = component else { return nil }
+            return fairness
+        }
 
         var variables = shared.map { state in
             if let initial = try? state.initial.evaluate(in: [:]) {
@@ -121,8 +133,9 @@ enum AlgorithmLowerer {
             name: algorithm.name,
             variables: variables,
             actions: actions,
-            invariants: generatedAssertionInvariants,
-            fairness: fairness)
+            invariants: declaredInvariants + generatedAssertionInvariants,
+            temporalProperties: declaredTemporal,
+            fairness: declaredFairness + fairness)
     }
 
     private static func constantFunction(domain: [TLAValue], value: StateExpr) -> StateExpr {

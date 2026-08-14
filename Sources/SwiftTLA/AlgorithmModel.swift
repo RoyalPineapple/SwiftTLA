@@ -13,6 +13,9 @@ internal struct AlgorithmModel: Sendable {
 internal indirect enum AlgorithmComponentModel: Sendable {
     case shared(AlgorithmStateModel)
     case process(AlgorithmProcessModel)
+    case invariant(NamedInvariant)
+    case temporal(NamedTemporal)
+    case fairness(FairnessCondition)
     case local(AlgorithmStateModel)
     case step(AlgorithmStepModel)
     case propertyBoundary
