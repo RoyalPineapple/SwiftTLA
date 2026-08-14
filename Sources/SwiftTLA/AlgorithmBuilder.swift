@@ -87,6 +87,24 @@ extension WithValue {
     }
 }
 
+extension Function where Domain: FiniteDomainKey {
+    /// Builds a total finite formal function from an expression over each key.
+    ///
+    /// This is useful for dependent initial state: the body may read an
+    /// earlier shared variable, but it cannot execute ordinary Swift logic.
+    public static func mapping(
+        _ body: (WithValue<Domain>) -> Expr<Range>
+    ) -> Expr<Self> {
+        let binding = "__pcal_function_key"
+        let key = WithValue<Domain>(expression: .variable(binding))
+        return Expr<Self>(.functionLiteral(
+            .setLiteral(Domain.tlaValues.map(StateExpr.value)),
+            binding,
+            body(key).raw
+        ))
+    }
+}
+
 public struct AlgorithmLValue<Value: TLAValueType>: Sendable {
     fileprivate let model: AlgorithmLValueModel
 }
@@ -104,6 +122,9 @@ public struct SharedVariable<Value: TLAValueType>: StateExprConvertible, Sendabl
     fileprivate let swiftTypeName: String
 
     public var stateExpr: StateExpr { .variable(name) }
+
+    /// The typed expression for the current formal value.
+    public var expr: Expr<Value> { Expr(stateExpr) }
 
     public var algorithmLValue: AlgorithmLValue<Value> {
         AlgorithmLValue(model: .root(name))

@@ -102,6 +102,53 @@ struct GeneratedRangeInitializedAlgorithmTests {
     }
 }
 
+@TLAModel
+struct GeneratedDependentInitialAlgorithm {
+    enum Node: String, FiniteDomainKey {
+        case left
+        case right
+
+        static let formalDomain: [Node] = [.left, .right]
+        static let formalTypeIdentity = FormalTypeIdentity(rawValue: "test.dependent-initial-node")
+
+        var tlaValue: TLAValue { .string(rawValue) }
+    }
+
+    enum Phase: String, TLAValueType {
+        case active
+        case inactive
+    }
+
+    static var spec: TLASpec {
+        #spec("GeneratedDependentInitialAlgorithm") {
+            Algorithm("GeneratedDependentInitialAlgorithm") {
+                let seed = SharedVar(in: SetExpr<Bool>.literal(false, true))
+                let mirrors = SharedVar(initial: Function<Node, Phase>.mapping { node in
+                    Expr<Phase>.ifThenElse(node == .left && seed == true, then: .active, else: .inactive)
+                })
+                Each(Node.all) { _ in
+                    Do("stop") {
+                        Assign(mirrors, to: mirrors)
+                        Stop()
+                    }
+                }
+            }
+        }
+    }
+}
+
+struct GeneratedDependentInitialAlgorithmTests {
+    @Test("#spec independently preserves a dependent typed function initializer")
+    func generatedModelPreservesDependentInitialStates() {
+        let states = computeInitialStates(GeneratedDependentInitialAlgorithm.spec)
+
+        #expect(Set(states.compactMap { $0["mirrors"] }) == [
+            .function([.string("left"): .string("inactive"), .string("right"): .string("inactive")]),
+            .function([.string("left"): .string("active"), .string("right"): .string("inactive")])
+        ])
+    }
+}
+
 struct NestedAdapterConcurrencyTests {
     @Test("Nested adapters observe and execute through their canonical model")
     @MainActor

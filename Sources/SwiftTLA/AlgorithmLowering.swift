@@ -27,11 +27,11 @@ enum AlgorithmLowerer {
         }
 
         var variables = shared.map { state in
-            NamedVar(
-                name: state.root,
-                initial: staticInitialValue(state.initial, named: state.root),
-                initialSet: state.initialSet
-            )
+            if let initial = try? state.initial.evaluate(in: [:]) {
+                NamedVar(name: state.root, initial: initial, initialSet: state.initialSet)
+            } else {
+                NamedVar(name: state.root, initial: .int(0), initExpr: state.initial)
+            }
         }
         for process in processes {
             for local in process.components {

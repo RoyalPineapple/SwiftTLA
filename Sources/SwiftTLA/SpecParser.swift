@@ -63,6 +63,7 @@ public enum SpecParser {
            let selfExpr = decodeStateExpr(base) {
             let propName = memberAccess.declName.baseName.text
             switch propName {
+            case "expr": return selfExpr
             case "cardinality": return .cardinality(selfExpr)
             case "flattened": return .unionAll(selfExpr)
             case "subsets": return .powerSet(selfExpr)
@@ -138,6 +139,38 @@ public enum SpecParser {
             default:
                 return nil
             }
+        }
+
+        if access.declName.baseName.text == "mapping",
+           let literalType = typedLiteralType(access.base),
+           literalType.name == "Function",
+           let domainType = literalType.arguments.first,
+           let domain = _enumDomains[domainType],
+           let closure = call.trailingClosure,
+           let parameter = closureParameterNames(in: closure).first,
+           closure.statements.count == 1,
+           case .expr(let bodySyntax) = closure.statements.first?.item,
+           let body = decodeTypedFacadeValue(
+                bodySyntax,
+                substitutions: [parameter: .variable("__pcal_function_key")]
+           ) {
+            return .functionLiteral(
+                .setLiteral(domain.map(StateExpr.value)),
+                "__pcal_function_key",
+                body
+            )
+        }
+
+        if access.declName.baseName.text == "ifThenElse",
+           let base = access.base,
+           base.description.trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix("Expr<"),
+           let conditionSyntax = call.arguments.first?.expression,
+           let thenSyntax = call.arguments.first(where: { $0.label?.text == "then" })?.expression,
+           let elseSyntax = call.arguments.first(where: { $0.label?.text == "else" })?.expression,
+           let condition = decodeTypedFacadeValue(conditionSyntax, substitutions: substitutions),
+           let thenValue = decodeTypedFacadeValue(thenSyntax, substitutions: substitutions),
+           let elseValue = decodeTypedFacadeValue(elseSyntax, substitutions: substitutions) {
+            return .ifThenElse(condition, thenValue, elseValue)
         }
 
         // Swift infers `Record<Schema>` from a surrounding `SetExpr` or

@@ -86,6 +86,21 @@ extension Expr where T == Bool {
     }
 }
 
+extension Expr {
+    /// Builds a typed formal conditional without leaving the typed DSL.
+    public static func ifThenElse(
+        _ condition: some StateExprConvertible,
+        then: T,
+        else otherwise: T
+    ) -> Expr<T> {
+        Expr<T>(.ifThenElse(
+            condition.stateExpr,
+            .value(then.tlaValue),
+            .value(otherwise.tlaValue)
+        ))
+    }
+}
+
 extension Expr where T == String {
     public static func ifThenElse(_ cond: some StateExprConvertible, _ then: String, _ else: Var<String>) -> Expr {
         Expr(.ifThenElse(cond.stateExpr, .value(.string(then)), `else`.stateExpr))

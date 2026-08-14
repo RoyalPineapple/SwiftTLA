@@ -417,6 +417,28 @@ struct AlgorithmBuilderTests {
             .value(.int(1)), .value(.int(2)), .value(.int(3))
         ]))
     }
+
+    @Test("dependent typed function initialization is evaluated after earlier initial state choices")
+    func lowersDependentFunctionInitialization() throws {
+        let algorithm = Algorithm("DependentInitial") {
+            let seed = SharedVar("seed", in: SetExpr<Bool>.literal(false, true))
+            seed
+            let mirrors = SharedVar("mirrors", initial: Function<Node, Bool>.mapping { _ in seed.expr })
+            mirrors
+            Each(Node.all) { _ in
+                Do("stop") { Stop() }
+            }
+        }
+
+        let spec = try algorithm.lower()
+        let states = computeInitialStates(spec)
+
+        #expect(Set(states.compactMap { $0["seed"] }) == [.bool(false), .bool(true)])
+        #expect(Set(states.compactMap { $0["mirrors"] }) == [
+            .function([.string("first"): .bool(false), .string("second"): .bool(false)]),
+            .function([.string("first"): .bool(true), .string("second"): .bool(true)])
+        ])
+    }
 }
 
 private enum Node: String, FiniteDomainKey, PlusCalLabel {
