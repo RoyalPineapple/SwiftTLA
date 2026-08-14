@@ -36,8 +36,7 @@ public enum GeneratedDemoTestSuite {
             testResults(for: target.title, verifySpec: TwoBuckets.verifySpec, matrix: TwoBuckets.transitionMatrix,
                         verifyTransitions: TwoBuckets.verifyTransitions, verifyInvariants: TwoBuckets.verifyInvariants)
         case .duckDuckLeader:
-            testResults(for: target.title, verifySpec: ChangRoberts.verifySpec, matrix: ChangRoberts.transitionMatrix,
-                        verifyTransitions: ChangRoberts.verifyTransitions, verifyInvariants: ChangRoberts.verifyInvariants)
+            ringTestResults()
         case .elevatorBank:
             testResults(for: target.title, verifySpec: ElevatorBank.verifySpec, matrix: ElevatorBank.transitionMatrix,
                         verifyTransitions: ElevatorBank.verifyTransitions, verifyInvariants: ElevatorBank.verifyInvariants)
@@ -64,6 +63,43 @@ public enum GeneratedDemoTestSuite {
             },
             result(model: model, check: "Native transitions", action: verifyTransitions),
             result(model: model, check: "Invariants", action: verifyInvariants)
+        ]
+    }
+
+    /// The twelve-node ring has a deliberately large asynchronous state space.
+    /// The release pipeline exhaustively checks it; the app runs these immediate,
+    /// generated-surface checks so its button remains responsive.
+    private static func ringTestResults() -> [GeneratedDemoTestResult] {
+        [
+            result(model: GeneratedDemoTestTarget.duckDuckLeader.title, check: "Formal surface", action: { () throws -> Void in
+                let spec = ChangRoberts.spec
+                guard !spec.variables.isEmpty, !spec.actions.isEmpty else {
+                    throw GeneratedDemoSuiteError.unexpectedFormalSurface
+                }
+            }),
+            result(model: GeneratedDemoTestTarget.duckDuckLeader.title, check: "Generated state", action: { () throws -> Void in
+                let machine = ChangRoberts()
+                guard machine.state.leader == 0, machine.state.messages.elements.count == 12 else {
+                    throw GeneratedDemoSuiteError.unexpectedInitialState
+                }
+            }),
+            result(model: GeneratedDemoTestTarget.duckDuckLeader.title, check: "Typed delivery", action: { () throws -> Void in
+                var machine = ChangRoberts()
+                _ = try machine.apply(.deliver(process: .six))
+                guard machine.state.messages.elements.contains(where: {
+                    $0[ChangRoberts.MessageSchema.candidate] == 12 &&
+                    $0[ChangRoberts.MessageSchema.from] == .six &&
+                    $0[ChangRoberts.MessageSchema.to] == .seven
+                }) else {
+                    throw GeneratedDemoSuiteError.deliveryWasNotForwarded
+                }
+            }),
+            result(model: GeneratedDemoTestTarget.duckDuckLeader.title, check: "Enabled actions", action: { () throws -> Void in
+                let machine = ChangRoberts()
+                guard try machine.availableActions().contains(.deliver(process: .six)) else {
+                    throw GeneratedDemoSuiteError.expectedActionUnavailable
+                }
+            })
         ]
     }
 
@@ -95,4 +131,8 @@ public enum GeneratedDemoTestSuite {
 
 private enum GeneratedDemoSuiteError: Error {
     case emptyMatrix
+    case unexpectedFormalSurface
+    case unexpectedInitialState
+    case deliveryWasNotForwarded
+    case expectedActionUnavailable
 }

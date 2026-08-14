@@ -499,7 +499,18 @@ extension TLCTemporalAdapterV1 {
   }
 
   private func resolvedURL(_ url: URL) -> URL {
-    url.resolvingSymlinksInPath().standardizedFileURL
+    let candidate = url.standardizedFileURL
+    var existingAncestor = candidate
+    var suffix = [String]()
+    while !FileManager.default.fileExists(atPath: existingAncestor.path) {
+      let component = existingAncestor.lastPathComponent
+      guard component.isEmpty == false, component != "/" else { break }
+      suffix.insert(component, at: 0)
+      existingAncestor.deleteLastPathComponent()
+    }
+    return suffix.reduce(existingAncestor.resolvingSymlinksInPath().standardizedFileURL) {
+      $0.appendingPathComponent($1)
+    }
   }
 
   private func isTemporalViolation(_ result: TLCProcessResultV1) -> Bool {

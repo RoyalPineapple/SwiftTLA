@@ -31,7 +31,7 @@ private struct DemoHomeView: View {
             ElevatorBankView()
                 .tabItem { Text("Elevator Bank") }
             GeneratedSurfaceView()
-                .tabItem { Text("Generated Surface") }
+                .tabItem { Text("Generated Tests") }
         }
         .padding(24)
         .background(Color.black.opacity(0.9))
@@ -234,7 +234,8 @@ private struct ElevatorBankView: View {
     private var riderSummary: String {
         let riders = ElevatorBank.Rider.formalDomain.filter { $0 != .none }
         return riders.map { rider in
-            "\(rider.rawValue.capitalized): \(state.riders[rider][ElevatorBank.RiderSchema.phase].rawValue)"
+            let passenger = state.riders[rider]
+            return "\(rider.rawValue.capitalized): \(passenger[ElevatorBank.RiderSchema.phase].rawValue), floor \(passenger[ElevatorBank.RiderSchema.floor].rawValue) → \(passenger[ElevatorBank.RiderSchema.destination].rawValue)"
         }.joined(separator: "\n")
     }
 
@@ -346,13 +347,14 @@ private struct ElevatorBankScene: View {
     let error: String?
 
     var body: some View {
-        HStack(alignment: .center, spacing: 60) {
+        HStack(alignment: .bottom, spacing: 34) {
+            ElevatorFloorBoard(state: state)
             ElevatorShaft(car: .carA, state: state)
             ElevatorShaft(car: .carB, state: state)
-            StateCard(title: "Formal state", detail: riderSummary, error: error)
-                .frame(width: 265)
+            StateCard(title: "Riders", detail: riderSummary, error: error)
+                .frame(width: 300)
         }
-        .frame(maxWidth: .infinity, minHeight: 430)
+        .frame(maxWidth: .infinity, minHeight: 430, alignment: .center)
     }
 }
 
@@ -362,12 +364,12 @@ private struct ElevatorBankControls: View {
     let reset: () -> Void
 
     var body: some View {
-        HStack(spacing: 12) {
-            Button("Advance Car 1", action: operateCarA)
+        HStack(spacing: 14) {
+            Button("Operate Car 1", action: operateCarA)
                 .buttonStyle(.borderedProminent)
-            Button("Advance Car 2", action: operateCarB)
+            Button("Operate Car 2", action: operateCarB)
                 .buttonStyle(.borderedProminent)
-            Spacer()
+            Divider().frame(height: 26)
             Button("Reset", systemImage: "arrow.counterclockwise", action: reset)
         }
     }
@@ -379,8 +381,8 @@ private struct GeneratedSurfaceView: View {
 
     var body: some View {
         DemoScreen(
-            title: "Generated Surface",
-            subtitle: "One formal model produces native state, adapters, and verification helpers."
+            title: "Generated Tests",
+            subtitle: "Run the same generated checks exercised by this consumer package's test target."
         ) {
             ScrollView {
                 VStack(spacing: 16) {
@@ -428,7 +430,7 @@ private struct GeneratedSurfaceSummary: View {
                 )
                 GeneratedSurfaceItem(
                     title: "Verification suite",
-                    detail: "The cards run the helpers that the downstream test target also exercises."
+                    detail: "Small models run full generated verification. The ring runs fast generated-surface checks; its full graph belongs in the release pipeline."
                 )
             }
         }
@@ -465,7 +467,7 @@ private struct GeneratedTestCard: View {
             HStack {
                 VStack(alignment: .leading, spacing: 3) {
                     Text(target.title).font(.headline)
-                    Text("Generated verification helpers, exercised here and by the downstream test target.")
+                    Text("Generated checks, exercised here and by the downstream test target.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -545,43 +547,83 @@ private struct Bucket: View {
     }
 }
 
-private struct ElevatorShaft: View {
-    let car: ElevatorBank.CarID
+private struct ElevatorFloorBoard: View {
     let state: ElevatorBank.State
 
-    private var vehicle: Record<ElevatorBank.CarSchema> { state.cars[car] }
+    private let floors: [ElevatorBank.Floor] = [.three, .two, .one]
 
     var body: some View {
         VStack(spacing: 8) {
-            Text(car == .carA ? "Car 1" : "Car 2").font(.headline)
-            ZStack(alignment: .bottom) {
-                RoundedRectangle(cornerRadius: 18)
-                    .stroke(.white.opacity(0.35), lineWidth: 3)
-                    .frame(width: 165, height: 360)
-                ForEach(ElevatorBank.Floor.formalDomain, id: \.self) { floor in
-                    Rectangle().fill(.white.opacity(0.12)).frame(height: 1)
-                        .offset(y: floorOffset(floor))
-                }
-                if vehicle[ElevatorBank.CarSchema.floor] == .one || vehicle[ElevatorBank.CarSchema.floor] == .two || vehicle[ElevatorBank.CarSchema.floor] == .three {
-                    CarCabin(vehicle: vehicle)
-                        .offset(y: floorOffset(vehicle[ElevatorBank.CarSchema.floor]))
-                        .animation(.snappy, value: vehicle)
+            Text("Floors")
+                .font(.headline)
+                .frame(height: 26)
+            VStack(spacing: 0) {
+                ForEach(floors, id: \.self) { floor in
+                    HStack(spacing: 8) {
+                        Text("Floor \(floor.rawValue)")
+                            .font(.subheadline.weight(.medium))
+                        Spacer(minLength: 0)
+                        VStack(alignment: .trailing, spacing: 3) {
+                            ForEach(waitingRiders(at: floor), id: \.self) { rider in
+                                RiderChip(rider: rider, destination: state.riders[rider][ElevatorBank.RiderSchema.destination])
+                            }
+                        }
+                    }
+                    .frame(width: 150, height: 112)
+                    .overlay(alignment: .bottom) { Rectangle().fill(.white.opacity(0.12)).frame(height: 1) }
                 }
             }
         }
     }
 
-    private func floorOffset(_ floor: ElevatorBank.Floor) -> CGFloat {
-        switch floor {
-        case .one: 112
-        case .two: 0
-        case .three: -112
+    private func waitingRiders(at floor: ElevatorBank.Floor) -> [ElevatorBank.Rider] {
+        ElevatorBank.Rider.formalDomain.filter { rider in
+            rider != .none
+                && state.riders[rider][ElevatorBank.RiderSchema.phase] == .waiting
+                && state.riders[rider][ElevatorBank.RiderSchema.floor] == floor
+        }
+    }
+}
+
+private struct ElevatorShaft: View {
+    let car: ElevatorBank.CarID
+    let state: ElevatorBank.State
+
+    private var vehicle: Record<ElevatorBank.CarSchema> { state.cars[car] }
+    private let floors: [ElevatorBank.Floor] = [.three, .two, .one]
+
+    var body: some View {
+        VStack(spacing: 8) {
+            Text(car == .carA ? "Car 1" : "Car 2")
+                .font(.headline)
+                .frame(height: 26)
+            VStack(spacing: 0) {
+                ForEach(floors, id: \.self) { floor in
+                    ZStack {
+                        if vehicle[ElevatorBank.CarSchema.floor] == floor {
+                            CarCabin(
+                                vehicle: vehicle,
+                                destination: state.riders[vehicle[ElevatorBank.CarSchema.rider]][ElevatorBank.RiderSchema.destination]
+                            )
+                                .transition(.opacity.combined(with: .scale(scale: 0.95)))
+                        }
+                    }
+                    .frame(width: 176, height: 112)
+                    .overlay(alignment: .bottom) { Rectangle().fill(.white.opacity(0.12)).frame(height: 1) }
+                }
+            }
+            .background {
+                RoundedRectangle(cornerRadius: 18)
+                    .stroke(.white.opacity(0.35), lineWidth: 3)
+            }
+            .animation(.snappy, value: vehicle)
         }
     }
 }
 
 private struct CarCabin: View {
     let vehicle: Record<ElevatorBank.CarSchema>
+    let destination: ElevatorBank.Floor
 
     var body: some View {
         VStack(spacing: 5) {
@@ -590,12 +632,26 @@ private struct CarCabin: View {
                 RoundedRectangle(cornerRadius: 4).fill(.indigo).frame(width: 52, height: 45)
             }
             if vehicle[ElevatorBank.CarSchema.rider] != .none {
-                Text("♟ → \(vehicle[ElevatorBank.CarSchema.rider].rawValue.capitalized)")
-                    .font(.caption.bold()).foregroundStyle(.orange)
+                RiderChip(
+                    rider: vehicle[ElevatorBank.CarSchema.rider],
+                    destination: destination
+                )
             }
         }
         .padding(8)
         .background(.indigo.opacity(0.2), in: .rect(cornerRadius: 12))
+    }
+
+}
+
+private struct RiderChip: View {
+    let rider: ElevatorBank.Rider
+    let destination: ElevatorBank.Floor
+
+    var body: some View {
+        Label("\(rider.rawValue.capitalized) → \(destination.rawValue)", systemImage: "person.fill")
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(.orange)
     }
 }
 

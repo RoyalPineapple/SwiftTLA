@@ -424,6 +424,8 @@ private func executeProcess(
       partialStderr: String(data: output.stderr, encoding: .utf8) ?? "<non-UTF-8 output>"
     )
   }
+  try? stdoutPipe.fileHandleForWriting.close()
+  try? stderrPipe.fileHandleForWriting.close()
   _ = outputGroup.wait(timeout: .now() + 10)
   return TLCProcessResultV1(
     status: process.terminationStatus,

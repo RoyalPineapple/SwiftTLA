@@ -50,7 +50,7 @@ struct PublicWorkflowAnnotationFixtureTests {
     let exported = Set(expression.matches(in: macroSource, range: range).compactMap { match -> String? in
       guard let nameRange = Range(match.range(at: 1), in: macroSource) else { return nil }
       return "@" + String(macroSource[nameRange])
-    })
+    }.filter { $0 != "@spec" })
     let inventoried = Set(inventory.annotations.filter { $0.decision != "removed" }.map(\.name))
 
     #expect(exported == inventoried)

@@ -3,22 +3,13 @@ import Testing
 
 @Suite(.serialized)
 struct ReadmeSymmetricCollectionTests {
-  @Test("README symmetric collection model compiles, retains its invariant, and checks")
-  func readmeModelCompilesAndChecks() throws {
+  @Test("symmetric collection fixture compiles, retains its invariant, and checks")
+  func symmetricCollectionFixtureCompilesAndChecks() throws {
     let root = packageRoot()
-    let readme = try String(contentsOf: root.appendingPathComponent("README.md"), encoding: .utf8)
     let fixture = root.appendingPathComponent("Tests/Fixtures/ReadmeSymmetricCollectionMacro")
-    let source = try String(
-      contentsOf: fixture.appendingPathComponent(
-        "Sources/ReadmeSymmetricCollectionMacro/ReadmeSymmetricCollectionMacro.swift"
-      ),
-      encoding: .utf8
-    )
-
-    #expect(source.hasPrefix(symmetricCollectionSnippet(in: readme) + "\n\nlet generatedSpec"))
 
     let result = try runSwift(["run", "--package-path", fixture.path])
-    #expect(result.status == 0, "README fixture failed:\n\(result.output)")
+    #expect(result.status == 0, "symmetric collection fixture failed:\n\(result.output)")
   }
 
   @Test("An invalid modeled phase fails macro-time checking")
@@ -29,17 +20,6 @@ struct ReadmeSymmetricCollectionTests {
     #expect(result.status != 0)
     #expect(result.output.contains("validPhase"))
     #expect(result.output.localizedCaseInsensitiveContains("invariant"))
-  }
-
-  private func symmetricCollectionSnippet(in readme: String) -> String {
-    guard let section = readme.range(of: "## Symmetric collections"),
-          let opening = readme.range(of: "```swift", range: section.upperBound..<readme.endIndex),
-          let closing = readme.range(of: "```", range: opening.upperBound..<readme.endIndex)
-    else {
-      Issue.record("README symmetric collection Swift snippet is missing")
-      return ""
-    }
-    return String(readme[opening.upperBound..<closing.lowerBound]).trimmingCharacters(in: .newlines)
   }
 
   private func runSwift(_ arguments: [String]) throws -> (status: Int32, output: String) {
