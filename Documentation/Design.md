@@ -1,9 +1,15 @@
-# SwiftTLA language fragment (B v1)
+# SwiftTLA language design
 
-## Core guarantee
+SwiftTLA lets an engineer write a bounded formal algorithm in a shape that
+feels native to Swift: typed values, scoped result builders, enums for finite
+domains, records for structured state, and generated machines for execution.
+One authored model becomes a checked formal AST, a TLA+ module, and a typed
+Swift state machine.
 
-SwiftTLA deliberately keeps two independent constructions of the same formal
-model. This is a fidelity check, not duplicate application logic:
+## One model, several faithful products
+
+SwiftTLA constructs the same formal model along two independent paths, then
+compares them before generated code uses it:
 
 ```
 source syntax → parser → StateExpr/ActionExpr AST
@@ -16,24 +22,21 @@ constrained builders → runtime TLASpec → SpecRuntime
 parser AST ↔ runtime TLASpec semantic alpha-equivalence gate
 ```
 
-The parser and the builders are intentionally separate implementations. The
-macro checks semantic alpha-equivalence before generated runtime work. A
-mismatch reports the first differing declaration, action, invariant, or
-normalized bound expression. Do not replace this with a macro that emits the
-parser AST as the runtime model: that would make the check vacuous.
+The parser reads the authored Swift syntax. The constrained builders construct
+the executable `TLASpec`. Semantic alpha-equivalence confirms that they mean
+the same thing, with a diagnostic that identifies the first differing
+declaration, action, invariant, or bound expression.
 
-`#spec` is a syntax boundary, not a second semantics engine. It can rewrite
-Swift declaration sugar such as `let count = SharedVar(initial: 0)` into a
-builder-visible declaration. The source parser reads that `let` independently;
-the runtime builder constructs the corresponding `TLASpec` independently.
-Every future authoring convenience must preserve this split.
+`#spec` is the authoring boundary. It makes Swift declaration sugar such as
+`let count = SharedVar(initial: 0)` available to the scoped builder while the
+source parser reads the original declaration independently. New conveniences
+preserve this two-path construction.
 
 ## A small family of scoped builders
 
-SwiftTLA does not have one permissive "formal builder." It has a small,
-fixed family of builders. Each builder represents one formal scope and accepts
-only the elements that are meaningful in that scope. This is how the Swift
-type checker rejects a misplaced statement before macro parsing or model
+SwiftTLA has a small, fixed family of builders. Each builder represents a
+formal scope and gives that scope a clear Swift spelling. The type checker uses
+those scopes to guide correct construction before macro parsing or model
 checking begins.
 
 | Scope | Builder | It accepts | It produces |
@@ -43,12 +46,11 @@ checking begins.
 | One concurrent process family | `Each(domain) { self in ... }` | labeled atomic regions | one process definition for each finite member |
 | One atomic region | `Do(label) { ... }` / `DoBuilder` | guards, assignments, local bindings, branching, and control transfer | one `StepStatement` list, lowered as one transition |
 
-`DoBuilder` is deliberately not generic. An atomic block always produces
-formal statements; it is not a general Swift collection builder. The generic
+`DoBuilder` produces formal statements for one atomic transition. The generic
 part of the API is the data that flows through it: `SharedVariable<Value>`,
 `LocalVariable<Value>`, typed records, finite maps, finite domains, and typed
-expressions. A `Do` block can therefore be strongly typed without accepting
-arbitrary Swift values or side effects.
+expressions. This keeps an atomic block strongly typed while making its
+formal boundary obvious.
 
 ```swift
 Algorithm("Counter") {
@@ -65,11 +67,10 @@ Algorithm("Counter") {
 ```
 
 Here, `SharedVar` belongs to the algorithm scope, `Each` introduces
-independently scheduled finite processes, and `Do` makes the guard,
-assignment, and stop one atomic formal step. A statement that belongs to a
-different scope does not type-check as a `Do` statement. That restriction is
-intentional: the builder layer is the first validation layer, not decorative
-syntax.
+independently scheduled finite processes, and `Do` groups the guard,
+assignment, and stop into one atomic formal step. The builder layer makes
+scope visible in the source and gives Swift a first opportunity to validate
+the model.
 
 ### Typed formal data
 
@@ -91,17 +92,15 @@ The working elevator model is the reference implementation of this pattern:
 `CarSchema` defines validated fields, `cars` is a typed finite function, and
 all updates use typed fields rather than string subscripts.
 
-The rule is not optional: public generated state and transition results use
-named Swift types, not `[String: TLAValue]`. String names are contained inside
-the formal implementation behind validated handles and record fields.
+Generated state and transition results use these named Swift types. Formal
+names remain behind validated variables, fields, and domains.
 
 ### Adding a builder
 
-Add a new builder only when it represents a real formal scope with its own
-valid statements and lowering rule. Do not add a generic builder merely to
-make arbitrary Swift compile. A future procedure, macro, or process-local
-scope may deserve a specific builder; ordinary expressions and assignments do
-not.
+Each new builder represents a formal scope with its own statements and
+lowering rule. A future procedure, macro, or process-local scope may earn a
+specific builder; expressions and assignments stay in the scopes that own
+them.
 
 Finite nondeterministic initialization is also formal semantics. For example,
 `SharedVar(in: SetExpr<Record<CarSchema>>.literal(...))` means that the
@@ -111,26 +110,23 @@ not reduced to a Swift collection or display hint.
 
 ## Compilation and execution phases
 
-The two paths are deliberately separate all the way to the comparison:
+The two paths carry the authored model through the following phases:
 
 1. The Swift compiler type-checks the `#spec` closure. Its result builders
    accept only the supported authoring vocabulary.
-2. The `#spec` macro performs limited syntax-only desugaring. For example, it
-   makes a `let count = SharedVar(initial: 0)` declaration visible to the
-   runtime builder. It does not supply a formal model to that builder.
+2. The `#spec` macro performs syntax-only desugaring. For example, it makes a
+   `let count = SharedVar(initial: 0)` declaration visible to the runtime
+   builder.
 3. The model macro parses the original source independently into the formal
    AST. The checker, TLA+ emitter, and generated machine start from this AST.
 4. At runtime, the constrained builder closure runs and independently creates
    a `TLASpec`.
 5. SwiftTLA normalizes both models and compares them with semantic
-   alpha-equivalence. A failure identifies the first declaration, action,
-   invariant, or bound expression that differs.
-6. Only after that check passes does the generated machine execute the
-   validated transition runtime.
+   alpha-equivalence.
+6. The generated machine executes the validated transition runtime.
 
-The runtime builder does not keep re-parsing source and it does not make
-product decisions. After construction and comparison, the generated machine
-holds its canonical state machine and applies enabled transitions.
+After construction and comparison, the generated machine holds its canonical
+state machine and applies enabled transitions.
 
 This is intentionally not a hash-only check. A structural fingerprint is a
 useful fast diagnostic and cache key, but alpha-equivalence is the authority:
@@ -163,18 +159,12 @@ The `#spec` expansion registers `count` with the constrained runtime builder.
 The model macro parses the original declaration to the formal AST. Neither path
 receives the other's completed model.
 
-## Source language boundary and fallback
+## Authoring two source forms
 
-PlusCal-shaped authoring is preferred when an upstream specification contains
-an algorithm: translate its shared variables, processes, and labeled atomic
-steps mechanically into `Algorithm`, `Each`, and `Do`. SwiftTLA then lowers
-that form into the same core AST and emits ordinary TLA+ for TLC.
-
-Not every published TLA+ specification began as PlusCal. A direct TLA+
-specification uses the typed `#spec` vocabulary directly. It is not forced
-through an invented algorithm just to satisfy a style rule. Both forms end at
-the same AST, checker, emitter, generated machine, and parser–builder fidelity
-gate.
+PlusCal-shaped authoring expresses algorithms through `Algorithm`, `Each`, and
+`Do`; SwiftTLA lowers it into the core AST and emits ordinary TLA+ for TLC.
+The typed `#spec` vocabulary also expresses direct TLA+ specifications. Both
+forms share the AST, checker, emitter, generated machine, and fidelity gate.
 
 State-count parity does not prove runtime correctness. Equal state counts can
 hide different initial states, transitions, action labels, or outcomes.
