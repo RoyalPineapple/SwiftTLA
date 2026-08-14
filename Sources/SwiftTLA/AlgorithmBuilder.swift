@@ -226,12 +226,42 @@ extension SharedVariable where Value == Int {
         .greaterOrEqual(lhs.stateExpr, .int(rhs))
     }
 
-    public static func == (_ lhs: SharedVariable, _ rhs: Int) -> StateExpr {
-        .equal(lhs.stateExpr, .int(rhs))
+}
+
+extension SharedVariable {
+    public static func == (_ lhs: SharedVariable, _ rhs: Value) -> StateExpr {
+        .equal(lhs.stateExpr, .value(rhs.tlaValue))
     }
 
-    public static func != (_ lhs: SharedVariable, _ rhs: Int) -> StateExpr {
-        .notEqual(lhs.stateExpr, .int(rhs))
+    public static func != (_ lhs: SharedVariable, _ rhs: Value) -> StateExpr {
+        .notEqual(lhs.stateExpr, .value(rhs.tlaValue))
+    }
+
+    public static func == (_ lhs: SharedVariable, _ rhs: Expr<Value>) -> StateExpr {
+        .equal(lhs.stateExpr, rhs.raw)
+    }
+
+    public static func != (_ lhs: SharedVariable, _ rhs: Expr<Value>) -> StateExpr {
+        .notEqual(lhs.stateExpr, rhs.raw)
+    }
+
+}
+
+extension SharedVariable where Value: FiniteDomainKey {
+    public static func == (_ lhs: SharedVariable, _ rhs: ProcessIdentifier<Value>) -> StateExpr {
+        .equal(lhs.stateExpr, rhs.stateExpr)
+    }
+
+    public static func != (_ lhs: SharedVariable, _ rhs: ProcessIdentifier<Value>) -> StateExpr {
+        .notEqual(lhs.stateExpr, rhs.stateExpr)
+    }
+
+    public static func == (_ lhs: SharedVariable, _ rhs: WithValue<Value>) -> StateExpr {
+        .equal(lhs.stateExpr, rhs.stateExpr)
+    }
+
+    public static func != (_ lhs: SharedVariable, _ rhs: WithValue<Value>) -> StateExpr {
+        .notEqual(lhs.stateExpr, rhs.stateExpr)
     }
 }
 
