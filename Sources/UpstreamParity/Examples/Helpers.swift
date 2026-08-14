@@ -64,31 +64,3 @@ func coffeeCanSpec(maxBeanCount: Int) -> TLASpec {
             }
         }
     }
-
-    /// Faithful Moving_Cat_Puzzle algorithm for fixed Number_Of_Boxes.
-func catSpec(boxes: Int) -> TLASpec {
-        let cat = Var<Int>("cat_box")
-        let observed = Var<Int>("observed_box")
-        let direction = Var<String>("direction")
-        return TLASpec("Cat") {
-            Extends("Naturals")
-            Variable(cat, in: 1...boxes)
-            Variable(observed, in: 2...(boxes - 1))
-            Variable(direction, in: ["left", "right"])
-            Invariant("TypeOK") {
-                cat >= 1 && cat <= boxes
-                    && observed >= 2 && observed <= boxes - 1
-                    && (direction == "left" || direction == "right")
-            }
-            Action("Next") {
-                // Move_Cat /\ Observe_Box
-                ((cat < boxes && cat.becomes(cat + 1)) || (cat > 1 && cat.becomes(cat - 1)))
-                    && (
-                        (direction == "right" && observed < boxes - 1 && observed.becomes(observed + 1))
-                            || (direction == "right" && observed == boxes - 1 && direction.becomes("left"))
-                            || (direction == "left" && observed > 2 && observed.becomes(observed - 1))
-                            || (direction == "left" && observed == 2 && direction.becomes("right"))
-                    )
-            }
-        }
-    }

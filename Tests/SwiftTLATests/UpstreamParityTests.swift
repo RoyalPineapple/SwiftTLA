@@ -93,6 +93,17 @@ struct UpstreamParityTests {
         }
     }
 
+    @Test("Moving Cat models use typed direction state")
+    func movingCatTypedDirectionParity() throws {
+        try CatEvenBoxesModel.verifySpec()
+        try CatOddBoxesModel.verifySpec()
+
+        let even = ModelChecker(spec: CatEvenBoxesModel.spec, maxStates: 50_000)
+        let odd = ModelChecker(spec: CatOddBoxesModel.spec, maxStates: 50_000)
+        #expect(try even.exploreGraph().states.count == Example.catEvenBoxes.expectedDistinct)
+        #expect(try odd.exploreGraph().states.count == Example.catOddBoxes.expectedDistinct)
+    }
+
     @Test("Sync termination detector uses typed finite function state")
     func syncTerminationTypedFunctionParity() throws {
         try SyncTerminationDetectionModel.verifySpec()
