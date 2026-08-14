@@ -210,6 +210,37 @@ import UpstreamParity
     #expect(r.count == 3)
   }
 
+  @Test func existentialRetainsItsSurroundingGuard() throws {
+    let action: ActionExpr = .and(
+      .guard_(.equal(.variable("x"), .value(.int(0)))),
+      .existsAction(
+        "candidate",
+        .setLiteral([.value(.int(1))]),
+        .assign("x", .variable("candidate"))
+      )
+    )
+
+    let blocked = try ActionEnumerator.enumerate(action, from: ["x": .int(1)], varNames: ["x"])
+    #expect(blocked.isEmpty)
+
+    let advanced = try ActionEnumerator.enumerate(action, from: s0, varNames: ["x"])
+    #expect(advanced == [["x": .int(1)]])
+  }
+
+  @Test func equivalentAssignmentsAroundAnExistentialAgree() throws {
+    let action: ActionExpr = .and(
+      .existsAction(
+        "candidate",
+        .setLiteral([.value(.int(1))]),
+        .assign("x", .variable("candidate"))
+      ),
+      .assign("x", .value(.int(1)))
+    )
+
+    let successors = try ActionEnumerator.enumerate(action, from: s0, varNames: ["x"])
+    #expect(successors == [["x": .int(1)]])
+  }
+
 }
 
 // MARK: - StateExpr: every case tested via CaseIterable
