@@ -43,6 +43,17 @@ struct UpstreamParityTests {
         }
     }
 
+    @Test("two-process Lock PlusCal port matches TLC")
+    func lockMatchesTLC() throws {
+        try LockModel.verifySpec()
+        let checker = ModelChecker(spec: Example.lockTwoProcess.spec, maxStates: 100)
+        #expect(try checker.exploreGraph().states.count == Example.lockTwoProcess.expectedDistinct)
+        guard case .ok = try checker.check() else {
+            Issue.record("Lock did not verify")
+            return
+        }
+    }
+
     @Test("HourClock .tlaModule is TLC-shaped")
     func hourClockTLA() {
         let tla = Example.hourClock.spec.tlaModule

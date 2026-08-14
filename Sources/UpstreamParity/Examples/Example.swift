@@ -38,6 +38,7 @@ public enum Example {
         hourClock,
         hourClock2,
         lamportMutexN2,
+        lockTwoProcess,
         multiCarElevator,
         nQueensFour,
         paxosSmall,
