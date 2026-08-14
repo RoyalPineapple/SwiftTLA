@@ -78,6 +78,10 @@ extension Var where T == String {
 // MARK: - Free-floating
 
 extension Expr where T == Bool {
+    public static prefix func !(_ value: Expr<Bool>) -> Expr<Bool> {
+        Expr(.not(value.raw))
+    }
+
     public static func ifThenElse(_ cond: some StateExprConvertible, _ then: Bool, _ else: Var<Bool>) -> Expr {
         Expr(.ifThenElse(cond.stateExpr, .value(.bool(then)), `else`.stateExpr))
     }

@@ -1,8 +1,146 @@
 import SwiftTLA
+import SwiftTLAMacros
 
-/// Lamport's Bakery algorithm — mutual exclusion without atomic reads/writes.
-/// N=2 processes, Nat bounded to 0..2. PlusCal translation ported 1:1.
-/// Upstream: specifications/Bakery-Boulangerie/Bakery.tla
+/// The bounded N=2 instance of Lamport's PlusCal Bakery algorithm.
+///
+/// The source algorithm is authored as one fair process family. The lowerer
+/// creates the function-shaped process-local state and program counter that
+/// the upstream PlusCal translator creates.
+@TLAModel
+public struct BakeryN2Model {
+    public enum Process: Int, CaseIterable, FiniteDomainKey {
+        case one = 1
+        case two = 2
+
+        public static let formalDomain = allCases
+        public static let formalTypeIdentity = FormalTypeIdentity(rawValue: "upstream.bakery.n2.process")
+        public var tlaValue: TLAValue { .int(rawValue) }
+    }
+
+    private enum Step: String, PlusCalLabel {
+        case ncs
+        case e1
+        case e2
+        case e3
+        case e4
+        case w1
+        case w2
+        case cs
+        case exit
+    }
+
+    public static var spec: TLASpec {
+        #spec("Bakery") {
+            Extends("Integers")
+            Algorithm("Bakery") {
+                let num = SharedVar(initial: Function<Process, Int>.literal((.one, 0), (.two, 0)))
+                let flag = SharedVar(initial: Function<Process, Bool>.literal((.one, false), (.two, false)))
+
+                Each(Process.all, fairness: .weak) { process in
+                    let unchecked: LocalVariable<SetExpr<Process>> = LocalVar(initial: SetExpr<Process>())
+                    let maxSeen = LocalVar(initial: 0)
+                    let next: LocalVariable<Process> = LocalVar(initial: .one)
+
+                    Do(Step.ncs) {
+                        Skip()
+                    }
+
+                    Do(Step.e1) {
+                        Either {
+                            Assign(flag, to: flag.updating(process, to: !flag[process]))
+                            Goto(Step.e1)
+                        } or: {
+                            Assign(flag, to: flag.updating(process, to: true))
+                            Assign(unchecked, to: SetExpr<Process>.literal(.one, .two).removing(process))
+                            Assign(maxSeen, to: 0)
+                        }
+                    }
+
+                    While(Step.e2, !unchecked.expr.isEmpty) {
+                        With(unchecked) { candidate in
+                            Assign(unchecked, to: unchecked.expr.removing(candidate))
+                            If(num[candidate] > maxSeen.expr) {
+                                Assign(maxSeen, to: num[candidate])
+                            }
+                        }
+                    }
+
+                    Do(Step.e3) {
+                        Either {
+                            With(SetExpr<Int>.literal(0, 1, 2)) { ticket in
+                                Assign(num, to: num.updating(process, to: ticket.expr))
+                                Goto(Step.e3)
+                            }
+                        } or: {
+                            With(SetExpr<Int>.literal(0, 1, 2)) { ticket in
+                                When(ticket.expr > maxSeen.expr)
+                                Assign(num, to: num.updating(process, to: ticket.expr))
+                            }
+                        }
+                    }
+
+                    Do(Step.e4) {
+                        Either {
+                            Assign(flag, to: flag.updating(process, to: !flag[process]))
+                            Goto(Step.e4)
+                        } or: {
+                            Assign(flag, to: flag.updating(process, to: false))
+                            Assign(unchecked, to: SetExpr<Process>.literal(.one, .two).removing(process))
+                        }
+                    }
+
+                    Do(Step.w1) {
+                        Either {
+                            When(unchecked.expr.isEmpty)
+                            Goto(Step.cs)
+                        } or: {
+                            With(unchecked) { candidate in
+                                Assign(next, to: candidate)
+                                When(!flag[candidate])
+                                Goto(Step.w2)
+                            }
+                        }
+                    }
+
+                    Do(Step.w2) {
+                        Either {
+                            When(num[next.expr] == 0)
+                            Assign(unchecked, to: unchecked.expr.removing(next.expr))
+                            Goto(Step.w1)
+                        } or: {
+                            Either {
+                                When(num[process] < num[next.expr])
+                                Assign(unchecked, to: unchecked.expr.removing(next.expr))
+                                Goto(Step.w1)
+                            } or: {
+                                When(num[process] == num[next.expr])
+                                When(process.stateExpr < next.expr)
+                                Assign(unchecked, to: unchecked.expr.removing(next.expr))
+                                Goto(Step.w1)
+                            }
+                        }
+                    }
+
+                    Do(Step.cs) {
+                        Skip()
+                    }
+
+                    Do(Step.exit) {
+                        Either {
+                            With(SetExpr<Int>.literal(0, 1, 2)) { ticket in
+                                Assign(num, to: num.updating(process, to: ticket.expr))
+                                Goto(Step.exit)
+                            }
+                        } or: {
+                            Assign(num, to: num.updating(process, to: 0))
+                            Goto(Step.ncs)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
 
 extension Example {
     public static let bakeryN2 = Entry(
@@ -10,217 +148,8 @@ extension Example {
         upstreamSpec: "Bakery-Boulangerie",
         upstreamModule: "specifications/Bakery-Boulangerie/Bakery.tla",
         upstreamCfg: "specifications/Bakery-Boulangerie/MCBakery.cfg",
-        expectedDistinct: 2303,  // TLC-verified
-        spec: bakerySpec(),
-        notes: "N=2, MaxNat=2. Mutual exclusion + inductive invariant.",
+        expectedDistinct: 2303,
+        spec: BakeryN2Model.spec,
+        notes: "N=2, MaxNat=2. One fair PlusCal process family lowered to typed functions and program counters."
     )
-}
-
-private func bakerySpec() -> TLASpec {
-    let N = 2
-    let procs = 1...N
-    let maxNat = 2
-    let natVals = 0...maxNat
-    let pcStates = ["ncs", "e1", "e2", "e3", "e4", "w1", "w2", "cs", "exit"]
-
-    let num = Var<TLAValue>("num")
-    let flag = Var<TLAValue>("flag")
-    let pc = Var<TLAValue>("pc")
-    let unchecked = Var<TLAValue>("unchecked")
-    let maxV = Var<TLAValue>("max")
-    let nxt = Var<TLAValue>("nxt")
-
-    // Init: functions over Procs
-    let initNum: TLAValue = .function(Dictionary(uniqueKeysWithValues: procs.map { (.int($0), .int(0)) }))
-    let initFlag: TLAValue = .function(Dictionary(uniqueKeysWithValues: procs.map { (.int($0), .bool(false)) }))
-    let initPC: TLAValue = .function(Dictionary(uniqueKeysWithValues: procs.map { (.int($0), .string("ncs")) }))
-    let initUnchecked: TLAValue = .function(Dictionary(uniqueKeysWithValues: procs.map { (.int($0), .set([])) }))
-    let initMax: TLAValue = .function(Dictionary(uniqueKeysWithValues: procs.map { (.int($0), .int(0)) }))
-    let initNxt: TLAValue = .function(Dictionary(uniqueKeysWithValues: procs.map { (.int($0), .int(1)) }))
-
-    let procSetExpr: StateExpr = .setLiteral(procs.map { .int($0) })
-    let natSetExpr: StateExpr = .setLiteral(natVals.map { .int($0) })
-    let emptySet: StateExpr = .setLiteral([])
-
-    return TLASpec("Bakery") {
-        Extends("Integers")
-
-        Variable(num, initNum)
-        Variable(flag, initFlag)
-        Variable(pc, initPC)
-        Variable(unchecked, initUnchecked)
-        Variable(maxV, initMax)
-        Variable(nxt, initNxt)
-
-        Invariant("TypeOK") {
-            for i in procs {
-                let ik = StateExpr.value(.int(i))
-                StateExpr.in(num.stateExpr.applying(ik), natSetExpr)
-                    && StateExpr.in(flag.stateExpr.applying(ik), .setLiteral([.bool(false), .bool(true)]))
-                    && StateExpr.in(pc.stateExpr.applying(ik), .setLiteral(pcStates.map { .value(.string($0)) }))
-                    && StateExpr.in(maxV.stateExpr.applying(ik), natSetExpr)
-                    && StateExpr.in(nxt.stateExpr.applying(ik), procSetExpr)
-            }
-        }
-
-        Invariant("MutualExclusion") {
-            !(pc.stateExpr.applying(1) == "cs" && pc.stateExpr.applying(2) == "cs")
-        }
-
-        // Per-process actions — following the PlusCal translation
-
-        for s in procs {
-            // ncs(self): non-critical section → e1
-            Action("ncs_\(s)") {
-                pc.stateExpr.applying(s) == "ncs"
-                    && .assign(pc.name, pc.stateExpr.updated(at: s, to: "e1"))
-                    && num.stays && flag.stays && unchecked.stays && maxV.stays && nxt.stays
-            }
-
-            // e1(self): toggle flag OR set flag=TRUE and start e2
-            Action("e1a_\(s)") {
-                pc.stateExpr.applying(s) == "e1"
-                    && .assign(flag.name, flag.stateExpr.updated(at: s, to: StateExpr.not(flag.stateExpr.applying(s))))
-                    && .assign(pc.name, pc.stateExpr.updated(at: s, to: "e1"))
-                    && num.stays && unchecked.stays && maxV.stays && nxt.stays
-            }
-            Action("e1b_\(s)") {
-                pc.stateExpr.applying(s) == "e1"
-                    && .assign(flag.name, flag.stateExpr.updated(at: s, to: StateExpr.value(.bool(true))))
-                    && .assign(unchecked.name, unchecked.stateExpr.updated(
-                        at: s,
-                        to: StateExpr.setDifference(procSetExpr, StateExpr.singleton(StateExpr.int(s)))
-                    ))
-                    && .assign(maxV.name, maxV.stateExpr.updated(at: s, to: 0))
-                    && .assign(pc.name, pc.stateExpr.updated(at: s, to: "e2"))
-                    && num.stays && nxt.stays
-            }
-
-            // e2(self): scan numbers of other processes (N=2: at most 1 unchecked)
-            let other = s == 1 ? 2 : 1
-            Action("e2_pick_gt_\(s)") {
-                pc.stateExpr.applying(s) == "e2" && num.stateExpr.applying(other) > maxV.stateExpr.applying(s)
-                    && StateExpr.in(StateExpr.int(other), unchecked.stateExpr.applying(s))
-                    && .assign(unchecked.name, unchecked.stateExpr.updated(at: s,
-                        to: unchecked.stateExpr.applying(s).subtracting(StateExpr.singleton(StateExpr.int(other)))))
-                    && .assign(maxV.name, maxV.stateExpr.updated(at: s, to: num.stateExpr.applying(other)))
-                    && .assign(pc.name, pc.stateExpr.updated(at: s, to: "e2"))
-                    && flag.stays && nxt.stays && num.stays
-            }
-            Action("e2_pick_le_\(s)") {
-                pc.stateExpr.applying(s) == "e2" && !(num.stateExpr.applying(other) > maxV.stateExpr.applying(s))
-                    && StateExpr.in(StateExpr.int(other), unchecked.stateExpr.applying(s))
-                    && .assign(unchecked.name, unchecked.stateExpr.updated(at: s,
-                        to: unchecked.stateExpr.applying(s).subtracting(StateExpr.singleton(StateExpr.int(other)))))
-                    && maxV.stays
-                    && .assign(pc.name, pc.stateExpr.updated(at: s, to: "e2"))
-                    && flag.stays && nxt.stays && num.stays
-            }
-            Action("e2_done_\(s)") {
-                pc.stateExpr.applying(s) == "e2" && unchecked.stateExpr.applying(s) == emptySet
-                    && .assign(pc.name, pc.stateExpr.updated(at: s, to: "e3"))
-                    && num.stays && flag.stays && maxV.stays && nxt.stays && unchecked.stays
-            }
-
-            // e3(self): choose ticket number > max seen, or loop
-            Action("e3_loop_\(s)") {
-                pc.stateExpr.applying(s) == "e3"
-                    && ActionExpr.exists("k", from: natSetExpr) { k in
-                        .assign(num.name, num.stateExpr.updated(at: s, to: k))
-                            && .assign(pc.name, pc.stateExpr.updated(at: s, to: "e3"))
-                            && flag.stays && unchecked.stays && maxV.stays && nxt.stays
-                    }
-            }
-            // Proceed to e4: pick ticket > maxV[s]. 
-            // For Nat={0,1,2}: maxV=0→pick from {1,2}, maxV=1→{2}, maxV=2→{} (stuck)
-            Action("e3_to_e4_gt1_\(s)") {
-                pc.stateExpr.applying(s) == "e3" && maxV.stateExpr.applying(s) < 2
-                    && .assign(num.name, num.stateExpr.updated(at: s, to: 2))
-                    && .assign(pc.name, pc.stateExpr.updated(at: s, to: "e4"))
-                    && flag.stays && unchecked.stays && maxV.stays && nxt.stays
-            }
-            Action("e3_to_e4_gt0_\(s)") {
-                pc.stateExpr.applying(s) == "e3" && maxV.stateExpr.applying(s) < 1
-                    && .assign(num.name, num.stateExpr.updated(at: s, to: 1))
-                    && .assign(pc.name, pc.stateExpr.updated(at: s, to: "e4"))
-                    && flag.stays && unchecked.stays && maxV.stays && nxt.stays
-            }
-
-            // e4(self): lower flag
-            Action("e4a_\(s)") {
-                pc.stateExpr.applying(s) == "e4"
-                    && .assign(flag.name, flag.stateExpr.updated(at: s, to: StateExpr.not(flag.stateExpr.applying(s))))
-                    && .assign(pc.name, pc.stateExpr.updated(at: s, to: "e4"))
-                    && num.stays && maxV.stays && nxt.stays && unchecked.stays
-            }
-            Action("e4b_\(s)") {
-                pc.stateExpr.applying(s) == "e4"
-                    && .assign(flag.name, flag.stateExpr.updated(at: s, to: StateExpr.value(.bool(false))))
-                    && .assign(unchecked.name, unchecked.stateExpr.updated(
-                        at: s,
-                        to: StateExpr.setDifference(procSetExpr, StateExpr.singleton(StateExpr.int(s)))
-                    ))
-                    && .assign(pc.name, pc.stateExpr.updated(at: s, to: "w1"))
-                    && num.stays && maxV.stays && nxt.stays
-            }
-
-            // w1(self): pick next process to check
-            Action("w1_pick_\(s)") {
-                pc.stateExpr.applying(s) == "w1" && unchecked.stateExpr.applying(s) != emptySet
-                    && ActionExpr.exists("i", from: unchecked.stateExpr.applying(s)) { i in
-                        .assign(nxt.name, nxt.stateExpr.updated(at: s, to: i))
-                            && StateExpr.not(flag.stateExpr.applying(i))
-                            && .assign(pc.name, pc.stateExpr.updated(at: s, to: "w2"))
-                            && num.stays && flag.stays && unchecked.stays && maxV.stays
-                    }
-            }
-            Action("w1_done_\(s)") {
-                pc.stateExpr.applying(s) == "w1" && unchecked.stateExpr.applying(s) == emptySet
-                    && .assign(pc.name, pc.stateExpr.updated(at: s, to: "cs"))
-                    && num.stays && flag.stays && unchecked.stays && maxV.stays && nxt.stays
-            }
-
-            // w2(self): wait until safe to proceed
-            Action("w2_\(s)") {
-                let pcAtW2 = StateExpr.equal(pc.stateExpr.applying(s), "w2")
-                let nxtIsZero = StateExpr.equal(num.stateExpr.applying(nxt.stateExpr.applying(s)), 0)
-                let myLessThanNxt = StateExpr.lessThan(num.stateExpr.applying(s), num.stateExpr.applying(nxt.stateExpr.applying(s)))
-                let tieAndSmaller = (num.stateExpr.applying(s) == num.stateExpr.applying(nxt.stateExpr.applying(s)))
-                                    && StateExpr.lessThan(StateExpr.value(.int(s)), nxt.stateExpr.applying(s))
-                let guardExpr = pcAtW2 && (nxtIsZero || myLessThanNxt || tieAndSmaller)
-                let nxtSingular = StateExpr.singleton(nxt.stateExpr.applying(s))
-                let newUnchecked = unchecked.stateExpr.applying(s).subtracting(nxtSingular)
-                guardExpr
-                    && .assign(unchecked.name, unchecked.stateExpr.updated(at: s, to: newUnchecked))
-                    && .assign(pc.name, pc.stateExpr.updated(at: s, to: "w1"))
-                    && num.stays && flag.stays && maxV.stays && nxt.stays
-            }
-
-            // cs(self): critical section
-            Action("cs_\(s)") {
-                pc.stateExpr.applying(s) == "cs"
-                    && .assign(pc.name, pc.stateExpr.updated(at: s, to: "exit"))
-                    && num.stays && flag.stays && unchecked.stays && maxV.stays && nxt.stays
-            }
-
-            // exit(self): reset ticket number
-            Action("exit_loop_\(s)") {
-                pc.stateExpr.applying(s) == "exit"
-                    && ActionExpr.exists("k", from: natSetExpr) { k in
-                        .assign(num.name, num.stateExpr.updated(at: s, to: k))
-                            && .assign(pc.name, pc.stateExpr.updated(at: s, to: "exit"))
-                            && flag.stays && unchecked.stays && maxV.stays && nxt.stays
-                    }
-            }
-            Action("exit_reset_\(s)") {
-                pc.stateExpr.applying(s) == "exit"
-                    && .assign(num.name, num.stateExpr.updated(at: s, to: 0))
-                    && .assign(pc.name, pc.stateExpr.updated(at: s, to: "ncs"))
-                    && flag.stays && unchecked.stays && maxV.stays && nxt.stays
-            }
-        }
-
-        // Liveness requires WF fairness on all actions (not included in this model).
-        // Upstream cfg has *PROPERTIES DeadlockFree StarvationFree — commented out.
-    }
 }

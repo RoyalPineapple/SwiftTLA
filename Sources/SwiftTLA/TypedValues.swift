@@ -262,6 +262,11 @@ extension Expr {
     Expr<SetExpr<Element>>(.setDifference(raw, .setLiteral([element.stateExpr])))
   }
 
+  public func removing<Element: FiniteDomainKey>(_ element: ProcessIdentifier<Element>) -> Expr<SetExpr<Element>>
+  where T == SetExpr<Element> {
+    Expr<SetExpr<Element>>(.setDifference(raw, .setLiteral([element.stateExpr])))
+  }
+
   public func contains<Element: TLAValueType>(_ element: Element) -> StateExpr
   where T == SetExpr<Element> {
     .in(.value(element.tlaValue), raw)

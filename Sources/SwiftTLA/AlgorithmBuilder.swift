@@ -178,6 +178,9 @@ public struct LocalVariable<Value: TLAValueType>: StateExprConvertible, Sendable
 
     public var stateExpr: StateExpr { .variable(name) }
 
+    /// The typed expression for the current process-local formal value.
+    public var expr: Expr<Value> { Expr(stateExpr) }
+
     public var algorithmLValue: AlgorithmLValue<Value> {
         AlgorithmLValue(model: .root(name))
     }
@@ -881,6 +884,14 @@ public func With<Value: TLAValueType>(
     @DoBuilder _ body: (WithValue<Value>) -> [StepStatement]
 ) -> StepStatement {
     With(Expr<SetExpr<Value>>(source.stateExpr), body)
+}
+
+/// Binds one member of a process-local formal set.
+public func With<Value: TLAValueType>(
+    _ source: LocalVariable<SetExpr<Value>>,
+    @DoBuilder _ body: (WithValue<Value>) -> [StepStatement]
+) -> StepStatement {
+    With(source.expr, body)
 }
 
 /// Binds one member of a finite Swift domain. This is the most direct Swift

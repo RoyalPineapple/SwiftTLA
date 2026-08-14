@@ -377,6 +377,8 @@ extension SpecParser {
             return .goto(.init(name: label))
         case "Stop":
             return .stop
+        case "Skip":
+            return .skip
         case "If":
             guard let conditionSyntax = call.arguments.first?.expression,
                   let condition = decodeStateExpr(conditionSyntax),
