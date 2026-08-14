@@ -872,6 +872,26 @@ public func With<Value: TLAValueType>(
     return StepStatement(model: .with(variable: variable, source: source.raw, body(value).map(\.model)))
 }
 
+/// Binds a deterministic formal value for one atomic block.
+///
+/// This is PlusCal's `with name = expression` form, not membership selection.
+/// It lowers to a scoped TLA+ `LET name == expression IN ...` expression.
+public func Let<Value: TLAValueType>(
+    _ value: Expr<Value>,
+    @DoBuilder _ body: (WithValue<Value>) -> [StepStatement]
+) -> StepStatement {
+    let variable = FreshVarName.fresh()
+    let bound = WithValue<Value>(expression: .variable(variable))
+    return StepStatement(model: .letBinding(variable: variable, value: value.raw, body(bound).map(\.model)))
+}
+
+public func Let<Value: TLAValueType>(
+    _ value: Value,
+    @DoBuilder _ body: (WithValue<Value>) -> [StepStatement]
+) -> StepStatement {
+    Let(Expr<Value>(.value(value.tlaValue)), body)
+}
+
 public func With<Value: TLAValueType>(
     _ source: Var<SetExpr<Value>>,
     @DoBuilder _ body: (WithValue<Value>) -> [StepStatement]
@@ -1087,7 +1107,7 @@ internal enum AlgorithmValidator {
             switch statement {
             case .await, .assert, .skip:
                 break
-            case .with(_, _, let body):
+            case .letBinding(_, _, let body), .with(_, _, let body):
                 validateStatements(body, at: anchor, labels: labels, diagnostics: &diagnostics)
             case .set(let target, _):
                 validateName(target.root, at: anchor, diagnostics: &diagnostics)
@@ -1119,7 +1139,7 @@ internal enum AlgorithmValidator {
                 statementPaths = writePaths(body)
             case .await, .assert, .goto, .stop, .skip:
                 statementPaths = [[]]
-            case .with(_, _, let body):
+            case .letBinding(_, _, let body), .with(_, _, let body):
                 statementPaths = writePaths(body)
             }
             paths = paths.flatMap { path in statementPaths.map { path + $0 } }

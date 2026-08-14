@@ -33,6 +33,12 @@ public enum ActionEnumerator {
             return try disjuncts.flatMap { try processDisjunct($0, oldState: oldState, varNames: varNames) }
         }
 
+        if let expanded = try expandFirstDefinition(in: action, oldState: oldState) {
+            return try expanded.flatMap {
+                try processDisjunct($0, oldState: oldState, varNames: varNames)
+            }
+        }
+
         if let expanded = try expandFirstExistsAction(in: action, oldState: oldState) {
             return try expanded.flatMap { try processDisjunct($0, oldState: oldState, varNames: varNames) }
         }
@@ -156,6 +162,42 @@ public enum ActionEnumerator {
                 expanded.map { .ifElse(condition, then, $0) }
             }
         case .assign, .unchanged, .guard_, .chooseAction, .define:
+            return nil
+        }
+    }
+
+    /// Expands one nested deterministic `LET` binding without dropping its
+    /// surrounding guards, control assignment, or sibling statements.
+    private static func expandFirstDefinition(
+        in action: ActionExpr,
+        oldState: [String: TLAValue]
+    ) throws -> [ActionExpr]? {
+        switch action {
+        case .define(let name, let value, let body):
+            let resolved = try value.evaluate(in: oldState)
+            return [substituteVarInAction(name, resolved, body)]
+        case .and(let lhs, let rhs):
+            if let expanded = try expandFirstDefinition(in: lhs, oldState: oldState) {
+                return expanded.map { .and($0, rhs) }
+            }
+            return try expandFirstDefinition(in: rhs, oldState: oldState).map { expanded in
+                expanded.map { .and(lhs, $0) }
+            }
+        case .or(let lhs, let rhs):
+            if let expanded = try expandFirstDefinition(in: lhs, oldState: oldState) {
+                return expanded.map { .or($0, rhs) }
+            }
+            return try expandFirstDefinition(in: rhs, oldState: oldState).map { expanded in
+                expanded.map { .or(lhs, $0) }
+            }
+        case .ifElse(let condition, let then, let otherwise):
+            if let expanded = try expandFirstDefinition(in: then, oldState: oldState) {
+                return expanded.map { .ifElse(condition, $0, otherwise) }
+            }
+            return try expandFirstDefinition(in: otherwise, oldState: oldState).map { expanded in
+                expanded.map { .ifElse(condition, then, $0) }
+            }
+        case .assign, .unchanged, .guard_, .chooseAction, .existsAction:
             return nil
         }
     }

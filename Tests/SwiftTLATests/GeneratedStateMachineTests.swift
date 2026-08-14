@@ -71,7 +71,9 @@ struct GeneratedSequentialCounter {
             Algorithm("GeneratedSequentialCounter") {
                 let count = SharedVar(initial: 0)
                 Do("increment") {
-                    Assign(count, to: count + 1)
+                    Let(count + 1) { nextCount in
+                        Assign(count, to: nextCount.expr)
+                    }
                 }
                 Do("finish") {
                     Stop()

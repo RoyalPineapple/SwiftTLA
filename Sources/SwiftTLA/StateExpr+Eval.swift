@@ -423,8 +423,19 @@ extension StateExpr {
     }
 
     public static func substituteVariable(_ name: String, _ value: TLAValue, in expr: StateExpr) -> StateExpr {
+        substituteVariable(name, with: .value(value), in: expr)
+    }
+
+    /// Capture-aware substitution of a formal expression. This is used for
+    /// deterministic PlusCal local bindings, which are TLA+ `LET` values rather
+    /// than runtime state entries.
+    public static func substituteVariable(
+        _ name: String,
+        with replacement: StateExpr,
+        in expr: StateExpr
+    ) -> StateExpr {
         switch expr {
-        case .variable(let n) where n == name: return .value(value)
+        case .variable(let n) where n == name: return replacement
         case .variable: return expr
         case .value, .enabledAction: return expr
         case .add(let l, let r): return .add(sub(l), sub(r))
@@ -480,6 +491,8 @@ extension StateExpr {
         case .recursiveCall(let n, let a): return .recursiveCall(n, a.map(sub))
         }
 
-        func sub(_ e: StateExpr) -> StateExpr { Self.substituteVariable(name, value, in: e) }
+        func sub(_ e: StateExpr) -> StateExpr {
+            Self.substituteVariable(name, with: replacement, in: e)
+        }
     }
 }

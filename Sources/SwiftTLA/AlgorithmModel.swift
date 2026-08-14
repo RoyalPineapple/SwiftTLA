@@ -104,6 +104,7 @@ internal indirect enum AlgorithmStatementModel: Sendable {
     case await(StateExpr)
     case assert(StateExpr)
     case set(target: AlgorithmLValueModel, value: StateExpr)
+    case letBinding(variable: String, value: StateExpr, [AlgorithmStatementModel])
     case with(variable: String, source: StateExpr, [AlgorithmStatementModel])
     case ifElse(StateExpr, [AlgorithmStatementModel], [AlgorithmStatementModel])
     case either([AlgorithmStatementModel], [AlgorithmStatementModel])

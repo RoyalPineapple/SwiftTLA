@@ -271,6 +271,8 @@ enum AlgorithmLowerer {
             case .root(let root): return .assign(root, value)
             case .function(let root, let key): return .assign(root, .except(.variable(root), key, value))
             }
+        case .letBinding(let variable, let value, let body):
+            return .define(variable, value, lowerSequential(body))
         case .with(let variable, let source, let body):
             return .existsAction(variable, source, lowerSequential(body))
         case .ifElse(let condition, let then, let otherwise):
@@ -311,6 +313,13 @@ enum AlgorithmLowerer {
                     .map { invariant in
                         NamedInvariant(name: invariant.name, body: .forAll(.setLiteral(domain.map(StateExpr.value)), variable, invariant.body))
                     }
+            case .letBinding(let variable, let value, let body):
+                return sequentialAssertionInvariants(
+                    in: body.map { substituteAlgorithmVariable($0, name: variable, with: value) },
+                    label: label,
+                    executionCondition: executionCondition,
+                    pathCondition: pathCondition
+                )
             case .with(let variable, let source, let body):
                 return sequentialAssertionInvariants(in: body, label: label, executionCondition: executionCondition, pathCondition: pathCondition)
                     .map { invariant in
@@ -394,6 +403,12 @@ enum AlgorithmLowerer {
                         rewrite(key, localRoots: localRoots),
                         value))
             }
+        case .letBinding(let variable, let value, let body):
+            return .define(
+                variable,
+                rewrite(value, localRoots: localRoots),
+                lower(body, localRoots: localRoots, processDomain: processDomain)
+            )
         case .with(let variable, let source, let body):
             return .existsAction(
                 variable,
@@ -499,6 +514,22 @@ enum AlgorithmLowerer {
                     pathCondition: pathCondition,
                     quantifiedBindings: quantifiedBindings + [(variable, .setLiteral(domain.map(StateExpr.value)))]
                 )
+            case .letBinding(let variable, let value, let body):
+                return assertionInvariants(
+                    in: body.map {
+                        substituteAlgorithmVariable(
+                            $0,
+                            name: variable,
+                            with: rewrite(value, localRoots: localRoots)
+                        )
+                    },
+                    process: process,
+                    label: label,
+                    localRoots: localRoots,
+                    executionCondition: executionCondition,
+                    pathCondition: pathCondition,
+                    quantifiedBindings: quantifiedBindings
+                )
             case .with(let variable, let source, let body):
                 return assertionInvariants(
                     in: body,
@@ -536,6 +567,68 @@ enum AlgorithmLowerer {
             occurrences[invariant.name] = occurrence + 1
             guard occurrence > 0 else { return invariant }
             return NamedInvariant(name: "\(invariant.name)_\(occurrence)", body: invariant.body)
+        }
+    }
+
+    /// Replaces a deterministic `Let` binding while deriving an assertion
+    /// invariant. Action lowering keeps the binding as `LET ... IN`; an
+    /// invariant is a state expression, so it needs the equivalent scoped
+    /// substitution instead.
+    private static func substituteAlgorithmVariable(
+        _ statement: AlgorithmStatementModel,
+        name: String,
+        with replacement: StateExpr
+    ) -> AlgorithmStatementModel {
+        func expression(_ value: StateExpr) -> StateExpr {
+            StateExpr.substituteVariable(name, with: replacement, in: value)
+        }
+        switch statement {
+        case .await(let value): return .await(expression(value))
+        case .assert(let value): return .assert(expression(value))
+        case .set(let target, let value):
+            let rewrittenTarget: AlgorithmLValueModel
+            switch target {
+            case .root: rewrittenTarget = target
+            case .function(let root, let key):
+                rewrittenTarget = .function(root: root, key: expression(key))
+            }
+            return .set(target: rewrittenTarget, value: expression(value))
+        case .letBinding(let variable, let value, let body):
+            return .letBinding(
+                variable: variable,
+                value: expression(value),
+                variable == name
+                    ? body
+                    : body.map { substituteAlgorithmVariable($0, name: name, with: replacement) }
+            )
+        case .with(let variable, let source, let body):
+            return .with(
+                variable: variable,
+                source: expression(source),
+                variable == name
+                    ? body
+                    : body.map { substituteAlgorithmVariable($0, name: name, with: replacement) }
+            )
+        case .ifElse(let condition, let then, let otherwise):
+            return .ifElse(
+                expression(condition),
+                then.map { substituteAlgorithmVariable($0, name: name, with: replacement) },
+                otherwise.map { substituteAlgorithmVariable($0, name: name, with: replacement) }
+            )
+        case .either(let first, let second):
+            return .either(
+                first.map { substituteAlgorithmVariable($0, name: name, with: replacement) },
+                second.map { substituteAlgorithmVariable($0, name: name, with: replacement) }
+            )
+        case .choose(let variable, let domain, let body):
+            return .choose(
+                variable: variable,
+                domain: domain,
+                variable == name
+                    ? body
+                    : body.map { substituteAlgorithmVariable($0, name: name, with: replacement) }
+            )
+        case .goto, .stop, .skip: return statement
         }
     }
 

@@ -427,6 +427,19 @@ extension SpecParser {
                 source: replacingProcessParameter(in: source, named: processParameter),
                 body.map { replaceAlgorithmVariable($0, from: bound, to: replacement) }
             )
+        case "Let":
+            guard let valueSyntax = call.arguments.first?.expression,
+                  let value = decodeStateExpr(valueSyntax),
+                  let closure = call.trailingClosure,
+                  let bound = closureParameterNames(in: closure).first,
+                  let body = parseAlgorithmStatements(closure.statements, processParameter: processParameter)
+            else { return nil }
+            let replacement = FreshVarName.fresh()
+            return .letBinding(
+                variable: replacement,
+                value: replacingProcessParameter(in: value, named: processParameter),
+                body.map { replaceAlgorithmVariable($0, from: bound, to: replacement) }
+            )
         default:
             return nil
         }
@@ -487,6 +500,12 @@ extension SpecParser {
             case .function(let root, let key): rewrittenTarget = .function(root: root, key: renameVar(from, to: to, in: key))
             }
             return .set(target: rewrittenTarget, value: renameVar(from, to: to, in: value))
+        case .letBinding(let variable, let value, let body):
+            return .letBinding(
+                variable: variable,
+                value: renameVar(from, to: to, in: value),
+                variable == from ? body : body.map { replaceAlgorithmVariable($0, from: from, to: to) }
+            )
         case .with(let variable, let source, let body):
             return .with(
                 variable: variable,

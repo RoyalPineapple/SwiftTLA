@@ -9,7 +9,9 @@ struct AlgorithmBuilderTests {
             let value = SharedVar("value", initial: 0)
             value
             Do("increment") {
-                Assign(value, to: value + 1)
+                Let(value + 1) { nextValue in
+                    Assign(value, to: nextValue.expr)
+                }
             }
             Do("finish") {
                 Stop()
