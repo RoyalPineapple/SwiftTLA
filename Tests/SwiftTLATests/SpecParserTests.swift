@@ -60,7 +60,10 @@ private func parseExpression(_ source: String) -> ExprSyntax {
 
         #expect(parsed.variables.isEmpty)
         #expect(parsed.actions.isEmpty)
-        #expect(parsed.diagnostics.first?.message == "Unsupported Algorithm declaration 'UnsupportedAlgorithmConstruct()'. Supported declarations are SharedVar and Each.")
+        #expect(
+            parsed.diagnostics.first?.message
+                == "Unsupported Algorithm declaration 'UnsupportedAlgorithmConstruct()'. Supported declarations are SharedVar, Each, Do, and While."
+        )
     }
 
     @Test("parser lowers the mechanical PlusCal statements through the shared IR")
@@ -379,7 +382,10 @@ private enum ParserNode: String, FiniteDomainKey {
     }
 
     @Test func parseAt() {
-        #expect(SpecParser.decodeStateExpr(parseExpression("t.at(3)")) == StateExpr.tupleAccess(.variable("t"), 3))
+        #expect(
+            SpecParser.decodeStateExpr(parseExpression("t.at(3)"))
+                == StateExpr.tupleDynamicAccess(.variable("t"), .int(3))
+        )
     }
 }
 

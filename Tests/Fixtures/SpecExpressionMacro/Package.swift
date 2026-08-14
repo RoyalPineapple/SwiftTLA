@@ -9,8 +9,8 @@ let package = Package(
         .executableTarget(
             name: "SpecExpressionMacro",
             dependencies: [
-                .product(name: "SwiftTLA", package: "SwiftTLA-demo-migration"),
-                .product(name: "SwiftTLAMacros", package: "SwiftTLA-demo-migration")
+                .product(name: "SwiftTLA", package: "SwiftTLA"),
+                .product(name: "SwiftTLAMacros", package: "SwiftTLA")
             ]
         )
     ]
