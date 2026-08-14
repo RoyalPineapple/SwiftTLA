@@ -230,6 +230,13 @@ public protocol FormalTupleValue: TLAValueType {}
 extension TupleExpr: FormalTupleValue {}
 
 extension Expr {
+  /// Returns the formal union of two typed sets.
+  public func union<Element: TLAValueType>(
+    _ other: Expr<SetExpr<Element>>
+  ) -> Expr<SetExpr<Element>> where T == SetExpr<Element> {
+    Expr<SetExpr<Element>>(.union(raw, other.raw))
+  }
+
   public func inserting<Element: TLAValueType>(_ element: Expr<Element>) -> Expr<SetExpr<Element>>
   where T == SetExpr<Element> {
     Expr<SetExpr<Element>>(.union(raw, .setLiteral([element.raw])))

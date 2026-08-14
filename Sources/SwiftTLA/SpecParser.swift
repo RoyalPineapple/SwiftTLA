@@ -212,6 +212,11 @@ public enum SpecParser {
         else { return nil }
 
         switch access.declName.baseName.text {
+        case "union":
+            guard let otherSyntax = call.arguments.first?.expression,
+                  let other = decodeTypedFacadeValue(otherSyntax, substitutions: substitutions)
+            else { return nil }
+            return .union(base, other)
         case "inserting", "removing":
             guard let elementSyntax = call.arguments.first?.expression,
                   let element = decodeTypedFacadeValue(elementSyntax, substitutions: substitutions)

@@ -40,23 +40,26 @@ private struct TypedQuantifierGeneratedModel {
         let values = IntRange(1, through: 4)
         let evenValues = values.filtering { value in value.expr % 2 == 0 }
         let squares = evenValues.mapping { value in value.expr * value.expr }
+        let expanded = squares.union(SetExpr<Int>.literal(25))
         let sequence = TupleExpr<Int>.literal(3, 5, 7)
 
         #expect(try values.raw.evaluate(in: [:]) == TLAValue.set([.int(1), .int(2), .int(3), .int(4)]))
         #expect(try evenValues.raw.evaluate(in: [:]) == TLAValue.set([.int(2), .int(4)]))
         #expect(try squares.raw.evaluate(in: [:]) == TLAValue.set([.int(4), .int(16)]))
+        #expect(try expanded.raw.evaluate(in: [:]) == TLAValue.set([.int(4), .int(16), .int(25)]))
         #expect(try sequence.at(Expr<Int>(.int(2))).raw.evaluate(in: [:]) == .int(5))
     }
 
     @Test("source parser preserves typed collection operators")
     func parserPreservesTypedOperators() {
-        let source = "IntRange(1, through: 4).filtering { value in value.expr % 2 == 0 }.mapping { value in value.expr * value.expr }"
+        let source = "IntRange(1, through: 4).filtering { value in value.expr % 2 == 0 }.mapping { value in value.expr * value.expr }.union(SetExpr<Int>.literal(25))"
         let syntax = Parser.parse(source: source).statements.first!.item.as(ExprSyntax.self)!
         let parsed = SpecParser.decodeStateExpr(syntax)
 
         let values = IntRange(1, through: 4)
         let runtime = values.filtering { value in value.expr % 2 == 0 }
             .mapping { value in value.expr * value.expr }
+            .union(SetExpr<Int>.literal(25))
 
         guard let parsed else {
             Issue.record("The typed collection expression did not parse")
