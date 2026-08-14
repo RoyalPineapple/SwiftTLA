@@ -139,6 +139,8 @@ extension Expr where T == String {
 
 public func +(_ lhs: Expr<Int>, _ rhs: Int) -> Expr<Int> { Expr(.add(lhs.raw, .int(rhs))) }
 public func -(_ lhs: Expr<Int>, _ rhs: Int) -> Expr<Int> { Expr(.subtract(lhs.raw, .int(rhs))) }
+public func *(_ lhs: Expr<Int>, _ rhs: Expr<Int>) -> Expr<Int> { Expr(.multiply(lhs.raw, rhs.raw)) }
+public func *(_ lhs: Expr<Int>, _ rhs: Int) -> Expr<Int> { Expr(.multiply(lhs.raw, .int(rhs))) }
 public func -(_ lhs: Int, _ rhs: Var<Int>) -> Expr<Int> { Expr(.subtract(.int(lhs), rhs.stateExpr)) }
 public func -(_ lhs: Int, _ rhs: Expr<Int>) -> Expr<Int> { Expr(.subtract(.int(lhs), rhs.raw)) }
 public func +(_ lhs: Expr<Int>, _ rhs: Var<Int>) -> Expr<Int> { Expr(.add(lhs.raw, rhs.stateExpr)) }

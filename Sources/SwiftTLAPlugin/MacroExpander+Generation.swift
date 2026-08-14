@@ -381,6 +381,8 @@ extension MacroExpander {
         case .setDifference(let a, let b): return "\(cg(a)).subtracting(\(cg(b)))"
         case .subset(let a, let b): return "\(cg(a)).isSubset(of: \(cg(b)))"
         case .tupleAccess(let t, let i): return "(\(cg(t)))[\(i)]"
+        case .tupleDynamicAccess(let tuple, let index):
+            return "(\(cg(tuple)))[(\(cg(index))) - 1]"
         case .tupleAppend(let t, let e): return "(\(cg(t)) + [\(cg(e))])"
         case .tupleHead(let t): return "(\(cg(t))).first!"
         case .tupleTail(let t): return "Array((\(cg(t))).dropFirst())"
@@ -406,6 +408,8 @@ extension MacroExpander {
             return "\(cg(s)).map { \(qv) in \(mapping) }"
         case .powerSet(let s): return "\(cg(s)).powerSet"
         case .unionAll(let s): return "\(cg(s)).flattened"
+        case .integerRange(let lower, let upper):
+            return "Set(\(cg(lower))...\(cg(upper)))"
         case .tupleLiteral(let es):
             return "[\(es.map { cg($0) }.joined(separator: ", "))]"
         case .recordLiteral(let fs):
@@ -481,6 +485,8 @@ extension MacroExpander {
         case .setDifference(let a, let b): walkStateExpr(a, visitor: visitor); walkStateExpr(b, visitor: visitor)
         case .subset(let a, let b): walkStateExpr(a, visitor: visitor); walkStateExpr(b, visitor: visitor)
         case .tupleAccess(let t, _): walkStateExpr(t, visitor: visitor)
+        case .tupleDynamicAccess(let tuple, let index):
+            walkStateExpr(tuple, visitor: visitor); walkStateExpr(index, visitor: visitor)
         case .tupleAppend(let t, let e): walkStateExpr(t, visitor: visitor); walkStateExpr(e, visitor: visitor)
         case .tupleHead(let t): walkStateExpr(t, visitor: visitor)
         case .tupleTail(let t): walkStateExpr(t, visitor: visitor)
@@ -492,6 +498,8 @@ extension MacroExpander {
         case .setMap(let e, _, let s): walkStateExpr(e, visitor: visitor); walkStateExpr(s, visitor: visitor)
         case .powerSet(let s): walkStateExpr(s, visitor: visitor)
         case .unionAll(let s): walkStateExpr(s, visitor: visitor)
+        case .integerRange(let lower, let upper):
+            walkStateExpr(lower, visitor: visitor); walkStateExpr(upper, visitor: visitor)
         case .tupleLiteral(let es): es.forEach { walkStateExpr($0, visitor: visitor) }
         case .recordLiteral(let fs): fs.values.forEach { walkStateExpr($0, visitor: visitor) }
         case .setLiteral(let es): es.forEach { walkStateExpr($0, visitor: visitor) }
@@ -691,6 +699,7 @@ extension MacroExpander {
         case .setDifference(let a, let b): return .setDifference(sub(a), sub(b))
         case .subset(let a, let b): return .subset(sub(a), sub(b))
         case .tupleAccess(let t, let i): return .tupleAccess(sub(t), i)
+        case .tupleDynamicAccess(let tuple, let index): return .tupleDynamicAccess(sub(tuple), sub(index))
         case .tupleAppend(let t, let e): return .tupleAppend(sub(t), sub(e))
         case .tupleHead(let t): return .tupleHead(sub(t))
         case .tupleTail(let t): return .tupleTail(sub(t))
@@ -702,6 +711,7 @@ extension MacroExpander {
         case .setMap(let e, let qv, let s): return .setMap(sub(e), qv, sub(s))
         case .powerSet(let s): return .powerSet(sub(s))
         case .unionAll(let s): return .unionAll(sub(s))
+        case .integerRange(let lower, let upper): return .integerRange(sub(lower), sub(upper))
         case .tupleLiteral(let es): return .tupleLiteral(es.map(sub))
         case .recordLiteral(let fs): return .recordLiteral(fs.mapValues(sub))
         case .setLiteral(let es): return .setLiteral(es.map(sub))

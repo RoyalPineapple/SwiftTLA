@@ -391,9 +391,46 @@ extension Expr where T: FormalSetValue {
   }
 }
 
+/// A bounded, inclusive formal integer set. This is TLA+ `lower..upper`, not
+/// a Swift range. Both endpoints can depend on the current formal state.
+public func IntRange(
+  _ lower: some StateExprConvertible,
+  through upper: some StateExprConvertible
+) -> Expr<SetExpr<Int>> {
+  Expr<SetExpr<Int>>(.integerRange(lower.stateExpr, upper.stateExpr))
+}
+
+extension Expr {
+  /// Selects formal set members that satisfy `predicate`.
+  public func filtering<Element: TLAValueType>(
+    _ predicate: (WithValue<Element>) -> StateExpr
+  ) -> Expr<SetExpr<Element>> where T == SetExpr<Element> {
+    let binding = FreshVarName.fresh()
+    let element = WithValue<Element>(expression: .variable(binding))
+    return Expr<SetExpr<Element>>(.setFilter(raw, binding, predicate(element)))
+  }
+
+  /// Maps every formal set member through a typed formal expression.
+  public func mapping<Element: TLAValueType, Result: TLAValueType>(
+    _ transform: (WithValue<Element>) -> Expr<Result>
+  ) -> Expr<SetExpr<Result>> where T == SetExpr<Element> {
+    let binding = FreshVarName.fresh()
+    let element = WithValue<Element>(expression: .variable(binding))
+    return Expr<SetExpr<Result>>(.setMap(transform(element).raw, binding, raw))
+  }
+}
+
 extension Expr where T: FormalTupleValue {
   public var count: Expr<Int> {
     Expr<Int>(.tupleLength(raw))
+  }
+}
+
+extension Expr {
+  /// Reads a formal sequence at a one-based formal index.
+  public func at<Element: TLAValueType>(_ index: Expr<Int>) -> Expr<Element>
+  where T == TupleExpr<Element> {
+    Expr<Element>(.tupleDynamicAccess(raw, index.raw))
   }
 }
 

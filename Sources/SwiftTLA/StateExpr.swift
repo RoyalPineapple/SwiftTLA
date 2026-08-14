@@ -50,9 +50,11 @@ public indirect enum StateExpr: Hashable, Sendable, CustomStringConvertible {
     case setMap(StateExpr, String, StateExpr)
     case powerSet(StateExpr)
     case unionAll(StateExpr)
+    case integerRange(StateExpr, StateExpr)
 
     case tupleLiteral([StateExpr])
     case tupleAccess(StateExpr, Int)
+    case tupleDynamicAccess(StateExpr, StateExpr)
     case tupleLength(StateExpr)
     case tupleAppend(StateExpr, StateExpr)
     case tupleHead(StateExpr)
@@ -112,8 +114,10 @@ public indirect enum StateExpr: Hashable, Sendable, CustomStringConvertible {
         case .setMap(let e, let qv, let s): return "{\(e) : \(qv) \\in \(s)}"
         case .powerSet(let s): return "SUBSET \(s)"
         case .unionAll(let s): return "UNION \(s)"
+        case .integerRange(let lower, let upper): return "\(lower)..\(upper)"
         case .tupleLiteral(let elems): return "<<\(elems.map(\.description).joined(separator: ", "))>>"
         case .tupleAccess(let t, let i): return "\(t)[\(i)]"
+        case .tupleDynamicAccess(let tuple, let index): return "\(tuple)[\(index)]"
         case .tupleLength(let t): return "Len(\(t))"
         case .tupleAppend(let t, let e): return "Append(\(t), \(e))"
         case .tupleHead(let t): return "Head(\(t))"

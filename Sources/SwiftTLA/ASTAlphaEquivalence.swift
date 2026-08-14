@@ -264,8 +264,10 @@ private func stateKey(_ expression: StateExpr, environment: [String: String], ne
         return "map(\(key(mapped, environment: extended)),\(canonical),\(setKey))"
     case .powerSet(let value): return "powerSet(\(key(value)))"
     case .unionAll(let value): return "unionAll(\(key(value)))"
+    case .integerRange(let lower, let upper): return pair("integerRange", lower, upper)
     case .tupleLiteral(let values): return "tuple[\(values.map { key($0) }.joined(separator: ","))]"
     case .tupleAccess(let tuple, let index): return "tupleAccess(\(key(tuple)),\(index))"
+    case .tupleDynamicAccess(let tuple, let index): return pair("tupleDynamicAccess", tuple, index)
     case .tupleLength(let tuple): return "tupleLength(\(key(tuple)))"
     case .tupleAppend(let tuple, let value): return pair("tupleAppend", tuple, value)
     case .tupleHead(let tuple): return "tupleHead(\(key(tuple)))"

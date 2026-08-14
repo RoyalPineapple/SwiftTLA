@@ -61,7 +61,7 @@ public struct ProcessIdentifier<Value: FiniteDomainKey>: StateExprConvertible, S
 /// It exists only while constructing the algorithm IR. The lowerer turns it
 /// into a scoped TLA+ action binding; it is never runtime Swift state.
 public struct WithValue<Value: TLAValueType>: StateExprConvertible, Sendable {
-    fileprivate let expression: StateExpr
+    let expression: StateExpr
 
     public var stateExpr: StateExpr { expression }
 

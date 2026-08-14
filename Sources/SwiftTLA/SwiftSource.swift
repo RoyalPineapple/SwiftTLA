@@ -128,6 +128,7 @@ extension StateExpr {
     case .tupleLiteral(let es):
       return "StateExpr.tuple([\(es.map(\.swiftSource).joined(separator: ", "))])"
     case .tupleAccess(let t, let i): return "\(t.swiftSource).at(\(i))"
+    case .tupleDynamicAccess(let tuple, let index): return "\(tuple.swiftSource).at(\(index.swiftSource))"
     case .tupleLength(let t): return "\(t.swiftSource).count"
     case .tupleHead(let t): return "\(t.swiftSource).head"
     case .tupleTail(let t): return "\(t.swiftSource).tail"
@@ -140,6 +141,7 @@ extension StateExpr {
     case .recordAccess(let r, let f): return "\(r.swiftSource).\(f)"
     case .setFilter(let s, _, let p): return "\(s.swiftSource).filtering(\(p.swiftSource))"
     case .setMap(let e, _, let s): return "\(s.swiftSource).mapping(\(e.swiftSource))"
+    case .integerRange(let lower, let upper): return "IntRange(\(lower.swiftSource), through: \(upper.swiftSource))"
     case .forAll(let s, _, let p): return "StateExpr.for(\(s.swiftSource), \(p.swiftSource))"
     case .exists(let s, _, let p): return "StateExpr.exists(\(s.swiftSource), \(p.swiftSource))"
     case .choose(let s, _, let p): return "StateExpr.choose(\(s.swiftSource), \(p.swiftSource))"

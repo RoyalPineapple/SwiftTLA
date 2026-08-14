@@ -25,6 +25,14 @@ public enum SpecParser {
     // MARK: - Compact expression decoder
 
     public static func decodeStateExpr(_ expression: ExprSyntax) -> StateExpr? {
+        if let call = expression.as(FunctionCallExprSyntax.self),
+           call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "IntRange",
+           let lower = call.arguments.first?.expression,
+           let upper = call.arguments.first(where: { $0.label?.text == "through" })?.expression,
+           let lowerExpression = decodeStateExpr(lower),
+           let upperExpression = decodeStateExpr(upper) {
+            return .integerRange(lowerExpression, upperExpression)
+        }
         // Empty typed formal values are ordinary initializers in the Swift
         // surface. Decode them directly so the source parser and runtime
         // builder agree on the same collection-shaped initial state.
@@ -196,6 +204,35 @@ public enum SpecParser {
                 : .setDifference(base, singleton)
         case "updating":
             break
+        case "filtering":
+            guard let closure = call.trailingClosure,
+                  closure.statements.count == 1,
+                  case .expr(let body) = closure.statements.first?.item,
+                  let parameter = closureParameterNames(in: closure).first,
+                  closureParameterNames(in: closure).count == 1,
+                  let predicate = decodeTypedFacadeValue(
+                    body,
+                    substitutions: substitutions.merging([parameter: .variable(parameter)]) { _, replacement in replacement }
+                  )
+            else { return nil }
+            return .setFilter(base, parameter, predicate)
+        case "mapping":
+            guard let closure = call.trailingClosure,
+                  closure.statements.count == 1,
+                  case .expr(let body) = closure.statements.first?.item,
+                  let parameter = closureParameterNames(in: closure).first,
+                  closureParameterNames(in: closure).count == 1,
+                  let mapping = decodeTypedFacadeValue(
+                    body,
+                    substitutions: substitutions.merging([parameter: .variable(parameter)]) { _, replacement in replacement }
+                  )
+            else { return nil }
+            return .setMap(mapping, parameter, base)
+        case "at":
+            guard let indexSyntax = call.arguments.first?.expression,
+                  let index = decodeTypedFacadeValue(indexSyntax, substitutions: substitutions)
+            else { return nil }
+            return .tupleDynamicAccess(base, index)
         default:
             return nil
         }

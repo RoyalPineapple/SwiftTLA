@@ -45,7 +45,7 @@ import Testing
         #expect(try StateExpr.ifThenElse(.bool(true), .int(1), .int(2)).evaluate(in: [:]) == .int(1))
     }
 
-    @Test("sets — literal, in, subset, union, intersection, difference, cardinality, powerset")
+    @Test("sets — literal, in, subset, union, intersection, difference, cardinality, powerset, range")
     func sets() throws {
         #expect(try StateExpr.setLiteral([.int(1), .int(2)]).evaluate(in: [:]) == .set([.int(1), .int(2)]))
         #expect(try StateExpr.in(.int(2), .variable("s")).evaluate(in: state) == .bool(true))
@@ -55,12 +55,14 @@ import Testing
         #expect(try StateExpr.setDifference(.variable("s"), .setLiteral([.int(2)])).evaluate(in: state) == .set([.int(1), .int(3)]))
         #expect(try StateExpr.cardinality(.variable("s")).evaluate(in: state) == .int(3))
         #expect(try StateExpr.powerSet(.setLiteral([.int(1)])).evaluate(in: state) == .set([.set([]), .set([.int(1)])]))
+        #expect(try StateExpr.integerRange(.int(2), .int(4)).evaluate(in: state) == .set([.int(2), .int(3), .int(4)]))
     }
 
     @Test("tuples — literal, access, length, append, head, tail, concatenate")
     func tuples() throws {
         #expect(try StateExpr.tupleLiteral([.int(1), .int(2)]).evaluate(in: [:]) == .tuple([.int(1), .int(2)]))
         #expect(try StateExpr.tupleAccess(.variable("t"), 1).evaluate(in: state) == .int(1))
+        #expect(try StateExpr.tupleDynamicAccess(.variable("t"), .int(2)).evaluate(in: state) == .int(2))
         #expect(try StateExpr.tupleLength(.variable("t")).evaluate(in: state) == .int(3))
         #expect(try StateExpr.tupleAppend(.variable("t"), .int(4)).evaluate(in: state) == .tuple([.int(1), .int(2), .int(3), .int(4)]))
         #expect(try StateExpr.tupleHead(.variable("t")).evaluate(in: state) == .int(1))

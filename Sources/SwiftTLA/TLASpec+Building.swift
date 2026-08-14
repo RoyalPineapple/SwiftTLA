@@ -320,10 +320,14 @@ private func substituteInState(_ expr: StateExpr, constants: [String: TLAValue])
       substituteInState(a, constants: constants), qv, substituteInState(b, constants: constants))
   case .powerSet(let a): return .powerSet(substituteInState(a, constants: constants))
   case .unionAll(let a): return .unionAll(substituteInState(a, constants: constants))
+  case .integerRange(let lower, let upper):
+    return .integerRange(substituteInState(lower, constants: constants), substituteInState(upper, constants: constants))
   case .tupleLiteral(let elems):
     return .tupleLiteral(elems.map { substituteInState($0, constants: constants) })
   case .tupleAccess(let a, let i):
     return .tupleAccess(substituteInState(a, constants: constants), i)
+  case .tupleDynamicAccess(let tuple, let index):
+    return .tupleDynamicAccess(substituteInState(tuple, constants: constants), substituteInState(index, constants: constants))
   case .tupleLength(let a): return .tupleLength(substituteInState(a, constants: constants))
   case .tupleAppend(let a, let b):
     return .tupleAppend(

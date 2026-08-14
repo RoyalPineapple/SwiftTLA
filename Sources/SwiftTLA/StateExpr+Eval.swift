@@ -186,6 +186,13 @@ extension StateExpr {
             }
             return .set(result)
 
+        case .integerRange(let lower, let upper):
+            guard case .int(let lowerValue) = try ev(lower),
+                  case .int(let upperValue) = try ev(upper)
+            else { throw tm("integer range", got: try ev(lower)) }
+            guard lowerValue <= upperValue else { return .set([]) }
+            return .set(Set((lowerValue...upperValue).map(TLAValue.int)))
+
         case .tupleLiteral(let elements):
             return .tuple(try elements.map { try ev($0) })
 
@@ -193,6 +200,15 @@ extension StateExpr {
             guard case .tuple(let tv) = try ev(t) else { throw tm("tuple access", got: try ev(t)) }
             guard index >= 1, index <= tv.count else { throw EvalError.indexOutOfBounds(index, tv.count) }
             return tv[index - 1]
+
+        case .tupleDynamicAccess(let tuple, let index):
+            guard case .tuple(let values) = try ev(tuple), case .int(let position) = try ev(index) else {
+                throw tm("tuple access", got: try ev(tuple))
+            }
+            guard position >= 1, position <= values.count else {
+                throw EvalError.indexOutOfBounds(position, values.count)
+            }
+            return values[position - 1]
 
         case .tupleLength(let t):
             guard case .tuple(let tv) = try ev(t) else { throw tm("Len", got: try ev(t)) }
@@ -439,8 +455,10 @@ extension StateExpr {
         case .setMap(let e, let qv, let s): return .setMap(sub(e), qv, qv == name ? s : sub(s))
         case .powerSet(let s): return .powerSet(sub(s))
         case .unionAll(let s): return .unionAll(sub(s))
+        case .integerRange(let lower, let upper): return .integerRange(sub(lower), sub(upper))
         case .tupleLiteral(let es): return .tupleLiteral(es.map(sub))
         case .tupleAccess(let t, let i): return .tupleAccess(sub(t), i)
+        case .tupleDynamicAccess(let tuple, let index): return .tupleDynamicAccess(sub(tuple), sub(index))
         case .tupleLength(let t): return .tupleLength(sub(t))
         case .tupleAppend(let t, let e): return .tupleAppend(sub(t), sub(e))
         case .tupleHead(let t): return .tupleHead(sub(t))

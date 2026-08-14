@@ -550,8 +550,10 @@ public func renameVar(_ from: String, to: String, in expr: StateExpr) -> StateEx
     return .setMap(renameVar(from, to: to, in: e), qv, qv == from ? s : renameVar(from, to: to, in: s))
   case .powerSet(let s): return .powerSet(renameVar(from, to: to, in: s))
   case .unionAll(let s): return .unionAll(renameVar(from, to: to, in: s))
+  case .integerRange(let lower, let upper): return .integerRange(renameVar(from, to: to, in: lower), renameVar(from, to: to, in: upper))
   case .tupleLiteral(let es): return .tupleLiteral(es.map { renameVar(from, to: to, in: $0) })
   case .tupleAccess(let t, let i): return .tupleAccess(renameVar(from, to: to, in: t), i)
+  case .tupleDynamicAccess(let tuple, let index): return .tupleDynamicAccess(renameVar(from, to: to, in: tuple), renameVar(from, to: to, in: index))
   case .tupleLength(let t): return .tupleLength(renameVar(from, to: to, in: t))
   case .tupleAppend(let t, let e):
     return .tupleAppend(renameVar(from, to: to, in: t), renameVar(from, to: to, in: e))

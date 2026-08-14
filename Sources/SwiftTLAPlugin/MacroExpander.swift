@@ -264,6 +264,7 @@ enum MacroExpander {
         case .setDifference(let a, let b): return "StateExpr.setDifference(\(cg(a)), \(cg(b)))"
         case .subset(let a, let b): return "StateExpr.subset(\(cg(a)), \(cg(b)))"
         case .tupleAccess(let t, let i): return "StateExpr.tupleAccess(\(cg(t)), \(i))"
+        case .tupleDynamicAccess(let tuple, let index): return "StateExpr.tupleDynamicAccess(\(cg(tuple)), \(cg(index)))"
         case .tupleAppend(let t, let e): return "StateExpr.tupleAppend(\(cg(t)), \(cg(e)))"
         case .tupleHead(let t): return "StateExpr.tupleHead(\(cg(t)))"
         case .tupleTail(let t): return "StateExpr.tupleTail(\(cg(t)))"
@@ -275,6 +276,7 @@ enum MacroExpander {
         case .setMap(let e, let qv, let s): return "StateExpr.setMap(\(cg(e)), \"\(qv)\", \(cg(s)))"
         case .powerSet(let s): return "StateExpr.powerSet(\(cg(s)))"
         case .unionAll(let s): return "StateExpr.unionAll(\(cg(s)))"
+        case .integerRange(let lower, let upper): return "StateExpr.integerRange(\(cg(lower)), \(cg(upper)))"
         case .tupleLiteral(let es): return "StateExpr.tupleLiteral([\(es.map(cg).joined(separator: ", "))])"
         case .recordLiteral(let fs):
             let fields = fs.map { "\"\($0.key)\": \(cg($0.value))" }.joined(separator: ", ")

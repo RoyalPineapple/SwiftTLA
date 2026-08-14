@@ -202,11 +202,13 @@ extension SpecParser {
 
             if let stringLit = args[0].expression.as(StringLiteralExprSyntax.self) {
                 let varName = stringLit.segments.description.replacingOccurrences(of: "\"", with: "")
-                let initial: TLAValue = args.count >= 2 ? parseInitialExpr(args[1].expression) : .int(0)
+                let initial: TLAValue = args.count >= 2
+                    ? parsedInitialValue(args[1].expression)
+                    : .int(0)
                 let inferredType = args.count >= 2 ? initialValueTypeName(from: args[1].expression) : nil
                 result.variables.append((varName, initial, nil, varTypeName ?? inferredType))
             } else {
-                let initial: TLAValue = parseInitialExpr(args[0].expression)
+                let initial: TLAValue = parsedInitialValue(args[0].expression)
                 let inferredType = initialValueTypeName(from: args[0].expression)
                 result.variables.append((patternName, initial, nil, varTypeName ?? inferredType))
             }
@@ -348,6 +350,10 @@ extension SpecParser {
     }
 
     static func initialValueTypeName(from expression: ExprSyntax) -> String? {
+        if let call = expression.as(FunctionCallExprSyntax.self),
+           call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "IntRange" {
+            return "SetExpr<Int>"
+        }
         if expression.is(IntegerLiteralExprSyntax.self) { return "Int" }
         if expression.is(BooleanLiteralExprSyntax.self) { return "Bool" }
         if expression.is(StringLiteralExprSyntax.self) { return "String" }
@@ -366,6 +372,17 @@ extension SpecParser {
             return "TLAValue"
         }
         return enumCaseTypeName(from: expression)
+    }
+
+    /// Evaluates a closed typed formal initializer through the same expression
+    /// decoder used for actions. Literal-only parsing is insufficient for
+    /// values such as `IntRange(1, through: 4)`.
+    static func parsedInitialValue(_ expression: ExprSyntax) -> TLAValue {
+        if let decoded = decodeStateExpr(expression),
+           let value = try? decoded.evaluate(in: [:]) {
+            return value
+        }
+        return parseInitialExpr(expression)
     }
 
     static func parseBuilderCall(
