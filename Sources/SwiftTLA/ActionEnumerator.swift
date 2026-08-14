@@ -161,28 +161,6 @@ public enum ActionEnumerator {
     }
 
     private static func substituteVarInAction(_ name: String, _ value: TLAValue, _ action: ActionExpr) -> ActionExpr {
-        switch action {
-        case .assign(let v, let e):
-            return .assign(v, StateExpr.substituteVariable(name, value, in: e))
-        case .unchanged(let v):
-            return .unchanged(v)
-        case .guard_(let e):
-            return .guard_(StateExpr.substituteVariable(name, value, in: e))
-        case .chooseAction(let v, let s):
-            return .chooseAction(v, StateExpr.substituteVariable(name, value, in: s))
-        case .existsAction(let v, let s, let b):
-            return .existsAction(v, StateExpr.substituteVariable(name, value, in: s), substituteVarInAction(name, value, b))
-        case .and(let a, let b):
-            return .and(substituteVarInAction(name, value, a), substituteVarInAction(name, value, b))
-        case .or(let a, let b):
-            return .or(substituteVarInAction(name, value, a), substituteVarInAction(name, value, b))
-        case .ifElse(let c, let t, let e):
-            return .ifElse(StateExpr.substituteVariable(name, value, in: c),
-                           substituteVarInAction(name, value, t),
-                           substituteVarInAction(name, value, e))
-        case .define(let v, let exp, let body):
-            return .define(v, StateExpr.substituteVariable(name, value, in: exp),
-                              substituteVarInAction(name, value, body))
-        }
+        substituteVar(name, with: value, in: action)
     }
 }

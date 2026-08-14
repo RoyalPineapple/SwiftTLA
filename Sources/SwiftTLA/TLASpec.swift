@@ -105,7 +105,7 @@ func actionInvocations(_ action: NamedAction) -> [(
     return binding.values.enumerated().flatMap { index, value in
       expand(
         position + 1, arguments + [value], indices + [index],
-        body.substituteVar(binding.name, with: value, in: body))
+        substituteVar(binding.name, with: value, in: body))
     }
   }
   return expand(0, [], [], action.body)

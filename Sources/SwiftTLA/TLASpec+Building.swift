@@ -229,31 +229,7 @@ public func substituteConstants(_ spec: TLASpec) -> TLASpec {
 
 private func substituteActionVar(_ name: String, with value: TLAValue, in expr: ActionExpr)
   -> ActionExpr {
-  switch expr {
-  case .assign(let v, let e): return .assign(v, StateExpr.substituteVariable(name, value, in: e))
-  case .unchanged: return expr
-  case .guard_(let e): return .guard_(StateExpr.substituteVariable(name, value, in: e))
-  case .chooseAction(let v, let s):
-    return .chooseAction(v, StateExpr.substituteVariable(name, value, in: s))
-  case .existsAction(let v, let s, let b):
-    return .existsAction(
-      v, StateExpr.substituteVariable(name, value, in: s),
-      substituteActionVar(name, with: value, in: b))
-  case .ifElse(let c, let t, let e):
-    return .ifElse(
-      StateExpr.substituteVariable(name, value, in: c),
-      substituteActionVar(name, with: value, in: t), substituteActionVar(name, with: value, in: e))
-  case .define(let v, let exp, let b):
-    return .define(
-      v, StateExpr.substituteVariable(name, value, in: exp),
-      substituteActionVar(name, with: value, in: b))
-  case .and(let a, let b):
-    return .and(
-      substituteActionVar(name, with: value, in: a), substituteActionVar(name, with: value, in: b))
-  case .or(let a, let b):
-    return .or(
-      substituteActionVar(name, with: value, in: a), substituteActionVar(name, with: value, in: b))
-  }
+  substituteVar(name, with: value, in: expr)
 }
 
 private func substituteInValue(_ value: TLAValue, constants: [String: TLAValue]) -> TLAValue {

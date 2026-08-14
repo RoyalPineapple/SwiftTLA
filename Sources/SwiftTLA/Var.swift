@@ -799,9 +799,9 @@ public func renameVar(_ from: String, to: String, in expr: StateExpr) -> StateEx
     return .setDifference(renameVar(from, to: to, in: a), renameVar(from, to: to, in: b))
   case .cardinality(let s): return .cardinality(renameVar(from, to: to, in: s))
   case .setFilter(let s, let qv, let p):
-    return .setFilter(renameVar(from, to: to, in: s), qv, renameVar(from, to: to, in: p))
+    return .setFilter(renameVar(from, to: to, in: s), qv, qv == from ? p : renameVar(from, to: to, in: p))
   case .setMap(let e, let qv, let s):
-    return .setMap(renameVar(from, to: to, in: e), qv, renameVar(from, to: to, in: s))
+    return .setMap(renameVar(from, to: to, in: e), qv, qv == from ? s : renameVar(from, to: to, in: s))
   case .powerSet(let s): return .powerSet(renameVar(from, to: to, in: s))
   case .unionAll(let s): return .unionAll(renameVar(from, to: to, in: s))
   case .tupleLiteral(let es): return .tupleLiteral(es.map { renameVar(from, to: to, in: $0) })
@@ -818,7 +818,7 @@ public func renameVar(_ from: String, to: String, in expr: StateExpr) -> StateEx
   case .recordAccess(let r, let f): return .recordAccess(renameVar(from, to: to, in: r), f)
   case .domain(let f): return .domain(renameVar(from, to: to, in: f))
   case .functionLiteral(let d, let qv, let b):
-    return .functionLiteral(renameVar(from, to: to, in: d), qv, renameVar(from, to: to, in: b))
+    return .functionLiteral(renameVar(from, to: to, in: d), qv, qv == from ? b : renameVar(from, to: to, in: b))
   case .functionApply(let f, let x):
     return .functionApply(renameVar(from, to: to, in: f), renameVar(from, to: to, in: x))
   case .except(let f, let x, let e):
@@ -829,11 +829,11 @@ public func renameVar(_ from: String, to: String, in expr: StateExpr) -> StateEx
     return .caseExpr(
       ps.map { renameVar(from, to: to, in: $0) }, fb.map { renameVar(from, to: to, in: $0) })
   case .forAll(let s, let qv, let p):
-    return .forAll(renameVar(from, to: to, in: s), qv, renameVar(from, to: to, in: p))
+    return .forAll(renameVar(from, to: to, in: s), qv, qv == from ? p : renameVar(from, to: to, in: p))
   case .exists(let s, let qv, let p):
-    return .exists(renameVar(from, to: to, in: s), qv, renameVar(from, to: to, in: p))
+    return .exists(renameVar(from, to: to, in: s), qv, qv == from ? p : renameVar(from, to: to, in: p))
   case .choose(let s, let qv, let p):
-    return .choose(renameVar(from, to: to, in: s), qv, renameVar(from, to: to, in: p))
+    return .choose(renameVar(from, to: to, in: s), qv, qv == from ? p : renameVar(from, to: to, in: p))
   case .sequenceFromSet(let s): return .sequenceFromSet(renameVar(from, to: to, in: s))
   case .setSum(let f, let s):
     return .setSum(renameVar(from, to: to, in: f), renameVar(from, to: to, in: s))
