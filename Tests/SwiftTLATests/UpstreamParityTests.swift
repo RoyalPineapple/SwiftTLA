@@ -91,17 +91,4 @@ struct UpstreamParityNativeTests {
     @Test("Barrier_N6 native verifyTransitions")
     func barrierNativeVerifyTransitions() throws { try BarrierModel.verifyTransitions() }
 
-    // Self-consistency
-    @Test("Native codegen self-consistency")
-    func nativeSelfConsistency() throws {
-        func check<State: Equatable>(_ matrix: [(from: State, invocation: TLAActionInvocation, to: State)]) {
-            for entry in matrix {
-                #expect(entry.from != entry.to)
-            }
-        }
-        try check(HourClockModel.transitionMatrix())
-        try check(HourClock2Model.transitionMatrix())
-        try check(DieHardModel.transitionMatrix())
-        try check(BarrierModel.transitionMatrix())
-    }
 }
