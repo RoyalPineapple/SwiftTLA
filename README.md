@@ -7,6 +7,24 @@ pinned executable reference. Published TLA+ semantics remain authoritative.
 
 See [the supported language fragment](Documentation/Design.md), the [generated-machine guide](Documentation/GeneratedMachines.md), and the [symmetric collections guide](Documentation/SymmetricCollections.md). The generated-machine API reference is in [SwiftTLA DocC](Sources/SwiftTLA/SwiftTLA.docc/SwiftTLA.md).
 
+## Demonstrations app
+
+The macOS demonstration app is a separate Swift package in
+[`Examples/SwiftTLADemoApp`](Examples/SwiftTLADemoApp). It consumes the root
+package's public `SwiftTLA` and `SwiftTLADemos` products. The formal models
+remain in [`Sources/SwiftTLADemos`](Sources/SwiftTLADemos), so the app imports
+the same generated machines that the package verifies.
+
+Run it from the repository root:
+
+```bash
+cd Examples/SwiftTLADemoApp
+swift run SwiftTLADemoApp
+```
+
+It includes the Two Buckets puzzle, the Duck, Duck, Leader Chang–Roberts
+election, and the Elevator Bank model.
+
 ## Compiler pipeline
 
 ```text
