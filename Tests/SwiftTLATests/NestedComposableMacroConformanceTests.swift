@@ -8,6 +8,7 @@ private enum AvailabilityEvaluationFailure: Error {
     case unavailable
 }
 
+@Suite(.serialized)
 struct NestedComposableMacroConformanceTests {
     @Test("Runtime successor relation preserves parameterized nondeterministic checked edges")
     func runtimeSuccessorsPreserveEveryCheckedParameterizedSuccessor() throws {
