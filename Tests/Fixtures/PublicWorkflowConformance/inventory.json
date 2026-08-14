@@ -43,7 +43,7 @@
       "runtimeProof": {"command": "swift run", "evidence": "localDiagnosticOnly"},
       "diagnosticCategory": "macroInvariantViolation",
       "diagnosticText": "Invariant 'withinBounds' violated",
-      "sourceInputsSHA256": "b239a88bd677ed69a1b5cfe313655a5fadc36469d63acb1fb786c5b5c0d1d182",
+      "sourceInputsSHA256": "aff372a94cd71bf29d647f8535e29b7ce3d81667791c57b3494166889c990b1c",
       "sourceInputs": [
         {"path": "Sources/SwiftTLAMacros/Macros.swift", "sha256": "51c63c28490dd19945f757923b5a3d5b1230ea35e4acfced1404694e9fd65463"},
         {"path": "Tests/Fixtures/PublicWorkflowConformance/TLActor/Valid/Package.swift", "sha256": "64dc2dfd687dd85995916554127496b07d0caee6728de9d12edb16ba05f6ef52"},
@@ -69,7 +69,7 @@
       "expectedInvalidOutcome": "buildFailed",
       "diagnosticCategory": "macroInvariantViolation",
       "diagnosticText": "Invariant 'withinBounds' violated",
-      "sourceInputsSHA256": "010de5f84fd323e2069796157e82129e0bea1f6e113d42bbb1891ed4eb5c2f73",
+      "sourceInputsSHA256": "a31099961e659a8f093793afbe13dc6f5c11270e25dfe4c171db824fcac8a8e6",
       "sourceInputs": [
         {"path": "Sources/SwiftTLAMacros/Macros.swift", "sha256": "51c63c28490dd19945f757923b5a3d5b1230ea35e4acfced1404694e9fd65463"},
         {"path": "Tests/Fixtures/PublicWorkflowConformance/TLAObservable/Valid/Package.swift", "sha256": "9d32aad60423342ae2b71ce98262bb5e83b7ccd973b6963879b5d63d1346b7d6"},

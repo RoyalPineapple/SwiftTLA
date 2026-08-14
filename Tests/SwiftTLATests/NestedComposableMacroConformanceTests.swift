@@ -240,7 +240,7 @@ struct NestedComposableMacroConformanceTests {
         try assertExternalSurfaceIsForbidden(
             fixture: "InvalidNestedActorRawSurface",
             typeName: "NestedActorSurface.Actor",
-            stateDiagnostic: "has no member 'tlaSnapshot'"
+            stateDiagnostic: "cannot convert value of type 'TLAStateProjectionResult'"
         )
     }
 
@@ -249,7 +249,7 @@ struct NestedComposableMacroConformanceTests {
         try assertExternalSurfaceIsForbidden(
             fixture: "InvalidNestedObservableRawSurface",
             typeName: "NestedObservableSurface.Observable",
-            stateDiagnostic: "has no member 'tlaSnapshot'"
+            stateDiagnostic: "cannot convert value of type 'TLAStateProjectionResult'"
         )
     }
 
