@@ -34,7 +34,7 @@
     "schema": "PublicWorkflowParserBuilderToolchainV1",
     "dependencies": [
       { "id": "swiftSyntaxResolution", "evidence": { "path": "Package.resolved", "sha256": "cfdc69e87cdcea8681bfa8b117d599eef34e6f986fe23d9ad5eb4a320a1a18d7" } },
-      { "id": "swiftTLAPackage", "evidence": { "path": "Package.swift", "sha256": "9dd427098bbacebacb55a8d16d23853352a4af7dc41a78c3f771db6e2a896442" } },
+      { "id": "swiftTLAPackage", "evidence": { "path": "Package.swift", "sha256": "c856c5decbdf6449c8c36eee431dd1e4329a6e1cb2d033639598e5b1c9d17e99" } },
       { "id": "adapterSource", "evidence": { "path": "Sources/UpstreamParity/Conformance/PublicWorkflowParserBuilderAdapter.swift", "sha256": "363be60962a3921039c9c2068150214c23524949035ae902078441df96947a94" } }
     ],
     "notApplicable": [

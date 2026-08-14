@@ -9,7 +9,9 @@ struct ChangRobertsDemoTests {
         let builderTree = ParsedSpecModel(
             variables: builderSpec.variables.map { ($0.name, $0.initial, $0.initialSet) },
             actions: builderSpec.actions.map { ($0.name, $0.body, $0.bindings) },
-            invariants: builderSpec.invariants.map { ($0.name, $0.body) }
+            invariants: builderSpec.invariants.map { ($0.name, $0.body) },
+            temporal: builderSpec.temporalProperties.map { ($0.name, $0.expr) },
+            fairness: builderSpec.fairness
         )
         #expect(
             _tlaAlphaEquivalent(builderTree, ChangRoberts._parserTree),
