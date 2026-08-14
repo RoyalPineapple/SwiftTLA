@@ -369,6 +369,18 @@ extension SharedVariable {
         Expr<SetExpr<Element>>(.union(stateExpr, .setLiteral([element.raw])))
     }
 
+    /// Inserts the current identifier of a finite PlusCal process into a
+    /// shared formal set.
+    public func inserting<Element: FiniteDomainKey>(_ element: ProcessIdentifier<Element>) -> Expr<SetExpr<Element>>
+    where Value == SetExpr<Element> {
+        Expr<SetExpr<Element>>(.union(stateExpr, .setLiteral([element.stateExpr])))
+    }
+
+    public func inserting<Element: FiniteDomainKey>(_ element: WithValue<Element>) -> Expr<SetExpr<Element>>
+    where Value == SetExpr<Element> {
+        Expr<SetExpr<Element>>(.union(stateExpr, .setLiteral([element.stateExpr])))
+    }
+
     public func removing<Element: TLAValueType>(_ element: Element) -> Expr<SetExpr<Element>>
     where Value == SetExpr<Element> {
         Expr<SetExpr<Element>>(.setDifference(stateExpr, .setLiteral([.value(element.tlaValue)])))
@@ -378,11 +390,20 @@ extension SharedVariable {
     where Value == SetExpr<Element> {
         Expr<SetExpr<Element>>(.setDifference(stateExpr, .setLiteral([element.stateExpr])))
     }
+
+    public func contains<Element: TLAValueType>(_ element: Expr<Element>) -> StateExpr
+    where Value == SetExpr<Element> {
+        .in(element.raw, stateExpr)
+    }
 }
 
 extension SharedVariable where Value: FormalSetValue {
     public var isEmpty: StateExpr {
         .equal(.cardinality(stateExpr), .value(.int(0)))
+    }
+
+    public var cardinality: Expr<Int> {
+        Expr(.cardinality(stateExpr))
     }
 }
 
