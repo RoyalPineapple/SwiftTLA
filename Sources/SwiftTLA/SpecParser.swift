@@ -18,6 +18,17 @@ public enum SpecParser {
     // MARK: - Compact expression decoder
 
     public static func decodeStateExpr(_ expression: ExprSyntax) -> StateExpr? {
+        // Empty typed formal values are ordinary initializers in the Swift
+        // surface. Decode them directly so the source parser and runtime
+        // builder agree on the same collection-shaped initial state.
+        if let call = expression.as(FunctionCallExprSyntax.self),
+           call.arguments.isEmpty,
+           call.trailingClosure == nil {
+            let constructor = call.calledExpression.description
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            if constructor.hasPrefix("SetExpr<") { return .value(.set([])) }
+            if constructor.hasPrefix("TupleExpr<") { return .value(.tuple([])) }
+        }
         if let typedFacadeExpr = decodeTypedFacadeExpr(expression, substitutions: [:]) {
             return typedFacadeExpr
         }

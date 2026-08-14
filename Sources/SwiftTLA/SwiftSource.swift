@@ -16,9 +16,10 @@ extension TLASpec {
     for v in variables {
       switch v.collectionType {
       case .set:
-        lines.append("            SetVar<Int>(\"\(v.name)\")")
+        lines.append("            Variable(\"\(v.name)\", .set([]))")
       case .array(let count):
-        lines.append("            ArrayVar<Int>(\"\(v.name)\", count: \(count))")
+        let values = Array(repeating: ".int(0)", count: count).joined(separator: ", ")
+        lines.append("            Variable(\"\(v.name)\", .tuple([\(values)]))")
       case .dictionary(let scope):
         lines.append("            DictionaryVar<SomeID, Int>(\"\(v.name)\", scope: \(scope))")
       case .scalar:

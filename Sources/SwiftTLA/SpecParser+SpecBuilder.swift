@@ -328,6 +328,15 @@ extension SpecParser {
         if expression.is(BooleanLiteralExprSyntax.self) { return "Bool" }
         if expression.is(StringLiteralExprSyntax.self) { return "String" }
         if let call = expression.as(FunctionCallExprSyntax.self),
+           call.arguments.isEmpty,
+           call.trailingClosure == nil {
+            let constructor = call.calledExpression.description
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            if constructor.hasPrefix("SetExpr<") || constructor.hasPrefix("TupleExpr<") {
+                return constructor
+            }
+        }
+        if let call = expression.as(FunctionCallExprSyntax.self),
            let memberAccess = call.calledExpression.as(MemberAccessExprSyntax.self),
            memberAccess.base?.as(DeclReferenceExprSyntax.self)?.baseName.text == "TLAValue" {
             return "TLAValue"

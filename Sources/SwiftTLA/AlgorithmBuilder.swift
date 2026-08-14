@@ -200,6 +200,21 @@ extension SharedVariable where Value == Int {
 }
 
 extension SharedVariable {
+    public func contains<Element: TLAValueType>(_ element: Element) -> StateExpr
+    where Value == SetExpr<Element> {
+        .in(.value(element.tlaValue), stateExpr)
+    }
+
+    public func appending<Element: TLAValueType>(_ element: Element) -> Expr<TupleExpr<Element>>
+    where Value == TupleExpr<Element> {
+        Expr(.tupleAppend(stateExpr, .value(element.tlaValue)))
+    }
+
+    public func at<Element: TLAValueType>(_ index: Int) -> Expr<Element>
+    where Value == TupleExpr<Element> {
+        Expr(.tupleAccess(stateExpr, index))
+    }
+
     public subscript<Schema: TLARecordSchema, Field>(_ field: TLAField<Schema, Field>) -> Expr<Field>
     where Value == Record<Schema>, Field: TLAValueType {
         Expr<Field>(.recordAccess(stateExpr, field.name))
@@ -326,6 +341,18 @@ extension SharedVariable {
     public func removing<Element: TLAValueType>(_ element: WithValue<Element>) -> Expr<SetExpr<Element>>
     where Value == SetExpr<Element> {
         Expr<SetExpr<Element>>(.setDifference(stateExpr, .setLiteral([element.stateExpr])))
+    }
+}
+
+extension SharedVariable where Value: FormalSetValue {
+    public var isEmpty: StateExpr {
+        .equal(.cardinality(stateExpr), .value(.int(0)))
+    }
+}
+
+extension SharedVariable where Value: FormalTupleValue {
+    public var count: Expr<Int> {
+        Expr(.tupleLength(stateExpr))
     }
 }
 

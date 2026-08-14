@@ -179,74 +179,6 @@ extension Dictionary where Key == String, Value == TLAValue {
   }
 }
 
-// MARK: - ArrayVar<T>
-
-/// A lightweight Typed TLA+ variable wrapping a tuple (sequence).
-/// Domain = 0..<count.
-///
-/// ```swift
-/// let vals = ArrayVar<Int>("vals", count: 3)
-/// vals[0]                // StateExpr: vals[1]
-/// vals.becomes([1,2,3])  // vals' = <<1,2,3>>
-/// ```
-public struct ArrayVar<T: TLAValueType>: Sendable, CustomStringConvertible {
-  public let name: String
-  public let count: Int
-
-  public init(_ name: String? = nil, count: Int) {
-    self.name = name ?? ""
-    self.count = count
-  }
-
-  public var description: String { name }
-
-  public subscript(index: Int) -> StateExpr {
-    .tupleAccess(.variable(name), index)
-  }
-
-  @discardableResult
-  public func becomes(_ values: [T]) -> ActionExpr {
-    .assign(name, .tupleLiteral(values.map { .value($0.tlaValue) }))
-  }
-
-  @discardableResult
-  public func becomes(_ other: ArrayVar<T>) -> ActionExpr {
-    .assign(name, other.stateExpr)
-  }
-
-  public var stays: ActionExpr { .unchanged(name) }
-}
-
-extension ArrayVar: StateExprConvertible {
-  public var stateExpr: StateExpr { .variable(name) }
-}
-
-// MARK: - Layer 2: ArrayVar native operations
-
-extension ArrayVar {
-  @discardableResult
-  public func append(_ element: T) -> ActionExpr {
-    .assign(name, .tupleAppend(.variable(name), StateExpr.value(element.tlaValue)))
-  }
-
-  public var sizeExpr: StateExpr {
-    .tupleLength(.variable(name))
-  }
-
-  public var isEmptyExpr: StateExpr {
-    .equal(.tupleLength(.variable(name)), StateExpr.value(.int(0)))
-  }
-
-  public func extract(from state: [String: TLAValue]) -> [T] where T: TLABridgeable {
-    guard case .tuple(let t) = state[name] else { return [] }
-    return t.map { T(tlaValue: $0) }
-  }
-
-  public func update(in state: inout [String: TLAValue], to newValue: [T]) where T: TLABridgeable {
-    state[name] = .tuple(newValue.map { $0.tlaValue })
-  }
-}
-
 // MARK: - DictMember<K>
 
 /// Opaque member token for DictionaryVar.
@@ -337,86 +269,9 @@ extension DictionaryVar {
   }
 }
 
-// MARK: - SetVar<T>
-
-/// A lightweight TLA+ variable wrapping a set.
-///
-/// ```swift
-/// let s = SetVar<Int>("seen")
-/// s.becomes([1,2,3])   // seen' = {1, 2, 3}
-/// ```
-public struct SetVar<T: TLAValueType>: Sendable, CustomStringConvertible {
-  public let name: String
-
-  public init(_ name: String? = nil) {
-    self.name = name ?? ""
-  }
-
-  public var description: String { name }
-
-  @discardableResult
-  public func becomes(_ elements: [T]) -> ActionExpr {
-    .assign(name, .setLiteral(elements.map { .value($0.tlaValue) }))
-  }
-
-  @discardableResult
-  public func becomes(_ other: SetVar<T>) -> ActionExpr {
-    .assign(name, other.stateExpr)
-  }
-
-  public var stays: ActionExpr { .unchanged(name) }
-}
-
-extension SetVar: StateExprConvertible {
-  public var stateExpr: StateExpr { .variable(name) }
-}
-
-// MARK: - Layer 2: SetVar native operations
-
-extension SetVar {
-  @discardableResult
-  public func insert(_ element: T) -> ActionExpr {
-    .assign(name, .union(.variable(name), StateExpr.singleton(StateExpr.value(element.tlaValue))))
-  }
-
-  @discardableResult
-  public func remove(_ element: T) -> ActionExpr {
-    .assign(
-      name, .setDifference(.variable(name), StateExpr.singleton(StateExpr.value(element.tlaValue))))
-  }
-
-  public func contains(_ element: T) -> StateExpr {
-    .in(StateExpr.value(element.tlaValue), .variable(name))
-  }
-
-  public var isEmpty: StateExpr {
-    .equal(.cardinality(.variable(name)), StateExpr.value(.int(0)))
-  }
-
-  @discardableResult
-  public func union(_ other: some StateExprConvertible) -> ActionExpr {
-    .assign(name, .union(.variable(name), other.stateExpr))
-  }
-
-  public func extract(from state: [String: TLAValue]) -> Set<T> where T: TLABridgeable & Hashable {
-    guard case .set(let s) = state[name] else { return [] }
-    return Set(s.map { T(tlaValue: $0) })
-  }
-
-  public func update(in state: inout [String: TLAValue], to newValue: Set<T>)
-  where T: TLABridgeable & Hashable {
-    state[name] = .set(Set(newValue.map { $0.tlaValue }))
-  }
-}
-
 // MARK: - Builder integration
 
 extension SpecBuilder {
-  public static func buildExpression<T: TLAValueType>(_ expr: ArrayVar<T>) -> [SpecComponent] {
-    let initial = TLAValue.tuple(Array(repeating: T.defaultValue.tlaValue, count: expr.count))
-    return [VarDecl(expr.name, initial, collectionType: .array(expr.count))]
-  }
-
   public static func buildExpression<K: Identifiable, V: TLAValueType>(_ expr: DictionaryVar<K, V>)
     -> [SpecComponent] {
     if expr.scope > 0 {
@@ -428,9 +283,6 @@ extension SpecBuilder {
     return [VarDecl(expr.name, .function([:]), collectionType: .dictionary(expr.scope))]
   }
 
-  public static func buildExpression<T: TLAValueType>(_ expr: SetVar<T>) -> [SpecComponent] {
-    [VarDecl(expr.name, .set([]), collectionType: .set)]
-  }
 }
 
 public protocol StateExprConvertible { var stateExpr: StateExpr { get } }

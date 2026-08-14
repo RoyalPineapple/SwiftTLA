@@ -189,6 +189,46 @@ public struct SetExpr<Element: TLAValueType>: TLAValueType, Hashable, Sendable {
   }
 }
 
+public protocol FormalSetValue: TLAValueType {}
+extension SetExpr: FormalSetValue {}
+
+/// A typed finite TLA+ tuple (sequence).
+///
+/// This is the formal sequence value, not a Swift `Array`. Use it for ordered
+/// state. Its storage is private so application code cannot accidentally make
+/// a host-language collection part of the specification.
+public struct TupleExpr<Element: TLAValueType>: TLAValueType, Hashable, Sendable {
+  private let values: [TLAValue]
+
+  public init() {
+    values = []
+  }
+
+  public init?(formalValue: TLAValue) {
+    guard case .tuple(let values) = formalValue,
+          values.allSatisfy({ Element(formalValue: $0) != nil })
+    else { return nil }
+    self.values = values
+  }
+
+  public var tlaValue: TLAValue { .tuple(values) }
+  public static var defaultValue: Self { Self() }
+
+  /// The typed tuple elements, in their formal order.
+  public var elements: [Element] { values.compactMap(Element.init(formalValue:)) }
+
+  public static func literal(_ elements: Element...) -> Expr<Self> {
+    Expr(.tupleLiteral(elements.map { .value($0.tlaValue) }))
+  }
+
+  public static func literal(_ elements: Expr<Element>...) -> Expr<Self> {
+    Expr(.tupleLiteral(elements.map(\.raw)))
+  }
+}
+
+public protocol FormalTupleValue: TLAValueType {}
+extension TupleExpr: FormalTupleValue {}
+
 extension Expr {
   public func inserting<Element: TLAValueType>(_ element: Expr<Element>) -> Expr<SetExpr<Element>>
   where T == SetExpr<Element> {
@@ -203,6 +243,30 @@ extension Expr {
   public func removing<Element: TLAValueType>(_ element: Expr<Element>) -> Expr<SetExpr<Element>>
   where T == SetExpr<Element> {
     Expr<SetExpr<Element>>(.setDifference(raw, .setLiteral([element.raw])))
+  }
+
+  public func contains<Element: TLAValueType>(_ element: Element) -> StateExpr
+  where T == SetExpr<Element> {
+    .in(.value(element.tlaValue), raw)
+  }
+
+  public func contains<Element: TLAValueType>(_ element: Expr<Element>) -> StateExpr
+  where T == SetExpr<Element> {
+    .in(element.raw, raw)
+  }
+
+  public func appending<Element: TLAValueType>(_ element: Element) -> Expr<TupleExpr<Element>>
+  where T == TupleExpr<Element> {
+    Expr<TupleExpr<Element>>(.tupleAppend(raw, .value(element.tlaValue)))
+  }
+
+  public func appending<Element: TLAValueType>(_ element: Expr<Element>) -> Expr<TupleExpr<Element>>
+  where T == TupleExpr<Element> {
+    Expr<TupleExpr<Element>>(.tupleAppend(raw, element.raw))
+  }
+
+  public func at<Element: TLAValueType>(_ index: Int) -> Expr<Element> where T == TupleExpr<Element> {
+    Expr<Element>(.tupleAccess(raw, index))
   }
 
   public subscript<Schema: TLARecordSchema, Value>(_ field: TLAField<Schema, Value>) -> Expr<Value>
@@ -296,6 +360,18 @@ extension Expr {
   ) -> Expr<Function<Domain, Range>> where T == Function<Domain, Range> {
     Expr<Function<Domain, Range>>(
       .except(raw, index.stateExpr, update(Expr<Range>(.functionApply(raw, index.stateExpr))).raw))
+  }
+}
+
+extension Expr where T: FormalSetValue {
+  public var isEmpty: StateExpr {
+    .equal(.cardinality(raw), .value(.int(0)))
+  }
+}
+
+extension Expr where T: FormalTupleValue {
+  public var count: Expr<Int> {
+    Expr<Int>(.tupleLength(raw))
   }
 }
 
