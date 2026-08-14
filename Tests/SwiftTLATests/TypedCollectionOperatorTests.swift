@@ -20,6 +20,20 @@ private struct TypedCollectionGeneratedModel {
     }
 }
 
+@TLAModel
+private struct TypedQuantifierGeneratedModel {
+    static var spec: TLASpec {
+        #spec("TypedQuantifierGeneratedModel") {
+            let result = SharedVar(initial: false)
+            Action("findEven") {
+                result.becomes(Exists(in: IntRange(1, through: 4)) { value in
+                    value.expr % 2 == 0
+                })
+            }
+        }
+    }
+}
+
 @Suite(.serialized) struct TypedCollectionOperatorTests {
     @Test("typed interval, filter, map, and dynamic tuple access evaluate")
     func typedOperatorsEvaluate() throws {
@@ -72,5 +86,23 @@ private struct TypedCollectionGeneratedModel {
         #expect(Set(result.before.values.elements) == Set([1, 2, 3, 4]))
         #expect(Set(result.after.values.elements) == Set([4, 16]))
         #expect(TypedCollectionGeneratedModel.spec.tlaModule.contains("keepEvenSquares"))
+    }
+
+    @Test("typed bounded quantifiers parse, evaluate, and generate")
+    func typedQuantifiersSurviveThePipeline() throws {
+        let hasEven = Exists(in: IntRange(1, through: 4)) { value in
+            value.expr % 2 == 0
+        }
+        let everyPositive = ForAll(in: IntRange(1, through: 4)) { value in
+            value.expr > 0
+        }
+        #expect(try hasEven.raw.evaluate(in: [:]) == .bool(true))
+        #expect(try everyPositive.raw.evaluate(in: [:]) == .bool(true))
+
+        TypedQuantifierGeneratedModel._checkParserTree()
+        var model = TypedQuantifierGeneratedModel()
+        let result = try model.apply(.findEven)
+        #expect(result.after.result == true)
+        #expect(TypedQuantifierGeneratedModel.spec.tlaModule.contains("\\\\E"))
     }
 }

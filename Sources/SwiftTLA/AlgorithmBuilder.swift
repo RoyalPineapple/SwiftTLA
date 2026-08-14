@@ -892,6 +892,29 @@ public func Let<Value: TLAValueType>(
     Let(Expr<Value>(.value(value.tlaValue)), body)
 }
 
+/// Tests whether a bounded formal set has a member that satisfies `predicate`.
+///
+/// This is the typed Swift spelling of TLA+ `\\E value \\in domain : predicate`.
+/// The bound value is formal data, not a Swift collection element.
+public func Exists<Value: TLAValueType>(
+    in domain: Expr<SetExpr<Value>>,
+    where predicate: (WithValue<Value>) -> StateExpr
+) -> Expr<Bool> {
+    let variable = FreshVarName.fresh()
+    return Expr(.exists(domain.raw, variable, predicate(WithValue(expression: .variable(variable)))))
+}
+
+/// Tests whether every bounded formal set member satisfies `predicate`.
+///
+/// This is the typed Swift spelling of TLA+ `\\A value \\in domain : predicate`.
+public func ForAll<Value: TLAValueType>(
+    in domain: Expr<SetExpr<Value>>,
+    where predicate: (WithValue<Value>) -> StateExpr
+) -> Expr<Bool> {
+    let variable = FreshVarName.fresh()
+    return Expr(.forAll(domain.raw, variable, predicate(WithValue(expression: .variable(variable)))))
+}
+
 public func With<Value: TLAValueType>(
     _ source: Var<SetExpr<Value>>,
     @DoBuilder _ body: (WithValue<Value>) -> [StepStatement]

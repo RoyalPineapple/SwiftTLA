@@ -26,6 +26,24 @@ public enum SpecParser {
 
     public static func decodeStateExpr(_ expression: ExprSyntax) -> StateExpr? {
         if let call = expression.as(FunctionCallExprSyntax.self),
+           let name = call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text,
+           name == "Exists" || name == "ForAll",
+           let domainSyntax = call.arguments.first(where: { $0.label?.text == "in" })?.expression,
+           let domain = decodeStateExpr(domainSyntax),
+           let closure = call.trailingClosure,
+           closure.statements.count == 1,
+           case .expr(let bodySyntax) = closure.statements.first?.item,
+           let parameter = closureParameterNames(in: closure).first,
+           closureParameterNames(in: closure).count == 1,
+           let predicate = decodeTypedFacadeValue(
+               bodySyntax,
+               substitutions: [parameter: .variable(parameter)]
+           ) {
+            return name == "Exists"
+                ? .exists(domain, parameter, predicate)
+                : .forAll(domain, parameter, predicate)
+        }
+        if let call = expression.as(FunctionCallExprSyntax.self),
            call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "IntRange",
            let lower = call.arguments.first?.expression,
            let upper = call.arguments.first(where: { $0.label?.text == "through" })?.expression,
