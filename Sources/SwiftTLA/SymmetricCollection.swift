@@ -67,6 +67,16 @@ public struct SharedCollection<Element: Identifiable, Value: TLAValueType>: Send
     self.storage = SymmetricCollectionVar(name)
   }
 
+  /// Source-level spelling for a `#spec` declaration. The expression macro
+  /// rewrites this to the named initializer before the runtime builder runs.
+  public init(
+    _ element: Element.Type,
+    verificationScope: Int,
+    initial: Value
+  ) {
+    self.init("__unboundSharedCollection", element, verificationScope: verificationScope, initial: initial)
+  }
+
   public subscript(_ member: SymmetricMember<Element>) -> Expr<Value> {
     storage[member]
   }
