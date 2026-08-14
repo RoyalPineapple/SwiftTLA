@@ -188,9 +188,8 @@ Nested adapters expose the enclosing model's `State`, `ActionLabel`, and
 
 ## Isolation and callbacks
 
-`@TLAObservable` is main-actor isolated. It must be nested in one `@TLAModel`
-struct. `@TLAActor` has the same nesting requirement. Neither adapter owns a
-formal specification or generates an independent machine.
+A nested `@TLAObservable` adapter is main-actor isolated. It must be nested in
+one `@TLAModel` struct. `@TLAActor` has the same nesting requirement. Neither adapter owns a formal specification or generates an independent machine.
 
 A nested observable owns its own canonical model and provides async action
 execution. It does not provide automatic SwiftUI invalidation or shared state
@@ -283,7 +282,7 @@ func runGeneratedMachineTesting() async throws {
     let beforeFailure = machine.state
 
     assert(initial.projection != nil)
-    assert(initial.availableInvocations == [.init(name: "advance")])
+    assert(initial.availableInvocations == [.init(name: "advance", arguments: [.string("only")])])
     assert(result.after.value == 1)
 
     do {
