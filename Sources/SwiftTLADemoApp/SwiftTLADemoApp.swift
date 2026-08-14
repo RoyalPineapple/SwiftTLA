@@ -44,40 +44,20 @@ private struct TwoBucketsView: View {
 
     var body: some View {
         DemoScreen(title: "Two Buckets", subtitle: "Measure exactly 4 gallons.") {
-            HStack(alignment: .center, spacing: 72) {
-                HStack(alignment: .bottom, spacing: 40) {
-                    Bucket(capacity: 3, amount: state.three, label: "Bucket 3")
-                    Bucket(capacity: 5, amount: state.five, label: "Bucket 5", target: 4)
-                }
-                StateCard(
-                    title: state.five == 4 ? "Solved" : "Generated machine",
-                    detail: state.five == 4 ? "Exactly 4 gallons." : "Each enabled button is a formal transition.",
-                    error: error
-                )
-            }
-            .frame(maxWidth: .infinity, minHeight: 360)
-
-            HStack(spacing: 10) {
-                bucketButton("Fill 3") { _ = try await machine._fillThree() }
-                bucketButton("Empty 3") { _ = try await machine._emptyThree() }
-                bucketButton("Pour 3 → 5") { _ = try await machine._pourThreeIntoFive() }
-                    .tint(.orange)
-                bucketButton("Pour 5 → 3") { _ = try await machine._pourFiveIntoThree() }
-                    .tint(.orange)
-                bucketButton("Fill 5") { _ = try await machine._fillFive() }
-                bucketButton("Empty 5") { _ = try await machine._emptyFive() }
-                Spacer()
-                Button("Reset", systemImage: "arrow.counterclockwise") {
+            TwoBucketsScene(state: state, error: error)
+            TwoBucketsControls(
+                fillThree: { perform { _ = try await machine._fillThree() } },
+                emptyThree: { perform { _ = try await machine._emptyThree() } },
+                pourThreeIntoFive: { perform { _ = try await machine._pourThreeIntoFive() } },
+                pourFiveIntoThree: { perform { _ = try await machine._pourFiveIntoThree() } },
+                fillFive: { perform { _ = try await machine._fillFive() } },
+                emptyFive: { perform { _ = try await machine._emptyFive() } },
+                reset: {
                     machine = TwoBuckets.Observable()
                     error = nil
                 }
-            }
+            )
         }
-    }
-
-    private func bucketButton(_ title: String, action: @escaping () async throws -> Void) -> some View {
-        Button(title) { perform(action) }
-            .buttonStyle(.borderedProminent)
     }
 
     private func perform(_ action: @escaping () async throws -> Void) {
@@ -106,32 +86,20 @@ private struct DuckDuckLeaderView: View {
             title: "Duck, Duck, Leader",
             subtitle: "A message carrying the largest identifier completes the ring."
         ) {
-            HStack(spacing: 50) {
-                RingView(
-                    nodes: ring,
-                    identifiers: state.identifiers,
-                    messages: state.messages.elements,
-                    leader: state.leader,
-                    delivery: delivery
-                )
-                    .frame(width: 520, height: 520)
-                StateCard(
-                    title: state.leader == 0 ? "Election running" : "Leader: \(state.leader)",
-                    detail: "\(lastMove)\n\n\(messageStatus)",
-                    error: error
-                )
-                .frame(width: 260)
-            }
-            .frame(maxWidth: .infinity)
-
-            HStack(spacing: 12) {
-                Button("Shuffle", systemImage: "shuffle") { shuffleSchedule() }
-                Button("Reset", systemImage: "arrow.counterclockwise") { reset() }
-                Button(isPlaying ? "Pause" : "Play", systemImage: isPlaying ? "pause.fill" : "play.fill") {
-                    togglePlayback()
-                }
-                .buttonStyle(.borderedProminent)
-            }
+            DuckDuckLeaderScene(
+                nodes: ring,
+                state: state,
+                delivery: delivery,
+                lastMove: lastMove,
+                messageStatus: messageStatus,
+                error: error
+            )
+            DuckDuckLeaderControls(
+                isPlaying: isPlaying,
+                shuffle: shuffleSchedule,
+                reset: { reset() },
+                togglePlayback: togglePlayback
+            )
         }
     }
 
@@ -249,29 +217,15 @@ private struct ElevatorBankView: View {
             title: "Elevator Bank",
             subtitle: "Two riders, two cars, and doors that make every handoff explicit."
         ) {
-            HStack(alignment: .center, spacing: 60) {
-                ElevatorShaft(car: .carA, state: state)
-                ElevatorShaft(car: .carB, state: state)
-                StateCard(
-                    title: "Formal state",
-                    detail: riderSummary,
-                    error: error
-                )
-                .frame(width: 265)
-            }
-            .frame(maxWidth: .infinity, minHeight: 430)
-
-            HStack(spacing: 12) {
-                Button("Advance Car 1") { operate(.carA) }
-                    .buttonStyle(.borderedProminent)
-                Button("Advance Car 2") { operate(.carB) }
-                    .buttonStyle(.borderedProminent)
-                Spacer()
-                Button("Reset", systemImage: "arrow.counterclockwise") {
+            ElevatorBankScene(state: state, riderSummary: riderSummary, error: error)
+            ElevatorBankControls(
+                operateCarA: { operate(.carA) },
+                operateCarB: { operate(.carB) },
+                reset: {
                     machine = ElevatorBank.Observable()
                     error = nil
                 }
-            }
+            )
         }
     }
 
@@ -286,6 +240,133 @@ private struct ElevatorBankView: View {
         Task { @MainActor in
             do { _ = try await machine._operate(process: car); error = nil }
             catch let failure { error = failure.localizedDescription }
+        }
+    }
+}
+
+private struct TwoBucketsScene: View {
+    let state: TwoBuckets.State
+    let error: String?
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 72) {
+            HStack(alignment: .bottom, spacing: 40) {
+                Bucket(capacity: 3, amount: state.three, label: "Bucket 3")
+                Bucket(capacity: 5, amount: state.five, label: "Bucket 5", target: 4)
+            }
+            StateCard(
+                title: state.five == 4 ? "Solved" : "Generated machine",
+                detail: state.five == 4 ? "Exactly 4 gallons." : "Each enabled button is a formal transition.",
+                error: error
+            )
+        }
+        .frame(maxWidth: .infinity, minHeight: 360)
+    }
+}
+
+private struct TwoBucketsControls: View {
+    let fillThree: () -> Void
+    let emptyThree: () -> Void
+    let pourThreeIntoFive: () -> Void
+    let pourFiveIntoThree: () -> Void
+    let fillFive: () -> Void
+    let emptyFive: () -> Void
+    let reset: () -> Void
+
+    var body: some View {
+        HStack(spacing: 10) {
+            actionButton("Fill 3", action: fillThree)
+            actionButton("Empty 3", action: emptyThree)
+            actionButton("Pour 3 → 5", tint: .orange, action: pourThreeIntoFive)
+            actionButton("Pour 5 → 3", tint: .orange, action: pourFiveIntoThree)
+            actionButton("Fill 5", action: fillFive)
+            actionButton("Empty 5", action: emptyFive)
+            Spacer()
+            Button("Reset", systemImage: "arrow.counterclockwise", action: reset)
+        }
+    }
+
+    private func actionButton(_ title: String, tint: Color? = nil, action: @escaping () -> Void) -> some View {
+        Button(title, action: action)
+            .buttonStyle(.borderedProminent)
+            .tint(tint)
+    }
+}
+
+private struct DuckDuckLeaderScene: View {
+    let nodes: [ChangRoberts.Node]
+    let state: ChangRoberts.State
+    let delivery: DuckDelivery?
+    let lastMove: String
+    let messageStatus: String
+    let error: String?
+
+    var body: some View {
+        HStack(spacing: 50) {
+            RingView(
+                nodes: nodes,
+                identifiers: state.identifiers,
+                messages: state.messages.elements,
+                leader: state.leader,
+                delivery: delivery
+            )
+            .frame(width: 520, height: 520)
+            StateCard(
+                title: state.leader == 0 ? "Election running" : "Leader: \(state.leader)",
+                detail: "\(lastMove)\n\n\(messageStatus)",
+                error: error
+            )
+            .frame(width: 260)
+        }
+        .frame(maxWidth: .infinity)
+    }
+}
+
+private struct DuckDuckLeaderControls: View {
+    let isPlaying: Bool
+    let shuffle: () -> Void
+    let reset: () -> Void
+    let togglePlayback: () -> Void
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Button("Shuffle", systemImage: "shuffle", action: shuffle)
+            Button("Reset", systemImage: "arrow.counterclockwise", action: reset)
+            Button(isPlaying ? "Pause" : "Play", systemImage: isPlaying ? "pause.fill" : "play.fill", action: togglePlayback)
+                .buttonStyle(.borderedProminent)
+        }
+    }
+}
+
+private struct ElevatorBankScene: View {
+    let state: ElevatorBank.State
+    let riderSummary: String
+    let error: String?
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 60) {
+            ElevatorShaft(car: .carA, state: state)
+            ElevatorShaft(car: .carB, state: state)
+            StateCard(title: "Formal state", detail: riderSummary, error: error)
+                .frame(width: 265)
+        }
+        .frame(maxWidth: .infinity, minHeight: 430)
+    }
+}
+
+private struct ElevatorBankControls: View {
+    let operateCarA: () -> Void
+    let operateCarB: () -> Void
+    let reset: () -> Void
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Button("Advance Car 1", action: operateCarA)
+                .buttonStyle(.borderedProminent)
+            Button("Advance Car 2", action: operateCarB)
+                .buttonStyle(.borderedProminent)
+            Spacer()
+            Button("Reset", systemImage: "arrow.counterclockwise", action: reset)
         }
     }
 }
