@@ -1,5 +1,3 @@
-import SwiftTLA
-
 extension Example {
     public static let catOddBoxes = Entry(
         id: "Moving_Cat_Puzzle/CatOddBoxes",
@@ -7,8 +5,8 @@ extension Example {
         upstreamModule: "specifications/Moving_Cat_Puzzle/Cat.tla",
         upstreamCfg: "specifications/Moving_Cat_Puzzle/CatOddBoxes.cfg",
         expectedDistinct: 30,
-        spec: catSpec(boxes: 5),
-        notes: "Number_Of_Boxes=5. Move_Cat /\\ Observe_Box. TLC upstream = 30.",
+        spec: CatOddBoxesModel.spec,
+        notes: "Number_Of_Boxes=5. Typed direction phase. TLC upstream = 30.",
     )
 
 }

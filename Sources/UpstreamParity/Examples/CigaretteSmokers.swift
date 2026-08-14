@@ -1,4 +1,41 @@
 import SwiftTLA
+import SwiftTLAMacros
+
+@TLAModel
+public struct CigaretteSmokersModel {
+    public static var spec: TLASpec {
+        #spec("CigaretteSmokers") {
+            Extends("Integers")
+            let smokingM = SharedVar(initial: false)
+            let smokingP = SharedVar(initial: false)
+            let smokingT = SharedVar(initial: false)
+            let dealer = SharedVar(in: 1...3)
+            Action("start_1") {
+                dealer == 1 && smokingT.becomes(true) && dealer.becomes(0) && smokingM.stays && smokingP.stays
+            }
+            Action("start_2") {
+                dealer == 2 && smokingP.becomes(true) && dealer.becomes(0) && smokingM.stays && smokingT.stays
+            }
+            Action("start_3") {
+                dealer == 3 && smokingM.becomes(true) && dealer.becomes(0) && smokingP.stays && smokingT.stays
+            }
+            Action("stop_m1") { dealer == 0 && smokingM == true && smokingM.becomes(false) && dealer.becomes(1) }
+            Action("stop_m2") { dealer == 0 && smokingM == true && smokingM.becomes(false) && dealer.becomes(2) }
+            Action("stop_m3") { dealer == 0 && smokingM == true && smokingM.becomes(false) && dealer.becomes(3) }
+            Action("stop_p1") { dealer == 0 && smokingP == true && smokingP.becomes(false) && dealer.becomes(1) }
+            Action("stop_p2") { dealer == 0 && smokingP == true && smokingP.becomes(false) && dealer.becomes(2) }
+            Action("stop_p3") { dealer == 0 && smokingP == true && smokingP.becomes(false) && dealer.becomes(3) }
+            Action("stop_t1") { dealer == 0 && smokingT == true && smokingT.becomes(false) && dealer.becomes(1) }
+            Action("stop_t2") { dealer == 0 && smokingT == true && smokingT.becomes(false) && dealer.becomes(2) }
+            Action("stop_t3") { dealer == 0 && smokingT == true && smokingT.becomes(false) && dealer.becomes(3) }
+            Invariant("AtMostOne") {
+                !(smokingM == true && smokingP == true)
+                !(smokingM == true && smokingT == true)
+                !(smokingP == true && smokingT == true)
+            }
+        }
+    }
+}
 
 extension Example {
     public static let cigaretteSmokers = Entry(
@@ -7,42 +44,7 @@ extension Example {
         upstreamModule: "specifications/CigaretteSmokers/CigaretteSmokers.tla",
         upstreamCfg: "specifications/CigaretteSmokers/CigaretteSmokers.cfg",
         expectedDistinct: 6,
-        spec: cigaretteSmokersSpec(),
+        spec: CigaretteSmokersModel.spec,
         notes: "Ingredients={m,p,t}, Offers=pairs. TLC TypeOK+AtMostOne = 6.",
     )
-
-    static func cigaretteSmokersSpec() -> TLASpec {
-        TLASpec("CigaretteSmokers") {
-            Extends("Integers")
-            let sm = Var<Bool>("smoking_m")
-            let sp = Var<Bool>("smoking_p")
-            let st = Var<Bool>("smoking_t")
-            let dealer = Var<Int>("dealer")
-            Variable(sm, false); Variable(sp, false); Variable(st, false)
-            Variable(dealer, in: 1...3)
-            Action("start_1") {
-                dealer == 1 && .assign(st.name, true) && dealer.becomes(0) && sm.stays && sp.stays
-            }
-            Action("start_2") {
-                dealer == 2 && sp.becomes(true) && dealer.becomes(0) && sm.stays && st.stays
-            }
-            Action("start_3") {
-                dealer == 3 && sm.becomes(true) && dealer.becomes(0) && sp.stays && st.stays
-            }
-            Action("stop_m1") { dealer == 0 && sm == true && sm.becomes(false) && dealer.becomes(1) }
-            Action("stop_m2") { dealer == 0 && sm == true && sm.becomes(false) && dealer.becomes(2) }
-            Action("stop_m3") { dealer == 0 && sm == true && sm.becomes(false) && dealer.becomes(3) }
-            Action("stop_p1") { dealer == 0 && sp == true && sp.becomes(false) && dealer.becomes(1) }
-            Action("stop_p2") { dealer == 0 && sp == true && sp.becomes(false) && dealer.becomes(2) }
-            Action("stop_p3") { dealer == 0 && sp == true && sp.becomes(false) && dealer.becomes(3) }
-            Action("stop_t1") { dealer == 0 && st == true && .assign(st.name, false) && dealer.becomes(1) }
-            Action("stop_t2") { dealer == 0 && st == true && .assign(st.name, false) && dealer.becomes(2) }
-            Action("stop_t3") { dealer == 0 && st == true && .assign(st.name, false) && dealer.becomes(3) }
-            Invariant("AtMostOne") {
-                !(sm == true && sp == true)
-                !(sm == true && st == true)
-                !(sp == true && st == true)
-            }
-        }
-    }
 }

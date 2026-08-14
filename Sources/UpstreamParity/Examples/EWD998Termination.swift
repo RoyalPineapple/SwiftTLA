@@ -1,114 +1,128 @@
 import SwiftTLA
+import SwiftTLAMacros
 
-// Ring termination detection (EWD998). N=4. StateConstraint bounds pending.
-// TypeOK + Safe. 17 states.
-// Upstream: specifications/ewd998/AsyncTerminationDetection.tla
+/// Dijkstra's asynchronous ring-termination detector from EWD 998.
+///
+/// The finite node domain and its two shared functions are formal values.
+/// Parameterized actions replace the old raw existential action bodies, so the
+/// same authoring surface drives the parser, builder, and generated machine.
+@TLAModel
+public struct EWD998TerminationModel {
+    public enum Node: Int, CaseIterable, FiniteDomainKey {
+        case zero = 0
+        case one = 1
+        case two = 2
+        case three = 3
+
+        public static let formalDomain = allCases
+        public static let formalTypeIdentity = FormalTypeIdentity(rawValue: "examples.ewd998.node")
+
+        public var tlaValue: TLAValue { .int(rawValue) }
+    }
+
+    public static var spec: TLASpec {
+        #spec("AsyncTerminationDetection") {
+            Extends("Naturals")
+            let active = SharedVar(in: SetExpr<Function<Node, Bool>>.literal(
+                Function<Node, Bool>.literal((.zero, false), (.one, false), (.two, false), (.three, false)),
+                Function<Node, Bool>.literal((.zero, false), (.one, false), (.two, false), (.three, true)),
+                Function<Node, Bool>.literal((.zero, false), (.one, false), (.two, true), (.three, false)),
+                Function<Node, Bool>.literal((.zero, false), (.one, false), (.two, true), (.three, true)),
+                Function<Node, Bool>.literal((.zero, false), (.one, true), (.two, false), (.three, false)),
+                Function<Node, Bool>.literal((.zero, false), (.one, true), (.two, false), (.three, true)),
+                Function<Node, Bool>.literal((.zero, false), (.one, true), (.two, true), (.three, false)),
+                Function<Node, Bool>.literal((.zero, false), (.one, true), (.two, true), (.three, true)),
+                Function<Node, Bool>.literal((.zero, true), (.one, false), (.two, false), (.three, false)),
+                Function<Node, Bool>.literal((.zero, true), (.one, false), (.two, false), (.three, true)),
+                Function<Node, Bool>.literal((.zero, true), (.one, false), (.two, true), (.three, false)),
+                Function<Node, Bool>.literal((.zero, true), (.one, false), (.two, true), (.three, true)),
+                Function<Node, Bool>.literal((.zero, true), (.one, true), (.two, false), (.three, false)),
+                Function<Node, Bool>.literal((.zero, true), (.one, true), (.two, false), (.three, true)),
+                Function<Node, Bool>.literal((.zero, true), (.one, true), (.two, true), (.three, false)),
+                Function<Node, Bool>.literal((.zero, true), (.one, true), (.two, true), (.three, true))
+            ))
+            let pending = SharedVar(initial: Function<Node, Int>.literal(
+                (.zero, 0), (.one, 0), (.two, 0), (.three, 0)
+            ))
+            let terminationDetected = SharedVar(initial: false)
+
+            Constraint(
+                pending[.zero] <= 3 && pending[.one] <= 3
+                    && pending[.two] <= 3 && pending[.three] <= 3
+            )
+
+            Invariant("TypeOK") {
+                pending[.zero] >= 0 && pending[.one] >= 0
+                    && pending[.two] >= 0 && pending[.three] >= 0
+            }
+
+            Invariant("Safe") {
+                !terminationDetected || (
+                    active[.zero] == false && active[.one] == false
+                        && active[.two] == false && active[.three] == false
+                        && pending[.zero] == 0 && pending[.one] == 0
+                        && pending[.two] == 0 && pending[.three] == 0
+                )
+            }
+
+            Action("Terminate", parameters: [
+                ActionParameter("node", values: Node.finiteValues)
+            ]) {
+                let node = Expr<Node>(.variable("node"))
+                let quiescent = active[.zero] == false && active[.one] == false
+                    && active[.two] == false && active[.three] == false
+                    && pending[.zero] == 0 && pending[.one] == 0
+                    && pending[.two] == 0 && pending[.three] == 0
+
+                active[node] == true
+                    && active.becomes(active.updating(node, to: false))
+                    && pending.stays
+                    && ((quiescent && terminationDetected.becomes(true))
+                        || (!quiescent && terminationDetected.stays))
+            }
+
+            Action("RcvMsg", parameters: [
+                ActionParameter("node", values: Node.finiteValues)
+            ]) {
+                let node = Expr<Node>(.variable("node"))
+                pending[node] > 0
+                    && active.becomes(active.updating(node, to: true))
+                    && pending.becomes(pending.updating(node) { current in current - 1 })
+                    && terminationDetected.stays
+            }
+
+            Action("SendMsg", parameters: [
+                ActionParameter("sender", values: Node.finiteValues),
+                ActionParameter("receiver", values: Node.finiteValues)
+            ]) {
+                let sender = Expr<Node>(.variable("sender"))
+                let receiver = Expr<Node>(.variable("receiver"))
+                active[sender] == true
+                    && pending.becomes(pending.updating(receiver) { current in current + 1 })
+                    && active.stays
+                    && terminationDetected.stays
+            }
+
+            Action("DetectTermination") {
+                active[.zero] == false && active[.one] == false
+                    && active[.two] == false && active[.three] == false
+                    && pending[.zero] == 0 && pending[.one] == 0
+                    && pending[.two] == 0 && pending[.three] == 0
+                    && terminationDetected.becomes(true)
+                    && active.stays && pending.stays
+            }
+        }
+    }
+}
 
 extension Example {
-    static let ewd998 = Example.Entry(
+    public static let ewd998 = Entry(
         id: "ewd998/AsyncTerminationDetection",
         upstreamSpec: "ewd998",
         upstreamModule: "specifications/ewd998/AsyncTerminationDetection.tla",
         upstreamCfg: "specifications/ewd998/AsyncTerminationDetection.cfg",
         expectedDistinct: 4097,
-        spec: ewd998Spec(),
-        notes: "N=4. Nondet init for active. Constraint pending<=3. Safe.",
+        spec: EWD998TerminationModel.spec,
+        notes: "N=4. Typed active/pending functions and parameterized asynchronous actions. Constraint pending<=3. Safe."
     )
-}
-
-private func ewd998Spec() -> TLASpec {
-    let N = 4
-    let nodeSet = StateExpr.setLiteral((0..<N).map { StateExpr.value(.int($0)) })
-    let trueE = StateExpr.value(.bool(true))
-    let falseE = StateExpr.value(.bool(false))
-    let boolSet = StateExpr.set([trueE, falseE])
-
-    let active = Var<TLAValue>("active")
-    let pending = Var<TLAValue>("pending")
-    let terminationDetected = Var<Bool>("terminationDetected")
-
-    var activeInits = Set<TLAValue>()
-    func genActive(_ i: Int, _ cur: [(Int, TLAValue)]) {
-        if i >= N {
-            activeInits.insert(.function(Dictionary(uniqueKeysWithValues: cur.map { (.int($0.0), $0.1) })))
-        } else {
-            genActive(i + 1, cur + [(i, .bool(true))])
-            genActive(i + 1, cur + [(i, .bool(false))])
-        }
-    }
-    genActive(0, [])
-
-    let stateC = StateExpr.forAll(nodeSet) { x in
-        StateExpr.variable("pending").applying(x) <= 3
-    }
-
-    return TLASpec("AsyncTerminationDetection") {
-        Extends("Naturals")
-
-        Variable(active, in: activeInits)
-        Variable(pending, TLAValue.function(Dictionary(uniqueKeysWithValues: (0..<N).map { (.int($0), .int(0)) })))
-        Variable(terminationDetected, false)
-        Constraint(stateC)
-
-        Invariant("TypeOK") {
-                                                terminationDetected.stateExpr.isIn(boolSet)
-            for i in 0..<N {
-                let ci = StateExpr.value(.int(i))
-                active.stateExpr.applying(ci).isIn(boolSet)
-                pending.stateExpr.applying(ci) >= 0
-            }
-        }
-
-        Invariant("Safe") {
-                                                let terminated = StateExpr.forAll(nodeSet) { x in
-                StateExpr.not(active.stateExpr.applying(x)) && StateExpr.equal(pending.stateExpr.applying(x), 0)
-                                                }
-            StateExpr.ifThenElse(terminationDetected.stateExpr, terminated, trueE)
-        }
-
-        Action("Terminate") {
-            ActionExpr.exists("i", from: nodeSet) { i in
-                                                                let terminated = StateExpr.forAll(nodeSet) { x in
-                    StateExpr.not(active.stateExpr.applying(x)) && StateExpr.equal(pending.stateExpr.applying(x), 0)
-                                                                }
-
-                return active.stateExpr.applying(i)
-                    && .assign(active.name, active.stateExpr.updated(at: i, to: falseE))
-                    && pending.stays
-                    && terminationDetected.becomes(
-                        Expr(.ifThenElse(terminated, trueE, terminationDetected.stateExpr)))
-            }
-        }
-
-        Action("RcvMsg") {
-            ActionExpr.exists("i", from: nodeSet) { i in
-                                                pending.stateExpr.applying(i) > 0
-                    && .assign(active.name, active.stateExpr.updated(at: i, to: trueE))
-                    && .assign(pending.name, pending.stateExpr.updated(at: i, to: pending.stateExpr.applying(i) - 1))
-                    && terminationDetected.stays
-            }
-        }
-
-        Action("SendMsg") {
-            ActionExpr.exists("i", from: nodeSet) { i in
-                ActionExpr.exists("j", from: nodeSet) { j in
-                                                            active.stateExpr.applying(i)
-                        && .assign(pending.name, pending.stateExpr.updated(at: j, to: pending.stateExpr.applying(j) + 1))
-                        && active.stays
-                        && terminationDetected.stays
-                }
-            }
-        }
-
-        Action("DetectTermination") {
-                                    let terminated = StateExpr.forAll(nodeSet) { x in
-                StateExpr.not(active.stateExpr.applying(x)) && StateExpr.equal(pending.stateExpr.applying(x), 0)
-                                    }
-
-            terminated
-                && terminationDetected.becomes(Expr<Bool>(trueE))
-                && active.stays
-                && pending.stays
-        }
-    }
 }

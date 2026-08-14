@@ -1,171 +1,74 @@
-# Porting Rules
+# Upstream example porting rules
 
-How to port an upstream TLA+ spec into `Sources/UpstreamParity/Examples/`.
+This directory is a parity corpus. Each port must preserve the published
+model's state space and labeled transition relation for its declared finite
+configuration. It is not a place to invent a friendlier algorithm.
 
-## Before you start
+## Choose the authoring form from the upstream source
 
-Read the upstream `.tla` file and its `.cfg` file. Understand:
+1. Read the upstream `.tla` and `.cfg` first.
+2. If the source contains a PlusCal algorithm, port it with the scoped DSL:
+   `#spec`, `Algorithm`, `Each`, and labeled `Do` blocks. Preserve the shared
+   variables, process family, atomic labels, fairness, and formal properties.
+3. If the source is direct TLA+, use the typed `#spec` vocabulary directly.
+   Do not manufacture an `Algorithm` around it.
+4. If an upstream construct is not supported, record the missing construct and
+   stop. Do not emulate it with raw `TLAValue`, `StateExpr`, `ActionExpr`, or
+   Swift control flow in a new port.
 
-- What the spec models.
-- Each variable, its type, and its initial value.
-- Each action and what it changes.
-- Each invariant.
+The older raw ports remain evidence while they are being migrated. Do not use
+them as templates for new work.
 
-## File structure
+## Typed authoring rules
 
-One port lives in one file under `Sources/UpstreamParity/Examples/<Name>.swift`.
+- Give every finite domain a named `FiniteDomainKey` enum.
+- Use `TLARecordSchema`, `Record<Schema>`, `TLAField`, and
+  `Function<Domain, Range>` for structured state.
+- Keep formal string names behind validated variables, fields, and domains.
+  Do not expose string-keyed state or add new raw-map access.
+- Keep all model logic in the specification. A generated actor, observable,
+  test, or demo view may dispatch and render it, but may not reimplement a
+  transition guard or state update.
 
-```swift
-import SwiftTLA
+## PlusCal-shaped translation
 
-// (One-line summary of the spec.)
-// Upstream: specifications/<path>/<file>.tla
-// Port: 1:1 translation. <Safety property>. <N> states.
+| Upstream form | SwiftTLA form |
+|---|---|
+| `variables` | `SharedVar` declarations inside `Algorithm` |
+| `process (p \in S)` | `Each(S) { p in ... }` |
+| labeled atomic code | `Do(Label.foo) { ... }` |
+| `await P` | `When(P)` |
+| `x := e` | `Assign(x, to: e)` |
+| `if` / `either` | `If` / `Either` |
+| `with` / choice | `With` / `Choose` |
+| `goto` / `skip` / termination | `Goto` / `Skip` / `Stop` |
+| process fairness | `Each(S, fairness: .weak)` or `.strong` |
 
-extension Example {
-    static let <name> = Example.Entry(
-        id: "<Category>/<Spec>",
-        upstreamSpec: "<category>",
-        upstreamModule: "specifications/<path>/<file>.tla",
-        upstreamCfg: "<path>.cfg",
-        expectedDistinct: <N>,
-        expectedResult: "success",
-        spec: <name>Spec(),
-        notes: "<note>"
-    )
-}
-```
+`Do` is atomic. Every accepted `DoBuilder` statement becomes part of one
+formal transition. Do not put an ordinary Swift side effect in a `Do` block.
 
-## Spec function
+## Fidelity and validation
 
-The spec function follows the upstream structure. Use the same variable names and the same order.
+The macro parser and the constrained runtime builder independently construct
+the formal model. Their semantic alpha-equivalence gate must pass before the
+generated runtime is trusted. A structural fingerprint may speed diagnostics,
+but it is not the authority.
 
-```swift
-private func <name>Spec() -> TLASpec {
-    // ---------- VARIABLES ----------
-    // (description of each variable and its range)
-    let <var> = Var("<name>", <initial>)
-    let <var> = Var.typed<TLAFunctionType>("<name>")
+After a port:
 
-    return TLASpec("<ModuleName>") {
-        Extends("Naturals")
+1. Add or preserve the `Example.Entry` metadata and expected finite outcome.
+2. Run the focused `UpstreamParityTests` case. It must check the declared
+   state count and the parser–builder fidelity gate.
+3. Run the relevant TLC parity command when the upstream module and bounded
+   configuration are available.
+4. For a supported core case, refresh only the declared evidence through the
+   core-conformance workflow. Do not edit pins by hand.
 
-        // ---------- INITIAL PREDICATE ----------
-        // (explanation of init)
-        Variable(<var>)
-        Variable(<var>, in: <values>)
+## Names and source mapping
 
-        // ---------- TYPE INVARIANT ----------
-        // (what TypeOK checks)
-        Invariant("TypeOK") { <condition> }
-
-        // ---------- ACTIONS ----------
-        // (what this action does)
-        Action("<Name>") {
-            <guard> && <var>.becomes(<expr>)
-            && <other>.stays
-        }
-    }
-}
-```
-
-## TLA+ to Swift map
-
-| TLA+ | Swift |
-|------|-------|
-| `EXTENDS Naturals` | `Extends("Naturals")` |
-| `VARIABLES x` | `let x = Var("x", 0)` |
-| `VARIABLES f` (function) | `let f = Var.typed<TLAFunctionType>("f")` |
-| `x = 0` | `Variable(x)` |
-| `x \in {0,1,2}` | `Variable(x, in: 0..<3)` |
-| `x' = e` | `x.becomes(e)` |
-| `UNCHANGED x` | `x.stays` |
-| `x' \in S` | `choose(x, from: S)` |
-| `f[k]` | `f.applying(k)` |
-| `[f EXCEPT ![k] = v]` | `f.updated(at: k, to: v)` |
-| `IF c THEN t ELSE e` | `StateExpr.if(c, then: t, else: e)` |
-| `\A v \in S : P` | `StateExpr.forAll(v, in: S, P)` |
-| `\E v \in S : P` | `StateExpr.exists(v, in: S, P)` |
-| `CHOOSE v \in S : P` | `StateExpr.choose(v, from: S, matching: P)` |
-
-## Names
-
-- Variable names must match the upstream exactly: `big`, `small`, `rmState`.
-- File names use PascalCase: `DieHard.swift`, `TwoPhase.swift`.
-- ID strings use `Category/SpecName`: `"DieHard/TypeOK"`.
-- Action names must match the upstream: `"FillSmallJug"`, `"TMCommit"`.
-
-## Invariants
-
-- Include TypeOK when the upstream has it.
-- Check safety invariants only. Skip liveness PROPERTIES.
-- Do not include invariants that must fail (for example, NotSolved in DieHard).
-
-## Validation
-
-After you write the port:
-
-1. `swift build` — must compile.
-2. `swift test --filter UpstreamParity` — the ModelChecker count must match `expectedDistinct`.
-3. `make parity` — the TLC count must match.
-4. Add the entry to `Example.all` at the top of `Example.swift`.
-
-## Key porting patterns
-
-### Action structure
-
-Match the upstream action structure exactly. If the upstream has named per-instance
-actions (for example, `Loop(p)`, `Think(p)`, `Eat(p)` with `Next == \E self : ...`), create
-named actions in a `for` loop — do not inline everything into one `existsAction`.
-
-```swift
-Action("Loop_\(p)") {
-    pc.value == loop
-    && (passLeft || passRight || keepForks)
-    && (goEat || stayLoop || goThink)
-}
-```
-
-### UNCHANGED
-
-Do not add manual UNCHANGED inside action branches. Let `completeAction` handle
-missing variable assignments. Only assign the variables that change in each branch.
-If a branch does not change a variable, do not mention it — `completeAction` adds
-the necessary UNCHANGED per disjunct.
-
-### ExistsAction vs named actions
-
-Use `existsAction` only for simple nondeterministic choices (for example,
-`\E p \in Prisoner` in a single-action spec). If the upstream uses `\E` with named
-sub-actions, prefer per-instance named actions.
-
-### Records in functions
-
-Access record fields with `StateExpr.recordAccess(func.applying(key), "field")`.
-
-```swift
-let hld = StateExpr.recordAccess(forks.value.applying(p), "holder")
-let lc = StateExpr.recordAccess(forks.value.applying(p), "clean")
-```
-
-### Constants and TLC parity
-
-Wrap constant values in `Constant()` to emit `CONSTANTS` / `ASSUME` in the TLA+ output.
-The parity script automatically copies `ASSUME` lines as `CONSTANT` assignments in the `.cfg`.
-
-### Invariant names
-
-The parity script detects these invariants: `TypeOK`, `TypeInvariant`, `VictoryOK`,
-`ExclusiveAccess`, `SumMet`, `HCini`. Use one of these names when possible.
-Add new invariant names to the script if needed.
-
-### InvariantBuilder
-
-Supports `for` loops (via `buildArray`) and `let` bindings.
-Use loops freely instead of unrolling.
-
-```swift
-Invariant("TypeOK") {
-    for i in 1...NP { typeOkLine(i) }
-}
-```
+- Keep upstream variable names, module names, action labels, and invariant
+  names unless the lowerer necessarily creates internal labels.
+- File names are PascalCase. Entry IDs retain the upstream category/spec name.
+- Record the upstream module and configuration in `Example.Entry`.
+- A failure must report the next useful fact: the declaration, action,
+  invariant, bound expression, or graph edge that differs.

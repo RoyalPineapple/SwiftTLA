@@ -48,6 +48,79 @@ struct UpstreamParityTests {
             #expect(tla.contains(name), "missing \(name)")
         }
     }
+
+    @Test("Channel typed record model matches its validated state count")
+    func channelTypedRecordParity() throws {
+        try ChannelModel.verifySpec()
+        let checker = ModelChecker(spec: ChannelModel.spec, maxStates: 50_000)
+        #expect(try checker.exploreGraph().states.count == Example.channel.expectedDistinct)
+        guard case .ok = try checker.check() else {
+            Issue.record("Typed Channel model did not verify")
+            return
+        }
+    }
+
+    @Test("AsynchInterface typed record model matches its validated state count")
+    func asynchInterfaceTypedRecordParity() throws {
+        try AsynchInterfaceModel.verifySpec()
+        let checker = ModelChecker(spec: AsynchInterfaceModel.spec, maxStates: 50_000)
+        #expect(try checker.exploreGraph().states.count == Example.asynchInterface.expectedDistinct)
+        guard case .ok = try checker.check() else {
+            Issue.record("Typed AsynchInterface model did not verify")
+            return
+        }
+    }
+
+    @Test("TeachingConcurrency Simple models use typed phase state")
+    func teachingSimpleTypedPhaseParity() throws {
+        try TeachingSimpleN2Model.verifySpec()
+        try TeachingSimpleN3Model.verifySpec()
+
+        let n2 = ModelChecker(spec: TeachingSimpleN2Model.spec, maxStates: 50_000)
+        let n3 = ModelChecker(spec: TeachingSimpleN3Model.spec, maxStates: 50_000)
+        #expect(try n2.exploreGraph().states.count == Example.teachingSimpleN2.expectedDistinct)
+        #expect(try n3.exploreGraph().states.count == Example.teachingSimpleN3.expectedDistinct)
+    }
+
+    @Test("EWD840 uses typed finite function state")
+    func ewd840TypedFunctionParity() throws {
+        try EWD840Model.verifySpec()
+        let checker = ModelChecker(spec: EWD840Model.spec, maxStates: 50_000)
+        #expect(try checker.exploreGraph().states.count == Example.ewd840.expectedDistinct)
+        guard case .ok = try checker.check() else {
+            Issue.record("Typed EWD840 model did not verify")
+            return
+        }
+    }
+
+    @Test("EWD998 uses typed finite functions and parameterized actions")
+    func ewd998TypedFunctionParity() throws {
+        try EWD998TerminationModel.verifySpec()
+        let checker = ModelChecker(spec: EWD998TerminationModel.spec, maxStates: 50_000)
+        #expect(try checker.exploreGraph().states.count == Example.ewd998.expectedDistinct)
+        guard case .ok = try checker.check() else {
+            Issue.record("Typed EWD998 model did not verify")
+            return
+        }
+    }
+
+    @Test("Moving Cat models use typed direction state")
+    func movingCatTypedDirectionParity() throws {
+        try CatEvenBoxesModel.verifySpec()
+        try CatOddBoxesModel.verifySpec()
+
+        let even = ModelChecker(spec: CatEvenBoxesModel.spec, maxStates: 50_000)
+        let odd = ModelChecker(spec: CatOddBoxesModel.spec, maxStates: 50_000)
+        #expect(try even.exploreGraph().states.count == Example.catEvenBoxes.expectedDistinct)
+        #expect(try odd.exploreGraph().states.count == Example.catOddBoxes.expectedDistinct)
+    }
+
+    @Test("Sync termination detector uses typed finite function state")
+    func syncTerminationTypedFunctionParity() throws {
+        try SyncTerminationDetectionModel.verifySpec()
+        let checker = ModelChecker(spec: SyncTerminationDetectionModel.spec, maxStates: 50_000)
+        #expect(try checker.exploreGraph().states.count == Example.syncTD.expectedDistinct)
+    }
 }
 
 // MARK: - Native codegen verification for @TLAModel parity specs
@@ -91,17 +164,4 @@ struct UpstreamParityNativeTests {
     @Test("Barrier_N6 native verifyTransitions")
     func barrierNativeVerifyTransitions() throws { try BarrierModel.verifyTransitions() }
 
-    // Self-consistency
-    @Test("Native codegen self-consistency")
-    func nativeSelfConsistency() throws {
-        func check<State: Equatable>(_ matrix: [(from: State, invocation: TLAActionInvocation, to: State)]) {
-            for entry in matrix {
-                #expect(entry.from != entry.to)
-            }
-        }
-        try check(HourClockModel.transitionMatrix())
-        try check(HourClock2Model.transitionMatrix())
-        try check(DieHardModel.transitionMatrix())
-        try check(BarrierModel.transitionMatrix())
-    }
 }

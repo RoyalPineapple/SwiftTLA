@@ -27,6 +27,9 @@ swift build
 echo "Build macro plugin"
 swift build --target SwiftTLAMacros
 
+echo "Build downstream examples"
+make examples
+
 echo "Validate core-conformance workflow contract"
 Tests/Fixtures/CoreConformance/CI/assert_workflow.sh
 

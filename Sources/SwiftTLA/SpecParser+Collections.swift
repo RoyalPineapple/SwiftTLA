@@ -3,78 +3,6 @@ import SwiftParser
 import SwiftBasicFormat
 
 extension SpecParser {
-    static func parseDictionaryVarDecl(
-        _ binding: PatternBindingSyntax,
-        into result: inout ParsedSpecComponents
-    ) -> Bool {
-        guard let call = binding.initializer?.value.as(FunctionCallExprSyntax.self),
-              let specialization = call.calledExpression.as(GenericSpecializationExprSyntax.self),
-              specialization.expression.as(DeclReferenceExprSyntax.self)?.baseName.text == "DictionaryVar"
-        else { return false }
-
-        let typeArguments = Array(specialization.genericArgumentClause.arguments)
-        let arguments = Array(call.arguments)
-        guard typeArguments.count == 2,
-              let nameLiteral = arguments.first?.expression.as(StringLiteralExprSyntax.self),
-              let scope = dictionaryScope(in: arguments),
-              let initial = dictionaryDefaultValue(
-                for: typeArguments[1].argument.description.trimmingCharacters(in: .whitespacesAndNewlines)
-              )
-        else {
-            result.diagnostics.append(.init(
-                message: "DictionaryVar requires key and value types, a string literal name, an integer literal scope, "
-                    + "and a supported value default.",
-                source: call.description
-            ))
-            return true
-        }
-
-        let name = nameLiteral.segments.description.replacingOccurrences(of: "\"", with: "")
-        let elementType = typeArguments[0].argument.description.trimmingCharacters(in: .whitespacesAndNewlines)
-        let valueType = typeArguments[1].argument.description.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard scope > 0 else {
-            result.variables.append((name, .function([:]), nil, valueType))
-            return true
-        }
-
-        let declaration = SymmetricCollectionDecl(name: name, verificationScope: scope, initial: initial)
-        result.symmetricCollections.append(.init(
-            name: name,
-            elementType: elementType,
-            valueType: valueType,
-            verificationScope: scope,
-            source: call.description,
-            declaration: declaration
-        ))
-        result.variables.append((name, declaration.variable.initial, nil, valueType))
-        return true
-    }
-
-    private static func dictionaryScope(in arguments: [LabeledExprSyntax]) -> Int? {
-        guard let expression = arguments.first(where: { $0.label?.text == "scope" })?.expression else {
-            return 4
-        }
-        guard let literal = expression.as(IntegerLiteralExprSyntax.self) else { return nil }
-        return Int(literal.literal.text)
-    }
-
-    private static func dictionaryDefaultValue(for valueType: String) -> TLAValue? {
-        switch valueType {
-        case "Int", "TLAValue":
-            return .int(0)
-        case "Bool":
-            return .bool(false)
-        case "String":
-            return .string("")
-        default:
-            if valueType.hasPrefix("Function<") { return .function([:]) }
-            if valueType.hasPrefix("Record<") { return .record([:]) }
-            if valueType.hasPrefix("SetExpr<") { return .set([]) }
-            if let finiteDefault = _enumDomains[valueType]?.first { return finiteDefault }
-            return nil
-        }
-    }
-
     static func collectSymmetricCollectionTypes(
         in closure: ClosureExprSyntax
     ) -> [String: (element: String, value: String)] {
@@ -654,7 +582,8 @@ extension SpecParser {
             let label = args[1].label?.text
             if label == "in" {
                 if let setExpr = decodeStateExpr(args[1].expression) {
-                    result.variables.append((firstName, .set([]), setExpr, nil))
+                    let initial = (try? setExpr.evaluate(in: [:])) ?? .int(0)
+                    result.variables.append((firstName, initial, setExpr, nil))
                     return
                 }
             }

@@ -1,23 +1,175 @@
-# SwiftTLA language fragment (B v1)
+# SwiftTLA language design
 
-## Core guarantee
+SwiftTLA lets an engineer write a bounded formal algorithm in a shape that
+feels native to Swift: typed values, scoped result builders, enums for finite
+domains, records for structured state, and generated machines for execution.
+One authored model becomes a checked formal AST, a TLA+ module, and a typed
+Swift state machine.
 
-SwiftTLA produces a **single AST** from the DSL. That AST feeds two paths:
+## One model, several faithful products
+
+SwiftTLA constructs the same formal model along two independent paths, then
+compares them before generated code uses it:
 
 ```
-DSL → StateExpr/ActionExpr AST
-        ├── SpecRuntime     (runs as Swift code)
-        └── .tlaModule       (TLC validates against upstream)
+source syntax → parser → StateExpr/ActionExpr AST
+                         ├── compile-time checker
+                         ├── .tlaModule
+                         └── generated Swift machine surface
+
+constrained builders → runtime TLASpec → SpecRuntime
+
+parser AST ↔ runtime TLASpec semantic alpha-equivalence gate
 ```
 
-State-count parity does not prove runtime correctness. Equal state counts can
-hide different initial states, transitions, action labels, or outcomes.
+The parser reads the authored Swift syntax. The constrained builders construct
+the executable `TLASpec`. Semantic alpha-equivalence confirms that they mean
+the same thing, with a diagnostic that identifies the first differing
+declaration, action, invariant, or bound expression.
+
+`#spec` is the authoring boundary. It makes Swift declaration sugar such as
+`let count = SharedVar(initial: 0)` available to the scoped builder while the
+source parser reads the original declaration independently. New conveniences
+preserve this two-path construction.
+
+## A small family of scoped builders
+
+SwiftTLA has a small, fixed family of builders. Each builder represents a
+formal scope and gives that scope a clear Swift spelling. The type checker uses
+those scopes to guide correct construction before macro parsing or model
+checking begins.
+
+| Scope | Builder | It accepts | It produces |
+|---|---|---|---|
+| A complete specification | `#spec { ... }` / `SpecBuilder` | declarations, an `Algorithm`, and formal properties | `TLASpec` components |
+| One PlusCal algorithm | `Algorithm { ... }` / `AlgorithmBuilder` | shared state, process families, and formal properties | algorithm components |
+| One concurrent process family | `Each(domain) { self in ... }` | labeled atomic regions | one process definition for each finite member |
+| One atomic region | `Do(label) { ... }` / `DoBuilder` | guards, assignments, local bindings, branching, and control transfer | one `StepStatement` list, lowered as one transition |
+
+`DoBuilder` produces formal statements for one atomic transition. The generic
+part of the API is the data that flows through it: `SharedVariable<Value>`,
+`LocalVariable<Value>`, typed records, finite maps, finite domains, and typed
+expressions. This keeps an atomic block strongly typed while making its
+formal boundary obvious.
+
+```swift
+Algorithm("Counter") {
+    let count = SharedVar(initial: 0)
+
+    Each(Node.all) { _ in
+        Do(Step.advance) {
+            When(count < 1)
+            Assign(count, to: count + 1)
+            Stop()
+        }
+    }
+}
+```
+
+Here, `SharedVar` belongs to the algorithm scope, `Each` introduces
+independently scheduled finite processes, and `Do` groups the guard,
+assignment, and stop into one atomic formal step. The builder layer makes
+scope visible in the source and gives Swift a first opportunity to validate
+the model.
+
+### Typed formal data
+
+Formal data has the same boundary. A record is declared in the specification
+with a named schema, then used through a typed record expression; a finite map
+is a typed function; and a finite Swift enum provides the members of a formal
+domain. These are not UI-only descriptions. They survive parsing, lowering,
+checking, TLA+ emission, and generated Swift state.
+
+| Formal concept | SwiftTLA type | Example |
+|---|---|---|
+| finite member set | `FiniteDomainKey` enum | `CarID`, `Floor`, `Rider` |
+| named total record | `TLARecordSchema` + `Record<Schema>` | a car’s floor, door, and rider |
+| named record field | `TLAField<Schema, Value>` | `CarSchema.floor` |
+| finite total map | `Function<Domain, Range>` | `Function<CarID, Record<CarSchema>>` |
+| shared formal state | `SharedVariable<Value>` | `cars` |
+
+The working elevator model is the reference implementation of this pattern:
+`CarSchema` defines validated fields, `cars` is a typed finite function, and
+all updates use typed fields rather than string subscripts.
+
+Generated state and transition results use these named Swift types. Formal
+names remain behind validated variables, fields, and domains.
+
+### Adding a builder
+
+Each new builder represents a formal scope with its own statements and
+lowering rule. A future procedure, macro, or process-local scope may earn a
+specific builder; expressions and assignments stay in the scopes that own
+them.
+
+Finite nondeterministic initialization is also formal semantics. For example,
+`SharedVar(in: SetExpr<Record<CarSchema>>.literal(...))` means that the
+initial predicate chooses one member of that typed, finite set. Both paths
+retain the complete `initialSet`; it is compared by the fidelity gate and is
+not reduced to a Swift collection or display hint.
+
+## Compilation and execution phases
+
+The two paths carry the authored model through the following phases:
+
+1. The Swift compiler type-checks the `#spec` closure. Its result builders
+   accept only the supported authoring vocabulary.
+2. The `#spec` macro performs syntax-only desugaring. For example, it makes a
+   `let count = SharedVar(initial: 0)` declaration visible to the runtime
+   builder.
+3. The model macro parses the original source independently into the formal
+   AST. The checker, TLA+ emitter, and generated machine start from this AST.
+4. At runtime, the constrained builder closure runs and independently creates
+   a `TLASpec`.
+5. SwiftTLA normalizes both models and compares them with semantic
+   alpha-equivalence.
+6. The generated machine executes the validated transition runtime.
+
+After construction and comparison, the generated machine holds its canonical
+state machine and applies enabled transitions.
+
+A structural fingerprint gives a fast diagnostic and cache key. Semantic
+alpha-equivalence supplies the formal comparison: it recognizes equivalent
+bound-variable names and identifies the semantic node that differs when the
+models diverge.
+
+```swift
+@TLAModel
+struct Counter {
+    enum Node: String, FiniteDomainKey { /* bounded members */ }
+
+    static var spec: TLASpec {
+        #spec("Counter") {
+            Algorithm("Counter") {
+                let count = SharedVar(initial: 0)
+                Each(Node.all) { _ in
+                    Do("advance") {
+                        When(count < 1)
+                        Assign(count, to: count + 1)
+                        Stop()
+                    }
+                }
+            }
+        }
+    }
+}
+```
+
+The `#spec` expansion registers `count` with the constrained runtime builder,
+while the model macro parses the original declaration into the formal AST.
+
+## Authoring two source forms
+
+PlusCal-shaped authoring expresses algorithms through `Algorithm`, `Each`, and
+`Do`; SwiftTLA lowers it into the core AST and emits ordinary TLA+ for TLC.
+The typed `#spec` vocabulary also expresses direct TLA+ specifications. Both
+forms share the AST, checker, emitter, generated machine, and fidelity gate.
 
 For selected finite core models, the core-conformance command compares the
-complete labeled transition relation from SwiftTLA with a pinned TLC run. The
-core-support gate admits only the exact finite cases named in its support
-register. See `Documentation/CoreGraphConformance.md` and
-`Documentation/CoreSupport.md` for the boundary and commands.
+complete labeled transition relation from SwiftTLA with a pinned TLC run. This
+includes initial states, state bindings, action labels, edges, and outcomes.
+See `Documentation/CoreGraphConformance.md` and
+`Documentation/CoreSupport.md` for the supported cases and commands.
 
 ## Finite graph conformance flow
 
@@ -29,27 +181,16 @@ which records callbacks as JSONL. The TLC adapter verifies the stream and
 provenance, then canonicalizes it. The comparator checks the finite initial
 set, state bindings, edge multiset, and outcome after the declared mappings.
 
-The bridge is transport only: it neither evaluates TLA expressions nor
-discovers successors nor decides equivalence. Trace/replay files are failure
-diagnostics, not substitutes for complete graph evidence. This architecture
-is intentionally bounded to declared finite cases; it does not claim temporal,
-liveness, fairness, or symmetry conformance.
-
-Published TLA+ semantics are authoritative. TLC is a pinned executable
-reference, and its source and tests are diagnostic evidence. No hidden checker
-or oracle is claimed.
+The bridge carries complete graph evidence between the Swift and TLC runs.
+Trace and replay files make a difference inspectable. Published TLA+ semantics
+remain authoritative, with TLC serving as the pinned executable reference.
 
 ## Macro and package evidence boundary
 
-The macro and package examples in this repository demonstrate API usage; they
-do not establish support for every accepted model. The separate [public
-workflow conformance](PublicWorkflowConformance.md) command retains bounded
-valid and invalid fixture results for `@TLAModel`, `@TLAActor`, and
-`@TLAObservable`, plus the exact named `SwiftTLA-Package` public-library macOS
-build. Local output is diagnostic and explicit hosted output is candidate
-evidence. `@TypedVar` is not release-facing or admitted, and `@TLAValidated`
-was removed because it had no implementation. The P4 report does not widen the
-finite core language claim in this document.
+The [public workflow conformance](PublicWorkflowConformance.md) command keeps
+fixture results for `@TLAModel`, `@TLAActor`, and `@TLAObservable`, together
+with the public-library macOS build. It is the release evidence for the
+generated public interfaces.
 
 ## Generated-machine boundary
 
@@ -130,7 +271,7 @@ the supported surface.
 | **Liveness** | — | Not in v1 scope |
 | **Temporal properties** | ✓ | `TemporalDecl`, `LeadsTo`, `Eventually`, `AlwaysEventually` — TLA+ output only |
 | **INSTANCE / EXTENDS custom** | — | External module dependencies; most TLC configs |
-| **PlusCal** | — | Port post-translation TLA+ (like DiningPhilosophers) |
+| **PlusCal-shaped algorithms** | ~ | Bounded `Algorithm`, `Each`, `Do`, `When`, `Assert`, `Assign`, `If`, `Either`, `Choose`, `With`, `Goto`, `Stop`; parser and runtime builder have a mandatory semantic-equivalence gate |
 | **Refinement mappings** | — | Not in v1 scope |
 | **Symmetry reduction** | ~ | `SymmetryDecl` exists; not active |
 | **LET in actions** | ✓ | Swift `let` in `Action { }` builder for StateExpr; no ActionExpr-level LET needed |

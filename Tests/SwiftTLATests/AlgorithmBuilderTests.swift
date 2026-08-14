@@ -5,13 +5,12 @@ import Testing
 struct AlgorithmBuilderTests {
     @Test("typed first-slice builders preserve ordered process steps")
     func buildsBoundedAlgorithm() throws {
-        let maximum = Var<Int>("maximum", 0)
-        let inbox = Var<Int>("inbox", 0)
-
         let algorithm = Algorithm("ChangRoberts") {
-            Shared(maximum, initial: 0)
+            let maximum = SharedVar("maximum", initial: 0)
+            maximum
             Each(Node.all) { node in
-                Local(inbox, initial: 0)
+                let inbox = LocalVar("inbox", initial: 0)
+                inbox
                 Do(AlgorithmLabel.receive) {
                     Await(inbox > 0)
                     Choose(Node.all) { candidate in
@@ -43,10 +42,34 @@ struct AlgorithmBuilderTests {
         #expect(algorithm.model.processes[0].steps.map(\.label.name) == ["receive", "forward", "done"])
     }
 
+    @Test("algorithm-level properties lower with the executable process")
+    func lowersAlgorithmProperties() throws {
+        let algorithm = Algorithm("Properties") {
+            let value = SharedVar("value", initial: 0)
+            value
+            Each(Node.all) { _ in
+                Do(AlgorithmLabel.receive) {
+                    Assign(value, to: value + 1)
+                    Goto(AlgorithmLabel.receive)
+                }
+            }
+            Invariant("NonNegative") { value >= 0 }
+            LeadsTo("EventuallyPositive", value == 0, value > 0)
+            WeakFairness("receive")
+        }
+
+        #expect(algorithm.validate().isEmpty)
+        let spec = try algorithm.lower()
+        #expect(spec.invariants.map(\.name) == ["NonNegative"])
+        #expect(spec.temporalProperties.map(\.name) == ["EventuallyPositive"])
+        #expect(spec.fairness.contains(.weakFairness("receive")))
+    }
+
     @Test("validation fails closed for invalid bounded algorithms")
     func rejectsInvalidAlgorithms() {
-        let value = Var<Int>("value", 0)
         let invalid = Algorithm("__pcal_invalid") {
+            let value = SharedVar("value", initial: 0)
+            value
             Each(EmptyNode.all) { _ in
                 Do(AlgorithmLabel.receive) {
                     Assign(value, to: 1)
@@ -66,7 +89,7 @@ struct AlgorithmBuilderTests {
         #expect(codes.contains(.duplicateLabel))
         #expect(codes.contains(.invalidTarget))
         #expect(codes.contains(.duplicateRootWrite))
-        #expect(codes.contains(.propertyBoundary))
+        #expect(!codes.contains(.propertyBoundary))
         #expect(throws: AlgorithmValidationError.self) {
             try invalid.requireValid()
         }
@@ -74,9 +97,9 @@ struct AlgorithmBuilderTests {
 
     @Test("lowering initializes pc and binds every atomic action to a process")
     func lowersControlStateAndActionBindings() throws {
-        let value = Var<Int>("value", 0)
         let algorithm = Algorithm("BoundedCounter") {
-            Shared(value, initial: 0)
+            let value = SharedVar("value", initial: 0)
+            value
             Each(Node.all) { _ in
                 Do(AlgorithmLabel.receive) {
                     Assign(value, to: value + 1)
@@ -105,9 +128,9 @@ struct AlgorithmBuilderTests {
 
     @Test("lowered atomic actions advance pc and stop before the explicit terminating self loop")
     func lowersAtomicSemantics() throws {
-        let value = Var<Int>("value", 0)
         let algorithm = Algorithm("BoundedCounter") {
-            Shared(value, initial: 0)
+            let value = SharedVar("value", initial: 0)
+            value
             Each(Node.all) { _ in
                 Do(AlgorithmLabel.receive) {
                     Assign(value, to: value + 1)
@@ -155,10 +178,10 @@ struct AlgorithmBuilderTests {
 
     @Test("lowering represents process-local state as a function of self")
     func lowersLocalState() throws {
-        let inbox = Var<Int>("inbox", 0)
         let algorithm = Algorithm("LocalCounter") {
             Each(Node.all) { _ in
-                Local(inbox, initial: 0)
+                let inbox = LocalVar("inbox", initial: 0)
+                inbox
                 Do(AlgorithmLabel.receive) {
                     Await(inbox == 0)
                     Assign(inbox, to: inbox + 1)
@@ -189,9 +212,9 @@ struct AlgorithmBuilderTests {
 
     @Test("string labels are contained by ProgramLabel and validated before lowering")
     func validatesStringLabels() throws {
-        let value = Var<Int>("value", 0)
         let algorithm = Algorithm("StringLabels") {
-            Shared(value, initial: 0)
+            let value = SharedVar("value", initial: 0)
+            value
             Each(Node.all) { _ in
                 Do("move") {
                     Assign(value, to: value + 1)
@@ -214,9 +237,9 @@ struct AlgorithmBuilderTests {
 
     @Test("the end of an Each machine reaches its builder-owned Done state")
     func eachMachineEndsInDone() throws {
-        let value = Var<Int>("value", 0)
         let algorithm = Algorithm("ImplicitStop") {
-            Shared(value, initial: 0)
+            let value = SharedVar("value", initial: 0)
+            value
             Each(Node.all) { _ in
                 Do("finish") {
                     Assign(value, to: value + 1)
@@ -238,9 +261,9 @@ struct AlgorithmBuilderTests {
 
     @Test("an unlabeled transfer falls through to the next Do block")
     func intermediateDoFallsThrough() throws {
-        let value = Var<Int>("value", 0)
         let algorithm = Algorithm("Fallthrough") {
-            Shared(value, initial: 0)
+            let value = SharedVar("value", initial: 0)
+            value
             Each(Node.all) { _ in
                 Do("prepare") {
                     Assign(value, to: value + 1)
@@ -265,9 +288,9 @@ struct AlgorithmBuilderTests {
 
     @Test("TLASpec accepts an algorithm component and lowers it before checking")
     func algorithmComposesIntoTLASpec() throws {
-        let value = Var<Int>("value", 0)
+        let value = SharedVar("value", initial: 0)
         let algorithm = Algorithm("Composed") {
-            Shared(value, initial: 0)
+            value
             Each(Node.all) { _ in
                 Do("finish") { Assign(value, to: value + 1) }
             }
@@ -284,11 +307,11 @@ struct AlgorithmBuilderTests {
 
     @Test("When, Assert, With, and process fairness lower as formal semantics")
     func lowersMechanicalPlusCalStatements() throws {
-        let count = Var<Int>("count", 0)
-        let selected = Var<Int>("selected", 0)
         let algorithm = Algorithm("Mechanical") {
-            Shared(count, initial: 0)
-            Shared(selected, initial: 0)
+            let count = SharedVar("count", initial: 0)
+            let selected = SharedVar("selected", initial: 0)
+            count
+            selected
             Each(Node.all, fairness: .weak) { node in
                 Do("choose") {
                     When(count == 0)
@@ -321,9 +344,9 @@ struct AlgorithmBuilderTests {
 
     @Test("a false While condition advances control and a true condition loops")
     func lowersWhileAsFormalControl() throws {
-        let count = Var<Int>("count", 0)
         let algorithm = Algorithm("Loop") {
-            Shared(count, initial: 0)
+            let count = SharedVar("count", initial: 0)
+            count
             Each(Node.all) { _ in
                 While("repeat", count < 2) {
                     Assign(count, to: count + 1)
@@ -353,9 +376,9 @@ struct AlgorithmBuilderTests {
 
     @Test("Assert is required only on the branch that reaches it")
     func scopesAssertToItsConditionalBranch() throws {
-        let count = Var<Int>("count", 0)
         let algorithm = Algorithm("ConditionalAssert") {
-            Shared(count, initial: 0)
+            let count = SharedVar("count", initial: 0)
+            count
             Each(Node.all) { _ in
                 Do("check") {
                     If(count == 0) {
@@ -376,9 +399,9 @@ struct AlgorithmBuilderTests {
 
     @Test("Assert becomes a model-checker safety obligation")
     func checksAssertAsAnInvariant() throws {
-        let count = Var<Int>("count", 0)
         let algorithm = Algorithm("BrokenAssertion") {
-            Shared(count, initial: 0)
+            let count = SharedVar("count", initial: 0)
+            count
             Each(Node.all) { _ in
                 Do("check") {
                     Assert(count == 1)
@@ -393,6 +416,51 @@ struct AlgorithmBuilderTests {
             return
         }
         #expect(name == "__pcal_assert_check_0_0")
+    }
+
+    @Test("SharedVar range expands to the declared finite initial states")
+    func lowersNondeterministicSharedInitialization() throws {
+        let algorithm = Algorithm("HourClock") {
+            let hour = SharedVar("hour", in: 1...3)
+            hour
+            Each(Node.all) { _ in
+                Do("tick") {
+                    When(hour < 3)
+                    Assign(hour, to: hour + 1)
+                    Stop()
+                }
+            }
+        }
+
+        let spec = try algorithm.lower()
+        let states = computeInitialStates(spec)
+
+        #expect(Set(states.compactMap { $0["hour"] }) == [.int(1), .int(2), .int(3)])
+        #expect(spec.variables.first { $0.name == "hour" }?.initialSet == .setLiteral([
+            .value(.int(1)), .value(.int(2)), .value(.int(3))
+        ]))
+    }
+
+    @Test("dependent typed function initialization is evaluated after earlier initial state choices")
+    func lowersDependentFunctionInitialization() throws {
+        let algorithm = Algorithm("DependentInitial") {
+            let seed = SharedVar("seed", in: SetExpr<Bool>.literal(false, true))
+            seed
+            let mirrors = SharedVar("mirrors", initial: Function<Node, Bool>.mapping { _ in seed.expr })
+            mirrors
+            Each(Node.all) { _ in
+                Do("stop") { Stop() }
+            }
+        }
+
+        let spec = try algorithm.lower()
+        let states = computeInitialStates(spec)
+
+        #expect(Set(states.compactMap { $0["seed"] }) == [.bool(false), .bool(true)])
+        #expect(Set(states.compactMap { $0["mirrors"] }) == [
+            .function([.string("first"): .bool(false), .string("second"): .bool(false)]),
+            .function([.string("first"): .bool(true), .string("second"): .bool(true)])
+        ])
     }
 }
 

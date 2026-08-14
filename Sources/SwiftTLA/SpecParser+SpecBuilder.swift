@@ -87,7 +87,10 @@ extension SpecParser {
         enumPhases: [String: [String: TLAValue]] = [:],
         enumDomains: [String: [TLAValue]] = [:]
       ) -> ParsedSpecComponents {
+        parseContextLock.lock()
+        defer { parseContextLock.unlock() }
         _enumPhases = enumPhases
+        algorithmParseFailure = nil
         _enumDomains = enumDomains.isEmpty
             ? enumPhases.mapValues { phases in
                 phases.keys.sorted().compactMap { phases[$0] }
@@ -147,10 +150,6 @@ extension SpecParser {
                   let fc = initializer.as(FunctionCallExprSyntax.self)
             else { continue }
 
-            if parseDictionaryVarDecl(binding, into: &result) {
-                continue
-            }
-
             let stateVarInfo = resolveVarCall(fc)
             let varTypeName = stateVarInfo?.1 ?? resolveVarTypeArg(fc)
             let callName = stateVarInfo?.0 ?? (resolveVarTypeArg(fc) != nil ? "Var" : nil)
@@ -170,6 +169,24 @@ extension SpecParser {
             }
 
             if let rangeExpr = args.first(where: { $0.label?.text == "in" })?.expression {
+                if callName == "SharedVar", let range = parseIntegerClosedRange(rangeExpr) {
+                    result.variables.append((
+                        patternName,
+                        .int(range.lowerBound),
+                        .setLiteral(range.map { .value(.int($0)) }),
+                        "Int"
+                    ))
+                    continue
+                }
+                if callName == "SharedVar",
+                   let initialSet = decodeStateExpr(rangeExpr),
+                   case .setLiteral(let elements) = initialSet,
+                   let first = elements.first,
+                   let elementType = setExpressionElementTypeName(rangeExpr) {
+                    let initial = (try? first.evaluate(in: [:])) ?? .int(0)
+                    result.variables.append((patternName, initial, initialSet, elementType))
+                    continue
+                }
                 let lowerBound = parseRangeLowerBound(rangeExpr)
                 result.variables.append((patternName, .int(lowerBound), nil, varTypeName))
                 continue
@@ -200,7 +217,7 @@ extension SpecParser {
     /// Returns nil if the call is not a StateVar constructor.
     static func resolveVarCall(_ fc: FunctionCallExprSyntax) -> (String, String?)? {
         if let ref = fc.calledExpression.as(DeclReferenceExprSyntax.self) {
-            guard ["StateVar", "Var"].contains(ref.baseName.text) else { return nil }
+            guard ["StateVar", "Var", "SharedVar"].contains(ref.baseName.text) else { return nil }
             return (ref.baseName.text, nil)
         }
         if let generic = fc.calledExpression.as(GenericSpecializationExprSyntax.self),
@@ -232,6 +249,33 @@ extension SpecParser {
             : nil
     }
 
+    static func parseIntegerClosedRange(_ expression: ExprSyntax) -> ClosedRange<Int>? {
+        guard let sequence = expression.as(SequenceExprSyntax.self) else { return nil }
+        let elements = Array(sequence.elements)
+        guard elements.count == 3,
+              elements[1].as(BinaryOperatorExprSyntax.self)?.operator.text == "...",
+              let lowerSyntax = elements[0].as(IntegerLiteralExprSyntax.self),
+              let upperSyntax = elements[2].as(IntegerLiteralExprSyntax.self),
+              let lower = Int(lowerSyntax.literal.text),
+              let upper = Int(upperSyntax.literal.text),
+              lower <= upper
+        else { return nil }
+        return lower...upper
+    }
+
+    /// Returns the formal element type from `SetExpr<Element>.literal(...)`.
+    /// This is syntax-only: the parser must not consult the runtime builder.
+    static func setExpressionElementTypeName(_ expression: ExprSyntax) -> String? {
+        guard let call = expression.as(FunctionCallExprSyntax.self),
+              let member = call.calledExpression.as(MemberAccessExprSyntax.self),
+              member.declName.baseName.text == "literal",
+              let base = member.base
+        else { return nil }
+        let typeName = base.description.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard typeName.hasPrefix("SetExpr<"), typeName.hasSuffix(">") else { return nil }
+        return String(typeName.dropFirst("SetExpr<".count).dropLast())
+    }
+
     /// Extracts the lower bound from a range expression like `1...12`.
     static func parseRangeLowerBound(_ expression: ExprSyntax) -> Int {
         if let seq = expression.as(SequenceExprSyntax.self) {
@@ -260,6 +304,9 @@ extension SpecParser {
 
     /// Converts a Swift initializer expression to a TLAValue.
     static func parseInitialExpr(_ expression: ExprSyntax) -> TLAValue {
+        if let decoded = decodeStateExpr(expression), case .value(let value) = decoded {
+            return value
+        }
         if let intVal = expression.as(IntegerLiteralExprSyntax.self) {
             return .int(Int(intVal.literal.text) ?? 0)
         }
@@ -304,6 +351,15 @@ extension SpecParser {
         if expression.is(IntegerLiteralExprSyntax.self) { return "Int" }
         if expression.is(BooleanLiteralExprSyntax.self) { return "Bool" }
         if expression.is(StringLiteralExprSyntax.self) { return "String" }
+        if let call = expression.as(FunctionCallExprSyntax.self),
+           call.arguments.isEmpty,
+           call.trailingClosure == nil {
+            let constructor = call.calledExpression.description
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            if constructor.hasPrefix("SetExpr<") || constructor.hasPrefix("TupleExpr<") {
+                return constructor
+            }
+        }
         if let call = expression.as(FunctionCallExprSyntax.self),
            let memberAccess = call.calledExpression.as(MemberAccessExprSyntax.self),
            memberAccess.base?.as(DeclReferenceExprSyntax.self)?.baseName.text == "TLAValue" {

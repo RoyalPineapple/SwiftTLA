@@ -28,6 +28,7 @@ struct MultiCarElevatorDSLTests {
   enum CarSchema: TLARecordSchema {
     typealias Fields = CarFields
     static let fieldNames: Set<String> = ["floor", "doorsOpen"]
+    static let defaultRecord: TLAValue = .record(["floor": .int(0), "doorsOpen": .bool(false)])
 
     static func fieldName<Value>(for field: KeyPath<CarFields, Value>) -> String? {
       let key = field as AnyKeyPath
@@ -224,7 +225,7 @@ struct MultiCarElevatorDSLTests {
 
   private func normalize(_ spec: TLASpec) -> ParsedSpecModel {
     ParsedSpecModel(
-      variables: spec.variables.map { ($0.name, $0.initial) },
+      variables: spec.variables.map { ($0.name, $0.initial, $0.initialSet) },
       actions: spec.actions.map { ($0.name, $0.body, $0.bindings) },
       invariants: spec.invariants.map { ($0.name, $0.body) }
     )

@@ -20,9 +20,8 @@ private func parseExpression(_ source: String) -> ExprSyntax {
     func parsesBoundedAlgorithm() {
         let source = """
         {
-            let count = Var<Int>("count")
             Algorithm("Counter") {
-                Shared(count, initial: 0)
+                let count = SharedVar(initial: 0)
                 Each(Node.all) { node in
                     Do("increment") {
                         Await(count < 2)
@@ -61,16 +60,15 @@ private func parseExpression(_ source: String) -> ExprSyntax {
 
         #expect(parsed.variables.isEmpty)
         #expect(parsed.actions.isEmpty)
-        #expect(parsed.diagnostics.first?.message == "Unsupported Algorithm declaration. Supported declarations are Shared and Each.")
+        #expect(parsed.diagnostics.first?.message == "Unsupported Algorithm declaration 'UnsupportedAlgorithmConstruct()'. Supported declarations are SharedVar and Each.")
     }
 
     @Test("parser lowers the mechanical PlusCal statements through the shared IR")
     func parsesMechanicalPlusCalStatements() {
         let source = """
         {
-            let count = Var<Int>("count")
             Algorithm("Counter") {
-                Shared(count, initial: 0)
+                let count = SharedVar(initial: 0)
                 Each(Node.all, fairness: .strong) { node in
                     While("increment", count < 2) {
                         When(count >= 0)
@@ -101,9 +99,8 @@ private func parseExpression(_ source: String) -> ExprSyntax {
     func parserTreeMatchesRuntimeAlgorithm() {
         let source = """
         {
-            let count = Var<Int>("count")
             Algorithm("Counter") {
-                Shared(count, initial: 0)
+                let count = SharedVar(initial: 0)
                 Each(Node.all) { _ in
                     Do("increment") {
                         Await(count < 2)
@@ -118,10 +115,10 @@ private func parseExpression(_ source: String) -> ExprSyntax {
             closure,
             enumDomains: ["Node": [.string("left"), .string("right")]]
         )
-        let count = Var<Int>("count")
         let runtime = TLASpec("Counter") {
             Algorithm("Counter") {
-                Shared(count, initial: 0)
+                let count = SharedVar("count", initial: 0)
+                count
                 Each(ParserNode.all) { _ in
                     Do("increment") {
                         Await(count < 2)
@@ -131,12 +128,12 @@ private func parseExpression(_ source: String) -> ExprSyntax {
             }
         }
         let runtimeTree = ParsedSpecModel(
-            variables: runtime.variables.map { ($0.name, $0.initial) },
+            variables: runtime.variables.map { ($0.name, $0.initial, $0.initialSet) },
             actions: runtime.actions.map { ($0.name, $0.body, $0.bindings) },
             invariants: runtime.invariants.map { ($0.name, $0.body) }
         )
         let parserTree = ParsedSpecModel(
-            variables: parsed.variables.map { ($0.name, $0.initial) },
+            variables: parsed.variables.map { ($0.name, $0.initial, $0.initialSet) },
             actions: parsed.actions.map { ($0.name, $0.body, $0.bindings) },
             invariants: parsed.invariants
         )
@@ -199,7 +196,8 @@ private enum ParserNode: String, FiniteDomainKey {
         #expect(parsed.variables.count == 1)
         guard parsed.variables.count == 1 else { return }
         #expect(parsed.variables[0].name == "counter")
-        #expect(parsed.variables[0].initial == .set([]))
+        #expect(parsed.variables[0].initial == .set([.int(0), .int(1)]))
+        #expect(parsed.variables[0].initialSet == .setLiteral([.value(.int(0)), .value(.int(1))]))
         #expect(parsed.variables[0].swiftTypeName == "Int")
     }
 
@@ -223,6 +221,29 @@ private enum ParserNode: String, FiniteDomainKey {
         #expect(parsed.variables[1].name == "phase")
         #expect(parsed.variables[1].initial == .int(0))
         #expect(parsed.variables[1].swiftTypeName == "Int")
+    }
+
+    @Test func finiteVariableDomainsCompareAsFormalSets() {
+        let parsed = ParsedSpecModel(
+            variables: [(
+                name: "counter",
+                initial: .set([.int(0), .int(1)]),
+                initialSet: .setLiteral([.int(0), .int(1)])
+            )],
+            actions: [],
+            invariants: []
+        )
+        let built = ParsedSpecModel(
+            variables: [(
+                name: "counter",
+                initial: .set([.int(0), .int(1)]),
+                initialSet: .setLiteral([.int(1), .int(0)])
+            )],
+            actions: [],
+            invariants: []
+        )
+
+        #expect(_tlaAlphaEquivalent(parsed, built))
     }
 
     @Test func oneArgumentVariableRejectsUnboundReference() {
@@ -946,6 +967,7 @@ private struct TestCarFields {
 private enum TestCarSchema: TLARecordSchema {
     typealias Fields = TestCarFields
     static let fieldNames: Set<String> = ["floor", "doorsOpen"]
+    static let defaultRecord: TLAValue = .record(["floor": .int(0), "doorsOpen": .bool(false)])
 
     static func fieldName<Value>(for field: KeyPath<TestCarFields, Value>) -> String? {
         let key = field as AnyKeyPath

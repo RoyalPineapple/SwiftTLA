@@ -4,12 +4,10 @@ import SwiftTLAMacros
 @TLAModel
 public struct DieHardModel {
     public static var spec: TLASpec {
-        TLASpec("DieHard") {
+        #spec("DieHard") {
             Extends("Naturals")
-            let big = Var<Int>("big")
-            let small = Var<Int>("small")
-            Variable(big, 0)
-            Variable(small, 0)
+            let big = SharedVar(initial: 0)
+            let small = SharedVar(initial: 0)
             Invariant("TypeOK") { big >= 0 && big <= 5 && small >= 0 && small <= 3 }
             Action("FillSmallJug") { small.becomes(3) }
             Action("FillBigJug") { big.becomes(5) }

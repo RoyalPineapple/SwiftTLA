@@ -7,17 +7,40 @@
 /// ```
 import SwiftSyntaxMacros
 
-public protocol TLAValueType: TLAValueConvertible {
+public protocol TLAValueType: TLAValueConvertible, StateExprConvertible, Sendable {
   static var defaultValue: Self { get }
+  init?(formalValue: TLAValue)
 }
-extension Int: TLAValueType { public static var defaultValue: Int { 0 } }
-extension Bool: TLAValueType { public static var defaultValue: Bool { false } }
-extension String: TLAValueType { public static var defaultValue: String { "" } }
+extension Int: TLAValueType {
+  public static var defaultValue: Int { 0 }
+  public init?(formalValue: TLAValue) {
+    guard case .int(let value) = formalValue else { return nil }
+    self = value
+  }
+}
+extension Bool: TLAValueType {
+  public static var defaultValue: Bool { false }
+  public init?(formalValue: TLAValue) {
+    guard case .bool(let value) = formalValue else { return nil }
+    self = value
+  }
+}
+extension String: TLAValueType {
+  public static var defaultValue: String { "" }
+  public init?(formalValue: TLAValue) {
+    guard case .string(let value) = formalValue else { return nil }
+    self = value
+  }
+}
 
 /// All RawRepresentable Int enums get TLAValueType support.
 extension TLAValueType where Self: RawRepresentable, Self.RawValue == Int {
   public static var defaultValue: Self { Self(rawValue: 0)! }
   public var tlaValue: TLAValue { .int(rawValue) }
+  public init?(formalValue: TLAValue) {
+    guard case .int(let value) = formalValue else { return nil }
+    self.init(rawValue: value)
+  }
 }
 
 extension TLAValueType
@@ -30,9 +53,16 @@ where Self: RawRepresentable, Self.RawValue == Int, Self: CustomStringConvertibl
 extension TLAValueType where Self: RawRepresentable, Self.RawValue == String {
   public static var defaultValue: Self { Self(rawValue: "")! }
   public var tlaValue: TLAValue { .string(rawValue) }
+  public init?(formalValue: TLAValue) {
+    guard case .string(let value) = formalValue else { return nil }
+    self.init(rawValue: value)
+  }
 }
 
-extension TLAValue: TLAValueType { public static var defaultValue: TLAValue { .int(0) } }
+extension TLAValue: TLAValueType {
+  public static var defaultValue: TLAValue { .int(0) }
+  public init?(formalValue: TLAValue) { self = formalValue }
+}
 
 extension StateExprConvertible where Self: TLAValueType {
   public var stateExpr: StateExpr { .value(tlaValue) }
@@ -73,6 +103,24 @@ public struct Expr<T: TLAValueType>: StateExprConvertible, Sendable {
   public let raw: StateExpr
   public init(_ raw: StateExpr) { self.raw = raw }
   public var stateExpr: StateExpr { raw }
+
+  /// Typed equality keeps enum literals contextual in formal expressions:
+  /// `car[Car.door] == .closed`.
+  public static func == (lhs: Expr<T>, rhs: T) -> StateExpr {
+    .equal(lhs.raw, .value(rhs.tlaValue))
+  }
+
+  public static func == (lhs: T, rhs: Expr<T>) -> StateExpr {
+    .equal(.value(lhs.tlaValue), rhs.raw)
+  }
+
+  public static func != (lhs: Expr<T>, rhs: T) -> StateExpr {
+    .notEqual(lhs.raw, .value(rhs.tlaValue))
+  }
+
+  public static func != (lhs: T, rhs: Expr<T>) -> StateExpr {
+    .notEqual(.value(lhs.tlaValue), rhs.raw)
+  }
 }
 
 public struct Var<T: TLAValueType>: Sendable, CustomStringConvertible, SpecComponent {
@@ -128,260 +176,6 @@ extension Dictionary where Key == String, Value == TLAValue {
   public subscript<T: TLAValueType>(_ variable: Var<T>) -> TLAValue? {
     get { self[variable.name] }
     set { self[variable.name] = newValue }
-  }
-}
-
-// MARK: - ArrayVar<T>
-
-/// A lightweight Typed TLA+ variable wrapping a tuple (sequence).
-/// Domain = 0..<count.
-///
-/// ```swift
-/// let vals = ArrayVar<Int>("vals", count: 3)
-/// vals[0]                // StateExpr: vals[1]
-/// vals.becomes([1,2,3])  // vals' = <<1,2,3>>
-/// ```
-public struct ArrayVar<T: TLAValueType>: Sendable, CustomStringConvertible {
-  public let name: String
-  public let count: Int
-
-  public init(_ name: String? = nil, count: Int) {
-    self.name = name ?? ""
-    self.count = count
-  }
-
-  public var description: String { name }
-
-  public subscript(index: Int) -> StateExpr {
-    .tupleAccess(.variable(name), index)
-  }
-
-  @discardableResult
-  public func becomes(_ values: [T]) -> ActionExpr {
-    .assign(name, .tupleLiteral(values.map { .value($0.tlaValue) }))
-  }
-
-  @discardableResult
-  public func becomes(_ other: ArrayVar<T>) -> ActionExpr {
-    .assign(name, other.stateExpr)
-  }
-
-  public var stays: ActionExpr { .unchanged(name) }
-}
-
-extension ArrayVar: StateExprConvertible {
-  public var stateExpr: StateExpr { .variable(name) }
-}
-
-// MARK: - Layer 2: ArrayVar native operations
-
-extension ArrayVar {
-  @discardableResult
-  public func append(_ element: T) -> ActionExpr {
-    .assign(name, .tupleAppend(.variable(name), StateExpr.value(element.tlaValue)))
-  }
-
-  public var sizeExpr: StateExpr {
-    .tupleLength(.variable(name))
-  }
-
-  public var isEmptyExpr: StateExpr {
-    .equal(.tupleLength(.variable(name)), StateExpr.value(.int(0)))
-  }
-
-  public func extract(from state: [String: TLAValue]) -> [T] where T: TLABridgeable {
-    guard case .tuple(let t) = state[name] else { return [] }
-    return t.map { T(tlaValue: $0) }
-  }
-
-  public func update(in state: inout [String: TLAValue], to newValue: [T]) where T: TLABridgeable {
-    state[name] = .tuple(newValue.map { $0.tlaValue })
-  }
-}
-
-// MARK: - DictMember<K>
-
-/// Opaque member token for DictionaryVar.
-public struct DictMember<K: Identifiable>: Sendable {
-  public let key: StateExpr
-  public init(key: TLAValue) { self.key = .value(key) }
-  init(key: StateExpr) { self.key = key }
-}
-
-// MARK: - DictionaryVar<K, V>
-
-/// A lightweight TLA+ dictionary wrapping a function. Symmetry proven.
-///
-/// ```swift
-/// let dict = DictionaryVar<DeviceID, Bool>("enabled", scope: 4)
-/// dict[member]               // Expr<Bool>: enabled[memKey]
-/// dict.update(member, to: true)  // enabled' = [enabled EXCEPT ![memKey] = TRUE]
-/// dict.allSatisfy { $0 == true } // ∀ m ∈ DOMAIN enabled: enabled[m] = TRUE
-/// ```
-public struct DictionaryVar<K: Identifiable, V: TLAValueType>: Sendable, CustomStringConvertible {
-  public let name: String
-  public let scope: Int
-
-  public init(_ name: String? = nil, scope: Int = 4) {
-    self.name = name ?? ""
-    self.scope = scope
-  }
-
-  public var description: String { name }
-
-  public subscript(member: DictMember<K>) -> Expr<V> {
-    Expr(.functionApply(.variable(name), member.key))
-  }
-
-  @discardableResult
-  public func update(_ member: DictMember<K>, to value: V) -> ActionExpr {
-    update(member, to: Expr<V>(.value(value.tlaValue)))
-  }
-
-  @discardableResult
-  public func update(_ member: DictMember<K>, to value: Expr<V>) -> ActionExpr {
-    .assign(name, .except(.variable(name), member.key, value.raw))
-  }
-
-  public func allSatisfy(_ predicate: (Expr<V>) -> StateExpr) -> StateExpr {
-    let mv = FreshVarName.fresh()
-    let value = Expr<V>(.functionApply(.variable(name), .variable(mv)))
-    return .forAll(.domain(.variable(name)), mv, predicate(value))
-  }
-
-  public func contains(where predicate: (Expr<V>) -> StateExpr) -> StateExpr {
-    let mv = FreshVarName.fresh()
-    let value = Expr<V>(.functionApply(.variable(name), .variable(mv)))
-    return .exists(.domain(.variable(name)), mv, predicate(value))
-  }
-}
-
-extension DictionaryVar: StateExprConvertible {
-  public var stateExpr: StateExpr { .variable(name) }
-}
-
-// MARK: - Layer 2: DictionaryVar native operations
-
-extension DictionaryVar {
-  public func contains(key: K) -> StateExpr where K: TLAValueConvertible {
-    .in(StateExpr.value(key.tlaValue), .domain(.variable(name)))
-  }
-
-  public var isEmptyExpr: StateExpr {
-    .equal(.cardinality(.domain(.variable(name))), StateExpr.value(.int(0)))
-  }
-
-  public func extract(from state: [String: TLAValue]) -> [K: V]
-  where K: TLABridgeable & Hashable, V: TLABridgeable {
-    guard case .function(let f) = state[name] else { return [:] }
-    var result: [K: V] = [:]
-    for (k, v) in f {
-      result[K(tlaValue: k)] = V(tlaValue: v)
-    }
-    return result
-  }
-
-  public func update(in state: inout [String: TLAValue], to newValue: [K: V])
-  where K: TLABridgeable & Hashable, V: TLABridgeable {
-    let mapped: [TLAValue: TLAValue] = Dictionary(
-      uniqueKeysWithValues: newValue.map { ($0.key.tlaValue, $0.value.tlaValue) })
-    state[name] = .function(mapped)
-  }
-}
-
-// MARK: - SetVar<T>
-
-/// A lightweight TLA+ variable wrapping a set.
-///
-/// ```swift
-/// let s = SetVar<Int>("seen")
-/// s.becomes([1,2,3])   // seen' = {1, 2, 3}
-/// ```
-public struct SetVar<T: TLAValueType>: Sendable, CustomStringConvertible {
-  public let name: String
-
-  public init(_ name: String? = nil) {
-    self.name = name ?? ""
-  }
-
-  public var description: String { name }
-
-  @discardableResult
-  public func becomes(_ elements: [T]) -> ActionExpr {
-    .assign(name, .setLiteral(elements.map { .value($0.tlaValue) }))
-  }
-
-  @discardableResult
-  public func becomes(_ other: SetVar<T>) -> ActionExpr {
-    .assign(name, other.stateExpr)
-  }
-
-  public var stays: ActionExpr { .unchanged(name) }
-}
-
-extension SetVar: StateExprConvertible {
-  public var stateExpr: StateExpr { .variable(name) }
-}
-
-// MARK: - Layer 2: SetVar native operations
-
-extension SetVar {
-  @discardableResult
-  public func insert(_ element: T) -> ActionExpr {
-    .assign(name, .union(.variable(name), StateExpr.singleton(StateExpr.value(element.tlaValue))))
-  }
-
-  @discardableResult
-  public func remove(_ element: T) -> ActionExpr {
-    .assign(
-      name, .setDifference(.variable(name), StateExpr.singleton(StateExpr.value(element.tlaValue))))
-  }
-
-  public func contains(_ element: T) -> StateExpr {
-    .in(StateExpr.value(element.tlaValue), .variable(name))
-  }
-
-  public var isEmpty: StateExpr {
-    .equal(.cardinality(.variable(name)), StateExpr.value(.int(0)))
-  }
-
-  @discardableResult
-  public func union(_ other: some StateExprConvertible) -> ActionExpr {
-    .assign(name, .union(.variable(name), other.stateExpr))
-  }
-
-  public func extract(from state: [String: TLAValue]) -> Set<T> where T: TLABridgeable & Hashable {
-    guard case .set(let s) = state[name] else { return [] }
-    return Set(s.map { T(tlaValue: $0) })
-  }
-
-  public func update(in state: inout [String: TLAValue], to newValue: Set<T>)
-  where T: TLABridgeable & Hashable {
-    state[name] = .set(Set(newValue.map { $0.tlaValue }))
-  }
-}
-
-// MARK: - Builder integration
-
-extension SpecBuilder {
-  public static func buildExpression<T: TLAValueType>(_ expr: ArrayVar<T>) -> [SpecComponent] {
-    let initial = TLAValue.tuple(Array(repeating: T.defaultValue.tlaValue, count: expr.count))
-    return [VarDecl(expr.name, initial, collectionType: .array(expr.count))]
-  }
-
-  public static func buildExpression<K: Identifiable, V: TLAValueType>(_ expr: DictionaryVar<K, V>)
-    -> [SpecComponent] {
-    if expr.scope > 0 {
-      return [
-        SymmetricCollectionDecl(
-          name: expr.name, verificationScope: expr.scope, initial: V.defaultValue.tlaValue)
-      ]
-    }
-    return [VarDecl(expr.name, .function([:]), collectionType: .dictionary(expr.scope))]
-  }
-
-  public static func buildExpression<T: TLAValueType>(_ expr: SetVar<T>) -> [SpecComponent] {
-    [VarDecl(expr.name, .set([]), collectionType: .set)]
   }
 }
 
@@ -493,12 +287,14 @@ public prefix func ! <E: StateExprConvertible>(expression: E) -> StateExpr {
 public func == <L: StateExprConvertible, R: StateExprConvertible>(lhs: L, rhs: R) -> StateExpr {
   .equal(lhs.stateExpr, rhs.stateExpr)
 }
+
 extension StateExpr {
   public static func == (lhs: StateExpr, rhs: StateExpr) -> StateExpr { .equal(lhs, rhs) }
 }
 public func != <L: StateExprConvertible, R: StateExprConvertible>(lhs: L, rhs: R) -> StateExpr {
   .notEqual(lhs.stateExpr, rhs.stateExpr)
 }
+
 public func < <L: StateExprConvertible, R: StateExprConvertible>(lhs: L, rhs: R) -> StateExpr {
   .lessThan(lhs.stateExpr, rhs.stateExpr)
 }
@@ -749,9 +545,9 @@ public func renameVar(_ from: String, to: String, in expr: StateExpr) -> StateEx
     return .setDifference(renameVar(from, to: to, in: a), renameVar(from, to: to, in: b))
   case .cardinality(let s): return .cardinality(renameVar(from, to: to, in: s))
   case .setFilter(let s, let qv, let p):
-    return .setFilter(renameVar(from, to: to, in: s), qv, renameVar(from, to: to, in: p))
+    return .setFilter(renameVar(from, to: to, in: s), qv, qv == from ? p : renameVar(from, to: to, in: p))
   case .setMap(let e, let qv, let s):
-    return .setMap(renameVar(from, to: to, in: e), qv, renameVar(from, to: to, in: s))
+    return .setMap(renameVar(from, to: to, in: e), qv, qv == from ? s : renameVar(from, to: to, in: s))
   case .powerSet(let s): return .powerSet(renameVar(from, to: to, in: s))
   case .unionAll(let s): return .unionAll(renameVar(from, to: to, in: s))
   case .tupleLiteral(let es): return .tupleLiteral(es.map { renameVar(from, to: to, in: $0) })
@@ -768,7 +564,7 @@ public func renameVar(_ from: String, to: String, in expr: StateExpr) -> StateEx
   case .recordAccess(let r, let f): return .recordAccess(renameVar(from, to: to, in: r), f)
   case .domain(let f): return .domain(renameVar(from, to: to, in: f))
   case .functionLiteral(let d, let qv, let b):
-    return .functionLiteral(renameVar(from, to: to, in: d), qv, renameVar(from, to: to, in: b))
+    return .functionLiteral(renameVar(from, to: to, in: d), qv, qv == from ? b : renameVar(from, to: to, in: b))
   case .functionApply(let f, let x):
     return .functionApply(renameVar(from, to: to, in: f), renameVar(from, to: to, in: x))
   case .except(let f, let x, let e):
@@ -779,11 +575,11 @@ public func renameVar(_ from: String, to: String, in expr: StateExpr) -> StateEx
     return .caseExpr(
       ps.map { renameVar(from, to: to, in: $0) }, fb.map { renameVar(from, to: to, in: $0) })
   case .forAll(let s, let qv, let p):
-    return .forAll(renameVar(from, to: to, in: s), qv, renameVar(from, to: to, in: p))
+    return .forAll(renameVar(from, to: to, in: s), qv, qv == from ? p : renameVar(from, to: to, in: p))
   case .exists(let s, let qv, let p):
-    return .exists(renameVar(from, to: to, in: s), qv, renameVar(from, to: to, in: p))
+    return .exists(renameVar(from, to: to, in: s), qv, qv == from ? p : renameVar(from, to: to, in: p))
   case .choose(let s, let qv, let p):
-    return .choose(renameVar(from, to: to, in: s), qv, renameVar(from, to: to, in: p))
+    return .choose(renameVar(from, to: to, in: s), qv, qv == from ? p : renameVar(from, to: to, in: p))
   case .sequenceFromSet(let s): return .sequenceFromSet(renameVar(from, to: to, in: s))
   case .setSum(let f, let s):
     return .setSum(renameVar(from, to: to, in: f), renameVar(from, to: to, in: s))

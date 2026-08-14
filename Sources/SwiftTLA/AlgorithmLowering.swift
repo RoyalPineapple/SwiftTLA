@@ -25,13 +25,37 @@ enum AlgorithmLowerer {
                 return state
             }
         }
+        let declaredInvariants = algorithm.components.compactMap { component -> NamedInvariant? in
+            guard case .invariant(let invariant) = component else { return nil }
+            return invariant
+        }
+        let declaredTemporal = algorithm.components.compactMap { component -> NamedTemporal? in
+            guard case .temporal(let temporal) = component else { return nil }
+            return temporal
+        }
+        let declaredFairness = algorithm.components.compactMap { component -> FairnessCondition? in
+            guard case .fairness(let fairness) = component else { return nil }
+            return fairness
+        }
 
-        var variables = shared.map { NamedVar(name: $0.root, initial: $0.initial) }
+        var variables = shared.map { state in
+            if let initial = try? state.initial.evaluate(in: [:]) {
+                NamedVar(name: state.root, initial: initial, initialSet: state.initialSet)
+            } else {
+                NamedVar(name: state.root, initial: .int(0), initExpr: state.initial)
+            }
+        }
         for process in processes {
             for local in process.components {
                 guard case .local(let state) = local else { continue }
                 variables.append(
-                    NamedVar(name: state.root, initial: constantFunction(domain: process.domain, value: state.initial)))
+                    NamedVar(
+                        name: state.root,
+                        initial: staticInitialValue(
+                            constantFunction(domain: process.domain, value: state.initial),
+                            named: state.root
+                        )
+                    ))
             }
         }
 
@@ -109,12 +133,27 @@ enum AlgorithmLowerer {
             name: algorithm.name,
             variables: variables,
             actions: actions,
-            invariants: generatedAssertionInvariants,
-            fairness: fairness)
+            invariants: declaredInvariants + generatedAssertionInvariants,
+            temporalProperties: declaredTemporal,
+            fairness: declaredFairness + fairness)
     }
 
-    private static func constantFunction(domain: [TLAValue], value: TLAValue) -> TLAValue {
-        .function(Dictionary(uniqueKeysWithValues: domain.map { ($0, value) }))
+    private static func constantFunction(domain: [TLAValue], value: StateExpr) -> StateExpr {
+        let binding = "__pcal_initial_process"
+        return .functionLiteral(
+            .setLiteral(domain.map(StateExpr.value)),
+            binding,
+            value
+        )
+    }
+
+    /// Algorithm declarations are finite initial values. Keep the initial
+    /// state concrete so the checker, parser tree, and generated State agree.
+    private static func staticInitialValue(_ expression: StateExpr, named name: String) -> TLAValue {
+        guard let value = try? expression.evaluate(in: [:]) else {
+            preconditionFailure("Algorithm variable '\(name)' needs a closed formal initial expression.")
+        }
+        return value
     }
 
     private static func lower(

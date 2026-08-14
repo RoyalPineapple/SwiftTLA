@@ -33,25 +33,8 @@ public enum ActionEnumerator {
             return try disjuncts.flatMap { try processDisjunct($0, oldState: oldState, varNames: varNames) }
         }
 
-        let existsBindings = extractExistsActions(action)
-        if !existsBindings.isEmpty {
-            let (_, actionGuards) = try extractAssignments(action)
-            let guardExpr = actionGuards.reduce(StateExpr.value(.bool(true))) { .and($0, $1) }
-            guard try guardExpr.evaluateBool(in: oldState) else { return [] }
-
-            let (v, s, body) = existsBindings[0]
-            guard case .set(let sv) = try s.evaluate(in: oldState) else {
-                throw ActionError.invalidActionForm("\\E set must be a set")
-            }
-            var results: [[String: TLAValue]] = []
-            for elem in sv {
-                var rest = body
-                rest = substituteVarInAction(v, elem, rest)
-                let disjuncts = distributeOr(rest)
-                let inner = try disjuncts.flatMap { try processDisjunct($0, oldState: oldState, varNames: varNames) }
-                results.append(contentsOf: inner)
-            }
-            return results
+        if let expanded = try expandFirstExistsAction(in: action, oldState: oldState) {
+            return try expanded.flatMap { try processDisjunct($0, oldState: oldState, varNames: varNames) }
         }
 
         let chooseAssignments = try extractChooseActions(action)
@@ -138,6 +121,45 @@ public enum ActionEnumerator {
         }
     }
 
+    /// Expands one existential binder while retaining every surrounding action
+    /// clause. A `With` can appear between guards and assignments; enumerating
+    /// only its body would change the transition relation.
+    private static func expandFirstExistsAction(
+        in action: ActionExpr,
+        oldState: [String: TLAValue]
+    ) throws -> [ActionExpr]? {
+        switch action {
+        case .existsAction(let name, let set, let body):
+            guard case .set(let values) = try set.evaluate(in: oldState) else {
+                throw ActionError.invalidActionForm("\\E set must be a set")
+            }
+            return values.map { substituteVarInAction(name, $0, body) }
+        case .and(let lhs, let rhs):
+            if let expanded = try expandFirstExistsAction(in: lhs, oldState: oldState) {
+                return expanded.map { .and($0, rhs) }
+            }
+            return try expandFirstExistsAction(in: rhs, oldState: oldState).map { expanded in
+                expanded.map { .and(lhs, $0) }
+            }
+        case .or(let lhs, let rhs):
+            if let expanded = try expandFirstExistsAction(in: lhs, oldState: oldState) {
+                return expanded.map { .or($0, rhs) }
+            }
+            return try expandFirstExistsAction(in: rhs, oldState: oldState).map { expanded in
+                expanded.map { .or(lhs, $0) }
+            }
+        case .ifElse(let condition, let then, let otherwise):
+            if let expanded = try expandFirstExistsAction(in: then, oldState: oldState) {
+                return expanded.map { .ifElse(condition, $0, otherwise) }
+            }
+            return try expandFirstExistsAction(in: otherwise, oldState: oldState).map { expanded in
+                expanded.map { .ifElse(condition, then, $0) }
+            }
+        case .assign, .unchanged, .guard_, .chooseAction, .define:
+            return nil
+        }
+    }
+
     public static func extractAssignments(_ action: ActionExpr) throws -> (assignments: [String: StateExpr], guards: [StateExpr]) {
         switch action {
         case .assign(let name, let expr):
@@ -151,38 +173,18 @@ public enum ActionEnumerator {
         case .and(let a, let b):
             let (lhsAssign, lhsGuards) = try extractAssignments(a)
             let (rhsAssign, rhsGuards) = try extractAssignments(b)
-            for key in rhsAssign.keys where lhsAssign[key] != nil {
-                throw ActionError.multipleAssignment(key)
+            for (key, rhsValue) in rhsAssign {
+                if let lhsValue = lhsAssign[key], lhsValue != rhsValue {
+                    throw ActionError.multipleAssignment(key)
+                }
             }
-            return (lhsAssign.merging(rhsAssign) { $1 }, lhsGuards + rhsGuards)
+            return (lhsAssign.merging(rhsAssign) { lhs, _ in lhs }, lhsGuards + rhsGuards)
         case .or:
             return ([:], [])
         }
     }
 
     private static func substituteVarInAction(_ name: String, _ value: TLAValue, _ action: ActionExpr) -> ActionExpr {
-        switch action {
-        case .assign(let v, let e):
-            return .assign(v, StateExpr.substituteVariable(name, value, in: e))
-        case .unchanged(let v):
-            return .unchanged(v)
-        case .guard_(let e):
-            return .guard_(StateExpr.substituteVariable(name, value, in: e))
-        case .chooseAction(let v, let s):
-            return .chooseAction(v, StateExpr.substituteVariable(name, value, in: s))
-        case .existsAction(let v, let s, let b):
-            return .existsAction(v, StateExpr.substituteVariable(name, value, in: s), substituteVarInAction(name, value, b))
-        case .and(let a, let b):
-            return .and(substituteVarInAction(name, value, a), substituteVarInAction(name, value, b))
-        case .or(let a, let b):
-            return .or(substituteVarInAction(name, value, a), substituteVarInAction(name, value, b))
-        case .ifElse(let c, let t, let e):
-            return .ifElse(StateExpr.substituteVariable(name, value, in: c),
-                           substituteVarInAction(name, value, t),
-                           substituteVarInAction(name, value, e))
-        case .define(let v, let exp, let body):
-            return .define(v, StateExpr.substituteVariable(name, value, in: exp),
-                              substituteVarInAction(name, value, body))
-        }
+        substituteVar(name, with: value, in: action)
     }
 }

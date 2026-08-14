@@ -1,4 +1,71 @@
 import SwiftTLA
+import SwiftTLAMacros
+
+/// The three-node bounded termination detector from EWD 840.
+@TLAModel
+public struct SyncTerminationDetectionModel {
+    public enum Node: Int, CaseIterable, FiniteDomainKey {
+        case zero = 0
+        case one = 1
+        case two = 2
+
+        public static let formalDomain = allCases
+        public static let formalTypeIdentity = FormalTypeIdentity(rawValue: "examples.sync-termination.node")
+        public var tlaValue: TLAValue { .int(rawValue) }
+    }
+
+    public static var spec: TLASpec {
+        #spec("SyncTerminationDetection") {
+            Extends("Integers")
+            let active = SharedVar(in: SetExpr<Function<Node, Bool>>.literal(
+                Function<Node, Bool>.literal((Node.zero, false), (Node.one, false), (Node.two, false)),
+                Function<Node, Bool>.literal((Node.zero, false), (Node.one, false), (Node.two, true)),
+                Function<Node, Bool>.literal((Node.zero, false), (Node.one, true), (Node.two, false)),
+                Function<Node, Bool>.literal((Node.zero, false), (Node.one, true), (Node.two, true)),
+                Function<Node, Bool>.literal((Node.zero, true), (Node.one, false), (Node.two, false)),
+                Function<Node, Bool>.literal((Node.zero, true), (Node.one, false), (Node.two, true)),
+                Function<Node, Bool>.literal((Node.zero, true), (Node.one, true), (Node.two, false)),
+                Function<Node, Bool>.literal((Node.zero, true), (Node.one, true), (Node.two, true))
+            ))
+            let terminationDetected = SharedVar(initial: false)
+
+            Action("Terminate_0") {
+                active[.zero] == true && active.becomes(active.updating(.zero, to: false)) && terminationDetected.stays
+            }
+            Action("Terminate_1") {
+                active[.one] == true && active.becomes(active.updating(.one, to: false)) && terminationDetected.stays
+            }
+            Action("Terminate_2") {
+                active[.two] == true && active.becomes(active.updating(.two, to: false)) && terminationDetected.stays
+            }
+            Action("Wakeup_0_to_1") {
+                active[.zero] == true && active.becomes(active.updating(.one, to: true)) && terminationDetected.stays
+            }
+            Action("Wakeup_0_to_2") {
+                active[.zero] == true && active.becomes(active.updating(.two, to: true)) && terminationDetected.stays
+            }
+            Action("Wakeup_1_to_0") {
+                active[.one] == true && active.becomes(active.updating(.zero, to: true)) && terminationDetected.stays
+            }
+            Action("Wakeup_1_to_2") {
+                active[.one] == true && active.becomes(active.updating(.two, to: true)) && terminationDetected.stays
+            }
+            Action("Wakeup_2_to_0") {
+                active[.two] == true && active.becomes(active.updating(.zero, to: true)) && terminationDetected.stays
+            }
+            Action("Wakeup_2_to_1") {
+                active[.two] == true && active.becomes(active.updating(.one, to: true)) && terminationDetected.stays
+            }
+            Action("DetectTermination") {
+                active[.zero] == false && active[.one] == false && active[.two] == false
+                    && terminationDetected.becomes(true) && active.stays
+            }
+            Invariant("TDCorrect") {
+                terminationDetected == false || (active[.zero] == false && active[.one] == false && active[.two] == false)
+            }
+        }
+    }
+}
 
 extension Example {
     public static let syncTD = Entry(
@@ -7,68 +74,7 @@ extension Example {
         upstreamModule: "specifications/ewd840/SyncTerminationDetection.tla",
         upstreamCfg: "specifications/ewd840/SyncTerminationDetection.cfg",
         expectedDistinct: 9,
-        spec: syncTDSpec(),
-        notes: "Abstract termination detection. N=3, active as function, terminationDetected boolean. TLC = ?",
+        spec: SyncTerminationDetectionModel.spec,
+        notes: "Three-node abstract termination detection, using typed finite functions. TLC = 9."
     )
-
-static func syncTDSpec() -> TLASpec {
-        let N = 3
-        let nodes = Array(0..<N)
-        let boolOpts: [TLAValue] = [.bool(false), .bool(true)]
-        var activeFuncs: [TLAValue] = []
-        for a0 in boolOpts { for a1 in boolOpts { for a2 in boolOpts {
-            activeFuncs.append(.function([.int(0): a0, .int(1): a1, .int(2): a2]))
-        }}}
-
-        let active = Var<TLAValue>("active")
-        let terminatedDetected = Var<Bool>("terminationDetected")
-
-        func activeOf(_ i: Int) -> StateExpr {
-            StateExpr.functionApply(StateExpr.variable("active"), StateExpr.value(.int(i)))
-        }
-        func allInactive() -> StateExpr {
-            StateExpr.and(
-                StateExpr.and(
-                    StateExpr.equal(activeOf(0), StateExpr.value(.bool(false))),
-                    StateExpr.equal(activeOf(1), StateExpr.value(.bool(false)))
-                ),
-                StateExpr.equal(activeOf(2), StateExpr.value(.bool(false)))
-            )
-        }
-
-        return TLASpec("SyncTerminationDetection") {
-            Extends("Integers")
-            Variable(active, in: activeFuncs)
-            Variable(terminatedDetected, in: [false])
-
-            for i in nodes {
-                Action("Terminate_\(i)") {
-                    activeOf(i) == true
-                    && .assign(active.name, active.stateExpr.updated(at: i, to: false))
-                    && terminatedDetected.stays
-                }
-            }
-
-            for i in nodes {
-                for j in nodes where j != i {
-                    Action("Wakeup_\(i)_to_\(j)") {
-                        activeOf(i) == true
-                        && .assign(active.name, active.stateExpr.updated(at: j, to: true))
-                        && terminatedDetected.stays
-                    }
-                }
-            }
-
-            Action("DetectTermination") {
-                allInactive()
-                && terminatedDetected.becomes(true)
-                && active.stays
-            }
-
-            Invariant("TDCorrect") {
-                terminatedDetected == false || allInactive()
-            }
-        }
-    }
-
 }

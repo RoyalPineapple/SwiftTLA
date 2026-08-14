@@ -5,9 +5,11 @@
 /// (`\A`, `\E`, `CHOOSE`, function literals, filters, and action-local
 /// bindings) may differ.
 public func _tlaAlphaEquivalent(_ lhs: ParsedSpecModel, _ rhs: ParsedSpecModel) -> Bool {
-    guard lhs.variables.elementsEqual(rhs.variables, by: { $0.name == $1.name && $0.initial == $1.initial }),
+    guard lhs.variables.elementsEqual(rhs.variables, by: variablesEquivalent),
           lhs.actions.count == rhs.actions.count,
-          lhs.invariants.count == rhs.invariants.count
+          lhs.invariants.count == rhs.invariants.count,
+          lhs.temporal.count == rhs.temporal.count,
+          lhs.fairness == rhs.fairness
     else { return false }
 
     for (left, right) in zip(lhs.actions, rhs.actions) {
@@ -18,14 +20,25 @@ public func _tlaAlphaEquivalent(_ lhs: ParsedSpecModel, _ rhs: ParsedSpecModel) 
     for (left, right) in zip(lhs.invariants, rhs.invariants) {
         guard left.name == right.name, alphaKey(left.body) == alphaKey(right.body) else { return false }
     }
+    for (left, right) in zip(lhs.temporal, rhs.temporal) {
+        guard left.name == right.name, alphaKey(left.expr) == alphaKey(right.expr) else { return false }
+    }
     return true
 }
 
 /// Explains the first semantic difference that remains after normalization.
 /// This is intentionally concise enough to be useful in a macro runtime trap.
 public func _tlaFidelityDiagnostic(_ expected: ParsedSpecModel, _ actual: ParsedSpecModel) -> String {
-    guard expected.variables.elementsEqual(actual.variables, by: { $0.name == $1.name && $0.initial == $1.initial }) else {
-        return "Variable declarations or initial values differ."
+    guard expected.variables.elementsEqual(actual.variables, by: variablesEquivalent) else {
+        let sharedCount = min(expected.variables.count, actual.variables.count)
+        for index in 0..<sharedCount {
+            let expectedVariable = expected.variables[index]
+            let actualVariable = actual.variables[index]
+            guard variablesEquivalent(expectedVariable, actualVariable) else {
+                return "Variable \(index) differs: expected '\(expectedVariable.name)' initial \(expectedVariable.initial) domain \(String(describing: expectedVariable.initialSet)); built '\(actualVariable.name)' initial \(actualVariable.initial) domain \(String(describing: actualVariable.initialSet))."
+            }
+        }
+        return "Variable count differs: expected \(expected.variables.count), got \(actual.variables.count)."
     }
     guard expected.actions.count == actual.actions.count else {
         return "Action count differs: expected \(expected.actions.count), got \(actual.actions.count)."
@@ -37,8 +50,10 @@ public func _tlaFidelityDiagnostic(_ expected: ParsedSpecModel, _ actual: Parsed
         guard left.bindings == right.bindings else {
             return "Action '\(left.name)' has different finite bindings."
         }
-        guard alphaKey(left.body) == alphaKey(right.body) else {
-            return "Action '\(left.name)' differs after normalizing local binders, guard grouping, and action disjunction."
+        let expectedKey = alphaKey(left.body)
+        let actualKey = alphaKey(right.body)
+        guard expectedKey == actualKey else {
+            return "Action '\(left.name)' differs after normalization. Expected \(expectedKey); built \(actualKey)."
         }
     }
     guard expected.invariants.count == actual.invariants.count else {
@@ -52,7 +67,33 @@ public func _tlaFidelityDiagnostic(_ expected: ParsedSpecModel, _ actual: Parsed
             return "Invariant '\(left.name)' differs after normalizing local binders and logical grouping."
         }
     }
+    guard expected.temporal.count == actual.temporal.count else {
+        return "Temporal property count differs: expected \(expected.temporal.count), got \(actual.temporal.count)."
+    }
+    for (left, right) in zip(expected.temporal, actual.temporal) {
+        guard left.name == right.name else {
+            return "Temporal property order or name differs: expected '\(left.name)', got '\(right.name)'."
+        }
+        guard alphaKey(left.expr) == alphaKey(right.expr) else {
+            return "Temporal property '\(left.name)' differs after normalizing local binders and logical grouping."
+        }
+    }
+    guard expected.fairness == actual.fairness else {
+        return "Fairness declarations differ: expected \(expected.fairness), got \(actual.fairness)."
+    }
     return "The parser tree differs in an unsupported semantic field."
+}
+
+private func variablesEquivalent(
+    _ lhs: (name: String, initial: TLAValue, initialSet: StateExpr?),
+    _ rhs: (name: String, initial: TLAValue, initialSet: StateExpr?)
+) -> Bool {
+    guard lhs.name == rhs.name, lhs.initial == rhs.initial else { return false }
+    switch (lhs.initialSet, rhs.initialSet) {
+    case (nil, nil): return true
+    case let (.some(left), .some(right)): return alphaKey(left) == alphaKey(right)
+    case (nil, .some), (.some, nil): return false
+    }
 }
 
 private func alphaKey(_ action: ActionExpr) -> String {
@@ -69,8 +110,8 @@ private func semanticBranches(_ action: ActionExpr) -> [ActionExpr] {
     switch action {
     case .or(let left, let right):
         return semanticBranches(left) + semanticBranches(right)
-    case .guard_(.or(let left, let right)):
-        return semanticBranches(.guard_(left)) + semanticBranches(.guard_(right))
+    case .guard_(let condition):
+        return semanticStateBranches(condition).map(ActionExpr.guard_)
     case .and(let left, let right):
         return semanticBranches(left).flatMap { leftBranch in
             semanticBranches(right).map { rightBranch in .and(leftBranch, rightBranch) }
@@ -87,9 +128,38 @@ private func semanticBranches(_ action: ActionExpr) -> [ActionExpr] {
     }
 }
 
+/// Splits only disjunctions that occur inside a Boolean guard. Swift can group
+/// `a && (b || c)` into one `StateExpr` before that condition meets an action
+/// update, while the syntax parser retains separate action guards. Both spell
+/// the same transition relation.
+private func semanticStateBranches(_ expression: StateExpr) -> [StateExpr] {
+    switch expression {
+    case .or(let left, let right):
+        return semanticStateBranches(left) + semanticStateBranches(right)
+    case .and(let left, let right):
+        return semanticStateBranches(left).flatMap { leftBranch in
+            semanticStateBranches(right).map { rightBranch in
+                .and(leftBranch, rightBranch)
+            }
+        }
+    default:
+        return [expression]
+    }
+}
+
 private func alphaKey(_ expression: StateExpr) -> String {
     var next = 0
     return stateKey(expression, environment: [:], next: &next)
+}
+
+private func alphaKey(_ expression: TemporalExpr) -> String {
+    switch expression {
+    case .always(let state): return "always(\(alphaKey(state)))"
+    case .eventually(let state): return "eventually(\(alphaKey(state)))"
+    case .alwaysEventually(let state): return "alwaysEventually(\(alphaKey(state)))"
+    case .eventuallyAlways(let state): return "eventuallyAlways(\(alphaKey(state)))"
+    case .leadsTo(let from, let to): return "leadsTo(\(alphaKey(from)),\(alphaKey(to)))"
+    }
 }
 
 private func fresh(_ name: String, environment: [String: String], next: inout Int) -> (String, [String: String]) {
@@ -177,7 +247,7 @@ private func stateKey(_ expression: StateExpr, environment: [String: String], ne
     case .or: return associative("or", expression)
     case .not(let value): return "not(\(key(value)))"
     case .ifThenElse(let c, let t, let f): return "if(\(key(c)),\(key(t)),\(key(f)))"
-    case .setLiteral(let values): return "set[\(values.map { key($0) }.joined(separator: ","))]"
+    case .setLiteral(let values): return "set[\(values.map { key($0) }.sorted().joined(separator: ","))]"
     case .in(let a, let b): return pair("in", a, b)
     case .subset(let a, let b): return pair("subset", a, b)
     case .union(let a, let b): return pair("union", a, b)

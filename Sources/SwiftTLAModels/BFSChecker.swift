@@ -30,6 +30,8 @@ public struct BFSChecker {
             Action("Complete") {
                 (phase == 0) && ((processed >= queued) || (processed >= 20))
                     && phase.becomes(1)
+                    && processed.stays
+                    && queued.stays
             }
 
             Action("Violate") {

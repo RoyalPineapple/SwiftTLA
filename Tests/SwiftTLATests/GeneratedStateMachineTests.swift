@@ -32,10 +32,9 @@ struct GeneratedAlgorithmCounter {
     }
 
     static var spec: TLASpec {
-        TLASpec("GeneratedAlgorithmCounter") {
-            let count = Var<Int>("count")
+        #spec("GeneratedAlgorithmCounter") {
             Algorithm("GeneratedAlgorithmCounter") {
-                Shared(count, initial: 0)
+                let count = SharedVar(initial: 0)
                 Each(Node.all, fairness: .weak) { _ in
                     While("increment", count < 2) {
                         When(count < 2)
@@ -62,6 +61,91 @@ struct GeneratedAlgorithmMachineTests {
             .string("left"): .string("increment"),
             .string("right"): .string("increment")
         ]))
+    }
+}
+
+@TLAModel
+struct GeneratedRangeInitializedAlgorithm {
+    enum Node: String, FiniteDomainKey {
+        case clock
+
+        static let formalDomain: [Node] = [.clock]
+        static let formalTypeIdentity = FormalTypeIdentity(rawValue: "test.range-initialized-node")
+
+        var tlaValue: TLAValue { .string(rawValue) }
+    }
+
+    static var spec: TLASpec {
+        #spec("GeneratedRangeInitializedAlgorithm") {
+            Algorithm("GeneratedRangeInitializedAlgorithm") {
+                let hour = SharedVar(in: 1...3)
+                Each(Node.all) { _ in
+                    Do("advance") {
+                        When(hour < 3)
+                        Assign(hour, to: hour + 1)
+                    }
+                }
+            }
+        }
+    }
+}
+
+struct GeneratedRangeInitializedAlgorithmTests {
+    @Test("#spec independently parses a finite SharedVar initial range")
+    func generatedRangePreservesEveryInitialHour() {
+        let initialHours = computeInitialStates(GeneratedRangeInitializedAlgorithm.spec)
+            .compactMap { $0["hour"] }
+
+        #expect(Set(initialHours) == [.int(1), .int(2), .int(3)])
+        #expect(GeneratedRangeInitializedAlgorithm.spec.variables.first { $0.name == "hour" }?.initialSet
+            == .setLiteral([.value(.int(1)), .value(.int(2)), .value(.int(3))]))
+    }
+}
+
+@TLAModel
+struct GeneratedDependentInitialAlgorithm {
+    enum Node: String, FiniteDomainKey {
+        case left
+        case right
+
+        static let formalDomain: [Node] = [.left, .right]
+        static let formalTypeIdentity = FormalTypeIdentity(rawValue: "test.dependent-initial-node")
+
+        var tlaValue: TLAValue { .string(rawValue) }
+    }
+
+    enum Phase: String, TLAValueType {
+        case active
+        case inactive
+    }
+
+    static var spec: TLASpec {
+        #spec("GeneratedDependentInitialAlgorithm") {
+            Algorithm("GeneratedDependentInitialAlgorithm") {
+                let seed = SharedVar(in: SetExpr<Bool>.literal(false, true))
+                let mirrors = SharedVar(initial: Function<Node, Phase>.mapping { node in
+                    Expr<Phase>.ifThenElse(node == .left && seed == true, then: .active, else: .inactive)
+                })
+                Each(Node.all) { _ in
+                    Do("stop") {
+                        Assign(mirrors, to: mirrors)
+                        Stop()
+                    }
+                }
+            }
+        }
+    }
+}
+
+struct GeneratedDependentInitialAlgorithmTests {
+    @Test("#spec independently preserves a dependent typed function initializer")
+    func generatedModelPreservesDependentInitialStates() {
+        let states = computeInitialStates(GeneratedDependentInitialAlgorithm.spec)
+
+        #expect(Set(states.compactMap { $0["mirrors"] }) == [
+            .function([.string("left"): .string("inactive"), .string("right"): .string("inactive")]),
+            .function([.string("left"): .string("active"), .string("right"): .string("inactive")])
+        ])
     }
 }
 
@@ -104,7 +188,7 @@ struct NestedAdapterConcurrencyTests {
         #expect(await observable.machineObservation().state.projection?.value(for: count) == .int(1))
         #expect(await actor.machineObservation().state.projection?.value(for: count) == .int(1))
         #expect(observable.state.count == 1)
-        #expect(await actor.state().count == 1)
+        #expect(await actor.state.count == 1)
         #expect(await callbackRecorder.transitions.count == 1)
         #expect(await callbackRecorder.transitions.first?.0 == expected.before)
         #expect(await callbackRecorder.transitions.first?.1 == expected.after)
@@ -205,36 +289,6 @@ struct BuilderOnlyClock {
     }
 }
 
-@TLAObservable
-final class ObservableTwoCarElevator {
-    static var spec: TLASpec {
-        TLASpec("ObservableTwoCarElevator") {
-            let floor = Var<Int>("floor")
-            Variable(floor, 0)
-            Action("moveElevator", parameters: [ActionParameter("id", values: [1, 2])]) {
-                floor.becomes(2)
-            }
-        }
-    }
-}
-
-@TLAObservable
-final class ObservableThreeParameterMachine {
-    static var spec: TLASpec {
-        TLASpec("ObservableThreeParameterMachine") {
-            let floor = Var<Int>("floor")
-            Variable(floor, 0)
-            Action("board", parameters: [
-                ActionParameter("person", values: [1, 2]),
-                ActionParameter("elevator", values: [10, 20]),
-                ActionParameter("direction", values: [100, 200])
-            ]) {
-                floor.becomes(1)
-            }
-        }
-    }
-}
-
 @TLAModel
 struct TwoCarElevatorMachine {
     static var spec: TLASpec {
@@ -246,6 +300,9 @@ struct TwoCarElevatorMachine {
             }
         }
     }
+
+    @TLAObservable
+    final class Observable {}
 }
 
 @TLAModel
@@ -263,6 +320,12 @@ struct ThreeParameterActionMachine {
             }
         }
     }
+
+    @TLAObservable
+    final class Observable {}
+
+    @TLAActor
+    actor Actor {}
 }
 
 @TLAModel
@@ -317,23 +380,6 @@ struct NestedComposedCounter {
     actor Actor {}
 }
 
-@TLAActor
-actor ThreeParameterActionActor {
-    static var spec: TLASpec {
-        TLASpec("ThreeParameterActionActor") {
-            let floor = Var<Int>("floor")
-            Variable(floor, 0)
-            Action("board", parameters: [
-                ActionParameter("person", values: [1, 2]),
-                ActionParameter("elevator", values: [10, 20]),
-                ActionParameter("direction", values: [100, 200])
-            ]) {
-                floor.becomes(1)
-            }
-        }
-    }
-}
-
 private actor NestedCallbackRecorder {
     private(set) var transitions: [(NestedComposedCounter.State, NestedComposedCounter.State)] = []
 
@@ -345,21 +391,30 @@ private actor NestedCallbackRecorder {
 // MARK: - Tests for generated verification methods
 
 struct GeneratedStateMachineTests {
+    @Test("#spec preserves the constrained TLASpec builder for model generation")
+    func specExpressionMacroCompilesExternally() throws {
+        let fixture = packageRoot().appendingPathComponent("Tests/Fixtures/SpecExpressionMacro")
+        let result = try runSwift(["run", "--package-path", fixture.path])
+
+        #expect(result.status == 0, Comment(rawValue: result.output))
+    }
+
     private struct BoardCallback: Sendable {
         let person: Int
         let elevator: Int
         let direction: Int
-        let before: ObservableThreeParameterMachine.State
-        let after: ObservableThreeParameterMachine.State
+        let before: ThreeParameterActionMachine.State
+        let after: ThreeParameterActionMachine.State
     }
 
     @Test("Observable parameterized action applies its selected finite-domain argument")
-    func observableParameterizedAction() throws {
-        let elevator = ObservableTwoCarElevator()
+    @MainActor
+    func observableParameterizedAction() async throws {
+        let elevator = TwoCarElevatorMachine.Observable()
         let callbackID = LockedValue<Int?>(nil)
         elevator.onMoveElevator = { id, _, _ in callbackID.value = id }
-        _ = try elevator._moveElevator(id: 2)
-        #expect(elevator.floor == 2)
+        _ = try await elevator._moveElevator(id: 2)
+        #expect(elevator.state.floor == 2)
         #expect(callbackID.value == 2)
     }
 
@@ -563,11 +618,12 @@ struct GeneratedStateMachineTests {
     }
 
     @Test("Observable and actor adapters return the canonical three-argument transition evidence")
+    @MainActor
     func observableAndActorMatchCanonicalThreeArgumentEvidence() async throws {
         var model = ThreeParameterActionMachine()
         let expected = try model.apply(.board(person: 2, elevator: 20, direction: 200))
 
-        let observable = ObservableThreeParameterMachine()
+        let observable = ThreeParameterActionMachine.Observable()
         let callback = LockedValue<BoardCallback?>(nil)
         observable.onBoard = { person, elevator, direction, before, after in
             callback.value = .init(
@@ -578,10 +634,12 @@ struct GeneratedStateMachineTests {
                 after: after
             )
         }
-        let observed = try observable._board(person: 2, elevator: 20, direction: 200)
+        let observed = try await observable._board(person: 2, elevator: 20, direction: 200)
 
-        let actor = ThreeParameterActionActor()
-        let acted = try await actor.apply(.board(person: 2, elevator: 20, direction: 200))
+        let actor = ThreeParameterActionMachine.Actor()
+        let acted = try await actor.execute(
+            ThreeParameterActionMachine.ActionLabel.board(person: 2, elevator: 20, direction: 200).toInvocation()
+        )
 
         #expect(observed.action.toInvocation() == expected.action.toInvocation())
         #expect(observed.before.floor == expected.before.floor)
@@ -597,6 +655,7 @@ struct GeneratedStateMachineTests {
     }
 
     @Test("Rejected generated labels preserve model, observable, and actor state")
+    @MainActor
     func rejectedActionsDoNotMutateOrNotify() async throws {
         let expectedInvocation = TLAActionInvocation(
             name: "board",
@@ -613,12 +672,12 @@ struct GeneratedStateMachineTests {
         }
         #expect(model.tlaSnapshot() == modelBefore)
 
-        let observable = ObservableThreeParameterMachine()
+        let observable = ThreeParameterActionMachine.Observable()
         let callbackCount = LockedValue(0)
         observable.onBoard = { _, _, _, _, _ in callbackCount.value += 1 }
         let observableBefore = observable.tlaSnapshot()
         do {
-            _ = try observable._board(person: 2, elevator: 30, direction: 200)
+            _ = try await observable._board(person: 2, elevator: 30, direction: 200)
             Issue.record("Expected rejected observable action")
         } catch {
             assertRejectedBoardError(error, expectedInvocation: expectedInvocation)
@@ -626,10 +685,12 @@ struct GeneratedStateMachineTests {
         #expect(observable.tlaSnapshot() == observableBefore)
         #expect(callbackCount.value == 0)
 
-        let actor = ThreeParameterActionActor()
+        let actor = ThreeParameterActionMachine.Actor()
         let actorBefore = await actor.tlaSnapshot()
         do {
-            _ = try await actor.apply(.board(person: 2, elevator: 30, direction: 200))
+            _ = try await actor.execute(
+                ThreeParameterActionMachine.ActionLabel.board(person: 2, elevator: 30, direction: 200).toInvocation()
+            )
             Issue.record("Expected rejected actor action")
         } catch {
             assertRejectedBoardError(error, expectedInvocation: expectedInvocation)

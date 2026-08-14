@@ -26,39 +26,16 @@ struct DuckDuckLeaderCanonical {
             }
         }
     }
-}
 
-@TLAActor
-actor DuckDuckLeaderActor {
-    static var spec: TLASpec {
-        TLASpec("DuckDuckLeaderActor") {
-            let leader = Var<Int>("leader")
-            let turn = Var<Int>("turn")
-            Variable(leader, 1)
-            Variable(turn, 0)
-            Action("pass", parameters: [
-                ActionParameter("from", values: [1, 2]),
-                ActionParameter("to", values: [1, 2]),
-                ActionParameter("round", values: [1, 2, 3])
-            ]) {
-                let from = Expr<Int>(.variable("from"))
-                let to = Expr<Int>(.variable("to"))
-                let round = Expr<Int>(.variable("round"))
-                leader == from
-                    && to != from
-                    && turn + 1 == round
-                    && leader.becomes(to)
-                    && turn.becomes(round)
-            }
-        }
-    }
+    @TLAActor
+    actor Actor {}
 }
 
 struct DuckDuckLeaderAdapterTests {
     @Test("Duck Duck Leader actor preserves canonical arbitrary-length evidence")
     func actorMatchesCanonicalSchedule() async throws {
         var canonical = DuckDuckLeaderCanonical()
-        let actor = DuckDuckLeaderActor()
+        let actor = DuckDuckLeaderCanonical.Actor()
         let schedule = [
             TLAActionInvocation(name: "pass", arguments: [.int(1), .int(2), .int(1)]),
             TLAActionInvocation(name: "pass", arguments: [.int(2), .int(1), .int(2)]),
@@ -69,9 +46,9 @@ struct DuckDuckLeaderAdapterTests {
 
         for invocation in schedule {
             let canonicalLabel = try #require(DuckDuckLeaderCanonical.ActionLabel(invocation: invocation))
-            let actorLabel = try #require(DuckDuckLeaderActor.ActionLabel(invocation: invocation))
+            let actorLabel = try #require(DuckDuckLeaderCanonical.Actor.ActionLabel(invocation: invocation))
             let expected = try canonical.apply(canonicalLabel)
-            let actual = try await actor.apply(actorLabel)
+            let actual = try await actor.execute(actorLabel.toInvocation())
 
             #expect(actual.action.toInvocation() == invocation)
             #expect(actual.action.toInvocation() == expected.action.toInvocation())
@@ -86,12 +63,12 @@ struct DuckDuckLeaderAdapterTests {
 
     @Test("Duck Duck Leader actor rejects unavailable invocations without mutation")
     func unavailableActionPreservesActorSnapshot() async throws {
-        let actor = DuckDuckLeaderActor()
+        let actor = DuckDuckLeaderCanonical.Actor()
         let unavailable = TLAActionInvocation(name: "pass", arguments: [.int(2), .int(1), .int(1)])
         let before = await actor.tlaSnapshot()
 
         do {
-            _ = try await actor.apply(try #require(DuckDuckLeaderActor.ActionLabel(invocation: unavailable)))
+            _ = try await actor.execute(unavailable)
             Issue.record("Expected unavailable Duck Duck Leader action")
         } catch let GeneratedMachineError.runtime(.actionNotEnabled(invocation, available)) {
             #expect(invocation == unavailable)
@@ -103,7 +80,7 @@ struct DuckDuckLeaderAdapterTests {
 
     @Test("Duck Duck Leader actor serializes concurrent duplicate submissions")
     func concurrentSubmissionsMatchActualCanonicalEvidence() async throws {
-        let actor = DuckDuckLeaderActor()
+        let actor = DuckDuckLeaderCanonical.Actor()
         let invocation = TLAActionInvocation(name: "pass", arguments: [.int(1), .int(2), .int(1)])
 
         async let first = submit(actor, invocation: invocation)
@@ -131,12 +108,12 @@ struct DuckDuckLeaderAdapterTests {
     }
 
     private func submit(
-        _ actor: DuckDuckLeaderActor,
+        _ actor: DuckDuckLeaderCanonical.Actor,
         invocation: TLAActionInvocation
     ) async -> Submission {
         do {
-            let label = try #require(DuckDuckLeaderActor.ActionLabel(invocation: invocation))
-            let evidence = try await actor.apply(label)
+            let label = try #require(DuckDuckLeaderCanonical.Actor.ActionLabel(invocation: invocation))
+            let evidence = try await actor.execute(label.toInvocation())
             return .applied(.init(
                 invocation: evidence.action.toInvocation(),
                 before: evidence.before,
@@ -167,8 +144,8 @@ struct DuckDuckLeaderAdapterTests {
 
     private struct Evidence: Sendable {
         let invocation: TLAActionInvocation
-        let before: DuckDuckLeaderActor.State
-        let after: DuckDuckLeaderActor.State
+        let before: DuckDuckLeaderCanonical.Actor.State
+        let after: DuckDuckLeaderCanonical.Actor.State
     }
 
     private struct Rejection: Sendable {

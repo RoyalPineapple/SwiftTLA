@@ -1,86 +1,163 @@
 import SwiftTLA
 import SwiftTLAMacros
 
+/// Lamport's two-phase commit protocol with three resource managers.
+///
+/// The coordinator and each resource manager are independently scheduled
+/// PlusCal-shaped processes. Messages are a typed formal record set, not a
+/// Swift dictionary or a raw string-keyed state value.
 @TLAModel
 public struct TwoPhaseModel {
+    public enum ResourceManager: String, CaseIterable, FiniteDomainKey {
+        case one = "r1"
+        case two = "r2"
+        case three = "r3"
+
+        public static let formalDomain = allCases
+        public static let formalTypeIdentity = FormalTypeIdentity(rawValue: "examples.twoPhase.resourceManager")
+
+        public var tlaValue: TLAValue { .string(rawValue) }
+    }
+
+    public enum Coordinator: String, CaseIterable, FiniteDomainKey {
+        case transactionManager
+
+        public static let formalDomain = allCases
+        public static let formalTypeIdentity = FormalTypeIdentity(rawValue: "examples.twoPhase.coordinator")
+
+        public var tlaValue: TLAValue { .string(rawValue) }
+    }
+
+    public enum ResourceManagerState: String, TLAValueType {
+        case working
+        case prepared
+        case committed
+        case aborted
+    }
+
+    public enum TransactionManagerState: String, TLAValueType {
+        case initial = "init"
+        case committed
+        case aborted
+    }
+
+    public enum MessageKind: String, TLAValueType {
+        case prepared
+        case commit
+        case abort
+    }
+
+    public struct MessageFields {
+        public let kind: MessageKind
+        public let resourceManager: ResourceManager
+    }
+
+    public enum MessageSchema: TLARecordSchema {
+        public typealias Fields = MessageFields
+
+        public static let fieldNames: Set<String> = ["kind", "rm"]
+        public static let defaultRecord: TLAValue = .record([
+            "kind": .string(MessageKind.prepared.rawValue),
+            "rm": .string(ResourceManager.one.rawValue)
+        ])
+
+        public static func fieldName<Value>(for field: KeyPath<MessageFields, Value>) -> String? {
+            let key = field as AnyKeyPath
+            if key == \MessageFields.kind { return "kind" }
+            if key == \MessageFields.resourceManager { return "rm" }
+            return nil
+        }
+
+        public static let kind = field(\MessageFields.kind)
+        public static let resourceManager = field(\MessageFields.resourceManager)
+    }
+
+    private enum ResourceManagerStep: String, PlusCalLabel {
+        case resourceManagerOperate
+    }
+
+    private enum CoordinatorStep: String, PlusCalLabel {
+        case coordinatorOperate
+    }
+
     public static var spec: TLASpec {
-        let rms = ["r1", "r2", "r3"]
-
-        func recordMsg(_ fields: [String: String]) -> StateExpr {
-            .recordLiteral(fields.mapValues { .value(.string($0)) })
-        }
-        func commitMsg() -> StateExpr { recordMsg(["type": "Commit"]) }
-        func abortMsg() -> StateExpr { recordMsg(["type": "Abort"]) }
-        func preparedMsg(_ rm: String) -> StateExpr { recordMsg(["type": "Prepared", "rm": rm]) }
-        func rmSt(_ rm: String) -> StateExpr {
-            .functionApply(.variable("rmState"), .value(.string(rm)))
-        }
-
-        return TLASpec("TwoPhase") {
+        #spec("TwoPhase") {
             Extends("Integers")
-            let rmState = Var<TLAValue>("rmState")
-            let tmState = Var<String>("tmState")
-            let tmPrepared = Var<TLAValue>("tmPrepared")
-            let msgs = Var<TLAValue>("msgs")
-            let initRMState = TLAValue.function(Dictionary(uniqueKeysWithValues: rms.map {
-                (TLAValue.string($0), TLAValue.string("working"))
-            }))
-            Variable(rmState, initRMState)
-            Variable(tmState, "init")
-            Variable(tmPrepared, TLAValue.set([]))
-            Variable(msgs, TLAValue.set([]))
+            Algorithm("TwoPhase") {
+                let resourceManagerState = SharedVar(initial: Function<ResourceManager, ResourceManagerState>.literal(
+                    (.one, .working), (.two, .working), (.three, .working)
+                ))
+                let transactionManagerState = SharedVar(initial: TransactionManagerState.initial)
+                let prepared = SharedVar(initial: SetExpr<ResourceManager>())
+                let messages = SharedVar(initial: SetExpr<Record<MessageSchema>>())
 
-            for rm in rms {
-                Action("RcvPrepared_\(rm)") {
-                    tmState == "init"
-                    && preparedMsg(rm).isIn(msgs)
-                    && .assign(tmPrepared.name, .union(tmPrepared.stateExpr, StateExpr.singleton(StateExpr.value(.string(rm)))))
-                    && rmState.stays && tmState.stays && msgs.stays
+                Each(ResourceManager.all) { resourceManager in
+                    Do(ResourceManagerStep.resourceManagerOperate) {
+                        Either {
+                            When(resourceManagerState[resourceManager] == .working)
+                            Assign(resourceManagerState, to: resourceManagerState.updating(resourceManager, to: .prepared))
+                            Assign(messages, to: messages.inserting(Record<MessageSchema>.literal(
+                                .init(MessageSchema.kind, .prepared),
+                                .init(MessageSchema.resourceManager, resourceManager)
+                            )))
+                        } or: {
+                            Either {
+                                When(resourceManagerState[resourceManager] == .working)
+                                Assign(resourceManagerState, to: resourceManagerState.updating(resourceManager, to: .aborted))
+                            } or: {
+                                Either {
+                                    When(messages.contains(Record<MessageSchema>.literal(
+                                        .init(MessageSchema.kind, .commit),
+                                        .init(MessageSchema.resourceManager, .one)
+                                    )))
+                                    Assign(resourceManagerState, to: resourceManagerState.updating(resourceManager, to: .committed))
+                                } or: {
+                                    When(messages.contains(Record<MessageSchema>.literal(
+                                        .init(MessageSchema.kind, .abort),
+                                        .init(MessageSchema.resourceManager, .one)
+                                    )))
+                                    Assign(resourceManagerState, to: resourceManagerState.updating(resourceManager, to: .aborted))
+                                }
+                            }
+                        }
+                        Goto(ResourceManagerStep.resourceManagerOperate)
+                    }
+                }
+
+                Each(Coordinator.all) { _ in
+                    Do(CoordinatorStep.coordinatorOperate) {
+                        Either {
+                            With(ResourceManager.all) { resourceManager in
+                                When(transactionManagerState == TransactionManagerState.initial)
+                                When(messages.contains(Record<MessageSchema>.literal(
+                                    .init(MessageSchema.kind, .prepared),
+                                    .init(MessageSchema.resourceManager, resourceManager)
+                                )))
+                                Assign(prepared, to: prepared.inserting(resourceManager))
+                            }
+                        } or: {
+                            Either {
+                                When(transactionManagerState == TransactionManagerState.initial)
+                                When(prepared.cardinality == 3)
+                                Assign(transactionManagerState, to: TransactionManagerState.committed)
+                                Assign(messages, to: messages.inserting(Record<MessageSchema>.literal(
+                                    .init(MessageSchema.kind, .commit),
+                                    .init(MessageSchema.resourceManager, .one)
+                                )))
+                            } or: {
+                                When(transactionManagerState == TransactionManagerState.initial)
+                                Assign(transactionManagerState, to: TransactionManagerState.aborted)
+                                Assign(messages, to: messages.inserting(Record<MessageSchema>.literal(
+                                    .init(MessageSchema.kind, .abort),
+                                    .init(MessageSchema.resourceManager, .one)
+                                )))
+                            }
+                        }
+                        Goto(CoordinatorStep.coordinatorOperate)
+                    }
                 }
             }
 
-            Action("TMCommit") {
-                tmState == "init"
-                && tmPrepared.stateExpr.cardinality == 3
-                && tmState.becomes("committed")
-                && .assign(msgs.name, .union(msgs.stateExpr, StateExpr.singleton(commitMsg())))
-                && rmState.stays && tmPrepared.stays
-            }
-
-            Action("TMAbort") {
-                tmState == "init"
-                && tmState.becomes("aborted")
-                && .assign(msgs.name, .union(msgs.stateExpr, StateExpr.singleton(abortMsg())))
-                && rmState.stays && tmPrepared.stays
-            }
-
-            for rm in rms {
-                Action("Prepare_\(rm)") {
-                    rmSt(rm) == "working"
-                    && .assign(rmState.name, rmState.stateExpr.updated(at: rm, to: "prepared"))
-                    && .assign(msgs.name, .union(msgs.stateExpr, StateExpr.singleton(preparedMsg(rm))))
-                    && tmState.stays && tmPrepared.stays
-                }
-                Action("Abort_\(rm)") {
-                    rmSt(rm) == "working"
-                    && .assign(rmState.name, rmState.stateExpr.updated(at: rm, to: "aborted"))
-                    && tmState.stays && tmPrepared.stays && msgs.stays
-                }
-                Action("RcvCommit_\(rm)") {
-                    commitMsg().isIn(msgs)
-                    && .assign(rmState.name, rmState.stateExpr.updated(at: rm, to: "committed"))
-                    && tmState.stays && tmPrepared.stays && msgs.stays
-                }
-                Action("RcvAbort_\(rm)") {
-                    abortMsg().isIn(msgs)
-                    && .assign(rmState.name, rmState.stateExpr.updated(at: rm, to: "aborted"))
-                    && tmState.stays && tmPrepared.stays && msgs.stays
-                }
-            }
-
-            Invariant("TPTypeOK") {
-                tmState.stateExpr.isIn(StateExpr.set(["init", "committed", "aborted"]))
-            }
         }
     }
 }
@@ -93,6 +170,6 @@ extension Example {
         upstreamCfg: "specifications/transaction_commit/TwoPhase.cfg",
         expectedDistinct: 288,
         spec: TwoPhaseModel.spec,
-        notes: "Lamport TwoPhase safety. RM={r1,r2,r3}, msgs as record-set. SPECIFICATION TPSpec. TLC = 288.",
+        notes: "Lamport TwoPhase safety. Typed resource-manager and message records. TLC = 288."
     )
 }

@@ -1,104 +1,99 @@
 import SwiftTLA
+import SwiftTLAMacros
 
-// Single-switch prisoner puzzle. Counter turns light off, counts to N.
-// N=3, Light_Unknown=FALSE. 3 initial counter choices → 16 states.
-// Port: 1:1. TypeOK + VictoryOK.
-// Upstream: specifications/Prisoners_Single_Switch/Prisoner.tla
+/// The single-switch prisoner puzzle from *Specifying Systems*.
+///
+/// A single scheduler process chooses the prisoner who enters the room. The
+/// model keeps the choice formal with `With`, so no host-language loop or UI
+/// policy decides who visits next.
+@TLAModel
+public struct PrisonerModel {
+    public enum Prisoner: String, CaseIterable, FiniteDomainKey {
+        case alice = "Alice"
+        case bob = "Bob"
+        case eve = "Eve"
+
+        public static let formalDomain = allCases
+        public static let formalTypeIdentity = FormalTypeIdentity(rawValue: "examples.prisoner.prisoner")
+
+        public var tlaValue: TLAValue { .string(rawValue) }
+    }
+
+    public enum Light: String, TLAValueType {
+        case off
+        case on
+    }
+
+    private enum Scheduler: String, CaseIterable, FiniteDomainKey {
+        case warden
+
+        static let formalDomain = allCases
+        static let formalTypeIdentity = FormalTypeIdentity(rawValue: "examples.prisoner.scheduler")
+
+        var tlaValue: TLAValue { .string(rawValue) }
+    }
+
+    private enum Step: String, PlusCalLabel {
+        case chooseVisitor
+    }
+
+    public static var spec: TLASpec {
+        #spec("Prisoner") {
+            Extends("Naturals")
+            Algorithm("Prisoner") {
+                let counter = SharedVar(initial: Prisoner.alice)
+                let count = SharedVar(initial: 1)
+                let announced = SharedVar(initial: false)
+                let signalled = SharedVar(initial: Function<Prisoner, Int>.literal(
+                    (.alice, 0), (.bob, 0), (.eve, 0)
+                ))
+                let light = SharedVar(initial: Light.off)
+                let hasVisited = SharedVar(initial: SetExpr<Prisoner>())
+
+                Each(Scheduler.all) { _ in
+                    Do(Step.chooseVisitor) {
+                        With(Prisoner.all) { prisoner in
+                            Either {
+                                When(counter == prisoner)
+                                Either {
+                                    When(light == Light.on)
+                                    Assign(light, to: Light.off)
+                                    Assign(count, to: count + 1)
+                                    Assign(announced, to: count + 1 >= 3)
+                                } or: {
+                                    Assign(announced, to: count >= 3)
+                                }
+                            } or: {
+                                Either {
+                                    When(counter != prisoner)
+                                    When(light == Light.off)
+                                    When(signalled[prisoner] < 1)
+                                    Assign(light, to: Light.on)
+                                    Assign(signalled, to: signalled.updating(prisoner) { value in value + 1 })
+                                } or: {
+                                    When(counter != prisoner)
+                                    When(!(light == Light.off && signalled[prisoner] < 1))
+                                }
+                            }
+                            Assign(hasVisited, to: hasVisited.inserting(prisoner))
+                            Assert(announced == false || hasVisited == SetExpr<Prisoner>.literal(.alice, .bob, .eve))
+                        }
+                        Goto(Step.chooseVisitor)
+                    }
+                }
+            }
+        }
+    }
+}
 
 extension Example {
-    static let prisonerN3 = Example.Entry(
+    public static let prisonerN3 = Entry(
         id: "Prisoners_Single_Switch/Prisoner",
         upstreamSpec: "Prisoners_Single_Switch",
         upstreamModule: "specifications/Prisoners_Single_Switch/Prisoner.tla",
         upstreamCfg: "specifications/Prisoners_Single_Switch/Prisoner.cfg",
         expectedDistinct: 16,
-        spec: prisonerSpec(),
-        notes: "N=3, Light_Unknown=FALSE. 3 initial counter choices via Variable(in:).",
+        spec: PrisonerModel.spec,
+        notes: "N=3, typed signalling function, visited set, and formal visitor choice. TLC = 16."
     )
-}
-
-private func prisonerSpec() -> TLASpec {
-    let prisoners: Set<TLAValue> = [.string("Alice"), .string("Bob"), .string("Eve")]
-    let lightUnknown: TLAValue = .bool(false)
-    let threshold: StateExpr = 3
-
-    let count = Var<Int>("count")
-    let announced = Var<Bool>("announced")
-    let signalled = Var<TLAValue>("signalled")
-    let light = Var<String>("light")
-    let hasVisited = Var<TLAValue>("has_visited")
-    let counter = Var<String>("counter")
-
-    let lightOff = StateExpr.value(.string("off"))
-    let lightOn = StateExpr.value(.string("on"))
-    let trueE = StateExpr.value(.bool(true))
-    let falseE = StateExpr.value(.bool(false))
-    let pSet = StateExpr.setLiteral(prisoners.map { StateExpr.value($0) })
-    let rng02 = StateExpr.set([StateExpr.value(.int(0)), .value(.int(1)), .value(.int(2))])
-
-    return TLASpec("Prisoner") {
-        Extends("Naturals")
-        Constant("Prisoner", TLAValue.set(prisoners))
-        Constant("Light_Unknown", lightUnknown)
-
-        Variable(counter, TLAValue.string("Alice"))
-        Variable(count, 1)
-        Variable(announced, false)
-        Variable(signalled, TLAValue.function([.string("Alice"): 0, .string("Bob"): 0, .string("Eve"): 0]))
-        Variable(light, TLAValue.string("off"))
-        Variable(hasVisited, TLAValue.set([]))
-
-        Invariant("TypeOK") {
-                                                let h = StateExpr.variable("has_visited")
-            let c = StateExpr.variable("count")
-            c >= 1 && c <= threshold + 1
-                && announced.stateExpr.isIn(StateExpr.set([trueE, falseE]))
-                && light.stateExpr.isIn(StateExpr.set([lightOff, lightOn]))
-                && h.isSubset(of: pSet)
-            for p in ["Alice", "Bob", "Eve"] {
-                signalled.stateExpr.applying(StateExpr.value(.string(p))).isIn(rng02)
-            }
-        }
-
-        Invariant("VictoryOK") {
-                        let h = StateExpr.variable("has_visited")
-            let a = StateExpr.variable("announced")
-            StateExpr.ifThenElse(a, StateExpr.equal(h, pSet), trueE)
-        }
-
-        Action("Warden") {
-            ActionExpr.exists("p", from: pSet) { p in
-                                                                                let hv = StateExpr.variable("has_visited")
-                let ct = StateExpr.variable("counter")
-                let cnt = StateExpr.variable("count")
-                let l = StateExpr.variable("light")
-                let isPct = StateExpr.equal(p, ct)
-
-                let lightOnAct: ActionExpr = .and(.assign("light", lightOff),
-                    .and(.assign("count", cnt + 1),
-                        .assign("announced", cnt + 1 >= threshold)))
-                let lightOffAct: ActionExpr = .and(.unchanged("light"),
-                    .and(.unchanged("count"),
-                        .assign("announced", cnt >= threshold)))
-                let counterBody: ActionExpr = .and(.guard_(isPct),
-                    .and(.or(.and(.guard_(StateExpr.equal(l, lightOn)), lightOnAct),
-                             .and(.guard_(StateExpr.notEqual(l, lightOn)), lightOffAct)),
-                        .unchanged("signalled")))
-
-                let sigAct: ActionExpr = .and(.assign("light", lightOn),
-                    .assign("signalled", signalled.stateExpr.updated(at: p, to: signalled.stateExpr.applying(p) + 1)))
-                let noSigAct: ActionExpr = .and(.unchanged("light"),
-                    .unchanged("signalled"))
-                let canSignal = StateExpr.equal(l, lightOff) && signalled.stateExpr.applying(p) < 1
-                let standardBody: ActionExpr = .and(.guard_(StateExpr.notEqual(p, ct)),
-                    .and(.or(.and(.guard_(canSignal), sigAct),
-                             .and(.guard_(StateExpr.not(canSignal)), noSigAct)),
-                        .and(.unchanged("count"),
-                            .unchanged("announced"))))
-
-                return .and(.or(counterBody, standardBody),
-                    .assign("has_visited", hv.union(StateExpr.singleton(p))))
-            }
-        }
-    }
 }

@@ -105,7 +105,7 @@ func actionInvocations(_ action: NamedAction) -> [(
     return binding.values.enumerated().flatMap { index, value in
       expand(
         position + 1, arguments + [value], indices + [index],
-        body.substituteVar(binding.name, with: value, in: body))
+        substituteVar(binding.name, with: value, in: body))
     }
   }
   return expand(0, [], [], action.body)
@@ -129,30 +129,44 @@ public struct NamedInvariant: Sendable, CustomStringConvertible, Equatable {
   public var description: String { "\(name): \(body)" }
 }
 public struct ParsedSpecModel: Equatable, Sendable {
-  public let variables: [(name: String, initial: TLAValue)]
+  /// The parsed declaration, including its finite initial domain when one was
+  /// authored. The domain is part of the formal initial predicate, not display
+  /// metadata, so fidelity checks must retain it.
+  public let variables: [(name: String, initial: TLAValue, initialSet: StateExpr?)]
   public let actions: [(name: String, body: ActionExpr, bindings: [ActionBinding])]
   public let invariants: [(name: String, body: StateExpr)]
+  public let temporal: [(name: String, expr: TemporalExpr)]
+  public let fairness: [FairnessCondition]
   public init(
-    variables: [(String, TLAValue)], actions: [(String, ActionExpr, [ActionBinding])],
-    invariants: [(String, StateExpr)]
+    variables: [(String, TLAValue, StateExpr?)], actions: [(String, ActionExpr, [ActionBinding])],
+    invariants: [(String, StateExpr)],
+    temporal: [(String, TemporalExpr)] = [],
+    fairness: [FairnessCondition] = []
   ) {
     self.variables = variables
     self.actions = actions
     self.invariants = invariants
+    self.temporal = temporal
+    self.fairness = fairness
   }
   public static func == (lhs: ParsedSpecModel, rhs: ParsedSpecModel) -> Bool {
     guard lhs.variables.count == rhs.variables.count,
       lhs.actions.count == rhs.actions.count,
-      lhs.invariants.count == rhs.invariants.count
+      lhs.invariants.count == rhs.invariants.count,
+      lhs.temporal.count == rhs.temporal.count,
+      lhs.fairness == rhs.fairness
     else { return false }
     for (a, b) in zip(lhs.variables, rhs.variables) {
-      if a.name != b.name || a.initial != b.initial { return false }
+      if a.name != b.name || a.initial != b.initial || a.initialSet != b.initialSet { return false }
     }
     for (a, b) in zip(lhs.actions, rhs.actions) {
       if a.name != b.name || a.body != b.body || a.bindings != b.bindings { return false }
     }
     for (a, b) in zip(lhs.invariants, rhs.invariants) {
       if a.name != b.name || a.body != b.body { return false }
+    }
+    for (a, b) in zip(lhs.temporal, rhs.temporal) {
+      if a.name != b.name || a.expr != b.expr { return false }
     }
     return true
   }

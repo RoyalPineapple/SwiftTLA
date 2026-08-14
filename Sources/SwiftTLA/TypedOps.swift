@@ -78,11 +78,56 @@ extension Var where T == String {
 // MARK: - Free-floating
 
 extension Expr where T == Bool {
+    public static prefix func !(_ value: Expr<Bool>) -> Expr<Bool> {
+        Expr(.not(value.raw))
+    }
+
     public static func ifThenElse(_ cond: some StateExprConvertible, _ then: Bool, _ else: Var<Bool>) -> Expr {
         Expr(.ifThenElse(cond.stateExpr, .value(.bool(then)), `else`.stateExpr))
     }
     public static func ifThenElse(_ cond: some StateExprConvertible, _ then: StateExpr, _ else: StateExpr) -> Expr {
         Expr(.ifThenElse(cond.stateExpr, then, `else`))
+    }
+}
+
+extension Expr {
+    /// Builds a typed formal conditional without leaving the typed DSL.
+    public static func ifThenElse(
+        _ condition: some StateExprConvertible,
+        then: T,
+        else otherwise: T
+    ) -> Expr<T> {
+        Expr<T>(.ifThenElse(
+            condition.stateExpr,
+            .value(then.tlaValue),
+            .value(otherwise.tlaValue)
+        ))
+    }
+
+    /// Builds a typed conditional when one branch is already a formal expression.
+    public static func ifThenElse(
+        _ condition: some StateExprConvertible,
+        then: T,
+        else otherwise: Expr<T>
+    ) -> Expr<T> {
+        Expr<T>(.ifThenElse(
+            condition.stateExpr,
+            .value(then.tlaValue),
+            otherwise.raw
+        ))
+    }
+
+    /// Builds a typed conditional when one branch is already a formal expression.
+    public static func ifThenElse(
+        _ condition: some StateExprConvertible,
+        then: Expr<T>,
+        else otherwise: T
+    ) -> Expr<T> {
+        Expr<T>(.ifThenElse(
+            condition.stateExpr,
+            then.raw,
+            .value(otherwise.tlaValue)
+        ))
     }
 }
 
@@ -93,6 +138,8 @@ extension Expr where T == String {
 }
 
 public func +(_ lhs: Expr<Int>, _ rhs: Int) -> Expr<Int> { Expr(.add(lhs.raw, .int(rhs))) }
+public func -(_ lhs: Expr<Int>, _ rhs: Int) -> Expr<Int> { Expr(.subtract(lhs.raw, .int(rhs))) }
 public func -(_ lhs: Int, _ rhs: Var<Int>) -> Expr<Int> { Expr(.subtract(.int(lhs), rhs.stateExpr)) }
+public func -(_ lhs: Int, _ rhs: Expr<Int>) -> Expr<Int> { Expr(.subtract(.int(lhs), rhs.raw)) }
 public func +(_ lhs: Expr<Int>, _ rhs: Var<Int>) -> Expr<Int> { Expr(.add(lhs.raw, rhs.stateExpr)) }
 public func %(_ lhs: Expr<Int>, _ rhs: Int) -> Expr<Int> { Expr(.modulo(lhs.raw, .int(rhs))) }

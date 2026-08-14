@@ -9,7 +9,7 @@ func runGeneratedMachineTesting() async throws {
     let beforeFailure = machine.state
 
     assert(initial.projection != nil)
-    assert(initial.availableInvocations == [.init(name: "advance")])
+    assert(initial.availableInvocations == [.init(name: "advance", arguments: [.string("only")])])
     assert(result.after.value == 1)
 
     do {

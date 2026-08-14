@@ -375,14 +375,3 @@ public func CollectionAction<Element: Identifiable, Value: TLAValueType>(
   let token = SymmetricMember<Element>(owner: collection.name, binding: .variable(member))
   return ActionDecl(name, .existsAction(member, collection.memberDomain, body(token)))
 }
-
-@discardableResult
-public func CollectionAction<K: Identifiable, V: TLAValueType>(
-  _ name: String,
-  on collection: DictionaryVar<K, V>,
-  @ActionBuilder _ body: (DictMember<K>) -> ActionExpr
-) -> ActionDecl {
-  let mv = FreshVarName.fresh()
-  let token = DictMember<K>(key: StateExpr.variable(mv))
-  return ActionDecl(name, .existsAction(mv, .domain(.variable(collection.name)), body(token)))
-}

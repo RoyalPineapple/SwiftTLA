@@ -1,4 +1,79 @@
 import SwiftTLA
+import SwiftTLAMacros
+
+/// Lamport's transaction-commit protocol over three resource managers.
+///
+/// The resource-manager state is one finite, typed formal function. The three
+/// parameterized actions retain the upstream transition relation without
+/// manufacturing a separate action for each manager in Swift.
+@TLAModel
+public struct TCommitModel {
+    public enum ResourceManager: String, CaseIterable, FiniteDomainKey {
+        case one = "r1"
+        case two = "r2"
+        case three = "r3"
+
+        public static let formalDomain = allCases
+        public static let formalTypeIdentity = FormalTypeIdentity(rawValue: "examples.tcommit.resourceManager")
+
+        public var tlaValue: TLAValue { .string(rawValue) }
+    }
+
+    public enum ManagerState: String, TLAValueType {
+        case working
+        case prepared
+        case committed
+        case aborted
+    }
+
+    private enum Step: String, PlusCalLabel {
+        case operate
+    }
+
+    public static var spec: TLASpec {
+        #spec("TCommit") {
+            Extends("Integers")
+            let rmState = SharedVar(initial: Function<ResourceManager, ManagerState>.literal(
+                (.one, .working), (.two, .working), (.three, .working)
+            ))
+
+            Algorithm("TCommit") {
+                Each(ResourceManager.all) { rm in
+                    Do(Step.operate) {
+                        Either {
+                            When(rmState[rm] == .working)
+                            Assign(rmState, to: rmState.updating(rm, to: .prepared))
+                        } or: {
+                            Either {
+                                When(rmState[rm] == .prepared)
+                                When(rmState[.one] == .prepared || rmState[.one] == .committed)
+                                When(rmState[.two] == .prepared || rmState[.two] == .committed)
+                                When(rmState[.three] == .prepared || rmState[.three] == .committed)
+                                Assign(rmState, to: rmState.updating(rm, to: .committed))
+                            } or: {
+                                When(rmState[rm] == .working || rmState[rm] == .prepared)
+                                When(rmState[.one] != .committed)
+                                When(rmState[.two] != .committed)
+                                When(rmState[.three] != .committed)
+                                Assign(rmState, to: rmState.updating(rm, to: .aborted))
+                            }
+                        }
+                        Goto(Step.operate)
+                    }
+                }
+            }
+
+            Invariant("TCConsistent") {
+                !(rmState[.one] == .aborted && rmState[.two] == .committed)
+                    && !(rmState[.one] == .aborted && rmState[.three] == .committed)
+                    && !(rmState[.two] == .aborted && rmState[.one] == .committed)
+                    && !(rmState[.two] == .aborted && rmState[.three] == .committed)
+                    && !(rmState[.three] == .aborted && rmState[.one] == .committed)
+                    && !(rmState[.three] == .aborted && rmState[.two] == .committed)
+            }
+        }
+    }
+}
 
 extension Example {
     public static let tCommit = Entry(
@@ -7,58 +82,7 @@ extension Example {
         upstreamModule: "specifications/transaction_commit/TCommit.tla",
         upstreamCfg: "specifications/transaction_commit/TCommit.cfg",
         expectedDistinct: 34,
-        spec: tCommitSpec(),
-        notes: "Lamport TCommit. SPECIFICATION TCSpec. TLC = 34.",
+        spec: TCommitModel.spec,
+        notes: "Lamport TCommit. Typed resource-manager function and parameterized actions. TLC = 34."
     )
-
-static func tCommitSpec() -> TLASpec {
-        let rms = ["r1", "r2", "r3"]
-        let rmState = Var<TLAValue>("rmState")
-        let initFun = TLAValue.function(Dictionary(uniqueKeysWithValues: rms.map {
-            (.string($0), .string("working"))
-        }))
-        func st(_ rm: String) -> StateExpr {
-            .functionApply(.variable("rmState"), .value(.string(rm)))
-        }
-        func isPreparedOrCommitted(_ rm: String) -> StateExpr {
-            st(rm) == "prepared" || st(rm) == "committed"
-        }
-        func noResourceManagerHasCommitted() -> StateExpr {
-            st("r1") != "committed" && st("r2") != "committed" && st("r3") != "committed"
-        }
-        func abortAndCommitAreMutuallyExclusive(_ aborted: String, _ committed: String) -> StateExpr {
-            !(st(aborted) == "aborted" && st(committed) == "committed")
-        }
-        return TLASpec("TCommit") {
-            Extends("Integers")
-            Variable(rmState, initFun)
-            for rm in rms {
-                Action("Prepare_\(rm)") {
-                    st(rm) == "working"
-                        && .assign(rmState.name, rmState.stateExpr.updated(at: rm, to: "prepared"))
-                }
-                Action("Commit_\(rm)") {
-                    st(rm) == "prepared"
-                        && isPreparedOrCommitted("r1")
-                        && isPreparedOrCommitted("r2")
-                        && isPreparedOrCommitted("r3")
-                        && .assign(rmState.name, rmState.stateExpr.updated(at: rm, to: "committed"))
-                }
-                Action("Abort_\(rm)") {
-                    (st(rm) == "working" || st(rm) == "prepared")
-                        && noResourceManagerHasCommitted()
-                        && .assign(rmState.name, rmState.stateExpr.updated(at: rm, to: "aborted"))
-                }
-            }
-            Invariant("TCConsistent") {
-                abortAndCommitAreMutuallyExclusive("r1", "r2")
-                    && abortAndCommitAreMutuallyExclusive("r1", "r3")
-                    && abortAndCommitAreMutuallyExclusive("r2", "r1")
-                    && abortAndCommitAreMutuallyExclusive("r2", "r3")
-                    && abortAndCommitAreMutuallyExclusive("r3", "r1")
-                    && abortAndCommitAreMutuallyExclusive("r3", "r2")
-            }
-        }
-    }
-
 }

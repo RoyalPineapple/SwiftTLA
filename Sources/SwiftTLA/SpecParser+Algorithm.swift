@@ -21,16 +21,23 @@ extension SpecParser {
 
         var components: [AlgorithmComponentModel] = []
         for statement in closure.statements {
+            if case .decl(let declaration) = statement.item,
+               let variable = declaration.as(VariableDeclSyntax.self),
+               let component = parseAlgorithmVariableDeclaration(variable, expectedKind: "SharedVar") {
+                components.append(component)
+                continue
+            }
             guard case .expr(let expression) = statement.item else {
                 result.diagnostics.append(.init(
-                    message: "Unsupported Algorithm declaration. Supported declarations are Shared and Each.",
+                    message: "Unsupported Algorithm declaration '\(statement.description.trimmingCharacters(in: .whitespacesAndNewlines))'. Supported declarations are SharedVar and Each.",
                     source: statement
                 ))
                 return
             }
             guard let component = parseAlgorithmComponent(expression) else {
+                let detail = algorithmParseFailure.map { " \($0)" } ?? ""
                 result.diagnostics.append(.init(
-                    message: "Unsupported Algorithm declaration. Supported declarations are Shared and Each.",
+                    message: "Unsupported Algorithm declaration '\(expression.description.trimmingCharacters(in: .whitespacesAndNewlines))'. Supported declarations are SharedVar and Each.\(detail)",
                     source: expression
                 ))
                 return
@@ -49,11 +56,32 @@ extension SpecParser {
         }
 
         let lowered = AlgorithmLowerer.lower(model)
+        let stateTypes = Dictionary(uniqueKeysWithValues: algorithmStateDeclarations(in: model).compactMap { state in
+            state.swiftTypeName.map { (state.root, $0) }
+        })
+        let localRoots: Set<String> = Set(model.processes.flatMap { process in
+            process.components.compactMap {
+                guard case .local(let state) = $0 else { return nil }
+                return state.root
+            }
+        })
         for variable in lowered.variables {
             if let index = result.variables.firstIndex(where: { $0.name == variable.name }) {
                 result.variables[index] = (variable.name, variable.initial, variable.initialSet, result.variables[index].swiftTypeName)
             } else {
-                result.variables.append((variable.name, variable.initial, variable.initialSet, nil))
+                let inferredType = stateTypes[variable.name]
+                let projectedType: String?
+                if localRoots.contains(variable.name) {
+                    projectedType = "TLAValue"
+                } else {
+                    projectedType = inferredType
+                }
+                result.variables.append((
+                    variable.name,
+                    variable.initial,
+                    variable.initialSet,
+                    projectedType
+                ))
             }
         }
         let processTypes = Dictionary(uniqueKeysWithValues: model.processes.map { process in
@@ -71,7 +99,22 @@ extension SpecParser {
             )
         }
         result.invariants += lowered.invariants.map { ($0.name, $0.body) }
+        result.temporal += lowered.temporalProperties.map { ($0.name, $0.expr) }
         result.fairness += lowered.fairness
+    }
+
+    private static func algorithmStateDeclarations(in model: AlgorithmModel) -> [AlgorithmStateModel] {
+        model.components.flatMap { component in
+            switch component {
+            case .shared(let state): return [state]
+            case .process(let process):
+                return process.components.compactMap {
+                    guard case .local(let state) = $0 else { return nil }
+                    return state
+                }
+            default: return []
+            }
+        }
     }
 
     private static func parseAlgorithmComponent(_ expression: ExprSyntax) -> AlgorithmComponentModel? {
@@ -80,29 +123,100 @@ extension SpecParser {
         else { return nil }
 
         switch name {
-        case "Shared":
-            guard let reference = call.arguments.first?.expression.as(DeclReferenceExprSyntax.self)?.baseName.text,
-                  let initialSyntax = call.arguments.first(where: { $0.label?.text == "initial" })?.expression,
-                  let initial = literalAlgorithmValue(initialSyntax)
-            else { return nil }
-            return .shared(.init(root: reference, initial: initial))
         case "Each":
-            return parseEach(call)
+            let component = parseEach(call)
+            if component == nil, algorithmParseFailure == nil {
+                algorithmParseFailure = "Each requires a finite enum domain and a decodable process body."
+            }
+            return component
+        case "Invariant":
+            guard let invariant = parseAlgorithmInvariant(call) else { return nil }
+            return .invariant(invariant)
+        case "LeadsTo", "Eventually", "Always", "AlwaysEventually", "EventuallyAlways":
+            guard let temporal = parseAlgorithmTemporal(call, named: name) else { return nil }
+            return .temporal(temporal)
+        case "WeakFairness", "StrongFairness":
+            guard let fairness = decodeFairness(call) else { return nil }
+            return .fairness(fairness)
         default:
             return nil
         }
+    }
+
+    private static func parseAlgorithmTemporal(
+        _ call: FunctionCallExprSyntax,
+        named kind: String
+    ) -> NamedTemporal? {
+        guard let name = extractStringArg(call, index: 0) else { return nil }
+        let arguments = Array(call.arguments).map(\.expression)
+        let expression: TemporalExpr?
+        switch kind {
+        case "LeadsTo":
+            guard arguments.count == 3,
+                  let from = decodeStateExpr(arguments[1]),
+                  let to = decodeStateExpr(arguments[2])
+            else { return nil }
+            expression = .leadsTo(from, to)
+        case "Eventually":
+            expression = arguments.count == 2 ? decodeStateExpr(arguments[1]).map(TemporalExpr.eventually) : nil
+        case "Always":
+            expression = arguments.count == 2 ? decodeStateExpr(arguments[1]).map(TemporalExpr.always) : nil
+        case "AlwaysEventually":
+            expression = arguments.count == 2 ? decodeStateExpr(arguments[1]).map(TemporalExpr.alwaysEventually) : nil
+        case "EventuallyAlways":
+            expression = arguments.count == 2 ? decodeStateExpr(arguments[1]).map(TemporalExpr.eventuallyAlways) : nil
+        default:
+            expression = nil
+        }
+        return expression.map { .init(name: name, expr: $0) }
+    }
+
+    private static func parseAlgorithmInvariant(
+        _ call: FunctionCallExprSyntax
+    ) -> NamedInvariant? {
+        guard let name = extractStringArg(call, index: 0),
+              let closure = call.trailingClosure
+        else { return nil }
+
+        var expressions: [StateExpr] = []
+        for (index, statement) in closure.statements.enumerated() {
+            guard case .expr(let expression) = statement.item else {
+                algorithmParseFailure = "Invariant '\(name)' statement \(index + 1) is not a formal expression."
+                return nil
+            }
+            guard let decoded = decodeStateExpr(expression) else {
+                algorithmParseFailure = "Invariant '\(name)' statement \(index + 1) could not be decoded: '\(expression.description.trimmingCharacters(in: .whitespacesAndNewlines))'."
+                return nil
+            }
+            expressions.append(decoded)
+        }
+        guard !expressions.isEmpty else { return nil }
+        let body = expressions.dropFirst().reduce(expressions[0], StateExpr.and)
+        return .init(name: name, body: body)
     }
 
     private static func parseEach(_ call: FunctionCallExprSyntax) -> AlgorithmComponentModel? {
         guard let domainSyntax = call.arguments.first?.expression,
               let domain = finiteAlgorithmDomain(domainSyntax),
               let closure = call.trailingClosure
-        else { return nil }
+        else {
+            algorithmParseFailure = "Each could not resolve its finite domain."
+            return nil
+        }
         let parameter = closureParameterNames(in: closure).first ?? "__pcal_self"
         var components: [AlgorithmComponentModel] = []
-        for statement in closure.statements {
+        for (index, statement) in closure.statements.enumerated() {
+            if case .decl(let declaration) = statement.item,
+               let variable = declaration.as(VariableDeclSyntax.self),
+               let component = parseAlgorithmVariableDeclaration(variable, expectedKind: "LocalVar") {
+                components.append(component)
+                continue
+            }
             guard case .expr(let expression) = statement.item else { return nil }
             guard let component = parseEachComponent(expression, processParameter: parameter) else {
+                if algorithmParseFailure == nil {
+                    algorithmParseFailure = "Process component \(index + 1) could not be decoded: '\(expression.description.trimmingCharacters(in: .whitespacesAndNewlines))'."
+                }
                 return nil
             }
             components.append(component)
@@ -122,6 +236,69 @@ extension SpecParser {
         return .process(.init(typeName: domain.typeName, domain: domain.values, fairness: fairness, components: components))
     }
 
+    /// Parses the declaration spelling used by the public PlusCal-shaped DSL.
+    /// The runtime builder receives the same declaration through `#spec`'s
+    /// registration rewrite; this parser deliberately does its own decoding.
+    private static func parseAlgorithmVariableDeclaration(
+        _ declaration: VariableDeclSyntax,
+        expectedKind: String
+    ) -> AlgorithmComponentModel? {
+        guard declaration.bindings.count == 1,
+              let binding = declaration.bindings.first,
+              let declaredName = binding.pattern.as(IdentifierPatternSyntax.self)?.identifier.text,
+              let initializer = binding.initializer?.value.as(FunctionCallExprSyntax.self),
+              initializer.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == expectedKind
+        else { return nil }
+
+        if let literalName = extractStringArg(initializer, index: 0), literalName != declaredName {
+            return nil
+        }
+
+        let state: AlgorithmStateModel
+        if let initialSyntax = initializer.arguments.first(where: { $0.label?.text == "initial" })?.expression,
+           let initial = decodeStateExpr(initialSyntax) {
+            state = AlgorithmStateModel(
+                root: declaredName,
+                initial: initial,
+                swiftTypeName: algorithmInitialTypeName(initialSyntax)
+            )
+        } else if expectedKind == "SharedVar",
+                  let rangeSyntax = initializer.arguments.first(where: { $0.label?.text == "in" })?.expression,
+                  let range = parseIntegerClosedRange(rangeSyntax) {
+            state = AlgorithmStateModel(
+                root: declaredName,
+                initial: .value(.int(range.lowerBound)),
+                initialSet: .setLiteral(range.map { .value(.int($0)) }),
+                swiftTypeName: "Int"
+            )
+        } else if expectedKind == "SharedVar",
+                  let setSyntax = initializer.arguments.first(where: { $0.label?.text == "in" })?.expression,
+                  let initialSet = decodeStateExpr(setSyntax),
+                  case .setLiteral(let elements) = initialSet,
+                  let initial = elements.first,
+                  let typeName = setExpressionElementTypeName(setSyntax) {
+            state = AlgorithmStateModel(
+                root: declaredName,
+                initial: initial,
+                initialSet: initialSet,
+                swiftTypeName: typeName
+            )
+        } else {
+            return nil
+        }
+        return expectedKind == "SharedVar" ? .shared(state) : .local(state)
+    }
+
+    private static func algorithmInitialTypeName(_ expression: ExprSyntax) -> String? {
+        if let call = expression.as(FunctionCallExprSyntax.self),
+           let member = call.calledExpression.as(MemberAccessExprSyntax.self),
+           member.declName.baseName.text == "literal",
+           let base = member.base {
+            return base.description.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        return initialValueTypeName(from: expression)
+    }
+
     private static func parseEachComponent(
         _ expression: ExprSyntax,
         processParameter: String
@@ -131,12 +308,6 @@ extension SpecParser {
         else { return nil }
 
         switch name {
-        case "Local":
-            guard let reference = call.arguments.first?.expression.as(DeclReferenceExprSyntax.self)?.baseName.text,
-                  let initialSyntax = call.arguments.first(where: { $0.label?.text == "initial" })?.expression,
-                  let initial = literalAlgorithmValue(initialSyntax)
-            else { return nil }
-            return .local(.init(root: reference, initial: initial))
         case "Do", "While":
             guard let label = algorithmLabel(call.arguments.first?.expression),
                   let closure = call.trailingClosure,
@@ -162,10 +333,15 @@ extension SpecParser {
         processParameter: String
     ) -> [AlgorithmStatementModel]? {
         var result: [AlgorithmStatementModel] = []
-        for statement in statements {
+        for (index, statement) in statements.enumerated() {
             guard case .expr(let expression) = statement.item,
                   let parsed = parseAlgorithmStatement(expression, processParameter: processParameter)
-            else { return nil }
+            else {
+                if algorithmParseFailure == nil {
+                    algorithmParseFailure = "Statement \(index + 1) could not be decoded: '\(statement.description.trimmingCharacters(in: .whitespacesAndNewlines))'."
+                }
+                return nil
+            }
             result.append(parsed)
         }
         return result
@@ -201,6 +377,8 @@ extension SpecParser {
             return .goto(.init(name: label))
         case "Stop":
             return .stop
+        case "Skip":
+            return .skip
         case "If":
             guard let conditionSyntax = call.arguments.first?.expression,
                   let condition = decodeStateExpr(conditionSyntax),
@@ -208,11 +386,13 @@ extension SpecParser {
                   let then = parseAlgorithmStatements(thenClosure.statements, processParameter: processParameter)
             else { return nil }
             let elseClosure = call.additionalTrailingClosures.first?.closure
+                ?? call.arguments.first(where: { $0.label?.text == "else" })?.expression.as(ClosureExprSyntax.self)
             let otherwise = elseClosure.flatMap { parseAlgorithmStatements($0.statements, processParameter: processParameter) } ?? []
             return .ifElse(replacingProcessParameter(in: condition, named: processParameter), then, otherwise)
         case "Either":
             guard let first = call.trailingClosure.flatMap({ parseAlgorithmStatements($0.statements, processParameter: processParameter) }),
-                  let secondClosure = call.additionalTrailingClosures.first?.closure,
+                  let secondClosure = call.additionalTrailingClosures.first?.closure
+                    ?? call.arguments.first(where: { $0.label?.text == "or" })?.expression.as(ClosureExprSyntax.self),
                   let second = parseAlgorithmStatements(secondClosure.statements, processParameter: processParameter)
             else { return nil }
             return .either(first, second)
@@ -273,13 +453,6 @@ extension SpecParser {
         }
         if let reference = expression.as(DeclReferenceExprSyntax.self) {
             return reference.baseName.text
-        }
-        return nil
-    }
-
-    private static func literalAlgorithmValue(_ expression: ExprSyntax) -> TLAValue? {
-        if let decoded = decodeStateExpr(expression), case .value(let value) = decoded {
-            return value
         }
         return nil
     }

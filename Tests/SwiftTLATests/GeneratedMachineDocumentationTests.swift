@@ -141,7 +141,7 @@ struct GeneratedMachineDocumentationTests {
         "`TLAMachineAdapterAccess`",
         "`execute(_ invocation: TLAActionInvocation)`",
         "nested `@TLAObservable` adapter is main-actor isolated",
-        "standalone `@TLAObservable` declaration",
+        "Neither adapter owns a formal specification",
         "then awaits the matching callback",
         "Generated `VerificationError`",
         "Generated `runtime`",

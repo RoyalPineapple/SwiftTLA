@@ -16,7 +16,8 @@ build:
 	swift build
 
 examples:
-	swift build --package-path Examples
+	swift test --package-path Examples/SwiftTLADemos
+	swift build --package-path Examples/SwiftTLADemoApp
 
 core-conformance:
 	./scripts/run_core_conformance.sh --case all --output .build/core-conformance-evidence

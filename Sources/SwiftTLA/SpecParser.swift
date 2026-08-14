@@ -1,6 +1,7 @@
 import SwiftSyntax
 import SwiftParser
 import SwiftBasicFormat
+import Foundation
 
 /// Parses SwiftSyntax AST nodes into DSL types (StateExpr, ActionExpr, etc.).
 /// Every AST pattern maps deterministically to a DSL value.
@@ -14,10 +15,27 @@ public enum SpecParser {
     nonisolated(unsafe) static var _enumPhases: [String: [String: TLAValue]] = [:]
 
     nonisolated(unsafe) static var _enumDomains: [String: [TLAValue]] = [:]
+    nonisolated(unsafe) static var algorithmParseFailure: String?
+
+    /// The parser carries enum information while it decodes one macro body.
+    /// Macro expansion is concurrent, so one parse must not overwrite another
+    /// parse's enum context.
+    static let parseContextLock = NSLock()
 
     // MARK: - Compact expression decoder
 
     public static func decodeStateExpr(_ expression: ExprSyntax) -> StateExpr? {
+        // Empty typed formal values are ordinary initializers in the Swift
+        // surface. Decode them directly so the source parser and runtime
+        // builder agree on the same collection-shaped initial state.
+        if let call = expression.as(FunctionCallExprSyntax.self),
+           call.arguments.isEmpty,
+           call.trailingClosure == nil {
+            let constructor = call.calledExpression.description
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            if constructor.hasPrefix("SetExpr<") { return .value(.set([])) }
+            if constructor.hasPrefix("TupleExpr<") { return .value(.tuple([])) }
+        }
         if let typedFacadeExpr = decodeTypedFacadeExpr(expression, substitutions: [:]) {
             return typedFacadeExpr
         }
@@ -45,6 +63,7 @@ public enum SpecParser {
            let selfExpr = decodeStateExpr(base) {
             let propName = memberAccess.declName.baseName.text
             switch propName {
+            case "expr": return selfExpr
             case "cardinality": return .cardinality(selfExpr)
             case "flattened": return .unionAll(selfExpr)
             case "subsets": return .powerSet(selfExpr)
@@ -122,10 +141,66 @@ public enum SpecParser {
             }
         }
 
-        guard access.declName.baseName.text == "updating",
-              let baseSyntax = access.base,
-              let base = decodeTypedFacadeValue(baseSyntax, substitutions: substitutions),
-              let selectorSyntax = call.arguments.first?.expression,
+        if access.declName.baseName.text == "mapping",
+           let literalType = typedLiteralType(access.base),
+           literalType.name == "Function",
+           let domainType = literalType.arguments.first,
+           let domain = _enumDomains[domainType],
+           let closure = call.trailingClosure,
+           let parameter = closureParameterNames(in: closure).first,
+           closure.statements.count == 1,
+           case .expr(let bodySyntax) = closure.statements.first?.item,
+           let body = decodeTypedFacadeValue(
+                bodySyntax,
+                substitutions: [parameter: .variable("__pcal_function_key")]
+           ) {
+            return .functionLiteral(
+                .setLiteral(domain.map(StateExpr.value)),
+                "__pcal_function_key",
+                body
+            )
+        }
+
+        if access.declName.baseName.text == "ifThenElse",
+           let base = access.base,
+           base.description.trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix("Expr<"),
+           let conditionSyntax = call.arguments.first?.expression,
+           let thenSyntax = call.arguments.first(where: { $0.label?.text == "then" })?.expression,
+           let elseSyntax = call.arguments.first(where: { $0.label?.text == "else" })?.expression,
+           let condition = decodeTypedFacadeValue(conditionSyntax, substitutions: substitutions),
+           let thenValue = decodeTypedFacadeValue(thenSyntax, substitutions: substitutions),
+           let elseValue = decodeTypedFacadeValue(elseSyntax, substitutions: substitutions) {
+            return .ifThenElse(condition, thenValue, elseValue)
+        }
+
+        // Swift infers `Record<Schema>` from a surrounding `SetExpr` or
+        // `Function` literal, so the source spelling may be `Record.literal`.
+        // Its field entries retain enough syntax to decode independently.
+        if access.declName.baseName.text == "literal",
+           access.base?.as(DeclReferenceExprSyntax.self)?.baseName.text == "Record" {
+            return decodeTypedRecordLiteral(call, substitutions: substitutions)
+        }
+
+        guard let baseSyntax = access.base,
+              let base = decodeTypedFacadeValue(baseSyntax, substitutions: substitutions)
+        else { return nil }
+
+        switch access.declName.baseName.text {
+        case "inserting", "removing":
+            guard let elementSyntax = call.arguments.first?.expression,
+                  let element = decodeTypedFacadeValue(elementSyntax, substitutions: substitutions)
+            else { return nil }
+            let singleton = StateExpr.setLiteral([element])
+            return access.declName.baseName.text == "inserting"
+                ? .union(base, singleton)
+                : .setDifference(base, singleton)
+        case "updating":
+            break
+        default:
+            return nil
+        }
+
+        guard let selectorSyntax = call.arguments.first?.expression,
               let selector = typedUpdateSelector(selectorSyntax, substitutions: substitutions)
         else { return nil }
 
@@ -155,7 +230,15 @@ public enum SpecParser {
         _ expression: ExprSyntax,
         substitutions: [String: StateExpr]
     ) -> StateExpr? {
-        decodeTypedFacadeExpr(expression, substitutions: substitutions) ?? decodeStateExpr(expression)
+        // A typed function selector can be an explicit finite-domain enum
+        // case (for example, `Process.p0`). Resolve it before the typed
+        // facade treats member access as a record field or a property.
+        if let member = expression.as(MemberAccessExprSyntax.self),
+           let type = member.base?.as(DeclReferenceExprSyntax.self)?.baseName.text,
+           let value = _enumPhases[type]?[member.declName.baseName.text] {
+            return .value(value)
+        }
+        return decodeTypedFacadeExpr(expression, substitutions: substitutions) ?? decodeStateExpr(expression)
     }
 
     static func typedUpdateSelector(

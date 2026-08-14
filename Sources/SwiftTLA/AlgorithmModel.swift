@@ -13,6 +13,9 @@ internal struct AlgorithmModel: Sendable {
 internal indirect enum AlgorithmComponentModel: Sendable {
     case shared(AlgorithmStateModel)
     case process(AlgorithmProcessModel)
+    case invariant(NamedInvariant)
+    case temporal(NamedTemporal)
+    case fairness(FairnessCondition)
     case local(AlgorithmStateModel)
     case step(AlgorithmStepModel)
     case propertyBoundary
@@ -40,7 +43,21 @@ internal enum AlgorithmFairness: Sendable {
 
 internal struct AlgorithmStateModel: Sendable {
     let root: String
-    let initial: TLAValue
+    let initial: StateExpr
+    let initialSet: StateExpr?
+    let swiftTypeName: String?
+
+    init(
+        root: String,
+        initial: StateExpr,
+        initialSet: StateExpr? = nil,
+        swiftTypeName: String? = nil
+    ) {
+        self.root = root
+        self.initial = initial
+        self.initialSet = initialSet
+        self.swiftTypeName = swiftTypeName
+    }
 }
 
 internal struct AlgorithmStepModel: Sendable {

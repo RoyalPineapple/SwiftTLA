@@ -28,6 +28,8 @@ struct ParsedMacroModel {
     let enumInfos: [ParsedEnumInfo]
     let hasInvariants: Bool
     let invariants: [(String, StateExpr)]
+    let temporal: [(String, TemporalExpr)]
+    let fairness: [FairnessCondition]
 }
 
 enum NestedAdapterModelRegistry {
@@ -155,7 +157,8 @@ enum TLASpecVerifier {
         return ParsedMacroModel(
             typeName: typeName, variables: parsed.variables, actions: parsed.actions,
             symmetricCollections: parsed.symmetricCollections, collectionActions: parsed.collectionActions,
-            enumInfos: enumInfos, hasInvariants: hasInvs, invariants: parsed.invariants
+            enumInfos: enumInfos, hasInvariants: hasInvs, invariants: parsed.invariants,
+            temporal: parsed.temporal, fairness: parsed.fairness
         )
     }
 
@@ -382,11 +385,7 @@ enum TLASpecVerifier {
                         if let returnStmt = stmt.item.as(ReturnStmtSyntax.self) { return returnStmt.expression }
                         return nil
                     }()
-                    if let e = expr,
-                       let fc = e.as(FunctionCallExprSyntax.self),
-                       fc.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "TLASpec" {
-                        return fc.trailingClosure ?? fc.arguments.last?.expression.as(ClosureExprSyntax.self)
-                    }
+                    if let closure = specBuilderClosure(from: expr) { return closure }
                 }
             }
             if let accessors = binding.accessorBlock?.accessors.as(AccessorDeclListSyntax.self) {
@@ -397,14 +396,23 @@ enum TLASpecVerifier {
                             if let returnStmt = stmt.item.as(ReturnStmtSyntax.self) { return returnStmt.expression }
                             return nil
                         }()
-                        if let e = expr,
-                           let fc = e.as(FunctionCallExprSyntax.self),
-                           fc.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "TLASpec" {
-                            return fc.trailingClosure ?? fc.arguments.last?.expression.as(ClosureExprSyntax.self)
-                        }
+                        if let closure = specBuilderClosure(from: expr) { return closure }
                     }
                 }
             }
+        }
+        return nil
+    }
+
+    private static func specBuilderClosure(from expression: ExprSyntax?) -> ClosureExprSyntax? {
+        guard let expression else { return nil }
+        if let call = expression.as(FunctionCallExprSyntax.self),
+           call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "TLASpec" {
+            return call.trailingClosure ?? call.arguments.last?.expression.as(ClosureExprSyntax.self)
+        }
+        if let macro = expression.as(MacroExpansionExprSyntax.self),
+           macro.macroName.text == "spec" {
+            return macro.trailingClosure
         }
         return nil
     }
@@ -555,6 +563,13 @@ struct SimpleError: Error, CustomStringConvertible {
 
 // MARK: - Macros
 
+private func hasZeroArgumentInitializer(in declaration: some DeclGroupSyntax) -> Bool {
+    declaration.memberBlock.members.contains { member in
+        guard let initializer = member.decl.as(InitializerDeclSyntax.self) else { return false }
+        return initializer.signature.parameterClause.parameters.isEmpty
+    }
+}
+
 public struct ModelMacro: MemberMacro, ExtensionMacro {
     public static func expansion(of node: AttributeSyntax, attachedTo declaration: some DeclGroupSyntax, providingExtensionsOf type: some TypeSyntaxProtocol, conformingTo protocols: [TypeSyntax], in context: some MacroExpansionContext) throws -> [ExtensionDeclSyntax] {
         guard diagnoseStoredInstanceState(in: declaration, context: context) == false else {
@@ -575,7 +590,11 @@ public struct ModelMacro: MemberMacro, ExtensionMacro {
             return []
         }
         NestedAdapterModelRegistry.record(parsed)
-        return MacroExpander.generate(mode: .model, model: parsed)
+        return MacroExpander.generate(
+            mode: .model,
+            model: parsed,
+            needsPublicInitializer: !hasZeroArgumentInitializer(in: declaration)
+        )
     }
 }
 
@@ -589,13 +608,7 @@ public struct TLAActorMacro: MemberMacro, ExtensionMacro {
             return [ext]
         case .invalid:
             return []
-        case .standalone:
-            break
         }
-        guard let ext = ("""
-            extension \(type.trimmed): TLAModelType {}
-            """ as DeclSyntax).as(ExtensionDeclSyntax.self) else { return [] }
-        return [ext]
     }
 
     public static func expansion(of node: AttributeSyntax, providingMembersOf declaration: some DeclGroupSyntax, in context: some MacroExpansionContext) throws -> [DeclSyntax] {
@@ -610,21 +623,12 @@ public struct TLAActorMacro: MemberMacro, ExtensionMacro {
             }
             return MacroExpander.generateNestedAdapterMembers(
                 kind: .actor,
-                canonicalModel: parsed
+                canonicalModel: parsed,
+                needsPublicInitializer: !hasZeroArgumentInitializer(in: declaration)
             )
         case .invalid:
             return []
-        case .standalone:
-            break
         }
-        let parsed: ParsedMacroModel
-        do {
-            parsed = try TLASpecVerifier.parseAndVerify(declaration)
-        } catch let diagnostic as SpecParser.SymmetricCollectionParseDiagnostic {
-            context.diagnose(parserDiagnostic(diagnostic, in: declaration))
-            return []
-        }
-        return MacroExpander.generate(mode: .actor, model: parsed)
     }
 }
 
@@ -634,11 +638,6 @@ public struct TLAObservableMacro: MemberMacro, ExtensionMacro {
         case .nested:
             guard let ext = ("""
                 @MainActor extension \(type.trimmed): Sendable, TLAMachineAdapterAccess {}
-                """ as DeclSyntax).as(ExtensionDeclSyntax.self) else { return [] }
-            return [ext]
-        case .standalone:
-            guard let ext = ("""
-                extension \(type.trimmed): Sendable {}
                 """ as DeclSyntax).as(ExtensionDeclSyntax.self) else { return [] }
             return [ext]
         case .invalid:
@@ -658,21 +657,12 @@ public struct TLAObservableMacro: MemberMacro, ExtensionMacro {
             }
             return MacroExpander.generateNestedAdapterMembers(
                 kind: .observable,
-                canonicalModel: parsed
+                canonicalModel: parsed,
+                needsPublicInitializer: !hasZeroArgumentInitializer(in: declaration)
             )
         case .invalid:
             return []
-        case .standalone:
-            break
         }
-        let parsed: ParsedMacroModel
-        do {
-            parsed = try TLASpecVerifier.parseAndVerify(declaration)
-        } catch let diagnostic as SpecParser.SymmetricCollectionParseDiagnostic {
-            context.diagnose(parserDiagnostic(diagnostic, in: declaration))
-            return []
-        }
-        return MacroExpander.generate(mode: .observable, model: parsed)
     }
 }
 
@@ -716,7 +706,6 @@ private func isInstanceStoredBinding(_ binding: PatternBindingSyntax) -> Bool {
 }
 
 private enum AdapterNestingMode {
-    case standalone
     case nested(StructDeclSyntax)
     case invalid
 }
@@ -744,14 +733,11 @@ private func adapterNestingMode(
         }
         return .nested(structModel)
     }
-    if TLASpecVerifier.findSpec(in: declaration.memberBlock.members) == nil {
-        context.diagnose(Diagnostic(
-            node: Syntax(attribute),
-            message: AdapterNestingDiagnostic(message: "Adapter without a spec must be enclosed by one @TLAModel")
-        ))
-        return .invalid
-    }
-    return .standalone
+    context.diagnose(Diagnostic(
+        node: Syntax(attribute),
+        message: AdapterNestingDiagnostic(message: "@TLAActor and @TLAObservable require an enclosing @TLAModel; put the formal spec on that model")
+    ))
+    return .invalid
 }
 
 private func enclosingModelDeclarations(in context: some MacroExpansionContext) -> [DeclGroupSyntax] {

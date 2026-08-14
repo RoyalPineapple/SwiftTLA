@@ -1,4 +1,67 @@
 import SwiftTLA
+import SwiftTLAMacros
+
+@TLAModel
+public struct CatEvenBoxesModel {
+    public enum Direction: String, TLAValueType {
+        case left
+        case right
+    }
+
+    public static var spec: TLASpec {
+        #spec("Cat") {
+            Extends("Naturals")
+            let catBox = SharedVar(in: 1...6)
+            let observedBox = SharedVar(in: 2...5)
+            let direction = SharedVar(in: SetExpr<Direction>.literal(.left, .right))
+
+            Invariant("TypeOK") {
+                catBox >= 1 && catBox <= 6
+                    && observedBox >= 2 && observedBox <= 5
+                    && (direction == Direction.left || direction == Direction.right)
+            }
+
+            Action("Next") {
+                ((catBox < 6 && catBox.becomes(catBox + 1)) || (catBox > 1 && catBox.becomes(catBox - 1)))
+                    && ((direction == Direction.right && observedBox < 5 && observedBox.becomes(observedBox + 1))
+                        || (direction == Direction.right && observedBox == 5 && direction.becomes(Direction.left))
+                        || (direction == Direction.left && observedBox > 2 && observedBox.becomes(observedBox - 1))
+                        || (direction == Direction.left && observedBox == 2 && direction.becomes(Direction.right)))
+            }
+        }
+    }
+}
+
+@TLAModel
+public struct CatOddBoxesModel {
+    public enum Direction: String, TLAValueType {
+        case left
+        case right
+    }
+
+    public static var spec: TLASpec {
+        #spec("Cat") {
+            Extends("Naturals")
+            let catBox = SharedVar(in: 1...5)
+            let observedBox = SharedVar(in: 2...4)
+            let direction = SharedVar(in: SetExpr<Direction>.literal(.left, .right))
+
+            Invariant("TypeOK") {
+                catBox >= 1 && catBox <= 5
+                    && observedBox >= 2 && observedBox <= 4
+                    && (direction == Direction.left || direction == Direction.right)
+            }
+
+            Action("Next") {
+                ((catBox < 5 && catBox.becomes(catBox + 1)) || (catBox > 1 && catBox.becomes(catBox - 1)))
+                    && ((direction == Direction.right && observedBox < 4 && observedBox.becomes(observedBox + 1))
+                        || (direction == Direction.right && observedBox == 4 && direction.becomes(Direction.left))
+                        || (direction == Direction.left && observedBox > 2 && observedBox.becomes(observedBox - 1))
+                        || (direction == Direction.left && observedBox == 2 && direction.becomes(Direction.right)))
+            }
+        }
+    }
+}
 
 extension Example {
     public static let catEvenBoxes = Entry(
@@ -7,8 +70,7 @@ extension Example {
         upstreamModule: "specifications/Moving_Cat_Puzzle/Cat.tla",
         upstreamCfg: "specifications/Moving_Cat_Puzzle/CatEvenBoxes.cfg",
         expectedDistinct: 48,
-        spec: catSpec(boxes: 6),
-        notes: "Number_Of_Boxes=6. TLC upstream = 48.",
+        spec: CatEvenBoxesModel.spec,
+        notes: "Number_Of_Boxes=6. Typed direction phase. TLC upstream = 48."
     )
-
 }

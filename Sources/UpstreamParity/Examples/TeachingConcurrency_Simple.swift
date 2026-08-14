@@ -1,4 +1,128 @@
 import SwiftTLA
+import SwiftTLAMacros
+
+/// Two bounded instances of the upstream `Simple` PlusCal algorithm.
+///
+/// The upstream model has one `x` and one `y` function, indexed by the
+/// process identifier. `Each` lowers to exactly that function-shaped state
+/// and its generated `pc` function; the Swift source does not unroll a
+/// separate action or program counter for every process.
+@TLAModel
+public struct TeachingSimpleN2Model {
+    public enum Process: Int, CaseIterable, FiniteDomainKey {
+        case p0
+        case p1
+
+        public static let formalDomain = allCases
+        public static let formalTypeIdentity = FormalTypeIdentity(
+            rawValue: "upstream.teaching-concurrency.simple.n2.process"
+        )
+        public var tlaValue: TLAValue { .int(rawValue) }
+    }
+
+    private enum Step: String, PlusCalLabel {
+        case a
+        case b
+    }
+
+    public static var spec: TLASpec {
+        #spec("Simple") {
+            Extends("Integers")
+            Algorithm("Simple") {
+                let x = SharedVar(initial: Function<Process, Int>.literal(
+                    (.p0, 0), (.p1, 0)
+                ))
+                let y = SharedVar(initial: Function<Process, Int>.literal(
+                    (.p0, 0), (.p1, 0)
+                ))
+
+                Each(Process.all) { process in
+                    Do(Step.a) {
+                        Assign(x, to: x.updating(process, to: 1))
+                    }
+                    Do(Step.b) {
+                        If(process == .p0) {
+                            Assign(y, to: y.updating(process, to: x[.p1]))
+                        } else: {
+                            Assign(y, to: y.updating(process, to: x[.p0]))
+                        }
+                    }
+                }
+
+                // Keep one formal predicate per line. The builder combines
+                // these clauses with conjunction, exactly as upstream TypeOK.
+                Invariant("TypeOK") {
+                    x[.p0] == 0 || x[.p0] == 1
+                    x[.p1] == 0 || x[.p1] == 1
+                    y[.p0] == 0 || y[.p0] == 1
+                    y[.p1] == 0 || y[.p1] == 1
+                }
+            }
+        }
+    }
+}
+
+@TLAModel
+public struct TeachingSimpleN3Model {
+    public enum Process: Int, CaseIterable, FiniteDomainKey {
+        case p0
+        case p1
+        case p2
+
+        public static let formalDomain = allCases
+        public static let formalTypeIdentity = FormalTypeIdentity(
+            rawValue: "upstream.teaching-concurrency.simple.n3.process"
+        )
+        public var tlaValue: TLAValue { .int(rawValue) }
+    }
+
+    private enum Step: String, PlusCalLabel {
+        case a
+        case b
+    }
+
+    public static var spec: TLASpec {
+        #spec("Simple") {
+            Extends("Integers")
+            Algorithm("Simple") {
+                let x = SharedVar(initial: Function<Process, Int>.literal(
+                    (.p0, 0), (.p1, 0), (.p2, 0)
+                ))
+                let y = SharedVar(initial: Function<Process, Int>.literal(
+                    (.p0, 0), (.p1, 0), (.p2, 0)
+                ))
+
+                Each(Process.all) { process in
+                    Do(Step.a) {
+                        Assign(x, to: x.updating(process, to: 1))
+                    }
+                    Do(Step.b) {
+                        If(process == .p0) {
+                            Assign(y, to: y.updating(process, to: x[.p2]))
+                        } else: {
+                            If(process == .p1) {
+                                Assign(y, to: y.updating(process, to: x[.p0]))
+                            } else: {
+                                Assign(y, to: y.updating(process, to: x[.p1]))
+                            }
+                        }
+                    }
+                }
+
+                // See the N=2 instance for why this is one predicate per
+                // builder line rather than a host-language boolean loop.
+                Invariant("TypeOK") {
+                    x[.p0] == 0 || x[.p0] == 1
+                    x[.p1] == 0 || x[.p1] == 1
+                    x[.p2] == 0 || x[.p2] == 1
+                    y[.p0] == 0 || y[.p0] == 1
+                    y[.p1] == 0 || y[.p1] == 1
+                    y[.p2] == 0 || y[.p2] == 1
+                }
+            }
+        }
+    }
+}
 
 extension Example {
     public static let teachingSimpleN2 = Entry(
@@ -7,8 +131,8 @@ extension Example {
         upstreamModule: "specifications/TeachingConcurrency/Simple.tla",
         upstreamCfg: nil,
         expectedDistinct: 13,
-        spec: teachingSimple(n: 2),
-        notes: "PlusCal translation, N=2. Upstream TLC (TypeOK only) = 13.",
+        spec: TeachingSimpleN2Model.spec,
+        notes: "N=2, one PlusCal process family with function-shaped x, y, and pc state. TLC = 13."
     )
 
     public static let teachingSimpleN3 = Entry(
@@ -17,52 +141,7 @@ extension Example {
         upstreamModule: "specifications/TeachingConcurrency/Simple.tla",
         upstreamCfg: nil,
         expectedDistinct: 51,
-        spec: teachingSimple(n: 3),
-        notes: "N=3. Upstream TLC = 51. (cfg default N=5 → 723).",
+        spec: TeachingSimpleN3Model.spec,
+        notes: "N=3, one PlusCal process family with function-shaped x, y, and pc state. TLC = 51."
     )
-
-    /// Flattened TeachingConcurrency Simple for small N (2 or 3).
-static func teachingSimple(n: Int) -> TLASpec {
-        precondition(n == 2 || n == 3)
-        if n == 2 {
-            let x0 = Var<Int>("x0"), x1 = Var<Int>("x1")
-            let y0 = Var<Int>("y0"), y1 = Var<Int>("y1")
-            let pc0 = Var<String>("pc0"), pc1 = Var<String>("pc1")
-            return TLASpec("Simple") {
-                Extends("Integers")
-                Variable(x0, 0); Variable(x1, 0)
-                Variable(y0, 0); Variable(y1, 0)
-                Variable(pc0, "a"); Variable(pc1, "a")
-                Action("a0") { pc0 == "a" && x0.becomes(1) && pc0.becomes("b") }
-                Action("b0") { pc0 == "b" && y0.becomes(x1) && pc0.becomes("Done") }
-                Action("a1") { pc1 == "a" && x1.becomes(1) && pc1.becomes("b") }
-                Action("b1") { pc1 == "b" && y1.becomes(x0) && pc1.becomes("Done") }
-                Action("Terminating") { pc0 == "Done" && pc1 == "Done" }
-                Invariant("TypeOK") {
-                    (x0 == 0 || x0 == 1) && (x1 == 0 || x1 == 1)
-                        && (y0 == 0 || y0 == 1) && (y1 == 0 || y1 == 1)
-                }
-            }
-        }
-        let x0 = Var<Int>("x0"), x1 = Var<Int>("x1"), x2 = Var<Int>("x2")
-        let y0 = Var<Int>("y0"), y1 = Var<Int>("y1"), y2 = Var<Int>("y2")
-        let pc0 = Var<String>("pc0"), pc1 = Var<String>("pc1"), pc2 = Var<String>("pc2")
-        return TLASpec("Simple") {
-            Extends("Integers")
-            Variable(x0, 0); Variable(x1, 0); Variable(x2, 0)
-            Variable(y0, 0); Variable(y1, 0); Variable(y2, 0)
-            Variable(pc0, "a"); Variable(pc1, "a"); Variable(pc2, "a")
-            Action("a0") { pc0 == "a" && x0.becomes(1) && pc0.becomes("b") }
-            Action("b0") { pc0 == "b" && y0.becomes(x2) && pc0.becomes("Done") }
-            Action("a1") { pc1 == "a" && x1.becomes(1) && pc1.becomes("b") }
-            Action("b1") { pc1 == "b" && y1.becomes(x0) && pc1.becomes("Done") }
-            Action("a2") { pc2 == "a" && x2.becomes(1) && pc2.becomes("b") }
-            Action("b2") { pc2 == "b" && y2.becomes(x1) && pc2.becomes("Done") }
-            Action("Terminating") { pc0 == "Done" && pc1 == "Done" && pc2 == "Done" }
-            Invariant("TypeOK") {
-                (x0 == 0 || x0 == 1) && (x1 == 0 || x1 == 1) && (x2 == 0 || x2 == 1)
-            }
-        }
-    }
-
 }

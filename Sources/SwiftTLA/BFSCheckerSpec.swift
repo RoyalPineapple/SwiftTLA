@@ -31,6 +31,8 @@ extension TLASpec {
             Action("Complete") {
                 (phase == 0) && ((processed >= queued) || (processed >= maxStates))
                     && phase.becomes(1)
+                    && processed.stays
+                    && queued.stays
             }
 
             Action("Violate") {
