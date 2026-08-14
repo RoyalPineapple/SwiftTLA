@@ -404,77 +404,41 @@ private struct RingView: View {
 
     var body: some View {
         GeometryReader { proxy in
-            let center = CGPoint(x: proxy.size.width / 2, y: proxy.size.height / 2)
-            let radius = min(proxy.size.width, proxy.size.height) * 0.38
-            ZStack {
-                Circle().stroke(.white.opacity(0.25), lineWidth: 4)
-                    .frame(width: radius * 2, height: radius * 2)
-                ForEach(Array(nodes.enumerated()), id: \.offset) { index, node in
-                    let point = ringPoint(for: node, center: center, radius: radius)
-                    let isLeaderHome = identifiers[node] == leader && leader != 0
-                    VStack(spacing: 2) {
-                        Image(systemName: "chair.fill")
-                        Text("Seat \(index + 1)").font(.caption.bold())
-                        Text("home ID \(identifiers[node])").font(.caption2)
-                    }
-                    .foregroundStyle(isLeaderHome ? .orange : .indigo)
-                    .frame(width: 72, height: 64)
-                    .background(.black.opacity(0.5), in: .circle)
-                    .overlay(Circle().stroke(isLeaderHome ? .orange : .indigo, lineWidth: isLeaderHome ? 4 : 3))
-                    .opacity(isLeaderHome ? 1 : 0.75)
-                    .position(point)
-                }
-                ForEach(Array(messages.enumerated()), id: \.offset) { index, message in
-                    let destination = message[ChangRoberts.MessageSchema.to]
-                    if delivery?.candidate != message[ChangRoberts.MessageSchema.candidate] {
-                        let priorAtDestination = messages[..<index].filter {
-                            $0[ChangRoberts.MessageSchema.to] == destination
-                        }.count
-                        let totalAtDestination = messages.filter {
-                            $0[ChangRoberts.MessageSchema.to] == destination
-                        }.count
-                        messageBadge(candidate: message[ChangRoberts.MessageSchema.candidate])
-                            .position(messagePoint(
-                                for: destination,
-                                center: center,
-                                radius: radius,
-                                ordinal: priorAtDestination,
-                                total: totalAtDestination
-                            ))
-                    }
-                }
-                if let delivery {
-                    messageBadge(candidate: delivery.candidate)
-                        .scaleEffect(1.1)
-                        .opacity(delivery.to == nil ? 1 - delivery.progress : 1)
-                        .position(deliveryPoint(delivery, center: center, radius: radius))
-                }
-                VStack(spacing: 4) {
-                    Text("\(messages.count) ducks in flight")
-                    Text("Seats stay put. Duck IDs travel clockwise.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                .font(.headline)
-                .foregroundStyle(.orange)
-            }
+            DuckRingCanvas(
+                nodes: nodes,
+                identifiers: identifiers,
+                messages: messages,
+                leader: leader,
+                delivery: delivery,
+                layout: DuckRingLayout(size: proxy.size, nodes: nodes)
+            )
         }
     }
+}
 
-    private func ringPoint(for node: ChangRoberts.Node, center: CGPoint, radius: CGFloat) -> CGPoint {
+private struct DuckRingLayout {
+    let center: CGPoint
+    let radius: CGFloat
+    let nodes: [ChangRoberts.Node]
+
+    init(size: CGSize, nodes: [ChangRoberts.Node]) {
+        center = CGPoint(x: size.width / 2, y: size.height / 2)
+        radius = min(size.width, size.height) * 0.38
+        self.nodes = nodes
+    }
+
+    func ringPoint(for node: ChangRoberts.Node) -> CGPoint {
         guard let index = nodes.firstIndex(of: node) else { return center }
         let angle = CGFloat(index) * (2 * .pi / CGFloat(nodes.count)) - .pi / 2
         return CGPoint(x: center.x + radius * cos(angle), y: center.y + radius * sin(angle))
     }
 
-    private func messagePoint(
+    func messagePoint(
         for node: ChangRoberts.Node,
-        center: CGPoint,
-        radius: CGFloat,
         ordinal: Int,
         total: Int
     ) -> CGPoint {
-        let ringPoint = ringPoint(for: node, center: center, radius: radius)
+        let ringPoint = ringPoint(for: node)
         let radialX = ringPoint.x - center.x
         let radialY = ringPoint.y - center.y
         let radialLength = max((radialX * radialX + radialY * radialY).squareRoot(), 1)
@@ -485,10 +449,10 @@ private struct RingView: View {
         )
     }
 
-    private func deliveryPoint(_ delivery: DuckDelivery, center: CGPoint, radius: CGFloat) -> CGPoint {
-        let start = messagePoint(for: delivery.from, center: center, radius: radius, ordinal: 0, total: 1)
+    func deliveryPoint(_ delivery: DuckDelivery) -> CGPoint {
+        let start = messagePoint(for: delivery.from, ordinal: 0, total: 1)
         let end = delivery.to.map {
-            messagePoint(for: $0, center: center, radius: radius, ordinal: 0, total: 1)
+            messagePoint(for: $0, ordinal: 0, total: 1)
         } ?? start
         return CGPoint(
             x: start.x + (end.x - start.x) * delivery.progress,
@@ -496,8 +460,116 @@ private struct RingView: View {
         )
     }
 
-    @ViewBuilder
-    private func messageBadge(candidate: Int) -> some View {
+}
+
+private struct DuckRingCanvas: View {
+    let nodes: [ChangRoberts.Node]
+    let identifiers: Function<ChangRoberts.Node, Int>
+    let messages: [Record<ChangRoberts.MessageSchema>]
+    let leader: Int
+    let delivery: DuckDelivery?
+    let layout: DuckRingLayout
+
+    var body: some View {
+        ZStack {
+            Circle().stroke(.white.opacity(0.25), lineWidth: 4)
+                .frame(width: layout.radius * 2, height: layout.radius * 2)
+            DuckRingSeats(nodes: nodes, identifiers: identifiers, leader: leader, layout: layout)
+            DuckRingMessages(messages: messages, activeDelivery: delivery, layout: layout)
+            if let delivery {
+                DuckMessageBadge(candidate: delivery.candidate)
+                    .scaleEffect(1.1)
+                    .opacity(delivery.to == nil ? 1 - delivery.progress : 1)
+                    .position(layout.deliveryPoint(delivery))
+            }
+            DuckRingStatus(messageCount: messages.count)
+        }
+    }
+}
+
+private struct DuckRingSeats: View {
+    let nodes: [ChangRoberts.Node]
+    let identifiers: Function<ChangRoberts.Node, Int>
+    let leader: Int
+    let layout: DuckRingLayout
+
+    var body: some View {
+        ForEach(Array(nodes.enumerated()), id: \.offset) { index, node in
+            DuckSeat(
+                number: index + 1,
+                identifier: identifiers[node],
+                isLeaderHome: identifiers[node] == leader && leader != 0
+            )
+            .position(layout.ringPoint(for: node))
+        }
+    }
+}
+
+private struct DuckSeat: View {
+    let number: Int
+    let identifier: Int
+    let isLeaderHome: Bool
+
+    var body: some View {
+        VStack(spacing: 2) {
+            Image(systemName: "chair.fill")
+            Text("Seat \(number)").font(.caption.bold())
+            Text("home ID \(identifier)").font(.caption2)
+        }
+        .foregroundStyle(isLeaderHome ? .orange : .indigo)
+        .frame(width: 72, height: 64)
+        .background(.black.opacity(0.5), in: .circle)
+        .overlay(Circle().stroke(isLeaderHome ? .orange : .indigo, lineWidth: isLeaderHome ? 4 : 3))
+        .opacity(isLeaderHome ? 1 : 0.75)
+    }
+}
+
+private struct DuckRingMessages: View {
+    let messages: [Record<ChangRoberts.MessageSchema>]
+    let activeDelivery: DuckDelivery?
+    let layout: DuckRingLayout
+
+    var body: some View {
+        ForEach(Array(messages.enumerated()), id: \.offset) { index, message in
+            if message[ChangRoberts.MessageSchema.candidate] != activeDelivery?.candidate {
+                let destination = message[ChangRoberts.MessageSchema.to]
+                let placement = placement(for: destination, at: index)
+                DuckMessageBadge(candidate: message[ChangRoberts.MessageSchema.candidate])
+                    .position(layout.messagePoint(
+                        for: destination,
+                        ordinal: placement.ordinal,
+                        total: placement.total
+                    ))
+            }
+        }
+    }
+
+    private func placement(for destination: ChangRoberts.Node, at index: Int) -> (ordinal: Int, total: Int) {
+        let prior = messages[..<index].filter { $0[ChangRoberts.MessageSchema.to] == destination }.count
+        let total = messages.filter { $0[ChangRoberts.MessageSchema.to] == destination }.count
+        return (prior, total)
+    }
+}
+
+private struct DuckRingStatus: View {
+    let messageCount: Int
+
+    var body: some View {
+        VStack(spacing: 4) {
+            Text("\(messageCount) ducks in flight")
+            Text("Seats stay put. Duck IDs travel clockwise.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .font(.headline)
+        .foregroundStyle(.orange)
+    }
+}
+
+private struct DuckMessageBadge: View {
+    let candidate: Int
+
+    var body: some View {
         Label("Duck ID \(candidate)", systemImage: "bird.fill")
             .font(.caption.bold())
             .foregroundStyle(.black)
