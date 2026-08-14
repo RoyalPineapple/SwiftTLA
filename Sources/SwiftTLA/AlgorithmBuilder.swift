@@ -1108,6 +1108,41 @@ public func If(
     StepStatement(model: .ifElse(condition.stateExpr, then().map(\.model), otherwise().map(\.model)))
 }
 
+/// Builds a typed formal conditional value.
+///
+/// This is distinct from the statement-builder `If(condition) { ... } else: { ... }` form.
+public func If<Value: TLAValueType>(
+    _ condition: some StateExprConvertible,
+    then: Value,
+    else otherwise: Value
+) -> Expr<Value> {
+    Expr(.ifThenElse(condition.stateExpr, .value(then.tlaValue), .value(otherwise.tlaValue)))
+}
+
+public func If<Value: TLAValueType>(
+    _ condition: some StateExprConvertible,
+    then: Value,
+    else otherwise: Expr<Value>
+) -> Expr<Value> {
+    Expr(.ifThenElse(condition.stateExpr, .value(then.tlaValue), otherwise.raw))
+}
+
+public func If<Value: TLAValueType>(
+    _ condition: some StateExprConvertible,
+    then: Expr<Value>,
+    else otherwise: Value
+) -> Expr<Value> {
+    Expr(.ifThenElse(condition.stateExpr, then.raw, .value(otherwise.tlaValue)))
+}
+
+public func If<Value: TLAValueType>(
+    _ condition: some StateExprConvertible,
+    then: Expr<Value>,
+    else otherwise: Expr<Value>
+) -> Expr<Value> {
+    Expr(.ifThenElse(condition.stateExpr, then.raw, otherwise.raw))
+}
+
 public func Either(
     @DoBuilder _ first: () -> [StepStatement],
     @DoBuilder or second: @escaping () -> [StepStatement]

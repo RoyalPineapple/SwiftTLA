@@ -46,7 +46,8 @@ extension SpecParser {
             }
             guard case .expr(let expression) = statement.item else {
                 result.diagnostics.append(.init(
-                    message: "Unsupported Algorithm declaration '\(statement.description.trimmingCharacters(in: .whitespacesAndNewlines))'. Supported declarations are SharedVar, Each, Do, and While.",
+                    message: "Unsupported Algorithm declaration '\(statement.description.trimmingCharacters(in: .whitespacesAndNewlines))'. "
+                        + "Supported declarations are SharedVar, Macro, Each, Do, and While.",
                     source: statement
                 ))
                 return
@@ -54,7 +55,8 @@ extension SpecParser {
             guard let component = parseAlgorithmComponent(expression, macros: macros) else {
                 let detail = algorithmParseFailure.map { " \($0)" } ?? ""
                 result.diagnostics.append(.init(
-                    message: "Unsupported Algorithm declaration '\(expression.description.trimmingCharacters(in: .whitespacesAndNewlines))'. Supported declarations are SharedVar, Macro, Each, Do, and While.\(detail)",
+                    message: "Unsupported Algorithm declaration '\(expression.description.trimmingCharacters(in: .whitespacesAndNewlines))'. "
+                        + "Supported declarations are SharedVar, Macro, Each, Do, and While.\(detail)",
                     source: expression
                 ))
                 return
@@ -207,7 +209,8 @@ extension SpecParser {
                 return nil
             }
             guard let decoded = decodeStateExpr(expression) else {
-                algorithmParseFailure = "Invariant '\(name)' statement \(index + 1) could not be decoded: '\(expression.description.trimmingCharacters(in: .whitespacesAndNewlines))'."
+                algorithmParseFailure = "Invariant '\(name)' statement \(index + 1) could not be decoded: "
+                    + "'\(expression.description.trimmingCharacters(in: .whitespacesAndNewlines))'."
                 return nil
             }
             expressions.append(decoded)
@@ -240,7 +243,8 @@ extension SpecParser {
             guard case .expr(let expression) = statement.item else { return nil }
             guard let component = parseEachComponent(expression, processParameter: parameter, macros: macros) else {
                 if algorithmParseFailure == nil {
-                    algorithmParseFailure = "Process component \(index + 1) could not be decoded: '\(expression.description.trimmingCharacters(in: .whitespacesAndNewlines))'."
+                    algorithmParseFailure = "Process component \(index + 1) could not be decoded: "
+                        + "'\(expression.description.trimmingCharacters(in: .whitespacesAndNewlines))'."
                 }
                 return nil
             }
@@ -398,7 +402,8 @@ extension SpecParser {
             guard case .expr(let expression) = statement.item
             else {
                 if algorithmParseFailure == nil {
-                    algorithmParseFailure = "Statement \(index + 1) could not be decoded: '\(statement.description.trimmingCharacters(in: .whitespacesAndNewlines))'."
+                    algorithmParseFailure = "Statement \(index + 1) could not be decoded: "
+                        + "'\(statement.description.trimmingCharacters(in: .whitespacesAndNewlines))'."
                 }
                 return nil
             }
@@ -414,7 +419,8 @@ extension SpecParser {
                 macros: macros
             ) else {
                 if algorithmParseFailure == nil {
-                    algorithmParseFailure = "Statement \(index + 1) could not be decoded: '\(statement.description.trimmingCharacters(in: .whitespacesAndNewlines))'."
+                    algorithmParseFailure = "Statement \(index + 1) could not be decoded: "
+                        + "'\(statement.description.trimmingCharacters(in: .whitespacesAndNewlines))'."
                 }
                 return nil
             }
@@ -460,17 +466,29 @@ extension SpecParser {
             guard let conditionSyntax = call.arguments.first?.expression,
                   let condition = decodeStateExpr(conditionSyntax),
                   let thenClosure = call.trailingClosure,
-                  let then = parseAlgorithmStatements(thenClosure.statements, processParameter: processParameter, macros: macros)
+                  let then = parseAlgorithmStatements(
+                      thenClosure.statements,
+                      processParameter: processParameter,
+                      macros: macros
+                  )
             else { return nil }
             let elseClosure = call.additionalTrailingClosures.first?.closure
                 ?? call.arguments.first(where: { $0.label?.text == "else" })?.expression.as(ClosureExprSyntax.self)
-            let otherwise = elseClosure.flatMap { parseAlgorithmStatements($0.statements, processParameter: processParameter, macros: macros) } ?? []
+            let otherwise = elseClosure.flatMap {
+                parseAlgorithmStatements($0.statements, processParameter: processParameter, macros: macros)
+            } ?? []
             return .ifElse(replacingProcessParameter(in: condition, named: processParameter), then, otherwise)
         case "Either":
-            guard let first = call.trailingClosure.flatMap({ parseAlgorithmStatements($0.statements, processParameter: processParameter, macros: macros) }),
+            guard let first = call.trailingClosure.flatMap({
+                parseAlgorithmStatements($0.statements, processParameter: processParameter, macros: macros)
+            }),
                   let secondClosure = call.additionalTrailingClosures.first?.closure
                     ?? call.arguments.first(where: { $0.label?.text == "or" })?.expression.as(ClosureExprSyntax.self),
-                  let second = parseAlgorithmStatements(secondClosure.statements, processParameter: processParameter, macros: macros)
+                  let second = parseAlgorithmStatements(
+                      secondClosure.statements,
+                      processParameter: processParameter,
+                      macros: macros
+                  )
             else { return nil }
             return .either(first, second)
         case "Choose":
@@ -612,9 +630,16 @@ extension SpecParser {
                 variable == from ? body : body.map { replaceAlgorithmVariable($0, from: from, to: to) }
             )
         case .ifElse(let condition, let then, let otherwise):
-            return .ifElse(renameVar(from, to: to, in: condition), then.map { replaceAlgorithmVariable($0, from: from, to: to) }, otherwise.map { replaceAlgorithmVariable($0, from: from, to: to) })
+            return .ifElse(
+                renameVar(from, to: to, in: condition),
+                then.map { replaceAlgorithmVariable($0, from: from, to: to) },
+                otherwise.map { replaceAlgorithmVariable($0, from: from, to: to) }
+            )
         case .either(let first, let second):
-            return .either(first.map { replaceAlgorithmVariable($0, from: from, to: to) }, second.map { replaceAlgorithmVariable($0, from: from, to: to) })
+            return .either(
+                first.map { replaceAlgorithmVariable($0, from: from, to: to) },
+                second.map { replaceAlgorithmVariable($0, from: from, to: to) }
+            )
         case .choose(let variable, let domain, let body):
             return .choose(
                 variable: variable,

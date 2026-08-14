@@ -62,7 +62,8 @@ private func parseExpression(_ source: String) -> ExprSyntax {
         #expect(parsed.actions.isEmpty)
         #expect(
             parsed.diagnostics.first?.message
-                == "Unsupported Algorithm declaration 'UnsupportedAlgorithmConstruct()'. Supported declarations are SharedVar, Macro, Each, Do, and While."
+                == "Unsupported Algorithm declaration 'UnsupportedAlgorithmConstruct()'. "
+                    + "Supported declarations are SharedVar, Macro, Each, Do, and While."
         )
     }
 
