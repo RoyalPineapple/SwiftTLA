@@ -10,12 +10,11 @@ See [the supported language fragment](Documentation/Design.md), the [generated-m
 ## Compiler pipeline
 
 ```text
-Typed Swift DSL ──► TLASpec ──► compile-time model checking ──► executable model
-       │                │                    │                         │
-       │                │                    ├── failure: compiler diagnostic
-       │                │                    └── success: state machine or actor API
-       │                └── .tlaModule + .tlaCfg ──► pinned TLC reference
-       └── types constrain legal variables, values, and collection operations
+source #spec ──► parser AST ──► checker / TLA+ output / generated machine
+     │
+     └─────────► constrained runtime builder ──► independent TLASpec
+                                                    │
+                           semantic alpha-equivalence gate ◄─┘
 ```
 
 The release-facing macro examples use the same model-checking pipeline before they generate code. `@TLAModel` produces an executable model type. `@TLAActor` produces an actor or a nested actor adapter. `@TLAObservable` produces an observable model or a nested main-actor adapter with typed callbacks. The runtime behavior, the compile-time check, and the TLA+ export all come from one DSL model. The current public-workflow evidence covers only the bounded fixtures and package matrix described in [public workflow conformance](Documentation/PublicWorkflowConformance.md); it is not a claim about every accepted macro input.
@@ -31,73 +30,51 @@ import SwiftTLAMacros
 
 @TLAModel
 public struct HourClock {
+    enum Process: String, FiniteDomainKey {
+        case clock
+
+        static let formalDomain: [Process] = [.clock]
+        static let formalTypeIdentity = FormalTypeIdentity(rawValue: "readme.hour-clock.process")
+
+        var tlaValue: TLAValue { .string(rawValue) }
+    }
+
+    enum Step: String, PlusCalLabel {
+        case tick
+    }
+
     public static var spec: TLASpec {
-        TLASpec("HourClock") {
-            let hour = Var<Int>("hour", value: 1)
-            Variable(hour, 1)
-            Action("Tick") {
-                (hour != 12 && hour.becomes(hour + 1)) ||
-                (hour == 12 && hour.becomes(1))
+        #spec("HourClock") {
+            Algorithm("HourClock") {
+                let hour = SharedVar(initial: 1)
+                Each(Process.all) { _ in
+                    Do(Step.tick) {
+                        Either {
+                            When(hour < 12)
+                            Assign(hour, to: hour + 1)
+                        } or: {
+                            When(hour == 12)
+                            Assign(hour, to: 1)
+                        }
+                    }
+                }
             }
-            Invariant("validHour") { hour >= 1 && hour <= 12 }
         }
     }
 }
 
 var clock = HourClock()
-let result = try clock.apply(.Tick)
+let result = try clock.apply(.tick(process: .clock))
 print(result.after.hour)
 ```
 
 ## Symmetric collections
 
-Use a symmetric collection when individual members are exchangeable for the property being checked. Runtime devices keep their concrete `Identifiable.ID` values; the verifier uses separate opaque members derived only from `verificationScope`.
-
-```swift
-import Foundation
-import SwiftTLA
-import SwiftTLAMacros
-
-struct Device: Identifiable {
-    let id: UUID
-}
-
-@TLAModel
-struct DeviceContract {
-    static var spec: TLASpec {
-        TLASpec("DeviceContract") {
-            let phases = SymmetricCollectionVar<Device, Int>("phases")
-            SymmetricCollection(phases, verificationScope: 4, initial: 0)
-
-            CollectionAction("beginConnect", on: phases) { member in
-                phases[member] == 0 && phases.update(member, to: 1)
-            }
-
-            Invariant("validPhase") {
-                phases.allSatisfy { phase in phase >= 0 && phase <= 1 }
-            }
-        }
-    }
-}
-
-let device = Device(id: UUID())
-var contract = DeviceContract()
-contract.phases.insert(device)
-try contract.beginConnect(id: device.id)
-```
-
-The ID routes the generated runtime action but never becomes model data. This macro example verifies the collection declaration, ID-routed action, and a nontrivial collection-wide phase invariant. `allSatisfy` quantifies the opaque verification members, so a modeled transition that produces a phase outside `0...1` fails the compile-time check. The collection member token in `CollectionAction` is opaque: it may select or update its owning collection, but it cannot be compared, stored, or otherwise used to observe member identity. Use `contains(where:)` when the property is existential rather than universal; both predicates are checked over the same finite modeled domain.
-
-### Verification boundary
-
-`verificationScope: 4` checks exactly four exchangeable model members for that run. The live runtime collection can contain a different number of concrete devices. A successful finite run does **not** prove the model for larger populations, arbitrary population sizes, or membership churn not represented in the model. Parametric verification is future work; it is not supplied by symmetric-collection reduction.
-
-Run the symmetric-collection check with the pinned TLC executable after [setting up TLC](scripts/setup-tlc.sh):
-
-```bash
-./scripts/setup-tlc.sh
-swift run tlc-validate symmetric-collections
-```
+Symmetric-collection verification remains available for the existing finite
+core fixtures. Its public authoring surface is being migrated to the
+PlusCal-shaped record and map vocabulary; do not start a new model with the
+older `SymmetricCollectionVar` API. See the [language fragment](Documentation/Design.md)
+for the current supported boundary.
 
 ## Bootstrap
 
