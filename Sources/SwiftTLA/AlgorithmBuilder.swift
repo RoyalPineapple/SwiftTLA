@@ -684,14 +684,6 @@ public struct Algorithm: Sendable, SpecComponent {
     }
 }
 
-public func Shared<Value: TLAValueType>(_ variable: Var<Value>, initial: Value) -> AlgorithmElement {
-    AlgorithmElement(model: .shared(AlgorithmStateModel(root: variable.name, initial: .value(initial.tlaValue))))
-}
-
-public func Local<Value: TLAValueType>(_ variable: Var<Value>, initial: Value) -> AlgorithmElement {
-    AlgorithmElement(model: .local(AlgorithmStateModel(root: variable.name, initial: .value(initial.tlaValue))))
-}
-
 /// Declares one independently scheduled process for every member of `domain`.
 ///
 /// `Each` is concurrent: its bodies do not run as a sequential Swift loop.

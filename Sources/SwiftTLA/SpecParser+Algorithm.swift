@@ -121,12 +121,6 @@ extension SpecParser {
         else { return nil }
 
         switch name {
-        case "Shared":
-            guard let reference = call.arguments.first?.expression.as(DeclReferenceExprSyntax.self)?.baseName.text,
-                  let initialSyntax = call.arguments.first(where: { $0.label?.text == "initial" })?.expression,
-                  let initial = literalAlgorithmValue(initialSyntax)
-            else { return nil }
-            return .shared(.init(root: reference, initial: .value(initial)))
         case "Each":
             return parseEach(call)
         default:
@@ -241,12 +235,6 @@ extension SpecParser {
         else { return nil }
 
         switch name {
-        case "Local":
-            guard let reference = call.arguments.first?.expression.as(DeclReferenceExprSyntax.self)?.baseName.text,
-                  let initialSyntax = call.arguments.first(where: { $0.label?.text == "initial" })?.expression,
-                  let initial = literalAlgorithmValue(initialSyntax)
-            else { return nil }
-            return .local(.init(root: reference, initial: .value(initial)))
         case "Do", "While":
             guard let label = algorithmLabel(call.arguments.first?.expression),
                   let closure = call.trailingClosure,
@@ -385,13 +373,6 @@ extension SpecParser {
         }
         if let reference = expression.as(DeclReferenceExprSyntax.self) {
             return reference.baseName.text
-        }
-        return nil
-    }
-
-    private static func literalAlgorithmValue(_ expression: ExprSyntax) -> TLAValue? {
-        if let decoded = decodeStateExpr(expression), case .value(let value) = decoded {
-            return value
         }
         return nil
     }

@@ -20,9 +20,8 @@ private func parseExpression(_ source: String) -> ExprSyntax {
     func parsesBoundedAlgorithm() {
         let source = """
         {
-            let count = Var<Int>("count")
             Algorithm("Counter") {
-                Shared(count, initial: 0)
+                let count = SharedVar(initial: 0)
                 Each(Node.all) { node in
                     Do("increment") {
                         Await(count < 2)
@@ -61,16 +60,15 @@ private func parseExpression(_ source: String) -> ExprSyntax {
 
         #expect(parsed.variables.isEmpty)
         #expect(parsed.actions.isEmpty)
-        #expect(parsed.diagnostics.first?.message == "Unsupported Algorithm declaration. Supported declarations are Shared and Each.")
+        #expect(parsed.diagnostics.first?.message == "Unsupported Algorithm declaration 'UnsupportedAlgorithmConstruct()'. Supported declarations are SharedVar and Each.")
     }
 
     @Test("parser lowers the mechanical PlusCal statements through the shared IR")
     func parsesMechanicalPlusCalStatements() {
         let source = """
         {
-            let count = Var<Int>("count")
             Algorithm("Counter") {
-                Shared(count, initial: 0)
+                let count = SharedVar(initial: 0)
                 Each(Node.all, fairness: .strong) { node in
                     While("increment", count < 2) {
                         When(count >= 0)
@@ -101,9 +99,8 @@ private func parseExpression(_ source: String) -> ExprSyntax {
     func parserTreeMatchesRuntimeAlgorithm() {
         let source = """
         {
-            let count = Var<Int>("count")
             Algorithm("Counter") {
-                Shared(count, initial: 0)
+                let count = SharedVar(initial: 0)
                 Each(Node.all) { _ in
                     Do("increment") {
                         Await(count < 2)
@@ -118,10 +115,10 @@ private func parseExpression(_ source: String) -> ExprSyntax {
             closure,
             enumDomains: ["Node": [.string("left"), .string("right")]]
         )
-        let count = Var<Int>("count")
         let runtime = TLASpec("Counter") {
             Algorithm("Counter") {
-                Shared(count, initial: 0)
+                let count = SharedVar("count", initial: 0)
+                count
                 Each(ParserNode.all) { _ in
                     Do("increment") {
                         Await(count < 2)

@@ -5,13 +5,12 @@ import Testing
 struct AlgorithmBuilderTests {
     @Test("typed first-slice builders preserve ordered process steps")
     func buildsBoundedAlgorithm() throws {
-        let maximum = Var<Int>("maximum", 0)
-        let inbox = Var<Int>("inbox", 0)
-
         let algorithm = Algorithm("ChangRoberts") {
-            Shared(maximum, initial: 0)
+            let maximum = SharedVar("maximum", initial: 0)
+            maximum
             Each(Node.all) { node in
-                Local(inbox, initial: 0)
+                let inbox = LocalVar("inbox", initial: 0)
+                inbox
                 Do(AlgorithmLabel.receive) {
                     Await(inbox > 0)
                     Choose(Node.all) { candidate in
@@ -45,8 +44,9 @@ struct AlgorithmBuilderTests {
 
     @Test("validation fails closed for invalid bounded algorithms")
     func rejectsInvalidAlgorithms() {
-        let value = Var<Int>("value", 0)
         let invalid = Algorithm("__pcal_invalid") {
+            let value = SharedVar("value", initial: 0)
+            value
             Each(EmptyNode.all) { _ in
                 Do(AlgorithmLabel.receive) {
                     Assign(value, to: 1)
@@ -74,9 +74,9 @@ struct AlgorithmBuilderTests {
 
     @Test("lowering initializes pc and binds every atomic action to a process")
     func lowersControlStateAndActionBindings() throws {
-        let value = Var<Int>("value", 0)
         let algorithm = Algorithm("BoundedCounter") {
-            Shared(value, initial: 0)
+            let value = SharedVar("value", initial: 0)
+            value
             Each(Node.all) { _ in
                 Do(AlgorithmLabel.receive) {
                     Assign(value, to: value + 1)
@@ -105,9 +105,9 @@ struct AlgorithmBuilderTests {
 
     @Test("lowered atomic actions advance pc and stop before the explicit terminating self loop")
     func lowersAtomicSemantics() throws {
-        let value = Var<Int>("value", 0)
         let algorithm = Algorithm("BoundedCounter") {
-            Shared(value, initial: 0)
+            let value = SharedVar("value", initial: 0)
+            value
             Each(Node.all) { _ in
                 Do(AlgorithmLabel.receive) {
                     Assign(value, to: value + 1)
@@ -155,10 +155,10 @@ struct AlgorithmBuilderTests {
 
     @Test("lowering represents process-local state as a function of self")
     func lowersLocalState() throws {
-        let inbox = Var<Int>("inbox", 0)
         let algorithm = Algorithm("LocalCounter") {
             Each(Node.all) { _ in
-                Local(inbox, initial: 0)
+                let inbox = LocalVar("inbox", initial: 0)
+                inbox
                 Do(AlgorithmLabel.receive) {
                     Await(inbox == 0)
                     Assign(inbox, to: inbox + 1)
@@ -189,9 +189,9 @@ struct AlgorithmBuilderTests {
 
     @Test("string labels are contained by ProgramLabel and validated before lowering")
     func validatesStringLabels() throws {
-        let value = Var<Int>("value", 0)
         let algorithm = Algorithm("StringLabels") {
-            Shared(value, initial: 0)
+            let value = SharedVar("value", initial: 0)
+            value
             Each(Node.all) { _ in
                 Do("move") {
                     Assign(value, to: value + 1)
@@ -214,9 +214,9 @@ struct AlgorithmBuilderTests {
 
     @Test("the end of an Each machine reaches its builder-owned Done state")
     func eachMachineEndsInDone() throws {
-        let value = Var<Int>("value", 0)
         let algorithm = Algorithm("ImplicitStop") {
-            Shared(value, initial: 0)
+            let value = SharedVar("value", initial: 0)
+            value
             Each(Node.all) { _ in
                 Do("finish") {
                     Assign(value, to: value + 1)
@@ -238,9 +238,9 @@ struct AlgorithmBuilderTests {
 
     @Test("an unlabeled transfer falls through to the next Do block")
     func intermediateDoFallsThrough() throws {
-        let value = Var<Int>("value", 0)
         let algorithm = Algorithm("Fallthrough") {
-            Shared(value, initial: 0)
+            let value = SharedVar("value", initial: 0)
+            value
             Each(Node.all) { _ in
                 Do("prepare") {
                     Assign(value, to: value + 1)
@@ -265,9 +265,9 @@ struct AlgorithmBuilderTests {
 
     @Test("TLASpec accepts an algorithm component and lowers it before checking")
     func algorithmComposesIntoTLASpec() throws {
-        let value = Var<Int>("value", 0)
+        let value = SharedVar("value", initial: 0)
         let algorithm = Algorithm("Composed") {
-            Shared(value, initial: 0)
+            value
             Each(Node.all) { _ in
                 Do("finish") { Assign(value, to: value + 1) }
             }
@@ -284,11 +284,11 @@ struct AlgorithmBuilderTests {
 
     @Test("When, Assert, With, and process fairness lower as formal semantics")
     func lowersMechanicalPlusCalStatements() throws {
-        let count = Var<Int>("count", 0)
-        let selected = Var<Int>("selected", 0)
         let algorithm = Algorithm("Mechanical") {
-            Shared(count, initial: 0)
-            Shared(selected, initial: 0)
+            let count = SharedVar("count", initial: 0)
+            let selected = SharedVar("selected", initial: 0)
+            count
+            selected
             Each(Node.all, fairness: .weak) { node in
                 Do("choose") {
                     When(count == 0)
@@ -321,9 +321,9 @@ struct AlgorithmBuilderTests {
 
     @Test("a false While condition advances control and a true condition loops")
     func lowersWhileAsFormalControl() throws {
-        let count = Var<Int>("count", 0)
         let algorithm = Algorithm("Loop") {
-            Shared(count, initial: 0)
+            let count = SharedVar("count", initial: 0)
+            count
             Each(Node.all) { _ in
                 While("repeat", count < 2) {
                     Assign(count, to: count + 1)
@@ -353,9 +353,9 @@ struct AlgorithmBuilderTests {
 
     @Test("Assert is required only on the branch that reaches it")
     func scopesAssertToItsConditionalBranch() throws {
-        let count = Var<Int>("count", 0)
         let algorithm = Algorithm("ConditionalAssert") {
-            Shared(count, initial: 0)
+            let count = SharedVar("count", initial: 0)
+            count
             Each(Node.all) { _ in
                 Do("check") {
                     If(count == 0) {
@@ -376,9 +376,9 @@ struct AlgorithmBuilderTests {
 
     @Test("Assert becomes a model-checker safety obligation")
     func checksAssertAsAnInvariant() throws {
-        let count = Var<Int>("count", 0)
         let algorithm = Algorithm("BrokenAssertion") {
-            Shared(count, initial: 0)
+            let count = SharedVar("count", initial: 0)
+            count
             Each(Node.all) { _ in
                 Do("check") {
                     Assert(count == 1)
