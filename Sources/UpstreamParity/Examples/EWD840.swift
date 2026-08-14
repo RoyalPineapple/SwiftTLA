@@ -1,4 +1,102 @@
 import SwiftTLA
+import SwiftTLAMacros
+
+/// Dijkstra's three-node termination detector from EWD 840.
+@TLAModel
+public struct EWD840Model {
+    public enum Node: Int, CaseIterable, FiniteDomainKey {
+        case zero = 0
+        case one = 1
+        case two = 2
+
+        public static let formalDomain = allCases
+        public static let formalTypeIdentity = FormalTypeIdentity(rawValue: "examples.ewd840.node")
+        public var tlaValue: TLAValue { .int(rawValue) }
+    }
+
+    public enum Color: String, TLAValueType {
+        case white
+        case black
+    }
+
+    public static var spec: TLASpec {
+        #spec("EWD840") {
+            Extends("Integers")
+            let active = SharedVar(in: SetExpr<Function<Node, Bool>>.literal(
+                Function<Node, Bool>.literal((Node.zero, false), (Node.one, false), (Node.two, false)),
+                Function<Node, Bool>.literal((Node.zero, false), (Node.one, false), (Node.two, true)),
+                Function<Node, Bool>.literal((Node.zero, false), (Node.one, true), (Node.two, false)),
+                Function<Node, Bool>.literal((Node.zero, false), (Node.one, true), (Node.two, true)),
+                Function<Node, Bool>.literal((Node.zero, true), (Node.one, false), (Node.two, false)),
+                Function<Node, Bool>.literal((Node.zero, true), (Node.one, false), (Node.two, true)),
+                Function<Node, Bool>.literal((Node.zero, true), (Node.one, true), (Node.two, false)),
+                Function<Node, Bool>.literal((Node.zero, true), (Node.one, true), (Node.two, true))
+            ))
+            let color = SharedVar(in: SetExpr<Function<Node, Color>>.literal(
+                Function<Node, Color>.literal((Node.zero, .white), (Node.one, .white), (Node.two, .white)),
+                Function<Node, Color>.literal((Node.zero, .white), (Node.one, .white), (Node.two, .black)),
+                Function<Node, Color>.literal((Node.zero, .white), (Node.one, .black), (Node.two, .white)),
+                Function<Node, Color>.literal((Node.zero, .white), (Node.one, .black), (Node.two, .black)),
+                Function<Node, Color>.literal((Node.zero, .black), (Node.one, .white), (Node.two, .white)),
+                Function<Node, Color>.literal((Node.zero, .black), (Node.one, .white), (Node.two, .black)),
+                Function<Node, Color>.literal((Node.zero, .black), (Node.one, .black), (Node.two, .white)),
+                Function<Node, Color>.literal((Node.zero, .black), (Node.one, .black), (Node.two, .black))
+            ))
+            let tpos = SharedVar(in: 0...2)
+            let tcolor = SharedVar(initial: Color.black)
+
+            Action("InitiateProbe") {
+                tpos == 0 && (tcolor == Color.black || color[.zero] == Color.black)
+                    && tpos.becomes(2) && tcolor.becomes(.white)
+                    && color.becomes(color.updating(.zero, to: .white)) && active.stays
+            }
+
+            Action("PassToken_1") {
+                tpos == 1 && (active[.one] == false || color[.one] == Color.black || tcolor == Color.black)
+                    && tpos.becomes(0)
+                    && ((color[.one] == Color.black && tcolor.becomes(.black))
+                        || (color[.one] != Color.black && tcolor.stays))
+                    && color.becomes(color.updating(.one, to: .white)) && active.stays
+            }
+            Action("PassToken_2") {
+                tpos == 2 && (active[.two] == false || color[.two] == Color.black || tcolor == Color.black)
+                    && tpos.becomes(1)
+                    && ((color[.two] == Color.black && tcolor.becomes(.black))
+                        || (color[.two] != Color.black && tcolor.stays))
+                    && color.becomes(color.updating(.two, to: .white)) && active.stays
+            }
+
+            Action("SendMsg_0_to_1") {
+                active[.zero] == true && active.becomes(active.updating(.one, to: true))
+                    && color.becomes(color.updating(.zero, to: .black)) && tpos.stays && tcolor.stays
+            }
+            Action("SendMsg_0_to_2") {
+                active[.zero] == true && active.becomes(active.updating(.two, to: true))
+                    && color.becomes(color.updating(.zero, to: .black)) && tpos.stays && tcolor.stays
+            }
+            Action("SendMsg_1_to_0") {
+                active[.one] == true && active.becomes(active.updating(.zero, to: true))
+                    && color.stays && tpos.stays && tcolor.stays
+            }
+            Action("SendMsg_1_to_2") {
+                active[.one] == true && active.becomes(active.updating(.two, to: true))
+                    && color.becomes(color.updating(.one, to: .black)) && tpos.stays && tcolor.stays
+            }
+            Action("SendMsg_2_to_0") {
+                active[.two] == true && active.becomes(active.updating(.zero, to: true))
+                    && color.stays && tpos.stays && tcolor.stays
+            }
+            Action("SendMsg_2_to_1") {
+                active[.two] == true && active.becomes(active.updating(.one, to: true))
+                    && color.stays && tpos.stays && tcolor.stays
+            }
+
+            Invariant("TypeOK") {
+                tpos >= 0 && tpos < 3 && (tcolor == Color.white || tcolor == Color.black)
+            }
+        }
+    }
+}
 
 extension Example {
     public static let ewd840 = Entry(
@@ -7,84 +105,7 @@ extension Example {
         upstreamModule: "specifications/ewd840/EWD840.tla",
         upstreamCfg: "specifications/ewd840/EWD840.cfg",
         expectedDistinct: 258,
-        spec: ewd840Spec(),
-        notes: "Dijkstra termination detection. N=3, active/color as functions. CASE-based TLA+ output.",
+        spec: EWD840Model.spec,
+        notes: "Dijkstra termination detection. N=3, typed active/color functions. TLC = 258."
     )
-
-static func ewd840Spec() -> TLASpec {
-        let N = 3
-        let nodes = Array(0..<N)
-        let boolOpts: [TLAValue] = [.bool(false), .bool(true)]
-        let colorOpts: [TLAValue] = [.string("white"), .string("black")]
-        var activeFuncs: [TLAValue] = []
-        for a0 in boolOpts { for a1 in boolOpts { for a2 in boolOpts {
-            activeFuncs.append(.function([.int(0): a0, .int(1): a1, .int(2): a2]))
-        }}}
-        var colorFuncs: [TLAValue] = []
-        for c0 in colorOpts { for c1 in colorOpts { for c2 in colorOpts {
-            colorFuncs.append(.function([.int(0): c0, .int(1): c1, .int(2): c2]))
-        }}}
-
-        let active = Var<TLAValue>("active")
-        let color = Var<TLAValue>("color")
-        let tpos = Var<Int>("tpos")
-        let tcolor = Var<String>("tcolor")
-
-        func activeOf(_ i: Int) -> StateExpr {
-            StateExpr.functionApply(StateExpr.variable("active"), StateExpr.value(.int(i)))
-        }
-        func colorOf(_ i: Int) -> StateExpr {
-            StateExpr.functionApply(StateExpr.variable("color"), StateExpr.value(.int(i)))
-        }
-
-        return TLASpec("EWD840") {
-            Extends("Integers")
-            Variable(active, in: activeFuncs)
-            Variable(color, in: colorFuncs)
-            Variable(tpos, in: 0..<N)
-            Variable(tcolor, "black")
-
-            Action("InitiateProbe") {
-                tpos == 0 && (tcolor == "black" || colorOf(0) == "black")
-                && tpos.becomes(N - 1) && tcolor.becomes("white")
-                && .assign(color.name, color.stateExpr.updated(at: 0, to: "white"))
-                && active.stays
-            }
-
-            for i in 1..<N {
-                Action("PassToken_\(i)") {
-                    tpos == i
-                    && (activeOf(i) == false || colorOf(i) == "black" || tcolor == "black")
-                    && tpos.becomes(i - 1)
-                    && tcolor.becomes(Expr(.ifThenElse(
-                        colorOf(i) == "black",
-                        "black",
-                        tcolor.stateExpr
-                    )))
-                         && .assign(color.name, color.stateExpr.updated(at: i, to: "white"))
-                    && active.stays
-                }
-            }
-
-            for i in nodes {
-                for j in nodes where j != i {
-                    Action("SendMsg_\(i)_to_\(j)") {
-                        activeOf(i) == true
-                        && .assign(active.name, active.stateExpr.updated(at: j, to: true))
-                        && .assign(color.name, .ifThenElse(
-                            j > i,
-                            color.stateExpr.updated(at: i, to: "black"),
-                            color.stateExpr
-                        ))
-                        && tpos.stays && tcolor.stays
-                    }
-                }
-            }
-
-            Invariant("TypeOK") {
-                tpos >= 0 && tpos < N && (tcolor == "white" || tcolor == "black")
-            }
-        }
-    }
-
 }

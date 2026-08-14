@@ -82,6 +82,17 @@ struct UpstreamParityTests {
         #expect(try n3.exploreGraph().states.count == Example.teachingSimpleN3.expectedDistinct)
     }
 
+    @Test("EWD840 uses typed finite function state")
+    func ewd840TypedFunctionParity() throws {
+        try EWD840Model.verifySpec()
+        let checker = ModelChecker(spec: EWD840Model.spec, maxStates: 50_000)
+        #expect(try checker.exploreGraph().states.count == Example.ewd840.expectedDistinct)
+        guard case .ok = try checker.check() else {
+            Issue.record("Typed EWD840 model did not verify")
+            return
+        }
+    }
+
     @Test("Sync termination detector uses typed finite function state")
     func syncTerminationTypedFunctionParity() throws {
         try SyncTerminationDetectionModel.verifySpec()
