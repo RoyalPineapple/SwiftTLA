@@ -130,23 +130,22 @@ public struct CanonicalStateV1: Hashable, Sendable {
 }
 
 public struct CanonicalEdgeV1: Hashable, Sendable, Comparable {
-    public let source: CanonicalStateKeyV1
-    public let action: String
-    public let target: CanonicalStateKeyV1
+  public let source: CanonicalStateKeyV1
+  public let action: String
+  public let target: CanonicalStateKeyV1
+  public let canonicalEncoding: String
 
-    public init(source: CanonicalStateKeyV1, action: String, target: CanonicalStateKeyV1) {
-        self.source = source
-        self.action = action
-        self.target = target
+  public init(source: CanonicalStateKeyV1, action: String, target: CanonicalStateKeyV1) {
+    self.source = source
+    self.action = action
+    self.target = target
+    canonicalEncoding = "edge:\(source.canonicalEncoding)--\(encodedBytes(action))-->\(target.canonicalEncoding)"
     }
 
     public static func < (lhs: Self, rhs: Self) -> Bool {
         canonicalBytes(lhs.canonicalEncoding, rhs.canonicalEncoding)
     }
 
-    public var canonicalEncoding: String {
-        "edge:\(source.canonicalEncoding)--\(encodedBytes(action))-->\(target.canonicalEncoding)"
-    }
 }
 
 public struct CanonicalStateObservationV1: Hashable, Sendable {
@@ -319,9 +318,16 @@ public struct CanonicalRunV1: Equatable, Sendable {
 }
 
 func canonicalBytes(_ lhs: String, _ rhs: String) -> Bool {
-    Array(lhs.utf8).lexicographicallyPrecedes(Array(rhs.utf8))
+    lhs.utf8.lexicographicallyPrecedes(rhs.utf8)
 }
 
 func encodedBytes(_ value: String) -> String {
-    value.utf8.map { String(format: "%02x", $0) }.joined()
+    let digits = Array("0123456789abcdef".utf8)
+    var bytes: [UInt8] = []
+    bytes.reserveCapacity(value.utf8.count * 2)
+    for byte in value.utf8 {
+        bytes.append(digits[Int(byte >> 4)])
+        bytes.append(digits[Int(byte & 0x0f)])
+    }
+    return String(decoding: bytes, as: UTF8.self)
 }
