@@ -28,6 +28,12 @@ builder-visible declaration. The source parser reads that `let` independently;
 the runtime builder constructs the corresponding `TLASpec` independently.
 Every future authoring convenience must preserve this split.
 
+Finite nondeterministic initialization is also formal semantics. For example,
+`SharedVar(in: SetExpr<Record<CarSchema>>.literal(...))` means that the
+initial predicate chooses one member of that typed, finite set. Both paths
+retain the complete `initialSet`; it is compared by the fidelity gate and is
+not reduced to a Swift collection or display hint.
+
 ## Compilation and execution phases
 
 The two paths are deliberately separate all the way to the comparison:

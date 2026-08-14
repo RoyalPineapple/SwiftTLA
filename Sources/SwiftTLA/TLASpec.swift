@@ -129,11 +129,14 @@ public struct NamedInvariant: Sendable, CustomStringConvertible, Equatable {
   public var description: String { "\(name): \(body)" }
 }
 public struct ParsedSpecModel: Equatable, Sendable {
-  public let variables: [(name: String, initial: TLAValue)]
+  /// The parsed declaration, including its finite initial domain when one was
+  /// authored. The domain is part of the formal initial predicate, not display
+  /// metadata, so fidelity checks must retain it.
+  public let variables: [(name: String, initial: TLAValue, initialSet: StateExpr?)]
   public let actions: [(name: String, body: ActionExpr, bindings: [ActionBinding])]
   public let invariants: [(name: String, body: StateExpr)]
   public init(
-    variables: [(String, TLAValue)], actions: [(String, ActionExpr, [ActionBinding])],
+    variables: [(String, TLAValue, StateExpr?)], actions: [(String, ActionExpr, [ActionBinding])],
     invariants: [(String, StateExpr)]
   ) {
     self.variables = variables
@@ -146,7 +149,7 @@ public struct ParsedSpecModel: Equatable, Sendable {
       lhs.invariants.count == rhs.invariants.count
     else { return false }
     for (a, b) in zip(lhs.variables, rhs.variables) {
-      if a.name != b.name || a.initial != b.initial { return false }
+      if a.name != b.name || a.initial != b.initial || a.initialSet != b.initialSet { return false }
     }
     for (a, b) in zip(lhs.actions, rhs.actions) {
       if a.name != b.name || a.body != b.body || a.bindings != b.bindings { return false }

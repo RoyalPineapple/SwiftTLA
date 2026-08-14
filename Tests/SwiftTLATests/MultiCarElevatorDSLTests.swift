@@ -225,7 +225,7 @@ struct MultiCarElevatorDSLTests {
 
   private func normalize(_ spec: TLASpec) -> ParsedSpecModel {
     ParsedSpecModel(
-      variables: spec.variables.map { ($0.name, $0.initial) },
+      variables: spec.variables.map { ($0.name, $0.initial, $0.initialSet) },
       actions: spec.actions.map { ($0.name, $0.body, $0.bindings) },
       invariants: spec.invariants.map { ($0.name, $0.body) }
     )

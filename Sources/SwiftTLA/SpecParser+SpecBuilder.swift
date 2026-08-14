@@ -175,6 +175,15 @@ extension SpecParser {
                     ))
                     continue
                 }
+                if callName == "SharedVar",
+                   let initialSet = decodeStateExpr(rangeExpr),
+                   case .setLiteral(let elements) = initialSet,
+                   let first = elements.first,
+                   let elementType = setExpressionElementTypeName(rangeExpr) {
+                    let initial = (try? first.evaluate(in: [:])) ?? .int(0)
+                    result.variables.append((patternName, initial, initialSet, elementType))
+                    continue
+                }
                 let lowerBound = parseRangeLowerBound(rangeExpr)
                 result.variables.append((patternName, .int(lowerBound), nil, varTypeName))
                 continue
@@ -249,6 +258,19 @@ extension SpecParser {
               lower <= upper
         else { return nil }
         return lower...upper
+    }
+
+    /// Returns the formal element type from `SetExpr<Element>.literal(...)`.
+    /// This is syntax-only: the parser must not consult the runtime builder.
+    static func setExpressionElementTypeName(_ expression: ExprSyntax) -> String? {
+        guard let call = expression.as(FunctionCallExprSyntax.self),
+              let member = call.calledExpression.as(MemberAccessExprSyntax.self),
+              member.declName.baseName.text == "literal",
+              let base = member.base
+        else { return nil }
+        let typeName = base.description.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard typeName.hasPrefix("SetExpr<"), typeName.hasSuffix(">") else { return nil }
+        return String(typeName.dropFirst("SetExpr<".count).dropLast())
     }
 
     /// Extracts the lower bound from a range expression like `1...12`.

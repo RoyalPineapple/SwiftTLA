@@ -131,12 +131,12 @@ private func parseExpression(_ source: String) -> ExprSyntax {
             }
         }
         let runtimeTree = ParsedSpecModel(
-            variables: runtime.variables.map { ($0.name, $0.initial) },
+            variables: runtime.variables.map { ($0.name, $0.initial, $0.initialSet) },
             actions: runtime.actions.map { ($0.name, $0.body, $0.bindings) },
             invariants: runtime.invariants.map { ($0.name, $0.body) }
         )
         let parserTree = ParsedSpecModel(
-            variables: parsed.variables.map { ($0.name, $0.initial) },
+            variables: parsed.variables.map { ($0.name, $0.initial, $0.initialSet) },
             actions: parsed.actions.map { ($0.name, $0.body, $0.bindings) },
             invariants: parsed.invariants
         )

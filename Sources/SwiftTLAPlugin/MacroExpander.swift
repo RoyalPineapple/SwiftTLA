@@ -142,7 +142,8 @@ enum MacroExpander {
     static func generateParserTreeCheck(model: ParsedMacroModel) -> [DeclSyntax] {
         let variableNames = model.variables.map { "\"\($0.name)\"" }.joined(separator: ", ")
         let treeVars = model.variables.map { v in
-            "(\"\(v.name)\", \(codegenTLAValue(v.initial)))"
+            let initialSet = v.initialSet.map(codegenStateExpr) ?? "nil"
+            return "(\"\(v.name)\", \(codegenTLAValue(v.initial)), \(initialSet))"
         }.joined(separator: ", ")
 
         let treeActions = model.actions.map { a in
@@ -167,7 +168,7 @@ enum MacroExpander {
         static func _checkParserTree() {
             let builtSpec = Self.spec
             let built = ParsedSpecModel(
-                variables: builtSpec.variables.map { ($0.name, $0.initial) },
+                variables: builtSpec.variables.map { ($0.name, $0.initial, $0.initialSet) },
                 actions: builtSpec.actions.map { ($0.name, $0.body, $0.bindings) },
                 invariants: builtSpec.invariants.map { ($0.name, $0.body) }
             )

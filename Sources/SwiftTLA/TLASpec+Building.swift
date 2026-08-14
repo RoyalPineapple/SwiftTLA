@@ -140,7 +140,7 @@ extension TLASpec {
 
     if let tree = parserTree {
       let built = ParsedSpecModel(
-        variables: variables.map { ($0.name, $0.initial) },
+        variables: variables.map { ($0.name, $0.initial, $0.initialSet) },
         actions: actions.map { ($0.name, $0.body, $0.bindings) },
         invariants: invariants.map { ($0.name, $0.body) }
       )

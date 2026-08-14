@@ -7,7 +7,7 @@ struct ChangRobertsDemoTests {
     func exposesTypedMessages() throws {
         let builderSpec = ChangRoberts.spec
         let builderTree = ParsedSpecModel(
-            variables: builderSpec.variables.map { ($0.name, $0.initial) },
+            variables: builderSpec.variables.map { ($0.name, $0.initial, $0.initialSet) },
             actions: builderSpec.actions.map { ($0.name, $0.body, $0.bindings) },
             invariants: builderSpec.invariants.map { ($0.name, $0.body) }
         )

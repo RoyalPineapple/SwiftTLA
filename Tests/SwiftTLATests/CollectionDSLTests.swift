@@ -35,6 +35,21 @@ private struct TypedTupleAlgorithm {
   }
 }
 
+@TLAModel
+private struct TypedFiniteInitialAlgorithm {
+  static var spec: TLASpec {
+    #spec("TypedFiniteInitialAlgorithm") {
+      let phase = SharedVar(in: SetExpr<Int>.literal(1, 2))
+      Action("prepare") {
+        phase == 1 && phase.becomes(2)
+      }
+      Invariant("knownPhase") {
+        phase == 1 || phase == 2
+      }
+    }
+  }
+}
+
 @Suite(.serialized)
 struct TypedFormalCollectionTests {
   @Test func typedSetLowersAndChecksThroughBothPaths() throws {
@@ -67,5 +82,15 @@ struct TypedFormalCollectionTests {
 
     let tuple = TupleExpr<Int>(formalValue: .tuple([.int(1), .int(2)]))
     #expect(tuple?.elements == [1, 2])
+  }
+
+  @Test func typedFiniteInitialDomainChecksThroughBothPaths() throws {
+    TypedFiniteInitialAlgorithm._checkParserTree()
+    let result = try ModelChecker(spec: TypedFiniteInitialAlgorithm.spec).check()
+    guard case .ok(let count) = result.underlyingOutcome else {
+      Issue.record("Expected successful finite-domain proof, got \(result)")
+      return
+    }
+    #expect(count == 2)
   }
 }

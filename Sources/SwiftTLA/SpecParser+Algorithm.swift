@@ -204,6 +204,18 @@ extension SpecParser {
                 initialSet: .setLiteral(range.map { .value(.int($0)) }),
                 swiftTypeName: "Int"
             )
+        } else if expectedKind == "SharedVar",
+                  let setSyntax = initializer.arguments.first(where: { $0.label?.text == "in" })?.expression,
+                  let initialSet = decodeStateExpr(setSyntax),
+                  case .setLiteral(let elements) = initialSet,
+                  let initial = elements.first,
+                  let typeName = setExpressionElementTypeName(setSyntax) {
+            state = AlgorithmStateModel(
+                root: declaredName,
+                initial: initial,
+                initialSet: initialSet,
+                swiftTypeName: typeName
+            )
         } else {
             return nil
         }

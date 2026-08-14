@@ -423,6 +423,29 @@ public func SharedVar(_ name: String, in range: ClosedRange<Int>) -> SharedVaria
     )
 }
 
+/// Declares a shared variable whose initial value is chosen from a finite,
+/// literal formal set. This is the typed form for records, enums, functions,
+/// and other bounded formal values.
+public func SharedVar<Value: TLAValueType>(in values: Expr<SetExpr<Value>>) -> SharedVariable<Value> {
+    SharedVar("", in: values)
+}
+
+/// The named form used by the `#spec` declaration rewrite.
+public func SharedVar<Value: TLAValueType>(
+    _ name: String,
+    in values: Expr<SetExpr<Value>>
+) -> SharedVariable<Value> {
+    guard case .setLiteral(let elements) = values.raw, let initial = elements.first else {
+        preconditionFailure("SharedVar(in:) requires a non-empty SetExpr.literal initial domain")
+    }
+    return SharedVariable(
+        name: name,
+        initial: initial,
+        initialSet: values.raw,
+        swiftTypeName: String(reflecting: Value.self)
+    )
+}
+
 /// Declares a shared variable with a typed formal initial expression.
 public func SharedVar<Value: TLAValueType>(
     _ name: String,
