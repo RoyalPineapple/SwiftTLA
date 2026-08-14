@@ -1,4 +1,106 @@
 import SwiftTLA
+import SwiftTLAMacros
+
+/// The single-record asynchronous channel from *Specifying Systems*.
+///
+/// The finite initial domain, record field names, and every channel transition
+/// are authored in the SwiftTLA DSL. The generated machine is therefore a
+/// typed view of the same model used for parity checking.
+@TLAModel
+public struct ChannelModel {
+    public enum Data: String, CaseIterable, FiniteDomainKey {
+        case d1
+        case d2
+        case d3
+
+        public static let formalDomain = allCases
+        public static let formalTypeIdentity = FormalTypeIdentity(rawValue: "examples.channel.data")
+        public var tlaValue: TLAValue { .string(rawValue) }
+    }
+
+    public struct ChannelFields {
+        public let value: Data
+        public let ready: Int
+        public let acknowledgement: Int
+    }
+
+    public enum ChannelSchema: TLARecordSchema {
+        public typealias Fields = ChannelFields
+
+        public static let fieldNames: Set<String> = ["val", "rdy", "ack"]
+        public static let defaultRecord: TLAValue = .record([
+            "val": .string(Data.d1.rawValue), "rdy": .int(0), "ack": .int(0)
+        ])
+
+        public static func fieldName<Value>(for field: KeyPath<ChannelFields, Value>) -> String? {
+            let key = field as AnyKeyPath
+            if key == \ChannelFields.value { return "val" }
+            if key == \ChannelFields.ready { return "rdy" }
+            if key == \ChannelFields.acknowledgement { return "ack" }
+            return nil
+        }
+
+        public static let value = field(\ChannelFields.value)
+        public static let ready = field(\ChannelFields.ready)
+        public static let acknowledgement = field(\ChannelFields.acknowledgement)
+    }
+
+    public static var spec: TLASpec {
+        #spec("Channel") {
+            Extends("Naturals")
+            let channel = SharedVar(in: SetExpr<Record<ChannelSchema>>.literal(
+                Record.literal(.init(ChannelSchema.value, .d1), .init(ChannelSchema.ready, 0), .init(ChannelSchema.acknowledgement, 0)),
+                Record.literal(.init(ChannelSchema.value, .d1), .init(ChannelSchema.ready, 0), .init(ChannelSchema.acknowledgement, 1)),
+                Record.literal(.init(ChannelSchema.value, .d1), .init(ChannelSchema.ready, 1), .init(ChannelSchema.acknowledgement, 0)),
+                Record.literal(.init(ChannelSchema.value, .d1), .init(ChannelSchema.ready, 1), .init(ChannelSchema.acknowledgement, 1)),
+                Record.literal(.init(ChannelSchema.value, .d2), .init(ChannelSchema.ready, 0), .init(ChannelSchema.acknowledgement, 0)),
+                Record.literal(.init(ChannelSchema.value, .d2), .init(ChannelSchema.ready, 0), .init(ChannelSchema.acknowledgement, 1)),
+                Record.literal(.init(ChannelSchema.value, .d2), .init(ChannelSchema.ready, 1), .init(ChannelSchema.acknowledgement, 0)),
+                Record.literal(.init(ChannelSchema.value, .d2), .init(ChannelSchema.ready, 1), .init(ChannelSchema.acknowledgement, 1)),
+                Record.literal(.init(ChannelSchema.value, .d3), .init(ChannelSchema.ready, 0), .init(ChannelSchema.acknowledgement, 0)),
+                Record.literal(.init(ChannelSchema.value, .d3), .init(ChannelSchema.ready, 0), .init(ChannelSchema.acknowledgement, 1)),
+                Record.literal(.init(ChannelSchema.value, .d3), .init(ChannelSchema.ready, 1), .init(ChannelSchema.acknowledgement, 0)),
+                Record.literal(.init(ChannelSchema.value, .d3), .init(ChannelSchema.ready, 1), .init(ChannelSchema.acknowledgement, 1))
+            ))
+
+            Invariant("TypeInvariant") {
+                (channel[ChannelSchema.value] == .d1
+                    || channel[ChannelSchema.value] == .d2
+                    || channel[ChannelSchema.value] == .d3)
+                    && channel[ChannelSchema.ready] >= 0 && channel[ChannelSchema.ready] <= 1
+                    && channel[ChannelSchema.acknowledgement] >= 0 && channel[ChannelSchema.acknowledgement] <= 1
+            }
+
+            Action("Send") {
+                channel[ChannelSchema.ready] == channel[ChannelSchema.acknowledgement]
+                    && (channel.becomes(Record<ChannelSchema>.literal(
+                        .init(ChannelSchema.value, Data.d1),
+                        .init(ChannelSchema.ready, 1 - channel[ChannelSchema.ready]),
+                        .init(ChannelSchema.acknowledgement, channel[ChannelSchema.acknowledgement])
+                    ))
+                    || channel.becomes(Record<ChannelSchema>.literal(
+                        .init(ChannelSchema.value, Data.d2),
+                        .init(ChannelSchema.ready, 1 - channel[ChannelSchema.ready]),
+                        .init(ChannelSchema.acknowledgement, channel[ChannelSchema.acknowledgement])
+                    ))
+                    || channel.becomes(Record<ChannelSchema>.literal(
+                        .init(ChannelSchema.value, Data.d3),
+                        .init(ChannelSchema.ready, 1 - channel[ChannelSchema.ready]),
+                        .init(ChannelSchema.acknowledgement, channel[ChannelSchema.acknowledgement])
+                    )))
+            }
+
+            Action("Rcv") {
+                channel[ChannelSchema.ready] != channel[ChannelSchema.acknowledgement]
+                    && channel.becomes(Record<ChannelSchema>.literal(
+                        .init(ChannelSchema.value, channel[ChannelSchema.value]),
+                        .init(ChannelSchema.ready, channel[ChannelSchema.ready]),
+                        .init(ChannelSchema.acknowledgement, 1 - channel[ChannelSchema.acknowledgement])
+                    ))
+            }
+        }
+    }
+}
 
 extension Example {
     public static let channel = Entry(
@@ -7,48 +109,7 @@ extension Example {
         upstreamModule: "specifications/SpecifyingSystems/AsynchronousInterface/Channel.tla",
         upstreamCfg: "specifications/SpecifyingSystems/AsynchronousInterface/Channel.cfg",
         expectedDistinct: 12,
-        spec: {
-            let data = ["d1", "d2", "d3"]
-            let chan = Var<TLAValue>("chan")
-            var records: [TLAValue] = []
-            for v in data {
-                for r in 0...1 {
-                    records.append(.record([
-                        "val": .string(v), "rdy": .int(r), "ack": .int(r)
-                    ]))
-                }
-            }
-            return TLASpec("Channel") {
-                Extends("Naturals")
-                Variable(chan, in: records)
-                Invariant("TypeInvariant") {
-                    (StateExpr.recordAccess(chan.stateExpr, "val") == "d1"
-                        || StateExpr.recordAccess(chan.stateExpr, "val") == "d2"
-                        || StateExpr.recordAccess(chan.stateExpr, "val") == "d3")
-                        && StateExpr.recordAccess(chan.stateExpr, "rdy") >= 0 && StateExpr.recordAccess(chan.stateExpr, "rdy") <= 1
-                        && StateExpr.recordAccess(chan.stateExpr, "ack") >= 0 && StateExpr.recordAccess(chan.stateExpr, "ack") <= 1
-                }
-                Action("Send") {
-                    StateExpr.recordAccess(chan.stateExpr, "rdy") == StateExpr.recordAccess(chan.stateExpr, "ack") && (
-                        .assign(chan.name, chan.stateExpr
-                            .updated(at: "val", to: "d1")
-                            .updated(at: "rdy", to: StateExpr.subtract(.int(1), StateExpr.recordAccess(chan.stateExpr, "rdy"))))
-                        || .assign(chan.name, chan.stateExpr
-                            .updated(at: "val", to: "d2")
-                            .updated(at: "rdy", to: StateExpr.subtract(.int(1), StateExpr.recordAccess(chan.stateExpr, "rdy"))))
-                        || .assign(chan.name, chan.stateExpr
-                            .updated(at: "val", to: "d3")
-                            .updated(at: "rdy", to: StateExpr.subtract(.int(1), StateExpr.recordAccess(chan.stateExpr, "rdy"))))
-                    )
-                }
-                Action("Rcv") {
-                    StateExpr.recordAccess(chan.stateExpr, "rdy") != StateExpr.recordAccess(chan.stateExpr, "ack")
-                        && .assign(chan.name, chan.stateExpr
-                            .updated(at: "ack", to: StateExpr.subtract(.int(1), StateExpr.recordAccess(chan.stateExpr, "ack"))))
-                }
-            }
-        }(),
-        notes: "Same as AsynchInterface with single record variable `chan`. TLC = 12.",
+        spec: ChannelModel.spec,
+        notes: "Single-record channel, authored as typed records and a finite formal initial domain. TLC = 12."
     )
-
 }

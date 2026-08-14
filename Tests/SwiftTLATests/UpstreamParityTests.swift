@@ -48,6 +48,17 @@ struct UpstreamParityTests {
             #expect(tla.contains(name), "missing \(name)")
         }
     }
+
+    @Test("Channel typed record model matches its validated state count")
+    func channelTypedRecordParity() throws {
+        try ChannelModel.verifySpec()
+        let checker = ModelChecker(spec: ChannelModel.spec, maxStates: 50_000)
+        #expect(try checker.exploreGraph().states.count == Example.channel.expectedDistinct)
+        guard case .ok = try checker.check() else {
+            Issue.record("Typed Channel model did not verify")
+            return
+        }
+    }
 }
 
 // MARK: - Native codegen verification for @TLAModel parity specs
