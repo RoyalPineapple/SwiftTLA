@@ -1,5 +1,5 @@
 import SwiftUI
-import ApplePlatformBluetooth
+import Bluetooth
 import CoreBluetooth
 
 @main

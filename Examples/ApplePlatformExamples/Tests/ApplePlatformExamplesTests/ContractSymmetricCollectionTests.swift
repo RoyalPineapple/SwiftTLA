@@ -1,6 +1,6 @@
 import Foundation
 import SwiftTLA
-@testable import ApplePlatformBluetooth
+@testable import Bluetooth
 import XCTest
 
 private struct LiveDevice: Identifiable {

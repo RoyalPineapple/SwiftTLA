@@ -1,5 +1,5 @@
 import SwiftUI
-@preconcurrency import ApplePlatformAVPipeline
+@preconcurrency import AVPipeline
 import SwiftTLA
 import SwiftTLAMacros
 import AVFoundation

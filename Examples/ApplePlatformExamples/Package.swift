@@ -6,8 +6,8 @@ let package = Package(
     name: "ApplePlatformExamples",
     platforms: [.macOS(.v14), .iOS(.v17), .macCatalyst(.v17), .tvOS(.v17), .watchOS(.v10)],
     products: [
-        .library(name: "ApplePlatformBluetooth", targets: ["ApplePlatformBluetooth"]),
-        .library(name: "ApplePlatformAVPipeline", targets: ["ApplePlatformAVPipeline"]),
+        .library(name: "Bluetooth", targets: ["Bluetooth"]),
+        .library(name: "AVPipeline", targets: ["AVPipeline"]),
         .executable(name: "bluetooth-example", targets: ["BluetoothExample"]),
         .executable(name: "av-pipeline-example", targets: ["AVPipelineExample"])
     ],
@@ -16,14 +16,14 @@ let package = Package(
     ],
     targets: [
         .target(
-            name: "ApplePlatformBluetooth",
+            name: "Bluetooth",
             dependencies: [
                 .product(name: "SwiftTLA", package: "SwiftTLA"),
                 .product(name: "SwiftTLAMacros", package: "SwiftTLA")
             ]
         ),
         .target(
-            name: "ApplePlatformAVPipeline",
+            name: "AVPipeline",
             dependencies: [
                 .product(name: "SwiftTLA", package: "SwiftTLA"),
                 .product(name: "SwiftTLAMacros", package: "SwiftTLA")
@@ -31,17 +31,17 @@ let package = Package(
         ),
         .executableTarget(
             name: "BluetoothExample",
-            dependencies: ["ApplePlatformBluetooth"],
+            dependencies: ["Bluetooth"],
             linkerSettings: [.unsafeFlags(["-Xlinker", "-ObjC"])]
         ),
         .executableTarget(
             name: "AVPipelineExample",
-            dependencies: ["ApplePlatformAVPipeline"],
+            dependencies: ["AVPipeline"],
             linkerSettings: [.unsafeFlags(["-Xlinker", "-ObjC"])]
         ),
         .testTarget(
             name: "ApplePlatformExamplesTests",
-            dependencies: ["ApplePlatformBluetooth"]
+            dependencies: ["Bluetooth"]
         )
     ]
 )
