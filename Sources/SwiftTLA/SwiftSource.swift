@@ -21,7 +21,7 @@ extension TLASpec {
         let values = Array(repeating: ".int(0)", count: count).joined(separator: ", ")
         lines.append("            Variable(\"\(v.name)\", .tuple([\(values)]))")
       case .dictionary(let scope):
-        lines.append("            DictionaryVar<SomeID, Int>(\"\(v.name)\", scope: \(scope))")
+        lines.append("            Variable(\"\(v.name)\", .function([:])) // former verification scope: \(scope)")
       case .scalar:
         lines.append("            Var<Int>(\"\(v.name)\", \(v.initial.swiftLiteral))")
       }

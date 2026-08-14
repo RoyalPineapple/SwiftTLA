@@ -163,44 +163,6 @@ struct SymmetricCollectionMacroRuntimeTests {
     #expect(parsed.diagnostics.isEmpty)
   }
 
-  @Test("DictionaryVar declarations remain visible to checker action evaluation")
-  func parserRetainsDictionaryVarStateForEnabledActions() throws {
-    let source = """
-    {
-      let cPhase = Var("cPhase", 0)
-      Variable(cPhase)
-      let devicePhases = DictionaryVar<Device, Int>("devicePhases", scope: 4)
-      devicePhases
-      Action("cToPoweredOff") {
-        (cPhase == 0 || cPhase == 5)
-          && devicePhases.allSatisfy { $0 == 0 || $0 == 7 }
-          && cPhase.becomes(4)
-      }
-      Action("cToPoweredOn") { cPhase == 4 && cPhase.becomes(5) }
-    }
-    """
-    let closure = Parser.parse(source: source).statements.first!.item.as(ClosureExprSyntax.self)!
-    let parsed = SpecParser.parseSpecClosure(closure)
-    let runtimeSpec = TLASpec("RuntimeDictionaryParity") {
-      DictionaryVar<Device, Int>("devicePhases", scope: 4)
-    }
-    let spec = TLASpec(
-      name: "DictionaryEnabledRegression",
-      variables: parsed.variables.map { NamedVar(name: $0.name, initial: $0.initial, initialSet: $0.initialSet) },
-      actions: parsed.actions.map { NamedAction(name: $0.name, body: $0.body) },
-      invariants: [],
-      symmetricCollections: parsed.symmetricCollections.map(\.declaration)
-    )
-
-    #expect(parsed.diagnostics.isEmpty)
-    #expect(parsed.variables.map(\.name) == ["cPhase", "devicePhases"])
-    #expect(parsed.symmetricCollections.map(\.name) == ["devicePhases"])
-    #expect(parsed.symmetricCollections.map(\.verificationScope) == [4])
-    #expect(parsed.variables[1].initial == runtimeSpec.variables[0].initial)
-    #expect(parsed.symmetricCollections[0].declaration.metadata == runtimeSpec.symmetricCollections[0].metadata)
-    #expect(try ModelChecker(spec: spec).check().description.contains("OK"))
-  }
-
   @Test("Parsed collection actions preserve guards and lowering behavior")
   func parserPreservesCollectionActionBody() throws {
     let source = """

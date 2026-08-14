@@ -487,12 +487,6 @@ extension Var {
     }
 }
 
-extension DictionaryVar {
-    public func algorithmLValue(_ member: DictMember<K>) -> AlgorithmLValue<V> {
-        AlgorithmLValue(model: .function(root: name, key: member.key))
-    }
-}
-
 public struct AlgorithmElement: Sendable {
     fileprivate let model: AlgorithmComponentModel
 }

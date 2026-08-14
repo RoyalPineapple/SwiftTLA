@@ -147,10 +147,6 @@ extension SpecParser {
                   let fc = initializer.as(FunctionCallExprSyntax.self)
             else { continue }
 
-            if parseDictionaryVarDecl(binding, into: &result) {
-                continue
-            }
-
             let stateVarInfo = resolveVarCall(fc)
             let varTypeName = stateVarInfo?.1 ?? resolveVarTypeArg(fc)
             let callName = stateVarInfo?.0 ?? (resolveVarTypeArg(fc) != nil ? "Var" : nil)
@@ -283,6 +279,9 @@ extension SpecParser {
 
     /// Converts a Swift initializer expression to a TLAValue.
     static func parseInitialExpr(_ expression: ExprSyntax) -> TLAValue {
+        if let decoded = decodeStateExpr(expression), case .value(let value) = decoded {
+            return value
+        }
         if let intVal = expression.as(IntegerLiteralExprSyntax.self) {
             return .int(Int(intVal.literal.text) ?? 0)
         }
