@@ -60,7 +60,7 @@ extension Example {
         id: "locks_auxiliary_vars/Lock_N2",
         upstreamSpec: "locks_auxiliary_vars",
         upstreamModule: "specifications/locks_auxiliary_vars/Lock.tla",
-        upstreamCfg: nil,
+        upstreamCfg: "specifications/locks_auxiliary_vars/Lock.cfg",
         expectedDistinct: 12,
         spec: LockModel.spec,
         notes: "Two-process PlusCal lock. TLC = 12."
