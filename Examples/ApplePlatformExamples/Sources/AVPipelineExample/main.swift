@@ -19,7 +19,7 @@ struct CameraApp: App {
                                 Button {
                                     model.currentPlayer?.pause()
                                     model.currentPlayer = nil
-                                    model._live()
+                                    Task { await model.live() }
                                 } label: {
                                     Image(systemName: "xmark.circle.fill")
                                         .font(.title)
@@ -46,7 +46,7 @@ struct CameraApp: App {
             }
             .background(.black)
             .frame(minWidth: 640, minHeight: 520)
-            .task { await model._ready() }
+            .task { await model.ready() }
         }
     }
 
@@ -61,7 +61,7 @@ struct CameraApp: App {
                             .onTapGesture {
                                 switch item {
                                 case .photo(let data): model.selectedPhoto = data
-                                case .video(let url): model.playRecording(url: url)
+                                case .video(let url): Task { await model.playRecording(url: url) }
                                 }
                             }
                             .overlay(
@@ -90,7 +90,7 @@ struct CameraApp: App {
             if model.phase == 3 || model.selectedPhoto != nil {
                 Button(action: {
                     model.selectedPhoto = nil
-                    model._live()
+                    Task { await model.live() }
                 }) {
                     Image(systemName: "camera.fill")
                         .font(.system(size: 28))
@@ -111,7 +111,7 @@ struct CameraApp: App {
                 .buttonStyle(.plain)
                 .disabled(model.phase != 1)
 
-                Button(action: { model.toggleRecording() }) {
+                Button(action: { Task { await model.toggleRecording() } }) {
                     ZStack {
                         Circle().stroke(.red, lineWidth: 4).frame(width: 56, height: 56)
                         if model.phase == 2 {
@@ -266,10 +266,67 @@ enum RollItem: Identifiable {
     }
 }
 
+@TLAModel
+struct CameraWorkflow {
+    private enum ReadyProcess: String, FiniteDomainKey { case readyEvent
+        static let formalDomain: [Self] = [.readyEvent]
+        static let formalTypeIdentity = FormalTypeIdentity(rawValue: "apple.av.camera.ready")
+        var tlaValue: TLAValue { .string(rawValue) }
+    }
+    private enum RecordProcess: String, FiniteDomainKey { case recordEvent
+        static let formalDomain: [Self] = [.recordEvent]
+        static let formalTypeIdentity = FormalTypeIdentity(rawValue: "apple.av.camera.record")
+        var tlaValue: TLAValue { .string(rawValue) }
+    }
+    private enum StopProcess: String, FiniteDomainKey { case stopEvent
+        static let formalDomain: [Self] = [.stopEvent]
+        static let formalTypeIdentity = FormalTypeIdentity(rawValue: "apple.av.camera.stop")
+        var tlaValue: TLAValue { .string(rawValue) }
+    }
+    private enum PlayProcess: String, FiniteDomainKey { case playEvent
+        static let formalDomain: [Self] = [.playEvent]
+        static let formalTypeIdentity = FormalTypeIdentity(rawValue: "apple.av.camera.play")
+        var tlaValue: TLAValue { .string(rawValue) }
+    }
+    private enum LiveProcess: String, FiniteDomainKey { case liveEvent
+        static let formalDomain: [Self] = [.liveEvent]
+        static let formalTypeIdentity = FormalTypeIdentity(rawValue: "apple.av.camera.live")
+        var tlaValue: TLAValue { .string(rawValue) }
+    }
+    private enum Step: String, PlusCalLabel { case ready, record, stop, play, live }
+
+    static var spec: TLASpec {
+        #spec("CameraWorkflow") {
+            Algorithm("CameraWorkflow") {
+                let phase = SharedVar(initial: 0)
+                Each(ReadyProcess.all) { _ in
+                    Do(Step.ready) { When(phase == 0); Assign(phase, to: 1); Goto(Step.ready) }
+                }
+                Each(RecordProcess.all) { _ in
+                    Do(Step.record) { When(phase == 1); Assign(phase, to: 2); Goto(Step.record) }
+                }
+                Each(StopProcess.all) { _ in
+                    Do(Step.stop) { When(phase == 2); Assign(phase, to: 1); Goto(Step.stop) }
+                }
+                Each(PlayProcess.all) { _ in
+                    Do(Step.play) { When(phase == 1); Assign(phase, to: 3); Goto(Step.play) }
+                }
+                Each(LiveProcess.all) { _ in
+                    Do(Step.live) { When(phase == 3); Assign(phase, to: 1); Goto(Step.live) }
+                }
+                Invariant("validPhase") { phase >= 0 && phase <= 3 }
+            }
+        }
+    }
+
+    @TLAObservable
+    final class Machine {}
+}
+
 @MainActor
 @Observable
 final class CameraModel {
-    var phase = 0
+    private let machine = CameraWorkflow.Machine()
     let capture = Media.Capture()
     var roll: [RollItem] = []
     var flashActive = false
@@ -280,17 +337,42 @@ final class CameraModel {
     private var movieOutput: AVCaptureMovieFileOutput?
     private let recordDelegate = RecordingDelegate()
 
-    func _ready() async {
-        guard let device = AVCaptureDevice.default(for: .video) else { return }
-        do {
-            try await capture.configure(device: device)
-            let session = capture.session
-            let output = AVCaptureMovieFileOutput()
-            session.addOutput(output)
-            movieOutput = output
-            try await capture.start()
-            phase = 1
-        } catch { print("Camera error: \(error)") }
+    var phase: Int { machine.state.phase }
+
+    init() {
+        machine.onReady = { [weak self] _, _ in
+            guard let self, let device = AVCaptureDevice.default(for: .video) else { return }
+            do {
+                try await self.capture.configure(device: device)
+                let output = AVCaptureMovieFileOutput()
+                self.capture.session.addOutput(output)
+                self.movieOutput = output
+                try await self.capture.start()
+            } catch { print("Camera error: \(error)") }
+        }
+        machine.onRecord = { [weak self] _, _ in
+            guard let self, let movieOutput = self.movieOutput else { return }
+            let url = FileManager.default.temporaryDirectory.appendingPathComponent("recording-\(UUID().uuidString).mov")
+            self.recordedURL = url
+            movieOutput.startRecording(to: url, recordingDelegate: self.recordDelegate)
+        }
+        machine.onStop = { [weak self] _, _ in
+            self?.movieOutput?.stopRecording()
+            if let url = self?.recordedURL { self?.roll.append(.video(url)) }
+        }
+        machine.onPlay = { [weak self] _, _ in
+            guard let self, let url = self.recordedURL else { return }
+            let player = AVPlayer(url: url)
+            self.currentPlayer = player
+            player.play()
+            NotificationCenter.default.addObserver(forName: .AVPlayerItemDidPlayToEndTime, object: player.currentItem, queue: .main) { [weak self] _ in
+                Task { try? await self?.machine._live() }
+            }
+        }
+        machine.onLive = { [weak self] _, _ in
+            self?.currentPlayer?.pause()
+            self?.currentPlayer = nil
+        }
     }
 
     func takeSnapshot() async {
@@ -306,37 +388,14 @@ final class CameraModel {
         }
     }
 
-    private func _record() {
-        guard let movieOutput else { return }
-        recordedURL = FileManager.default.temporaryDirectory.appendingPathComponent("recording-\(UUID().uuidString).mov")
-        movieOutput.startRecording(to: recordedURL!, recordingDelegate: recordDelegate)
-        phase = 2
+    func toggleRecording() async {
+        if phase == 2 { _ = try? await machine._stop() }
+        else if phase == 1 { _ = try? await machine._record() }
     }
 
-    private func _stop() {
-        movieOutput?.stopRecording()
-        if let recordedURL { roll.append(.video(recordedURL)) }
-        phase = 1
-    }
-
-    private func _play() {
-        guard let recordedURL else { return }
-        let player = AVPlayer(url: recordedURL)
-        currentPlayer = player
-        player.play()
-        phase = 3
-    }
-
-    func _live() { currentPlayer?.pause(); currentPlayer = nil; phase = 1 }
-
-    func toggleRecording() {
-        if phase == 2 { _stop() }
-        else if phase == 1 { _record() }
-    }
-
-    func playRecording(url: URL? = nil) {
+    func playRecording(url: URL? = nil) async {
         recordedURL = url ?? recordedURL
-        if phase == 1 { _play() }
+        if phase == 1 { _ = try? await machine._play() }
     }
 
     func delete(_ item: RollItem) {
@@ -352,6 +411,8 @@ final class CameraModel {
             return recordedURL.map { $0 == url } ?? false
         }
     }
+    func ready() async { _ = try? await machine._ready() }
+    func live() async { _ = try? await machine._live() }
 }
 
 private final class RecordingDelegate: NSObject, AVCaptureFileOutputRecordingDelegate {
