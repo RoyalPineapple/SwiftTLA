@@ -16,6 +16,7 @@ let package = Package(
         .library(name: "SwiftTLAMacros", targets: ["SwiftTLAMacros"]),
         .library(name: "SwiftTLAModels", targets: ["SwiftTLAModels"]),
         .library(name: "SwiftTLADemos", targets: ["SwiftTLADemos"]),
+        .executable(name: "SwiftTLADemoApp", targets: ["SwiftTLADemoApp"]),
         .library(name: "UpstreamParity", targets: ["UpstreamParity"])
     ],
     dependencies: [
@@ -40,6 +41,11 @@ let package = Package(
         ]),
         .target(name: "SwiftTLAModels", dependencies: ["SwiftTLA", "SwiftTLAMacros"], swiftSettings: settings),
         .target(name: "SwiftTLADemos", dependencies: ["SwiftTLA", "SwiftTLAMacros"], swiftSettings: settings),
+        .executableTarget(
+            name: "SwiftTLADemoApp",
+            dependencies: ["SwiftTLA", "SwiftTLADemos"],
+            swiftSettings: settings
+        ),
         .target(
             name: "UpstreamParity",
             dependencies: [

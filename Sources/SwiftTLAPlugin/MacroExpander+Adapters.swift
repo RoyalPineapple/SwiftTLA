@@ -10,7 +10,8 @@ enum NestedAdapterKind {
 extension MacroExpander {
     static func generateNestedAdapterMembers(
         kind: NestedAdapterKind,
-        canonicalModel: ParsedMacroModel
+        canonicalModel: ParsedMacroModel,
+        needsPublicInitializer: Bool
     ) -> [DeclSyntax] {
         let modelType = canonicalModel.typeName
         let isolation = kind == .observable ? "@MainActor " : ""
@@ -33,13 +34,20 @@ extension MacroExpander {
             """)
         ]
         if kind == .observable {
-            declarations.append(DeclSyntax(stringLiteral: """
-            @MainActor public init() {
-                _canonical = \(modelType)()
+            if needsPublicInitializer {
+                declarations.append(DeclSyntax(stringLiteral: """
+                @MainActor public init() {
+                    _canonical = \(modelType)()
+                }
+                """))
             }
-            """))
             declarations.append(contentsOf: generateNestedObservableMembers(model: canonicalModel))
         } else {
+            if needsPublicInitializer {
+                declarations.append(DeclSyntax(stringLiteral: """
+                public init() {}
+                """))
+            }
             declarations.append(DeclSyntax(stringLiteral: """
             public var state: State {
                 get async {

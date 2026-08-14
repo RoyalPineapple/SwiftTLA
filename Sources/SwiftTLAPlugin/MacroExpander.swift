@@ -19,10 +19,18 @@ enum MacroExpander {
         action.bindings.filter { $0.values.count > 1 }
     }
 
-    static func generate(mode: GenerationMode, model: ParsedMacroModel) -> [DeclSyntax] {
+    static func generate(
+        mode: GenerationMode,
+        model: ParsedMacroModel,
+        needsPublicInitializer: Bool = true
+    ) -> [DeclSyntax] {
         switch mode {
         case .model, .actor:
-            return generateStateMachineMembers(isActor: mode == .actor, model: model)
+            return generateStateMachineMembers(
+                isActor: mode == .actor,
+                model: model,
+                needsPublicInitializer: needsPublicInitializer
+            )
         case .observable:
             return generateObservableMembers(
                 typeName: model.typeName,
@@ -35,8 +43,19 @@ enum MacroExpander {
 
     // MARK: - State machine code generation (model / actor)
 
-    static func generateStateMachineMembers(isActor: Bool, model: ParsedMacroModel) -> [DeclSyntax] {
+    static func generateStateMachineMembers(
+        isActor: Bool,
+        model: ParsedMacroModel,
+        needsPublicInitializer: Bool
+    ) -> [DeclSyntax] {
         var decls: [DeclSyntax] = []
+
+        // A generated machine is a public value surface. Swift only
+        // synthesizes an internal memberwise initializer for a public type,
+        // so emit the zero-argument construction API explicitly.
+        if needsPublicInitializer {
+            decls.append(DeclSyntax(stringLiteral: "public init() {}"))
+        }
 
         decls.append(DeclSyntax(stringLiteral: """
         private var _machine = CanonicalMachine(
