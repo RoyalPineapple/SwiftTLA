@@ -21,16 +21,22 @@ extension SpecParser {
 
         var components: [AlgorithmComponentModel] = []
         for statement in closure.statements {
+            if case .decl(let declaration) = statement.item,
+               let variable = declaration.as(VariableDeclSyntax.self),
+               let component = parseAlgorithmVariableDeclaration(variable, expectedKind: "SharedVar") {
+                components.append(component)
+                continue
+            }
             guard case .expr(let expression) = statement.item else {
                 result.diagnostics.append(.init(
-                    message: "Unsupported Algorithm declaration. Supported declarations are Shared and Each.",
+                    message: "Unsupported Algorithm declaration. Supported declarations are SharedVar and Each.",
                     source: statement
                 ))
                 return
             }
             guard let component = parseAlgorithmComponent(expression) else {
                 result.diagnostics.append(.init(
-                    message: "Unsupported Algorithm declaration. Supported declarations are Shared and Each.",
+                    message: "Unsupported Algorithm declaration. Supported declarations are SharedVar and Each.",
                     source: expression
                 ))
                 return
@@ -101,6 +107,12 @@ extension SpecParser {
         let parameter = closureParameterNames(in: closure).first ?? "__pcal_self"
         var components: [AlgorithmComponentModel] = []
         for statement in closure.statements {
+            if case .decl(let declaration) = statement.item,
+               let variable = declaration.as(VariableDeclSyntax.self),
+               let component = parseAlgorithmVariableDeclaration(variable, expectedKind: "LocalVar") {
+                components.append(component)
+                continue
+            }
             guard case .expr(let expression) = statement.item else { return nil }
             guard let component = parseEachComponent(expression, processParameter: parameter) else {
                 return nil
@@ -120,6 +132,30 @@ extension SpecParser {
             fairness = .none
         }
         return .process(.init(typeName: domain.typeName, domain: domain.values, fairness: fairness, components: components))
+    }
+
+    /// Parses the declaration spelling used by the public PlusCal-shaped DSL.
+    /// The runtime builder receives the same declaration through `#spec`'s
+    /// registration rewrite; this parser deliberately does its own decoding.
+    private static func parseAlgorithmVariableDeclaration(
+        _ declaration: VariableDeclSyntax,
+        expectedKind: String
+    ) -> AlgorithmComponentModel? {
+        guard declaration.bindings.count == 1,
+              let binding = declaration.bindings.first,
+              let declaredName = binding.pattern.as(IdentifierPatternSyntax.self)?.identifier.text,
+              let initializer = binding.initializer?.value.as(FunctionCallExprSyntax.self),
+              initializer.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == expectedKind,
+              let initialSyntax = initializer.arguments.first(where: { $0.label?.text == "initial" })?.expression,
+              let initial = literalAlgorithmValue(initialSyntax)
+        else { return nil }
+
+        if let literalName = extractStringArg(initializer, index: 0), literalName != declaredName {
+            return nil
+        }
+
+        let state = AlgorithmStateModel(root: declaredName, initial: initial)
+        return expectedKind == "SharedVar" ? .shared(state) : .local(state)
     }
 
     private static func parseEachComponent(

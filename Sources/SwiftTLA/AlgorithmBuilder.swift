@@ -60,6 +60,68 @@ public struct AlgorithmLValue<Value: TLAValueType>: Sendable {
     fileprivate let model: AlgorithmLValueModel
 }
 
+/// A typed shared algorithm variable.
+///
+/// Declare it with `let value = SharedVar(initial: 0)` inside a
+/// `#spec` algorithm. The `#spec` macro registers the declaration with the
+/// runtime builder, while the parser independently reads the same declaration.
+/// Application code never needs the engine-level `Var` type for this form.
+public struct SharedVariable<Value: TLAValueType>: StateExprConvertible, Sendable {
+    fileprivate let name: String
+    fileprivate let initial: TLAValue
+
+    public var stateExpr: StateExpr { .variable(name) }
+
+    public var algorithmLValue: AlgorithmLValue<Value> {
+        AlgorithmLValue(model: .root(name))
+    }
+}
+
+/// A typed process-local algorithm variable.
+///
+/// A `LocalVar` declaration is valid only inside an `Each` process body.
+public struct LocalVariable<Value: TLAValueType>: StateExprConvertible, Sendable {
+    fileprivate let name: String
+    fileprivate let initial: TLAValue
+
+    public var stateExpr: StateExpr { .variable(name) }
+
+    public var algorithmLValue: AlgorithmLValue<Value> {
+        AlgorithmLValue(model: .root(name))
+    }
+}
+
+/// Declares a shared PlusCal-shaped variable.
+///
+/// Use it as a local declaration inside `#spec`; the macro registers the
+/// resulting handle with the enclosing `Algorithm` builder.
+public func SharedVar<Value: TLAValueType>(
+    _ name: String,
+    initial: Value
+) -> SharedVariable<Value> {
+    SharedVariable(name: name, initial: initial.tlaValue)
+}
+
+/// The name is supplied from the enclosing `let` binding by `#spec`.
+/// This overload is intentionally useful only inside that macro boundary.
+public func SharedVar<Value: TLAValueType>(initial: Value) -> SharedVariable<Value> {
+    SharedVariable(name: "", initial: initial.tlaValue)
+}
+
+/// Declares a process-local PlusCal-shaped variable.
+public func LocalVar<Value: TLAValueType>(
+    _ name: String,
+    initial: Value
+) -> LocalVariable<Value> {
+    LocalVariable(name: name, initial: initial.tlaValue)
+}
+
+/// The name is supplied from the enclosing `let` binding by `#spec`.
+/// This overload is intentionally useful only inside that macro boundary.
+public func LocalVar<Value: TLAValueType>(initial: Value) -> LocalVariable<Value> {
+    LocalVariable(name: "", initial: initial.tlaValue)
+}
+
 /// Scheduling policy for one `Each` process family.
 ///
 /// `.weak` is the PlusCal `fair process` spelling. The lowerer applies it to
@@ -122,6 +184,14 @@ public enum AlgorithmBuilder {
 
     public static func buildExpression(_ component: AlgorithmElement) -> [AlgorithmElement] {
         [component]
+    }
+
+    public static func buildExpression<Value>(_ variable: SharedVariable<Value>) -> [AlgorithmElement] {
+        [AlgorithmElement(model: .shared(.init(root: variable.name, initial: variable.initial)))]
+    }
+
+    public static func buildExpression<Value>(_ variable: LocalVariable<Value>) -> [AlgorithmElement] {
+        [AlgorithmElement(model: .local(.init(root: variable.name, initial: variable.initial)))]
     }
 
     public static func buildExpression(_ component: InvDecl) -> [AlgorithmElement] {
@@ -343,6 +413,20 @@ public func Assign<Value: TLAValueType>(
 
 public func Assign<Value: TLAValueType>(
     _ variable: Var<Value>,
+    to value: some StateExprConvertible
+) -> StepStatement {
+    Assign(variable.algorithmLValue, to: value)
+}
+
+public func Assign<Value: TLAValueType>(
+    _ variable: SharedVariable<Value>,
+    to value: some StateExprConvertible
+) -> StepStatement {
+    Assign(variable.algorithmLValue, to: value)
+}
+
+public func Assign<Value: TLAValueType>(
+    _ variable: LocalVariable<Value>,
     to value: some StateExprConvertible
 ) -> StepStatement {
     Assign(variable.algorithmLValue, to: value)

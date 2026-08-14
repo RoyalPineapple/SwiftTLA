@@ -32,10 +32,9 @@ struct GeneratedAlgorithmCounter {
     }
 
     static var spec: TLASpec {
-        TLASpec("GeneratedAlgorithmCounter") {
-            let count = Var<Int>("count")
+        #spec("GeneratedAlgorithmCounter") {
             Algorithm("GeneratedAlgorithmCounter") {
-                Shared(count, initial: 0)
+                let count = SharedVar(initial: 0)
                 Each(Node.all, fairness: .weak) { _ in
                     While("increment", count < 2) {
                         When(count < 2)
@@ -312,7 +311,7 @@ struct GeneratedStateMachineTests {
         let fixture = packageRoot().appendingPathComponent("Tests/Fixtures/SpecExpressionMacro")
         let result = try runSwift(["run", "--package-path", fixture.path])
 
-        #expect(result.status == 0, result.output)
+        #expect(result.status == 0, Comment(rawValue: result.output))
     }
 
     private struct BoardCallback: Sendable {
