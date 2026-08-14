@@ -2,13 +2,25 @@
 
 ## Core guarantee
 
-SwiftTLA produces a **single AST** from the DSL. That AST feeds two paths:
+SwiftTLA deliberately keeps two independent constructions of the same formal
+model. This is a fidelity check, not duplicate application logic:
 
 ```
-DSL → StateExpr/ActionExpr AST
-        ├── SpecRuntime     (runs as Swift code)
-        └── .tlaModule       (TLC validates against upstream)
+source syntax → parser → StateExpr/ActionExpr AST
+                         ├── compile-time checker
+                         ├── .tlaModule
+                         └── generated Swift machine surface
+
+constrained builders → runtime TLASpec → SpecRuntime
+
+parser AST ↔ runtime TLASpec semantic alpha-equivalence gate
 ```
+
+The parser and the builders are intentionally separate implementations. The
+macro checks semantic alpha-equivalence before generated runtime work. A
+mismatch reports the first differing declaration, action, invariant, or
+normalized bound expression. Do not replace this with a macro that emits the
+parser AST as the runtime model: that would make the check vacuous.
 
 State-count parity does not prove runtime correctness. Equal state counts can
 hide different initial states, transitions, action labels, or outcomes.

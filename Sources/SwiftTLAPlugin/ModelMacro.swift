@@ -382,11 +382,7 @@ enum TLASpecVerifier {
                         if let returnStmt = stmt.item.as(ReturnStmtSyntax.self) { return returnStmt.expression }
                         return nil
                     }()
-                    if let e = expr,
-                       let fc = e.as(FunctionCallExprSyntax.self),
-                       fc.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "TLASpec" {
-                        return fc.trailingClosure ?? fc.arguments.last?.expression.as(ClosureExprSyntax.self)
-                    }
+                    if let closure = specBuilderClosure(from: expr) { return closure }
                 }
             }
             if let accessors = binding.accessorBlock?.accessors.as(AccessorDeclListSyntax.self) {
@@ -397,14 +393,23 @@ enum TLASpecVerifier {
                             if let returnStmt = stmt.item.as(ReturnStmtSyntax.self) { return returnStmt.expression }
                             return nil
                         }()
-                        if let e = expr,
-                           let fc = e.as(FunctionCallExprSyntax.self),
-                           fc.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "TLASpec" {
-                            return fc.trailingClosure ?? fc.arguments.last?.expression.as(ClosureExprSyntax.self)
-                        }
+                        if let closure = specBuilderClosure(from: expr) { return closure }
                     }
                 }
             }
+        }
+        return nil
+    }
+
+    private static func specBuilderClosure(from expression: ExprSyntax?) -> ClosureExprSyntax? {
+        guard let expression else { return nil }
+        if let call = expression.as(FunctionCallExprSyntax.self),
+           call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "TLASpec" {
+            return call.trailingClosure ?? call.arguments.last?.expression.as(ClosureExprSyntax.self)
+        }
+        if let macro = expression.as(MacroExpansionExprSyntax.self),
+           macro.macroName.text == "spec" {
+            return macro.trailingClosure
         }
         return nil
     }

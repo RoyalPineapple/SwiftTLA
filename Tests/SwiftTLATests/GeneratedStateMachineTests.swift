@@ -307,6 +307,14 @@ private actor NestedCallbackRecorder {
 // MARK: - Tests for generated verification methods
 
 struct GeneratedStateMachineTests {
+    @Test("#spec preserves the constrained TLASpec builder for model generation")
+    func specExpressionMacroCompilesExternally() throws {
+        let fixture = packageRoot().appendingPathComponent("Tests/Fixtures/SpecExpressionMacro")
+        let result = try runSwift(["run", "--package-path", fixture.path])
+
+        #expect(result.status == 0, result.output)
+    }
+
     private struct BoardCallback: Sendable {
         let person: Int
         let elevator: Int

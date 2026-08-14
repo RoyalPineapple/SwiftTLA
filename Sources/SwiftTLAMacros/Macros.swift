@@ -25,5 +25,13 @@ public macro TLAActor() = #externalMacro(module: "SwiftTLAPlugin", type: "TLAAct
 @attached(extension, conformances: Sendable, TLAMachineAdapterAccess, names: arbitrary)
 public macro TLAObservable() = #externalMacro(module: "SwiftTLAPlugin", type: "TLAObservableMacro")
 
+/// Declares a formal specification body for `@TLAModel`.
+///
+/// `#spec` is the compile-time boundary for the PlusCal-shaped authoring DSL.
+/// The macro validates its literal name and body shape, then produces the
+/// canonical `TLASpec` expression consumed by `@TLAModel`.
+@freestanding(expression)
+public macro spec(_ name: StaticString, @SpecBuilder _ body: () -> [SpecComponent]) -> TLASpec = #externalMacro(module: "SwiftTLAPlugin", type: "SpecExpressionMacro")
+
 @attached(peer, names: arbitrary)
 public macro TypedVar() = #externalMacro(module: "SwiftTLAPlugin", type: "TypedVarMacro")
