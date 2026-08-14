@@ -12,7 +12,7 @@ See [the supported language fragment](Documentation/Design.md), the [generated-m
 The macOS demonstration app is a separate Swift package in
 [`Examples/SwiftTLADemoApp`](Examples/SwiftTLADemoApp). It consumes the root
 package's public `SwiftTLA` and `SwiftTLADemos` products. The formal models
-remain in [`Sources/SwiftTLADemos`](Sources/SwiftTLADemos), so the app imports
+live in [`Examples/SwiftTLADemos`](Examples/SwiftTLADemos), so the app imports
 the same generated machines that the package verifies.
 
 Run it from the repository root:
