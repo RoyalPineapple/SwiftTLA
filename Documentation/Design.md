@@ -250,7 +250,8 @@ the supported surface.
 | **Sequences — Head/Tail** | ✓ | `.head`, `.tail` |
 | **Sequences — Append** | ✓ | `.appending(e)` |
 | **Sequences — Len** | ✓ | `.count` |
-| **Sequences — element** | ✓ | `.at(i)` |
+| **Sequences — element** | ✓ | `sequence[index]` or `.at(i)` |
+| **Bounded sequence domain** | ✓ | `Sequences(of: values, lengths: 0...n)` |
 | **Sequences — concatenate** | ✓ | `.concatenating(other)` |
 | **Sets — union/intersection/diff** | ✓ | `.union`, `.intersection`, `.subtracting` |
 | **Sets — subset** | ✓ | `.isSubset(of:)` |

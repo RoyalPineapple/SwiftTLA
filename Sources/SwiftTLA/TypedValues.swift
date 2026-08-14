@@ -229,6 +229,48 @@ public struct TupleExpr<Element: TLAValueType>: TLAValueType, Hashable, Sendable
 public protocol FormalTupleValue: TLAValueType {}
 extension TupleExpr: FormalTupleValue {}
 
+/// Creates a finite formal set of sequences for model checking.
+///
+/// `Sequences(of:lengths:)` is the bounded authoring form of TLA+ `Seq(S)`.
+/// The element domain and every permitted length are explicit, so the result
+/// remains finite and can be explored by the checker and TLC.
+// swiftlint:disable:next identifier_name
+public func Sequences<Element: TLAValueType>(
+  of elements: Expr<SetExpr<Element>>,
+  lengths: ClosedRange<Int>
+) -> Expr<SetExpr<TupleExpr<Element>>> {
+  guard case .setLiteral(let members) = elements.raw else {
+    preconditionFailure("Sequences(of:lengths:) requires SetExpr.literal(...) as its element domain")
+  }
+
+  let sequences = formalSequenceExpressions(members: members, lengths: lengths)
+  return Expr<SetExpr<TupleExpr<Element>>>(.setLiteral(sequences))
+}
+
+/// The shared finite expansion used by the runtime builder and source parser.
+/// Keeping this operation here makes the two construction paths enumerate the
+/// same sequence domain without exposing host-language arrays to a model.
+func formalSequenceExpressions(
+  members: [StateExpr],
+  lengths: ClosedRange<Int>
+) -> [StateExpr] {
+  guard lengths.lowerBound >= 0 else {
+    preconditionFailure("Sequences(of:lengths:) does not accept negative lengths")
+  }
+
+  var result: [StateExpr] = []
+  for length in lengths {
+    var prefixes: [[StateExpr]] = [[]]
+    for _ in 0..<length {
+      prefixes = prefixes.flatMap { prefix in
+        members.map { prefix + [$0] }
+      }
+    }
+    result += prefixes.map(StateExpr.tupleLiteral)
+  }
+  return result
+}
+
 extension Expr {
   /// Returns the formal union of two typed sets.
   public func union<Element: TLAValueType>(
@@ -296,6 +338,12 @@ extension Expr {
 
   public func at<Element: TLAValueType>(_ index: Int) -> Expr<Element> where T == TupleExpr<Element> {
     Expr<Element>(.tupleAccess(raw, index))
+  }
+
+  /// Reads a formal sequence at a one-based formal index.
+  public subscript<Element: TLAValueType>(_ index: Expr<Int>) -> Expr<Element>
+  where T == TupleExpr<Element> {
+    Expr<Element>(.tupleDynamicAccess(raw, index.raw))
   }
 
   public subscript<Schema: TLARecordSchema, Value>(_ field: TLAField<Schema, Value>) -> Expr<Value>

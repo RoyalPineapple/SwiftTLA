@@ -39,6 +39,7 @@ public enum Example {
         diningPhilosophersNP5,
         ewd840,
         ewd998,
+        findHighest,
         hourClock,
         hourClock2,
         lamportMutexN2,

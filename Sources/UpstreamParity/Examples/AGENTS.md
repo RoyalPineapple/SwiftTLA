@@ -41,6 +41,8 @@ them as templates for new work.
 | `x := e` | `Assign(x, to: e)` |
 | `if` / `either` | `If` / `Either` |
 | `with` / choice | `With` / `Choose` |
+| `Seq(S)` in a finite TLC model | `Sequences(of: S, lengths: 0...n)` |
+| `s[i]` / `Len(s)` | `sequence[index]` / `sequence.count` |
 | `macro M(x) { ... }` / `M(v)` | `let m = Macro<Value> { x in ... }` / `m(v)` inside `Do` |
 | `goto` / `skip` / termination | `Goto` / `Skip` / `Stop` |
 | process fairness | `Each(S, fairness: .weak)` or `.strong` |

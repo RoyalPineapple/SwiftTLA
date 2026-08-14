@@ -15,6 +15,10 @@ public enum SpecParser {
     nonisolated(unsafe) static var _enumPhases: [String: [String: TLAValue]] = [:]
 
     nonisolated(unsafe) static var _enumDomains: [String: [TLAValue]] = [:]
+    /// Tuple-shaped algorithm state currently in scope. This lets the parser
+    /// distinguish `sequence[index]` from a finite-function lookup without
+    /// exposing raw type maps to authors.
+    nonisolated(unsafe) static var _algorithmTupleVariables: Set<String> = []
     nonisolated(unsafe) static var algorithmParseFailure: String?
 
     /// The parser carries enum information while it decodes one macro body.
@@ -25,6 +29,14 @@ public enum SpecParser {
     // MARK: - Compact expression decoder
 
     public static func decodeStateExpr(_ expression: ExprSyntax) -> StateExpr? {
+        if let call = expression.as(FunctionCallExprSyntax.self),
+           call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "Finished",
+           call.arguments.isEmpty {
+            return .equal(.variable("pc"), .value(.string("Done")))
+        }
+        if let sequences = decodeBoundedSequenceDomain(expression) {
+            return sequences
+        }
         if let boundedQuantifier = decodeAlgorithmDomainQuantifier(expression) {
             return boundedQuantifier
         }
@@ -40,7 +52,7 @@ public enum SpecParser {
         }
         if let call = expression.as(FunctionCallExprSyntax.self),
            let name = call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text,
-           name == "Exists" || name == "ForAll",
+           name == "Exists" || name == "ForAll" || name == "All",
            let domainSyntax = call.arguments.first(where: { $0.label?.text == "in" })?.expression,
            let domain = decodeStateExpr(domainSyntax),
            let closure = call.trailingClosure,
@@ -102,6 +114,7 @@ public enum SpecParser {
            let selfExpr = decodeStateExpr(base) {
             let propName = memberAccess.declName.baseName.text
             switch propName {
+            case "stateExpr": return selfExpr
             case "expr": return selfExpr
             case "cardinality": return .cardinality(selfExpr)
             case "flattened": return .unionAll(selfExpr)
@@ -138,6 +151,21 @@ public enum SpecParser {
             if prefix.operator.text == "-", let operand { return .negate(operand) }
         }
         return nil
+    }
+
+    /// Independently expands the bounded `Sequences(of:lengths:)` spelling
+    /// used by the algorithm builder. This is the finite model-checking form
+    /// of TLA+ `Seq(S)`, not a Swift array literal.
+    private static func decodeBoundedSequenceDomain(_ expression: ExprSyntax) -> StateExpr? {
+        guard let call = expression.as(FunctionCallExprSyntax.self),
+              call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "Sequences",
+              let memberSyntax = call.arguments.first(where: { $0.label?.text == "of" })?.expression,
+              let lengthSyntax = call.arguments.first(where: { $0.label?.text == "lengths" })?.expression,
+              let memberSet = decodeStateExpr(memberSyntax),
+              case .setLiteral(let members) = memberSet,
+              let lengths = parseIntegerClosedRange(lengthSyntax)
+        else { return nil }
+        return .setLiteral(formalSequenceExpressions(members: members, lengths: lengths))
     }
 
     private static func decodeAlgorithmDomainQuantifier(_ expression: ExprSyntax) -> StateExpr? {
@@ -187,6 +215,10 @@ public enum SpecParser {
                 return .recordAccess(base, fieldName)
             }
             guard let index = decodeTypedFacadeValue(selector, substitutions: substitutions) else { return nil }
+            if let reference = subscriptCall.calledExpression.as(DeclReferenceExprSyntax.self),
+               _algorithmTupleVariables.contains(reference.baseName.text) {
+                return .tupleDynamicAccess(base, index)
+            }
             return .functionApply(base, index)
         }
         guard let call = expression.as(FunctionCallExprSyntax.self),
@@ -533,7 +565,11 @@ public enum SpecParser {
     }
 
     static func decodeInfixExpr(_ elements: [ExprSyntax]) -> StateExpr? {
-        guard elements.count >= 3, elements.count % 2 == 1 else { return nil }
+        guard !elements.isEmpty else { return nil }
+        if elements.count == 1 {
+            return decodeStateExpr(elements[0])
+        }
+        guard elements.count % 2 == 1 else { return nil }
         if elements.count == 3 {
             guard let opText = elements[1].as(BinaryOperatorExprSyntax.self)?.operator.text,
                   let lhs = decodeStateExpr(elements[0]),

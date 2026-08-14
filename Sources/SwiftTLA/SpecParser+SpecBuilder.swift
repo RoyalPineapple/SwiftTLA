@@ -268,6 +268,12 @@ extension SpecParser {
     /// Returns the formal element type from `SetExpr<Element>.literal(...)`.
     /// This is syntax-only: the parser must not consult the runtime builder.
     static func setExpressionElementTypeName(_ expression: ExprSyntax) -> String? {
+        if let call = expression.as(FunctionCallExprSyntax.self),
+           call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "Sequences",
+           let members = call.arguments.first(where: { $0.label?.text == "of" })?.expression,
+           let element = setExpressionElementTypeName(members) {
+            return "TupleExpr<\(element)>"
+        }
         guard let call = expression.as(FunctionCallExprSyntax.self),
               let member = call.calledExpression.as(MemberAccessExprSyntax.self),
               member.declName.baseName.text == "literal",

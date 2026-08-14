@@ -125,6 +125,12 @@ struct UpstreamParityTests {
         #expect(try TeachingSimpleRegularN8Model.verifySpec() == Example.teachingSimpleRegularN8.expectedDistinct)
     }
 
+    @Test("FindHighest PlusCal port matches its bounded TLC configuration")
+    func findHighestParity() throws {
+        let count = try FindHighestModel.verifySpec()
+        #expect(count == Example.findHighest.expectedDistinct)
+    }
+
     @Test("EWD840 uses typed finite function state")
     func ewd840TypedFunctionParity() throws {
         try EWD840Model.verifySpec()

@@ -27,7 +27,10 @@ extension SpecParser {
         var components: [AlgorithmComponentModel] = []
         var macros: [String: AlgorithmMacroDefinition] = [:]
         var lexicalValues: [String: TLAValue] = [:]
+        let outerTupleVariables = _algorithmTupleVariables
+        _algorithmTupleVariables = []
         defer {
+            _algorithmTupleVariables = outerTupleVariables
             for name in lexicalValues.keys {
                 _constants.removeValue(forKey: name)
             }
@@ -55,6 +58,10 @@ extension SpecParser {
                let variable = declaration.as(VariableDeclSyntax.self),
                let component = parseAlgorithmVariableDeclaration(variable, expectedKind: "SharedVar") {
                 components.append(component)
+                if case .shared(let state) = component,
+                   state.swiftTypeName?.hasPrefix("TupleExpr<") == true {
+                    _algorithmTupleVariables.insert(state.root)
+                }
                 continue
             }
             guard case .expr(let expression) = statement.item else {
@@ -314,11 +321,16 @@ extension SpecParser {
                 swiftTypeName: "Int"
             )
         } else if expectedKind == "SharedVar",
-                  let setSyntax = initializer.arguments.first(where: { $0.label?.text == "in" })?.expression,
-                  let initialSet = decodeStateExpr(setSyntax),
+                  let setSyntax = initializer.arguments.first(where: { $0.label?.text == "in" })?.expression {
+            guard let initialSet = decodeStateExpr(setSyntax),
                   case .setLiteral(let elements) = initialSet,
                   let initial = elements.first,
-                  let typeName = setExpressionElementTypeName(setSyntax) {
+                  let typeName = setExpressionElementTypeName(setSyntax)
+            else {
+                algorithmParseFailure = "SharedVar(in:) requires a finite, decodable formal domain; "
+                    + "could not decode '\(setSyntax.description.trimmingCharacters(in: .whitespacesAndNewlines))'."
+                return nil
+            }
             state = AlgorithmStateModel(
                 root: declaredName,
                 initial: initial,

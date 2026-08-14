@@ -424,6 +424,18 @@ extension SharedVariable {
         Expr(.tupleAccess(stateExpr, index))
     }
 
+    /// Reads a formal sequence at a one-based formal index.
+    public subscript<Element: TLAValueType>(_ index: Expr<Int>) -> Expr<Element>
+    where Value == TupleExpr<Element> {
+        Expr(.tupleDynamicAccess(stateExpr, index.raw))
+    }
+
+    /// Reads a formal sequence at a one-based shared formal index.
+    public subscript<Element: TLAValueType>(_ index: SharedVariable<Int>) -> Expr<Element>
+    where Value == TupleExpr<Element> {
+        Expr(.tupleDynamicAccess(stateExpr, index.stateExpr))
+    }
+
     public subscript<Schema: TLARecordSchema, Field>(_ field: TLAField<Schema, Field>) -> Expr<Field>
     where Value == Record<Schema>, Field: TLAValueType {
         Expr<Field>(.recordAccess(stateExpr, field.name))
@@ -1009,23 +1021,35 @@ public func Let<Value: TLAValueType>(
 ///
 /// This is the typed Swift spelling of TLA+ `\\E value \\in domain : predicate`.
 /// The bound value is formal data, not a Swift collection element.
-public func Exists<Value: TLAValueType>(
+public func Exists<Value: TLAValueType, Predicate: StateExprConvertible>(
     in domain: Expr<SetExpr<Value>>,
-    where predicate: (WithValue<Value>) -> StateExpr
+    where predicate: (WithValue<Value>) -> Predicate
 ) -> Expr<Bool> {
     let variable = FreshVarName.fresh()
-    return Expr(.exists(domain.raw, variable, predicate(WithValue(expression: .variable(variable)))))
+    return Expr(.exists(domain.raw, variable, predicate(WithValue(expression: .variable(variable))).stateExpr))
 }
 
 /// Tests whether every bounded formal set member satisfies `predicate`.
 ///
 /// This is the typed Swift spelling of TLA+ `\\A value \\in domain : predicate`.
-public func ForAll<Value: TLAValueType>(
+public func ForAll<Value: TLAValueType, Predicate: StateExprConvertible>(
     in domain: Expr<SetExpr<Value>>,
-    where predicate: (WithValue<Value>) -> StateExpr
+    where predicate: (WithValue<Value>) -> Predicate
 ) -> Expr<Bool> {
     let variable = FreshVarName.fresh()
-    return Expr(.forAll(domain.raw, variable, predicate(WithValue(expression: .variable(variable)))))
+    return Expr(.forAll(domain.raw, variable, predicate(WithValue(expression: .variable(variable))).stateExpr))
+}
+
+/// States that every member of a bounded formal set satisfies `predicate`.
+///
+/// This `All(in:)` form returns a formal condition directly, which makes it
+/// natural inside `Invariant` and `When` blocks.
+public func All<Value: TLAValueType, Predicate: StateExprConvertible>(
+    in domain: Expr<SetExpr<Value>>,
+    where predicate: (WithValue<Value>) -> Predicate
+) -> StateExpr {
+    let variable = FreshVarName.fresh()
+    return .forAll(domain.raw, variable, predicate(WithValue(expression: .variable(variable))).stateExpr)
 }
 
 /// Tests a predicate for every member of a declared finite domain.
@@ -1045,6 +1069,13 @@ public func All<Value: FiniteDomainKey>(
 }
 
 /// True when a process in the surrounding `Algorithm` has reached `Done`.
+/// The program counter remains lowerer-owned; this avoids raw string-keyed
+/// inspection of generated control state.
+public func Finished() -> StateExpr {
+    .equal(.variable("pc"), .value(.string("Done")))
+}
+
+/// True when one member of a process family has reached `Done`.
 /// The program counter remains lowerer-owned; this avoids raw string-keyed
 /// inspection of generated control state.
 public func Finished<Value: FiniteDomainKey>(_ process: WithValue<Value>) -> StateExpr {

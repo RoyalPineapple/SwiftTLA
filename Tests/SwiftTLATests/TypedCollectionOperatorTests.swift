@@ -102,6 +102,25 @@ private struct TypedQuantifierGeneratedModel {
         )
     }
 
+    @Test("bounded sequences and terminal predicates parse as formal expressions")
+    func boundedSequencesAndFinishedParse() throws {
+        let sequenceSource = "Sequences(of: SetExpr<Int>.literal(0, 1), lengths: 0...2)"
+        let sequenceSyntax = Parser.parse(source: sequenceSource).statements.first!.item.as(ExprSyntax.self)!
+        let terminalSource = "(!Finished()) || i == f.count + 1"
+        let terminalSyntax = Parser.parse(source: terminalSource).statements.first!.item.as(ExprSyntax.self)!
+
+        let runtime = Sequences(of: SetExpr<Int>.literal(0, 1), lengths: 0...2)
+        let parsed = try #require(SpecParser.decodeStateExpr(sequenceSyntax))
+
+        #expect(try runtime.raw.evaluate(in: [:]) == .set([
+            .tuple([]), .tuple([.int(0)]), .tuple([.int(1)]),
+            .tuple([.int(0), .int(0)]), .tuple([.int(0), .int(1)]),
+            .tuple([.int(1), .int(0)]), .tuple([.int(1), .int(1)])
+        ]))
+        #expect(parsed == runtime.raw)
+        #expect(SpecParser.decodeStateExpr(terminalSyntax) != nil)
+    }
+
     @Test("typed bounded quantifiers parse, evaluate, and generate")
     func typedQuantifiersSurviveThePipeline() throws {
         let hasEven = Exists(in: IntRange(1, through: 4)) { value in
