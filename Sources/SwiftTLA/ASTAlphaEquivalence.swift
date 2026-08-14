@@ -5,7 +5,7 @@
 /// (`\A`, `\E`, `CHOOSE`, function literals, filters, and action-local
 /// bindings) may differ.
 public func _tlaAlphaEquivalent(_ lhs: ParsedSpecModel, _ rhs: ParsedSpecModel) -> Bool {
-    guard lhs.variables.elementsEqual(rhs.variables, by: { $0.name == $1.name && $0.initial == $1.initial }),
+    guard lhs.variables.elementsEqual(rhs.variables, by: variablesEquivalent),
           lhs.actions.count == rhs.actions.count,
           lhs.invariants.count == rhs.invariants.count
     else { return false }
@@ -24,8 +24,16 @@ public func _tlaAlphaEquivalent(_ lhs: ParsedSpecModel, _ rhs: ParsedSpecModel) 
 /// Explains the first semantic difference that remains after normalization.
 /// This is intentionally concise enough to be useful in a macro runtime trap.
 public func _tlaFidelityDiagnostic(_ expected: ParsedSpecModel, _ actual: ParsedSpecModel) -> String {
-    guard expected.variables.elementsEqual(actual.variables, by: { $0.name == $1.name && $0.initial == $1.initial }) else {
-        return "Variable declarations or initial values differ."
+    guard expected.variables.elementsEqual(actual.variables, by: variablesEquivalent) else {
+        let sharedCount = min(expected.variables.count, actual.variables.count)
+        for index in 0..<sharedCount {
+            let expectedVariable = expected.variables[index]
+            let actualVariable = actual.variables[index]
+            guard variablesEquivalent(expectedVariable, actualVariable) else {
+                return "Variable \(index) differs: expected '\(expectedVariable.name)' initial \(expectedVariable.initial) domain \(String(describing: expectedVariable.initialSet)); built '\(actualVariable.name)' initial \(actualVariable.initial) domain \(String(describing: actualVariable.initialSet))."
+            }
+        }
+        return "Variable count differs: expected \(expected.variables.count), got \(actual.variables.count)."
     }
     guard expected.actions.count == actual.actions.count else {
         return "Action count differs: expected \(expected.actions.count), got \(actual.actions.count)."
@@ -55,6 +63,18 @@ public func _tlaFidelityDiagnostic(_ expected: ParsedSpecModel, _ actual: Parsed
         }
     }
     return "The parser tree differs in an unsupported semantic field."
+}
+
+private func variablesEquivalent(
+    _ lhs: (name: String, initial: TLAValue, initialSet: StateExpr?),
+    _ rhs: (name: String, initial: TLAValue, initialSet: StateExpr?)
+) -> Bool {
+    guard lhs.name == rhs.name, lhs.initial == rhs.initial else { return false }
+    switch (lhs.initialSet, rhs.initialSet) {
+    case (nil, nil): return true
+    case let (.some(left), .some(right)): return alphaKey(left) == alphaKey(right)
+    case (nil, .some), (.some, nil): return false
+    }
 }
 
 private func alphaKey(_ action: ActionExpr) -> String {
@@ -198,7 +218,7 @@ private func stateKey(_ expression: StateExpr, environment: [String: String], ne
     case .or: return associative("or", expression)
     case .not(let value): return "not(\(key(value)))"
     case .ifThenElse(let c, let t, let f): return "if(\(key(c)),\(key(t)),\(key(f)))"
-    case .setLiteral(let values): return "set[\(values.map { key($0) }.joined(separator: ","))]"
+    case .setLiteral(let values): return "set[\(values.map { key($0) }.sorted().joined(separator: ","))]"
     case .in(let a, let b): return pair("in", a, b)
     case .subset(let a, let b): return pair("subset", a, b)
     case .union(let a, let b): return pair("union", a, b)

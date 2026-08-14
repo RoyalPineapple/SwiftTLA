@@ -196,7 +196,8 @@ private enum ParserNode: String, FiniteDomainKey {
         #expect(parsed.variables.count == 1)
         guard parsed.variables.count == 1 else { return }
         #expect(parsed.variables[0].name == "counter")
-        #expect(parsed.variables[0].initial == .set([]))
+        #expect(parsed.variables[0].initial == .set([.int(0), .int(1)]))
+        #expect(parsed.variables[0].initialSet == .setLiteral([.value(.int(0)), .value(.int(1))]))
         #expect(parsed.variables[0].swiftTypeName == "Int")
     }
 

@@ -582,7 +582,8 @@ extension SpecParser {
             let label = args[1].label?.text
             if label == "in" {
                 if let setExpr = decodeStateExpr(args[1].expression) {
-                    result.variables.append((firstName, .set([]), setExpr, nil))
+                    let initial = (try? setExpr.evaluate(in: [:])) ?? .int(0)
+                    result.variables.append((firstName, initial, setExpr, nil))
                     return
                 }
             }
