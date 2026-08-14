@@ -3,6 +3,36 @@ import Testing
 
 @Suite("PlusCal algorithm builders")
 struct AlgorithmBuilderTests {
+    @Test("statement macros expand into their surrounding atomic block")
+    func expandsTypedStatementMacro() throws {
+        let algorithm = Algorithm("MacroLock") {
+            let lock = SharedVar("lock", initial: 1)
+            lock
+            let acquire = Macro<Int> { value in
+                Await(value == 1)
+                Assign(value, to: 0)
+            }
+            let release = Macro<Int> { value in
+                Assign(value, to: 1)
+            }
+
+            Each(Node.all) { _ in
+                Do("acquire") { acquire(lock) }
+                Do("release") { release(lock) }
+            }
+        }
+
+        #expect(algorithm.validate().isEmpty)
+        let spec = try algorithm.lower()
+        let initial = try #require(computeInitialStates(spec).first)
+        let acquire = try #require(spec.actions.first { $0.name == "acquire" })
+        let invocation = try #require(actionInvocations(acquire).first)
+        let successor = try #require(
+            ActionEnumerator.enumerate(invocation.body, from: initial, varNames: spec.variables.map(\.name)).first
+        )
+        #expect(successor["lock"] == .int(0))
+    }
+
     @Test("a begin-style algorithm keeps a scalar program counter")
     func lowersSequentialAlgorithmWithoutInventingAProcess() throws {
         let algorithm = Algorithm("SequentialCounter") {

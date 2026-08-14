@@ -93,7 +93,7 @@ private struct TypedQuantifierGeneratedModel {
 
     @Test("typed conditional values parse without losing their result type")
     func typedConditionalValueParses() {
-        let source = "Expr<Int>.ifThenElse(true, then: 1, else: 2)"
+        let source = "If(true, then: 1, else: 2)"
         let syntax = Parser.parse(source: source).statements.first!.item.as(ExprSyntax.self)!
 
         #expect(

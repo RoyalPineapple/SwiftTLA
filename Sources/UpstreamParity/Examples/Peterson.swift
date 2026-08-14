@@ -43,14 +43,14 @@ public struct PetersonModel {
                         Assign(c, to: c.stateExpr.updated(at: process, to: true))
                     }
                     Do(Step.a2) {
-                        Assign(turn, to: Expr<Process>.ifThenElse(
+                        Assign(turn, to: If(
                             process == .one,
                             then: Process.two,
                             else: Process.one
                         ))
                     }
                     Do(Step.a3) {
-                        Let(Expr<Process>.ifThenElse(
+                        Let(If(
                                 process == .one,
                                 then: Process.two,
                                 else: Process.one

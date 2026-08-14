@@ -16,15 +16,18 @@ extension MacroExpander {
         }
         """),
         DeclSyntax(stringLiteral: """
-        public static func verifySpec() throws {
+        @discardableResult
+        public static func verifySpec() throws -> Int {
             let result = try ModelChecker(spec: Self.spec, maxStates: 100_000).check()
             switch result {
             case .ok(let count):
                 guard count > 0 else { throw VerificationError("No states found") }
+                return count
             case .bounded(_, let outcome):
                 switch outcome {
                 case .ok(let count):
                     guard count > 0 else { throw VerificationError("No states found") }
+                    return count
                 default:
                     throw VerificationError("Spec verification failed: \\(result)")
                 }

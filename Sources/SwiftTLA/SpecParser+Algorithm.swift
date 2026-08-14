@@ -1,5 +1,10 @@
 import SwiftSyntax
 
+private struct AlgorithmMacroDefinition: Sendable {
+    let parameter: String
+    let statements: [AlgorithmStatementModel]
+}
+
 extension SpecParser {
     /// Parses the bounded PlusCal-shaped authoring layer into the same TLA+ AST
     /// used by the ordinary builder parser. This path deliberately constructs an
@@ -20,7 +25,19 @@ extension SpecParser {
         }
 
         var components: [AlgorithmComponentModel] = []
+        var macros: [String: AlgorithmMacroDefinition] = [:]
         for statement in closure.statements {
+            if case .decl(let declaration) = statement.item,
+               let variable = declaration.as(VariableDeclSyntax.self),
+               let macro = parseAlgorithmMacroDeclaration(variable) {
+                let name = variable.bindings.first?.pattern.as(IdentifierPatternSyntax.self)?.identifier.text ?? ""
+                guard macros[name] == nil else {
+                    result.diagnostics.append(.init(message: "Algorithm macro '\(name)' is declared more than once.", source: statement))
+                    return
+                }
+                macros[name] = macro
+                continue
+            }
             if case .decl(let declaration) = statement.item,
                let variable = declaration.as(VariableDeclSyntax.self),
                let component = parseAlgorithmVariableDeclaration(variable, expectedKind: "SharedVar") {
@@ -34,10 +51,10 @@ extension SpecParser {
                 ))
                 return
             }
-            guard let component = parseAlgorithmComponent(expression) else {
+            guard let component = parseAlgorithmComponent(expression, macros: macros) else {
                 let detail = algorithmParseFailure.map { " \($0)" } ?? ""
                 result.diagnostics.append(.init(
-                    message: "Unsupported Algorithm declaration '\(expression.description.trimmingCharacters(in: .whitespacesAndNewlines))'. Supported declarations are SharedVar, Each, Do, and While.\(detail)",
+                    message: "Unsupported Algorithm declaration '\(expression.description.trimmingCharacters(in: .whitespacesAndNewlines))'. Supported declarations are SharedVar, Macro, Each, Do, and While.\(detail)",
                     source: expression
                 ))
                 return
@@ -117,20 +134,23 @@ extension SpecParser {
         }
     }
 
-    private static func parseAlgorithmComponent(_ expression: ExprSyntax) -> AlgorithmComponentModel? {
+    private static func parseAlgorithmComponent(
+        _ expression: ExprSyntax,
+        macros: [String: AlgorithmMacroDefinition]
+    ) -> AlgorithmComponentModel? {
         guard let call = expression.as(FunctionCallExprSyntax.self),
               let name = call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text
         else { return nil }
 
         switch name {
         case "Each":
-            let component = parseEach(call)
+            let component = parseEach(call, macros: macros)
             if component == nil, algorithmParseFailure == nil {
                 algorithmParseFailure = "Each requires a finite enum domain and a decodable process body."
             }
             return component
         case "Do", "While":
-            return parseEachComponent(expression, processParameter: "__pcal_sequential")
+            return parseEachComponent(expression, processParameter: "__pcal_sequential", macros: macros)
         case "Invariant":
             guard let invariant = parseAlgorithmInvariant(call) else { return nil }
             return .invariant(invariant)
@@ -197,7 +217,10 @@ extension SpecParser {
         return .init(name: name, body: body)
     }
 
-    private static func parseEach(_ call: FunctionCallExprSyntax) -> AlgorithmComponentModel? {
+    private static func parseEach(
+        _ call: FunctionCallExprSyntax,
+        macros: [String: AlgorithmMacroDefinition]
+    ) -> AlgorithmComponentModel? {
         guard let domainSyntax = call.arguments.first?.expression,
               let domain = finiteAlgorithmDomain(domainSyntax),
               let closure = call.trailingClosure
@@ -215,7 +238,7 @@ extension SpecParser {
                 continue
             }
             guard case .expr(let expression) = statement.item else { return nil }
-            guard let component = parseEachComponent(expression, processParameter: parameter) else {
+            guard let component = parseEachComponent(expression, processParameter: parameter, macros: macros) else {
                 if algorithmParseFailure == nil {
                     algorithmParseFailure = "Process component \(index + 1) could not be decoded: '\(expression.description.trimmingCharacters(in: .whitespacesAndNewlines))'."
                 }
@@ -291,6 +314,36 @@ extension SpecParser {
         return expectedKind == "SharedVar" ? .shared(state) : .local(state)
     }
 
+    private static func parseAlgorithmMacroDeclaration(
+        _ declaration: VariableDeclSyntax
+    ) -> AlgorithmMacroDefinition? {
+        guard declaration.bindings.count == 1,
+              let binding = declaration.bindings.first,
+              let initializer = binding.initializer?.value.as(FunctionCallExprSyntax.self),
+              isAlgorithmMacroInitializer(initializer),
+              let closure = initializer.trailingClosure,
+              let parameter = closureParameterNames(in: closure).first,
+              closureParameterNames(in: closure).count == 1,
+              let statements = parseAlgorithmStatements(
+                closure.statements,
+                processParameter: "__pcal_macro_no_process",
+                macros: [:]
+              )
+        else { return nil }
+        return .init(parameter: parameter, statements: statements)
+    }
+
+    private static func isAlgorithmMacroInitializer(_ initializer: FunctionCallExprSyntax) -> Bool {
+        if initializer.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "Macro" {
+            return true
+        }
+        return initializer.calledExpression
+            .as(GenericSpecializationExprSyntax.self)?
+            .expression
+            .as(DeclReferenceExprSyntax.self)?
+            .baseName.text == "Macro"
+    }
+
     private static func algorithmInitialTypeName(_ expression: ExprSyntax) -> String? {
         if let call = expression.as(FunctionCallExprSyntax.self),
            let member = call.calledExpression.as(MemberAccessExprSyntax.self),
@@ -303,7 +356,8 @@ extension SpecParser {
 
     private static func parseEachComponent(
         _ expression: ExprSyntax,
-        processParameter: String
+        processParameter: String,
+        macros: [String: AlgorithmMacroDefinition]
     ) -> AlgorithmComponentModel? {
         guard let call = expression.as(FunctionCallExprSyntax.self),
               let name = call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text
@@ -313,7 +367,11 @@ extension SpecParser {
         case "Do", "While":
             guard let label = algorithmLabel(call.arguments.first?.expression),
                   let closure = call.trailingClosure,
-                  let statements = parseAlgorithmStatements(closure.statements, processParameter: processParameter)
+                  let statements = parseAlgorithmStatements(
+                    closure.statements,
+                    processParameter: processParameter,
+                    macros: macros
+                  )
             else { return nil }
             let loopCondition: StateExpr?
             if name == "While" {
@@ -332,13 +390,29 @@ extension SpecParser {
 
     private static func parseAlgorithmStatements(
         _ statements: CodeBlockItemListSyntax,
-        processParameter: String
+        processParameter: String,
+        macros: [String: AlgorithmMacroDefinition]
     ) -> [AlgorithmStatementModel]? {
         var result: [AlgorithmStatementModel] = []
         for (index, statement) in statements.enumerated() {
-            guard case .expr(let expression) = statement.item,
-                  let parsed = parseAlgorithmStatement(expression, processParameter: processParameter)
+            guard case .expr(let expression) = statement.item
             else {
+                if algorithmParseFailure == nil {
+                    algorithmParseFailure = "Statement \(index + 1) could not be decoded: '\(statement.description.trimmingCharacters(in: .whitespacesAndNewlines))'."
+                }
+                return nil
+            }
+            if let expanded = parseMacroInvocation(expression, macros: macros) {
+                result += expanded.map {
+                    replaceAlgorithmVariable($0, from: "__pcal_macro_no_process", to: processParameter)
+                }
+                continue
+            }
+            guard let parsed = parseAlgorithmStatement(
+                expression,
+                processParameter: processParameter,
+                macros: macros
+            ) else {
                 if algorithmParseFailure == nil {
                     algorithmParseFailure = "Statement \(index + 1) could not be decoded: '\(statement.description.trimmingCharacters(in: .whitespacesAndNewlines))'."
                 }
@@ -351,7 +425,8 @@ extension SpecParser {
 
     private static func parseAlgorithmStatement(
         _ expression: ExprSyntax,
-        processParameter: String
+        processParameter: String,
+        macros: [String: AlgorithmMacroDefinition]
     ) -> AlgorithmStatementModel? {
         guard let call = expression.as(FunctionCallExprSyntax.self),
               let name = call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text
@@ -385,17 +460,17 @@ extension SpecParser {
             guard let conditionSyntax = call.arguments.first?.expression,
                   let condition = decodeStateExpr(conditionSyntax),
                   let thenClosure = call.trailingClosure,
-                  let then = parseAlgorithmStatements(thenClosure.statements, processParameter: processParameter)
+                  let then = parseAlgorithmStatements(thenClosure.statements, processParameter: processParameter, macros: macros)
             else { return nil }
             let elseClosure = call.additionalTrailingClosures.first?.closure
                 ?? call.arguments.first(where: { $0.label?.text == "else" })?.expression.as(ClosureExprSyntax.self)
-            let otherwise = elseClosure.flatMap { parseAlgorithmStatements($0.statements, processParameter: processParameter) } ?? []
+            let otherwise = elseClosure.flatMap { parseAlgorithmStatements($0.statements, processParameter: processParameter, macros: macros) } ?? []
             return .ifElse(replacingProcessParameter(in: condition, named: processParameter), then, otherwise)
         case "Either":
-            guard let first = call.trailingClosure.flatMap({ parseAlgorithmStatements($0.statements, processParameter: processParameter) }),
+            guard let first = call.trailingClosure.flatMap({ parseAlgorithmStatements($0.statements, processParameter: processParameter, macros: macros) }),
                   let secondClosure = call.additionalTrailingClosures.first?.closure
                     ?? call.arguments.first(where: { $0.label?.text == "or" })?.expression.as(ClosureExprSyntax.self),
-                  let second = parseAlgorithmStatements(secondClosure.statements, processParameter: processParameter)
+                  let second = parseAlgorithmStatements(secondClosure.statements, processParameter: processParameter, macros: macros)
             else { return nil }
             return .either(first, second)
         case "Choose":
@@ -403,7 +478,7 @@ extension SpecParser {
                   let domain = finiteAlgorithmDomain(domainSyntax),
                   let closure = call.trailingClosure,
                   let choice = closureParameterNames(in: closure).first,
-                  let body = parseAlgorithmStatements(closure.statements, processParameter: processParameter)
+                  let body = parseAlgorithmStatements(closure.statements, processParameter: processParameter, macros: macros)
             else { return nil }
             // Rebind the lexical choice to the stable IR binder after parsing.
             let replacement = "__pcal_choice"
@@ -419,7 +494,7 @@ extension SpecParser {
                   } ?? decodeStateExpr(sourceSyntax)),
                   let closure = call.trailingClosure,
                   let bound = closureParameterNames(in: closure).first,
-                  let body = parseAlgorithmStatements(closure.statements, processParameter: processParameter)
+                  let body = parseAlgorithmStatements(closure.statements, processParameter: processParameter, macros: macros)
             else { return nil }
             let replacement = "__pcal_with"
             return .with(
@@ -432,7 +507,7 @@ extension SpecParser {
                   let value = decodeStateExpr(valueSyntax),
                   let closure = call.trailingClosure,
                   let bound = closureParameterNames(in: closure).first,
-                  let body = parseAlgorithmStatements(closure.statements, processParameter: processParameter)
+                  let body = parseAlgorithmStatements(closure.statements, processParameter: processParameter, macros: macros)
             else { return nil }
             let replacement = FreshVarName.fresh()
             return .letBinding(
@@ -442,6 +517,26 @@ extension SpecParser {
             )
         default:
             return nil
+        }
+    }
+
+    /// Expands one bounded statement macro into the surrounding atomic block.
+    /// The first implementation accepts a single direct variable argument—the
+    /// shape used by PlusCal semaphore and lock macros. It deliberately does
+    /// not reinterpret an arbitrary Swift call as formal syntax.
+    private static func parseMacroInvocation(
+        _ expression: ExprSyntax,
+        macros: [String: AlgorithmMacroDefinition]
+    ) -> [AlgorithmStatementModel]? {
+        guard let call = expression.as(FunctionCallExprSyntax.self),
+              let name = call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text,
+              let macro = macros[name],
+              call.arguments.count == 1,
+              let target = algorithmTarget(call.arguments.first?.expression),
+              case .root(let argument) = target
+        else { return nil }
+        return macro.statements.map {
+            replaceAlgorithmVariable($0, from: macro.parameter, to: argument)
         }
     }
 
@@ -496,8 +591,12 @@ extension SpecParser {
         case .set(let target, let value):
             let rewrittenTarget: AlgorithmLValueModel
             switch target {
-            case .root: rewrittenTarget = target
-            case .function(let root, let key): rewrittenTarget = .function(root: root, key: renameVar(from, to: to, in: key))
+            case .root(let root): rewrittenTarget = .root(root == from ? to : root)
+            case .function(let root, let key):
+                rewrittenTarget = .function(
+                    root: root == from ? to : root,
+                    key: renameVar(from, to: to, in: key)
+                )
             }
             return .set(target: rewrittenTarget, value: renameVar(from, to: to, in: value))
         case .letBinding(let variable, let value, let body):
@@ -510,14 +609,18 @@ extension SpecParser {
             return .with(
                 variable: variable,
                 source: renameVar(from, to: to, in: source),
-                body.map { replaceAlgorithmVariable($0, from: from, to: to) }
+                variable == from ? body : body.map { replaceAlgorithmVariable($0, from: from, to: to) }
             )
         case .ifElse(let condition, let then, let otherwise):
             return .ifElse(renameVar(from, to: to, in: condition), then.map { replaceAlgorithmVariable($0, from: from, to: to) }, otherwise.map { replaceAlgorithmVariable($0, from: from, to: to) })
         case .either(let first, let second):
             return .either(first.map { replaceAlgorithmVariable($0, from: from, to: to) }, second.map { replaceAlgorithmVariable($0, from: from, to: to) })
         case .choose(let variable, let domain, let body):
-            return .choose(variable: variable, domain: domain, body.map { replaceAlgorithmVariable($0, from: from, to: to) })
+            return .choose(
+                variable: variable,
+                domain: domain,
+                variable == from ? body : body.map { replaceAlgorithmVariable($0, from: from, to: to) }
+            )
         case .goto, .stop, .skip: return statement
         }
     }

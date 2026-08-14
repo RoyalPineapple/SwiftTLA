@@ -26,6 +26,16 @@ public enum SpecParser {
 
     public static func decodeStateExpr(_ expression: ExprSyntax) -> StateExpr? {
         if let call = expression.as(FunctionCallExprSyntax.self),
+           call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "If",
+           let conditionSyntax = call.arguments.first?.expression,
+           let thenSyntax = call.arguments.first(where: { $0.label?.text == "then" })?.expression,
+           let elseSyntax = call.arguments.first(where: { $0.label?.text == "else" })?.expression,
+           let condition = decodeStateExpr(conditionSyntax),
+           let thenValue = decodeStateExpr(thenSyntax),
+           let elseValue = decodeStateExpr(elseSyntax) {
+            return .ifThenElse(condition, thenValue, elseValue)
+        }
+        if let call = expression.as(FunctionCallExprSyntax.self),
            let name = call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text,
            name == "Exists" || name == "ForAll",
            let domainSyntax = call.arguments.first(where: { $0.label?.text == "in" })?.expression,
@@ -450,17 +460,6 @@ public enum SpecParser {
             return .recordLiteral(fields)
         case "if":
             guard memberAccess.base?.as(DeclReferenceExprSyntax.self)?.baseName.text == "StateExpr",
-                  args.count >= 3,
-                  let cond = decodeStateExpr(args[0].expression),
-                  let thenVal = decodeStateExpr(args[1].expression),
-                  let elseVal = decodeStateExpr(args[2].expression) else { return nil }
-            return .ifThenElse(cond, thenVal, elseVal)
-        case "ifThenElse":
-            // `Expr<Value>.ifThenElse` preserves a value's Swift type at the
-            // authoring boundary, then lowers to the normal formal conditional.
-            guard memberAccess.base?.description
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-                .hasPrefix("Expr<") == true,
                   args.count >= 3,
                   let cond = decodeStateExpr(args[0].expression),
                   let thenVal = decodeStateExpr(args[1].expression),

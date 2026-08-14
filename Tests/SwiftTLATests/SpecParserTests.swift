@@ -62,7 +62,7 @@ private func parseExpression(_ source: String) -> ExprSyntax {
         #expect(parsed.actions.isEmpty)
         #expect(
             parsed.diagnostics.first?.message
-                == "Unsupported Algorithm declaration 'UnsupportedAlgorithmConstruct()'. Supported declarations are SharedVar, Each, Do, and While."
+                == "Unsupported Algorithm declaration 'UnsupportedAlgorithmConstruct()'. Supported declarations are SharedVar, Macro, Each, Do, and While."
         )
     }
 
@@ -96,6 +96,33 @@ private func parseExpression(_ source: String) -> ExprSyntax {
             .strongFairnessInvocation(.init(name: "increment", arguments: [.string("left")])),
             .strongFairnessInvocation(.init(name: "increment", arguments: [.string("right")]))
         ])
+    }
+
+    @Test("parser expands a bounded statement macro in its caller's atomic step")
+    func parsesStatementMacro() {
+        let source = """
+        {
+            Algorithm("MacroLock") {
+                let lock = SharedVar(initial: 1)
+                let acquire = Macro<Int> { value in
+                    Await(value == 1)
+                    Assign(value, to: 0)
+                }
+                Each(Node.all) { _ in
+                    Do("acquire") { acquire(lock) }
+                }
+            }
+        }
+        """
+        let closure = Parser.parse(source: source).statements.first!.item.as(ClosureExprSyntax.self)!
+        let parsed = SpecParser.parseSpecClosure(
+            closure,
+            enumDomains: ["Node": [.string("left"), .string("right")]]
+        )
+
+        #expect(parsed.diagnostics.isEmpty)
+        #expect(parsed.actions.map(\.name) == ["acquire", "Terminating"])
+        #expect(parsed.actions.first?.body.description.contains("lock") == true)
     }
 
     @Test("parsed Algorithm actions match runtime-builder normalization")

@@ -155,7 +155,7 @@ struct GeneratedDependentInitialAlgorithm {
             Algorithm("GeneratedDependentInitialAlgorithm") {
                 let seed = SharedVar(in: SetExpr<Bool>.literal(false, true))
                 let mirrors = SharedVar(initial: Function<Node, Phase>.mapping { node in
-                    Expr<Phase>.ifThenElse(node == .left && seed == true, then: .active, else: .inactive)
+                    If(node == .left && seed == true, then: .active, else: .inactive)
                 })
                 Each(Node.all) { _ in
                     Do("stop") {

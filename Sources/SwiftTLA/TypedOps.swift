@@ -77,63 +77,44 @@ extension Var where T == String {
 
 // MARK: - Free-floating
 
+/// Builds a typed formal conditional value.
+///
+/// This is distinct from the statement-builder `If(condition) { ... } else: { ... }` form.
+public func If<Value: TLAValueType>(
+    _ condition: some StateExprConvertible,
+    then: Value,
+    else otherwise: Value
+) -> Expr<Value> {
+    Expr(.ifThenElse(condition.stateExpr, .value(then.tlaValue), .value(otherwise.tlaValue)))
+}
+
+public func If<Value: TLAValueType>(
+    _ condition: some StateExprConvertible,
+    then: Value,
+    else otherwise: Expr<Value>
+) -> Expr<Value> {
+    Expr(.ifThenElse(condition.stateExpr, .value(then.tlaValue), otherwise.raw))
+}
+
+public func If<Value: TLAValueType>(
+    _ condition: some StateExprConvertible,
+    then: Expr<Value>,
+    else otherwise: Value
+) -> Expr<Value> {
+    Expr(.ifThenElse(condition.stateExpr, then.raw, .value(otherwise.tlaValue)))
+}
+
+public func If<Value: TLAValueType>(
+    _ condition: some StateExprConvertible,
+    then: Expr<Value>,
+    else otherwise: Expr<Value>
+) -> Expr<Value> {
+    Expr(.ifThenElse(condition.stateExpr, then.raw, otherwise.raw))
+}
+
 extension Expr where T == Bool {
     public static prefix func !(_ value: Expr<Bool>) -> Expr<Bool> {
         Expr(.not(value.raw))
-    }
-
-    public static func ifThenElse(_ cond: some StateExprConvertible, _ then: Bool, _ else: Var<Bool>) -> Expr {
-        Expr(.ifThenElse(cond.stateExpr, .value(.bool(then)), `else`.stateExpr))
-    }
-    public static func ifThenElse(_ cond: some StateExprConvertible, _ then: StateExpr, _ else: StateExpr) -> Expr {
-        Expr(.ifThenElse(cond.stateExpr, then, `else`))
-    }
-}
-
-extension Expr {
-    /// Builds a typed formal conditional without leaving the typed DSL.
-    public static func ifThenElse(
-        _ condition: some StateExprConvertible,
-        then: T,
-        else otherwise: T
-    ) -> Expr<T> {
-        Expr<T>(.ifThenElse(
-            condition.stateExpr,
-            .value(then.tlaValue),
-            .value(otherwise.tlaValue)
-        ))
-    }
-
-    /// Builds a typed conditional when one branch is already a formal expression.
-    public static func ifThenElse(
-        _ condition: some StateExprConvertible,
-        then: T,
-        else otherwise: Expr<T>
-    ) -> Expr<T> {
-        Expr<T>(.ifThenElse(
-            condition.stateExpr,
-            .value(then.tlaValue),
-            otherwise.raw
-        ))
-    }
-
-    /// Builds a typed conditional when one branch is already a formal expression.
-    public static func ifThenElse(
-        _ condition: some StateExprConvertible,
-        then: Expr<T>,
-        else otherwise: T
-    ) -> Expr<T> {
-        Expr<T>(.ifThenElse(
-            condition.stateExpr,
-            then.raw,
-            .value(otherwise.tlaValue)
-        ))
-    }
-}
-
-extension Expr where T == String {
-    public static func ifThenElse(_ cond: some StateExprConvertible, _ then: String, _ else: Var<String>) -> Expr {
-        Expr(.ifThenElse(cond.stateExpr, .value(.string(then)), `else`.stateExpr))
     }
 }
 

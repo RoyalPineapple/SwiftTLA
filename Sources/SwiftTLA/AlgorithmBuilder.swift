@@ -119,6 +119,115 @@ public struct AlgorithmLValue<Value: TLAValueType>: Sendable {
     fileprivate let model: AlgorithmLValueModel
 }
 
+/// One formal parameter in a bounded PlusCal statement macro.
+///
+/// A macro parameter is an authoring handle, not a Swift value. Its body is
+/// substituted into the surrounding `Do` block before the algorithm lowers.
+public struct MacroParameter<Value: TLAValueType>: StateExprConvertible, Sendable {
+    fileprivate let name: String
+
+    public var stateExpr: StateExpr { .variable(name) }
+    public var expr: Expr<Value> { Expr(stateExpr) }
+
+    public var algorithmLValue: AlgorithmLValue<Value> {
+        AlgorithmLValue(model: .root(name))
+    }
+}
+
+extension MacroParameter where Value == Int {
+    public static func == (lhs: MacroParameter, rhs: Int) -> StateExpr {
+        .equal(lhs.stateExpr, .value(.int(rhs)))
+    }
+
+    public static func > (lhs: MacroParameter, rhs: Int) -> StateExpr {
+        .greaterThan(lhs.stateExpr, .value(.int(rhs)))
+    }
+
+    public static func + (lhs: MacroParameter, rhs: Int) -> Expr<Int> {
+        Expr(.add(lhs.stateExpr, .value(.int(rhs))))
+    }
+
+    public static func - (lhs: MacroParameter, rhs: Int) -> Expr<Int> {
+        Expr(.subtract(lhs.stateExpr, .value(.int(rhs))))
+    }
+}
+
+/// A one-argument PlusCal statement macro.
+///
+/// Declare it inside `Algorithm`, then call it inside a `Do` body. The
+/// macro is formal syntax: it expands to statements in the same atomic step;
+/// it does not introduce a Swift function call or a separate transition.
+public struct Macro<Value: TLAValueType>: Sendable {
+    private let parameterName: String
+    private let statements: [AlgorithmStatementModel]
+
+    public init(@DoBuilder _ body: (MacroParameter<Value>) -> [StepStatement]) {
+        parameterName = "__pcal_macro_parameter"
+        statements = body(MacroParameter(name: parameterName)).map(\.model)
+    }
+
+    public func callAsFunction(_ argument: SharedVariable<Value>) -> [StepStatement] {
+        statements.map {
+            StepStatement(model: substituteMacroParameter($0, from: parameterName, to: argument.name))
+        }
+    }
+
+    public func callAsFunction(_ argument: LocalVariable<Value>) -> [StepStatement] {
+        statements.map {
+            StepStatement(model: substituteMacroParameter($0, from: parameterName, to: argument.name))
+        }
+    }
+}
+
+private func substituteMacroParameter(
+    _ statement: AlgorithmStatementModel,
+    from: String,
+    to: String
+) -> AlgorithmStatementModel {
+    switch statement {
+    case .await(let expression): return .await(renameVar(from, to: to, in: expression))
+    case .assert(let expression): return .assert(renameVar(from, to: to, in: expression))
+    case .set(let target, let value):
+        let rewrittenTarget: AlgorithmLValueModel
+        switch target {
+        case .root(let root): rewrittenTarget = .root(root == from ? to : root)
+        case .function(let root, let key):
+            rewrittenTarget = .function(root: root == from ? to : root, key: renameVar(from, to: to, in: key))
+        }
+        return .set(target: rewrittenTarget, value: renameVar(from, to: to, in: value))
+    case .letBinding(let variable, let value, let body):
+        return .letBinding(
+            variable: variable,
+            value: renameVar(from, to: to, in: value),
+            variable == from ? body : body.map { substituteMacroParameter($0, from: from, to: to) }
+        )
+    case .with(let variable, let source, let body):
+        return .with(
+            variable: variable,
+            source: renameVar(from, to: to, in: source),
+            variable == from ? body : body.map { substituteMacroParameter($0, from: from, to: to) }
+        )
+    case .ifElse(let condition, let then, let otherwise):
+        return .ifElse(
+            renameVar(from, to: to, in: condition),
+            then.map { substituteMacroParameter($0, from: from, to: to) },
+            otherwise.map { substituteMacroParameter($0, from: from, to: to) }
+        )
+    case .either(let first, let second):
+        return .either(
+            first.map { substituteMacroParameter($0, from: from, to: to) },
+            second.map { substituteMacroParameter($0, from: from, to: to) }
+        )
+    case .choose(let variable, let domain, let body):
+        return .choose(
+            variable: variable,
+            domain: domain,
+            variable == from ? body : body.map { substituteMacroParameter($0, from: from, to: to) }
+        )
+    case .goto, .stop, .skip: return statement
+    }
+}
+
 /// A typed shared algorithm variable.
 ///
 /// Declare it with `let value = SharedVar(initial: 0)` inside a
@@ -746,6 +855,10 @@ public enum DoBuilder {
     public static func buildExpression(_ statement: StepStatement) -> [StepStatement] {
         [statement]
     }
+
+    public static func buildExpression(_ statements: [StepStatement]) -> [StepStatement] {
+        statements
+    }
 }
 
 public struct Algorithm: Sendable, SpecComponent {
@@ -978,6 +1091,13 @@ public func Assign<Value: TLAValueType>(
     to value: some StateExprConvertible
 ) -> StepStatement {
     Assign(variable.algorithmLValue, to: value)
+}
+
+public func Assign<Value: TLAValueType>(
+    _ parameter: MacroParameter<Value>,
+    to value: some StateExprConvertible
+) -> StepStatement {
+    Assign(parameter.algorithmLValue, to: value)
 }
 
 public func If(

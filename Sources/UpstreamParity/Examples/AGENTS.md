@@ -41,6 +41,7 @@ them as templates for new work.
 | `x := e` | `Assign(x, to: e)` |
 | `if` / `either` | `If` / `Either` |
 | `with` / choice | `With` / `Choose` |
+| `macro M(x) { ... }` / `M(v)` | `let m = Macro<Value> { x in ... }` / `m(v)` inside `Do` |
 | `goto` / `skip` / termination | `Goto` / `Skip` / `Stop` |
 | process fairness | `Each(S, fairness: .weak)` or `.strong` |
 
@@ -58,7 +59,7 @@ After a port:
 
 1. Add or preserve the `Example.Entry` metadata and expected finite outcome.
 2. Run the focused `UpstreamParityTests` case. It must check the declared
-   state count and the parser–builder fidelity gate.
+   state count through the parser–builder fidelity gate.
 3. Run the relevant TLC parity command when the upstream module and bounded
    configuration are available.
 4. For a supported core case, refresh only the declared evidence through the

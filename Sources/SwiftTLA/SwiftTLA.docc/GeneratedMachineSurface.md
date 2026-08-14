@@ -64,7 +64,7 @@ assert(result.after.value == 1)
 
 ## Verification helpers
 
-Generated models provide `verifySpec()`, `transitionMatrix()`,
+Generated models provide `verifySpec()` (which returns the explored-state count), `transitionMatrix()`,
 `verifyTransitions()`, and `verifyInvariants()` for their declared finite
 model. These helpers use the bounded checker. They do not prove behavior that
 is outside the declared bounds or outside the supported SwiftTLA surface.
