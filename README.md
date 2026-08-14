@@ -64,7 +64,7 @@ public struct HourClock {
 }
 
 var clock = HourClock()
-let result = try clock.apply(.tick(process: .clock))
+let result = try clock.apply(.tick)
 print(result.after.hour)
 ```
 

@@ -61,19 +61,20 @@ extension MacroExpander {
     static func generateNestedObservableMembers(model: ParsedMacroModel) -> [DeclSyntax] {
         let callbacks = model.actions.map { action in
             let callbackName = "on" + action.name.prefix(1).capitalized + action.name.dropFirst()
-            let parameterTypes = action.bindings.map { swiftType(for: action, binding: $0) }
+            let parameterTypes = publicBindings(for: action).map { swiftType(for: action, binding: $0) }
             let parameters = (parameterTypes + ["State", "State"]).joined(separator: ", ")
             return DeclSyntax(stringLiteral: "@MainActor public var \(callbackName): ((\(parameters)) async -> Void)?")
         }
         let notifications = model.actions.map { action -> String in
             let callbackName = "on" + action.name.prefix(1).capitalized + action.name.dropFirst()
+            let publicBindings = publicBindings(for: action)
             let pattern: String
             let arguments: String
-            if action.bindings.isEmpty {
+            if publicBindings.isEmpty {
                 pattern = ".\(action.name)"
                 arguments = "evidence.before, evidence.after"
             } else {
-                let names = action.bindings.map(\.name)
+                let names = publicBindings.map(\.name)
                 pattern = ".\(action.name)(\(names.map { "let \($0)" }.joined(separator: ", ")))"
                 arguments = (names + ["evidence.before", "evidence.after"]).joined(separator: ", ")
             }
@@ -85,11 +86,12 @@ extension MacroExpander {
             """
         }.joined(separator: "\n")
         let typedActions = model.actions.map { action -> DeclSyntax in
-            let parameters = action.bindings.map { binding in
+            let bindings = publicBindings(for: action)
+            let parameters = bindings.map { binding in
                 "\(binding.name): \(swiftType(for: action, binding: binding))"
             }.joined(separator: ", ")
-            let labelArguments = action.bindings.map { "\($0.name): \($0.name)" }.joined(separator: ", ")
-            let label = action.bindings.isEmpty
+            let labelArguments = bindings.map { "\($0.name): \($0.name)" }.joined(separator: ", ")
+            let label = bindings.isEmpty
                 ? "ActionLabel.\(action.name).toInvocation()"
                 : "ActionLabel.\(action.name)(\(labelArguments)).toInvocation()"
             return DeclSyntax(stringLiteral: """

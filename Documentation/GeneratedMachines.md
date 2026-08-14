@@ -87,10 +87,10 @@ import SwiftTLA
 func runDirectAction() throws {
     var machine = BoundedCounter()
     let actions = try machine.availableActions()
-    let result = try machine.apply(.advance(process: .only))
+    let result = try machine.apply(.advance)
 
-    assert(actions == [.advance(process: .only)])
-    assert(result.action == .advance(process: .only))
+    assert(actions == [.advance])
+    assert(result.action == .advance)
     assert(result.before.value == 0)
     assert(result.after.value == 1)
     assert(machine.state.value == 1)
@@ -171,10 +171,10 @@ struct CounterHost {
 func runActorAccess() async throws {
     let actor = CounterHost.Actor()
     let state = await actor.state
-    let result = try await actor.execute(CounterHost.Actor.ActionLabel.advance(process: .only).toInvocation())
+    let result = try await actor.execute(CounterHost.Actor.ActionLabel.advance.toInvocation())
 
     assert(state.value == 0)
-    assert(result.action == CounterHost.Actor.ActionLabel.advance(process: .only))
+    assert(result.action == CounterHost.Actor.ActionLabel.advance)
     assert(result.after.value == 1)
 }
 ```
@@ -244,12 +244,12 @@ struct CounterScreenModel {
 @MainActor
 func runObservable() async throws {
     let observable = CounterScreenModel.Observable()
-    observable.onAdvance = { _, before, after in
+    observable.onAdvance = { before, after in
         assert(before.value == 0)
         assert(after.value == 1)
     }
-    let result = try await observable.execute(CounterScreenModel.Observable.ActionLabel.advance(process: .only).toInvocation())
-    assert(result.action == CounterScreenModel.Observable.ActionLabel.advance(process: .only))
+    let result = try await observable.execute(CounterScreenModel.Observable.ActionLabel.advance.toInvocation())
+    assert(result.action == CounterScreenModel.Observable.ActionLabel.advance)
 }
 ```
 
@@ -355,7 +355,7 @@ struct CounterView: View {
             Button("Advance") {
                 Task { @MainActor in
                     do {
-                        _ = try await machine.execute(CounterScreenModel.Observable.ActionLabel.advance(process: .only).toInvocation())
+                        _ = try await machine.execute(CounterScreenModel.Observable.ActionLabel.advance.toInvocation())
                         state = machine.state
                         observation = await machine.machineObservation()
                         diagnostic = ""

@@ -40,10 +40,10 @@ struct CounterScreenModel {
 @MainActor
 func runObservable() async throws {
     let observable = CounterScreenModel.Observable()
-    observable.onAdvance = { _, before, after in
+    observable.onAdvance = { before, after in
         assert(before.value == 0)
         assert(after.value == 1)
     }
-    let result = try await observable.execute(CounterScreenModel.Observable.ActionLabel.advance(process: .only).toInvocation())
-    assert(result.action == CounterScreenModel.Observable.ActionLabel.advance(process: .only))
+    let result = try await observable.execute(CounterScreenModel.Observable.ActionLabel.advance.toInvocation())
+    assert(result.action == CounterScreenModel.Observable.ActionLabel.advance)
 }

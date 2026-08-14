@@ -12,6 +12,13 @@ enum MacroExpander {
         action.bindingSwiftTypes[binding.name] ?? swiftType(for: binding.values[0])
     }
 
+    /// A finite binding with one possible value is a scheduler detail, not a
+    /// useful public argument. Keep it in the formal invocation while hiding
+    /// it from the generated Swift surface.
+    static func publicBindings(for action: SpecParser.ParsedAction) -> [ActionBinding] {
+        action.bindings.filter { $0.values.count > 1 }
+    }
+
     static func generate(mode: GenerationMode, model: ParsedMacroModel) -> [DeclSyntax] {
         switch mode {
         case .model, .actor:
@@ -306,6 +313,10 @@ enum MacroExpander {
             }
         }
 
+        func fixedArgument(_ binding: ActionBinding) -> String {
+            codegenTLAValue(binding.values[0])
+        }
+
         func invocationPattern(for action: SpecParser.ParsedAction, binding: ActionBinding, index: Int) -> String {
             let argument = "invocation.arguments[\(index)]"
             switch swiftType(for: action, binding: binding) {
@@ -320,27 +331,39 @@ enum MacroExpander {
         }
 
         let cases = actions.map { action in
-            guard !action.bindings.isEmpty else { return "case \(action.name)" }
-            let parameters = action.bindings.map { "\($0.name): \(swiftType(for: action, binding: $0))" }.joined(separator: ", ")
+            let bindings = publicBindings(for: action)
+            guard !bindings.isEmpty else { return "case \(action.name)" }
+            let parameters = bindings.map { "\($0.name): \(swiftType(for: action, binding: $0))" }.joined(separator: ", ")
             return "case \(action.name)(\(parameters))"
         }.joined(separator: "\n    ")
 
         let toInvocationCases = actions.map { action in
-            let arguments = action.bindings.map { argumentConstructor(for: action, binding: $0) }.joined(separator: ", ")
-            let pattern = action.bindings.isEmpty
+            let publicBindings = publicBindings(for: action)
+            let arguments = action.bindings.map { binding in
+                publicBindings.contains(where: { $0.name == binding.name })
+                    ? argumentConstructor(for: action, binding: binding)
+                    : fixedArgument(binding)
+            }.joined(separator: ", ")
+            let pattern = publicBindings.isEmpty
                 ? ".\(action.name)"
-                : ".\(action.name)(\(action.bindings.map { "let \($0.name)" }.joined(separator: ", ")))"
+                : ".\(action.name)(\(publicBindings.map { "let \($0.name)" }.joined(separator: ", ")))"
             return "case \(pattern): return .init(name: \"\(action.name)\", arguments: [\(arguments)])"
         }.joined(separator: "\n        ")
 
         let fromInvocationCases = actions.map { action in
+            let publicBindings = publicBindings(for: action)
             if action.bindings.isEmpty {
                 return "case \"\(action.name)\" where invocation.arguments.isEmpty: self = .\(action.name)"
             }
-            let patterns = action.bindings.enumerated().map { invocationPattern(for: action, binding: $0.element, index: $0.offset) }.joined(separator: ", ")
-            let arguments = action.bindings.map { "\($0.name): \($0.name)" }.joined(separator: ", ")
+            let patterns = action.bindings.enumerated().map { index, binding -> String in
+                if publicBindings.contains(where: { $0.name == binding.name }) {
+                    return invocationPattern(for: action, binding: binding, index: index)
+                }
+                return "\(codegenTLAValue(binding.values[0])) == invocation.arguments[\(index)]"
+            }.joined(separator: ", ")
+            let arguments = publicBindings.map { "\($0.name): \($0.name)" }.joined(separator: ", ")
             return "case \"\(action.name)\" where invocation.arguments.count == \(action.bindings.count): "
-                + "guard \(patterns) else { return nil }; self = .\(action.name)(\(arguments))"
+                + "guard \(patterns) else { return nil }; self = .\(action.name)\(arguments.isEmpty ? "" : "(\(arguments))")"
         }.joined(separator: "\n        ")
 
         return DeclSyntax(stringLiteral: """
@@ -629,12 +652,13 @@ extension MacroExpander {
                 """
                 return DeclSyntax(stringLiteral: source).as(FunctionDeclSyntax.self)!
             }
-            let parameters = action.bindings.map { binding in
+            let bindings = publicBindings(for: action)
+            let parameters = bindings.map { binding in
                 "\(binding.name): \(swiftType(for: action, binding: binding))"
             }.joined(separator: ", ")
-            let labels = action.bindings.map { "\($0.name): \($0.name)" }.joined(separator: ", ")
+            let labels = bindings.map { "\($0.name): \($0.name)" }.joined(separator: ", ")
             let methodName = isActor ? "_\(action.name)" : "apply\(action.name)"
-            if action.bindings.isEmpty {
+            if bindings.isEmpty {
                 let source = """
                 \(isActor ? "fileprivate" : "public mutating") func \(methodName)() throws -> TransitionResult {
                     try apply(.\(action.name))

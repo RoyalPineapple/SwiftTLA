@@ -15,7 +15,7 @@ struct CounterView: View {
             Button("Advance") {
                 Task { @MainActor in
                     do {
-                        _ = try await machine.execute(CounterScreenModel.Observable.ActionLabel.advance(process: .only).toInvocation())
+                        _ = try await machine.execute(CounterScreenModel.Observable.ActionLabel.advance.toInvocation())
                         state = machine.state
                         observation = await machine.machineObservation()
                         diagnostic = ""
