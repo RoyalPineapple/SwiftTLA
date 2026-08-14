@@ -29,7 +29,7 @@ public struct SimpleAllocatorModel {
             allocOf("c1").union(allocOf("c2")).union(allocOf("c3"))
         )
 
-        return TLASpec("SimpleAllocator") {
+        return #spec("SimpleAllocator") {
             Extends("Integers, FiniteSets")
             let unsat = Var<TLAValue>("unsat")
             let alloc = Var<TLAValue>("alloc")

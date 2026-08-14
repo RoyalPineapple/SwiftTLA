@@ -80,9 +80,9 @@ public enum MultiCarElevator {
         public static let direction = field(\CallFields.direction)
     }
 
-    public static var builderSpec: TLASpec { makeSpec(named: "MultiCarElevatorBuilder") }
+    public static var builderSpec: TLASpec { makeSpec() }
 
-    static func makeSpec(named name: String) -> TLASpec {
+    static func makeSpec() -> TLASpec {
         let cars = Var<Function<CarID, Record<CarSchema>>>("cars")
         let calls = Var<SetExpr<Record<CallSchema>>>("calls")
         let lastMoveDoorClosed = Var<Bool>("lastMoveDoorClosed")
@@ -135,7 +135,7 @@ public enum MultiCarElevator {
                 && carField(.value(CarID.carB.tlaValue), "rider") != person
         }
 
-        return TLASpec(name) {
+        return #spec("MultiCarElevator") {
             Variable(cars, try! initialCars.raw.evaluate(in: [:]))
             Variable(calls, TLAValue.set([]))
             Variable(lastMoveDoorClosed, true)
@@ -233,7 +233,7 @@ public enum MultiCarElevator {
 
 public struct MultiCarElevatorModel {
     public static var spec: TLASpec {
-        MultiCarElevator.makeSpec(named: "MultiCarElevator")
+        MultiCarElevator.makeSpec()
     }
 }
 
@@ -318,7 +318,7 @@ public struct MultiCarElevatorMacroFixture {
     }
 
     public static var spec: TLASpec {
-        TLASpec("MultiCarElevatorMacroFixture") {
+        #spec("MultiCarElevatorMacroFixture") {
             let cars: Var<Function<CarID, Record<CarSchema>>> = .init("cars")
             let calls: Var<SetExpr<Record<CallSchema>>> = .init("calls")
             let lastMoveDoorClosed: Var<Bool> = .init("lastMoveDoorClosed")

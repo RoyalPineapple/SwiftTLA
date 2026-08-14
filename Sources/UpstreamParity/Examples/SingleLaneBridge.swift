@@ -30,7 +30,7 @@ public struct SingleLaneBridgeModel {
         var locInit: [TLAValue: TLAValue] = [:]
         for car in allCars { locInit[car] = .int(carsRight.contains(car) ? endPos : startPos) }
 
-        return TLASpec("SingleLaneBridge") {
+        return #spec("SingleLaneBridge") {
             Extends("Naturals")
             Constant("CarsRight", TLAValue.set(carsRight))
             Constant("CarsLeft", TLAValue.set(carsLeft))

@@ -1,4 +1,5 @@
 import SwiftTLA
+import SwiftTLAMacros
 
 // Dining Philosophers — Chandy-Misra solution. NP=5.
 // Port: 1:1 structural match. TypeOK + ExclusiveAccess. 67 states.
@@ -74,7 +75,7 @@ private func diningPhilosophersSpec() -> TLASpec {
             && StateExpr.equal(p.applying(pj), eat))
     }
 
-    return TLASpec("DiningPhilosophers") {
+    return #spec("DiningPhilosophers") {
         Extends("Integers")
 
         Variable(forks, TLAValue.function(forkInits))
