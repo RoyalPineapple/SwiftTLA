@@ -71,8 +71,8 @@ private func semanticBranches(_ action: ActionExpr) -> [ActionExpr] {
     switch action {
     case .or(let left, let right):
         return semanticBranches(left) + semanticBranches(right)
-    case .guard_(.or(let left, let right)):
-        return semanticBranches(.guard_(left)) + semanticBranches(.guard_(right))
+    case .guard_(let condition):
+        return semanticStateBranches(condition).map(ActionExpr.guard_)
     case .and(let left, let right):
         return semanticBranches(left).flatMap { leftBranch in
             semanticBranches(right).map { rightBranch in .and(leftBranch, rightBranch) }
@@ -86,6 +86,25 @@ private func semanticBranches(_ action: ActionExpr) -> [ActionExpr] {
         return semanticBranches(body).map { .define(variable, value, $0) }
     default:
         return [action]
+    }
+}
+
+/// Splits only disjunctions that occur inside a Boolean guard. Swift can group
+/// `a && (b || c)` into one `StateExpr` before that condition meets an action
+/// update, while the syntax parser retains separate action guards. Both spell
+/// the same transition relation.
+private func semanticStateBranches(_ expression: StateExpr) -> [StateExpr] {
+    switch expression {
+    case .or(let left, let right):
+        return semanticStateBranches(left) + semanticStateBranches(right)
+    case .and(let left, let right):
+        return semanticStateBranches(left).flatMap { leftBranch in
+            semanticStateBranches(right).map { rightBranch in
+                .and(leftBranch, rightBranch)
+            }
+        }
+    default:
+        return [expression]
     }
 }
 
