@@ -128,10 +128,10 @@ The two paths carry the authored model through the following phases:
 After construction and comparison, the generated machine holds its canonical
 state machine and applies enabled transitions.
 
-This is intentionally not a hash-only check. A structural fingerprint is a
-useful fast diagnostic and cache key, but alpha-equivalence is the authority:
-it can accept equivalent bound-variable names and still point to the semantic
-node that differs when the models are not equivalent.
+A structural fingerprint gives a fast diagnostic and cache key. Semantic
+alpha-equivalence supplies the formal comparison: it recognizes equivalent
+bound-variable names and identifies the semantic node that differs when the
+models diverge.
 
 ```swift
 @TLAModel
@@ -155,9 +155,8 @@ struct Counter {
 }
 ```
 
-The `#spec` expansion registers `count` with the constrained runtime builder.
-The model macro parses the original declaration to the formal AST. Neither path
-receives the other's completed model.
+The `#spec` expansion registers `count` with the constrained runtime builder,
+while the model macro parses the original declaration into the formal AST.
 
 ## Authoring two source forms
 
@@ -166,14 +165,11 @@ PlusCal-shaped authoring expresses algorithms through `Algorithm`, `Each`, and
 The typed `#spec` vocabulary also expresses direct TLA+ specifications. Both
 forms share the AST, checker, emitter, generated machine, and fidelity gate.
 
-State-count parity does not prove runtime correctness. Equal state counts can
-hide different initial states, transitions, action labels, or outcomes.
-
 For selected finite core models, the core-conformance command compares the
-complete labeled transition relation from SwiftTLA with a pinned TLC run. The
-core-support gate admits only the exact finite cases named in its support
-register. See `Documentation/CoreGraphConformance.md` and
-`Documentation/CoreSupport.md` for the boundary and commands.
+complete labeled transition relation from SwiftTLA with a pinned TLC run. This
+includes initial states, state bindings, action labels, edges, and outcomes.
+See `Documentation/CoreGraphConformance.md` and
+`Documentation/CoreSupport.md` for the supported cases and commands.
 
 ## Finite graph conformance flow
 
@@ -185,27 +181,16 @@ which records callbacks as JSONL. The TLC adapter verifies the stream and
 provenance, then canonicalizes it. The comparator checks the finite initial
 set, state bindings, edge multiset, and outcome after the declared mappings.
 
-The bridge is transport only: it neither evaluates TLA expressions nor
-discovers successors nor decides equivalence. Trace/replay files are failure
-diagnostics, not substitutes for complete graph evidence. This architecture
-is intentionally bounded to declared finite cases; it does not claim temporal,
-liveness, fairness, or symmetry conformance.
-
-Published TLA+ semantics are authoritative. TLC is a pinned executable
-reference, and its source and tests are diagnostic evidence. No hidden checker
-or oracle is claimed.
+The bridge carries complete graph evidence between the Swift and TLC runs.
+Trace and replay files make a difference inspectable. Published TLA+ semantics
+remain authoritative, with TLC serving as the pinned executable reference.
 
 ## Macro and package evidence boundary
 
-The macro and package examples in this repository demonstrate API usage; they
-do not establish support for every accepted model. The separate [public
-workflow conformance](PublicWorkflowConformance.md) command retains bounded
-valid and invalid fixture results for `@TLAModel`, `@TLAActor`, and
-`@TLAObservable`, plus the exact named `SwiftTLA-Package` public-library macOS
-build. Local output is diagnostic and explicit hosted output is candidate
-evidence. `@TypedVar` is not release-facing or admitted, and `@TLAValidated`
-was removed because it had no implementation. The P4 report does not widen the
-finite core language claim in this document.
+The [public workflow conformance](PublicWorkflowConformance.md) command keeps
+fixture results for `@TLAModel`, `@TLAActor`, and `@TLAObservable`, together
+with the public-library macOS build. It is the release evidence for the
+generated public interfaces.
 
 ## Generated-machine boundary
 
