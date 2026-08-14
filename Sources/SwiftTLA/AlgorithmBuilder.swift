@@ -983,6 +983,17 @@ internal enum AlgorithmValidator {
         var diagnostics: [AlgorithmDiagnostic] = []
         validateName(model.name, at: .algorithm, diagnostics: &diagnostics)
 
+        // PlusCal has two distinct control shapes: a `begin` body with one
+        // scalar pc, and a process set with a function-valued pc. Mixing them
+        // would silently invent a third semantics, so reject it.
+        if !model.processes.isEmpty, !model.sequentialSteps.isEmpty {
+            diagnostics.append(AlgorithmDiagnostic(.invalidAlgorithmComponent, at: .algorithm))
+        }
+        let sequentialLabels = model.sequentialSteps.map(\.label.name)
+        if Set(sequentialLabels).count != sequentialLabels.count {
+            diagnostics.append(AlgorithmDiagnostic(.duplicateLabel, at: .algorithm))
+        }
+
         for (index, component) in model.components.enumerated() {
             switch component {
             case .shared(let state):
@@ -997,11 +1008,27 @@ internal enum AlgorithmValidator {
                 break
             case .propertyBoundary:
                 diagnostics.append(AlgorithmDiagnostic(.propertyBoundary, at: .algorithm))
-            case .local, .step:
+            case .step(let step):
+                validateSequential(step, labels: Set(model.sequentialSteps.map(\.label.name)), diagnostics: &diagnostics)
+            case .local:
                 diagnostics.append(AlgorithmDiagnostic(.invalidAlgorithmComponent, at: .algorithm))
             }
         }
         return diagnostics
+    }
+
+    private static func validateSequential(
+        _ step: AlgorithmStepModel,
+        labels: Set<String>,
+        diagnostics: inout [AlgorithmDiagnostic]
+    ) {
+        let allSteps = labels
+        validateName(step.label.name, at: .algorithm, diagnostics: &diagnostics)
+        let paths = writePaths(step.statements)
+        if paths.contains(where: { Set($0).count != $0.count }) {
+            diagnostics.append(AlgorithmDiagnostic(.duplicateRootWrite, at: .algorithm))
+        }
+        validateStatements(step.statements, at: .algorithm, labels: allSteps, diagnostics: &diagnostics)
     }
 
     private static func validate(

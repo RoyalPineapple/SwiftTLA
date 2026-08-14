@@ -29,7 +29,7 @@ extension SpecParser {
             }
             guard case .expr(let expression) = statement.item else {
                 result.diagnostics.append(.init(
-                    message: "Unsupported Algorithm declaration '\(statement.description.trimmingCharacters(in: .whitespacesAndNewlines))'. Supported declarations are SharedVar and Each.",
+                    message: "Unsupported Algorithm declaration '\(statement.description.trimmingCharacters(in: .whitespacesAndNewlines))'. Supported declarations are SharedVar, Each, Do, and While.",
                     source: statement
                 ))
                 return
@@ -37,7 +37,7 @@ extension SpecParser {
             guard let component = parseAlgorithmComponent(expression) else {
                 let detail = algorithmParseFailure.map { " \($0)" } ?? ""
                 result.diagnostics.append(.init(
-                    message: "Unsupported Algorithm declaration '\(expression.description.trimmingCharacters(in: .whitespacesAndNewlines))'. Supported declarations are SharedVar and Each.\(detail)",
+                    message: "Unsupported Algorithm declaration '\(expression.description.trimmingCharacters(in: .whitespacesAndNewlines))'. Supported declarations are SharedVar, Each, Do, and While.\(detail)",
                     source: expression
                 ))
                 return
@@ -129,6 +129,8 @@ extension SpecParser {
                 algorithmParseFailure = "Each requires a finite enum domain and a decodable process body."
             }
             return component
+        case "Do", "While":
+            return parseEachComponent(expression, processParameter: "__pcal_sequential")
         case "Invariant":
             guard let invariant = parseAlgorithmInvariant(call) else { return nil }
             return .invariant(invariant)

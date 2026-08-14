@@ -3,6 +3,35 @@ import Testing
 
 @Suite("PlusCal algorithm builders")
 struct AlgorithmBuilderTests {
+    @Test("a begin-style algorithm keeps a scalar program counter")
+    func lowersSequentialAlgorithmWithoutInventingAProcess() throws {
+        let algorithm = Algorithm("SequentialCounter") {
+            let value = SharedVar("value", initial: 0)
+            value
+            Do("increment") {
+                Assign(value, to: value + 1)
+            }
+            Do("finish") {
+                Stop()
+            }
+        }
+
+        #expect(algorithm.validate().isEmpty)
+        let spec = try algorithm.lower()
+        #expect(spec.variables.map(\.name) == ["value", "pc"])
+        #expect(spec.actions.map(\.name) == ["increment", "finish", "Terminating"])
+        #expect(spec.actions.allSatisfy { $0.bindings.isEmpty })
+
+        let initial = try #require(computeInitialStates(spec).first)
+        #expect(initial["pc"] == .string("increment"))
+        let increment = try #require(spec.actions.first { $0.name == "increment" })
+        let successor = try #require(
+            ActionEnumerator.enumerate(increment.body, from: initial, varNames: spec.variables.map(\.name)).first
+        )
+        #expect(successor["value"] == .int(1))
+        #expect(successor["pc"] == .string("finish"))
+    }
+
     @Test("typed first-slice builders preserve ordered process steps")
     func buildsBoundedAlgorithm() throws {
         let algorithm = Algorithm("ChangRoberts") {

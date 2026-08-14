@@ -8,6 +8,16 @@ internal struct AlgorithmModel: Sendable {
             return process
         }
     }
+
+    /// A PlusCal `begin ... end algorithm` body has one scalar program
+    /// counter. Keep it distinct from a one-member `Each` process, whose
+    /// counter is a function and whose transition labels carry a parameter.
+    var sequentialSteps: [AlgorithmStepModel] {
+        components.compactMap {
+            guard case .step(let step) = $0 else { return nil }
+            return step
+        }
+    }
 }
 
 internal indirect enum AlgorithmComponentModel: Sendable {

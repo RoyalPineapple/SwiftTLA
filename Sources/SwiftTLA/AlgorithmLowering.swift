@@ -15,6 +15,9 @@ enum AlgorithmLowerer {
 
     static func lower(_ algorithm: AlgorithmModel) -> TLASpec {
         let processes = algorithm.processes
+        if processes.isEmpty, !algorithm.sequentialSteps.isEmpty {
+            return lowerSequential(algorithm)
+        }
         let shared = algorithm.components.compactMap { component -> AlgorithmStateModel? in
             guard case .shared(let state) = component else { return nil }
             return state
@@ -145,6 +148,177 @@ enum AlgorithmLowerer {
             binding,
             value
         )
+    }
+
+    /// Lowers a PlusCal `begin ... end algorithm` body. This is deliberately
+    /// not a one-element process: PlusCal gives this form a scalar `pc` and
+    /// unparameterized action labels.
+    private static func lowerSequential(_ algorithm: AlgorithmModel) -> TLASpec {
+        let steps = algorithm.sequentialSteps
+        let shared = algorithm.components.compactMap { component -> AlgorithmStateModel? in
+            guard case .shared(let state) = component else { return nil }
+            return state
+        }
+        let declaredInvariants = algorithm.components.compactMap { component -> NamedInvariant? in
+            guard case .invariant(let invariant) = component else { return nil }
+            return invariant
+        }
+        let declaredTemporal = algorithm.components.compactMap { component -> NamedTemporal? in
+            guard case .temporal(let temporal) = component else { return nil }
+            return temporal
+        }
+        let declaredFairness = algorithm.components.compactMap { component -> FairnessCondition? in
+            guard case .fairness(let fairness) = component else { return nil }
+            return fairness
+        }
+
+        var variables = shared.map { state in
+            if let initial = try? state.initial.evaluate(in: [:]) {
+                NamedVar(name: state.root, initial: initial, initialSet: state.initialSet)
+            } else {
+                NamedVar(name: state.root, initial: .int(0), initExpr: state.initial)
+            }
+        }
+        guard let first = steps.first else {
+            return TLASpec(
+                name: algorithm.name,
+                variables: variables,
+                actions: [],
+                invariants: declaredInvariants,
+                temporalProperties: declaredTemporal,
+                fairness: declaredFairness
+            )
+        }
+        variables.append(NamedVar(name: controlVariable, initial: .string(first.label.name)))
+        let variableNames = variables.map(\.name)
+
+        var actions: [NamedAction] = []
+        var generatedAssertionInvariants: [NamedInvariant] = []
+        for (index, atomic) in steps.enumerated() {
+            let nextLabel = steps.indices.contains(index + 1)
+                ? steps[index + 1].label.name
+                : doneLabel
+            let statements = lowerSequential(atomic.statements)
+            let body: ActionExpr
+            if let condition = atomic.loopCondition {
+                body = .ifElse(
+                    condition,
+                    completingSequentialControl(statements, fallthrough: atomic.label.name),
+                    sequentialTransfer(to: nextLabel)
+                )
+            } else {
+                body = completingSequentialControl(statements, fallthrough: nextLabel)
+            }
+            actions.append(NamedAction(
+                name: atomic.label.name,
+                body: completeAction(
+                    .and(.guard_(.equal(.variable(controlVariable), .value(.string(atomic.label.name)))), body),
+                    allVars: variableNames
+                )
+            ))
+            generatedAssertionInvariants += sequentialAssertionInvariants(
+                in: atomic.statements,
+                label: atomic.label.name,
+                executionCondition: atomic.loopCondition,
+                pathCondition: .value(.bool(true))
+            )
+        }
+
+        let terminate = variableNames
+            .map(ActionExpr.unchanged)
+            .reduce(
+                .guard_(.equal(.variable(controlVariable), .value(.string(doneLabel)))),
+                ActionExpr.and
+            )
+        actions.append(NamedAction(name: terminatingAction, body: terminate))
+
+        return TLASpec(
+            name: algorithm.name,
+            variables: variables,
+            actions: actions,
+            invariants: declaredInvariants + generatedAssertionInvariants,
+            temporalProperties: declaredTemporal,
+            fairness: declaredFairness
+        )
+    }
+
+    private static func sequentialTransfer(to label: String) -> ActionExpr {
+        .assign(controlVariable, .value(.string(label)))
+    }
+
+    private static func completingSequentialControl(_ action: ActionExpr, fallthrough label: String) -> ActionExpr {
+        let branches = distributeOr(action)
+        let completed = branches.map { branch in
+            assignedVars(branch).contains(controlVariable)
+                ? branch
+                : .and(branch, sequentialTransfer(to: label))
+        }
+        return completed.dropFirst().reduce(completed.first ?? sequentialTransfer(to: label), ActionExpr.or)
+    }
+
+    private static func lowerSequential(_ statements: [AlgorithmStatementModel]) -> ActionExpr {
+        statements.reduce(.guard_(.value(.bool(true)))) { partial, statement in
+            .and(partial, lowerSequential(statement))
+        }
+    }
+
+    private static func lowerSequential(_ statement: AlgorithmStatementModel) -> ActionExpr {
+        switch statement {
+        case .await(let condition): return .guard_(condition)
+        case .assert: return .guard_(.value(.bool(true)))
+        case .set(let target, let value):
+            switch target {
+            case .root(let root): return .assign(root, value)
+            case .function(let root, let key): return .assign(root, .except(.variable(root), key, value))
+            }
+        case .with(let variable, let source, let body):
+            return .existsAction(variable, source, lowerSequential(body))
+        case .ifElse(let condition, let then, let otherwise):
+            return .ifElse(condition, lowerSequential(then), lowerSequential(otherwise))
+        case .either(let first, let second):
+            return .or(lowerSequential(first), lowerSequential(second))
+        case .choose(let variable, let domain, let body):
+            return .existsAction(variable, .setLiteral(domain.map(StateExpr.value)), lowerSequential(body))
+        case .goto(let label): return sequentialTransfer(to: label.name)
+        case .stop: return sequentialTransfer(to: doneLabel)
+        case .skip: return .guard_(.value(.bool(true)))
+        }
+    }
+
+    private static func sequentialAssertionInvariants(
+        in statements: [AlgorithmStatementModel],
+        label: String,
+        executionCondition: StateExpr?,
+        pathCondition: StateExpr
+    ) -> [NamedInvariant] {
+        let atLabel = StateExpr.equal(.variable(controlVariable), .value(.string(label)))
+        let executed = StateExpr.and(executionCondition.map { .and(atLabel, $0) } ?? atLabel, pathCondition)
+        return statements.enumerated().flatMap { index, statement in
+            switch statement {
+            case .assert(let condition):
+                return [NamedInvariant(
+                    name: "__pcal_assert_\(label)_\(index)",
+                    body: .or(.not(executed), condition)
+                )]
+            case .ifElse(let condition, let then, let otherwise):
+                return sequentialAssertionInvariants(in: then, label: label, executionCondition: executionCondition, pathCondition: .and(pathCondition, condition))
+                    + sequentialAssertionInvariants(in: otherwise, label: label, executionCondition: executionCondition, pathCondition: .and(pathCondition, .not(condition)))
+            case .either(let first, let second):
+                return sequentialAssertionInvariants(in: first, label: label, executionCondition: executionCondition, pathCondition: pathCondition)
+                    + sequentialAssertionInvariants(in: second, label: label, executionCondition: executionCondition, pathCondition: pathCondition)
+            case .choose(let variable, let domain, let body):
+                return sequentialAssertionInvariants(in: body, label: label, executionCondition: executionCondition, pathCondition: pathCondition)
+                    .map { invariant in
+                        NamedInvariant(name: invariant.name, body: .forAll(.setLiteral(domain.map(StateExpr.value)), variable, invariant.body))
+                    }
+            case .with(let variable, let source, let body):
+                return sequentialAssertionInvariants(in: body, label: label, executionCondition: executionCondition, pathCondition: pathCondition)
+                    .map { invariant in
+                        NamedInvariant(name: invariant.name, body: .forAll(source, variable, invariant.body))
+                    }
+            case .await, .set, .goto, .stop, .skip: return []
+            }
+        }
     }
 
     /// Algorithm declarations are finite initial values. Keep the initial

@@ -65,6 +65,35 @@ struct GeneratedAlgorithmMachineTests {
 }
 
 @TLAModel
+struct GeneratedSequentialCounter {
+    static var spec: TLASpec {
+        #spec("GeneratedSequentialCounter") {
+            Algorithm("GeneratedSequentialCounter") {
+                let count = SharedVar(initial: 0)
+                Do("increment") {
+                    Assign(count, to: count + 1)
+                }
+                Do("finish") {
+                    Stop()
+                }
+            }
+        }
+    }
+}
+
+struct GeneratedSequentialMachineTests {
+    @Test("a begin-style Algorithm generates scalar control state")
+    func generatedSequentialAlgorithmPreservesScalarPC() throws {
+        GeneratedSequentialCounter._checkParserTree()
+
+        var model = GeneratedSequentialCounter()
+        let result = try model.apply(.increment)
+        #expect(result.after.count == 1)
+        #expect(result.after.pc == "finish")
+    }
+}
+
+@TLAModel
 struct GeneratedRangeInitializedAlgorithm {
     enum Node: String, FiniteDomainKey {
         case clock
