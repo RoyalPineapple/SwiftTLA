@@ -28,6 +28,49 @@ builder-visible declaration. The source parser reads that `let` independently;
 the runtime builder constructs the corresponding `TLASpec` independently.
 Every future authoring convenience must preserve this split.
 
+## A small family of scoped builders
+
+SwiftTLA does not have one permissive "formal builder." It has a small,
+fixed family of builders. Each builder represents one formal scope and accepts
+only the elements that are meaningful in that scope. This is how the Swift
+type checker rejects a misplaced statement before macro parsing or model
+checking begins.
+
+| Scope | Builder | It accepts | It produces |
+|---|---|---|---|
+| A complete specification | `#spec { ... }` / `SpecBuilder` | declarations, an `Algorithm`, and formal properties | `TLASpec` components |
+| One PlusCal algorithm | `Algorithm { ... }` / `AlgorithmBuilder` | shared state, process families, and formal properties | algorithm components |
+| One concurrent process family | `Each(domain) { self in ... }` | labeled atomic regions | one process definition for each finite member |
+| One atomic region | `Do(label) { ... }` / `DoBuilder` | guards, assignments, local bindings, branching, and control transfer | one `StepStatement` list, lowered as one transition |
+
+`DoBuilder` is deliberately not generic. An atomic block always produces
+formal statements; it is not a general Swift collection builder. The generic
+part of the API is the data that flows through it: `SharedVariable<Value>`,
+`LocalVariable<Value>`, typed records, finite maps, finite domains, and typed
+expressions. A `Do` block can therefore be strongly typed without accepting
+arbitrary Swift values or side effects.
+
+```swift
+Algorithm("Counter") {
+    let count = SharedVar(initial: 0)
+
+    Each(Node.all) { _ in
+        Do(Step.advance) {
+            When(count < 1)
+            Assign(count, to: count + 1)
+            Stop()
+        }
+    }
+}
+```
+
+Here, `SharedVar` belongs to the algorithm scope, `Each` introduces
+independently scheduled finite processes, and `Do` makes the guard,
+assignment, and stop one atomic formal step. A statement that belongs to a
+different scope does not type-check as a `Do` statement. That restriction is
+intentional: the builder layer is the first validation layer, not decorative
+syntax.
+
 Finite nondeterministic initialization is also formal semantics. For example,
 `SharedVar(in: SetExpr<Record<CarSchema>>.literal(...))` means that the
 initial predicate chooses one member of that typed, finite set. Both paths
