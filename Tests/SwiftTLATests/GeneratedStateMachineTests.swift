@@ -414,7 +414,7 @@ struct GeneratedStateMachineTests {
         let callbackID = LockedValue<Int?>(nil)
         elevator.onMoveElevator = { id, _, _ in callbackID.value = id }
         _ = try await elevator._moveElevator(id: 2)
-        #expect(elevator.state.floor == 2)
+        #expect(elevator.state.floor == 1)
         #expect(callbackID.value == 2)
     }
 

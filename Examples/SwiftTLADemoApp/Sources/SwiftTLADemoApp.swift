@@ -31,7 +31,7 @@ private struct DemoHomeView: View {
             ElevatorBankView()
                 .tabItem { Text("Elevator Bank") }
             GeneratedSurfaceView()
-                .tabItem { Text("Generated Surface") }
+                .tabItem { Text("Generated Tests") }
         }
         .padding(24)
         .background(Color.black.opacity(0.9))
@@ -379,8 +379,8 @@ private struct GeneratedSurfaceView: View {
 
     var body: some View {
         DemoScreen(
-            title: "Generated Surface",
-            subtitle: "One formal model produces native state, adapters, and verification helpers."
+            title: "Generated Tests",
+            subtitle: "Run the same generated checks exercised by this consumer package's test target."
         ) {
             ScrollView {
                 VStack(spacing: 16) {
@@ -428,7 +428,7 @@ private struct GeneratedSurfaceSummary: View {
                 )
                 GeneratedSurfaceItem(
                     title: "Verification suite",
-                    detail: "The cards run the helpers that the downstream test target also exercises."
+                    detail: "Small models run full generated verification. The ring runs fast generated-surface checks; its full graph belongs in the release pipeline."
                 )
             }
         }
@@ -465,7 +465,7 @@ private struct GeneratedTestCard: View {
             HStack {
                 VStack(alignment: .leading, spacing: 3) {
                     Text(target.title).font(.headline)
-                    Text("Generated verification helpers, exercised here and by the downstream test target.")
+                    Text("Generated checks, exercised here and by the downstream test target.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }

@@ -3,10 +3,13 @@ import Testing
 
 @Suite(.serialized)
 struct ReadmeSymmetricCollectionTests {
-  @Test("README symmetric collection model compiles, retains its invariant, and checks")
-  func readmeModelCompilesAndChecks() throws {
+  @Test("symmetric collection language fragment compiles, retains its invariant, and checks")
+  func languageFragmentModelCompilesAndChecks() throws {
     let root = packageRoot()
-    let readme = try String(contentsOf: root.appendingPathComponent("README.md"), encoding: .utf8)
+    let languageFragment = try String(
+      contentsOf: root.appendingPathComponent("Documentation/SymmetricCollections.md"),
+      encoding: .utf8
+    )
     let fixture = root.appendingPathComponent("Tests/Fixtures/ReadmeSymmetricCollectionMacro")
     let source = try String(
       contentsOf: fixture.appendingPathComponent(
@@ -15,7 +18,7 @@ struct ReadmeSymmetricCollectionTests {
       encoding: .utf8
     )
 
-    #expect(source.hasPrefix(symmetricCollectionSnippet(in: readme) + "\n\nlet generatedSpec"))
+    #expect(source.hasPrefix(symmetricCollectionSnippet(in: languageFragment) + "\n\nlet generatedSpec"))
 
     let result = try runSwift(["run", "--package-path", fixture.path])
     #expect(result.status == 0, "README fixture failed:\n\(result.output)")
@@ -36,7 +39,7 @@ struct ReadmeSymmetricCollectionTests {
           let opening = readme.range(of: "```swift", range: section.upperBound..<readme.endIndex),
           let closing = readme.range(of: "```", range: opening.upperBound..<readme.endIndex)
     else {
-      Issue.record("README symmetric collection Swift snippet is missing")
+      Issue.record("symmetric collection language-fragment Swift snippet is missing")
       return ""
     }
     return String(readme[opening.upperBound..<closing.lowerBound]).trimmingCharacters(in: .newlines)
