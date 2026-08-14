@@ -3,6 +3,10 @@ import SwiftTLAMacros
 
 @TLAModel
 struct Counter {
+    enum Step: String, PlusCalLabel {
+        case advance
+    }
+
     enum Node: String, FiniteDomainKey {
         case only
 
@@ -50,7 +54,7 @@ struct Counter {
                 ))
                 Each(Node.all) { _ in
                     let visits = LocalVar(initial: 0)
-                    Do("advance") {
+                    Do(Step.advance) {
                         When(value < 1)
                         Assign(value, to: value + 1)
                         Assign(cars, to: cars.updating(.one) { car in
