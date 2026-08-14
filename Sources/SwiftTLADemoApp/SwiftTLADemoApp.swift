@@ -92,6 +92,12 @@ private struct DuckDuckLeaderView: View {
     @State private var actor = ChangRoberts.Actor()
     @State private var state = ChangRoberts().state
     @State private var error: String?
+    @State private var delivery: DuckDelivery?
+    @State private var isDelivering = false
+    @State private var isPlaying = false
+    @State private var deliveryOrder: [ChangRoberts.Node] = ChangRoberts.Node.all.members
+    @State private var lastMove = "Press Play to begin the election."
+    @State private var simulationID = UUID()
 
     private let ring: [ChangRoberts.Node] = [.one, .two, .three, .four, .five, .six, .seven, .eight, .nine, .ten, .eleven, .twelve]
 
@@ -101,42 +107,133 @@ private struct DuckDuckLeaderView: View {
             subtitle: "A message carrying the largest identifier completes the ring."
         ) {
             HStack(spacing: 50) {
-                RingView(nodes: ring, messages: state.messages.elements, leader: state.leader)
+                RingView(
+                    nodes: ring,
+                    identifiers: state.identifiers,
+                    messages: state.messages.elements,
+                    leader: state.leader,
+                    delivery: delivery
+                )
                     .frame(width: 520, height: 520)
                 StateCard(
                     title: state.leader == 0 ? "Election running" : "Leader: \(state.leader)",
-                    detail: "\(state.messages.elements.count) formal messages remain.",
+                    detail: "\(lastMove)\n\n\(messageStatus)",
                     error: error
                 )
                 .frame(width: 260)
             }
             .frame(maxWidth: .infinity)
 
-            HStack {
-                Button("Deliver random message", systemImage: "arrow.clockwise") { deliver() }
-                    .buttonStyle(.borderedProminent)
-                Button("Reset", systemImage: "arrow.counterclockwise") {
-                    actor = ChangRoberts.Actor()
-                    state = ChangRoberts().state
-                    error = nil
+            HStack(spacing: 12) {
+                Button("Shuffle", systemImage: "shuffle") { shuffleSchedule() }
+                Button("Reset", systemImage: "arrow.counterclockwise") { reset() }
+                Button(isPlaying ? "Pause" : "Play", systemImage: isPlaying ? "pause.fill" : "play.fill") {
+                    togglePlayback()
                 }
+                .buttonStyle(.borderedProminent)
             }
         }
     }
 
-    private func deliver() {
-        guard let message = state.messages.elements.first else { return }
-        Task {
-            do {
-                _ = try await actor.execute(
-                    ChangRoberts.Actor.ActionLabel.deliver(process: message[ChangRoberts.MessageSchema.to]).toInvocation()
-                )
-                let updated = await actor.state
-                await MainActor.run { state = updated; error = nil }
-            } catch let failure {
-                await MainActor.run { self.error = failure.localizedDescription }
-            }
+    private func shuffleSchedule() {
+        deliveryOrder.shuffle()
+        lastMove = "The scheduler shuffled its next delivery choices."
+    }
+
+    private func reset(message: String = "Press Play to begin the election.") {
+        simulationID = UUID()
+        isPlaying = false
+        isDelivering = false
+        deliveryOrder = ring
+        actor = ChangRoberts.Actor()
+        state = ChangRoberts().state
+        delivery = nil
+        lastMove = message
+        error = nil
+    }
+
+    private func togglePlayback() {
+        if isPlaying {
+            isPlaying = false
+            return
         }
+
+        isPlaying = true
+        let runID = simulationID
+        Task { @MainActor in
+            while isPlaying && state.leader == 0 && runID == simulationID {
+                let delivered = await deliverNext(runID: runID)
+                if !delivered { break }
+            }
+            if runID == simulationID, state.leader != 0 {
+                lastMove = "ID \(state.leader) completed the ring and is the leader."
+            }
+            if runID == simulationID { isPlaying = false }
+        }
+    }
+
+    @MainActor
+    private func deliverNext(runID: UUID) async -> Bool {
+        guard !isDelivering,
+              runID == simulationID,
+              let node = deliveryOrder.first(where: { node in
+                  state.messages.elements.contains { $0[ChangRoberts.MessageSchema.to] == node }
+              }),
+              let message = state.messages.elements.first(where: { $0[ChangRoberts.MessageSchema.to] == node })
+        else { return false }
+
+        isDelivering = true
+        defer { isDelivering = false }
+        do {
+            let runningActor = actor
+            let result = try await runningActor.execute(
+                ChangRoberts.Actor.ActionLabel.deliver(process: node).toInvocation()
+            )
+            guard runID == simulationID else { return false }
+            let forwarded = result.after.messages.elements.first {
+                $0[ChangRoberts.MessageSchema.candidate] == message[ChangRoberts.MessageSchema.candidate] &&
+                    $0[ChangRoberts.MessageSchema.from] == node
+            }
+            let animation = DuckDelivery(
+                candidate: message[ChangRoberts.MessageSchema.candidate],
+                from: node,
+                to: forwarded?[ChangRoberts.MessageSchema.to]
+            )
+
+            delivery = animation
+            lastMove = moveDescription(for: animation)
+            error = nil
+            try? await Task.sleep(for: .milliseconds(50))
+            withAnimation(.easeInOut(duration: 0.8)) {
+                delivery?.progress = 1
+            }
+            try? await Task.sleep(for: .milliseconds(850))
+            guard runID == simulationID else { return false }
+            state = result.after
+            delivery = nil
+            return true
+        } catch let failure {
+            error = failure.localizedDescription
+            return false
+        }
+    }
+
+    private func moveDescription(for delivery: DuckDelivery) -> String {
+        if let destination = delivery.to {
+            return "Duck ID \(delivery.candidate) runs from Seat \(displayIndex(for: delivery.from)) to Seat \(displayIndex(for: destination))."
+        }
+        return "Seat \(displayIndex(for: delivery.from)) retires Duck ID \(delivery.candidate)."
+    }
+
+    private func displayIndex(for node: ChangRoberts.Node) -> Int {
+        ring.firstIndex(of: node).map { $0 + 1 } ?? 0
+    }
+
+    private var messageStatus: String {
+        if state.leader != 0, !state.messages.elements.isEmpty {
+            return "\(state.messages.elements.count) older tokens remain in flight; the formal election is complete."
+        }
+        return "\(state.messages.elements.count) formal tokens remain in flight."
     }
 
 }
@@ -291,10 +388,19 @@ private struct CarCabin: View {
     }
 }
 
+private struct DuckDelivery: Equatable {
+    let candidate: Int
+    let from: ChangRoberts.Node
+    let to: ChangRoberts.Node?
+    var progress: CGFloat = 0
+}
+
 private struct RingView: View {
     let nodes: [ChangRoberts.Node]
+    let identifiers: Function<ChangRoberts.Node, Int>
     let messages: [Record<ChangRoberts.MessageSchema>]
     let leader: Int
+    let delivery: DuckDelivery?
 
     var body: some View {
         GeometryReader { proxy in
@@ -304,22 +410,100 @@ private struct RingView: View {
                 Circle().stroke(.white.opacity(0.25), lineWidth: 4)
                     .frame(width: radius * 2, height: radius * 2)
                 ForEach(Array(nodes.enumerated()), id: \.offset) { index, node in
-                    let angle = CGFloat(index) * (2 * .pi / CGFloat(nodes.count)) - .pi / 2
-                    let point = CGPoint(x: center.x + radius * cos(angle), y: center.y + radius * sin(angle))
+                    let point = ringPoint(for: node, center: center, radius: radius)
+                    let isLeaderHome = identifiers[node] == leader && leader != 0
                     VStack(spacing: 2) {
-                        Image(systemName: "bird.fill")
-                        Text("\(index + 1)").font(.caption.bold())
+                        Image(systemName: "chair.fill")
+                        Text("Seat \(index + 1)").font(.caption.bold())
+                        Text("home ID \(identifiers[node])").font(.caption2)
                     }
-                    .foregroundStyle(leader == index + 1 ? .orange : .indigo)
-                    .frame(width: 54, height: 54)
+                    .foregroundStyle(isLeaderHome ? .orange : .indigo)
+                    .frame(width: 72, height: 64)
                     .background(.black.opacity(0.5), in: .circle)
-                    .overlay(Circle().stroke(leader == index + 1 ? .orange : .indigo, lineWidth: 3))
+                    .overlay(Circle().stroke(isLeaderHome ? .orange : .indigo, lineWidth: isLeaderHome ? 4 : 3))
+                    .opacity(isLeaderHome ? 1 : 0.75)
                     .position(point)
                 }
-                Text("\(messages.count) messages")
-                    .font(.headline).foregroundStyle(.orange)
+                ForEach(Array(messages.enumerated()), id: \.offset) { index, message in
+                    let destination = message[ChangRoberts.MessageSchema.to]
+                    if delivery?.candidate != message[ChangRoberts.MessageSchema.candidate] {
+                        let priorAtDestination = messages[..<index].filter {
+                            $0[ChangRoberts.MessageSchema.to] == destination
+                        }.count
+                        let totalAtDestination = messages.filter {
+                            $0[ChangRoberts.MessageSchema.to] == destination
+                        }.count
+                        messageBadge(candidate: message[ChangRoberts.MessageSchema.candidate])
+                            .position(messagePoint(
+                                for: destination,
+                                center: center,
+                                radius: radius,
+                                ordinal: priorAtDestination,
+                                total: totalAtDestination
+                            ))
+                    }
+                }
+                if let delivery {
+                    messageBadge(candidate: delivery.candidate)
+                        .scaleEffect(1.1)
+                        .opacity(delivery.to == nil ? 1 - delivery.progress : 1)
+                        .position(deliveryPoint(delivery, center: center, radius: radius))
+                }
+                VStack(spacing: 4) {
+                    Text("\(messages.count) ducks in flight")
+                    Text("Seats stay put. Duck IDs travel clockwise.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .font(.headline)
+                .foregroundStyle(.orange)
             }
         }
+    }
+
+    private func ringPoint(for node: ChangRoberts.Node, center: CGPoint, radius: CGFloat) -> CGPoint {
+        guard let index = nodes.firstIndex(of: node) else { return center }
+        let angle = CGFloat(index) * (2 * .pi / CGFloat(nodes.count)) - .pi / 2
+        return CGPoint(x: center.x + radius * cos(angle), y: center.y + radius * sin(angle))
+    }
+
+    private func messagePoint(
+        for node: ChangRoberts.Node,
+        center: CGPoint,
+        radius: CGFloat,
+        ordinal: Int,
+        total: Int
+    ) -> CGPoint {
+        let ringPoint = ringPoint(for: node, center: center, radius: radius)
+        let radialX = ringPoint.x - center.x
+        let radialY = ringPoint.y - center.y
+        let radialLength = max((radialX * radialX + radialY * radialY).squareRoot(), 1)
+        let tangentOffset = (CGFloat(ordinal) - CGFloat(total - 1) / 2) * 54
+        return CGPoint(
+            x: center.x + radialX * 0.72 - radialY / radialLength * tangentOffset,
+            y: center.y + radialY * 0.72 + radialX / radialLength * tangentOffset
+        )
+    }
+
+    private func deliveryPoint(_ delivery: DuckDelivery, center: CGPoint, radius: CGFloat) -> CGPoint {
+        let start = messagePoint(for: delivery.from, center: center, radius: radius, ordinal: 0, total: 1)
+        let end = delivery.to.map {
+            messagePoint(for: $0, center: center, radius: radius, ordinal: 0, total: 1)
+        } ?? start
+        return CGPoint(
+            x: start.x + (end.x - start.x) * delivery.progress,
+            y: start.y + (end.y - start.y) * delivery.progress
+        )
+    }
+
+    @ViewBuilder
+    private func messageBadge(candidate: Int) -> some View {
+        Label("Duck ID \(candidate)", systemImage: "bird.fill")
+            .font(.caption.bold())
+            .foregroundStyle(.black)
+            .padding(.horizontal, 9)
+            .padding(.vertical, 6)
+            .background(.orange.gradient, in: .capsule)
     }
 }
 
