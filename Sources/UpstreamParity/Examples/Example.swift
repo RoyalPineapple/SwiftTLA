@@ -58,6 +58,7 @@ public enum Example {
         teachingSimpleN2,
         teachingSimpleN3,
         teachingSimpleRegularN8,
-        twoPhase
+        twoPhase,
+        twoPhaseWithBackupManager
     ]
 }

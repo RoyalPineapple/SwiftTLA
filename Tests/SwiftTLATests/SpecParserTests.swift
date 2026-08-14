@@ -154,6 +154,28 @@ private func parseExpression(_ source: String) -> ExprSyntax {
         #expect(body?.description.contains("__pcal_macro_parameter") == false)
     }
 
+    @Test("parser uses a PlusCal label enum's declared raw value")
+    func parsesDeclaredRawAlgorithmLabel() {
+        let source = """
+        {
+            Algorithm("RawLabel") {
+                Each(Node.all) { _ in
+                    Do(Step.resourceManager) { Stop() }
+                }
+            }
+        }
+        """
+        let closure = Parser.parse(source: source).statements.first!.item.as(ClosureExprSyntax.self)!
+        let parsed = SpecParser.parseSpecClosure(
+            closure,
+            enumPhases: ["Step": ["resourceManager": .string("RS")]],
+            enumDomains: ["Node": [.string("left"), .string("right")]]
+        )
+
+        #expect(parsed.diagnostics.isEmpty)
+        #expect(parsed.actions.map(\.name) == ["RS", "Terminating"])
+    }
+
     @Test("parsed Algorithm actions match runtime-builder normalization")
     func parserTreeMatchesRuntimeAlgorithm() {
         let source = """

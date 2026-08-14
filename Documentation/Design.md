@@ -305,6 +305,7 @@ the supported surface.
 | SimpleAllocator | 400 | Functions, invariants |
 | SingleLaneBridge | 3,605 | forAll/filterSet builders, ifElse, RECURSIVE SeqFromSet |
 | TCommit | 34 | State machine, invariants |
+| 2PCwithBTM | 1,245 | PlusCal macros, three fair process families, typed function state |
 | TeachingConcurrency N=2,N=3 | 13 / 23 | PlusCal translation, per-node actions |
 | TwoPhase | 288 | Records, invariants |
 

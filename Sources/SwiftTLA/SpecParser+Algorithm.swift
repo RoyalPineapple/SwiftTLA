@@ -624,6 +624,10 @@ extension SpecParser {
             return literal.segments.compactMap { $0.as(StringSegmentSyntax.self)?.content.text }.joined()
         }
         if let access = expression.as(MemberAccessExprSyntax.self) {
+            if let type = access.base?.as(DeclReferenceExprSyntax.self)?.baseName.text,
+               case .string(let rawLabel) = _enumPhases[type]?[access.declName.baseName.text] {
+                return rawLabel
+            }
             return access.declName.baseName.text
         }
         if let reference = expression.as(DeclReferenceExprSyntax.self) {

@@ -72,7 +72,7 @@ enum TLASpecVerifier {
 
         let rewritten = rewriteVarNames(in: closure)
         let enumInfos = Self.collectEnumStateVars(from: memberList)
-        let (enumPhases, caseToType) = collectEnumPhaseMap(from: memberList)
+        let (enumPhases, caseToType) = collectEnumMetadata(from: memberList)
         let enumDomains = Dictionary(
             uniqueKeysWithValues: enumInfos.map { ($0.typeName, $0.cases.map(\.value)) }
         )
@@ -417,33 +417,6 @@ enum TLASpecVerifier {
         return nil
     }
 
-    static func collectEnumPhases(from members: MemberBlockItemListSyntax) -> [String: Int] {
-        var result: [String: Int] = [:]
-        for member in members {
-            guard let enumDecl = member.decl.as(EnumDeclSyntax.self) else { continue }
-            guard let inheritance = enumDecl.inheritanceClause,
-                  inheritance.inheritedTypes.count == 1,
-                  inheritance.inheritedTypes.first?.type.as(IdentifierTypeSyntax.self)?.name.text == "Int"
-            else { continue }
-
-            var idx = 0
-            for caseMember in enumDecl.memberBlock.members {
-                guard let caseDecl = caseMember.decl.as(EnumCaseDeclSyntax.self) else { continue }
-                for element in caseDecl.elements {
-                    if let raw = element.rawValue?.value.as(IntegerLiteralExprSyntax.self),
-                       let val = Int(raw.literal.text) {
-                        result[element.name.text] = val
-                        idx = val + 1
-                    } else {
-                        result[element.name.text] = idx
-                        idx += 1
-                    }
-                }
-            }
-        }
-        return result
-    }
-
     static func collectEnumStateVars(from members: MemberBlockItemListSyntax) -> [ParsedEnumInfo] {
         var result: [ParsedEnumInfo] = []
         for member in members {
@@ -493,20 +466,6 @@ enum TLASpecVerifier {
         return result
     }
 
-    static func collectEnumPhaseMap(from members: MemberBlockItemListSyntax) -> (phases: EnumPhaseMap, caseToType: [String: String]) {
-        let infos = collectEnumStateVars(from: members)
-        var phases: EnumPhaseMap = [:]
-        var caseToType: [String: String] = [:]
-        for info in infos {
-            var caseMap: [String: TLAValue] = [:]
-            for (caseName, value) in info.cases {
-                caseMap[caseName] = value
-                caseToType[caseName] = info.typeName
-            }
-            phases[info.typeName] = caseMap
-        }
-        return (phases, caseToType)
-    }
 }
 
 private final class EnumDotRewriter: SyntaxRewriter {

@@ -62,11 +62,35 @@ enum AlgorithmLowerer {
             }
         }
 
-        let controlInitial = Dictionary(uniqueKeysWithValues: processes.flatMap { process in
-            guard let first = process.steps.first else { return [(TLAValue, TLAValue)]() }
-            return process.domain.map { ($0, .string(first.label.name)) }
-        })
-        variables.append(NamedVar(name: controlVariable, initial: .function(controlInitial)))
+        let controlBinding = "__pcal_initial_process"
+        let controlDomain = processes
+            .map { StateExpr.setLiteral($0.domain.map(StateExpr.value)) }
+            .dropFirst()
+            .reduce(
+                StateExpr.setLiteral(processes.first?.domain.map(StateExpr.value) ?? [])
+            ) { partial, domain in
+                .union(partial, domain)
+            }
+        let controlCases = processes.flatMap { process -> [StateExpr] in
+            guard let first = process.steps.first else { return [] }
+            return [
+                .in(
+                    .variable(controlBinding),
+                    .setLiteral(process.domain.map(StateExpr.value))
+                ),
+                .value(.string(first.label.name))
+            ]
+        }
+        let controlInitial = StateExpr.functionLiteral(
+            controlDomain,
+            controlBinding,
+            .caseExpr(controlCases, nil)
+        )
+        variables.append(NamedVar(
+            name: controlVariable,
+            initial: .function([:]),
+            initExpr: controlInitial
+        ))
 
         let variableNames = variables.map(\.name)
         let localRoots = Set(localStates.map(\.root))

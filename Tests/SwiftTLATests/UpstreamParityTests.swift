@@ -1,6 +1,6 @@
 import Testing
 import SwiftTLA
-import UpstreamParity
+@testable import UpstreamParity
 
 struct UpstreamParityTests {
     @Test("ModelChecker count vs TLC-verified expected — they must match")
@@ -214,6 +214,15 @@ struct UpstreamParityNativeTests {
     // TwoPhase
     @Test("TwoPhase native verifySpec")
     func twoPhaseNativeVerifySpec() throws { try TwoPhaseModel.verifySpec() }
+
+    @Test("TwoPhase with backup manager preserves the published PlusCal model")
+    func twoPhaseWithBackupManagerParity() throws {
+        TwoPhaseWithBackupManagerModel._checkParserTree()
+        #expect(
+            try TwoPhaseWithBackupManagerModel.verifySpec()
+                == Example.twoPhaseWithBackupManager.expectedDistinct
+        )
+    }
 
     // Barrier
     @Test("Barrier_N6 native verifySpec")

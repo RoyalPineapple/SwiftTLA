@@ -74,6 +74,28 @@ struct AlgorithmBuilderTests {
         MacroProcessGeneratedModel._checkParserTree()
     }
 
+    @Test("process control initialization joins typed process domains")
+    func initializesControlAcrossProcessDomains() throws {
+        let algorithm = Algorithm("MixedProcesses") {
+            Each(Node.all) { _ in
+                Do("stringProcess") { Stop() }
+            }
+            Each(OtherNode.all) { _ in
+                Do("otherProcess") { Stop() }
+            }
+        }
+
+        let spec = try algorithm.lower()
+        let initial = try #require(computeInitialStates(spec).first)
+        #expect(initial["pc"] == .function([
+            .string("first"): .string("stringProcess"),
+            .string("second"): .string("stringProcess"),
+            .string("other"): .string("otherProcess")
+        ]))
+        #expect(spec.tlaModule.contains("({\"first\", \"second\"} \\cup {\"other\"})"))
+        #expect(spec.tlaModule.contains("__pcal_initial_process =") == false)
+    }
+
     @Test("a begin-style algorithm keeps a scalar program counter")
     func lowersSequentialAlgorithmWithoutInventingAProcess() throws {
         let algorithm = Algorithm("SequentialCounter") {
@@ -600,6 +622,15 @@ private enum EmptyNode: String, FiniteDomainKey {
 
     static let formalDomain: [EmptyNode] = []
     static let formalTypeIdentity = FormalTypeIdentity(rawValue: "test.pluscal.empty-node")
+
+    var tlaValue: TLAValue { .string(rawValue) }
+}
+
+private enum OtherNode: String, FiniteDomainKey {
+    case one = "other"
+
+    static let formalDomain: [OtherNode] = [.one]
+    static let formalTypeIdentity = FormalTypeIdentity(rawValue: "test.pluscal.other-node")
 
     var tlaValue: TLAValue { .string(rawValue) }
 }
