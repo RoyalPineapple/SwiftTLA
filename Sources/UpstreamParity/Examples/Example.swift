@@ -42,6 +42,7 @@ public enum Example {
         multiCarElevator,
         nQueensFour,
         paxosSmall,
+        petersonTwoProcess,
         prisonerN3,
         prisoners4,
         simpleAllocator,

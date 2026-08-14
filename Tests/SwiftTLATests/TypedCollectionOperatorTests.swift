@@ -91,6 +91,17 @@ private struct TypedQuantifierGeneratedModel {
         #expect(TypedCollectionGeneratedModel.spec.tlaModule.contains("keepEvenSquares"))
     }
 
+    @Test("typed conditional values parse without losing their result type")
+    func typedConditionalValueParses() {
+        let source = "Expr<Int>.ifThenElse(true, then: 1, else: 2)"
+        let syntax = Parser.parse(source: source).statements.first!.item.as(ExprSyntax.self)!
+
+        #expect(
+            SpecParser.decodeStateExpr(syntax)
+                == .ifThenElse(.value(.bool(true)), .value(.int(1)), .value(.int(2)))
+        )
+    }
+
     @Test("typed bounded quantifiers parse, evaluate, and generate")
     func typedQuantifiersSurviveThePipeline() throws {
         let hasEven = Exists(in: IntRange(1, through: 4)) { value in

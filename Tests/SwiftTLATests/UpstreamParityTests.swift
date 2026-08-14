@@ -54,6 +54,17 @@ struct UpstreamParityTests {
         }
     }
 
+    @Test("two-process Peterson PlusCal port matches TLC")
+    func petersonMatchesTLC() throws {
+        try PetersonModel.verifySpec()
+        let checker = ModelChecker(spec: Example.petersonTwoProcess.spec, maxStates: 1_000)
+        #expect(try checker.exploreGraph().states.count == Example.petersonTwoProcess.expectedDistinct)
+        guard case .ok = try checker.check() else {
+            Issue.record("Peterson did not verify")
+            return
+        }
+    }
+
     @Test("HourClock .tlaModule is TLC-shaped")
     func hourClockTLA() {
         let tla = Example.hourClock.spec.tlaModule

@@ -455,6 +455,17 @@ public enum SpecParser {
                   let thenVal = decodeStateExpr(args[1].expression),
                   let elseVal = decodeStateExpr(args[2].expression) else { return nil }
             return .ifThenElse(cond, thenVal, elseVal)
+        case "ifThenElse":
+            // `Expr<Value>.ifThenElse` preserves a value's Swift type at the
+            // authoring boundary, then lowers to the normal formal conditional.
+            guard memberAccess.base?.description
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .hasPrefix("Expr<") == true,
+                  args.count >= 3,
+                  let cond = decodeStateExpr(args[0].expression),
+                  let thenVal = decodeStateExpr(args[1].expression),
+                  let elseVal = decodeStateExpr(args[2].expression) else { return nil }
+            return .ifThenElse(cond, thenVal, elseVal)
         case "enabled":
             guard memberAccess.base?.as(DeclReferenceExprSyntax.self)?.baseName.text == "StateExpr" else { return nil }
             let name = args.first?.expression.as(StringLiteralExprSyntax.self)?.segments.description
