@@ -324,12 +324,16 @@ struct NestedComposableMacroConformanceTests {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
         process.arguments = ["swift"] + arguments + ["--scratch-path", scratch.path]
-        let output = Pipe()
+        let outputURL = scratch.appendingPathComponent("output.log")
+        FileManager.default.createFile(atPath: outputURL.path, contents: nil)
+        let output = try FileHandle(forWritingTo: outputURL)
+        defer { try? output.close() }
         process.standardOutput = output
         process.standardError = output
         try process.run()
-        let outputData = output.fileHandleForReading.readDataToEndOfFile()
         process.waitUntilExit()
+        try output.synchronize()
+        let outputData = try Data(contentsOf: outputURL)
 
         return (
             process.terminationStatus,
