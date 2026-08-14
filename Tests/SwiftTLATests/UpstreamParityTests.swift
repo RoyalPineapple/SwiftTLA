@@ -59,6 +59,13 @@ struct UpstreamParityTests {
             return
         }
     }
+
+    @Test("Sync termination detector uses typed finite function state")
+    func syncTerminationTypedFunctionParity() throws {
+        try SyncTerminationDetectionModel.verifySpec()
+        let checker = ModelChecker(spec: SyncTerminationDetectionModel.spec, maxStates: 50_000)
+        #expect(try checker.exploreGraph().states.count == Example.syncTD.expectedDistinct)
+    }
 }
 
 // MARK: - Native codegen verification for @TLAModel parity specs
