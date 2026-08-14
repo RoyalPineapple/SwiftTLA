@@ -64,6 +64,44 @@ struct GeneratedAlgorithmMachineTests {
     }
 }
 
+@TLAModel
+struct GeneratedRangeInitializedAlgorithm {
+    enum Node: String, FiniteDomainKey {
+        case clock
+
+        static let formalDomain: [Node] = [.clock]
+        static let formalTypeIdentity = FormalTypeIdentity(rawValue: "test.range-initialized-node")
+
+        var tlaValue: TLAValue { .string(rawValue) }
+    }
+
+    static var spec: TLASpec {
+        #spec("GeneratedRangeInitializedAlgorithm") {
+            Algorithm("GeneratedRangeInitializedAlgorithm") {
+                let hour = SharedVar(in: 1...3)
+                Each(Node.all) { _ in
+                    Do("advance") {
+                        When(hour < 3)
+                        Assign(hour, to: hour + 1)
+                    }
+                }
+            }
+        }
+    }
+}
+
+struct GeneratedRangeInitializedAlgorithmTests {
+    @Test("#spec independently parses a finite SharedVar initial range")
+    func generatedRangePreservesEveryInitialHour() {
+        let initialHours = computeInitialStates(GeneratedRangeInitializedAlgorithm.spec)
+            .compactMap { $0["hour"] }
+
+        #expect(Set(initialHours) == [.int(1), .int(2), .int(3)])
+        #expect(GeneratedRangeInitializedAlgorithm.spec.variables.first { $0.name == "hour" }?.initialSet
+            == .setLiteral([.value(.int(1)), .value(.int(2)), .value(.int(3))]))
+    }
+}
+
 struct NestedAdapterConcurrencyTests {
     @Test("Nested adapters observe and execute through their canonical model")
     @MainActor

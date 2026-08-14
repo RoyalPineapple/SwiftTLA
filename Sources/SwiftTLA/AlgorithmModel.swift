@@ -41,11 +41,18 @@ internal enum AlgorithmFairness: Sendable {
 internal struct AlgorithmStateModel: Sendable {
     let root: String
     let initial: StateExpr
+    let initialSet: StateExpr?
     let swiftTypeName: String?
 
-    init(root: String, initial: StateExpr, swiftTypeName: String? = nil) {
+    init(
+        root: String,
+        initial: StateExpr,
+        initialSet: StateExpr? = nil,
+        swiftTypeName: String? = nil
+    ) {
         self.root = root
         self.initial = initial
+        self.initialSet = initialSet
         self.swiftTypeName = swiftTypeName
     }
 }

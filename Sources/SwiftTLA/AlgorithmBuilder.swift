@@ -100,6 +100,35 @@ public struct AlgorithmLValue<Value: TLAValueType>: Sendable {
 public struct SharedVariable<Value: TLAValueType>: StateExprConvertible, Sendable {
     fileprivate let name: String
     fileprivate let initial: StateExpr
+    fileprivate let initialSet: StateExpr?
+    fileprivate let swiftTypeName: String
+
+    public var stateExpr: StateExpr { .variable(name) }
+
+    public var algorithmLValue: AlgorithmLValue<Value> {
+        AlgorithmLValue(model: .root(name))
+    }
+
+    @discardableResult
+    public func becomes(_ value: Value) -> ActionExpr {
+        .assign(name, .value(value.tlaValue))
+    }
+
+    @discardableResult
+    public func becomes(_ value: Expr<Value>) -> ActionExpr {
+        .assign(name, value.raw)
+    }
+
+    public var stays: ActionExpr { .unchanged(name) }
+}
+
+/// A typed process-local algorithm variable.
+///
+/// A `LocalVar` declaration is valid only inside an `Each` process body.
+public struct LocalVariable<Value: TLAValueType>: StateExprConvertible, Sendable {
+    fileprivate let name: String
+    fileprivate let initial: StateExpr
+    fileprivate let initialSet: StateExpr?
     fileprivate let swiftTypeName: String
 
     public var stateExpr: StateExpr { .variable(name) }
@@ -109,18 +138,44 @@ public struct SharedVariable<Value: TLAValueType>: StateExprConvertible, Sendabl
     }
 }
 
-/// A typed process-local algorithm variable.
-///
-/// A `LocalVar` declaration is valid only inside an `Each` process body.
-public struct LocalVariable<Value: TLAValueType>: StateExprConvertible, Sendable {
-    fileprivate let name: String
-    fileprivate let initial: StateExpr
-    fileprivate let swiftTypeName: String
+// `SharedVariable` is an authoring handle, but it must read like the typed
+// variable it represents. Keep these operators on the handle rather than
+// forcing authors to escape into `.stateExpr` or `Expr`.
+extension SharedVariable where Value == Int {
+    public static func + (_ lhs: SharedVariable, _ rhs: Int) -> Expr<Int> {
+        Expr(.add(lhs.stateExpr, .int(rhs)))
+    }
 
-    public var stateExpr: StateExpr { .variable(name) }
+    public static func + (_ lhs: SharedVariable, _ rhs: Expr<Int>) -> Expr<Int> {
+        Expr(.add(lhs.stateExpr, rhs.raw))
+    }
 
-    public var algorithmLValue: AlgorithmLValue<Value> {
-        AlgorithmLValue(model: .root(name))
+    public static func - (_ lhs: SharedVariable, _ rhs: Int) -> Expr<Int> {
+        Expr(.subtract(lhs.stateExpr, .int(rhs)))
+    }
+
+    public static func < (_ lhs: SharedVariable, _ rhs: Int) -> StateExpr {
+        .lessThan(lhs.stateExpr, .int(rhs))
+    }
+
+    public static func > (_ lhs: SharedVariable, _ rhs: Int) -> StateExpr {
+        .greaterThan(lhs.stateExpr, .int(rhs))
+    }
+
+    public static func <= (_ lhs: SharedVariable, _ rhs: Int) -> StateExpr {
+        .lessOrEqual(lhs.stateExpr, .int(rhs))
+    }
+
+    public static func >= (_ lhs: SharedVariable, _ rhs: Int) -> StateExpr {
+        .greaterOrEqual(lhs.stateExpr, .int(rhs))
+    }
+
+    public static func == (_ lhs: SharedVariable, _ rhs: Int) -> StateExpr {
+        .equal(lhs.stateExpr, .int(rhs))
+    }
+
+    public static func != (_ lhs: SharedVariable, _ rhs: Int) -> StateExpr {
+        .notEqual(lhs.stateExpr, .int(rhs))
     }
 }
 
@@ -285,13 +340,40 @@ public func SharedVar<Value: TLAValueType>(
     _ name: String,
     initial: Value
 ) -> SharedVariable<Value> {
-    SharedVariable(name: name, initial: .value(initial.tlaValue), swiftTypeName: String(reflecting: Value.self))
+    SharedVariable(
+        name: name,
+        initial: .value(initial.tlaValue),
+        initialSet: nil,
+        swiftTypeName: String(reflecting: Value.self)
+    )
 }
 
 /// The name is supplied from the enclosing `let` binding by `#spec`.
 /// This overload is intentionally useful only inside that macro boundary.
 public func SharedVar<Value: TLAValueType>(initial: Value) -> SharedVariable<Value> {
-    SharedVariable(name: "", initial: .value(initial.tlaValue), swiftTypeName: String(reflecting: Value.self))
+    SharedVariable(
+        name: "",
+        initial: .value(initial.tlaValue),
+        initialSet: nil,
+        swiftTypeName: String(reflecting: Value.self)
+    )
+}
+
+/// Declares an integer shared variable with a finite nondeterministic initial
+/// value. The generated initial state contains one state for each member.
+public func SharedVar(in range: ClosedRange<Int>) -> SharedVariable<Int> {
+    SharedVar("", in: range)
+}
+
+/// The named form used by the `#spec` declaration rewrite.
+public func SharedVar(_ name: String, in range: ClosedRange<Int>) -> SharedVariable<Int> {
+    let values = range.map { StateExpr.value(.int($0)) }
+    return SharedVariable(
+        name: name,
+        initial: .value(.int(range.lowerBound)),
+        initialSet: .setLiteral(values),
+        swiftTypeName: "Int"
+    )
 }
 
 /// Declares a shared variable with a typed formal initial expression.
@@ -299,12 +381,12 @@ public func SharedVar<Value: TLAValueType>(
     _ name: String,
     initial: Expr<Value>
 ) -> SharedVariable<Value> {
-    SharedVariable(name: name, initial: initial.raw, swiftTypeName: String(reflecting: Value.self))
+    SharedVariable(name: name, initial: initial.raw, initialSet: nil, swiftTypeName: String(reflecting: Value.self))
 }
 
 /// The name is supplied from the enclosing `let` binding by `#spec`.
 public func SharedVar<Value: TLAValueType>(initial: Expr<Value>) -> SharedVariable<Value> {
-    SharedVariable(name: "", initial: initial.raw, swiftTypeName: String(reflecting: Value.self))
+    SharedVariable(name: "", initial: initial.raw, initialSet: nil, swiftTypeName: String(reflecting: Value.self))
 }
 
 /// Declares a process-local PlusCal-shaped variable.
@@ -312,13 +394,13 @@ public func LocalVar<Value: TLAValueType>(
     _ name: String,
     initial: Value
 ) -> LocalVariable<Value> {
-    LocalVariable(name: name, initial: .value(initial.tlaValue), swiftTypeName: String(reflecting: Value.self))
+    LocalVariable(name: name, initial: .value(initial.tlaValue), initialSet: nil, swiftTypeName: String(reflecting: Value.self))
 }
 
 /// The name is supplied from the enclosing `let` binding by `#spec`.
 /// This overload is intentionally useful only inside that macro boundary.
 public func LocalVar<Value: TLAValueType>(initial: Value) -> LocalVariable<Value> {
-    LocalVariable(name: "", initial: .value(initial.tlaValue), swiftTypeName: String(reflecting: Value.self))
+    LocalVariable(name: "", initial: .value(initial.tlaValue), initialSet: nil, swiftTypeName: String(reflecting: Value.self))
 }
 
 /// Declares a process-local variable with a typed formal initial expression.
@@ -326,12 +408,12 @@ public func LocalVar<Value: TLAValueType>(
     _ name: String,
     initial: Expr<Value>
 ) -> LocalVariable<Value> {
-    LocalVariable(name: name, initial: initial.raw, swiftTypeName: String(reflecting: Value.self))
+    LocalVariable(name: name, initial: initial.raw, initialSet: nil, swiftTypeName: String(reflecting: Value.self))
 }
 
 /// The name is supplied from the enclosing `let` binding by `#spec`.
 public func LocalVar<Value: TLAValueType>(initial: Expr<Value>) -> LocalVariable<Value> {
-    LocalVariable(name: "", initial: initial.raw, swiftTypeName: String(reflecting: Value.self))
+    LocalVariable(name: "", initial: initial.raw, initialSet: nil, swiftTypeName: String(reflecting: Value.self))
 }
 
 /// Scheduling policy for one `Each` process family.
@@ -402,6 +484,7 @@ public enum AlgorithmBuilder {
         [AlgorithmElement(model: .shared(.init(
             root: variable.name,
             initial: variable.initial,
+            initialSet: variable.initialSet,
             swiftTypeName: variable.swiftTypeName
         )))]
     }
@@ -410,6 +493,7 @@ public enum AlgorithmBuilder {
         [AlgorithmElement(model: .local(.init(
             root: variable.name,
             initial: variable.initial,
+            initialSet: variable.initialSet,
             swiftTypeName: variable.swiftTypeName
         )))]
     }
@@ -440,6 +524,15 @@ public enum AlgorithmBuilder {
 
     public static func buildExpression(_ component: ConstraintDecl) -> [AlgorithmElement] {
         [AlgorithmElement(model: .propertyBoundary)]
+    }
+}
+
+extension SpecBuilder {
+    /// Lets a `#spec` body use the same typed shared declaration whether it
+    /// contains a PlusCal `Algorithm` or an ordinary TLA+ action specification.
+    public static func buildExpression<Value>(_ variable: SharedVariable<Value>) -> [SpecComponent] {
+        let initial = (try? variable.initial.evaluate(in: [:])) ?? Value.defaultValue.tlaValue
+        return [VarDecl(variable.name, initial, initialSet: variable.initialSet)]
     }
 }
 

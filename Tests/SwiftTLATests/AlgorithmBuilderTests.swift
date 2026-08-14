@@ -394,6 +394,29 @@ struct AlgorithmBuilderTests {
         }
         #expect(name == "__pcal_assert_check_0_0")
     }
+
+    @Test("SharedVar range expands to the declared finite initial states")
+    func lowersNondeterministicSharedInitialization() throws {
+        let algorithm = Algorithm("HourClock") {
+            let hour = SharedVar("hour", in: 1...3)
+            hour
+            Each(Node.all) { _ in
+                Do("tick") {
+                    When(hour < 3)
+                    Assign(hour, to: hour + 1)
+                    Stop()
+                }
+            }
+        }
+
+        let spec = try algorithm.lower()
+        let states = computeInitialStates(spec)
+
+        #expect(Set(states.compactMap { $0["hour"] }) == [.int(1), .int(2), .int(3)])
+        #expect(spec.variables.first { $0.name == "hour" }?.initialSet == .setLiteral([
+            .value(.int(1)), .value(.int(2)), .value(.int(3))
+        ]))
+    }
 }
 
 private enum Node: String, FiniteDomainKey, PlusCalLabel {

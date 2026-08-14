@@ -27,7 +27,11 @@ enum AlgorithmLowerer {
         }
 
         var variables = shared.map { state in
-            NamedVar(name: state.root, initial: staticInitialValue(state.initial, named: state.root))
+            NamedVar(
+                name: state.root,
+                initial: staticInitialValue(state.initial, named: state.root),
+                initialSet: state.initialSet
+            )
         }
         for process in processes {
             for local in process.components {

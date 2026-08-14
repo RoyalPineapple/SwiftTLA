@@ -170,6 +170,15 @@ extension SpecParser {
             }
 
             if let rangeExpr = args.first(where: { $0.label?.text == "in" })?.expression {
+                if callName == "SharedVar", let range = parseIntegerClosedRange(rangeExpr) {
+                    result.variables.append((
+                        patternName,
+                        .int(range.lowerBound),
+                        .setLiteral(range.map { .value(.int($0)) }),
+                        "Int"
+                    ))
+                    continue
+                }
                 let lowerBound = parseRangeLowerBound(rangeExpr)
                 result.variables.append((patternName, .int(lowerBound), nil, varTypeName))
                 continue
@@ -200,7 +209,7 @@ extension SpecParser {
     /// Returns nil if the call is not a StateVar constructor.
     static func resolveVarCall(_ fc: FunctionCallExprSyntax) -> (String, String?)? {
         if let ref = fc.calledExpression.as(DeclReferenceExprSyntax.self) {
-            guard ["StateVar", "Var"].contains(ref.baseName.text) else { return nil }
+            guard ["StateVar", "Var", "SharedVar"].contains(ref.baseName.text) else { return nil }
             return (ref.baseName.text, nil)
         }
         if let generic = fc.calledExpression.as(GenericSpecializationExprSyntax.self),
@@ -230,6 +239,20 @@ extension SpecParser {
         return typeArgs.count >= 1
             ? typeArgs[0].argument.description.trimmingCharacters(in: .whitespacesAndNewlines)
             : nil
+    }
+
+    static func parseIntegerClosedRange(_ expression: ExprSyntax) -> ClosedRange<Int>? {
+        guard let sequence = expression.as(SequenceExprSyntax.self) else { return nil }
+        let elements = Array(sequence.elements)
+        guard elements.count == 3,
+              elements[1].as(BinaryOperatorExprSyntax.self)?.operator.text == "...",
+              let lowerSyntax = elements[0].as(IntegerLiteralExprSyntax.self),
+              let upperSyntax = elements[2].as(IntegerLiteralExprSyntax.self),
+              let lower = Int(lowerSyntax.literal.text),
+              let upper = Int(upperSyntax.literal.text),
+              lower <= upper
+        else { return nil }
+        return lower...upper
     }
 
     /// Extracts the lower bound from a range expression like `1...12`.

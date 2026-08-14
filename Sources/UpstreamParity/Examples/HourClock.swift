@@ -4,10 +4,10 @@ import SwiftTLAMacros
 @TLAModel
 public struct HourClockModel {
     public static var spec: TLASpec {
-        TLASpec("HourClock") {
+        #spec("HourClock") {
             Extends("Naturals")
-            let hr = Var<Int>("hr")
-            Variable(hr, in: 1...12)
+            let hr = SharedVar(in: 1...12)
+            hr
             Action("HCnxt") {
                 (hr != 12 && hr.becomes(hr + 1)) ||
                 (hr == 12 && hr.becomes(1))

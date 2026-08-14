@@ -180,20 +180,33 @@ extension SpecParser {
               let binding = declaration.bindings.first,
               let declaredName = binding.pattern.as(IdentifierPatternSyntax.self)?.identifier.text,
               let initializer = binding.initializer?.value.as(FunctionCallExprSyntax.self),
-              initializer.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == expectedKind,
-              let initialSyntax = initializer.arguments.first(where: { $0.label?.text == "initial" })?.expression,
-              let initial = decodeStateExpr(initialSyntax)
+              initializer.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == expectedKind
         else { return nil }
 
         if let literalName = extractStringArg(initializer, index: 0), literalName != declaredName {
             return nil
         }
 
-        let state = AlgorithmStateModel(
-            root: declaredName,
-            initial: initial,
-            swiftTypeName: algorithmInitialTypeName(initialSyntax)
-        )
+        let state: AlgorithmStateModel
+        if let initialSyntax = initializer.arguments.first(where: { $0.label?.text == "initial" })?.expression,
+           let initial = decodeStateExpr(initialSyntax) {
+            state = AlgorithmStateModel(
+                root: declaredName,
+                initial: initial,
+                swiftTypeName: algorithmInitialTypeName(initialSyntax)
+            )
+        } else if expectedKind == "SharedVar",
+                  let rangeSyntax = initializer.arguments.first(where: { $0.label?.text == "in" })?.expression,
+                  let range = parseIntegerClosedRange(rangeSyntax) {
+            state = AlgorithmStateModel(
+                root: declaredName,
+                initial: .value(.int(range.lowerBound)),
+                initialSet: .setLiteral(range.map { .value(.int($0)) }),
+                swiftTypeName: "Int"
+            )
+        } else {
+            return nil
+        }
         return expectedKind == "SharedVar" ? .shared(state) : .local(state)
     }
 
