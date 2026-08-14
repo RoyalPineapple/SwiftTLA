@@ -1,101 +1,88 @@
 import SwiftTLA
+import SwiftTLAMacros
 
-// Two-switch prisoner puzzle. Counter counts switch flips to N.
-// 4 prisoners (p1 counter, p2-p4 others). LET + SUBSET + EXCEPT @.
-// Port: TypeOK + CountInvariant safety. 4 states.
-// Upstream: specifications/Prisoners/Prisoners.tla
+/// The two-switch prisoner puzzle.
+///
+/// The scheduler makes the nondeterministic visitor choice explicit. The
+/// shared switch state and per-prisoner signal counts are typed formal values.
+@TLAModel
+public struct PrisonersModel {
+    public enum NonCounterPrisoner: String, CaseIterable, FiniteDomainKey {
+        case two = "p2"
+        case three = "p3"
+        case four = "p4"
+
+        public static let formalDomain = allCases
+        public static let formalTypeIdentity = FormalTypeIdentity(rawValue: "examples.prisoners.non-counter-prisoner")
+
+        public var tlaValue: TLAValue { .string(rawValue) }
+    }
+
+    private enum Scheduler: String, CaseIterable, FiniteDomainKey {
+        case warden
+
+        static let formalDomain = allCases
+        static let formalTypeIdentity = FormalTypeIdentity(rawValue: "examples.prisoners.scheduler")
+
+        var tlaValue: TLAValue { .string(rawValue) }
+    }
+
+    private enum Step: String, PlusCalLabel {
+        case chooseVisitor
+    }
+
+    public static var spec: TLASpec {
+        #spec("Prisoners") {
+            Extends("Naturals")
+            Algorithm("Prisoners") {
+                let switchAUp = SharedVar(in: SetExpr<Bool>.literal(true, false))
+                let switchBUp = SharedVar(in: SetExpr<Bool>.literal(true, false))
+                let timesSwitched = SharedVar(initial: Function<NonCounterPrisoner, Int>.literal(
+                    (.two, 0), (.three, 0), (.four, 0)
+                ))
+                let count = SharedVar(initial: 0)
+
+                Each(Scheduler.all) { _ in
+                    Do(Step.chooseVisitor) {
+                        Either {
+                            Either {
+                                When(switchAUp == true)
+                                Assign(switchAUp, to: false)
+                                Assign(count, to: count + 1)
+                            } or: {
+                                When(switchAUp == false)
+                                Assign(switchBUp, to: !(switchBUp == true))
+                            }
+                        } or: {
+                            With(NonCounterPrisoner.all) { prisoner in
+                                Either {
+                                    When(switchAUp == false)
+                                    When(timesSwitched[prisoner] < 2)
+                                    Assign(switchAUp, to: true)
+                                    Assign(timesSwitched, to: timesSwitched.updating(prisoner) { value in value + 1 })
+                                } or: {
+                                    When(!(switchAUp == false && timesSwitched[prisoner] < 2))
+                                    Assign(switchBUp, to: !(switchBUp == true))
+                                }
+                                Assert(count >= 0 && count <= 7)
+                            }
+                        }
+                        Goto(Step.chooseVisitor)
+                    }
+                }
+            }
+        }
+    }
+}
 
 extension Example {
-    static let prisoners4 = Example.Entry(
+    public static let prisoners4 = Entry(
         id: "Prisoners/Prisoners",
         upstreamSpec: "Prisoners",
         upstreamModule: "specifications/Prisoners/Prisoners.tla",
         upstreamCfg: "specifications/Prisoners/Prisoners.cfg",
         expectedDistinct: 214,
-        spec: prisoners4Spec(),
-        notes: "4 prisoners, p1=counter. Nondet switches init. 214 states.",
+        spec: PrisonersModel.spec,
+        notes: "Four prisoners, typed switch state and signal function. TLC = 214."
     )
-}
-
-private func prisoners4Spec() -> TLASpec {
-    let allPrisoners: Set<TLAValue> = [.string("p1"), .string("p2"), .string("p3"), .string("p4")]
-    let counter: TLAValue = .string("p1")
-    let otherPrisoners = allPrisoners.subtracting([counter])
-    let threshold = otherPrisoners.count * 2  // 2 per other prisoner = 6
-
-    let switchAUp = Var<Bool>("switchAUp")
-    let switchBUp = Var<Bool>("switchBUp")
-    let timesSwitched = Var<TLAValue>("timesSwitched")
-    let count = Var<Int>("count")
-
-    let others = StateExpr.setLiteral(otherPrisoners.map { .value($0) })
-
-    let tsInit = TLAValue.function(Dictionary(uniqueKeysWithValues: otherPrisoners.map { ($0, .int(0)) }))
-
-    return TLASpec("Prisoners") {
-        Extends("Naturals")
-        Constant("Prisoner", TLAValue.set(allPrisoners))
-        Constant("Counter", counter)
-
-        Variable(switchAUp, in: [TLAValue.bool(true), TLAValue.bool(false)])
-        Variable(switchBUp, in: [TLAValue.bool(true), TLAValue.bool(false)])
-        Variable(timesSwitched, tsInit)
-        Variable(count, 0)
-
-        Invariant("TypeOK") {
-            let a = StateExpr.variable("switchAUp")
-            let b = StateExpr.variable("switchBUp")
-            let t = StateExpr.variable("timesSwitched")
-            let c = StateExpr.variable("count")
-            let rng = StateExpr.set([StateExpr.value(.int(0)), .value(.int(1)), .value(.int(2))])
-
-            a.isIn(StateExpr.set([true, false]))
-            && b.isIn(StateExpr.set([true, false]))
-            && c >= 0 && c <= threshold + 1
-            && t.applying(StateExpr.value(.string("p2"))).isIn(rng)
-            && t.applying(StateExpr.value(.string("p3"))).isIn(rng)
-            && t.applying(StateExpr.value(.string("p4"))).isIn(rng)
-        }
-
-        Invariant("CountInvariant") {
-            let a = StateExpr.variable("switchAUp")
-            let t = StateExpr.variable("timesSwitched")
-            let c = StateExpr.variable("count")
-            let total = t.applying(StateExpr.value(.string("p2")))
-                + t.applying(StateExpr.value(.string("p3")))
-                + t.applying(StateExpr.value(.string("p4")))
-            let oneIfUp = StateExpr.ifThenElse(a, .value(.int(1)), .value(.int(0)))
-            let lo = total - oneIfUp
-            let hi = lo + 1
-            StateExpr.equal(c, lo) || StateExpr.equal(c, hi)
-        }
-
-        Action("CounterStep") {
-            let turnOff: ActionExpr = switchAUp.becomes(false)
-                && count.becomes(Expr(.add(count.stateExpr, .int(1))))
-                && switchBUp.stays
-            let flipB: ActionExpr = switchAUp.stays
-                && count.stays
-                && switchBUp.becomes(Expr(.not(switchBUp.stateExpr)))
-
-            (switchAUp.stateExpr && turnOff || StateExpr.not(switchAUp.stateExpr) && flipB) && timesSwitched.stays
-        }
-
-        Action("NonCounter") {
-            ActionExpr.exists("p", from: others) { p in
-                let signalA: ActionExpr = StateExpr.not(switchAUp.stateExpr) && timesSwitched.stateExpr.applying(p) < 2
-                    && switchAUp.becomes(true)
-                    && .assign(timesSwitched.name, timesSwitched.stateExpr.updated(
-                        at: p,
-                        to: StateExpr.add(timesSwitched.stateExpr.applying(p), .int(1))
-                    ))
-                    && switchBUp.stays && count.stays
-                let flipB: ActionExpr = StateExpr.not(StateExpr.not(switchAUp.stateExpr) && timesSwitched.stateExpr.applying(p) < 2)
-                    && switchBUp.becomes(Expr(.not(switchBUp.stateExpr)))
-                    && switchAUp.stays && timesSwitched.stays && count.stays
-
-                return signalA || flipB
-            }
-        }
-    }
 }

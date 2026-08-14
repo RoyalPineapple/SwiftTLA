@@ -35,8 +35,9 @@ extension SpecParser {
                 return
             }
             guard let component = parseAlgorithmComponent(expression) else {
+                let detail = algorithmParseFailure.map { " \($0)" } ?? ""
                 result.diagnostics.append(.init(
-                    message: "Unsupported Algorithm declaration '\(expression.description.trimmingCharacters(in: .whitespacesAndNewlines))'. Supported declarations are SharedVar and Each.",
+                    message: "Unsupported Algorithm declaration '\(expression.description.trimmingCharacters(in: .whitespacesAndNewlines))'. Supported declarations are SharedVar and Each.\(detail)",
                     source: expression
                 ))
                 return
@@ -122,7 +123,11 @@ extension SpecParser {
 
         switch name {
         case "Each":
-            return parseEach(call)
+            let component = parseEach(call)
+            if component == nil, algorithmParseFailure == nil {
+                algorithmParseFailure = "Each requires a finite enum domain and a decodable process body."
+            }
+            return component
         default:
             return nil
         }
@@ -132,10 +137,13 @@ extension SpecParser {
         guard let domainSyntax = call.arguments.first?.expression,
               let domain = finiteAlgorithmDomain(domainSyntax),
               let closure = call.trailingClosure
-        else { return nil }
+        else {
+            algorithmParseFailure = "Each could not resolve its finite domain."
+            return nil
+        }
         let parameter = closureParameterNames(in: closure).first ?? "__pcal_self"
         var components: [AlgorithmComponentModel] = []
-        for statement in closure.statements {
+        for (index, statement) in closure.statements.enumerated() {
             if case .decl(let declaration) = statement.item,
                let variable = declaration.as(VariableDeclSyntax.self),
                let component = parseAlgorithmVariableDeclaration(variable, expectedKind: "LocalVar") {
@@ -144,6 +152,9 @@ extension SpecParser {
             }
             guard case .expr(let expression) = statement.item else { return nil }
             guard let component = parseEachComponent(expression, processParameter: parameter) else {
+                if algorithmParseFailure == nil {
+                    algorithmParseFailure = "Process component \(index + 1) could not be decoded: '\(expression.description.trimmingCharacters(in: .whitespacesAndNewlines))'."
+                }
                 return nil
             }
             components.append(component)
@@ -260,10 +271,15 @@ extension SpecParser {
         processParameter: String
     ) -> [AlgorithmStatementModel]? {
         var result: [AlgorithmStatementModel] = []
-        for statement in statements {
+        for (index, statement) in statements.enumerated() {
             guard case .expr(let expression) = statement.item,
                   let parsed = parseAlgorithmStatement(expression, processParameter: processParameter)
-            else { return nil }
+            else {
+                if algorithmParseFailure == nil {
+                    algorithmParseFailure = "Statement \(index + 1) could not be decoded: '\(statement.description.trimmingCharacters(in: .whitespacesAndNewlines))'."
+                }
+                return nil
+            }
             result.append(parsed)
         }
         return result

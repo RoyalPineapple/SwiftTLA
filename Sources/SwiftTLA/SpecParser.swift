@@ -1,6 +1,7 @@
 import SwiftSyntax
 import SwiftParser
 import SwiftBasicFormat
+import Foundation
 
 /// Parses SwiftSyntax AST nodes into DSL types (StateExpr, ActionExpr, etc.).
 /// Every AST pattern maps deterministically to a DSL value.
@@ -14,6 +15,12 @@ public enum SpecParser {
     nonisolated(unsafe) static var _enumPhases: [String: [String: TLAValue]] = [:]
 
     nonisolated(unsafe) static var _enumDomains: [String: [TLAValue]] = [:]
+    nonisolated(unsafe) static var algorithmParseFailure: String?
+
+    /// The parser carries enum information while it decodes one macro body.
+    /// Macro expansion is concurrent, so one parse must not overwrite another
+    /// parse's enum context.
+    static let parseContextLock = NSLock()
 
     // MARK: - Compact expression decoder
 

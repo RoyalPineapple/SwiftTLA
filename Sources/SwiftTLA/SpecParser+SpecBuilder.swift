@@ -87,7 +87,10 @@ extension SpecParser {
         enumPhases: [String: [String: TLAValue]] = [:],
         enumDomains: [String: [TLAValue]] = [:]
       ) -> ParsedSpecComponents {
+        parseContextLock.lock()
+        defer { parseContextLock.unlock() }
         _enumPhases = enumPhases
+        algorithmParseFailure = nil
         _enumDomains = enumDomains.isEmpty
             ? enumPhases.mapValues { phases in
                 phases.keys.sorted().compactMap { phases[$0] }
