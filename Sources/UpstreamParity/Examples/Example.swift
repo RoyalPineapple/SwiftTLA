@@ -40,6 +40,7 @@ public enum Example {
         lamportMutexN2,
         multiCarElevator,
         paxosSmall,
+        peterson,
         prisonerN3,
         prisoners4,
         simpleAllocator,
