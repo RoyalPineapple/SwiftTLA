@@ -29,14 +29,14 @@ extension SpecParser {
             }
             guard case .expr(let expression) = statement.item else {
                 result.diagnostics.append(.init(
-                    message: "Unsupported Algorithm declaration. Supported declarations are SharedVar and Each.",
+                    message: "Unsupported Algorithm declaration '\(statement.description.trimmingCharacters(in: .whitespacesAndNewlines))'. Supported declarations are SharedVar and Each.",
                     source: statement
                 ))
                 return
             }
             guard let component = parseAlgorithmComponent(expression) else {
                 result.diagnostics.append(.init(
-                    message: "Unsupported Algorithm declaration. Supported declarations are SharedVar and Each.",
+                    message: "Unsupported Algorithm declaration '\(expression.description.trimmingCharacters(in: .whitespacesAndNewlines))'. Supported declarations are SharedVar and Each.",
                     source: expression
                 ))
                 return
@@ -293,11 +293,13 @@ extension SpecParser {
                   let then = parseAlgorithmStatements(thenClosure.statements, processParameter: processParameter)
             else { return nil }
             let elseClosure = call.additionalTrailingClosures.first?.closure
+                ?? call.arguments.first(where: { $0.label?.text == "else" })?.expression.as(ClosureExprSyntax.self)
             let otherwise = elseClosure.flatMap { parseAlgorithmStatements($0.statements, processParameter: processParameter) } ?? []
             return .ifElse(replacingProcessParameter(in: condition, named: processParameter), then, otherwise)
         case "Either":
             guard let first = call.trailingClosure.flatMap({ parseAlgorithmStatements($0.statements, processParameter: processParameter) }),
-                  let secondClosure = call.additionalTrailingClosures.first?.closure,
+                  let secondClosure = call.additionalTrailingClosures.first?.closure
+                    ?? call.arguments.first(where: { $0.label?.text == "or" })?.expression.as(ClosureExprSyntax.self),
                   let second = parseAlgorithmStatements(secondClosure.statements, processParameter: processParameter)
             else { return nil }
             return .either(first, second)

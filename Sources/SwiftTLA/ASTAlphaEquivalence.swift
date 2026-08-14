@@ -37,8 +37,10 @@ public func _tlaFidelityDiagnostic(_ expected: ParsedSpecModel, _ actual: Parsed
         guard left.bindings == right.bindings else {
             return "Action '\(left.name)' has different finite bindings."
         }
-        guard alphaKey(left.body) == alphaKey(right.body) else {
-            return "Action '\(left.name)' differs after normalizing local binders, guard grouping, and action disjunction."
+        let expectedKey = alphaKey(left.body)
+        let actualKey = alphaKey(right.body)
+        guard expectedKey == actualKey else {
+            return "Action '\(left.name)' differs after normalization. Expected \(expectedKey); built \(actualKey)."
         }
     }
     guard expected.invariants.count == actual.invariants.count else {

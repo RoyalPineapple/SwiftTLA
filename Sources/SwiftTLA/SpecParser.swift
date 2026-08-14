@@ -122,10 +122,34 @@ public enum SpecParser {
             }
         }
 
-        guard access.declName.baseName.text == "updating",
-              let baseSyntax = access.base,
-              let base = decodeTypedFacadeValue(baseSyntax, substitutions: substitutions),
-              let selectorSyntax = call.arguments.first?.expression,
+        // Swift infers `Record<Schema>` from a surrounding `SetExpr` or
+        // `Function` literal, so the source spelling may be `Record.literal`.
+        // Its field entries retain enough syntax to decode independently.
+        if access.declName.baseName.text == "literal",
+           access.base?.as(DeclReferenceExprSyntax.self)?.baseName.text == "Record" {
+            return decodeTypedRecordLiteral(call, substitutions: substitutions)
+        }
+
+        guard let baseSyntax = access.base,
+              let base = decodeTypedFacadeValue(baseSyntax, substitutions: substitutions)
+        else { return nil }
+
+        switch access.declName.baseName.text {
+        case "inserting", "removing":
+            guard let elementSyntax = call.arguments.first?.expression,
+                  let element = decodeTypedFacadeValue(elementSyntax, substitutions: substitutions)
+            else { return nil }
+            let singleton = StateExpr.setLiteral([element])
+            return access.declName.baseName.text == "inserting"
+                ? .union(base, singleton)
+                : .setDifference(base, singleton)
+        case "updating":
+            break
+        default:
+            return nil
+        }
+
+        guard let selectorSyntax = call.arguments.first?.expression,
               let selector = typedUpdateSelector(selectorSyntax, substitutions: substitutions)
         else { return nil }
 

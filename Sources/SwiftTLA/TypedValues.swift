@@ -55,6 +55,12 @@ public struct TLARecordEntry<Schema: TLARecordSchema>: Sendable {
     self.name = field.name
     self.value = value.raw
   }
+
+  public init<Value>(_ field: TLAField<Schema, Value>, _ value: ProcessIdentifier<Value>)
+  where Value: FiniteDomainKey {
+    self.name = field.name
+    self.value = value.stateExpr
+  }
 }
 
 public struct Record<Schema: TLARecordSchema>: TLAValueType, Hashable, Sendable {
@@ -121,6 +127,15 @@ public struct Function<Domain: FiniteTLAValueDomain, Range: TLAValueType>: TLAVa
   }
 
   public static func literal(_ entries: (Domain, Expr<Range>)...) -> Expr<Self> {
+    literal(entries)
+  }
+
+  /// Constructs a total finite function from concrete Swift values.
+  public static func literal(_ entries: (Domain, Range)...) -> Expr<Self> {
+    literal(entries.map { ($0.0, Expr<Range>(.value($0.1.tlaValue))) })
+  }
+
+  private static func literal(_ entries: [(Domain, Expr<Range>)]) -> Expr<Self> {
     let keys = entries.map { $0.0.tlaValue }
     let domain = Domain.tlaValues
     precondition(
@@ -136,19 +151,28 @@ public struct Function<Domain: FiniteTLAValueDomain, Range: TLAValueType>: TLAVa
     return Expr(
       .functionLiteral(.setLiteral(domain.map(StateExpr.value)), binding, .caseExpr(pairs, nil)))
   }
+
 }
 
-public struct SetExpr<Element: TLAValueType>: TLAValueType, Sendable {
-  public init() {}
+public struct SetExpr<Element: TLAValueType>: TLAValueType, Hashable, Sendable {
+  private let values: Set<TLAValue>
+
+  public init() {
+    values = []
+  }
 
   public init?(formalValue: TLAValue) {
     guard case .set(let values) = formalValue,
           values.allSatisfy({ Element(formalValue: $0) != nil })
     else { return nil }
+    self.values = values
   }
 
-  public var tlaValue: TLAValue { .set([]) }
+  public var tlaValue: TLAValue { .set(values) }
   public static var defaultValue: Self { Self() }
+
+  /// The typed members of this finite formal set. Their order is unspecified.
+  public var elements: [Element] { values.compactMap(Element.init(formalValue:)) }
 
   public static func literal(_ elements: Element...) -> Expr<Self> {
     Expr(.setLiteral(elements.map { .value($0.tlaValue) }))
@@ -160,6 +184,21 @@ public struct SetExpr<Element: TLAValueType>: TLAValueType, Sendable {
 }
 
 extension Expr {
+  public func inserting<Element: TLAValueType>(_ element: Expr<Element>) -> Expr<SetExpr<Element>>
+  where T == SetExpr<Element> {
+    Expr<SetExpr<Element>>(.union(raw, .setLiteral([element.raw])))
+  }
+
+  public func inserting<Element: TLAValueType>(_ element: Element) -> Expr<SetExpr<Element>>
+  where T == SetExpr<Element> {
+    Expr<SetExpr<Element>>(.union(raw, .setLiteral([.value(element.tlaValue)])))
+  }
+
+  public func removing<Element: TLAValueType>(_ element: Expr<Element>) -> Expr<SetExpr<Element>>
+  where T == SetExpr<Element> {
+    Expr<SetExpr<Element>>(.setDifference(raw, .setLiteral([element.raw])))
+  }
+
   public subscript<Schema: TLARecordSchema, Value>(_ field: TLAField<Schema, Value>) -> Expr<Value>
   where T == Record<Schema> {
     Expr<Value>(.recordAccess(raw, field.name))
@@ -196,6 +235,12 @@ extension Expr {
   }
 
   public func updating<Domain: FiniteTLAValueDomain, Range: TLAValueType>(
+    _ index: Domain, to value: Range
+  ) -> Expr<Function<Domain, Range>> where T == Function<Domain, Range> {
+    updating(index, to: Expr<Range>(.value(value.tlaValue)))
+  }
+
+  public func updating<Domain: FiniteTLAValueDomain, Range: TLAValueType>(
     _ index: Domain, _ update: (Expr<Range>) -> Expr<Range>
   ) -> Expr<Function<Domain, Range>> where T == Function<Domain, Range> {
     let selected = self[index]
@@ -210,10 +255,28 @@ extension Expr {
   }
 
   public func updating<Domain: FiniteTLAValueDomain, Range: TLAValueType>(
+    _ index: Expr<Domain>, to value: Range
+  ) -> Expr<Function<Domain, Range>> where T == Function<Domain, Range> {
+    updating(index, to: Expr<Range>(.value(value.tlaValue)))
+  }
+
+  public func updating<Domain: FiniteTLAValueDomain, Range: TLAValueType>(
     _ index: Expr<Domain>, _ update: (Expr<Range>) -> Expr<Range>
   ) -> Expr<Function<Domain, Range>> where T == Function<Domain, Range> {
     Expr<Function<Domain, Range>>(
       .except(raw, index.raw, update(Expr<Range>(.functionApply(raw, index.raw))).raw))
+  }
+
+  public func updating<Domain: FiniteDomainKey, Range: TLAValueType>(
+    _ index: ProcessIdentifier<Domain>, to value: Expr<Range>
+  ) -> Expr<Function<Domain, Range>> where T == Function<Domain, Range> {
+    Expr<Function<Domain, Range>>(.except(raw, index.stateExpr, value.raw))
+  }
+
+  public func updating<Domain: FiniteDomainKey, Range: TLAValueType>(
+    _ index: ProcessIdentifier<Domain>, to value: Range
+  ) -> Expr<Function<Domain, Range>> where T == Function<Domain, Range> {
+    updating(index, to: Expr<Range>(.value(value.tlaValue)))
   }
 }
 

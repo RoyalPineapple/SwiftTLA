@@ -54,6 +54,15 @@ public struct WithValue<Value: TLAValueType>: StateExprConvertible, Sendable {
     fileprivate let expression: StateExpr
 
     public var stateExpr: StateExpr { expression }
+
+    public var expr: Expr<Value> { Expr(expression) }
+}
+
+extension WithValue {
+    public subscript<Schema: TLARecordSchema, Field>(_ field: TLAField<Schema, Field>) -> Expr<Field>
+    where Value == Record<Schema>, Field: TLAValueType {
+        Expr<Field>(.recordAccess(stateExpr, field.name))
+    }
 }
 
 public struct AlgorithmLValue<Value: TLAValueType>: Sendable {
@@ -104,6 +113,17 @@ extension SharedVariable {
         Expr<Range>(.functionApply(stateExpr, index.tlaValue.stateExpr))
     }
 
+    /// Reads a finite function at the current PlusCal process identifier.
+    public subscript<Domain: FiniteDomainKey, Range>(_ index: ProcessIdentifier<Domain>) -> Expr<Range>
+    where Value == Function<Domain, Range>, Range: TLAValueType {
+        Expr<Range>(.functionApply(stateExpr, index.stateExpr))
+    }
+
+    public subscript<Domain: FiniteTLAValueDomain, Range>(_ index: Expr<Domain>) -> Expr<Range>
+    where Value == Function<Domain, Range>, Range: TLAValueType {
+        Expr<Range>(.functionApply(stateExpr, index.raw))
+    }
+
     public func updating<Domain: FiniteTLAValueDomain, Range>(
         _ index: Domain,
         _ update: (Expr<Range>) -> Expr<Range>
@@ -114,11 +134,67 @@ extension SharedVariable {
         )
     }
 
+    /// Updates a finite function at the current PlusCal process identifier.
+    public func updating<Domain: FiniteDomainKey, Range>(
+        _ index: ProcessIdentifier<Domain>,
+        _ update: (Expr<Range>) -> Expr<Range>
+    ) -> Expr<Function<Domain, Range>> where Value == Function<Domain, Range>, Range: TLAValueType {
+        let selected = self[index]
+        return Expr<Function<Domain, Range>>(
+            .except(stateExpr, index.stateExpr, update(selected).raw)
+        )
+    }
+
+    /// Replaces a finite function value at the current PlusCal process identifier.
+    public func updating<Domain: FiniteDomainKey, Range>(
+        _ index: ProcessIdentifier<Domain>,
+        to value: Expr<Range>
+    ) -> Expr<Function<Domain, Range>> where Value == Function<Domain, Range>, Range: TLAValueType {
+        Expr<Function<Domain, Range>>(.except(stateExpr, index.stateExpr, value.raw))
+    }
+
+    public func updating<Domain: FiniteDomainKey, Range>(
+        _ index: ProcessIdentifier<Domain>,
+        to value: Range
+    ) -> Expr<Function<Domain, Range>> where Value == Function<Domain, Range>, Range: TLAValueType {
+        updating(index, to: Expr<Range>(.value(value.tlaValue)))
+    }
+
+    public func updating<Domain: FiniteTLAValueDomain, Range>(
+        _ index: Expr<Domain>,
+        _ update: (Expr<Range>) -> Expr<Range>
+    ) -> Expr<Function<Domain, Range>> where Value == Function<Domain, Range>, Range: TLAValueType {
+        Expr<Function<Domain, Range>>(
+            .except(stateExpr, index.raw, update(Expr<Range>(.functionApply(stateExpr, index.raw))).raw)
+        )
+    }
+
+    public func updating<Domain: FiniteTLAValueDomain, Range>(
+        _ index: Expr<Domain>,
+        to value: Expr<Range>
+    ) -> Expr<Function<Domain, Range>> where Value == Function<Domain, Range>, Range: TLAValueType {
+        Expr<Function<Domain, Range>>(.except(stateExpr, index.raw, value.raw))
+    }
+
+    public func updating<Domain: FiniteTLAValueDomain, Range>(
+        _ index: Expr<Domain>,
+        to value: Range
+    ) -> Expr<Function<Domain, Range>> where Value == Function<Domain, Range>, Range: TLAValueType {
+        updating(index, to: Expr<Range>(.value(value.tlaValue)))
+    }
+
     public func updating<Domain: FiniteTLAValueDomain, Range>(
         _ index: Domain,
         to value: Expr<Range>
     ) -> Expr<Function<Domain, Range>> where Value == Function<Domain, Range>, Range: TLAValueType {
         Expr<Function<Domain, Range>>(.except(stateExpr, index.tlaValue.stateExpr, value.raw))
+    }
+
+    public func updating<Domain: FiniteTLAValueDomain, Range>(
+        _ index: Domain,
+        to value: Range
+    ) -> Expr<Function<Domain, Range>> where Value == Function<Domain, Range>, Range: TLAValueType {
+        updating(index, to: Expr<Range>(.value(value.tlaValue)))
     }
 
     public func inserting<Element: TLAValueType>(_ element: Element) -> Expr<SetExpr<Element>>
@@ -135,6 +211,11 @@ extension SharedVariable {
     where Value == SetExpr<Element> {
         Expr<SetExpr<Element>>(.setDifference(stateExpr, .setLiteral([.value(element.tlaValue)])))
     }
+
+    public func removing<Element: TLAValueType>(_ element: WithValue<Element>) -> Expr<SetExpr<Element>>
+    where Value == SetExpr<Element> {
+        Expr<SetExpr<Element>>(.setDifference(stateExpr, .setLiteral([element.stateExpr])))
+    }
 }
 
 extension LocalVariable {
@@ -146,6 +227,17 @@ extension LocalVariable {
     public subscript<Domain: FiniteTLAValueDomain, Range>(_ index: Domain) -> Expr<Range>
     where Value == Function<Domain, Range>, Range: TLAValueType {
         Expr<Range>(.functionApply(stateExpr, index.tlaValue.stateExpr))
+    }
+
+    /// Reads a finite function at the current PlusCal process identifier.
+    public subscript<Domain: FiniteDomainKey, Range>(_ index: ProcessIdentifier<Domain>) -> Expr<Range>
+    where Value == Function<Domain, Range>, Range: TLAValueType {
+        Expr<Range>(.functionApply(stateExpr, index.stateExpr))
+    }
+
+    public subscript<Domain: FiniteTLAValueDomain, Range>(_ index: Expr<Domain>) -> Expr<Range>
+    where Value == Function<Domain, Range>, Range: TLAValueType {
+        Expr<Range>(.functionApply(stateExpr, index.raw))
     }
 }
 
@@ -476,6 +568,13 @@ public func With<Value: TLAValueType>(
 
 public func With<Value: TLAValueType>(
     _ source: Var<SetExpr<Value>>,
+    @DoBuilder _ body: (WithValue<Value>) -> [StepStatement]
+) -> StepStatement {
+    With(Expr<SetExpr<Value>>(source.stateExpr), body)
+}
+
+public func With<Value: TLAValueType>(
+    _ source: SharedVariable<SetExpr<Value>>,
     @DoBuilder _ body: (WithValue<Value>) -> [StepStatement]
 ) -> StepStatement {
     With(Expr<SetExpr<Value>>(source.stateExpr), body)
