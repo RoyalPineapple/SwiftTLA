@@ -27,7 +27,8 @@ struct GeneratedMachineDocumentationTests {
         let observable = CounterScreenModel.Observable()
         let recorder = CallbackRecorder()
 
-        observable.onAdvance = { _, before, after in
+        observable.onAdvance = { process, before, after in
+            #expect(process == .only)
             await recorder.record(before: before, after: after)
         }
 
