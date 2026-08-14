@@ -135,6 +135,8 @@ struct UpstreamParityTests {
     func binarySearchParity() throws {
         let count = try BinarySearchModel.verifySpec()
         #expect(count == Example.binarySearch.expectedDistinct)
+        #expect(BinarySearchModel.spec.tlaModule.contains("WF_"))
+        #expect(BinarySearchModel.spec.tlaModule.contains("(Next)"))
     }
 
     @Test("EWD840 uses typed finite function state")
