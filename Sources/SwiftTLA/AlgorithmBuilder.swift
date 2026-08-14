@@ -1028,6 +1028,32 @@ public func ForAll<Value: TLAValueType>(
     return Expr(.forAll(domain.raw, variable, predicate(WithValue(expression: .variable(variable)))))
 }
 
+/// Tests a predicate for every member of a declared finite domain.
+///
+/// This is the typed Swift spelling of a bounded TLA+ `\\A value \\in Type`
+/// predicate. It is useful for properties over a PlusCal process family.
+public func All<Value: FiniteDomainKey>(
+    _ domain: FiniteDomain<Value>,
+    where predicate: (WithValue<Value>) -> StateExpr
+) -> StateExpr {
+    let variable = FreshVarName.fresh()
+    return .forAll(
+        .setLiteral(domain.values.map { .value($0.tlaValue) }),
+        variable,
+        predicate(WithValue(expression: .variable(variable)))
+    )
+}
+
+/// True when a process in the surrounding `Algorithm` has reached `Done`.
+/// The program counter remains lowerer-owned; this avoids raw string-keyed
+/// inspection of generated control state.
+public func Finished<Value: FiniteDomainKey>(_ process: WithValue<Value>) -> StateExpr {
+    .equal(
+        .functionApply(.variable("pc"), process.stateExpr),
+        .value(.string("Done"))
+    )
+}
+
 public func With<Value: TLAValueType>(
     _ source: Var<SetExpr<Value>>,
     @DoBuilder _ body: (WithValue<Value>) -> [StepStatement]

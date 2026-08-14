@@ -26,6 +26,12 @@ extension SpecParser {
 
         var components: [AlgorithmComponentModel] = []
         var macros: [String: AlgorithmMacroDefinition] = [:]
+        var lexicalValues: [String: TLAValue] = [:]
+        defer {
+            for name in lexicalValues.keys {
+                _constants.removeValue(forKey: name)
+            }
+        }
         for statement in closure.statements {
             if case .decl(let declaration) = statement.item,
                let variable = declaration.as(VariableDeclSyntax.self),
@@ -36,6 +42,13 @@ extension SpecParser {
                     return
                 }
                 macros[name] = macro
+                continue
+            }
+            if case .decl(let declaration) = statement.item,
+               let variable = declaration.as(VariableDeclSyntax.self),
+               let value = parseAlgorithmLexicalValue(variable) {
+                lexicalValues[value.name] = value.value
+                _constants[value.name] = value.value
                 continue
             }
             if case .decl(let declaration) = statement.item,
@@ -337,6 +350,24 @@ extension SpecParser {
         return .init(parameter: parameter, statements: statements)
     }
 
+    /// An immutable `let` in an Algorithm is a compile-time formal alias,
+    /// not a state variable or host-language computation. Accept only closed
+    /// expressions that the DSL evaluator can reduce now. The same value is
+    /// then visible to subsequent syntax decoding through the parser's formal
+    /// constant table.
+    private static func parseAlgorithmLexicalValue(
+        _ declaration: VariableDeclSyntax
+    ) -> (name: String, value: TLAValue)? {
+        guard declaration.bindings.count == 1,
+              let binding = declaration.bindings.first,
+              let name = binding.pattern.as(IdentifierPatternSyntax.self)?.identifier.text,
+              let initializer = binding.initializer?.value,
+              let expression = decodeStateExpr(initializer),
+              let value = try? expression.evaluate(in: [:])
+        else { return nil }
+        return (name, value)
+    }
+
     private static func isAlgorithmMacroInitializer(_ initializer: FunctionCallExprSyntax) -> Bool {
         if initializer.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "Macro" {
             return true
@@ -585,7 +616,7 @@ extension SpecParser {
         return nil
     }
 
-    private static func finiteAlgorithmDomain(_ expression: ExprSyntax) -> (typeName: String, values: [TLAValue])? {
+    static func finiteAlgorithmDomain(_ expression: ExprSyntax) -> (typeName: String, values: [TLAValue])? {
         guard let access = expression.as(MemberAccessExprSyntax.self),
               access.declName.baseName.text == "all",
               let type = access.base?.as(DeclReferenceExprSyntax.self)?.baseName.text,

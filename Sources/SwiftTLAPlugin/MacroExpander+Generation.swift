@@ -18,7 +18,7 @@ extension MacroExpander {
         DeclSyntax(stringLiteral: """
         @discardableResult
         public static func verifySpec() throws -> Int {
-            let result = try ModelChecker(spec: Self.spec, maxStates: 100_000).check()
+            let result = try ModelChecker(spec: Self.spec, maxStates: Self.verificationStateLimit).check()
             switch result {
             case .ok(let count):
                 guard count > 0 else { throw VerificationError("No states found") }
@@ -40,7 +40,7 @@ extension MacroExpander {
     static func generateTransitionMatrix() -> [DeclSyntax] {
         [DeclSyntax(stringLiteral: """
         private static func _formalTransitionMatrix() throws -> [(from: [String: TLAValue], invocation: TLAActionInvocation, to: [String: TLAValue])] {
-            let graph = try ModelChecker(spec: Self.spec, maxStates: 100_000).exploreGraph()
+            let graph = try ModelChecker(spec: Self.spec, maxStates: Self.verificationStateLimit).exploreGraph()
             var matrix: [(from: [String: TLAValue], invocation: TLAActionInvocation, to: [String: TLAValue])] = []
             for (fromID, transitions) in graph.transitions {
                 guard let fromState = graph.states[fromID] else { continue }

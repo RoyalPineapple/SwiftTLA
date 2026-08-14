@@ -7,7 +7,7 @@ struct UpstreamParityTests {
     func modelCheckerMatchesTLC() throws {
         for entry in Example.all {
 
-            let mc = ModelChecker(spec: entry.spec, maxStates: 50_000)
+            let mc = ModelChecker(spec: entry.spec, maxStates: entry.verificationStateLimit)
             let count = try mc.exploreGraph().states.count
             let result = try mc.check()
 
@@ -118,6 +118,11 @@ struct UpstreamParityTests {
         let n3 = ModelChecker(spec: TeachingSimpleN3Model.spec, maxStates: 50_000)
         #expect(try n2.exploreGraph().states.count == Example.teachingSimpleN2.expectedDistinct)
         #expect(try n3.exploreGraph().states.count == Example.teachingSimpleN3.expectedDistinct)
+    }
+
+    @Test("TeachingConcurrency SimpleRegular uses bounded regular-register state")
+    func teachingSimpleRegularParity() throws {
+        #expect(try TeachingSimpleRegularN8Model.verifySpec() == Example.teachingSimpleRegularN8.expectedDistinct)
     }
 
     @Test("EWD840 uses typed finite function state")

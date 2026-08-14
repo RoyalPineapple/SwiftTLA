@@ -315,6 +315,13 @@ extension Expr {
     Expr<Range>(.functionApply(raw, index.raw))
   }
 
+  /// Reads a finite function at the current member of a PlusCal process family.
+  public subscript<Domain: FiniteDomainKey, Range: TLAValueType>(_ index: ProcessIdentifier<Domain>) -> Expr<
+    Range
+  > where T == Function<Domain, Range> {
+    Expr<Range>(.functionApply(raw, index.stateExpr))
+  }
+
   public func updating<Schema: TLARecordSchema, Value>(
     _ field: TLAField<Schema, Value>, to value: Value
   ) -> Expr<Record<Schema>> where T == Record<Schema> {

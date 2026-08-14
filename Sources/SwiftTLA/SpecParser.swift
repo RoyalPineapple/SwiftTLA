@@ -25,6 +25,9 @@ public enum SpecParser {
     // MARK: - Compact expression decoder
 
     public static func decodeStateExpr(_ expression: ExprSyntax) -> StateExpr? {
+        if let boundedQuantifier = decodeAlgorithmDomainQuantifier(expression) {
+            return boundedQuantifier
+        }
         if let call = expression.as(FunctionCallExprSyntax.self),
            call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "If",
            let conditionSyntax = call.arguments.first?.expression,
@@ -135,6 +138,37 @@ public enum SpecParser {
             if prefix.operator.text == "-", let operand { return .negate(operand) }
         }
         return nil
+    }
+
+    private static func decodeAlgorithmDomainQuantifier(_ expression: ExprSyntax) -> StateExpr? {
+        guard let call = expression.as(FunctionCallExprSyntax.self),
+              let name = call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text,
+              name == "All",
+              let domainSyntax = call.arguments.first?.expression,
+              let domain = finiteAlgorithmDomain(domainSyntax),
+              let closure = call.trailingClosure,
+              closure.statements.count == 1,
+              case .expr(let bodySyntax) = closure.statements.first?.item,
+              let parameter = closureParameterNames(in: closure).first,
+              closureParameterNames(in: closure).count == 1
+        else { return nil }
+
+        let binding = StateExpr.variable(parameter)
+        let predicate: StateExpr?
+        if let finished = bodySyntax.as(FunctionCallExprSyntax.self),
+           finished.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "Finished",
+           let argument = finished.arguments.first?.expression,
+           decodeTypedFacadeValue(argument, substitutions: [parameter: binding]) != nil {
+            predicate = .equal(
+                .functionApply(.variable("pc"), binding),
+                .value(.string("Done"))
+            )
+        } else {
+            predicate = decodeTypedFacadeValue(bodySyntax, substitutions: [parameter: binding])
+        }
+        guard let predicate else { return nil }
+        let values = StateExpr.setLiteral(domain.values.map(StateExpr.value))
+        return .forAll(values, parameter, predicate)
     }
 
     static func decodeTypedFacadeExpr(
