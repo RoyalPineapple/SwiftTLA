@@ -1,34 +1,62 @@
 import SwiftTLA
 import SwiftTLAMacros
 
-/// The program-counter labels in the small Teaching Concurrency PlusCal model.
-public enum TeachingSimplePhase: String, TLAValueType {
-    case a
-    case b
-    case done = "Done"
-}
-
+/// Two bounded instances of the upstream `Simple` PlusCal algorithm.
+///
+/// The upstream model has one `x` and one `y` function, indexed by the
+/// process identifier. `Each` lowers to exactly that function-shaped state
+/// and its generated `pc` function; the Swift source does not unroll a
+/// separate action or program counter for every process.
 @TLAModel
 public struct TeachingSimpleN2Model {
+    public enum Process: Int, CaseIterable, FiniteDomainKey {
+        case p0
+        case p1
+
+        public static let formalDomain = allCases
+        public static let formalTypeIdentity = FormalTypeIdentity(
+            rawValue: "upstream.teaching-concurrency.simple.n2.process"
+        )
+        public var tlaValue: TLAValue { .int(rawValue) }
+    }
+
+    private enum Step: String, PlusCalLabel {
+        case a
+        case b
+    }
+
     public static var spec: TLASpec {
         #spec("Simple") {
             Extends("Integers")
-            let x0 = SharedVar(initial: 0)
-            let x1 = SharedVar(initial: 0)
-            let y0 = SharedVar(initial: 0)
-            let y1 = SharedVar(initial: 0)
-            let pc0 = SharedVar(initial: TeachingSimplePhase.a)
-            let pc1 = SharedVar(initial: TeachingSimplePhase.a)
+            Algorithm("Simple") {
+                let x = SharedVar(initial: Function<Process, Int>.literal(
+                    (.p0, 0), (.p1, 0)
+                ))
+                let y = SharedVar(initial: Function<Process, Int>.literal(
+                    (.p0, 0), (.p1, 0)
+                ))
 
-            Action("a0") { pc0 == TeachingSimplePhase.a && x0.becomes(1) && pc0.becomes(.b) }
-            Action("b0") { pc0 == TeachingSimplePhase.b && y0.becomes(x1) && pc0.becomes(.done) }
-            Action("a1") { pc1 == TeachingSimplePhase.a && x1.becomes(1) && pc1.becomes(.b) }
-            Action("b1") { pc1 == TeachingSimplePhase.b && y1.becomes(x0) && pc1.becomes(.done) }
-            Action("Terminating") { pc0 == TeachingSimplePhase.done && pc1 == TeachingSimplePhase.done }
+                Each(Process.all) { process in
+                    Do(Step.a) {
+                        Assign(x, to: x.updating(process, to: 1))
+                    }
+                    Do(Step.b) {
+                        If(process == .p0) {
+                            Assign(y, to: y.updating(process, to: x[.p1]))
+                        } else: {
+                            Assign(y, to: y.updating(process, to: x[.p0]))
+                        }
+                    }
+                }
 
-            Invariant("TypeOK") {
-                (x0 == 0 || x0 == 1) && (x1 == 0 || x1 == 1)
-                    && (y0 == 0 || y0 == 1) && (y1 == 0 || y1 == 1)
+                // Keep one formal predicate per line. The builder combines
+                // these clauses with conjunction, exactly as upstream TypeOK.
+                Invariant("TypeOK") {
+                    x[.p0] == 0 || x[.p0] == 1
+                    x[.p1] == 0 || x[.p1] == 1
+                    y[.p0] == 0 || y[.p0] == 1
+                    y[.p1] == 0 || y[.p1] == 1
+                }
             }
         }
     }
@@ -36,33 +64,61 @@ public struct TeachingSimpleN2Model {
 
 @TLAModel
 public struct TeachingSimpleN3Model {
+    public enum Process: Int, CaseIterable, FiniteDomainKey {
+        case p0
+        case p1
+        case p2
+
+        public static let formalDomain = allCases
+        public static let formalTypeIdentity = FormalTypeIdentity(
+            rawValue: "upstream.teaching-concurrency.simple.n3.process"
+        )
+        public var tlaValue: TLAValue { .int(rawValue) }
+    }
+
+    private enum Step: String, PlusCalLabel {
+        case a
+        case b
+    }
+
     public static var spec: TLASpec {
         #spec("Simple") {
             Extends("Integers")
-            let x0 = SharedVar(initial: 0)
-            let x1 = SharedVar(initial: 0)
-            let x2 = SharedVar(initial: 0)
-            let y0 = SharedVar(initial: 0)
-            let y1 = SharedVar(initial: 0)
-            let y2 = SharedVar(initial: 0)
-            let pc0 = SharedVar(initial: TeachingSimplePhase.a)
-            let pc1 = SharedVar(initial: TeachingSimplePhase.a)
-            let pc2 = SharedVar(initial: TeachingSimplePhase.a)
+            Algorithm("Simple") {
+                let x = SharedVar(initial: Function<Process, Int>.literal(
+                    (.p0, 0), (.p1, 0), (.p2, 0)
+                ))
+                let y = SharedVar(initial: Function<Process, Int>.literal(
+                    (.p0, 0), (.p1, 0), (.p2, 0)
+                ))
 
-            Action("a0") { pc0 == TeachingSimplePhase.a && x0.becomes(1) && pc0.becomes(.b) }
-            Action("b0") { pc0 == TeachingSimplePhase.b && y0.becomes(x2) && pc0.becomes(.done) }
-            Action("a1") { pc1 == TeachingSimplePhase.a && x1.becomes(1) && pc1.becomes(.b) }
-            Action("b1") { pc1 == TeachingSimplePhase.b && y1.becomes(x0) && pc1.becomes(.done) }
-            Action("a2") { pc2 == TeachingSimplePhase.a && x2.becomes(1) && pc2.becomes(.b) }
-            Action("b2") { pc2 == TeachingSimplePhase.b && y2.becomes(x1) && pc2.becomes(.done) }
-            Action("Terminating") {
-                pc0 == TeachingSimplePhase.done
-                    && pc1 == TeachingSimplePhase.done
-                    && pc2 == TeachingSimplePhase.done
-            }
+                Each(Process.all) { process in
+                    Do(Step.a) {
+                        Assign(x, to: x.updating(process, to: 1))
+                    }
+                    Do(Step.b) {
+                        If(process == .p0) {
+                            Assign(y, to: y.updating(process, to: x[.p2]))
+                        } else: {
+                            If(process == .p1) {
+                                Assign(y, to: y.updating(process, to: x[.p0]))
+                            } else: {
+                                Assign(y, to: y.updating(process, to: x[.p1]))
+                            }
+                        }
+                    }
+                }
 
-            Invariant("TypeOK") {
-                (x0 == 0 || x0 == 1) && (x1 == 0 || x1 == 1) && (x2 == 0 || x2 == 1)
+                // See the N=2 instance for why this is one predicate per
+                // builder line rather than a host-language boolean loop.
+                Invariant("TypeOK") {
+                    x[.p0] == 0 || x[.p0] == 1
+                    x[.p1] == 0 || x[.p1] == 1
+                    x[.p2] == 0 || x[.p2] == 1
+                    y[.p0] == 0 || y[.p0] == 1
+                    y[.p1] == 0 || y[.p1] == 1
+                    y[.p2] == 0 || y[.p2] == 1
+                }
             }
         }
     }
@@ -76,7 +132,7 @@ extension Example {
         upstreamCfg: nil,
         expectedDistinct: 13,
         spec: TeachingSimpleN2Model.spec,
-        notes: "PlusCal translation, N=2. Typed program-counter phases. Upstream TLC (TypeOK only) = 13."
+        notes: "N=2, one PlusCal process family with function-shaped x, y, and pc state. TLC = 13."
     )
 
     public static let teachingSimpleN3 = Entry(
@@ -86,6 +142,6 @@ extension Example {
         upstreamCfg: nil,
         expectedDistinct: 51,
         spec: TeachingSimpleN3Model.spec,
-        notes: "PlusCal translation, N=3. Typed program-counter phases. Upstream TLC = 51."
+        notes: "N=3, one PlusCal process family with function-shaped x, y, and pc state. TLC = 51."
     )
 }

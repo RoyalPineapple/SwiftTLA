@@ -177,9 +177,18 @@ extension SpecParser {
         guard let name = extractStringArg(call, index: 0),
               let closure = call.trailingClosure
         else { return nil }
-        let expressions = closure.statements.compactMap { statement -> StateExpr? in
-            guard case .expr(let expression) = statement.item else { return nil }
-            return decodeStateExpr(expression)
+
+        var expressions: [StateExpr] = []
+        for (index, statement) in closure.statements.enumerated() {
+            guard case .expr(let expression) = statement.item else {
+                algorithmParseFailure = "Invariant '\(name)' statement \(index + 1) is not a formal expression."
+                return nil
+            }
+            guard let decoded = decodeStateExpr(expression) else {
+                algorithmParseFailure = "Invariant '\(name)' statement \(index + 1) could not be decoded: '\(expression.description.trimmingCharacters(in: .whitespacesAndNewlines))'."
+                return nil
+            }
+            expressions.append(decoded)
         }
         guard !expressions.isEmpty else { return nil }
         let body = expressions.dropFirst().reduce(expressions[0], StateExpr.and)

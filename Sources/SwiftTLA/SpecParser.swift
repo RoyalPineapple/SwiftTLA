@@ -230,7 +230,15 @@ public enum SpecParser {
         _ expression: ExprSyntax,
         substitutions: [String: StateExpr]
     ) -> StateExpr? {
-        decodeTypedFacadeExpr(expression, substitutions: substitutions) ?? decodeStateExpr(expression)
+        // A typed function selector can be an explicit finite-domain enum
+        // case (for example, `Process.p0`). Resolve it before the typed
+        // facade treats member access as a record field or a property.
+        if let member = expression.as(MemberAccessExprSyntax.self),
+           let type = member.base?.as(DeclReferenceExprSyntax.self)?.baseName.text,
+           let value = _enumPhases[type]?[member.declName.baseName.text] {
+            return .value(value)
+        }
+        return decodeTypedFacadeExpr(expression, substitutions: substitutions) ?? decodeStateExpr(expression)
     }
 
     static func typedUpdateSelector(
