@@ -68,7 +68,8 @@ public struct AlgorithmLValue<Value: TLAValueType>: Sendable {
 /// Application code never needs the engine-level `Var` type for this form.
 public struct SharedVariable<Value: TLAValueType>: StateExprConvertible, Sendable {
     fileprivate let name: String
-    fileprivate let initial: TLAValue
+    fileprivate let initial: StateExpr
+    fileprivate let swiftTypeName: String
 
     public var stateExpr: StateExpr { .variable(name) }
 
@@ -82,12 +83,69 @@ public struct SharedVariable<Value: TLAValueType>: StateExprConvertible, Sendabl
 /// A `LocalVar` declaration is valid only inside an `Each` process body.
 public struct LocalVariable<Value: TLAValueType>: StateExprConvertible, Sendable {
     fileprivate let name: String
-    fileprivate let initial: TLAValue
+    fileprivate let initial: StateExpr
+    fileprivate let swiftTypeName: String
 
     public var stateExpr: StateExpr { .variable(name) }
 
     public var algorithmLValue: AlgorithmLValue<Value> {
         AlgorithmLValue(model: .root(name))
+    }
+}
+
+extension SharedVariable {
+    public subscript<Schema: TLARecordSchema, Field>(_ field: TLAField<Schema, Field>) -> Expr<Field>
+    where Value == Record<Schema>, Field: TLAValueType {
+        Expr<Field>(.recordAccess(stateExpr, field.name))
+    }
+
+    public subscript<Domain: FiniteTLAValueDomain, Range>(_ index: Domain) -> Expr<Range>
+    where Value == Function<Domain, Range>, Range: TLAValueType {
+        Expr<Range>(.functionApply(stateExpr, index.tlaValue.stateExpr))
+    }
+
+    public func updating<Domain: FiniteTLAValueDomain, Range>(
+        _ index: Domain,
+        _ update: (Expr<Range>) -> Expr<Range>
+    ) -> Expr<Function<Domain, Range>> where Value == Function<Domain, Range>, Range: TLAValueType {
+        let selected = self[index]
+        return Expr<Function<Domain, Range>>(
+            .except(stateExpr, index.tlaValue.stateExpr, update(selected).raw)
+        )
+    }
+
+    public func updating<Domain: FiniteTLAValueDomain, Range>(
+        _ index: Domain,
+        to value: Expr<Range>
+    ) -> Expr<Function<Domain, Range>> where Value == Function<Domain, Range>, Range: TLAValueType {
+        Expr<Function<Domain, Range>>(.except(stateExpr, index.tlaValue.stateExpr, value.raw))
+    }
+
+    public func inserting<Element: TLAValueType>(_ element: Element) -> Expr<SetExpr<Element>>
+    where Value == SetExpr<Element> {
+        Expr<SetExpr<Element>>(.union(stateExpr, .setLiteral([.value(element.tlaValue)])))
+    }
+
+    public func inserting<Element: TLAValueType>(_ element: Expr<Element>) -> Expr<SetExpr<Element>>
+    where Value == SetExpr<Element> {
+        Expr<SetExpr<Element>>(.union(stateExpr, .setLiteral([element.raw])))
+    }
+
+    public func removing<Element: TLAValueType>(_ element: Element) -> Expr<SetExpr<Element>>
+    where Value == SetExpr<Element> {
+        Expr<SetExpr<Element>>(.setDifference(stateExpr, .setLiteral([.value(element.tlaValue)])))
+    }
+}
+
+extension LocalVariable {
+    public subscript<Schema: TLARecordSchema, Field>(_ field: TLAField<Schema, Field>) -> Expr<Field>
+    where Value == Record<Schema>, Field: TLAValueType {
+        Expr<Field>(.recordAccess(stateExpr, field.name))
+    }
+
+    public subscript<Domain: FiniteTLAValueDomain, Range>(_ index: Domain) -> Expr<Range>
+    where Value == Function<Domain, Range>, Range: TLAValueType {
+        Expr<Range>(.functionApply(stateExpr, index.tlaValue.stateExpr))
     }
 }
 
@@ -99,13 +157,26 @@ public func SharedVar<Value: TLAValueType>(
     _ name: String,
     initial: Value
 ) -> SharedVariable<Value> {
-    SharedVariable(name: name, initial: initial.tlaValue)
+    SharedVariable(name: name, initial: .value(initial.tlaValue), swiftTypeName: String(reflecting: Value.self))
 }
 
 /// The name is supplied from the enclosing `let` binding by `#spec`.
 /// This overload is intentionally useful only inside that macro boundary.
 public func SharedVar<Value: TLAValueType>(initial: Value) -> SharedVariable<Value> {
-    SharedVariable(name: "", initial: initial.tlaValue)
+    SharedVariable(name: "", initial: .value(initial.tlaValue), swiftTypeName: String(reflecting: Value.self))
+}
+
+/// Declares a shared variable with a typed formal initial expression.
+public func SharedVar<Value: TLAValueType>(
+    _ name: String,
+    initial: Expr<Value>
+) -> SharedVariable<Value> {
+    SharedVariable(name: name, initial: initial.raw, swiftTypeName: String(reflecting: Value.self))
+}
+
+/// The name is supplied from the enclosing `let` binding by `#spec`.
+public func SharedVar<Value: TLAValueType>(initial: Expr<Value>) -> SharedVariable<Value> {
+    SharedVariable(name: "", initial: initial.raw, swiftTypeName: String(reflecting: Value.self))
 }
 
 /// Declares a process-local PlusCal-shaped variable.
@@ -113,13 +184,26 @@ public func LocalVar<Value: TLAValueType>(
     _ name: String,
     initial: Value
 ) -> LocalVariable<Value> {
-    LocalVariable(name: name, initial: initial.tlaValue)
+    LocalVariable(name: name, initial: .value(initial.tlaValue), swiftTypeName: String(reflecting: Value.self))
 }
 
 /// The name is supplied from the enclosing `let` binding by `#spec`.
 /// This overload is intentionally useful only inside that macro boundary.
 public func LocalVar<Value: TLAValueType>(initial: Value) -> LocalVariable<Value> {
-    LocalVariable(name: "", initial: initial.tlaValue)
+    LocalVariable(name: "", initial: .value(initial.tlaValue), swiftTypeName: String(reflecting: Value.self))
+}
+
+/// Declares a process-local variable with a typed formal initial expression.
+public func LocalVar<Value: TLAValueType>(
+    _ name: String,
+    initial: Expr<Value>
+) -> LocalVariable<Value> {
+    LocalVariable(name: name, initial: initial.raw, swiftTypeName: String(reflecting: Value.self))
+}
+
+/// The name is supplied from the enclosing `let` binding by `#spec`.
+public func LocalVar<Value: TLAValueType>(initial: Expr<Value>) -> LocalVariable<Value> {
+    LocalVariable(name: "", initial: initial.raw, swiftTypeName: String(reflecting: Value.self))
 }
 
 /// Scheduling policy for one `Each` process family.
@@ -187,11 +271,19 @@ public enum AlgorithmBuilder {
     }
 
     public static func buildExpression<Value>(_ variable: SharedVariable<Value>) -> [AlgorithmElement] {
-        [AlgorithmElement(model: .shared(.init(root: variable.name, initial: variable.initial)))]
+        [AlgorithmElement(model: .shared(.init(
+            root: variable.name,
+            initial: variable.initial,
+            swiftTypeName: variable.swiftTypeName
+        )))]
     }
 
     public static func buildExpression<Value>(_ variable: LocalVariable<Value>) -> [AlgorithmElement] {
-        [AlgorithmElement(model: .local(.init(root: variable.name, initial: variable.initial)))]
+        [AlgorithmElement(model: .local(.init(
+            root: variable.name,
+            initial: variable.initial,
+            swiftTypeName: variable.swiftTypeName
+        )))]
     }
 
     public static func buildExpression(_ component: InvDecl) -> [AlgorithmElement] {
@@ -272,11 +364,11 @@ public struct Algorithm: Sendable, SpecComponent {
 }
 
 public func Shared<Value: TLAValueType>(_ variable: Var<Value>, initial: Value) -> AlgorithmElement {
-    AlgorithmElement(model: .shared(AlgorithmStateModel(root: variable.name, initial: initial.tlaValue)))
+    AlgorithmElement(model: .shared(AlgorithmStateModel(root: variable.name, initial: .value(initial.tlaValue))))
 }
 
 public func Local<Value: TLAValueType>(_ variable: Var<Value>, initial: Value) -> AlgorithmElement {
-    AlgorithmElement(model: .local(AlgorithmStateModel(root: variable.name, initial: initial.tlaValue)))
+    AlgorithmElement(model: .local(AlgorithmStateModel(root: variable.name, initial: .value(initial.tlaValue))))
 }
 
 /// Declares one independently scheduled process for every member of `domain`.

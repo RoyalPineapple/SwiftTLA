@@ -26,7 +26,7 @@ public protocol TLARecordSchema: Sendable {
 }
 
 public struct TLAField<Schema: TLARecordSchema, Value: TLAValueType>: Sendable {
-  fileprivate let name: String
+  let name: String
 }
 
 extension TLARecordSchema {

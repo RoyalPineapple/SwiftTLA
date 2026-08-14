@@ -506,6 +506,15 @@ extension MacroExpander {
                 }
                 """
             }
+            let type = stateType(for: variable, enumInfos: enumInfos)
+            if type == "TLAValue" {
+                return """
+                guard let value = dict[\(key)] else {
+                    throw TLAStateProjectionDiagnostic.missingValue(path: \(key))
+                }
+                self.\(variable.name) = value
+                """
+            }
             if let typeName = variable.swiftTypeName,
                !["Int", "Bool", "String", "TLAValue"].contains(typeName) {
                 let pattern = tlaValuePattern(for: variable.initial, binding: "raw")
@@ -515,15 +524,6 @@ extension MacroExpander {
                 }
                 guard \(pattern), let value = \(typeName)(rawValue: raw) else {
                     throw TLAStateProjectionDiagnostic.invalidValue(path: \(key))
-                }
-                self.\(variable.name) = value
-                """
-            }
-            let type = stateType(for: variable, enumInfos: enumInfos)
-            if type == "TLAValue" {
-                return """
-                guard let value = dict[\(key)] else {
-                    throw TLAStateProjectionDiagnostic.missingValue(path: \(key))
                 }
                 self.\(variable.name) = value
                 """

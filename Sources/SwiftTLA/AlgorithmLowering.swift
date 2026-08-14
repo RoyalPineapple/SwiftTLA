@@ -26,12 +26,20 @@ enum AlgorithmLowerer {
             }
         }
 
-        var variables = shared.map { NamedVar(name: $0.root, initial: $0.initial) }
+        var variables = shared.map { state in
+            NamedVar(name: state.root, initial: staticInitialValue(state.initial, named: state.root))
+        }
         for process in processes {
             for local in process.components {
                 guard case .local(let state) = local else { continue }
                 variables.append(
-                    NamedVar(name: state.root, initial: constantFunction(domain: process.domain, value: state.initial)))
+                    NamedVar(
+                        name: state.root,
+                        initial: staticInitialValue(
+                            constantFunction(domain: process.domain, value: state.initial),
+                            named: state.root
+                        )
+                    ))
             }
         }
 
@@ -113,8 +121,22 @@ enum AlgorithmLowerer {
             fairness: fairness)
     }
 
-    private static func constantFunction(domain: [TLAValue], value: TLAValue) -> TLAValue {
-        .function(Dictionary(uniqueKeysWithValues: domain.map { ($0, value) }))
+    private static func constantFunction(domain: [TLAValue], value: StateExpr) -> StateExpr {
+        let binding = "__pcal_initial_process"
+        return .functionLiteral(
+            .setLiteral(domain.map(StateExpr.value)),
+            binding,
+            value
+        )
+    }
+
+    /// Algorithm declarations are finite initial values. Keep the initial
+    /// state concrete so the checker, parser tree, and generated State agree.
+    private static func staticInitialValue(_ expression: StateExpr, named name: String) -> TLAValue {
+        guard let value = try? expression.evaluate(in: [:]) else {
+            preconditionFailure("Algorithm variable '\(name)' needs a closed formal initial expression.")
+        }
+        return value
     }
 
     private static func lower(

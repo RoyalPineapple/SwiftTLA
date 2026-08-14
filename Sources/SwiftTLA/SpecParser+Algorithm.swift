@@ -55,11 +55,33 @@ extension SpecParser {
         }
 
         let lowered = AlgorithmLowerer.lower(model)
+        let stateTypes = Dictionary(uniqueKeysWithValues: algorithmStateDeclarations(in: model).compactMap { state in
+            state.swiftTypeName.map { (state.root, $0) }
+        })
+        let localRoots: Set<String> = Set(model.processes.flatMap { process in
+            process.components.compactMap {
+                guard case .local(let state) = $0 else { return nil }
+                return state.root
+            }
+        })
         for variable in lowered.variables {
             if let index = result.variables.firstIndex(where: { $0.name == variable.name }) {
                 result.variables[index] = (variable.name, variable.initial, variable.initialSet, result.variables[index].swiftTypeName)
             } else {
-                result.variables.append((variable.name, variable.initial, variable.initialSet, nil))
+                let inferredType = stateTypes[variable.name]
+                let projectedType: String?
+                if localRoots.contains(variable.name)
+                    || (inferredType?.contains("Function<") == true && variable.name != "pc") {
+                    projectedType = "TLAValue"
+                } else {
+                    projectedType = inferredType
+                }
+                result.variables.append((
+                    variable.name,
+                    variable.initial,
+                    variable.initialSet,
+                    projectedType
+                ))
             }
         }
         let processTypes = Dictionary(uniqueKeysWithValues: model.processes.map { process in
@@ -80,6 +102,20 @@ extension SpecParser {
         result.fairness += lowered.fairness
     }
 
+    private static func algorithmStateDeclarations(in model: AlgorithmModel) -> [AlgorithmStateModel] {
+        model.components.flatMap { component in
+            switch component {
+            case .shared(let state): return [state]
+            case .process(let process):
+                return process.components.compactMap {
+                    guard case .local(let state) = $0 else { return nil }
+                    return state
+                }
+            default: return []
+            }
+        }
+    }
+
     private static func parseAlgorithmComponent(_ expression: ExprSyntax) -> AlgorithmComponentModel? {
         guard let call = expression.as(FunctionCallExprSyntax.self),
               let name = call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text
@@ -91,7 +127,7 @@ extension SpecParser {
                   let initialSyntax = call.arguments.first(where: { $0.label?.text == "initial" })?.expression,
                   let initial = literalAlgorithmValue(initialSyntax)
             else { return nil }
-            return .shared(.init(root: reference, initial: initial))
+            return .shared(.init(root: reference, initial: .value(initial)))
         case "Each":
             return parseEach(call)
         default:
@@ -147,15 +183,29 @@ extension SpecParser {
               let initializer = binding.initializer?.value.as(FunctionCallExprSyntax.self),
               initializer.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == expectedKind,
               let initialSyntax = initializer.arguments.first(where: { $0.label?.text == "initial" })?.expression,
-              let initial = literalAlgorithmValue(initialSyntax)
+              let initial = decodeStateExpr(initialSyntax)
         else { return nil }
 
         if let literalName = extractStringArg(initializer, index: 0), literalName != declaredName {
             return nil
         }
 
-        let state = AlgorithmStateModel(root: declaredName, initial: initial)
+        let state = AlgorithmStateModel(
+            root: declaredName,
+            initial: initial,
+            swiftTypeName: algorithmInitialTypeName(initialSyntax)
+        )
         return expectedKind == "SharedVar" ? .shared(state) : .local(state)
+    }
+
+    private static func algorithmInitialTypeName(_ expression: ExprSyntax) -> String? {
+        if let call = expression.as(FunctionCallExprSyntax.self),
+           let member = call.calledExpression.as(MemberAccessExprSyntax.self),
+           member.declName.baseName.text == "literal",
+           let base = member.base {
+            return base.description.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        return initialValueTypeName(from: expression)
     }
 
     private static func parseEachComponent(
@@ -172,7 +222,7 @@ extension SpecParser {
                   let initialSyntax = call.arguments.first(where: { $0.label?.text == "initial" })?.expression,
                   let initial = literalAlgorithmValue(initialSyntax)
             else { return nil }
-            return .local(.init(root: reference, initial: initial))
+            return .local(.init(root: reference, initial: .value(initial)))
         case "Do", "While":
             guard let label = algorithmLabel(call.arguments.first?.expression),
                   let closure = call.trailingClosure,
