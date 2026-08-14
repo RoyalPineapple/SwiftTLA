@@ -29,20 +29,26 @@ public struct LockModel {
             Extends("Integers")
             Algorithm("Lock") {
                 let lock = SharedVar(initial: 1)
+                let acquire = Macro<Int> { value in
+                    Await(value == 1)
+                    Assign(value, to: 0)
+                }
+                let release = Macro<Int> { value in
+                    Assign(value, to: 1)
+                }
 
                 Each(Process.all) { _ in
                     Do(Step.l0) {
                         Skip()
                     }
                     Do(Step.l1) {
-                        Await(lock == 1)
-                        Assign(lock, to: 0)
+                        acquire(lock)
                     }
                     Do(Step.cs) {
                         Skip()
                     }
                     Do(Step.l2) {
-                        Assign(lock, to: 1)
+                        release(lock)
                         Goto(Step.l0)
                     }
                 }
