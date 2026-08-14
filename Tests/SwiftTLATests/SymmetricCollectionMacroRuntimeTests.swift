@@ -135,9 +135,32 @@ public struct GeneratedContainsPredicateRuntime {
 
 @Suite(.serialized)
 struct SymmetricCollectionMacroRuntimeTests {
-  private struct Device: Identifiable {
-    let id: Int
-  }
+    private struct Device: Identifiable {
+        let id: Int
+    }
+
+    private enum TypedPhase: String, TLAValueType {
+        case disconnected
+
+        static var defaultValue: TypedPhase { .disconnected }
+        var tlaValue: TLAValue { .string(rawValue) }
+    }
+
+    @Test("Parser retains a typed enum symmetric-collection initial value")
+    func parserRetainsTypedInitialValue() {
+        let source = """
+        {
+          let devices = SymmetricCollectionVar<Device, TypedPhase>("devices")
+          SymmetricCollection(devices, verificationScope: 2, initial: TypedPhase.disconnected)
+        }
+        """
+        let closure = Parser.parse(source: source).statements.first!.item.as(ClosureExprSyntax.self)!
+
+        let parsed = SpecParser.parseSpecClosure(closure)
+
+        #expect(parsed.diagnostics.isEmpty)
+        #expect(parsed.symmetricCollections.first?.declaration.initial == .string("disconnected"))
+    }
 
   @Test("Parsed symmetric declarations retain type, scope, action, and source provenance")
   func parserRetainsCollectionProvenance() {

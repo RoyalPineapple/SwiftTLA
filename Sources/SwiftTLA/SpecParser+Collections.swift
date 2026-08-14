@@ -542,6 +542,10 @@ extension SpecParser {
         if let string = expression.as(StringLiteralExprSyntax.self) {
             return .string(string.segments.description.replacingOccurrences(of: "\"", with: ""))
         }
+        if let member = expression.as(MemberAccessExprSyntax.self),
+           member.base != nil {
+            return .string(member.declName.baseName.text)
+        }
         return nil
     }
 

@@ -77,7 +77,10 @@ enum MacroExpander {
             hasActions: !model.actions.isEmpty,
             symmetricCollections: model.symmetricCollections
         ))
-        decls.append(contentsOf: generateCollectionRuntimeMembers(model.symmetricCollections))
+        decls.append(contentsOf: generateCollectionRuntimeMembers(
+            model.symmetricCollections,
+            enumInfos: model.enumInfos
+        ))
         let ordinaryVariables = model.variables.filter { variable in
             !model.symmetricCollections.contains(where: { $0.name == variable.name })
         }
@@ -736,14 +739,16 @@ extension MacroExpander {
     }
 
     static func generateCollectionRuntimeMembers(
-        _ collections: [SpecParser.ParsedSymmetricCollection]
+        _ collections: [SpecParser.ParsedSymmetricCollection],
+        enumInfos: [ParsedEnumInfo]
     ) -> [DeclSyntax] {
         var declarations = collections.map { collection in
-            DeclSyntax(stringLiteral: """
+            let initial = collectionInitialLiteral(for: collection, enumInfos: enumInfos)
+            return DeclSyntax(stringLiteral: """
             public var \(collection.name) = IdentifiedModelCollection<\(collection.elementType), \(collection.valueType)>(
                 name: \"\(collection.name)\",
                 verificationScope: \(collection.verificationScope),
-                initial: \(literalExpr(for: collection.declaration.initial))
+                initial: \(initial)
             )
             """)
         }
@@ -755,6 +760,18 @@ extension MacroExpander {
         public static let symmetricCollectionScopes: [SymmetricCollectionScope] = [\(scopes)]
         """))
         return declarations
+    }
+
+    static func collectionInitialLiteral(
+        for collection: SpecParser.ParsedSymmetricCollection,
+        enumInfos: [ParsedEnumInfo]
+    ) -> String {
+        guard let enumInfo = enumInfos.first(where: { $0.typeName == collection.valueType }),
+              let match = enumInfo.cases.first(where: { $0.value == collection.declaration.initial })
+        else {
+            return literalExpr(for: collection.declaration.initial)
+        }
+        return ".\(match.name)"
     }
 
 }

@@ -78,7 +78,9 @@ extension MacroExpander {
                     guard let match = actual.firstIndex(where: {
                         Self.spec.statesAreEquivalent($0, successor)
                     }) else {
-                        throw VerificationError("\\(invocation): missing successor \\(successor)")
+                        throw VerificationError(
+                            "\\(invocation): missing successor. Expected \\(successor); actual successors: \\(actual)"
+                        )
                     }
                     actual.remove(at: match)
                 }
