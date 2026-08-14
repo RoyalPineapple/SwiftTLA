@@ -60,6 +60,17 @@ struct UpstreamParityTests {
         }
     }
 
+    @Test("AsynchInterface typed record model matches its validated state count")
+    func asynchInterfaceTypedRecordParity() throws {
+        try AsynchInterfaceModel.verifySpec()
+        let checker = ModelChecker(spec: AsynchInterfaceModel.spec, maxStates: 50_000)
+        #expect(try checker.exploreGraph().states.count == Example.asynchInterface.expectedDistinct)
+        guard case .ok = try checker.check() else {
+            Issue.record("Typed AsynchInterface model did not verify")
+            return
+        }
+    }
+
     @Test("Sync termination detector uses typed finite function state")
     func syncTerminationTypedFunctionParity() throws {
         try SyncTerminationDetectionModel.verifySpec()
