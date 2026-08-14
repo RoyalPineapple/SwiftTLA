@@ -1499,11 +1499,11 @@
       "features": [
         "pluscal"
       ],
-      "swift_status": "unported",
+      "swift_status": "ported",
       "baseline": {
-        "distinct": null,
-        "result": "error",
-        "error": "Error: Parsing or semantic analysis failed."
+        "distinct": 4,
+        "result": "success",
+        "error": null
       }
     },
     {

@@ -282,13 +282,14 @@ the supported surface.
 
 ## Port inventory
 
-**25/25 TLC parity** — `scripts/validate_upstream_parity.sh` vs [tlaplus/Examples](https://github.com/tlaplus/Examples)
+**Selected TLC parity ports** — `scripts/validate_upstream_parity.sh` checks these ports against [tlaplus/Examples](https://github.com/tlaplus/Examples).
 
 | Spec | States | Key features |
 |------|--------|-------------|
 | AsynchInterface | 6 | Records, sequences |
 | Barrier_N6 | 64 | CHOOSE per-value, counters |
 | BinarySearch | 27,963 | PlusCal `while`, scoped `with`, bounded sorted sequences |
+| Consensus | 4 | PlusCal parameterless `macro`, `when`, scoped `with`, weak fairness |
 | CatOddBoxes / CatEvenBoxes | 30 / 48 | Nondet init |
 | Chameneos M=4,N=4 | 34,534 | RECURSIVE Sum, tuples, @ self-ref, existsAction |
 | ChangRoberts N=3 | 137 | CHOOSE per-value, per-node actions |

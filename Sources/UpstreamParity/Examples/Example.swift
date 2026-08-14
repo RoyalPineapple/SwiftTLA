@@ -36,6 +36,7 @@ public enum Example {
         cigaretteSmokers,
         coffeeCanMax100,
         coffeeCanMax5,
+        consensus,
         dieHardTypeOK,
         diningPhilosophersNP5,
         ewd840,

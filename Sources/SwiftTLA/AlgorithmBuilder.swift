@@ -679,6 +679,11 @@ extension SharedVariable where Value: FormalSetValue {
         .equal(.cardinality(stateExpr), .value(.int(0)))
     }
 
+    /// Tests whether this formal set is contained in another formal set.
+    public func isSubset(of other: some StateExprConvertible) -> StateExpr {
+        stateExpr.isSubset(of: other)
+    }
+
     public var cardinality: Expr<Int> {
         Expr(.cardinality(stateExpr))
     }

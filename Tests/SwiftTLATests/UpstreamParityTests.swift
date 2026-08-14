@@ -139,6 +139,12 @@ struct UpstreamParityTests {
         #expect(BinarySearchModel.spec.tlaModule.contains("(Next)"))
     }
 
+    @Test("Consensus PlusCal port matches its bounded TLC configuration")
+    func consensusParity() throws {
+        let count = try ConsensusModel.verifySpec()
+        #expect(count == Example.consensus.expectedDistinct)
+    }
+
     @Test("EWD840 uses typed finite function state")
     func ewd840TypedFunctionParity() throws {
         try EWD840Model.verifySpec()
@@ -222,6 +228,12 @@ struct UpstreamParityNativeTests {
             try TwoPhaseWithBackupManagerModel.verifySpec()
                 == Example.twoPhaseWithBackupManager.expectedDistinct
         )
+    }
+
+    @Test("Consensus preserves the published parameterless macro model")
+    func consensusNativeParity() throws {
+        ConsensusModel._checkParserTree()
+        #expect(try ConsensusModel.verifySpec() == Example.consensus.expectedDistinct)
     }
 
     // Barrier
