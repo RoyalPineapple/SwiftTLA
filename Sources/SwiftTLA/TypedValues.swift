@@ -61,6 +61,12 @@ public struct TLARecordEntry<Schema: TLARecordSchema>: Sendable {
     self.name = field.name
     self.value = value.stateExpr
   }
+
+  public init<Value>(_ field: TLAField<Schema, Value>, _ value: WithValue<Value>)
+  where Value: TLAValueType {
+    self.name = field.name
+    self.value = value.stateExpr
+  }
 }
 
 public struct Record<Schema: TLARecordSchema>: TLAValueType, Hashable, Sendable {
@@ -228,6 +234,12 @@ extension Expr {
     Expr<Record<Schema>>(.except(raw, .value(.string(field.name)), value.raw))
   }
 
+  public func updating<Schema: TLARecordSchema, Value>(
+    _ field: TLAField<Schema, Value>, to value: WithValue<Value>
+  ) -> Expr<Record<Schema>> where T == Record<Schema> {
+    Expr<Record<Schema>>(.except(raw, .value(.string(field.name)), value.stateExpr))
+  }
+
   public func updating<Domain: FiniteTLAValueDomain, Range: TLAValueType>(
     _ index: Domain, to value: Expr<Range>
   ) -> Expr<Function<Domain, Range>> where T == Function<Domain, Range> {
@@ -277,6 +289,13 @@ extension Expr {
     _ index: ProcessIdentifier<Domain>, to value: Range
   ) -> Expr<Function<Domain, Range>> where T == Function<Domain, Range> {
     updating(index, to: Expr<Range>(.value(value.tlaValue)))
+  }
+
+  public func updating<Domain: FiniteDomainKey, Range: TLAValueType>(
+    _ index: WithValue<Domain>, _ update: (Expr<Range>) -> Expr<Range>
+  ) -> Expr<Function<Domain, Range>> where T == Function<Domain, Range> {
+    Expr<Function<Domain, Range>>(
+      .except(raw, index.stateExpr, update(Expr<Range>(.functionApply(raw, index.stateExpr))).raw))
   }
 }
 

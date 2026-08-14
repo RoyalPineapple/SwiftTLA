@@ -103,6 +103,24 @@ public struct Expr<T: TLAValueType>: StateExprConvertible, Sendable {
   public let raw: StateExpr
   public init(_ raw: StateExpr) { self.raw = raw }
   public var stateExpr: StateExpr { raw }
+
+  /// Typed equality keeps enum literals contextual in formal expressions:
+  /// `car[Car.door] == .closed`.
+  public static func == (lhs: Expr<T>, rhs: T) -> StateExpr {
+    .equal(lhs.raw, .value(rhs.tlaValue))
+  }
+
+  public static func == (lhs: T, rhs: Expr<T>) -> StateExpr {
+    .equal(.value(lhs.tlaValue), rhs.raw)
+  }
+
+  public static func != (lhs: Expr<T>, rhs: T) -> StateExpr {
+    .notEqual(lhs.raw, .value(rhs.tlaValue))
+  }
+
+  public static func != (lhs: T, rhs: Expr<T>) -> StateExpr {
+    .notEqual(.value(lhs.tlaValue), rhs.raw)
+  }
 }
 
 public struct Var<T: TLAValueType>: Sendable, CustomStringConvertible, SpecComponent {
@@ -523,12 +541,14 @@ public prefix func ! <E: StateExprConvertible>(expression: E) -> StateExpr {
 public func == <L: StateExprConvertible, R: StateExprConvertible>(lhs: L, rhs: R) -> StateExpr {
   .equal(lhs.stateExpr, rhs.stateExpr)
 }
+
 extension StateExpr {
   public static func == (lhs: StateExpr, rhs: StateExpr) -> StateExpr { .equal(lhs, rhs) }
 }
 public func != <L: StateExprConvertible, R: StateExprConvertible>(lhs: L, rhs: R) -> StateExpr {
   .notEqual(lhs.stateExpr, rhs.stateExpr)
 }
+
 public func < <L: StateExprConvertible, R: StateExprConvertible>(lhs: L, rhs: R) -> StateExpr {
   .lessThan(lhs.stateExpr, rhs.stateExpr)
 }

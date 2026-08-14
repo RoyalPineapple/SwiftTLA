@@ -56,12 +56,34 @@ public struct WithValue<Value: TLAValueType>: StateExprConvertible, Sendable {
     public var stateExpr: StateExpr { expression }
 
     public var expr: Expr<Value> { Expr(expression) }
+
+    /// Keep a typed enum literal contextual when it is compared to a `With` value.
+    public static func == (lhs: WithValue<Value>, rhs: Value) -> StateExpr {
+        .equal(lhs.stateExpr, .value(rhs.tlaValue))
+    }
+
+    public static func == (lhs: Value, rhs: WithValue<Value>) -> StateExpr {
+        .equal(.value(lhs.tlaValue), rhs.stateExpr)
+    }
+
+    public static func != (lhs: WithValue<Value>, rhs: Value) -> StateExpr {
+        .notEqual(lhs.stateExpr, .value(rhs.tlaValue))
+    }
+
+    public static func != (lhs: Value, rhs: WithValue<Value>) -> StateExpr {
+        .notEqual(.value(lhs.tlaValue), rhs.stateExpr)
+    }
 }
 
 extension WithValue {
     public subscript<Schema: TLARecordSchema, Field>(_ field: TLAField<Schema, Field>) -> Expr<Field>
     where Value == Record<Schema>, Field: TLAValueType {
         Expr<Field>(.recordAccess(stateExpr, field.name))
+    }
+
+    public subscript<Domain: FiniteDomainKey, Range>(_ index: WithValue<Domain>) -> Expr<Range>
+    where Value == Function<Domain, Range>, Range: TLAValueType {
+        Expr<Range>(.functionApply(stateExpr, index.stateExpr))
     }
 }
 
@@ -124,6 +146,11 @@ extension SharedVariable {
         Expr<Range>(.functionApply(stateExpr, index.raw))
     }
 
+    public subscript<Domain: FiniteDomainKey, Range>(_ index: WithValue<Domain>) -> Expr<Range>
+    where Value == Function<Domain, Range>, Range: TLAValueType {
+        Expr<Range>(.functionApply(stateExpr, index.stateExpr))
+    }
+
     public func updating<Domain: FiniteTLAValueDomain, Range>(
         _ index: Domain,
         _ update: (Expr<Range>) -> Expr<Range>
@@ -166,6 +193,15 @@ extension SharedVariable {
     ) -> Expr<Function<Domain, Range>> where Value == Function<Domain, Range>, Range: TLAValueType {
         Expr<Function<Domain, Range>>(
             .except(stateExpr, index.raw, update(Expr<Range>(.functionApply(stateExpr, index.raw))).raw)
+        )
+    }
+
+    public func updating<Domain: FiniteDomainKey, Range>(
+        _ index: WithValue<Domain>,
+        _ update: (Expr<Range>) -> Expr<Range>
+    ) -> Expr<Function<Domain, Range>> where Value == Function<Domain, Range>, Range: TLAValueType {
+        Expr<Function<Domain, Range>>(
+            .except(stateExpr, index.stateExpr, update(Expr<Range>(.functionApply(stateExpr, index.stateExpr))).raw)
         )
     }
 
