@@ -30,8 +30,8 @@ private struct DemoHomeView: View {
                 .tabItem { Text("Duck, Duck, Leader") }
             ElevatorBankView()
                 .tabItem { Text("Elevator Bank") }
-            GeneratedTestsView()
-                .tabItem { Text("Generated Tests") }
+            GeneratedSurfaceView()
+                .tabItem { Text("Generated Surface") }
         }
         .padding(24)
         .background(Color.black.opacity(0.9))
@@ -373,26 +373,29 @@ private struct ElevatorBankControls: View {
     }
 }
 
-private struct GeneratedTestsView: View {
+private struct GeneratedSurfaceView: View {
     @State private var results: [GeneratedDemoTestTarget: [GeneratedDemoTestResult]] = [:]
     @State private var running: GeneratedDemoTestTarget?
 
     var body: some View {
         DemoScreen(
-            title: "Generated Tests",
-            subtitle: "Run the verification helpers generated beside each machine."
+            title: "Generated Surface",
+            subtitle: "One formal model produces native state, adapters, and verification helpers."
         ) {
-            VStack(spacing: 16) {
-                ForEach(GeneratedDemoTestTarget.allCases) { target in
-                    GeneratedTestCard(
-                        target: target,
-                        results: results[target] ?? [],
-                        isRunning: running == target,
-                        run: { run(target) }
-                    )
+            ScrollView {
+                VStack(spacing: 16) {
+                    GeneratedSurfaceSummary()
+                    ForEach(GeneratedDemoTestTarget.allCases) { target in
+                        GeneratedTestCard(
+                            target: target,
+                            results: results[target] ?? [],
+                            isRunning: running == target,
+                            run: { run(target) }
+                        )
+                    }
                 }
+                .frame(maxWidth: 720)
             }
-            .frame(maxWidth: 720)
         }
     }
 
@@ -409,6 +412,48 @@ private struct GeneratedTestsView: View {
     }
 }
 
+private struct GeneratedSurfaceSummary: View {
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("What the demonstrations consume")
+                .font(.headline)
+            HStack(alignment: .top, spacing: 18) {
+                GeneratedSurfaceItem(
+                    title: "Typed machine",
+                    detail: "Each model exposes State, ActionLabel, and TransitionResult."
+                )
+                GeneratedSurfaceItem(
+                    title: "Native adapters",
+                    detail: "The bucket and elevator scenes use Observable. The ring uses Actor."
+                )
+                GeneratedSurfaceItem(
+                    title: "Verification suite",
+                    detail: "The cards run the helpers that the downstream test target also exercises."
+                )
+            }
+        }
+        .padding(18)
+        .background(.white.opacity(0.08), in: .rect(cornerRadius: 16))
+        .overlay(RoundedRectangle(cornerRadius: 16).stroke(.white.opacity(0.14)))
+    }
+}
+
+private struct GeneratedSurfaceItem: View {
+    let title: String
+    let detail: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            Text(title)
+                .font(.subheadline.weight(.semibold))
+            Text(detail)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
 private struct GeneratedTestCard: View {
     let target: GeneratedDemoTestTarget
     let results: [GeneratedDemoTestResult]
@@ -420,7 +465,7 @@ private struct GeneratedTestCard: View {
             HStack {
                 VStack(alignment: .leading, spacing: 3) {
                     Text(target.title).font(.headline)
-                    Text("Specification, graph, native transitions, and invariants.")
+                    Text("Generated verification helpers, exercised here and by the downstream test target.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -433,7 +478,7 @@ private struct GeneratedTestCard: View {
             }
 
             if results.isEmpty {
-                Text("Not run yet.")
+                Text("Run the generated suite for this finite model.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             } else {
