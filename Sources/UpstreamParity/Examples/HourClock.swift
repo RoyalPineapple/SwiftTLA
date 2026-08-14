@@ -7,7 +7,6 @@ public struct HourClockModel {
         #spec("HourClock") {
             Extends("Naturals")
             let hr = SharedVar(in: 1...12)
-            hr
             Action("HCnxt") {
                 (hr != 12 && hr.becomes(hr + 1)) ||
                 (hr == 12 && hr.becomes(1))
@@ -25,6 +24,6 @@ extension Example {
         upstreamCfg: "specifications/SpecifyingSystems/HourClock/HourClock.cfg",
         expectedDistinct: 12,
         spec: HourClockModel.spec,
-        notes: "Pure DSL: zero Swift computation. Var<T> + builders only. TLC = 12.",
+        notes: "Pure DSL: typed SharedVar + builders only. TLC = 12.",
     )
 }

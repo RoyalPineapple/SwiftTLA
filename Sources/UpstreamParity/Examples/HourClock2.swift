@@ -4,10 +4,9 @@ import SwiftTLAMacros
 @TLAModel
 public struct HourClock2Model {
     public static var spec: TLASpec {
-        TLASpec("HourClock2") {
+        #spec("HourClock2") {
             Extends("Naturals")
-            let hr = Var<Int>("hr")
-            Variable(hr, in: 1...12)
+            let hr = SharedVar(in: 1...12)
             Action("HCnxt2") {
                 hr.becomes((hr % 12) + 1)
             }

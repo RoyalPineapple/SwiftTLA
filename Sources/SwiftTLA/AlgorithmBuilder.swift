@@ -146,12 +146,32 @@ extension SharedVariable where Value == Int {
         Expr(.add(lhs.stateExpr, .int(rhs)))
     }
 
+    public static func + (_ lhs: SharedVariable, _ rhs: SharedVariable) -> Expr<Int> {
+        Expr(.add(lhs.stateExpr, rhs.stateExpr))
+    }
+
     public static func + (_ lhs: SharedVariable, _ rhs: Expr<Int>) -> Expr<Int> {
         Expr(.add(lhs.stateExpr, rhs.raw))
     }
 
     public static func - (_ lhs: SharedVariable, _ rhs: Int) -> Expr<Int> {
         Expr(.subtract(lhs.stateExpr, .int(rhs)))
+    }
+
+    public static func - (_ lhs: SharedVariable, _ rhs: SharedVariable) -> Expr<Int> {
+        Expr(.subtract(lhs.stateExpr, rhs.stateExpr))
+    }
+
+    public static func - (_ lhs: SharedVariable, _ rhs: Expr<Int>) -> Expr<Int> {
+        Expr(.subtract(lhs.stateExpr, rhs.raw))
+    }
+
+    public static func % (_ lhs: SharedVariable, _ rhs: Int) -> Expr<Int> {
+        Expr(.modulo(lhs.stateExpr, .int(rhs)))
+    }
+
+    public static func - (_ lhs: Int, _ rhs: SharedVariable) -> Expr<Int> {
+        Expr(.subtract(.int(lhs), rhs.stateExpr))
     }
 
     public static func < (_ lhs: SharedVariable, _ rhs: Int) -> StateExpr {
