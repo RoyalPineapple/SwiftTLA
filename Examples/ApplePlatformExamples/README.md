@@ -3,6 +3,8 @@
 This package contains two separate SwiftTLA consumer applications:
 
 - `bluetooth-example`: a CoreBluetooth central and per-peripheral actor example.
+- `bluetooth-cli`: the same Bluetooth actor as a terminal scanner. Use
+  `swift run bluetooth-cli --seconds 20`.
 - `av-pipeline-example`: an AVFoundation capture, writer, and player pipeline.
 
 `Bluetooth` and `AVPipeline` are separate library targets. Each app imports only
