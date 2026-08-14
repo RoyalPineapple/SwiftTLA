@@ -17,6 +17,10 @@ struct ElevatorBankDemoTests {
             _tlaAlphaEquivalent(builderTree, ElevatorBank._parserTree),
             Comment(rawValue: _tlaFidelityDiagnostic(ElevatorBank._parserTree, builderTree))
         )
+        try ElevatorBank.verifySpec()
+        try ElevatorBank.verifyTransitions()
+        try ElevatorBank.verifyInvariants()
+        #expect(try ElevatorBank.transitionMatrix().isEmpty == false)
 
         var machine = ElevatorBank()
         #expect(machine.state.cars[.carA][ElevatorBank.CarSchema.floor] == .one)

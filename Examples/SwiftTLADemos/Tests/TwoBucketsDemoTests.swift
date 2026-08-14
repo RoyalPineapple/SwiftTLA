@@ -7,6 +7,9 @@ struct TwoBucketsDemoTests {
         var machine = TwoBuckets()
 
         try TwoBuckets.verifySpec()
+        try TwoBuckets.verifyTransitions()
+        try TwoBuckets.verifyInvariants()
+        #expect(try TwoBuckets.transitionMatrix().isEmpty == false)
 
         #expect(try machine.availableActions() == [
             .fillThree,
