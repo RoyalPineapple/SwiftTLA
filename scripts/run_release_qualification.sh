@@ -16,10 +16,10 @@ if [ "$lint_status" -ne 0 ]; then
 fi
 
 echo "Run tests"
-swift test
+swift test --parallel --num-workers 1
 
 echo "Run coverage"
-swift test --enable-code-coverage
+swift test --enable-code-coverage --parallel --num-workers 1
 
 echo "Build package"
 swift build
