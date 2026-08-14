@@ -105,6 +105,10 @@ public struct ChangRoberts {
                         Goto(Step.deliver)
                     }
                 }
+
+                Invariant("LeaderDomain") {
+                    leader >= 0 && leader <= 12
+                }
             }
         }
     }

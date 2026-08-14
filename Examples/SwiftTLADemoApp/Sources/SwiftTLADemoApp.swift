@@ -30,6 +30,8 @@ private struct DemoHomeView: View {
                 .tabItem { Text("Duck, Duck, Leader") }
             ElevatorBankView()
                 .tabItem { Text("Elevator Bank") }
+            GeneratedTestsView()
+                .tabItem { Text("Generated Tests") }
         }
         .padding(24)
         .background(Color.black.opacity(0.9))
@@ -368,6 +370,89 @@ private struct ElevatorBankControls: View {
             Spacer()
             Button("Reset", systemImage: "arrow.counterclockwise", action: reset)
         }
+    }
+}
+
+private struct GeneratedTestsView: View {
+    @State private var results: [GeneratedDemoTestTarget: [GeneratedDemoTestResult]] = [:]
+    @State private var running: GeneratedDemoTestTarget?
+
+    var body: some View {
+        DemoScreen(
+            title: "Generated Tests",
+            subtitle: "Run the verification helpers generated beside each machine."
+        ) {
+            VStack(spacing: 16) {
+                ForEach(GeneratedDemoTestTarget.allCases) { target in
+                    GeneratedTestCard(
+                        target: target,
+                        results: results[target] ?? [],
+                        isRunning: running == target,
+                        run: { run(target) }
+                    )
+                }
+            }
+            .frame(maxWidth: 720)
+        }
+    }
+
+    private func run(_ target: GeneratedDemoTestTarget) {
+        guard running == nil else { return }
+        running = target
+        Task { @MainActor in
+            let output = await Task.detached(priority: .userInitiated) {
+                GeneratedDemoTestSuite.run(target)
+            }.value
+            results[target] = output
+            running = nil
+        }
+    }
+}
+
+private struct GeneratedTestCard: View {
+    let target: GeneratedDemoTestTarget
+    let results: [GeneratedDemoTestResult]
+    let isRunning: Bool
+    let run: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(target.title).font(.headline)
+                    Text("Specification, graph, native transitions, and invariants.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Button(isRunning ? "Running" : "Run", systemImage: isRunning ? "hourglass" : "checkmark.circle") {
+                    run()
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(isRunning)
+            }
+
+            if results.isEmpty {
+                Text("Not run yet.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } else {
+                ForEach(results) { result in
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        Image(systemName: result.passed ? "checkmark.circle.fill" : "xmark.circle.fill")
+                            .foregroundStyle(result.passed ? .green : .red)
+                        Text(result.check).font(.subheadline.weight(.medium))
+                        Spacer()
+                        Text(result.detail)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+        }
+        .padding(18)
+        .background(.white.opacity(0.08), in: .rect(cornerRadius: 16))
+        .overlay(RoundedRectangle(cornerRadius: 16).stroke(.white.opacity(0.14)))
     }
 }
 

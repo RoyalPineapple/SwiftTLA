@@ -237,6 +237,15 @@ public struct ElevatorBank {
                         Goto(Step.operate)
                     }
                 }
+
+                Invariant("CarFloorDomain") {
+                    cars[.carA][CarSchema.floor] == .one
+                        || cars[.carA][CarSchema.floor] == .two
+                        || cars[.carA][CarSchema.floor] == .three
+                    cars[.carB][CarSchema.floor] == .one
+                        || cars[.carB][CarSchema.floor] == .two
+                        || cars[.carB][CarSchema.floor] == .three
+                }
             }
         }
     }

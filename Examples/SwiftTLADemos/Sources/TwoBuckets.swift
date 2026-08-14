@@ -135,6 +135,11 @@ public struct TwoBuckets {
                         Goto(Step.pourFiveIntoThree)
                     }
                 }
+
+                Invariant("Capacity") {
+                    three >= 0 && three <= 3
+                    five >= 0 && five <= 5
+                }
             }
         }
     }
