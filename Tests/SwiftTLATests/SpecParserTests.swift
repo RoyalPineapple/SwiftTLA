@@ -676,6 +676,13 @@ private func parseClosure(_ source: String) -> ClosureExprSyntax {
         )
     }
 
+    @Test func parseAlgorithmFairnessDeclaration() {
+        #expect(
+            SpecParser.decodeFairness(parseExpression("WeakFairness(\"Next\")").as(FunctionCallExprSyntax.self)!)
+                == FairnessCondition.weakFairness("Next")
+        )
+    }
+
     @Test func parseUnknownReturnsNil() {
         #expect(SpecParser.decodeFairness(parseExpression("x.unknown()").as(FunctionCallExprSyntax.self)!) == nil)
     }

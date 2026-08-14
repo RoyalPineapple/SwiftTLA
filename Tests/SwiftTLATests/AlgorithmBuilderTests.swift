@@ -435,6 +435,25 @@ struct AlgorithmBuilderTests {
         ]))
     }
 
+    @Test("a false outer guard does not evaluate a body-local LET")
+    func shortCircuitsBoundedActionBindings() throws {
+        let action = ActionExpr.and(
+            .guard_(.value(.bool(false))),
+            .define(
+                "middle",
+                .tupleDynamicAccess(.variable("sequence"), .value(.int(0))),
+                .assign("result", .variable("middle"))
+            )
+        )
+
+        let successors = try ActionEnumerator.enumerate(
+            action,
+            from: ["sequence": .tuple([]), "result": .int(0)],
+            varNames: ["sequence", "result"]
+        )
+        #expect(successors.isEmpty)
+    }
+
     @Test("Assert is required only on the branch that reaches it")
     func scopesAssertToItsConditionalBranch() throws {
         let algorithm = Algorithm("ConditionalAssert") {

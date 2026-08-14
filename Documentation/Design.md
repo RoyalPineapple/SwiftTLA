@@ -252,6 +252,7 @@ the supported surface.
 | **Sequences — Len** | ✓ | `.count` |
 | **Sequences — element** | ✓ | `sequence[index]` or `.at(i)` |
 | **Bounded sequence domain** | ✓ | `Sequences(of: values, lengths: 0...n)` |
+| **Bounded sorted integer sequence domain** | ✓ | `SortedSequences(of: values, lengths: 0...n)` |
 | **Sequences — concatenate** | ✓ | `.concatenating(other)` |
 | **Sets — union/intersection/diff** | ✓ | `.union`, `.intersection`, `.subtracting` |
 | **Sets — subset** | ✓ | `.isSubset(of:)` |
@@ -287,6 +288,7 @@ the supported surface.
 |------|--------|-------------|
 | AsynchInterface | 6 | Records, sequences |
 | Barrier_N6 | 64 | CHOOSE per-value, counters |
+| BinarySearch | 27,963 | PlusCal `while`, scoped `with`, bounded sorted sequences |
 | CatOddBoxes / CatEvenBoxes | 30 / 48 | Nondet init |
 | Chameneos M=4,N=4 | 34,534 | RECURSIVE Sum, tuples, @ self-ref, existsAction |
 | ChangRoberts N=3 | 137 | CHOOSE per-value, per-node actions |

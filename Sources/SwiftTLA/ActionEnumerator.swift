@@ -25,6 +25,14 @@ public enum ActionEnumerator {
         oldState: [String: TLAValue],
         varNames: [String]
     ) throws -> [[String: TLAValue]] {
+        // `distributeOr` turns an action conditional into guards plus a
+        // selected branch. Check guards that are outside a `LET` or `WITH`
+        // binding before evaluating that binding. A false loop guard must not
+        // evaluate a body-local expression such as `sequence[mid]`.
+        guard try outerGuardsAreEnabled(in: action, oldState: oldState) else {
+            return []
+        }
+
         // Handle LET bindings: evaluate value, substitute into body
         if case .define(let name, let valueExpr, let body) = action {
             let val = try valueExpr.evaluate(in: oldState)
@@ -119,6 +127,24 @@ public enum ActionEnumerator {
         }
     }
 
+    /// Evaluates only guards in the enclosing action context. Guards nested in
+    /// a binding may refer to its local name, so their evaluation remains with
+    /// normal binding expansion below.
+    private static func outerGuardsAreEnabled(
+        in action: ActionExpr,
+        oldState: [String: TLAValue]
+    ) throws -> Bool {
+        switch action {
+        case .guard_(let condition):
+            return try condition.evaluateBool(in: oldState)
+        case .and(let lhs, let rhs):
+            return try outerGuardsAreEnabled(in: lhs, oldState: oldState)
+                && outerGuardsAreEnabled(in: rhs, oldState: oldState)
+        case .or, .ifElse, .define, .existsAction, .assign, .unchanged, .chooseAction:
+            return true
+        }
+    }
+
     private static func extractExistsActions(_ action: ActionExpr) -> [(String, StateExpr, ActionExpr)] {
         switch action {
         case .existsAction(let v, let s, let b): return [(v, s, b)]
@@ -155,12 +181,7 @@ public enum ActionEnumerator {
                 expanded.map { .or(lhs, $0) }
             }
         case .ifElse(let condition, let then, let otherwise):
-            if let expanded = try expandFirstExistsAction(in: then, oldState: oldState) {
-                return expanded.map { .ifElse(condition, $0, otherwise) }
-            }
-            return try expandFirstExistsAction(in: otherwise, oldState: oldState).map { expanded in
-                expanded.map { .ifElse(condition, then, $0) }
-            }
+            return [try condition.evaluateBool(in: oldState) ? then : otherwise]
         case .assign, .unchanged, .guard_, .chooseAction, .define:
             return nil
         }
@@ -191,12 +212,7 @@ public enum ActionEnumerator {
                 expanded.map { .or(lhs, $0) }
             }
         case .ifElse(let condition, let then, let otherwise):
-            if let expanded = try expandFirstDefinition(in: then, oldState: oldState) {
-                return expanded.map { .ifElse(condition, $0, otherwise) }
-            }
-            return try expandFirstDefinition(in: otherwise, oldState: oldState).map { expanded in
-                expanded.map { .ifElse(condition, then, $0) }
-            }
+            return [try condition.evaluateBool(in: oldState) ? then : otherwise]
         case .assign, .unchanged, .guard_, .chooseAction, .existsAction:
             return nil
         }

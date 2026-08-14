@@ -247,6 +247,24 @@ public func Sequences<Element: TLAValueType>(
   return Expr<SetExpr<TupleExpr<Element>>>(.setLiteral(sequences))
 }
 
+/// Creates a finite formal set of nondecreasing integer sequences.
+///
+/// This is the bounded model-checking form of a sorted `Seq(Values)` domain.
+/// It is useful when the sortedness is an assumption of the algorithm, as in
+/// binary search, rather than state that the algorithm itself must establish.
+// swiftlint:disable:next identifier_name
+public func SortedSequences(
+  of elements: Expr<SetExpr<Int>>,
+  lengths: ClosedRange<Int>
+) -> Expr<SetExpr<TupleExpr<Int>>> {
+  guard case .setLiteral(let members) = elements.raw else {
+    preconditionFailure("SortedSequences(of:lengths:) requires SetExpr.literal(...) as its element domain")
+  }
+  return Expr<SetExpr<TupleExpr<Int>>>(.setLiteral(
+    formalSequenceExpressions(members: members, lengths: lengths).filter(formalIntegerSequenceIsSorted)
+  ))
+}
+
 /// The shared finite expansion used by the runtime builder and source parser.
 /// Keeping this operation here makes the two construction paths enumerate the
 /// same sequence domain without exposing host-language arrays to a model.
@@ -269,6 +287,16 @@ func formalSequenceExpressions(
     result += prefixes.map(StateExpr.tupleLiteral)
   }
   return result
+}
+
+func formalIntegerSequenceIsSorted(_ expression: StateExpr) -> Bool {
+  guard case .tupleLiteral(let values) = expression else { return false }
+  let integers = values.compactMap { value -> Int? in
+    guard case .value(.int(let integer)) = value else { return nil }
+    return integer
+  }
+  return integers.count == values.count
+    && zip(integers, integers.dropFirst()).allSatisfy { $0 <= $1 }
 }
 
 extension Expr {
@@ -485,6 +513,13 @@ extension Expr {
 extension Expr where T: FormalTupleValue {
   public var count: Expr<Int> {
     Expr<Int>(.tupleLength(raw))
+  }
+}
+
+extension Expr where T == Int {
+  /// Divides formal integers with TLA+ integer-division semantics.
+  public func integerDivided(by divisor: Int) -> Expr<Int> {
+    Expr(.integerDivide(raw, .int(divisor)))
   }
 }
 

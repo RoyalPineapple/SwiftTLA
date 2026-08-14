@@ -102,15 +102,19 @@ private struct TypedQuantifierGeneratedModel {
         )
     }
 
-    @Test("bounded sequences and terminal predicates parse as formal expressions")
+    @Test("bounded sequence domains and terminal predicates parse as formal expressions")
     func boundedSequencesAndFinishedParse() throws {
         let sequenceSource = "Sequences(of: SetExpr<Int>.literal(0, 1), lengths: 0...2)"
         let sequenceSyntax = Parser.parse(source: sequenceSource).statements.first!.item.as(ExprSyntax.self)!
+        let sortedSource = "SortedSequences(of: SetExpr<Int>.literal(0, 1, 2), lengths: 0...2)"
+        let sortedSyntax = Parser.parse(source: sortedSource).statements.first!.item.as(ExprSyntax.self)!
         let terminalSource = "(!Finished()) || i == f.count + 1"
         let terminalSyntax = Parser.parse(source: terminalSource).statements.first!.item.as(ExprSyntax.self)!
 
         let runtime = Sequences(of: SetExpr<Int>.literal(0, 1), lengths: 0...2)
+        let sortedRuntime = SortedSequences(of: SetExpr<Int>.literal(0, 1, 2), lengths: 0...2)
         let parsed = try #require(SpecParser.decodeStateExpr(sequenceSyntax))
+        let parsedSorted = try #require(SpecParser.decodeStateExpr(sortedSyntax))
 
         #expect(try runtime.raw.evaluate(in: [:]) == .set([
             .tuple([]), .tuple([.int(0)]), .tuple([.int(1)]),
@@ -118,6 +122,13 @@ private struct TypedQuantifierGeneratedModel {
             .tuple([.int(1), .int(0)]), .tuple([.int(1), .int(1)])
         ]))
         #expect(parsed == runtime.raw)
+        #expect(parsedSorted == sortedRuntime.raw)
+        #expect(try sortedRuntime.raw.evaluate(in: [:]) == .set([
+            .tuple([]),
+            .tuple([.int(0)]), .tuple([.int(1)]), .tuple([.int(2)]),
+            .tuple([.int(0), .int(0)]), .tuple([.int(0), .int(1)]), .tuple([.int(0), .int(2)]),
+            .tuple([.int(1), .int(1)]), .tuple([.int(1), .int(2)]), .tuple([.int(2), .int(2)])
+        ]))
         #expect(SpecParser.decodeStateExpr(terminalSyntax) != nil)
     }
 

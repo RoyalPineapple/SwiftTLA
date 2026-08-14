@@ -1168,6 +1168,17 @@ public func If(
 /// Builds a typed formal conditional value.
 ///
 /// This is distinct from the statement-builder `If(condition) { ... } else: { ... }` form.
+public func If(
+    _ condition: some StateExprConvertible,
+    then: StateExpr,
+    else otherwise: StateExpr
+) -> StateExpr {
+    .ifThenElse(condition.stateExpr, then.stateExpr, otherwise.stateExpr)
+}
+
+/// Builds a typed formal conditional value.
+///
+/// This is distinct from the statement-builder `If(condition) { ... } else: { ... }` form.
 public func If<Value: TLAValueType>(
     _ condition: some StateExprConvertible,
     then: Value,

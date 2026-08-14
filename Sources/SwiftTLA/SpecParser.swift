@@ -158,14 +158,16 @@ public enum SpecParser {
     /// of TLA+ `Seq(S)`, not a Swift array literal.
     private static func decodeBoundedSequenceDomain(_ expression: ExprSyntax) -> StateExpr? {
         guard let call = expression.as(FunctionCallExprSyntax.self),
-              call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "Sequences",
+              let name = call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text,
+              name == "Sequences" || name == "SortedSequences",
               let memberSyntax = call.arguments.first(where: { $0.label?.text == "of" })?.expression,
               let lengthSyntax = call.arguments.first(where: { $0.label?.text == "lengths" })?.expression,
               let memberSet = decodeStateExpr(memberSyntax),
               case .setLiteral(let members) = memberSet,
               let lengths = parseIntegerClosedRange(lengthSyntax)
         else { return nil }
-        return .setLiteral(formalSequenceExpressions(members: members, lengths: lengths))
+        let sequences = formalSequenceExpressions(members: members, lengths: lengths)
+        return .setLiteral(name == "SortedSequences" ? sequences.filter(formalIntegerSequenceIsSorted) : sequences)
     }
 
     private static func decodeAlgorithmDomainQuantifier(_ expression: ExprSyntax) -> StateExpr? {
@@ -813,13 +815,19 @@ extension SpecParser {
     }
 
     public static func decodeFairness(_ call: FunctionCallExprSyntax) -> FairnessCondition? {
-        guard let ref = call.calledExpression.as(MemberAccessExprSyntax.self) else { return nil }
-        let name = ref.declName.baseName.text
+        let name: String
+        if let ref = call.calledExpression.as(MemberAccessExprSyntax.self) {
+            name = ref.declName.baseName.text
+        } else if let reference = call.calledExpression.as(DeclReferenceExprSyntax.self) {
+            name = reference.baseName.text
+        } else {
+            return nil
+        }
         let actionName = call.arguments.first?.expression.as(StringLiteralExprSyntax.self)?
             .segments.description.replacingOccurrences(of: "\"", with: "") ?? ""
         switch name {
-        case "weakFairness": return .weakFairness(actionName)
-        case "strongFairness": return .strongFairness(actionName)
+        case "weakFairness", "WeakFairness": return .weakFairness(actionName)
+        case "strongFairness", "StrongFairness": return .strongFairness(actionName)
         default: return nil
         }
     }

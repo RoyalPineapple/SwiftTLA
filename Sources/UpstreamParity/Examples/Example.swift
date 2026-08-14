@@ -25,6 +25,7 @@ public enum Example {
         gameOfLife,
         nanoBlockchain,
         bakeryN2,
+        binarySearch,
         barrierN6,
         barriersN6,
         catEvenBoxes,

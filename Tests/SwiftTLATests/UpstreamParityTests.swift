@@ -131,6 +131,12 @@ struct UpstreamParityTests {
         #expect(count == Example.findHighest.expectedDistinct)
     }
 
+    @Test("BinarySearch PlusCal port matches its bounded TLC configuration")
+    func binarySearchParity() throws {
+        let count = try BinarySearchModel.verifySpec()
+        #expect(count == Example.binarySearch.expectedDistinct)
+    }
+
     @Test("EWD840 uses typed finite function state")
     func ewd840TypedFunctionParity() throws {
         try EWD840Model.verifySpec()
