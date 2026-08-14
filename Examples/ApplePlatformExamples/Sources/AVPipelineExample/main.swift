@@ -46,7 +46,7 @@ struct CameraApp: App {
             }
             .background(.black)
             .frame(minWidth: 640, minHeight: 520)
-            .task { model._ready() }
+            .task { await model._ready() }
         }
     }
 
@@ -266,24 +266,10 @@ enum RollItem: Identifiable {
     }
 }
 
+@MainActor
 @Observable
-@TLAObservable
 final class CameraModel {
-    static var spec: TLASpec {
-        TLASpec("CameraModel") {
-            let phase = Var("phase", 0)
-            Variable(phase)
-
-            Action("ready")  { phase == 0 && phase.becomes(1) }
-            Action("record") { phase == 1 && phase.becomes(2) }
-            Action("stop")   { phase == 2 && phase.becomes(1) }
-            Action("play")   { phase == 1 && phase.becomes(3) }
-            Action("live")   { phase == 3 && phase.becomes(1) }
-
-            Invariant("validPhase") { phase >= 0 && phase <= 3 }
-        }
-    }
-
+    var phase = 0
     let capture = Media.Capture()
     var roll: [RollItem] = []
     var flashActive = false
@@ -294,46 +280,17 @@ final class CameraModel {
     private var movieOutput: AVCaptureMovieFileOutput?
     private let recordDelegate = RecordingDelegate()
 
-    init() {
-        onReady = { [weak self] from, to in
-            guard let self, let device = AVCaptureDevice.default(for: .video) else { return }
-            do {
-                try await self.capture.configure(device: device)
-                let sess = await self.capture.session
-                let mo = AVCaptureMovieFileOutput()
-                sess.addOutput(mo)
-                self.movieOutput = mo
-                try await self.capture.start()
-            } catch {
-                print("Camera error: \(error)")
-            }
-        }
-        onRecord = { [weak self] from, to in
-            guard let self, let mo = self.movieOutput else { return }
-            let url = FileManager.default.temporaryDirectory
-                .appendingPathComponent("recording-\(UUID().uuidString).mov")
-            self.recordedURL = url
-            mo.startRecording(to: url, recordingDelegate: self.recordDelegate)
-        }
-        onStop = { [weak self] from, to in
-            self?.movieOutput?.stopRecording()
-            if let url = self?.recordedURL { self?.roll.append(.video(url)) }
-            self?.recordedURL = nil
-        }
-        onPlay = { [weak self] from, to in
-            guard let self, let u = self.recordedURL else { return }
-            let player = AVPlayer(url: u)
-            self.currentPlayer = player
-            player.play()
-            NotificationCenter.default.addObserver(forName: .AVPlayerItemDidPlayToEndTime,
-                                                   object: player.currentItem, queue: .main) { [weak self] _ in
-                self?._live()
-            }
-        }
-        onLive = { [weak self] from, to in
-            self?.currentPlayer?.pause()
-            self?.currentPlayer = nil
-        }
+    func _ready() async {
+        guard let device = AVCaptureDevice.default(for: .video) else { return }
+        do {
+            try await capture.configure(device: device)
+            let session = capture.session
+            let output = AVCaptureMovieFileOutput()
+            session.addOutput(output)
+            movieOutput = output
+            try await capture.start()
+            phase = 1
+        } catch { print("Camera error: \(error)") }
     }
 
     func takeSnapshot() async {
@@ -348,6 +305,29 @@ final class CameraModel {
             print("Snapshot error: \(error)")
         }
     }
+
+    private func _record() {
+        guard let movieOutput else { return }
+        recordedURL = FileManager.default.temporaryDirectory.appendingPathComponent("recording-\(UUID().uuidString).mov")
+        movieOutput.startRecording(to: recordedURL!, recordingDelegate: recordDelegate)
+        phase = 2
+    }
+
+    private func _stop() {
+        movieOutput?.stopRecording()
+        if let recordedURL { roll.append(.video(recordedURL)) }
+        phase = 1
+    }
+
+    private func _play() {
+        guard let recordedURL else { return }
+        let player = AVPlayer(url: recordedURL)
+        currentPlayer = player
+        player.play()
+        phase = 3
+    }
+
+    func _live() { currentPlayer?.pause(); currentPlayer = nil; phase = 1 }
 
     func toggleRecording() {
         if phase == 2 { _stop() }

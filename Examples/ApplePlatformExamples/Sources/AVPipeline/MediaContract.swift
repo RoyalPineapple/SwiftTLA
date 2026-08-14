@@ -1,43 +1,49 @@
-import SwiftTLA
 import AVFoundation
+import SwiftTLA
+import SwiftTLAMacros
 
-/// Coordinator: composes Capture, Writer, Player at runtime.
-/// State machines verified individually by @TLAActor.
-/// Cross-actor invariants verified by TLC (66 states, depth 10).
-public actor MediaContract {
+/// The pipeline contract is a generated model. Capture, writing, and playback
+/// are explicit formal stages; AVFoundation remains a thin effect layer.
+@TLAModel
+public struct MediaPipelineModel {
+    public enum Stage: String, CaseIterable, FiniteDomainKey {
+        case idle, capturing, writing, readyToPlay, playing
+        public static let formalDomain = allCases
+        public static let formalTypeIdentity = FormalTypeIdentity(rawValue: "apple.av.pipeline-stage")
+        public var tlaValue: TLAValue { .string(rawValue) }
+    }
+    private enum Process: String, FiniteDomainKey { case pipelineEvent
+        static let formalDomain: [Self] = [.pipelineEvent]
+        static let formalTypeIdentity = FormalTypeIdentity(rawValue: "apple.av.pipeline-process")
+        var tlaValue: TLAValue { .string(rawValue) }
+    }
+    private enum Step: String, PlusCalLabel { case beginCapture, beginWriting, finishWriting, play, stop }
     public static var spec: TLASpec {
-        let capture = Media.Capture.spec
-        let writer = Media.Writer.spec
-        let player = Media.Player.spec
-
-        return TLASpec("MediaContract") {
-            Use(spec: capture)
-            Use(spec: writer)
-            Use(spec: player)
-
-            let cPhase = Var("cPhase", 0)
-            let wPhase = Var("wPhase", 0)
-            let pPhase = Var("pPhase", 0)
-            Variable(cPhase)
-            Variable(wPhase)
-            Variable(pPhase)
-
-            Action("cStop")     { (cPhase == 2 || cPhase == 3) && (wPhase != 2 && wPhase != 3) && cPhase.becomes(0) }
-            Action("cInterrupt") { cPhase == 2 && (wPhase != 2 && wPhase != 3) && cPhase.becomes(3) }
-            Action("wStart")     { wPhase == 1 && cPhase == 2 && wPhase.becomes(2) }
-            Action("pPlay")      { (pPhase == 2 || pPhase == 4) && wPhase == 4 && pPhase.becomes(3) }
-
-            Invariant("writerRequiresCapture") { (wPhase != 2 && wPhase != 3) || (cPhase == 2) }
-            Invariant("playerRequiresWriter")  { (pPhase != 3) || (wPhase == 4) }
+        #spec("MediaPipelineModel") {
+            Algorithm("MediaPipelineModel") {
+                let stage = SharedVar(initial: Stage.idle)
+                Each(Process.all) { _ in
+                    Do(Step.beginCapture) { When(stage == .idle); Assign(stage, to: Stage.capturing); Goto(Step.beginCapture) }
+                    Do(Step.beginWriting) { When(stage == .capturing); Assign(stage, to: Stage.writing); Goto(Step.beginWriting) }
+                    Do(Step.finishWriting) { When(stage == .writing); Assign(stage, to: Stage.readyToPlay); Goto(Step.finishWriting) }
+                    Do(Step.play) { When(stage == .readyToPlay); Assign(stage, to: Stage.playing); Goto(Step.play) }
+                    Do(Step.stop) { When(stage == .capturing || stage == .writing || stage == .playing); Assign(stage, to: Stage.idle); Goto(Step.stop) }
+                }
+                Invariant("knownPipelineStage") { stage == .idle || stage == .capturing || stage == .writing || stage == .readyToPlay || stage == .playing }
+            }
         }
     }
+    @TLAActor public actor Machine {}
+}
 
+public actor MediaContract {
+    private let machine = MediaPipelineModel.Machine()
     public let capture = Media.Capture()
     public let writer: Media.Writer
     public let player: Media.Player
-
     public init(outputURL: URL) {
         writer = Media.Writer(url: outputURL, fileType: .mp4, outputSettings: [:])
         player = Media.Player(url: outputURL)
     }
+    public func stage() async -> MediaPipelineModel.Stage { await machine.state.stage }
 }

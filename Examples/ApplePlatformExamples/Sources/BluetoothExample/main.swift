@@ -79,15 +79,20 @@ final class BLEModel: ObservableObject {
     }
 
     private func startScanning() async {
-        isScanning = true
-        let stream = await ble.scan()
+        let stream: AsyncStream<Device>
+        do {
+            stream = try await ble.scan()
+            isScanning = true
+        } catch {
+            print("BLE scan error: \(error)")
+            return
+        }
         scanTask = Task { [weak self] in
             for await device in stream {
                 guard let self else { return }
-                let peripheral = await device.peripheral
-                let id = peripheral.identifier
+                let id = device.id
                 guard seen.insert(id).inserted else { continue }
-                let name = peripheral.name ?? "Unknown"
+                let name = await device.name ?? "Unknown"
                 let item = DiscoveredDevice(id: id.uuidString, name: name, identifier: id)
                 devices.append(item)
             }

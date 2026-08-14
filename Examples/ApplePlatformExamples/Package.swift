@@ -10,6 +10,7 @@ let package = Package(
         .library(name: "AVPipeline", targets: ["AVPipeline"]),
         .executable(name: "bluetooth-example", targets: ["BluetoothExample"]),
         .executable(name: "bluetooth-cli", targets: ["BluetoothCLI"]),
+        .executable(name: "av-pipeline-cli", targets: ["AVPipelineCLI"]),
         .executable(name: "av-pipeline-example", targets: ["AVPipelineExample"])
     ],
     dependencies: [
@@ -41,13 +42,18 @@ let package = Package(
             linkerSettings: [.unsafeFlags(["-Xlinker", "-ObjC"])]
         ),
         .executableTarget(
+            name: "AVPipelineCLI",
+            dependencies: ["AVPipeline"],
+            linkerSettings: [.unsafeFlags(["-Xlinker", "-ObjC"])]
+        ),
+        .executableTarget(
             name: "AVPipelineExample",
             dependencies: ["AVPipeline"],
             linkerSettings: [.unsafeFlags(["-Xlinker", "-ObjC"])]
         ),
         .testTarget(
             name: "ApplePlatformExamplesTests",
-            dependencies: ["Bluetooth"]
+            dependencies: ["Bluetooth", "AVPipeline"]
         )
     ]
 )

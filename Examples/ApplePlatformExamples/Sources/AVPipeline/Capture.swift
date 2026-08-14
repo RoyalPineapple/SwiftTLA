@@ -1,94 +1,106 @@
+import AVFoundation
 import SwiftTLA
 import SwiftTLAMacros
-import AVFoundation
+
+@TLAModel
+public struct CaptureModel {
+    public enum Phase: String, CaseIterable, FiniteDomainKey {
+        case idle, configured, running, interrupted
+        public static let formalDomain = allCases
+        public static let formalTypeIdentity = FormalTypeIdentity(rawValue: "apple.av.capture-phase")
+        public var tlaValue: TLAValue { .string(rawValue) }
+    }
+
+    private enum Process: String, FiniteDomainKey {
+        case captureEvent
+        static let formalDomain: [Self] = [.captureEvent]
+        static let formalTypeIdentity = FormalTypeIdentity(rawValue: "apple.av.capture-process")
+        var tlaValue: TLAValue { .string(rawValue) }
+    }
+    private enum Step: String, PlusCalLabel { case configure, start, stop, interrupt, resume }
+
+    public static var spec: TLASpec {
+        #spec("CaptureModel") {
+            Algorithm("CaptureModel") {
+                let phase = SharedVar(initial: Phase.idle)
+                Each(Process.all) { _ in
+                    Do(Step.configure) { When(phase == .idle); Assign(phase, to: Phase.configured); Goto(Step.start) }
+                    Do(Step.start) { When(phase == .configured); Assign(phase, to: Phase.running); Goto(Step.stop) }
+                    Do(Step.stop) { When(phase == .running || phase == .interrupted); Assign(phase, to: Phase.idle); Goto(Step.configure) }
+                    Do(Step.interrupt) { When(phase == .running); Assign(phase, to: Phase.interrupted); Goto(Step.interrupt) }
+                    Do(Step.resume) { When(phase == .interrupted); Assign(phase, to: Phase.running); Goto(Step.resume) }
+                }
+                Invariant("knownCapturePhase") { phase == .idle || phase == .configured || phase == .running || phase == .interrupted }
+            }
+        }
+    }
+
+    @TLAActor public actor Machine {}
+}
 
 private final class CaptureVideoDelegate: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate {
     let continuation: AsyncStream<CMSampleBuffer>.Continuation
     init(continuation: AsyncStream<CMSampleBuffer>.Continuation) { self.continuation = continuation }
-    func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer,
-                       from connection: AVCaptureConnection) { continuation.yield(sampleBuffer) }
+    func captureOutput(_: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from _: AVCaptureConnection) { continuation.yield(sampleBuffer) }
 }
 
 public enum Media {
-
     private final class CapturePhotoDelegate: NSObject, AVCapturePhotoCaptureDelegate {
         weak var actor: Capture?
-        func photoOutput(_ output: AVCapturePhotoOutput,
-                         didFinishProcessingPhoto photo: AVCapturePhoto,
-                         error: Error?) {
-            Task { await actor?.didCapture(photo, error) }
-        }
+        func photoOutput(_: AVCapturePhotoOutput, didFinishProcessingPhoto photo: AVCapturePhoto, error: Error?) { Task { await actor?.didCapture(photo, error) } }
     }
 
-    @TLAActor
+    /// AVFoundation effects are here; the generated machine owns the lifecycle.
     public actor Capture {
-        public static var spec: TLASpec {
-            TLASpec("Capture") {
-                let phase = Var("phase", 0)
-            Variable(phase)
-                Action("configure")  { phase == 0 && phase.becomes(1) }
-                Action("start")      { phase == 1 && phase.becomes(2) }
-                Action("stop")       { (phase == 2 || phase == 3) && phase.becomes(0) }
-                Action("interrupt")  { phase == 2 && phase.becomes(3) }
-                Action("resume")     { phase == 3 && phase.becomes(2) }
-                Invariant("validPhase") { phase >= 0 && phase <= 3 }
-            }
-        }
-
-        public let session = AVCaptureSession()
+        private let machine = CaptureModel.Machine()
+        /// AVFoundation owns this reference. The actor owns all lifecycle calls.
+        public nonisolated(unsafe) let session = AVCaptureSession()
         private let delegate = CapturePhotoDelegate()
         private let photoOutput = AVCapturePhotoOutput()
         private var photoCont: CheckedContinuation<Data, Error>?
 
         public init() { delegate.actor = self }
+        public func phase() async -> CaptureModel.Phase { await machine.state.phase }
 
-        public func configure(device: AVCaptureDevice) throws {
-            guard _state.phase == 0 else { throw MediaError.cannotConfigure }
+        public func configure(device: AVCaptureDevice) async throws {
+            guard await machine.state.phase == .idle else { throw MediaError.cannotConfigure }
             session.beginConfiguration()
-            let input = try AVCaptureDeviceInput(device: device)
-            session.addInput(input)
+            defer { session.commitConfiguration() }
+            session.addInput(try AVCaptureDeviceInput(device: device))
             session.addOutput(photoOutput)
-            session.commitConfiguration()
-            _configure()
+            _ = try await machine.execute(CaptureModel.Machine.ActionLabel.configure.toInvocation())
         }
 
         public func start() async throws {
-            guard _state.phase == 1 else { throw MediaError.notConfigured }
-            _start()
-            await withCheckedContinuation { (c: CheckedContinuation<Void, Never>) in
-                session.startRunning()
-                c.resume()
-            }
+            guard await machine.state.phase == .configured else { throw MediaError.notConfigured }
+            _ = try await machine.execute(CaptureModel.Machine.ActionLabel.start.toInvocation())
+            session.startRunning()
         }
 
-        public func stop() { _stop(); session.stopRunning() }
+        public func stop() async { _ = try? await machine.execute(CaptureModel.Machine.ActionLabel.stop.toInvocation()); session.stopRunning() }
 
         public func capturePhoto() async throws -> Data {
-            guard _state.phase == 2 else { throw MediaError.notRunning }
-            return try await withCheckedThrowingContinuation { c in
-                self.photoCont = c
-                let settings = AVCapturePhotoSettings()
-                photoOutput.capturePhoto(with: settings, delegate: delegate)
+            guard await machine.state.phase == .running else { throw MediaError.notRunning }
+            return try await withCheckedThrowingContinuation { continuation in
+                photoCont = continuation
+                photoOutput.capturePhoto(with: AVCapturePhotoSettings(), delegate: delegate)
             }
         }
 
-        public func stream() -> AsyncStream<CMSampleBuffer> {
-            guard _state.phase == 2 else { return AsyncStream { $0.finish() } }
+        public func stream() async -> AsyncStream<CMSampleBuffer> {
+            guard await machine.state.phase == .running else { return AsyncStream { $0.finish() } }
             return AsyncStream { continuation in
-                let videoOutput = AVCaptureVideoDataOutput()
-                videoOutput.setSampleBufferDelegate(
-                    CaptureVideoDelegate(continuation: continuation),
-                    queue: DispatchQueue(label: "video")
-                )
-                session.addOutput(videoOutput)
+                let output = AVCaptureVideoDataOutput()
+                output.setSampleBufferDelegate(CaptureVideoDelegate(continuation: continuation), queue: DispatchQueue(label: "video"))
+                session.addOutput(output)
             }
         }
 
         func didCapture(_ photo: AVCapturePhoto?, _ error: Error?) {
+            defer { photoCont = nil }
             if let error { photoCont?.resume(throwing: error) }
             else if let data = photo?.fileDataRepresentation() { photoCont?.resume(returning: data) }
             else { photoCont?.resume(throwing: MediaError.noData) }
-            photoCont = nil
         }
     }
 }

@@ -4,7 +4,19 @@ import Foundation
 @main
 struct BluetoothCLI {
     static func main() async {
-        let duration = scanDuration(arguments: Array(CommandLine.arguments.dropFirst()))
+        let arguments = Array(CommandLine.arguments.dropFirst())
+        if arguments.contains("--verify") {
+            do {
+                try BluetoothModel.verifySpec()
+                try PeripheralModel.verifySpec()
+                print("Bluetooth formal checks passed.")
+            } catch {
+                writeError("Bluetooth validation failed: \(error)")
+            }
+            return
+        }
+
+        let duration = scanDuration(arguments: arguments)
         let central = Bluetooth()
 
         do {
@@ -15,7 +27,13 @@ struct BluetoothCLI {
         }
 
         print("Scanning for \(duration) seconds. Press Control-C to stop.")
-        let devices = await central.scan()
+        let devices: AsyncStream<Device>
+        do {
+            devices = try await central.scan()
+        } catch {
+            writeError("Bluetooth scan could not start: \(error)")
+            return
+        }
         let printer = Task {
             for await device in devices {
                 let name = await device.name ?? "Unnamed peripheral"
