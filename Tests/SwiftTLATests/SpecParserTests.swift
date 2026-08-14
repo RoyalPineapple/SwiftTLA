@@ -223,6 +223,29 @@ private enum ParserNode: String, FiniteDomainKey {
         #expect(parsed.variables[1].swiftTypeName == "Int")
     }
 
+    @Test func finiteVariableDomainsCompareAsFormalSets() {
+        let parsed = ParsedSpecModel(
+            variables: [(
+                name: "counter",
+                initial: .set([.int(0), .int(1)]),
+                initialSet: .setLiteral([.int(0), .int(1)])
+            )],
+            actions: [],
+            invariants: []
+        )
+        let built = ParsedSpecModel(
+            variables: [(
+                name: "counter",
+                initial: .set([.int(0), .int(1)]),
+                initialSet: .setLiteral([.int(1), .int(0)])
+            )],
+            actions: [],
+            invariants: []
+        )
+
+        #expect(_tlaAlphaEquivalent(parsed, built))
+    }
+
     @Test func oneArgumentVariableRejectsUnboundReference() {
         let source = """
         {
