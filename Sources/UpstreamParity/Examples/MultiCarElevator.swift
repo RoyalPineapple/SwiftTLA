@@ -36,6 +36,9 @@ public enum MultiCarElevator {
         public typealias Fields = CarFields
 
         public static let fieldNames: Set<String> = ["floor", "doorsOpen", "rider"]
+        public static let defaultRecord: TLAValue = .record([
+            "floor": .int(0), "doorsOpen": .bool(false), "rider": .string("none")
+        ])
 
         public static func fieldName<Value>(for field: KeyPath<CarFields, Value>) -> String? {
             let key = field as AnyKeyPath
@@ -60,6 +63,9 @@ public enum MultiCarElevator {
         public typealias Fields = CallFields
 
         public static let fieldNames: Set<String> = ["person", "floor", "direction"]
+        public static let defaultRecord: TLAValue = .record([
+            "person": .string("alice"), "floor": .int(0), "direction": .string("up")
+        ])
 
         public static func fieldName<Value>(for field: KeyPath<CallFields, Value>) -> String? {
             let key = field as AnyKeyPath
@@ -267,6 +273,9 @@ public struct MultiCarElevatorMacroFixture {
         typealias Fields = CarFields
 
         static let fieldNames: Set<String> = ["floor", "doorsOpen", "rider"]
+        static let defaultRecord: TLAValue = .record([
+            "floor": .int(0), "doorsOpen": .bool(false), "rider": .string("none")
+        ])
 
         static func fieldName<Value>(for field: KeyPath<CarFields, Value>) -> String? {
             let key = field as AnyKeyPath
@@ -291,6 +300,9 @@ public struct MultiCarElevatorMacroFixture {
         typealias Fields = CallFields
 
         static let fieldNames: Set<String> = ["person", "floor", "direction"]
+        static let defaultRecord: TLAValue = .record([
+            "person": .string("alice"), "floor": .int(0), "direction": .string("up")
+        ])
 
         static func fieldName<Value>(for field: KeyPath<CallFields, Value>) -> String? {
             let key = field as AnyKeyPath

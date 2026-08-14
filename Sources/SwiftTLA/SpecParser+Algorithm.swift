@@ -70,8 +70,7 @@ extension SpecParser {
             } else {
                 let inferredType = stateTypes[variable.name]
                 let projectedType: String?
-                if localRoots.contains(variable.name)
-                    || (inferredType?.contains("Function<") == true && variable.name != "pc") {
+                if localRoots.contains(variable.name) {
                     projectedType = "TLAValue"
                 } else {
                     projectedType = inferredType

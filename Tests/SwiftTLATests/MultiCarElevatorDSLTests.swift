@@ -28,6 +28,7 @@ struct MultiCarElevatorDSLTests {
   enum CarSchema: TLARecordSchema {
     typealias Fields = CarFields
     static let fieldNames: Set<String> = ["floor", "doorsOpen"]
+    static let defaultRecord: TLAValue = .record(["floor": .int(0), "doorsOpen": .bool(false)])
 
     static func fieldName<Value>(for field: KeyPath<CarFields, Value>) -> String? {
       let key = field as AnyKeyPath

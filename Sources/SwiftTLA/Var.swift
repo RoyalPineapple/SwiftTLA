@@ -9,15 +9,38 @@ import SwiftSyntaxMacros
 
 public protocol TLAValueType: TLAValueConvertible {
   static var defaultValue: Self { get }
+  init?(formalValue: TLAValue)
 }
-extension Int: TLAValueType { public static var defaultValue: Int { 0 } }
-extension Bool: TLAValueType { public static var defaultValue: Bool { false } }
-extension String: TLAValueType { public static var defaultValue: String { "" } }
+extension Int: TLAValueType {
+  public static var defaultValue: Int { 0 }
+  public init?(formalValue: TLAValue) {
+    guard case .int(let value) = formalValue else { return nil }
+    self = value
+  }
+}
+extension Bool: TLAValueType {
+  public static var defaultValue: Bool { false }
+  public init?(formalValue: TLAValue) {
+    guard case .bool(let value) = formalValue else { return nil }
+    self = value
+  }
+}
+extension String: TLAValueType {
+  public static var defaultValue: String { "" }
+  public init?(formalValue: TLAValue) {
+    guard case .string(let value) = formalValue else { return nil }
+    self = value
+  }
+}
 
 /// All RawRepresentable Int enums get TLAValueType support.
 extension TLAValueType where Self: RawRepresentable, Self.RawValue == Int {
   public static var defaultValue: Self { Self(rawValue: 0)! }
   public var tlaValue: TLAValue { .int(rawValue) }
+  public init?(formalValue: TLAValue) {
+    guard case .int(let value) = formalValue else { return nil }
+    self.init(rawValue: value)
+  }
 }
 
 extension TLAValueType
@@ -30,9 +53,16 @@ where Self: RawRepresentable, Self.RawValue == Int, Self: CustomStringConvertibl
 extension TLAValueType where Self: RawRepresentable, Self.RawValue == String {
   public static var defaultValue: Self { Self(rawValue: "")! }
   public var tlaValue: TLAValue { .string(rawValue) }
+  public init?(formalValue: TLAValue) {
+    guard case .string(let value) = formalValue else { return nil }
+    self.init(rawValue: value)
+  }
 }
 
-extension TLAValue: TLAValueType { public static var defaultValue: TLAValue { .int(0) } }
+extension TLAValue: TLAValueType {
+  public static var defaultValue: TLAValue { .int(0) }
+  public init?(formalValue: TLAValue) { self = formalValue }
+}
 
 extension StateExprConvertible where Self: TLAValueType {
   public var stateExpr: StateExpr { .value(tlaValue) }

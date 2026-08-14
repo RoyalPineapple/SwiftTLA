@@ -25,6 +25,7 @@ struct Counter {
         typealias Fields = CarFields
 
         static let fieldNames: Set<String> = ["doorsOpen", "floor"]
+        static let defaultRecord: TLAValue = .record(["doorsOpen": .bool(false), "floor": .int(0)])
 
         static func fieldName<Value>(for field: KeyPath<CarFields, Value>) -> String? {
             let key = field as AnyKeyPath
@@ -70,5 +71,6 @@ struct Counter {
 }
 
 var counter = Counter()
-let result = try counter.apply(.advance(process: .only))
+let result = try counter.apply(.advance)
 precondition(result.after.value == 1)
+precondition(result.after.cars[.one][Counter.CarSchema.floor] == 2)

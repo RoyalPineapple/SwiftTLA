@@ -62,7 +62,10 @@ enum MacroExpander {
         let ordinaryVariables = model.variables.filter { variable in
             !model.symmetricCollections.contains(where: { $0.name == variable.name })
         }
-        decls.append(contentsOf: generateVariableProperties(variables: ordinaryVariables).map(DeclSyntax.init))
+        decls.append(contentsOf: generateVariableProperties(
+            variables: ordinaryVariables,
+            enumInfos: model.enumInfos
+        ).map(DeclSyntax.init))
         let actionResult = generateActionMethods(
             isActor: isActor,
             actions: model.actions,
@@ -405,7 +408,7 @@ extension MacroExpander {
                         bindings: [PatternBindingSyntax(
                             pattern: IdentifierPatternSyntax(identifier: .identifier(v.name)),
                             typeAnnotation: TypeAnnotationSyntax(
-                                type: IdentifierTypeSyntax(name: .identifier(stateType(for: v, enumInfos: enumInfos)))
+                                type: TypeSyntax(stringLiteral: stateType(for: v, enumInfos: enumInfos))
                             )
                         )]
                     )
@@ -462,6 +465,8 @@ extension MacroExpander {
                                         ExprSyntax(stringLiteral: "d[Variables.\(v.name).rawValue] = \(v.name)")
                                     } else if ["Int", "Bool", "String"].contains(st) {
                                         ExprSyntax(stringLiteral: "d[Variables.\(v.name).rawValue] = \(constructor(forSwiftType: st, value: v.name))")
+                                    } else if v.swiftTypeName != nil {
+                                        ExprSyntax(stringLiteral: "d[Variables.\(v.name).rawValue] = \(v.name).tlaValue")
                                     } else {
                                         ExprSyntax(stringLiteral: "d[Variables.\(v.name).rawValue] = \(constructor(for: v.initial, value: v.name))")
                                     }
@@ -475,16 +480,18 @@ extension MacroExpander {
         )
     }
 
-    static func generateVariableProperties(variables: [(name: String, initial: TLAValue, initialSet: StateExpr?, swiftTypeName: String?)]) -> [VariableDeclSyntax] {
+    static func generateVariableProperties(
+        variables: [(name: String, initial: TLAValue, initialSet: StateExpr?, swiftTypeName: String?)],
+        enumInfos: [ParsedEnumInfo] = []
+    ) -> [VariableDeclSyntax] {
         variables.map { v in
-            let inferred = v.swiftTypeName ?? swiftType(for: v.initial)
-            let propType = ["Int", "Bool", "String"].contains(inferred) ? inferred : "TLAValue"
+            let propType = stateType(for: v, enumInfos: enumInfos)
             return VariableDeclSyntax(
                 modifiers: [DeclModifierSyntax(name: .keyword(.public))],
                 bindingSpecifier: .keyword(.var),
                 bindings: [PatternBindingSyntax(
                     pattern: IdentifierPatternSyntax(identifier: .identifier(v.name)),
-                    typeAnnotation: TypeAnnotationSyntax(type: IdentifierTypeSyntax(name: .identifier(propType))),
+                    typeAnnotation: TypeAnnotationSyntax(type: TypeSyntax(stringLiteral: propType)),
                     accessorBlock: AccessorBlockSyntax(accessors: .getter(
                         CodeBlockItemListSyntax { ExprSyntax(stringLiteral: "_machine.snapshot.\(v.name)") }
                     ))
@@ -540,12 +547,11 @@ extension MacroExpander {
             }
             if let typeName = variable.swiftTypeName,
                !["Int", "Bool", "String", "TLAValue"].contains(typeName) {
-                let pattern = tlaValuePattern(for: variable.initial, binding: "raw")
                 return """
                 guard let rawValue = dict[\(key)] else {
                     throw TLAStateProjectionDiagnostic.missingValue(path: \(key))
                 }
-                guard \(pattern), let value = \(typeName)(rawValue: raw) else {
+                guard let value = \(typeName)(formalValue: rawValue) else {
                     throw TLAStateProjectionDiagnostic.invalidValue(path: \(key))
                 }
                 self.\(variable.name) = value

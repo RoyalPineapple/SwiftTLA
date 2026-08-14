@@ -22,11 +22,13 @@ extension FiniteTLAValueDomain {
 public protocol TLARecordSchema: Sendable {
   associatedtype Fields
   static var fieldNames: Set<String> { get }
+  /// A complete, schema-valid formal value used only when a generic default is required.
+  static var defaultRecord: TLAValue { get }
   static func fieldName<Value>(for field: KeyPath<Fields, Value>) -> String?
 }
 
-public struct TLAField<Schema: TLARecordSchema, Value: TLAValueType>: Sendable {
-  let name: String
+public struct TLAField<Schema: TLARecordSchema, Value: TLAValueType>: Hashable, Sendable {
+  public let name: String
 }
 
 extension TLARecordSchema {
@@ -55,11 +57,32 @@ public struct TLARecordEntry<Schema: TLARecordSchema>: Sendable {
   }
 }
 
-public struct Record<Schema: TLARecordSchema>: TLAValueType, Sendable {
-  public init() {}
+public struct Record<Schema: TLARecordSchema>: TLAValueType, Hashable, Sendable {
+  private let values: [String: TLAValue]
 
-  public var tlaValue: TLAValue { .record([:]) }
+  public init() {
+    guard let value = Self(formalValue: Schema.defaultRecord) else {
+      preconditionFailure("\(Schema.self).defaultRecord must contain every declared field with valid formal values")
+    }
+    values = value.values
+  }
+
+  public init?(formalValue: TLAValue) {
+    guard case .record(let values) = formalValue,
+          Set(values.keys) == Schema.fieldNames
+    else { return nil }
+    self.values = values
+  }
+
+  public var tlaValue: TLAValue { .record(values) }
   public static var defaultValue: Self { Self() }
+
+  public subscript<Value: TLAValueType>(_ field: TLAField<Schema, Value>) -> Value {
+    guard let raw = values[field.name], let value = Value(formalValue: raw) else {
+      preconditionFailure("Formal record '\(Schema.self)' contains an invalid '\(field.name)' field")
+    }
+    return value
+  }
 
   public static func literal(_ fields: TLARecordEntry<Schema>...) -> Expr<Self> {
     let names = fields.map(\.name)
@@ -72,11 +95,30 @@ public struct Record<Schema: TLARecordSchema>: TLAValueType, Sendable {
   }
 }
 
-public struct Function<Domain: FiniteTLAValueDomain, Range: TLAValueType>: TLAValueType, Sendable {
-  public init() {}
+public struct Function<Domain: FiniteTLAValueDomain, Range: TLAValueType>: TLAValueType, Hashable, Sendable {
+  private let values: [TLAValue: TLAValue]
 
-  public var tlaValue: TLAValue { .function([:]) }
+  public init() {
+    values = Dictionary(uniqueKeysWithValues: Domain.tlaValues.map { ($0, Range.defaultValue.tlaValue) })
+  }
+
+  public init?(formalValue: TLAValue) {
+    guard case .function(let values) = formalValue,
+          Set(values.keys) == Set(Domain.tlaValues),
+          values.values.allSatisfy({ Range(formalValue: $0) != nil })
+    else { return nil }
+    self.values = values
+  }
+
+  public var tlaValue: TLAValue { .function(values) }
   public static var defaultValue: Self { Self() }
+
+  public subscript(_ key: Domain) -> Range {
+    guard let raw = values[key.tlaValue], let value = Range(formalValue: raw) else {
+      preconditionFailure("Formal function '\(Domain.self)' contains an invalid value")
+    }
+    return value
+  }
 
   public static func literal(_ entries: (Domain, Expr<Range>)...) -> Expr<Self> {
     let keys = entries.map { $0.0.tlaValue }
@@ -98,6 +140,12 @@ public struct Function<Domain: FiniteTLAValueDomain, Range: TLAValueType>: TLAVa
 
 public struct SetExpr<Element: TLAValueType>: TLAValueType, Sendable {
   public init() {}
+
+  public init?(formalValue: TLAValue) {
+    guard case .set(let values) = formalValue,
+          values.allSatisfy({ Element(formalValue: $0) != nil })
+    else { return nil }
+  }
 
   public var tlaValue: TLAValue { .set([]) }
   public static var defaultValue: Self { Self() }

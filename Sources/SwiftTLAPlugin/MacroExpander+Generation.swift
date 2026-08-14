@@ -144,7 +144,7 @@ extension MacroExpander {
             isActor: true,
             hasActions: !actions.isEmpty
         ))
-        decls.append(contentsOf: generateVariableProperties(variables: variables).map(DeclSyntax.init))
+        decls.append(contentsOf: generateVariableProperties(variables: variables, enumInfos: enumInfos).map(DeclSyntax.init))
         decls.append(contentsOf: generateObservableActionMethods(variables: variables, actions: actions).map(DeclSyntax.init))
         decls.append(DeclSyntax(
             VariableDeclSyntax(
@@ -256,6 +256,9 @@ extension MacroExpander {
         let inferred = v.swiftTypeName ?? swiftType(for: v.initial)
         if ["Int", "Bool", "String"].contains(inferred) { return inferred }
         if enumInfos.contains(where: { $0.typeName == inferred }) { return inferred }
+        if inferred.hasPrefix("Record<") || inferred.hasPrefix("Function<") || inferred.hasPrefix("SetExpr<") {
+            return inferred
+        }
         return "TLAValue"
     }
     static func extractor(for initial: TLAValue) -> String {
