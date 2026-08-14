@@ -9,11 +9,11 @@ struct AlgorithmBuilderTests {
         let algorithm = Algorithm("MacroLock") {
             let lock = SharedVar("lock", initial: 1)
             lock
-            let acquire = Macro<Int> { value in
+            let acquire = Macro { (value: MacroParameter<Int>) in
                 Await(value == 1)
                 Assign(value, to: 0)
             }
-            let release = Macro<Int> { value in
+            let release = Macro { (value: MacroParameter<Int>) in
                 Assign(value, to: 1)
             }
 
@@ -34,6 +34,32 @@ struct AlgorithmBuilderTests {
         #expect(successor["lock"] == .int(0))
     }
 
+    @Test("parameterless statement macros expand into their surrounding atomic block")
+    func expandsParameterlessStatementMacro() throws {
+        let algorithm = Algorithm("ParameterlessMacro") {
+            let count = SharedVar("count", initial: 0)
+            count
+            let increment = Macro {
+                Assign(count, to: count + 1)
+            }
+
+            Do("increment") { increment() }
+        }
+
+        #expect(algorithm.validate().isEmpty)
+        let spec = try algorithm.lower()
+        let initial = try #require(computeInitialStates(spec).first)
+        let increment = try #require(spec.actions.first { $0.name == "increment" })
+        let successor = try #require(
+            ActionEnumerator.enumerate(
+                increment.body,
+                from: initial,
+                varNames: spec.variables.map(\.name)
+            ).first
+        )
+        #expect(successor["count"] == .int(1))
+    }
+
     @Test("statement macros accept the current typed process identifier")
     func expandsMacroWithProcessIdentifier() throws {
         let algorithm = Algorithm("MacroProcess") {
@@ -42,7 +68,7 @@ struct AlgorithmBuilderTests {
                 initial: Function<Node, Bool>.literal((.first, false), (.second, false))
             )
             marked
-            let mark = Macro<Node> { node in
+            let mark = Macro { (node: MacroParameter<Node>) in
                 Assign(marked, to: marked.updating(node, to: true))
             }
 
@@ -657,7 +683,7 @@ private struct MacroProcessGeneratedModel {
         #spec("MacroProcessGenerated") {
             Algorithm("MacroProcessGenerated") {
                 let marked = SharedVar(initial: Function<Node, Bool>.literal((.first, false), (.second, false)))
-                let mark = Macro<Node> { node in
+                let mark = Macro { (node: MacroParameter<Node>) in
                     Assign(marked, to: marked.updating(node, to: true))
                 }
 

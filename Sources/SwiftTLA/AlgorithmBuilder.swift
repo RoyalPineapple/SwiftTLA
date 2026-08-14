@@ -162,40 +162,63 @@ extension MacroParameter where Value: FiniteDomainKey {
     }
 }
 
-/// A one-argument PlusCal statement macro.
+/// A PlusCal statement macro.
 ///
 /// Declare it inside `Algorithm`, then call it inside a `Do` body. The
 /// macro is formal syntax: it expands to statements in the same atomic step;
 /// it does not introduce a Swift function call or a separate transition.
-public struct Macro<Value: TLAValueType>: Sendable {
-    private let parameterName: String
+public struct StatementMacro: Sendable {
+    private let parameterName: String?
     private let statements: [AlgorithmStatementModel]
 
-    public init(@DoBuilder _ body: (MacroParameter<Value>) -> [StepStatement]) {
-        parameterName = "__pcal_macro_parameter"
-        statements = body(MacroParameter(name: parameterName)).map(\.model)
+    fileprivate init(parameterName: String?, statements: [AlgorithmStatementModel]) {
+        self.parameterName = parameterName
+        self.statements = statements
     }
 
-    public func callAsFunction(_ argument: SharedVariable<Value>) -> [StepStatement] {
-        statements.map {
+    public func callAsFunction<Value: TLAValueType>(_ argument: SharedVariable<Value>) -> [StepStatement] {
+        guard let parameterName else { preconditionFailure("This macro has no parameter") }
+        return statements.map {
             StepStatement(model: substituteMacroParameter($0, from: parameterName, to: argument.name))
         }
     }
 
-    public func callAsFunction(_ argument: LocalVariable<Value>) -> [StepStatement] {
-        statements.map {
+    public func callAsFunction<Value: TLAValueType>(_ argument: LocalVariable<Value>) -> [StepStatement] {
+        guard let parameterName else { preconditionFailure("This macro has no parameter") }
+        return statements.map {
             StepStatement(model: substituteMacroParameter($0, from: parameterName, to: argument.name))
         }
     }
 
     /// Expands a macro using the current process identifier as its formal
     /// argument. The expansion stays in its surrounding atomic `Do` block.
-    public func callAsFunction(_ argument: ProcessIdentifier<Value>) -> [StepStatement]
-    where Value: FiniteDomainKey {
-        statements.map {
+    public func callAsFunction<Value: FiniteDomainKey>(_ argument: ProcessIdentifier<Value>) -> [StepStatement] {
+        guard let parameterName else { preconditionFailure("This macro has no parameter") }
+        return statements.map {
             StepStatement(model: substituteMacroParameter($0, from: parameterName, with: argument.stateExpr))
         }
     }
+
+    public func callAsFunction() -> [StepStatement] {
+        guard parameterName == nil else { preconditionFailure("This macro requires a parameter") }
+        return statements.map(StepStatement.init(model:))
+    }
+}
+
+/// Declares a one-argument PlusCal statement macro.
+public func Macro<Value: TLAValueType>(
+    @DoBuilder _ body: (MacroParameter<Value>) -> [StepStatement]
+) -> StatementMacro {
+    let parameterName = "__pcal_macro_parameter"
+    return StatementMacro(
+        parameterName: parameterName,
+        statements: body(MacroParameter(name: parameterName)).map(\.model)
+    )
+}
+
+/// Declares a parameterless PlusCal statement macro.
+public func Macro(@DoBuilder _ body: () -> [StepStatement]) -> StatementMacro {
+    StatementMacro(parameterName: nil, statements: body().map(\.model))
 }
 
 private func substituteMacroParameter(

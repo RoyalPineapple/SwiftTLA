@@ -29,11 +29,11 @@ public struct LockModel {
             Extends("Integers")
             Algorithm("Lock") {
                 let lock = SharedVar(initial: 1)
-                let acquire = Macro<Int> { value in
+                let acquire = Macro { (value: MacroParameter<Int>) in
                     Await(value == 1)
                     Assign(value, to: 0)
                 }
-                let release = Macro<Int> { value in
+                let release = Macro { (value: MacroParameter<Int>) in
                     Assign(value, to: 1)
                 }
 

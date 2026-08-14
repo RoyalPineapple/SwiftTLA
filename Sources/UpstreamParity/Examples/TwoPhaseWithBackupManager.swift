@@ -81,11 +81,11 @@ public struct TwoPhaseWithBackupManagerModel {
                 ))
                 let transactionManagerState = SharedVar(initial: TransactionManagerState.initial)
 
-                let prepare = Macro<ResourceManager> { manager in
+                let prepare = Macro { (manager: MacroParameter<ResourceManager>) in
                     Await(resourceManagerState[manager] == .working)
                     Assign(resourceManagerState, to: resourceManagerState.updating(manager, to: .prepared))
                 }
-                let decide = Macro<ResourceManager> { manager in
+                let decide = Macro { (manager: MacroParameter<ResourceManager>) in
                     Either {
                         Await(transactionManagerState == .commit)
                         Assign(resourceManagerState, to: resourceManagerState.updating(manager, to: .committed))
@@ -97,7 +97,7 @@ public struct TwoPhaseWithBackupManagerModel {
                         Assign(resourceManagerState, to: resourceManagerState.updating(manager, to: .aborted))
                     }
                 }
-                let fail = Macro<ResourceManager> { manager in
+                let fail = Macro { (manager: MacroParameter<ResourceManager>) in
                     If(All(ResourceManager.all) { resourceManager in
                         resourceManagerState[resourceManager] != .failed
                     }) {

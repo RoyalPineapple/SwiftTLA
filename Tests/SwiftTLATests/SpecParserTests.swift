@@ -105,7 +105,7 @@ private func parseExpression(_ source: String) -> ExprSyntax {
         {
             Algorithm("MacroLock") {
                 let lock = SharedVar(initial: 1)
-                let acquire = Macro<Int> { value in
+                let acquire = Macro { (value: MacroParameter<Int>) in
                     Await(value == 1)
                     Assign(value, to: 0)
                 }
@@ -126,13 +126,33 @@ private func parseExpression(_ source: String) -> ExprSyntax {
         #expect(parsed.actions.first?.body.description.contains("lock") == true)
     }
 
+    @Test("parser expands a parameterless statement macro")
+    func parsesParameterlessStatementMacro() {
+        let source = """
+        {
+            Algorithm("ParameterlessMacro") {
+                let count = SharedVar(initial: 0)
+                let increment = Macro {
+                    Assign(count, to: count + 1)
+                }
+                Do("increment") { increment() }
+            }
+        }
+        """
+        let closure = Parser.parse(source: source).statements.first!.item.as(ClosureExprSyntax.self)!
+        let parsed = SpecParser.parseSpecClosure(closure)
+
+        #expect(parsed.diagnostics.isEmpty)
+        #expect(parsed.actions.first?.body.description.contains("count' = (count + 1)") == true)
+    }
+
     @Test("parser expands a statement macro with the current process identifier")
     func parsesStatementMacroWithProcessIdentifier() {
         let source = """
         {
             Algorithm("MacroProcess") {
                 let marked = SharedVar(initial: Function<Node, Bool>.literal((Node.left, false), (Node.right, false)))
-                let mark = Macro<Node> { node in
+                let mark = Macro { (node: MacroParameter<Node>) in
                     Assign(marked, to: marked.updating(node, to: true))
                 }
                 Each(Node.all) { node in

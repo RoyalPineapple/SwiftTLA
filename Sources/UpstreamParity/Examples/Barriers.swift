@@ -34,18 +34,18 @@ public struct BarriersN6Model {
                 let gate2 = SharedVar(initial: 0)
                 let rendezvous = SharedVar(initial: 0)
 
-                let acquire = Macro<Int> { lock in
+                let acquire = Macro { (lock: MacroParameter<Int>) in
                     Await(lock == 1)
                     Assign(lock, to: 0)
                 }
-                let release = Macro<Int> { lock in
+                let release = Macro { (lock: MacroParameter<Int>) in
                     Assign(lock, to: 1)
                 }
-                let wait = Macro<Int> { semaphore in
+                let wait = Macro { (semaphore: MacroParameter<Int>) in
                     Await(semaphore > 0)
                     Assign(semaphore, to: semaphore - 1)
                 }
-                let signal = Macro<Int> { semaphore in
+                let signal = Macro { (semaphore: MacroParameter<Int>) in
                     Assign(semaphore, to: semaphore + 6)
                 }
 

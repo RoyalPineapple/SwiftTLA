@@ -1,7 +1,7 @@
 import SwiftSyntax
 
 private struct AlgorithmMacroDefinition: Sendable {
-    let parameter: String
+    let parameter: String?
     let statements: [AlgorithmStatementModel]
 }
 
@@ -351,15 +351,14 @@ extension SpecParser {
               let initializer = binding.initializer?.value.as(FunctionCallExprSyntax.self),
               isAlgorithmMacroInitializer(initializer),
               let closure = initializer.trailingClosure,
-              let parameter = closureParameterNames(in: closure).first,
-              closureParameterNames(in: closure).count == 1,
+              closureParameterNames(in: closure).count <= 1,
               let statements = parseAlgorithmStatements(
                 closure.statements,
                 processParameter: "__pcal_macro_no_process",
                 macros: [:]
               )
         else { return nil }
-        return .init(parameter: parameter, statements: statements)
+        return .init(parameter: closureParameterNames(in: closure).first, statements: statements)
     }
 
     /// An immutable `let` in an Algorithm is a compile-time formal alias,
@@ -595,13 +594,20 @@ extension SpecParser {
     ) -> [AlgorithmStatementModel]? {
         guard let call = expression.as(FunctionCallExprSyntax.self),
               let name = call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text,
-              let macro = macros[name],
+              let macro = macros[name]
+        else { return nil }
+
+        guard let parameter = macro.parameter else {
+            return call.arguments.isEmpty ? macro.statements : nil
+        }
+
+        guard
               call.arguments.count == 1,
               let target = algorithmTarget(call.arguments.first?.expression),
               case .root(let argument) = target
         else { return nil }
         return macro.statements.map {
-            replaceAlgorithmVariable($0, from: macro.parameter, to: argument)
+            replaceAlgorithmVariable($0, from: parameter, to: argument)
         }
     }
 
