@@ -7,7 +7,7 @@
 /// ```
 import SwiftSyntaxMacros
 
-public protocol TLAValueType: TLAValueConvertible {
+public protocol TLAValueType: TLAValueConvertible, StateExprConvertible, Sendable {
   static var defaultValue: Self { get }
   init?(formalValue: TLAValue)
 }

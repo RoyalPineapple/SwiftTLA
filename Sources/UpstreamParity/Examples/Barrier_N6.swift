@@ -3,27 +3,29 @@ import SwiftTLAMacros
 
 @TLAModel
 public struct BarrierModel {
+    public enum BarrierPhase: String, TLAValueType {
+        case b0, b1
+    }
+
     public static var spec: TLASpec {
-        TLASpec("Barrier") {
+        #spec("Barrier") {
             Extends("Integers")
-            let pc1 = Var<String>("pc1")
-            let pc2 = Var<String>("pc2")
-            let pc3 = Var<String>("pc3")
-            let pc4 = Var<String>("pc4")
-            let pc5 = Var<String>("pc5")
-            let pc6 = Var<String>("pc6")
-            Variable(pc1, "b0"); Variable(pc2, "b0"); Variable(pc3, "b0")
-            Variable(pc4, "b0"); Variable(pc5, "b0"); Variable(pc6, "b0")
-            Action("b0_1") { pc1 == "b0" && pc1.becomes("b1") }
-            Action("b0_2") { pc2 == "b0" && pc2.becomes("b1") }
-            Action("b0_3") { pc3 == "b0" && pc3.becomes("b1") }
-            Action("b0_4") { pc4 == "b0" && pc4.becomes("b1") }
-            Action("b0_5") { pc5 == "b0" && pc5.becomes("b1") }
-            Action("b0_6") { pc6 == "b0" && pc6.becomes("b1") }
+            let pc1 = SharedVar(initial: BarrierPhase.b0)
+            let pc2 = SharedVar(initial: BarrierPhase.b0)
+            let pc3 = SharedVar(initial: BarrierPhase.b0)
+            let pc4 = SharedVar(initial: BarrierPhase.b0)
+            let pc5 = SharedVar(initial: BarrierPhase.b0)
+            let pc6 = SharedVar(initial: BarrierPhase.b0)
+            Action("b0_1") { pc1 == BarrierPhase.b0 && pc1.becomes(BarrierPhase.b1) }
+            Action("b0_2") { pc2 == BarrierPhase.b0 && pc2.becomes(BarrierPhase.b1) }
+            Action("b0_3") { pc3 == BarrierPhase.b0 && pc3.becomes(BarrierPhase.b1) }
+            Action("b0_4") { pc4 == BarrierPhase.b0 && pc4.becomes(BarrierPhase.b1) }
+            Action("b0_5") { pc5 == BarrierPhase.b0 && pc5.becomes(BarrierPhase.b1) }
+            Action("b0_6") { pc6 == BarrierPhase.b0 && pc6.becomes(BarrierPhase.b1) }
             Action("b1_release") {
-                pc1 == "b1" && pc2 == "b1" && pc3 == "b1" && pc4 == "b1" && pc5 == "b1" && pc6 == "b1"
-                    && pc1.becomes("b0") && pc2.becomes("b0") && pc3.becomes("b0")
-                    && pc4.becomes("b0") && pc5.becomes("b0") && pc6.becomes("b0")
+                pc1 == BarrierPhase.b1 && pc2 == BarrierPhase.b1 && pc3 == BarrierPhase.b1 && pc4 == BarrierPhase.b1 && pc5 == BarrierPhase.b1 && pc6 == BarrierPhase.b1
+                    && pc1.becomes(BarrierPhase.b0) && pc2.becomes(BarrierPhase.b0) && pc3.becomes(BarrierPhase.b0)
+                    && pc4.becomes(BarrierPhase.b0) && pc5.becomes(BarrierPhase.b0) && pc6.becomes(BarrierPhase.b0)
             }
         }
     }
