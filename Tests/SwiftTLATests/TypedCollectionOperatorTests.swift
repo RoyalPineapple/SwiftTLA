@@ -106,6 +106,6 @@ private struct TypedQuantifierGeneratedModel {
         var model = TypedQuantifierGeneratedModel()
         let result = try model.apply(.findEven)
         #expect(result.after.result == true)
-        #expect(TypedQuantifierGeneratedModel.spec.tlaModule.contains("\\\\E"))
+        #expect(TypedQuantifierGeneratedModel.spec.tlaModule.contains("\\E"))
     }
 }
