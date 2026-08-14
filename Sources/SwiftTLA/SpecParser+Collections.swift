@@ -24,6 +24,21 @@ extension SpecParser {
                     arguments[1].argument.description.trimmingCharacters(in: .whitespacesAndNewlines)
                 )
             }
+            for binding in variable.bindings {
+                guard let name = binding.pattern.as(IdentifierPatternSyntax.self)?.identifier.text,
+                      let call = binding.initializer?.value.as(FunctionCallExprSyntax.self),
+                      call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "SharedCollection",
+                      let elementSyntax = call.arguments.first?.expression.as(MemberAccessExprSyntax.self),
+                      elementSyntax.declName.baseName.text == "self",
+                      let base = elementSyntax.base,
+                      let initial = call.arguments.first(where: { $0.label?.text == "initial" })?.expression,
+                      let value = initialValueTypeName(from: initial)
+                else { continue }
+                types[name] = (
+                    base.description.trimmingCharacters(in: .whitespacesAndNewlines),
+                    value
+                )
+            }
         }
         return types
     }
@@ -60,6 +75,34 @@ extension SpecParser {
             declaration: declaration
         ))
         result.variables.append((collectionName, declaration.variable.initial, nil, nil))
+    }
+
+    static func parseSharedCollectionDecl(
+        name: String,
+        call: FunctionCallExprSyntax,
+        into result: inout ParsedSpecComponents,
+        collectionTypes: [String: (element: String, value: String)]
+    ) -> Bool {
+        guard call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "SharedCollection",
+              let types = collectionTypes[name],
+              let scopeSyntax = call.arguments.first(where: { $0.label?.text == "verificationScope" })?.expression,
+              let scopeLiteral = scopeSyntax.as(IntegerLiteralExprSyntax.self),
+              let scope = Int(scopeLiteral.literal.text),
+              let initialSyntax = call.arguments.first(where: { $0.label?.text == "initial" })?.expression,
+              let initial = parseLiteralValue(initialSyntax)
+        else { return false }
+
+        let declaration = SymmetricCollectionDecl(name: name, verificationScope: scope, initial: initial)
+        result.symmetricCollections.append(.init(
+            name: name,
+            elementType: types.element,
+            valueType: types.value,
+            verificationScope: scope,
+            source: call.description,
+            declaration: declaration
+        ))
+        result.variables.append((name, declaration.variable.initial, nil, nil))
+        return true
     }
 
     static func parseCollectionAction(

@@ -543,6 +543,9 @@ public enum SpecBuilder {
     [expr]
   }
   public static func buildExpression(_ expr: SymmetricCollectionDecl) -> [SpecComponent] { [expr] }
+  public static func buildExpression<Element: Identifiable, Value: TLAValueType>(
+    _ expr: SharedCollection<Element, Value>
+  ) -> [SpecComponent] { [expr.declaration] }
   public static func buildExpression(_ expr: NamedValueDecl) -> [SpecComponent] { [] }
   public static func buildExpression(_ expr: OpDecl) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: OpUse) -> [SpecComponent] { [expr] }

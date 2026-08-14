@@ -40,6 +40,62 @@ public struct SymmetricCollectionVar<Element: Identifiable, Value: TLAValueType>
   }
 }
 
+/// A shared registry whose concrete members are unbounded at runtime and
+/// exchangeable representatives during finite verification.
+///
+/// `SharedCollection` is the public declaration used in a `#spec` body. The
+/// `#spec` macro supplies the declaration's formal name from the Swift `let`
+/// binding, so authors write `let devices = SharedCollection(Device.self, ...)`.
+/// The modeled collection is still a total finite function; this wrapper only
+/// keeps that encoding out of the authored API.
+public struct SharedCollection<Element: Identifiable, Value: TLAValueType>: Sendable {
+  public let name: String
+  public let verificationScope: Int
+  public let initial: Value
+
+  private let storage: SymmetricCollectionVar<Element, Value>
+
+  public init(
+    _ name: String,
+    _ element: Element.Type,
+    verificationScope: Int,
+    initial: Value
+  ) {
+    self.name = name
+    self.verificationScope = verificationScope
+    self.initial = initial
+    self.storage = SymmetricCollectionVar(name)
+  }
+
+  public subscript(_ member: SymmetricMember<Element>) -> Expr<Value> {
+    storage[member]
+  }
+
+  public func update(_ member: SymmetricMember<Element>, to value: Value) -> ActionExpr {
+    storage.update(member, to: value)
+  }
+
+  public func update(_ member: SymmetricMember<Element>, to value: Expr<Value>) -> ActionExpr {
+    storage.update(member, to: value)
+  }
+
+  public func allSatisfy(_ predicate: (Expr<Value>) -> StateExpr) -> StateExpr {
+    storage.allSatisfy(predicate)
+  }
+
+  public func contains(where predicate: (Expr<Value>) -> StateExpr) -> StateExpr {
+    storage.contains(where: predicate)
+  }
+
+  public var declaration: SymmetricCollectionDecl {
+    SymmetricCollectionDecl(name: name, verificationScope: verificationScope, initial: initial.tlaValue)
+  }
+
+  fileprivate var symmetricStorage: SymmetricCollectionVar<Element, Value> {
+    storage
+  }
+}
+
 /// Opaque action-selection token for a symmetric collection member.
 ///
 /// It intentionally provides no public identity projection or comparison
@@ -385,6 +441,15 @@ public func SymmetricCollection<Element: Identifiable, Value: TLAValueType>(
 ) -> SymmetricCollectionDecl {
   SymmetricCollectionDecl(
     name: collection.name, verificationScope: verificationScope, initial: initial.tlaValue)
+}
+
+@discardableResult
+public func CollectionAction<Element: Identifiable, Value: TLAValueType>(
+  _ name: String,
+  on collection: SharedCollection<Element, Value>,
+  @ActionBuilder _ body: (SymmetricMember<Element>) -> ActionExpr
+) -> ActionDecl {
+  CollectionAction(name, on: collection.symmetricStorage, body)
 }
 
 @discardableResult

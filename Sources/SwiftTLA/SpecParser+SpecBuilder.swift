@@ -106,7 +106,7 @@ extension SpecParser {
                 parseForLoop(forStmt, into: &result)
             } else if case .decl(let decl) = statement.item,
                       let varDecl = decl.as(VariableDeclSyntax.self) {
-                parseStateVarDecl(varDecl, into: &result)
+                parseStateVarDecl(varDecl, into: &result, collectionTypes: collectionTypes)
             }
         }
         return result
@@ -143,12 +143,25 @@ extension SpecParser {
 
     /// Parses `let x = Var(...)` or `let x = StateVar(...)` bindings into `ParsedSpecComponents.variables`.
     /// Handles both raw `Var("x", 0)` and rewrites where ModelMacro injected a string name.
-    static func parseStateVarDecl(_ varDecl: VariableDeclSyntax, into result: inout ParsedSpecComponents) {
+    static func parseStateVarDecl(
+        _ varDecl: VariableDeclSyntax,
+        into result: inout ParsedSpecComponents,
+        collectionTypes: [String: (element: String, value: String)] = [:]
+    ) {
         for binding in varDecl.bindings {
             guard let patternName = binding.pattern.as(IdentifierPatternSyntax.self)?.identifier.text,
                   let initializer = binding.initializer?.value,
                   let fc = initializer.as(FunctionCallExprSyntax.self)
             else { continue }
+
+            if parseSharedCollectionDecl(
+                name: patternName,
+                call: fc,
+                into: &result,
+                collectionTypes: collectionTypes
+            ) {
+                continue
+            }
 
             let stateVarInfo = resolveVarCall(fc)
             let varTypeName = stateVarInfo?.1 ?? resolveVarTypeArg(fc)

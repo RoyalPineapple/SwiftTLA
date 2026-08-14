@@ -39,8 +39,11 @@ public struct BluetoothDeviceCoordinator {
             let central = Var<CentralPhase>("central", .poweredOn)
             Variable(central)
 
-            let devicePhases = SymmetricCollectionVar<Device, DevicePhase>("devicePhases")
-            SymmetricCollection(devicePhases, verificationScope: 4, initial: DevicePhase.disconnected)
+            let devicePhases = SharedCollection(
+                Device.self,
+                verificationScope: 4,
+                initial: DevicePhase.disconnected
+            )
 
             Action("powerOff") {
                 central == CentralPhase.poweredOn &&
