@@ -428,6 +428,48 @@ private enum ParserNode: String, FiniteDomainKey {
         #expect(evidence?.description.contains("Next safe action:") == true)
     }
 
+    @Test func localOperatorParameterNamesAreAlphaEquivalent() {
+        let parserTree = ParsedSpecModel(
+            variables: [],
+            actions: [(
+                "advance",
+                .guard_(.letIn([
+                    LocalOperator(
+                        "Twice",
+                        parameters: ["input"],
+                        body: .add(.variable("input"), .variable("input"))
+                    )
+                ], .operatorApplication(
+                    .reference("Twice", arity: 1),
+                    [.value(.variable("counter"))]
+                ))),
+                []
+            )],
+            invariants: []
+        )
+        let builderTree = ParsedSpecModel(
+            variables: [],
+            actions: [(
+                "advance",
+                .guard_(.letIn([
+                    LocalOperator(
+                        "Twice",
+                        parameters: ["value"],
+                        body: .add(.variable("value"), .variable("value"))
+                    )
+                ], .operatorApplication(
+                    .reference("Twice", arity: 1),
+                    [.value(.variable("counter"))]
+                ))),
+                []
+            )],
+            invariants: []
+        )
+
+        #expect(_tlaAlphaEquivalent(parserTree, builderTree))
+        #expect(_tlaFidelityEvidence(parserTree, builderTree) == nil)
+    }
+
     @Test func parserDiagnosticRetainsSourceSpanAndNoCommitStatus() {
         let source = """
         {

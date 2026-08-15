@@ -470,8 +470,13 @@ private func stateKey(_ expression: StateExpr, environment: [String: String], ne
         return "letValue(\(canonical),\(valueKey),\(key(body, environment: extended)))"
     case .letIn(let operators, let body):
         let declarations = operators.map { operation in
-            let parameterNames = operation.parameters.joined(separator: ",")
-            return "local(\(operation.name),[\(parameterNames)],\(key(operation.body)))"
+            var operatorEnvironment = environment
+            let parameterNames = operation.parameters.map { parameter -> String in
+                let (canonical, extended) = fresh(parameter, environment: operatorEnvironment, next: &next)
+                operatorEnvironment = extended
+                return canonical
+            }
+            return "local(\(operation.name),[\(parameterNames.joined(separator: ","))],\(key(operation.body, environment: operatorEnvironment)))"
         }.joined(separator: ",")
         return "letIn([\(declarations)],\(key(body)))"
     }
