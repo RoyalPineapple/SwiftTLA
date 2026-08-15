@@ -750,11 +750,25 @@ public enum SpecParser {
 
     static func typedFieldName(_ expression: ExprSyntax) -> String? {
         guard let member = expression.as(MemberAccessExprSyntax.self),
-              let base = member.base?.as(DeclReferenceExprSyntax.self),
-              _enumPhases[base.baseName.text] == nil,
               member.declName.baseName.text != "finiteValues"
         else { return nil }
+        if let typeName = terminalTypeName(in: member.base), _enumPhases[typeName] != nil {
+            return nil
+        }
         return member.declName.baseName.text
+    }
+
+    /// A record field may be qualified by its enclosing model type, while an
+    /// enum case must remain a formal enum value. Reduce either spelling to
+    /// its terminal type name before consulting the enum namespace.
+    static func terminalTypeName(in expression: ExprSyntax?) -> String? {
+        if let reference = expression?.as(DeclReferenceExprSyntax.self) {
+            return reference.baseName.text
+        }
+        if let member = expression?.as(MemberAccessExprSyntax.self) {
+            return member.declName.baseName.text
+        }
+        return nil
     }
 
     static func typedLiteralType(_ expression: ExprSyntax?) -> (name: String, arguments: [String])? {

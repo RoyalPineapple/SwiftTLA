@@ -99,6 +99,32 @@ private func parseExpression(_ source: String) -> ExprSyntax {
         ])
     }
 
+    @Test("parser lowers ordered multi-source With bindings")
+    func parsesThreeIndependentWithBindings() {
+        let source = """
+        {
+            Algorithm("ThreeWith") {
+                let selected = SharedVar(initial: 0)
+                Do("choose") {
+                    With(
+                        SetExpr<Int>.literal(1, 2),
+                        SetExpr<Int>.literal(10),
+                        SetExpr<Int>.literal(100, 200)
+                    ) { first, second, third in
+                        Assign(selected, to: first.expr + second.expr + third.expr)
+                    }
+                }
+            }
+        }
+        """
+        let closure = Parser.parse(source: source).statements.first!.item.as(ClosureExprSyntax.self)!
+        let parsed = SpecParser.parseSpecClosure(closure)
+
+        #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
+        #expect(parsed.actions.first?.body.description.contains("__pcal_with_0") == true)
+        #expect(parsed.actions.first?.body.description.contains("__pcal_with_2") == true)
+    }
+
     @Test("parser expands a bounded statement macro in its caller's atomic step")
     func parsesStatementMacro() {
         let source = """
@@ -287,6 +313,35 @@ private func parseExpression(_ source: String) -> ExprSyntax {
         #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
         #expect(parsed.variables.first?.swiftTypeName == "Function<Node, SetExpr<Node>>")
         #expect(parsed.variables.first?.initialSet?.description.contains("Cardinality") == true)
+    }
+
+    @Test("parser retains a typed record-valued function comprehension")
+    func parsesRecordFunctionComprehension() {
+        let source = """
+        {
+            Algorithm("RecordFunction") {
+                let cars = SharedVar(initial: Function<Car, Record<Model.CarRecord>>.mapping { _ in
+                    Record.literal(
+                        .init(Model.CarRecord.floor, 4),
+                        .init(Model.CarRecord.door, .closed)
+                    )
+                })
+                Do("hold") { Assign(cars, to: cars.expr) }
+            }
+        }
+        """
+        let closure = Parser.parse(source: source).statements.first!.item.as(ClosureExprSyntax.self)!
+        let parsed = SpecParser.parseSpecClosure(
+            closure,
+            enumPhases: ["Door": ["closed": .string("closed")]],
+            enumDomains: ["Car": [.string("north"), .string("south")]]
+        )
+
+        #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
+        #expect(parsed.variables.first?.name == "cars")
+        #expect(parsed.variables.first?.initial.description.contains("[__pcal_function_key") == true)
+        #expect(parsed.variables.first?.initial.description.contains("floor") == true)
+        #expect(parsed.variables.first?.initial.description.contains("door") == true)
     }
 
     @Test("parser resolves a static formal selection before algorithm lowering")

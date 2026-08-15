@@ -1495,6 +1495,37 @@ public func With<First: TLAValueType, Second: TLAValueType>(
     }
 }
 
+/// Binds three independent members in formal left-to-right scope order.
+public func With<First: TLAValueType, Second: TLAValueType, Third: TLAValueType>(
+    _ first: Expr<SetExpr<First>>,
+    _ second: Expr<SetExpr<Second>>,
+    _ third: Expr<SetExpr<Third>>,
+    @DoBuilder _ body: (WithValue<First>, WithValue<Second>, WithValue<Third>) -> [StepStatement]
+) -> StepStatement {
+    With(first) { firstValue in
+        With(second) { secondValue in
+            With(third) { thirdValue in
+                body(firstValue, secondValue, thirdValue)
+            }
+        }
+    }
+}
+
+/// Binds four independent members in formal left-to-right scope order.
+public func With<First: TLAValueType, Second: TLAValueType, Third: TLAValueType, Fourth: TLAValueType>(
+    _ first: Expr<SetExpr<First>>,
+    _ second: Expr<SetExpr<Second>>,
+    _ third: Expr<SetExpr<Third>>,
+    _ fourth: Expr<SetExpr<Fourth>>,
+    @DoBuilder _ body: (WithValue<First>, WithValue<Second>, WithValue<Third>, WithValue<Fourth>) -> [StepStatement]
+) -> StepStatement {
+    With(first, second, third) { firstValue, secondValue, thirdValue in
+        With(fourth) { fourthValue in
+            body(firstValue, secondValue, thirdValue, fourthValue)
+        }
+    }
+}
+
 /// Destructures a selected two-member formal tuple for one atomic block.
 ///
 /// This is the typed Swift spelling of PlusCal's

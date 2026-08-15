@@ -733,23 +733,21 @@ extension SpecParser {
             }
             return nestedBody[0]
         case "With":
-            guard let sourceSyntax = call.arguments.first?.expression,
-                  let source = (finiteAlgorithmDomain(sourceSyntax).map { domain in
-                      StateExpr.setLiteral(domain.values.map(StateExpr.value))
-                  } ?? decodeStateExpr(sourceSyntax)),
-                  let closure = call.trailingClosure,
+            guard let closure = call.trailingClosure,
                   let body = parseAlgorithmStatements(closure.statements, processParameter: processParameter, macros: macros)
             else { return nil }
+            let sources = call.arguments.compactMap { algorithmWithSource($0.expression) }
+            guard sources.count == call.arguments.count else { return nil }
             let bindings = closureParameterNames(in: closure)
-            switch bindings.count {
-            case 1:
+            switch (sources.count, bindings.count) {
+            case (1, 1):
                 let replacement = "__pcal_with"
                 return .with(
                     variable: replacement,
-                    source: replacingProcessParameter(in: source, named: processParameter),
+                    source: replacingProcessParameter(in: sources[0], named: processParameter),
                     body.map { replaceAlgorithmVariable($0, from: bindings[0], to: replacement) }
                 )
-            case 2:
+            case (1, 2):
                 // `With(SetExpr<Pair<A, B>>) { first, second in ... }` is
                 // PlusCal's `with <<first, second>> \in Pairs`. Keep one
                 // formal selection, then bind both tuple positions inside its
@@ -762,7 +760,7 @@ extension SpecParser {
                     .map { replaceAlgorithmVariable($0, from: bindings[1], to: secondBinding) }
                 return .with(
                     variable: tupleBinding,
-                    source: replacingProcessParameter(in: source, named: processParameter),
+                    source: replacingProcessParameter(in: sources[0], named: processParameter),
                     [
                         .letBinding(
                             variable: firstBinding,
@@ -778,8 +776,24 @@ extension SpecParser {
                     ]
                 )
             default:
-                algorithmParseFailure = "With requires one value or a two-member Pair pattern."
-                return nil
+                guard sources.count == bindings.count, (1...4).contains(sources.count) else {
+                    algorithmParseFailure = "What failed: With binding pattern. Where: With closure. "
+                        + "Expected one binding, a two-member Pair pattern, or one formal source per binding (up to four); "
+                        + "found \(bindings.count) binding(s) and \(sources.count) source(s). "
+                        + "What changed: no model was changed. Next safe action: use independent With sources or a Pair."
+                    return nil
+                }
+                var boundBody = body
+                var selections: [(variable: String, source: StateExpr)] = []
+                for (index, binding) in bindings.enumerated() {
+                    let variable = "__pcal_with_\(index)"
+                    boundBody = boundBody.map { replaceAlgorithmVariable($0, from: binding, to: variable) }
+                    selections.append((variable, replacingProcessParameter(in: sources[index], named: processParameter)))
+                }
+                for selection in selections.reversed() {
+                    boundBody = [.with(variable: selection.variable, source: selection.source, boundBody)]
+                }
+                return boundBody[0]
             }
         case "Let":
             guard let valueSyntax = call.arguments.first?.expression,
@@ -797,6 +811,12 @@ extension SpecParser {
         default:
             return nil
         }
+    }
+
+    private static func algorithmWithSource(_ syntax: ExprSyntax) -> StateExpr? {
+        finiteAlgorithmDomain(syntax).map { domain in
+            StateExpr.setLiteral(domain.values.map(StateExpr.value))
+        } ?? decodeStateExpr(syntax)
     }
 
     /// Expands a bounded statement macro into the surrounding atomic block.
