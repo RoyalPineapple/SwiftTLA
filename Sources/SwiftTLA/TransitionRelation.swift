@@ -75,7 +75,7 @@ public struct TransitionRelation: Sendable {
                     try constraint.evaluateBool(
                         in: successor,
                         runtimeFuncs: spec.runtimeFuncs,
-                        recursiveFuncs: spec.recursiveFuncs
+                        recursiveFuncs: spec.resolvedRecursiveFuncs
                     ) ? Successor(invocation: variant.invocation, state: successor) : nil
                 }
             }

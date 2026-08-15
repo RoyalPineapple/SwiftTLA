@@ -18,6 +18,7 @@ extension TLASpec {
     var constraint: StateExpr?
     var recursiveDefs: [String] = []
     var recursiveFuncs: [RecursiveFunc] = []
+    let importedModules = components.compactMap { ($0 as? ImportDecl)?.module }
     var useSpecs: [TLASpec] = []
     var runtimeFuncCollector: [String: @Sendable ([TLAValue]) -> TLAValue] = [:]
     var runtimeFuncBodiesCollector: [String] = []
@@ -180,6 +181,7 @@ extension TLASpec {
     self.constraint = constraint
     self.recursiveDefs = recursiveDefs
     self.recursiveFuncs = recursiveFuncs
+    self.imports = importedModules
     self.runtimeFuncs = runtimeFuncCollector
     self.runtimeFuncBodies = runtimeFuncBodiesCollector
     self.symmetrySets = symmetrySets
@@ -225,6 +227,7 @@ public func substituteConstants(_ spec: TLASpec) -> TLASpec {
     constraint: spec.constraint.map { substituteInState($0, constants: constants) },
     recursiveDefs: spec.recursiveDefs,
     recursiveFuncs: spec.recursiveFuncs,
+    imports: spec.imports,
     symmetrySets: spec.symmetrySets,
     symmetryGroups: spec.symmetryGroups,
     symmetricCollections: spec.symmetricCollections

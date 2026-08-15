@@ -12,8 +12,15 @@ extension TLASpec {
         let modName = name.replacingOccurrences(of: " ", with: "")
         lines.append("---- MODULE \(modName) ----")
 
-        let symmetryModule = symmetrySets.isEmpty && symmetricCollections.isEmpty ? "" : ", TLC"
-        lines.append("EXTENDS \(extendsModules), FiniteSets, Sequences\(symmetryModule)")
+        let symmetryModule = symmetrySets.isEmpty && symmetricCollections.isEmpty ? [] : ["TLC"]
+        let importedNames = imports.map(\.name)
+        let modules = (extendsModules.split(separator: ",").map {
+            $0.trimmingCharacters(in: .whitespaces)
+        } + ["FiniteSets", "Sequences"] + symmetryModule + importedNames)
+            .reduce(into: [String]()) { names, module in
+                if !names.contains(module) { names.append(module) }
+            }
+        lines.append("EXTENDS \(modules.joined(separator: ", "))")
         lines.append("")
 
         let generatedMemberSymbols = symmetricCollections.flatMap { collection in
@@ -206,9 +213,25 @@ extension TLASpec {
         return lines.joined(separator: "\n") + "\n"
     }
 
-    /// Complete TLA+ bundle: .tla module + .cfg file.
-    public var tlaBundle: (tla: String, cfg: String) {
-        (tlaModule, tlaCfg)
+    /// Complete TLA+ source bundle: the root module, its configuration, and
+    /// each imported module in dependency order.
+    public var tlaBundle: TLAModuleBundle {
+        var emitted = Set<String>()
+        var files: [TLAModuleFile] = []
+
+        func appendImports(of module: TLASpec) {
+            for imported in module.imports {
+                appendImports(of: imported)
+                guard emitted.insert(imported.name).inserted else { continue }
+                files.append(TLAModuleFile(name: imported.name, tla: imported.tlaModule))
+            }
+        }
+
+        appendImports(of: self)
+        return TLAModuleBundle(
+            root: TLAModuleFile(name: name, tla: tlaModule, cfg: tlaCfg),
+            imports: files
+        )
     }
 
     private func validateSymmetricCollectionExport() {

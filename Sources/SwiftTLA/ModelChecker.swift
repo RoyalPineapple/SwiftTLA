@@ -109,7 +109,7 @@ public struct ModelChecker {
             seeds: seeds,
             variableNames: variableNames,
             expand: buildExpander(transitionRelation),
-            evaluate: buildEvaluator(runtimeFuncs: substituted.runtimeFuncs, recursiveFuncs: substituted.recursiveFuncs),
+            evaluate: buildEvaluator(runtimeFuncs: substituted.runtimeFuncs, recursiveFuncs: substituted.resolvedRecursiveFuncs),
             actions: actions,
             invariants: substituted.invariants,
             checkDeadlock: substituted.checkDeadlock,
@@ -142,7 +142,7 @@ public struct ModelChecker {
 
     private func checkAssume(_ specification: TLASpec, initial: State) throws -> Bool {
         guard let assume = specification.assume else { return true }
-        return try assume.evaluateBool(in: initial, runtimeFuncs: specification.runtimeFuncs, recursiveFuncs: specification.recursiveFuncs)
+        return try assume.evaluateBool(in: initial, runtimeFuncs: specification.runtimeFuncs, recursiveFuncs: specification.resolvedRecursiveFuncs)
     }
 
     private func emptyExploration(

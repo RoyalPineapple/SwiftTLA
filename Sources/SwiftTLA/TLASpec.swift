@@ -191,6 +191,8 @@ public struct TLASpec: Sendable {
   public let constraint: StateExpr?
   public let recursiveDefs: [String]
   public let recursiveFuncs: [RecursiveFunc]
+  /// Imported modules remain separate source files and resolve their operators at runtime.
+  public let imports: [TLASpec]
   public var runtimeFuncs: [String: @Sendable ([TLAValue]) -> TLAValue] = [:]
   public var runtimeFuncBodies: [String] = []
   public let symmetrySets: [SymmetrySet]
@@ -202,7 +204,7 @@ public struct TLASpec: Sendable {
     fairness: [FairnessCondition] = [], assume: StateExpr? = nil, checkDeadlock: Bool = false,
     definitions: [String] = [], theorems: [String] = [], extendsModules: String = "Integers",
     constraint: StateExpr? = nil, recursiveDefs: [String] = [],
-    recursiveFuncs: [RecursiveFunc] = [], symmetrySets: [SymmetrySet] = [],
+    recursiveFuncs: [RecursiveFunc] = [], imports: [TLASpec] = [], symmetrySets: [SymmetrySet] = [],
     symmetryGroups: [SymmetryVariableGroup] = [],
     symmetricCollections: [SymmetricCollectionDecl] = []
   ) {
@@ -221,9 +223,30 @@ public struct TLASpec: Sendable {
     self.constraint = constraint
     self.recursiveDefs = recursiveDefs
     self.recursiveFuncs = recursiveFuncs
+    self.imports = imports
     self.symmetrySets = symmetrySets
     self.symmetryGroups = symmetryGroups
     self.symmetricCollections = symmetricCollections
+  }
+
+  /// Recursive definitions visible after resolving the module import graph.
+  /// TLA+ `EXTENDS` exports imported operator names into the consumer scope,
+  /// so duplicate names are rejected instead of being silently shadowed.
+  public var resolvedRecursiveFuncs: [RecursiveFunc] {
+    var seen = Set<String>()
+    var result: [RecursiveFunc] = []
+    func visit(_ module: TLASpec, path: inout Set<String>) {
+      precondition(path.insert(module.name).inserted, "Cyclic formal module import: \(module.name)")
+      for imported in module.imports { visit(imported, path: &path) }
+      for function in module.recursiveFuncs {
+        precondition(seen.insert(function.name).inserted, "Duplicate imported formal operator: \(function.name)")
+        result.append(function)
+      }
+      path.remove(module.name)
+    }
+    var path = Set<String>()
+    visit(self, path: &path)
+    return result
   }
   public var description: String {
     var lines = ["Spec \"\(name)\""]
@@ -269,6 +292,7 @@ public struct TLASpec: Sendable {
       }(),
       recursiveDefs: self.recursiveDefs + other.recursiveDefs,
       recursiveFuncs: self.recursiveFuncs + other.recursiveFuncs,
+      imports: self.imports + other.imports,
       symmetrySets: self.symmetrySets + other.symmetrySets,
       symmetryGroups: self.symmetryGroups + other.symmetryGroups,
       symmetricCollections: self.symmetricCollections + other.symmetricCollections
@@ -292,6 +316,7 @@ public struct TLASpec: Sendable {
       constraint: self.constraint,
       recursiveDefs: self.recursiveDefs,
       recursiveFuncs: self.recursiveFuncs,
+      imports: self.imports,
       symmetrySets: self.symmetrySets,
       symmetryGroups: self.symmetryGroups,
       symmetricCollections: self.symmetricCollections
@@ -480,6 +505,7 @@ public struct UseDecl: SpecComponent {
   public let spec: TLASpec
   init(_ spec: TLASpec) { self.spec = spec }
 }
+
 public struct ConstraintDecl: SpecComponent, Equatable {
   public let body: StateExpr
   init(_ body: StateExpr) { self.body = body }
@@ -536,6 +562,7 @@ public enum SpecBuilder {
   public static func buildExpression(_ expr: AssumeDecl) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: ExtendsDecl) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: UseDecl) -> [SpecComponent] { [expr] }
+  public static func buildExpression(_ expr: ImportDecl) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: UseSpecDecl) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: DeadlockDecl) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: ConstraintDecl) -> [SpecComponent] { [expr] }
