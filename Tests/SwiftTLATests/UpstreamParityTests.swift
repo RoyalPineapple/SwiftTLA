@@ -145,6 +145,13 @@ struct UpstreamParityTests {
         #expect(count == Example.consensus.expectedDistinct)
     }
 
+    @Test("SumSequence bounded source port verifies")
+    func sumSequenceBoundedPort() throws {
+        SumSequenceModel._checkParserTree()
+        let count = try SumSequenceModel.verifySpec()
+        #expect(count == Example.sumSequence.expectedDistinct)
+    }
+
     @Test("EWD840 uses typed finite function state")
     func ewd840TypedFunctionParity() throws {
         try EWD840Model.verifySpec()

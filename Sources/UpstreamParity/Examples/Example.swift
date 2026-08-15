@@ -55,6 +55,7 @@ public enum Example {
         simpleAllocator,
         singleLaneBridge,
         syncTD,
+        sumSequence,
         tCommit,
         teachingSimpleN2,
         teachingSimpleN3,
