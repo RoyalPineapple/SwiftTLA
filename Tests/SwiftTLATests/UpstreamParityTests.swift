@@ -159,6 +159,13 @@ struct UpstreamParityTests {
         #expect(count == Example.reachable.expectedDistinct)
     }
 
+    @Test("Parallel Reachable bounded source port verifies")
+    func parallelReachableBoundedPort() throws {
+        ParallelReachableModel._checkParserTree()
+        let count = try ParallelReachableModel.verifySpec()
+        #expect(count == Example.parallelReachable.expectedDistinct)
+    }
+
     @Test("EWD840 uses typed finite function state")
     func ewd840TypedFunctionParity() throws {
         try EWD840Model.verifySpec()

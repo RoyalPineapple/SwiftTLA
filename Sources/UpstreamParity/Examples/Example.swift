@@ -48,6 +48,7 @@ public enum Example {
         lockTwoProcess,
         multiCarElevator,
         nQueensFour,
+        parallelReachable,
         paxosSmall,
         petersonTwoProcess,
         prisonerN3,

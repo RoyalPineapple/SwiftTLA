@@ -106,6 +106,12 @@ extension Expr {
     where T == Function<Domain, Range>, Range: TLAValueType {
         Expr<Range>(.functionApply(raw, index.stateExpr))
     }
+
+    /// Reads a finite function using process-local formal state.
+    public subscript<Domain: FiniteDomainKey, Range>(_ index: LocalVariable<Domain>) -> Expr<Range>
+    where T == Function<Domain, Range>, Range: TLAValueType {
+        Expr<Range>(.functionApply(raw, index.stateExpr))
+    }
 }
 
 extension Function where Domain: FiniteDomainKey {
@@ -499,6 +505,12 @@ extension SharedVariable {
     public func contains<Element: TLAValueType>(_ element: WithValue<Element>) -> StateExpr
     where Value == SetExpr<Element> {
         .in(element.stateExpr, stateExpr)
+    }
+
+    /// Returns this shared formal set without `element`.
+    public func removing<Element: TLAValueType>(_ element: Expr<Element>) -> Expr<SetExpr<Element>>
+    where Value == SetExpr<Element> {
+        Expr(.setDifference(stateExpr, .setLiteral([element.raw])))
     }
 
     public func appending<Element: TLAValueType>(_ element: Element) -> Expr<TupleExpr<Element>>
