@@ -433,7 +433,19 @@ private func substituteInState(_ expr: StateExpr, constants: [String: TLAValue])
     }
     return .operatorApplication(
       substitutedOperator,
-      arguments.map { substituteInState($0, constants: constants) }
+      arguments.map { argument in
+        switch argument {
+        case .value(let expression):
+          FormalCallArgument.value(substituteInState(expression, constants: constants))
+        case .operator(.reference(let name, let arity)):
+          FormalCallArgument.operator(.reference(name, arity: arity))
+        case .operator(.lambda(let lambda)):
+          FormalCallArgument.operator(.lambda(FormalLambda(
+            parameters: lambda.parameters,
+            body: substituteInState(lambda.body, constants: constants)
+          )))
+        }
+      }
     )
   case .letIn(let operators, let body):
     return .letIn(

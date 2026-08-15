@@ -185,6 +185,22 @@ extension StateExpr {
   }
 }
 
+private extension FormalCallArgument {
+  var swiftSource: String {
+    switch self {
+    case .value(let expression): return ".value(\(expression.swiftSource))"
+    case .operator(let operation):
+      switch operation {
+      case .lambda(let lambda):
+        let parameters = lambda.parameters.map { "\"\($0)\"" }.joined(separator: ", ")
+        return ".operator(.lambda(FormalLambda(parameters: [\(parameters)], body: \(lambda.body.swiftSource))))"
+      case .reference(let name, let arity):
+        return ".operator(.reference(\"\(name)\", arity: \(arity)))"
+      }
+    }
+  }
+}
+
 extension TemporalExpr {
   var swiftSource: String {
     switch self {

@@ -797,7 +797,19 @@ enum AlgorithmLowerer {
                 }
                 return .operatorApplication(
                     rewrittenOperator,
-                    arguments.map { rewritten($0, localRoots: localRoots) }
+                    arguments.map { argument in
+                        switch argument {
+                        case .value(let value):
+                            .value(rewritten(value, localRoots: localRoots))
+                        case .operator(.reference(let name, let arity)):
+                            .operator(.reference(name, arity: arity))
+                        case .operator(.lambda(let lambda)):
+                            .operator(.lambda(FormalLambda(
+                                parameters: lambda.parameters,
+                                body: rewritten(lambda.body, localRoots: localRoots)
+                            )))
+                        }
+                    }
                 )
             case .recursiveCall(let name, let arguments): return .recursiveCall(name, arguments.map { rewritten($0, localRoots: localRoots) })
             case .letIn(let operators, let body):

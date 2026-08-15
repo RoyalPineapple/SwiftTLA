@@ -100,3 +100,14 @@ extension StateExpr {
         return "\(preferred)_\(suffix)"
     }
 }
+
+private extension FormalCallArgument {
+    var freeVariableNames: Set<String> {
+        switch self {
+        case .value(let expression): expression.freeVariableNames
+        case .operator(.lambda(let lambda)):
+            lambda.body.freeVariableNames.subtracting(Set(lambda.parameters))
+        case .operator(.reference): []
+        }
+    }
+}

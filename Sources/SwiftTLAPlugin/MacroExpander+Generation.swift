@@ -515,7 +515,13 @@ extension MacroExpander {
             if case .lambda(let lambda) = operation {
                 walkStateExpr(lambda.body, visitor: visitor)
             }
-            arguments.forEach { walkStateExpr($0, visitor: visitor) }
+            arguments.forEach { argument in
+                switch argument {
+                case .value(let expression): walkStateExpr(expression, visitor: visitor)
+                case .operator(.lambda(let lambda)): walkStateExpr(lambda.body, visitor: visitor)
+                case .operator(.reference): break
+                }
+            }
         case .caseExpr(let ps, let fb): ps.forEach { walkStateExpr($0, visitor: visitor) }; fb.map { walkStateExpr($0, visitor: visitor) }
         case .forAll, .exists, .choose, .sequenceFromSet, .setSum, .functionSet, .recursiveCall, .enabledAction: break
         case .letIn(let operators, let body):
@@ -753,7 +759,18 @@ extension MacroExpander {
             case .reference:
                 substitutedOperator = operation
             }
-            return .operatorApplication(substitutedOperator, arguments.map(sub))
+            return .operatorApplication(substitutedOperator, arguments.map { argument in
+                switch argument {
+                case .value(let expression): return FormalCallArgument.value(sub(expression))
+                case .operator(.reference(let name, let arity)):
+                    return FormalCallArgument.operator(.reference(name, arity: arity))
+                case .operator(.lambda(let lambda)):
+                    return FormalCallArgument.operator(.lambda(FormalLambda(
+                        parameters: lambda.parameters,
+                        body: lambda.parameters.contains(name) ? lambda.body : sub(lambda.body)
+                    )))
+                }
+            })
         case .caseExpr(let ps, let fb): return .caseExpr(ps.map(sub), fb.map(sub))
         case .forAll, .exists, .choose, .sequenceFromSet, .setSum, .functionSet,
              .recursiveCall, .enabledAction: break

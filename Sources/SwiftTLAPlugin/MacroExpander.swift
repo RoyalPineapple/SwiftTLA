@@ -329,7 +329,17 @@ enum MacroExpander {
             case .reference(let name, let arity):
                 operatorSource = ".reference(\"\(name)\", arity: \(arity))"
             }
-            return "StateExpr.operatorApplication(\(operatorSource), [\(arguments.map(cg).joined(separator: ", "))])"
+            let argumentSource = arguments.map { argument -> String in
+                switch argument {
+                case .value(let expression): return ".value(\(cg(expression)))"
+                case .operator(.reference(let name, let arity)):
+                    return ".operator(.reference(\"\(name)\", arity: \(arity)))"
+                case .operator(.lambda(let lambda)):
+                    let parameters = lambda.parameters.map { "\"\($0)\"" }.joined(separator: ", ")
+                    return ".operator(.lambda(FormalLambda(parameters: [\(parameters)], body: \(cg(lambda.body)))))"
+                }
+            }.joined(separator: ", ")
+            return "StateExpr.operatorApplication(\(operatorSource), [\(argumentSource)])"
         case .recursiveCall(let name, let arguments):
             return "StateExpr.recursiveCall(\"\(name)\", [\(arguments.map(cg).joined(separator: ", "))])"
         case .letIn(let operators, let body):

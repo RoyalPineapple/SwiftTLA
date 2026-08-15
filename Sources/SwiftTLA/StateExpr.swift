@@ -74,6 +74,54 @@ public indirect enum FormalOperator: Hashable, Sendable {
     }
 }
 
+/// One argument supplied to a formal operator call.
+///
+/// TLA+ operators can receive ordinary expressions and other operators.  Keep
+/// that distinction in the AST: a higher-order call is not a Swift closure
+/// invocation and does not erase the operator that was supplied.
+public indirect enum FormalCallArgument: Hashable, Sendable {
+    case value(StateExpr)
+    case `operator`(FormalOperator)
+}
+
+/// One ordered parameter of a formal operator definition.
+///
+/// The order is part of TLA+ operator application.  Keeping the kind beside
+/// the name lets the evaluator reject a value where the source requires an
+/// operator, or the reverse, before it evaluates the definition body.
+public enum FormalParameter: Hashable, Sendable {
+    case value(String)
+    case `operator`(String, arity: Int)
+
+    public var name: String {
+        switch self {
+        case .value(let name), .operator(let name, _): name
+        }
+    }
+}
+
+/// An executable formal definition, including higher-order parameters.
+///
+/// This is distinct from a Swift function: its body stays in `StateExpr`, so
+/// the evaluator, alpha-equivalence checker, and TLA+ exporter all observe
+/// the same operation and its supplied operators.
+public struct FormalOperatorDefinition: Hashable, Sendable {
+    public let name: String
+    public let parameters: [FormalParameter]
+    public let body: StateExpr
+
+    public init(name: String, parameters: [FormalParameter], body: StateExpr) {
+        precondition(!name.isEmpty, "A formal operator definition needs a name.")
+        precondition(
+            Set(parameters.map(\.name)).count == parameters.count,
+            "A formal operator definition cannot repeat a parameter name."
+        )
+        self.name = name
+        self.parameters = parameters
+        self.body = body
+    }
+}
+
 public indirect enum StateExpr: Hashable, Sendable, CustomStringConvertible {
     case value(TLAValue)
     case variable(String)
@@ -139,7 +187,7 @@ public indirect enum StateExpr: Hashable, Sendable, CustomStringConvertible {
     case functionSet(StateExpr, StateExpr)
     case foldFunction(FormalLambda, initial: StateExpr, sequence: StateExpr)
 
-    case operatorApplication(FormalOperator, [StateExpr])
+    case operatorApplication(FormalOperator, [FormalCallArgument])
 
     case recursiveCall(String, [StateExpr])
     case letIn([LocalOperator], StateExpr)
@@ -214,7 +262,7 @@ public indirect enum StateExpr: Hashable, Sendable, CustomStringConvertible {
         case .foldFunction(let operation, let initial, let sequence):
             return "FoldFunction(LAMBDA \(operation.parameters.joined(separator: ", ")) : \(operation.body), \(initial), \(sequence))"
         case .operatorApplication(let operation, let arguments):
-            let arguments = arguments.map(\.description).joined(separator: ", ")
+            let arguments = arguments.map(\.tlaSource).joined(separator: ", ")
             return operation.isLambda
                 ? "(\(operation.tlaSource))(\(arguments))"
                 : "\(operation.tlaSource)(\(arguments))"
@@ -250,6 +298,23 @@ private extension FormalOperator {
     var isLambda: Bool {
         if case .lambda = self { return true }
         return false
+    }
+}
+
+private extension FormalCallArgument {
+    var tlaSource: String {
+        switch self {
+        case .value(let expression): expression.description
+        case .operator(let operation): operation.tlaSource
+        }
+    }
+
+    var referencedLocalOperators: Set<String> {
+        switch self {
+        case .value(let expression): localOperatorCalls(in: expression)
+        case .operator(.lambda(let lambda)): localOperatorCalls(in: lambda.body)
+        case .operator(.reference): []
+        }
     }
 }
 
@@ -313,7 +378,7 @@ private func localOperatorCalls(in expression: StateExpr) -> Set<String> {
         case .lambda(let lambda): operatorCalls = localOperatorCalls(in: lambda.body)
         case .reference: operatorCalls = []
         }
-        return arguments.reduce(into: operatorCalls) { $0.formUnion(localOperatorCalls(in: $1)) }
+        return arguments.reduce(into: operatorCalls) { $0.formUnion($1.referencedLocalOperators) }
     }
 }
 

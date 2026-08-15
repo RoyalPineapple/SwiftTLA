@@ -26,6 +26,9 @@ extension StateExpr {
     public func evaluate(in state: [String: TLAValue],
                          runtimeFuncs: [String: RuntimeFunc] = [:],
                          recursiveFuncs: [RecursiveFunc] = [],
+                         formalOperatorDefinitions: [FormalOperatorDefinition] = [],
+                         valueBindings: [String: TLAValue] = [:],
+                         operatorBindings: [String: FormalOperator] = [:],
                          maxDepth: Int = 1000) throws -> TLAValue {
         func tm(_ op: String, got: TLAValue...) -> EvalError {
             .typeMismatch("\(op): expected matching types, got \(got.map(\.description).joined(separator: ", "))")
@@ -40,10 +43,26 @@ extension StateExpr {
             }
         }
         func ev(_ expr: StateExpr) throws -> TLAValue {
-            try expr.evaluate(in: state, runtimeFuncs: runtimeFuncs, recursiveFuncs: recursiveFuncs, maxDepth: maxDepth)
+            try expr.evaluate(
+                in: state,
+                runtimeFuncs: runtimeFuncs,
+                recursiveFuncs: recursiveFuncs,
+                formalOperatorDefinitions: formalOperatorDefinitions,
+                valueBindings: valueBindings,
+                operatorBindings: operatorBindings,
+                maxDepth: maxDepth
+            )
         }
         func evDepth(_ expr: StateExpr, _ depth: Int) throws -> TLAValue {
-            try expr.evaluate(in: state, runtimeFuncs: runtimeFuncs, recursiveFuncs: recursiveFuncs, maxDepth: depth)
+            try expr.evaluate(
+                in: state,
+                runtimeFuncs: runtimeFuncs,
+                recursiveFuncs: recursiveFuncs,
+                formalOperatorDefinitions: formalOperatorDefinitions,
+                valueBindings: valueBindings,
+                operatorBindings: operatorBindings,
+                maxDepth: depth
+            )
         }
 
         func intOp(_ a: StateExpr, _ b: StateExpr, _ op: (Int, Int) throws -> Int) throws -> TLAValue {
@@ -66,7 +85,9 @@ extension StateExpr {
         switch self {
         case .value(let v): return v
         case .variable(let name):
-            guard let val = state[name] else { throw EvalError.undefinedVariable(name) }
+            guard let val = state[name] ?? valueBindings[name] else {
+                throw EvalError.undefinedVariable(name)
+            }
             return val
 
         case .add(let a, let b): return try intOp(a, b, +)
@@ -398,14 +419,28 @@ extension StateExpr {
             return result
 
         case .operatorApplication(let operation, let arguments):
-            guard arguments.count == operation.arity else {
+            let resolvedOperation: FormalOperator
+            if case .reference(let name, _) = operation,
+               let boundOperation = operatorBindings[name] {
+                resolvedOperation = boundOperation
+            } else {
+                resolvedOperation = operation
+            }
+            guard arguments.count == resolvedOperation.arity else {
                 throw EvalError.typeMismatch(
                     "Formal operator requires \(operation.arity) arguments, got \(arguments.count)"
                 )
             }
-            let values = try arguments.map { try ev($0) }
-            switch operation {
+            switch resolvedOperation {
             case .lambda(let lambda):
+                let values = try arguments.map { argument -> TLAValue in
+                    guard case .value(let expression) = argument else {
+                        throw EvalError.typeMismatch(
+                            "A value-only formal operator received an operator argument"
+                        )
+                    }
+                    return try ev(expression)
+                }
                 var body = lambda.body
                 for (parameter, value) in zip(lambda.parameters, values) {
                     body = Self.substituteVariable(parameter, value, in: body)
@@ -415,6 +450,52 @@ extension StateExpr {
                 }
                 return try evDepth(body, maxDepth - 1)
             case .reference(let name, _):
+                if let definition = formalOperatorDefinitions.first(where: { $0.name == name }) {
+                    guard definition.parameters.count == arguments.count else {
+                        throw EvalError.typeMismatch(
+                            "Operator '\(name)' requires \(definition.parameters.count) arguments, got \(arguments.count)"
+                        )
+                    }
+                    var nextValues = valueBindings
+                    var nextOperators = operatorBindings
+                    for (parameter, argument) in zip(definition.parameters, arguments) {
+                        switch (parameter, argument) {
+                        case (.value(let parameterName), .value(let expression)):
+                            nextValues[parameterName] = try ev(expression)
+                        case (.operator(let parameterName, let arity), .operator(let supplied)):
+                            guard supplied.arity == arity else {
+                                throw EvalError.typeMismatch(
+                                    "Operator parameter '\(parameterName)' requires arity \(arity)"
+                                )
+                            }
+                            nextOperators[parameterName] = supplied
+                        case (.value(let parameterName), .operator):
+                            throw EvalError.typeMismatch("Parameter '\(parameterName)' requires a formal value")
+                        case (.operator(let parameterName, _), .value):
+                            throw EvalError.typeMismatch("Parameter '\(parameterName)' requires a formal operator")
+                        }
+                    }
+                    guard maxDepth > 0 else {
+                        throw EvalError.typeMismatch("Formal operator recursion depth exceeded")
+                    }
+                    return try definition.body.evaluate(
+                        in: state,
+                        runtimeFuncs: runtimeFuncs,
+                        recursiveFuncs: recursiveFuncs,
+                        formalOperatorDefinitions: formalOperatorDefinitions,
+                        valueBindings: nextValues,
+                        operatorBindings: nextOperators,
+                        maxDepth: maxDepth - 1
+                    )
+                }
+                let values = try arguments.map { argument -> TLAValue in
+                    guard case .value(let expression) = argument else {
+                        throw EvalError.typeMismatch(
+                            "A value-only formal operator received an operator argument"
+                        )
+                    }
+                    return try ev(expression)
+                }
                 return try evDepth(
                     .recursiveCall(name, values.map(StateExpr.value)),
                     maxDepth - 1
@@ -645,7 +726,19 @@ extension StateExpr {
             case .reference:
                 substitutedOperator = operation
             }
-            return .operatorApplication(substitutedOperator, arguments.map(sub))
+            return .operatorApplication(substitutedOperator, arguments.map { argument -> FormalCallArgument in
+                switch argument {
+                case .value(let value): return FormalCallArgument.value(sub(value))
+                case .operator(.reference(let name, let arity)):
+                    return FormalCallArgument.operator(.reference(name, arity: arity))
+                case .operator(.lambda(let lambda)):
+                    let scoped = underParameters(lambda.parameters, body: lambda.body)
+                    return FormalCallArgument.operator(.lambda(FormalLambda(
+                        parameters: scoped.parameters,
+                        body: scoped.body
+                    )))
+                }
+            })
         case .recursiveCall(let n, let a): return .recursiveCall(n, a.map(sub))
         case .letIn(let operators, let body):
             return .letIn(
@@ -742,7 +835,18 @@ extension StateExpr {
                 case .reference(let name, let arity):
                     renamedOperator = .reference(rename(name), arity: arity)
                 }
-                return .operatorApplication(renamedOperator, arguments.map(visit))
+                return .operatorApplication(renamedOperator, arguments.map { argument -> FormalCallArgument in
+                    switch argument {
+                    case .value(let value): return FormalCallArgument.value(visit(value))
+                    case .operator(.reference(let name, let arity)):
+                        return FormalCallArgument.operator(.reference(rename(name), arity: arity))
+                    case .operator(.lambda(let lambda)):
+                        return FormalCallArgument.operator(.lambda(FormalLambda(
+                            parameters: lambda.parameters,
+                            body: visit(lambda.body)
+                        )))
+                    }
+                })
             case .recursiveCall(let name, let arguments): return .recursiveCall(rename(name), arguments.map(visit))
             case .letIn(let operators, let body):
                 return .letIn(
