@@ -160,6 +160,37 @@ public struct Function<Domain: FiniteTLAValueDomain, Range: TLAValueType>: TLAVa
 
 }
 
+/// The bounded formal function space from one finite domain to a finite set
+/// of values. `Functions(from:to:)` is a TLA+ function set, not a Swift
+/// dictionary or closure evaluated by the application.
+public func Functions<Domain: FiniteDomainKey, Range: TLAValueType>(
+  from domain: FiniteDomain<Domain>,
+  to values: Expr<SetExpr<Range>>
+) -> Expr<SetExpr<Function<Domain, Range>>> {
+  Expr(.functionSet(.setLiteral(domain.members.map { .value($0.tlaValue) }), values.raw))
+}
+
+/// All subsets of a finite formal set.
+public func Subsets<Element: TLAValueType>(
+  of values: Expr<SetExpr<Element>>
+) -> Expr<SetExpr<SetExpr<Element>>> {
+  Expr(.powerSet(values.raw))
+}
+
+/// Narrows a finite formal set to the values that satisfy a formal predicate.
+/// The closure describes TLA+ syntax; it does not execute as application code.
+public func Where<Value: TLAValueType>(
+  _ candidates: Expr<SetExpr<Value>>,
+  matching predicate: (WithValue<Value>) -> StateExpr
+) -> Expr<SetExpr<Value>> {
+  let binding = "__pcal_filtered_value"
+  return Expr(.setFilter(
+    candidates.raw,
+    binding,
+    predicate(WithValue<Value>(expression: .variable(binding)))
+  ))
+}
+
 public struct SetExpr<Element: TLAValueType>: TLAValueType, Hashable, Sendable {
   private let values: Set<TLAValue>
 
@@ -191,6 +222,20 @@ public struct SetExpr<Element: TLAValueType>: TLAValueType, Hashable, Sendable {
 
 public protocol FormalSetValue: TLAValueType {}
 extension SetExpr: FormalSetValue {}
+
+extension Expr where T: FormalSetValue {
+  public var isEmpty: StateExpr {
+    .equal(.cardinality(raw), .value(.int(0)))
+  }
+
+  public var cardinality: Expr<Int> {
+    Expr<Int>(.cardinality(raw))
+  }
+
+  public func isSubset(of other: some StateExprConvertible) -> StateExpr {
+    raw.isSubset(of: other)
+  }
+}
 
 /// A typed finite TLA+ tuple (sequence).
 ///
@@ -472,12 +517,6 @@ extension Expr {
   ) -> Expr<Function<Domain, Range>> where T == Function<Domain, Range> {
     Expr<Function<Domain, Range>>(
       .except(raw, index.stateExpr, update(Expr<Range>(.functionApply(raw, index.stateExpr))).raw))
-  }
-}
-
-extension Expr where T: FormalSetValue {
-  public var isEmpty: StateExpr {
-    .equal(.cardinality(raw), .value(.int(0)))
   }
 }
 

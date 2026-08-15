@@ -146,6 +146,34 @@ private func parseExpression(_ source: String) -> ExprSyntax {
         #expect(parsed.actions.first?.body.description.contains("count' = (count + 1)") == true)
     }
 
+    @Test("parser retains a filtered formal function initial domain")
+    func parsesFilteredFunctionInitialDomain() {
+        let source = """
+        {
+            Algorithm("FunctionDomain") {
+                let successors = SharedVar(in: Where(
+                    Functions(from: Node.all, to: Subsets(of: SetExpr<Node>.literal(.first, .second)))
+                ) { successor in
+                    All(Node.all) { node in
+                        successor[node].cardinality == 1
+                    }
+                })
+                Do("done") { Stop() }
+            }
+        }
+        """
+        let closure = Parser.parse(source: source).statements.first!.item.as(ClosureExprSyntax.self)!
+        let parsed = SpecParser.parseSpecClosure(
+            closure,
+            enumPhases: ["Node": ["first": .string("first"), "second": .string("second")]],
+            enumDomains: ["Node": [.string("first"), .string("second")]]
+        )
+
+        #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
+        #expect(parsed.variables.first?.swiftTypeName == "Function<Node, SetExpr<Node>>")
+        #expect(parsed.variables.first?.initialSet?.description.contains("Cardinality") == true)
+    }
+
     @Test("parser expands a statement macro with the current process identifier")
     func parsesStatementMacroWithProcessIdentifier() {
         let source = """

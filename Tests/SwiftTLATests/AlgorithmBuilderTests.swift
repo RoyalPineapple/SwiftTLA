@@ -60,6 +60,32 @@ struct AlgorithmBuilderTests {
         #expect(successor["count"] == .int(1))
     }
 
+    @Test("formal function domains stay typed through the builder")
+    func buildsFilteredFunctionInitialDomain() throws {
+        let nodes = SetExpr<Node>.literal(.first, .second)
+        let choices = Where(
+            Functions(from: Node.all, to: Subsets(of: nodes))
+        ) { successor in
+            All(Node.all) { node in
+                successor[node].cardinality == 1
+            }
+        }
+        let algorithm = Algorithm("ReachableGraph") {
+            let successors = SharedVar("successors", in: choices)
+            successors
+            Do("done") { Stop() }
+        }
+
+        let spec = try algorithm.lower()
+        #expect(computeInitialStates(spec).count == 4)
+    }
+
+    @Test("generated models retain typed filtered function domains")
+    func generatedModelRetainsFilteredFunctionDomain() throws {
+        FunctionDomainGeneratedModel._checkParserTree()
+        #expect(computeInitialStates(FunctionDomainGeneratedModel.spec).count == 4)
+    }
+
     @Test("statement macros accept the current typed process identifier")
     func expandsMacroWithProcessIdentifier() throws {
         let algorithm = Algorithm("MacroProcess") {
@@ -690,6 +716,40 @@ private struct MacroProcessGeneratedModel {
                 Each(Node.all) { node in
                     Do("mark") { mark(node) }
                     Do("done") { Stop() }
+                }
+            }
+        }
+    }
+}
+
+@TLAModel
+private struct FunctionDomainGeneratedModel {
+    enum Node: String, CaseIterable, FiniteDomainKey {
+        case first
+        case second
+
+        static let formalDomain = allCases
+        static let formalTypeIdentity = FormalTypeIdentity(rawValue: "test.pluscal.function-domain-node")
+
+        var tlaValue: TLAValue { .string(rawValue) }
+    }
+
+    static var spec: TLASpec {
+        #spec("FunctionDomainGenerated") {
+            Algorithm("FunctionDomainGenerated") {
+                let successors = SharedVar(in: Where(
+                    Functions(from: Node.all, to: Subsets(of: SetExpr<Node>.literal(.first, .second)))
+                ) { successor in
+                    All(Node.all) { node in
+                        successor[node].cardinality == 1
+                    }
+                })
+
+                Do("done") { Stop() }
+                Invariant("OneSuccessorPerNode") {
+                    All(Node.all) { node in
+                        successors[node].cardinality == 1
+                    }
                 }
             }
         }

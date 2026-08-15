@@ -65,9 +65,10 @@ extension SpecParser {
                 continue
             }
             guard case .expr(let expression) = statement.item else {
+                let detail = algorithmParseFailure.map { " \($0)" } ?? ""
                 result.diagnostics.append(.init(
                     message: "Unsupported Algorithm declaration '\(statement.description.trimmingCharacters(in: .whitespacesAndNewlines))'. "
-                        + "Supported declarations are SharedVar, Macro, Each, Do, and While.",
+                        + "Supported declarations are SharedVar, Macro, Each, Do, and While.\(detail)",
                     source: statement
                 ))
                 return
@@ -323,21 +324,23 @@ extension SpecParser {
         } else if expectedKind == "SharedVar",
                   let setSyntax = initializer.arguments.first(where: { $0.label?.text == "in" })?.expression {
             guard let initialSet = decodeStateExpr(setSyntax),
-                  case .setLiteral(let elements) = initialSet,
-                  let initial = elements.first,
+                  case .set(let elements) = try? initialSet.evaluate(in: [:]),
+                  !elements.isEmpty,
                   let typeName = setExpressionElementTypeName(setSyntax)
             else {
-                algorithmParseFailure = "SharedVar(in:) requires a finite, decodable formal domain; "
-                    + "could not decode '\(setSyntax.description.trimmingCharacters(in: .whitespacesAndNewlines))'."
+                algorithmParseFailure = algorithmParseFailure
+                    ?? ("SharedVar(in:) requires a non-empty static formal domain; "
+                        + "could not decode '\(setSyntax.description.trimmingCharacters(in: .whitespacesAndNewlines))'.")
                 return nil
             }
             state = AlgorithmStateModel(
                 root: declaredName,
-                initial: initial,
+                initial: .value(.int(0)),
                 initialSet: initialSet,
                 swiftTypeName: typeName
             )
         } else {
+            algorithmParseFailure = "\(expectedKind) declaration must use an explicit initial value or finite domain."
             return nil
         }
         return expectedKind == "SharedVar" ? .shared(state) : .local(state)

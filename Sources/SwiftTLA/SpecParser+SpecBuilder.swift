@@ -269,6 +269,25 @@ extension SpecParser {
     /// This is syntax-only: the parser must not consult the runtime builder.
     static func setExpressionElementTypeName(_ expression: ExprSyntax) -> String? {
         if let call = expression.as(FunctionCallExprSyntax.self),
+           call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "Where",
+           let candidates = call.arguments.first?.expression {
+            return setExpressionElementTypeName(candidates)
+        }
+        if let call = expression.as(FunctionCallExprSyntax.self),
+           call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "Subsets",
+           let values = call.arguments.first(where: { $0.label?.text == "of" })?.expression,
+           let element = setExpressionElementTypeName(values) {
+            return "SetExpr<\(element)>"
+        }
+        if let call = expression.as(FunctionCallExprSyntax.self),
+           call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "Functions",
+           let domainSyntax = call.arguments.first(where: { $0.label?.text == "from" })?.expression,
+           let domain = finiteAlgorithmDomain(domainSyntax),
+           let rangeSyntax = call.arguments.first(where: { $0.label?.text == "to" })?.expression,
+           let range = setExpressionElementTypeName(rangeSyntax) {
+            return "Function<\(domain.typeName), \(range)>"
+        }
+        if let call = expression.as(FunctionCallExprSyntax.self),
            let name = call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text,
            name == "Sequences" || name == "SortedSequences",
            let members = call.arguments.first(where: { $0.label?.text == "of" })?.expression,

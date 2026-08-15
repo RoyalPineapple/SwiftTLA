@@ -283,6 +283,8 @@ enum MacroExpander {
             return "StateExpr.recordLiteral([\(fields)])"
         case .setLiteral(let es): return "StateExpr.setLiteral([\(es.map(cg).joined(separator: ", "))])"
         case .functionLiteral(let d, let qv, let b): return "StateExpr.functionLiteral(\(cg(d)), \"\(qv)\", \(cg(b)))"
+        case .functionSet(let domain, let range):
+            return "StateExpr.functionSet(\(cg(domain)), \(cg(range)))"
         case .caseExpr(let ps, let fb):
             let patterns = ps.map(cg).joined(separator: ", ")
             let fallback = fb.map { cg($0) } ?? "nil"
@@ -293,7 +295,7 @@ enum MacroExpander {
             return "StateExpr.exists(\(cg(set)), \"\(variable)\", \(cg(predicate)))"
         case .choose(let set, let variable, let predicate):
             return "StateExpr.choose(\(cg(set)), \"\(variable)\", \(cg(predicate)))"
-        case .sequenceFromSet, .setSum, .functionSet, .recursiveCall, .enabledAction:
+        case .sequenceFromSet, .setSum, .recursiveCall, .enabledAction:
             return "StateExpr.value(.int(0))"
         }
     }
