@@ -567,6 +567,69 @@ private enum ParserNode: String, FiniteDomainKey {
         ])
     }
 
+    @Test func higherOrderFormalDefinitionRoundTripsThroughTheCanonicalParser() {
+        let source = """
+        {
+            FormalDefinition(
+                "applyTwice",
+                parameters: [.operator("operation", arity: 1), .value("initial")],
+                body: StateExpr.operatorApplication(
+                    .reference("operation", arity: 1),
+                    [
+                        .value(StateExpr.operatorApplication(
+                            .reference("operation", arity: 1),
+                            [.value(StateExpr.variable("initial"))]
+                        ))
+                    ]
+                )
+            )
+        }
+        """
+        let closure = Parser.parse(source: source).statements.first!.item.as(ClosureExprSyntax.self)!
+        let parsed = SpecParser.parseSpecClosure(closure)
+
+        #expect(parsed.diagnostics.isEmpty)
+        #expect(parsed.formalOperatorDefinitions == [
+            FormalOperatorDefinition(
+                name: "applyTwice",
+                parameters: [.operator("operation", arity: 1), .value("initial")],
+                body: .operatorApplication(
+                    .reference("operation", arity: 1),
+                    [.value(.operatorApplication(
+                        .reference("operation", arity: 1),
+                        [.value(.variable("initial"))]
+                    ))]
+                )
+            )
+        ])
+    }
+
+    @Test func formalOperatorLambdaAndArgumentKindsRoundTripThroughTheParser() {
+        let expression = parseExpression("""
+        StateExpr.operatorApplication(
+            .reference("apply", arity: 2),
+            [
+                .operator(.lambda(FormalLambda(
+                    parameters: ["value"],
+                    body: StateExpr.variable("value")
+                ))),
+                .value(3)
+            ]
+        )
+        """)
+
+        #expect(SpecParser.decodeStateExpr(expression) == .operatorApplication(
+            .reference("apply", arity: 2),
+            [
+                .operator(.lambda(FormalLambda(
+                    parameters: ["value"],
+                    body: .variable("value")
+                ))),
+                .value(.int(3))
+            ]
+        ))
+    }
+
     @Test func localOperatorParameterNamesAreAlphaEquivalent() {
         let parserTree = ParsedSpecModel(
             variables: [],

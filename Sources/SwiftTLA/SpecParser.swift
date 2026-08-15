@@ -905,6 +905,12 @@ public enum SpecParser {
                 fields[label] = val
             }
             return .recordLiteral(fields)
+        case "variable":
+            guard memberAccess.base?.as(DeclReferenceExprSyntax.self)?.baseName.text == "StateExpr",
+                  let name = args.first?.expression.as(StringLiteralExprSyntax.self)?.segments.description
+                    .replacingOccurrences(of: "\"", with: "")
+            else { return nil }
+            return .variable(name)
         case "if":
             guard memberAccess.base?.as(DeclReferenceExprSyntax.self)?.baseName.text == "StateExpr",
                   args.count >= 3,
@@ -942,6 +948,15 @@ public enum SpecParser {
             }
             guard definitions.count == definitionArray.elements.count else { return nil }
             return .letIn(definitions, body)
+        case "operatorApplication":
+            guard memberAccess.base?.as(DeclReferenceExprSyntax.self)?.baseName.text == "StateExpr",
+                  args.count == 2,
+                  let operation = decodeFormalOperator(args[0].expression),
+                  let argumentArray = args[1].expression.as(ArrayExprSyntax.self)
+            else { return nil }
+            let arguments = argumentArray.elements.compactMap { decodeFormalCallArgument($0.expression) }
+            guard arguments.count == argumentArray.elements.count else { return nil }
+            return .operatorApplication(operation, arguments)
         case "setFilter", "setMap", "forAll":
             guard memberAccess.base?.as(DeclReferenceExprSyntax.self)?.baseName.text == "StateExpr",
                   args.count == 3,
@@ -1026,6 +1041,68 @@ public enum SpecParser {
               let body = decodeStateExpr(bodySyntax)
         else { return nil }
         return LocalOperator(name, parameters: parameters, body: body)
+    }
+
+    /// Decodes formal operators as syntax, rather than Swift closures. This is
+    /// the source-side half of higher-order operator fidelity.
+    private static func decodeFormalOperator(_ expression: ExprSyntax) -> FormalOperator? {
+        guard let call = expression.as(FunctionCallExprSyntax.self),
+              let member = call.calledExpression.as(MemberAccessExprSyntax.self)
+        else { return nil }
+
+        switch member.declName.baseName.text {
+        case "reference":
+            guard let name = call.arguments.first?.expression.as(StringLiteralExprSyntax.self)?
+                    .segments.description.replacingOccurrences(of: "\"", with: ""),
+                  let aritySyntax = call.arguments.first(where: { $0.label?.text == "arity" })?
+                    .expression.as(IntegerLiteralExprSyntax.self),
+                  let arity = Int(aritySyntax.literal.text), arity >= 0
+            else { return nil }
+            return .reference(name, arity: arity)
+        case "lambda":
+            guard let lambdaSyntax = call.arguments.first?.expression,
+                  let lambda = decodeFormalLambda(lambdaSyntax)
+            else { return nil }
+            return .lambda(lambda)
+        default:
+            return nil
+        }
+    }
+
+    private static func decodeFormalLambda(_ expression: ExprSyntax) -> FormalLambda? {
+        guard let call = expression.as(FunctionCallExprSyntax.self),
+              call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "FormalLambda",
+              let parameterArray = call.arguments.first(where: { $0.label?.text == "parameters" })?
+                .expression.as(ArrayExprSyntax.self),
+              let bodySyntax = call.arguments.first(where: { $0.label?.text == "body" })?.expression
+        else { return nil }
+
+        let parameters = parameterArray.elements.compactMap { element in
+            element.expression.as(StringLiteralExprSyntax.self)?.segments.description
+                .replacingOccurrences(of: "\"", with: "")
+        }
+        guard parameters.count == parameterArray.elements.count,
+              !parameters.isEmpty,
+              Set(parameters).count == parameters.count,
+              let body = decodeStateExpr(bodySyntax)
+        else { return nil }
+        return FormalLambda(parameters: parameters, body: body)
+    }
+
+    private static func decodeFormalCallArgument(_ expression: ExprSyntax) -> FormalCallArgument? {
+        guard let call = expression.as(FunctionCallExprSyntax.self),
+              let member = call.calledExpression.as(MemberAccessExprSyntax.self),
+              let argument = call.arguments.first?.expression
+        else { return nil }
+
+        switch member.declName.baseName.text {
+        case "value":
+            return decodeStateExpr(argument).map(FormalCallArgument.value)
+        case "operator":
+            return decodeFormalOperator(argument).map(FormalCallArgument.operator)
+        default:
+            return nil
+        }
     }
 
     static func decodeInfixExpr(_ elements: [ExprSyntax]) -> StateExpr? {

@@ -1,8 +1,43 @@
 import SwiftTLA
+import SwiftTLAMacros
 import Testing
+
+@TLAModel
+private struct GeneratedHigherOrderFormalModel {
+  static var spec: TLASpec {
+    #spec("GeneratedHigherOrderFormalModel") {
+      FormalDefinition(
+        "applyTwice",
+        parameters: [.operator("operation", arity: 1), .value("initial")],
+        body: StateExpr.operatorApplication(
+          .reference("operation", arity: 1),
+          [.value(StateExpr.operatorApplication(
+            .reference("operation", arity: 1),
+            [.value(StateExpr.variable("initial"))]
+          ))]
+        )
+      )
+      Algorithm("GeneratedHigherOrderFormalModel") {
+        let counter = SharedVar(initial: 0)
+        Do("advance") {
+          Assign(counter, to: counter.expr + 1)
+        }
+      }
+    }
+  }
+}
 
 @Suite("Formal operators")
 struct FormalOperatorTests {
+  @Test("a #spec higher-order formal definition preserves parser and builder trees")
+  func generatedHigherOrderFormalDefinitionPreservesParserFidelity() throws {
+    GeneratedHigherOrderFormalModel._checkParserTree()
+
+    var model = GeneratedHigherOrderFormalModel()
+    let result = try model.apply(.advance)
+    #expect(result.after.counter == 1)
+  }
+
   @Test("a formal lambda is applied by the evaluator, not by Swift")
   func appliesFormalLambda() throws {
     let expression = StateExpr.operatorApplication(
