@@ -344,6 +344,35 @@ private func parseExpression(_ source: String) -> ExprSyntax {
         #expect(parsed.variables.first?.initial.description.contains("door") == true)
     }
 
+    @Test("parser retains a typed finite function literal with its bound key")
+    func parsesTypedFunctionLiteral() {
+        let source = """
+        {
+            Algorithm("FiniteFunction") {
+                Each(Node.all) { node in
+                    Do("hold") {
+                        let successor = Function<Node, Node>.literal(
+                            (Node.one, Node.two),
+                            (Node.two, Node.one)
+                        )
+                        When(successor[node] == Node.two)
+                    }
+                }
+            }
+        }
+        """
+        let closure = Parser.parse(source: source).statements.first!.item.as(ClosureExprSyntax.self)!
+        let parsed = SpecParser.parseSpecClosure(
+            closure,
+            enumPhases: ["Node": ["one": .int(1), "two": .int(2)]],
+            enumDomains: ["Node": [.int(1), .int(2)]]
+        )
+
+        #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
+        #expect(parsed.actions.first?.body.description.contains("CASE") == true)
+        #expect(parsed.actions.first?.body.description.contains("_typedFunctionEntry") == true)
+    }
+
     @Test("parser resolves a static formal selection before algorithm lowering")
     func parsesStaticFormalSelection() {
         let source = """

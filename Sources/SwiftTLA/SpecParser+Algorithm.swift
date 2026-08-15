@@ -623,7 +623,8 @@ extension SpecParser {
               let binding = declaration.bindings.first,
               let name = binding.pattern.as(IdentifierPatternSyntax.self)?.identifier.text,
               let initializer = binding.initializer?.value,
-              let value = decodeStateExpr(initializer)
+              let value = decodeTypedFacadeValue(initializer, substitutions: [:])
+                ?? decodeStateExpr(initializer)
         else { return nil }
         return (name, value)
     }
