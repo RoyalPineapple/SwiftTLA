@@ -34,6 +34,31 @@ struct AlgorithmBuilderTests {
         #expect(successor["lock"] == .int(0))
     }
 
+    @Test("two-parameter statement macros bind each argument in caller scope")
+    func expandsTwoParameterStatementMacro() throws {
+        let algorithm = Algorithm("CopyValue") {
+            let destination = SharedVar("destination", initial: 0)
+            let source = SharedVar("source", initial: 7)
+            destination
+            source
+            let copy = Macro { (target: MacroParameter<Int>, value: MacroParameter<Int>) in
+                Assign(target, to: value.expr)
+            }
+
+            Do("copy") { copy(destination, source) }
+        }
+
+        #expect(algorithm.validate().isEmpty)
+        let spec = try algorithm.lower()
+        let initial = try #require(computeInitialStates(spec).first)
+        let copy = try #require(spec.actions.first { $0.name == "copy" })
+        let successor = try #require(
+            ActionEnumerator.enumerate(copy.body, from: initial, varNames: spec.variables.map(\.name)).first
+        )
+        #expect(successor["destination"] == .int(7))
+        #expect(successor["source"] == .int(7))
+    }
+
     @Test("parameterless statement macros expand into their surrounding atomic block")
     func expandsParameterlessStatementMacro() throws {
         let algorithm = Algorithm("ParameterlessMacro") {

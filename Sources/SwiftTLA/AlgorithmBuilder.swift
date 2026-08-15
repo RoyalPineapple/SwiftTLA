@@ -244,40 +244,66 @@ extension MacroParameter where Value: FiniteDomainKey {
 /// macro is formal syntax: it expands to statements in the same atomic step;
 /// it does not introduce a Swift function call or a separate transition.
 public struct StatementMacro: Sendable {
-    private let parameterName: String?
+    private let parameterNames: [String]
     private let statements: [AlgorithmStatementModel]
 
-    fileprivate init(parameterName: String?, statements: [AlgorithmStatementModel]) {
-        self.parameterName = parameterName
+    fileprivate init(parameterNames: [String], statements: [AlgorithmStatementModel]) {
+        self.parameterNames = parameterNames
         self.statements = statements
     }
 
     public func callAsFunction<Value: TLAValueType>(_ argument: SharedVariable<Value>) -> [StepStatement] {
-        guard let parameterName else { preconditionFailure("This macro has no parameter") }
-        return statements.map {
-            StepStatement(model: substituteMacroParameter($0, from: parameterName, to: argument.name))
-        }
+        expand([.variable(argument.name)])
     }
 
     public func callAsFunction<Value: TLAValueType>(_ argument: LocalVariable<Value>) -> [StepStatement] {
-        guard let parameterName else { preconditionFailure("This macro has no parameter") }
-        return statements.map {
-            StepStatement(model: substituteMacroParameter($0, from: parameterName, to: argument.name))
-        }
+        expand([.variable(argument.name)])
     }
 
     /// Expands a macro using the current process identifier as its formal
     /// argument. The expansion stays in its surrounding atomic `Do` block.
     public func callAsFunction<Value: FiniteDomainKey>(_ argument: ProcessIdentifier<Value>) -> [StepStatement] {
-        guard let parameterName else { preconditionFailure("This macro has no parameter") }
-        return statements.map {
-            StepStatement(model: substituteMacroParameter($0, from: parameterName, with: argument.stateExpr))
-        }
+        expand([argument.stateExpr])
     }
 
     public func callAsFunction() -> [StepStatement] {
-        guard parameterName == nil else { preconditionFailure("This macro requires a parameter") }
-        return statements.map(StepStatement.init(model:))
+        expand([])
+    }
+
+    public func callAsFunction<First: TLAValueType, Second: TLAValueType>(
+        _ first: SharedVariable<First>, _ second: SharedVariable<Second>
+    ) -> [StepStatement] {
+        expand([.variable(first.name), .variable(second.name)])
+    }
+
+    public func callAsFunction<First: TLAValueType, Second: TLAValueType>(
+        _ first: LocalVariable<First>, _ second: LocalVariable<Second>
+    ) -> [StepStatement] {
+        expand([.variable(first.name), .variable(second.name)])
+    }
+
+    public func callAsFunction<First: TLAValueType, Second: TLAValueType>(
+        _ first: SharedVariable<First>, _ second: LocalVariable<Second>
+    ) -> [StepStatement] {
+        expand([.variable(first.name), .variable(second.name)])
+    }
+
+    public func callAsFunction<First: TLAValueType, Second: TLAValueType>(
+        _ first: LocalVariable<First>, _ second: SharedVariable<Second>
+    ) -> [StepStatement] {
+        expand([.variable(first.name), .variable(second.name)])
+    }
+
+    private func expand(_ arguments: [StateExpr]) -> [StepStatement] {
+        precondition(
+            parameterNames.count == arguments.count,
+            "Statement macro expected \(parameterNames.count) arguments but received \(arguments.count)."
+        )
+        return parameterNames.enumerated().reduce(statements) { expanded, binding in
+            expanded.map {
+                substituteMacroParameter($0, from: binding.element, with: arguments[binding.offset])
+            }
+        }.map(StepStatement.init(model:))
     }
 }
 
@@ -287,14 +313,27 @@ public func Macro<Value: TLAValueType>(
 ) -> StatementMacro {
     let parameterName = "__pcal_macro_parameter"
     return StatementMacro(
-        parameterName: parameterName,
+        parameterNames: [parameterName],
         statements: body(MacroParameter(name: parameterName)).map(\.model)
+    )
+}
+
+/// Declares a two-argument PlusCal statement macro. Both parameters remain
+/// formal handles until expansion inside the caller's atomic `Do` block.
+public func Macro<First: TLAValueType, Second: TLAValueType>(
+    @DoBuilder _ body: (MacroParameter<First>, MacroParameter<Second>) -> [StepStatement]
+) -> StatementMacro {
+    let firstName = "__pcal_macro_parameter_0"
+    let secondName = "__pcal_macro_parameter_1"
+    return StatementMacro(
+        parameterNames: [firstName, secondName],
+        statements: body(MacroParameter(name: firstName), MacroParameter(name: secondName)).map(\.model)
     )
 }
 
 /// Declares a parameterless PlusCal statement macro.
 public func Macro(@DoBuilder _ body: () -> [StepStatement]) -> StatementMacro {
-    StatementMacro(parameterName: nil, statements: body().map(\.model))
+    StatementMacro(parameterNames: [], statements: body().map(\.model))
 }
 
 private func substituteMacroParameter(
@@ -342,16 +381,28 @@ private func substituteMacroParameter(
     case .set(let target, let value):
         return .set(target: substituteTarget(target), value: substitute(value))
     case .letBinding(let variable, let value, let body):
-        return .letBinding(
+        let (scopedVariable, scopedBody) = captureSafeMacroBody(
             variable: variable,
+            body: body,
+            replacing: from,
+            with: replacement
+        )
+        return .letBinding(
+            variable: scopedVariable,
             value: substitute(value),
-            variable == from ? body : body.map { substituteMacroParameter($0, from: from, with: replacement) }
+            scopedBody
         )
     case .with(let variable, let source, let body):
-        return .with(
+        let (scopedVariable, scopedBody) = captureSafeMacroBody(
             variable: variable,
+            body: body,
+            replacing: from,
+            with: replacement
+        )
+        return .with(
+            variable: scopedVariable,
             source: substitute(source),
-            variable == from ? body : body.map { substituteMacroParameter($0, from: from, with: replacement) }
+            scopedBody
         )
     case .ifElse(let condition, let then, let otherwise):
         return .ifElse(
@@ -365,13 +416,34 @@ private func substituteMacroParameter(
             second.map { substituteMacroParameter($0, from: from, with: replacement) }
         )
     case .choose(let variable, let domain, let body):
-        return .choose(
+        let (scopedVariable, scopedBody) = captureSafeMacroBody(
             variable: variable,
+            body: body,
+            replacing: from,
+            with: replacement
+        )
+        return .choose(
+            variable: scopedVariable,
             domain: domain,
-            variable == from ? body : body.map { substituteMacroParameter($0, from: from, with: replacement) }
+            scopedBody
         )
     case .goto, .stop, .skip: return statement
     }
+}
+
+private func captureSafeMacroBody(
+    variable: String,
+    body: [AlgorithmStatementModel],
+    replacing parameter: String,
+    with replacement: StateExpr
+) -> (String, [AlgorithmStatementModel]) {
+    guard variable != parameter else { return (variable, body) }
+    guard replacement.freeVariableNames.contains(variable) else {
+        return (variable, body.map { substituteMacroParameter($0, from: parameter, with: replacement) })
+    }
+    let fresh = FreshVarName.fresh()
+    let renamed = body.map { substituteMacroParameter($0, from: variable, with: .variable(fresh)) }
+    return (fresh, renamed.map { substituteMacroParameter($0, from: parameter, with: replacement) })
 }
 
 /// A typed shared algorithm variable.

@@ -126,6 +126,49 @@ private func parseExpression(_ source: String) -> ExprSyntax {
         #expect(parsed.actions.first?.body.description.contains("lock") == true)
     }
 
+    @Test("parser expands every statement macro parameter in caller scope")
+    func parsesTwoParameterStatementMacro() {
+        let source = """
+        {
+            Algorithm("CopyValue") {
+                let destination = SharedVar(initial: 0)
+                let source = SharedVar(initial: 7)
+                let copy = Macro { (target: MacroParameter<Int>, value: MacroParameter<Int>) in
+                    Assign(target, to: value.expr)
+                }
+                Do("copy") { copy(destination, source) }
+            }
+        }
+        """
+        let closure = Parser.parse(source: source).statements.first!.item.as(ClosureExprSyntax.self)!
+        let parsed = SpecParser.parseSpecClosure(closure)
+
+        #expect(parsed.diagnostics.isEmpty)
+        #expect(parsed.actions.first?.body.description.contains("destination' = source") == true)
+        #expect(parsed.actions.first?.body.description.contains("__pcal_macro_parameter") == false)
+    }
+
+    @Test("statement macro arity diagnostics identify the declaration and safe repair")
+    func diagnosesStatementMacroArity() {
+        let source = """
+        {
+            Algorithm("BadMacroCall") {
+                let destination = SharedVar(initial: 0)
+                let source = SharedVar(initial: 7)
+                let copy = Macro { (target: MacroParameter<Int>, value: MacroParameter<Int>) in
+                    Assign(target, to: value.expr)
+                }
+                Do("copy") { copy(destination) }
+            }
+        }
+        """
+        let closure = Parser.parse(source: source).statements.first!.item.as(ClosureExprSyntax.self)!
+        let parsed = SpecParser.parseSpecClosure(closure)
+
+        #expect(parsed.actions.isEmpty)
+        #expect(parsed.diagnostics.first?.message.contains("Statement macro 'copy' expects 2 arguments but received 1.") == true)
+    }
+
     @Test("parser expands a parameterless statement macro")
     func parsesParameterlessStatementMacro() {
         let source = """

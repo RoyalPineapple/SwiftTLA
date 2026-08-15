@@ -1,7 +1,7 @@
 import SwiftSyntax
 
 private struct AlgorithmMacroDefinition: Sendable {
-    let parameter: String?
+    let parameters: [String]
     let statements: [AlgorithmStatementModel]
 }
 
@@ -368,19 +368,23 @@ extension SpecParser {
     private static func parseAlgorithmMacroDeclaration(
         _ declaration: VariableDeclSyntax
     ) -> AlgorithmMacroDefinition? {
+        guard let initializer = declaration.bindings.first?.initializer?.value.as(FunctionCallExprSyntax.self),
+              let closure = initializer.trailingClosure
+        else { return nil }
+        let parameters = closureParameterNames(in: closure)
+        guard Set(parameters).count == parameters.count else {
+            algorithmParseFailure = "Statement macro parameters must have distinct names."
+            return nil
+        }
         guard declaration.bindings.count == 1,
-              let binding = declaration.bindings.first,
-              let initializer = binding.initializer?.value.as(FunctionCallExprSyntax.self),
               isAlgorithmMacroInitializer(initializer),
-              let closure = initializer.trailingClosure,
-              closureParameterNames(in: closure).count <= 1,
               let statements = parseAlgorithmStatements(
                 closure.statements,
                 processParameter: "__pcal_macro_no_process",
                 macros: [:]
               )
         else { return nil }
-        return .init(parameter: closureParameterNames(in: closure).first, statements: statements)
+        return .init(parameters: parameters, statements: statements)
     }
 
     /// An immutable `let` in an Algorithm is a compile-time formal alias,
@@ -690,10 +694,9 @@ extension SpecParser {
         }
     }
 
-    /// Expands one bounded statement macro into the surrounding atomic block.
-    /// The first implementation accepts a single direct variable argument—the
-    /// shape used by PlusCal semaphore and lock macros. It deliberately does
-    /// not reinterpret an arbitrary Swift call as formal syntax.
+    /// Expands a bounded statement macro into the surrounding atomic block.
+    /// Every formal parameter is a direct algorithm variable so macro expansion
+    /// remains in the same typed state namespace as its caller.
     private static func parseMacroInvocation(
         _ expression: ExprSyntax,
         macros: [String: AlgorithmMacroDefinition]
@@ -703,17 +706,22 @@ extension SpecParser {
               let macro = macros[name]
         else { return nil }
 
-        guard let parameter = macro.parameter else {
-            return call.arguments.isEmpty ? macro.statements : nil
+        guard call.arguments.count == macro.parameters.count else {
+            algorithmParseFailure = "Statement macro '\(name)' expects \(macro.parameters.count) arguments but received \(call.arguments.count)."
+            return nil
         }
-
-        guard
-              call.arguments.count == 1,
-              let target = algorithmTarget(call.arguments.first?.expression),
-              case .root(let argument) = target
-        else { return nil }
-        return macro.statements.map {
-            replaceAlgorithmVariable($0, from: parameter, to: argument)
+        var arguments: [String] = []
+        for (index, argumentSyntax) in call.arguments.enumerated() {
+            guard let target = algorithmTarget(argumentSyntax.expression),
+                  case .root(let argument) = target
+            else {
+                algorithmParseFailure = "Statement macro '\(name)' argument \(index + 1) must be an algorithm variable; formal expressions cannot be assignment targets."
+                return nil
+            }
+            arguments.append(argument)
+        }
+        return zip(macro.parameters, arguments).reduce(macro.statements) { statements, binding in
+            statements.map { replaceAlgorithmVariable($0, from: binding.0, to: binding.1) }
         }
     }
 
@@ -781,16 +789,28 @@ extension SpecParser {
             }
             return .set(target: rewrittenTarget, value: renameVar(from, to: to, in: value))
         case .letBinding(let variable, let value, let body):
-            return .letBinding(
+            let (scopedVariable, scopedBody) = captureSafeAlgorithmBody(
                 variable: variable,
+                body: body,
+                replacing: from,
+                with: to
+            )
+            return .letBinding(
+                variable: scopedVariable,
                 value: renameVar(from, to: to, in: value),
-                variable == from ? body : body.map { replaceAlgorithmVariable($0, from: from, to: to) }
+                scopedBody
             )
         case .with(let variable, let source, let body):
-            return .with(
+            let (scopedVariable, scopedBody) = captureSafeAlgorithmBody(
                 variable: variable,
+                body: body,
+                replacing: from,
+                with: to
+            )
+            return .with(
+                variable: scopedVariable,
                 source: renameVar(from, to: to, in: source),
-                variable == from ? body : body.map { replaceAlgorithmVariable($0, from: from, to: to) }
+                scopedBody
             )
         case .ifElse(let condition, let then, let otherwise):
             return .ifElse(
@@ -804,12 +824,33 @@ extension SpecParser {
                 second.map { replaceAlgorithmVariable($0, from: from, to: to) }
             )
         case .choose(let variable, let domain, let body):
-            return .choose(
+            let (scopedVariable, scopedBody) = captureSafeAlgorithmBody(
                 variable: variable,
+                body: body,
+                replacing: from,
+                with: to
+            )
+            return .choose(
+                variable: scopedVariable,
                 domain: domain,
-                variable == from ? body : body.map { replaceAlgorithmVariable($0, from: from, to: to) }
+                scopedBody
             )
         case .goto, .stop, .skip: return statement
         }
+    }
+
+    private static func captureSafeAlgorithmBody(
+        variable: String,
+        body: [AlgorithmStatementModel],
+        replacing parameter: String,
+        with replacement: String
+    ) -> (String, [AlgorithmStatementModel]) {
+        guard variable != parameter else { return (variable, body) }
+        guard variable == replacement else {
+            return (variable, body.map { replaceAlgorithmVariable($0, from: parameter, to: replacement) })
+        }
+        let fresh = FreshVarName.fresh()
+        let renamed = body.map { replaceAlgorithmVariable($0, from: variable, to: fresh) }
+        return (fresh, renamed.map { replaceAlgorithmVariable($0, from: parameter, to: replacement) })
     }
 }
