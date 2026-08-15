@@ -291,10 +291,12 @@ extension SpecParser {
         }
         if let call = expression.as(FunctionCallExprSyntax.self),
            let name = call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text,
-           name == "Sequences" || name == "SortedSequences",
+           name == "Sequences" || name == "SortedSequences" || name == "ZeroBasedSequences",
            let members = call.arguments.first(where: { $0.label?.text == "of" })?.expression,
            let element = setExpressionElementTypeName(members) {
-            return "TupleExpr<\(element)>"
+            return name == "ZeroBasedSequences"
+                ? "ZeroBasedSequence<\(element)>"
+                : "TupleExpr<\(element)>"
         }
         guard let call = expression.as(FunctionCallExprSyntax.self),
               let member = call.calledExpression.as(MemberAccessExprSyntax.self),
@@ -390,9 +392,17 @@ extension SpecParser {
            call.trailingClosure == nil {
             let constructor = call.calledExpression.description
                 .trimmingCharacters(in: .whitespacesAndNewlines)
-            if constructor.hasPrefix("SetExpr<") || constructor.hasPrefix("TupleExpr<") {
+            if constructor.hasPrefix("SetExpr<") || constructor.hasPrefix("TupleExpr<")
+                || constructor.hasPrefix("ZeroBasedSequence<") {
                 return constructor
             }
+        }
+        if let call = expression.as(FunctionCallExprSyntax.self),
+           let member = call.calledExpression.as(MemberAccessExprSyntax.self),
+           member.declName.baseName.text == "filled",
+           let base = member.base {
+            let typeName = base.description.trimmingCharacters(in: .whitespacesAndNewlines)
+            if typeName.hasPrefix("ZeroBasedSequence<") { return typeName }
         }
         if let call = expression.as(FunctionCallExprSyntax.self),
            let memberAccess = call.calledExpression.as(MemberAccessExprSyntax.self),

@@ -41,6 +41,9 @@ public enum SpecParser {
         if let sequences = decodeBoundedSequenceDomain(expression) {
             return sequences
         }
+        if let filledSequence = decodeZeroBasedSequenceFill(expression) {
+            return filledSequence
+        }
         if let subsets = decodeBoundedSubsetDomain(expression) {
             return subsets
         }
@@ -255,7 +258,7 @@ public enum SpecParser {
     private static func decodeBoundedSequenceDomain(_ expression: ExprSyntax) -> StateExpr? {
         guard let call = expression.as(FunctionCallExprSyntax.self),
               let name = call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text,
-              name == "Sequences" || name == "SortedSequences",
+              name == "Sequences" || name == "SortedSequences" || name == "ZeroBasedSequences",
               let memberSyntax = call.arguments.first(where: { $0.label?.text == "of" })?.expression,
               let lengthSyntax = call.arguments.first(where: { $0.label?.text == "lengths" })?.expression,
               let memberSet = decodeStateExpr(memberSyntax),
@@ -263,7 +266,34 @@ public enum SpecParser {
               let lengths = parseIntegerClosedRange(lengthSyntax)
         else { return nil }
         let sequences = formalSequenceExpressions(members: members, lengths: lengths)
-        return .setLiteral(name == "SortedSequences" ? sequences.filter(formalIntegerSequenceIsSorted) : sequences)
+        switch name {
+        case "SortedSequences":
+            return .setLiteral(sequences.filter(formalIntegerSequenceIsSorted))
+        case "ZeroBasedSequences":
+            return .setLiteral(formalZeroBasedSequenceExpressions(members: members, lengths: lengths))
+        default:
+            return .setLiteral(sequences)
+        }
+    }
+
+    /// Parses `ZeroBasedSequence<Element>.filled(length:with:)` into the
+    /// TLA+ function literal used by the runtime builder.
+    private static func decodeZeroBasedSequenceFill(_ expression: ExprSyntax) -> StateExpr? {
+        guard let call = expression.as(FunctionCallExprSyntax.self),
+              let access = call.calledExpression.as(MemberAccessExprSyntax.self),
+              access.declName.baseName.text == "filled",
+              let base = access.base,
+              base.description.trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix("ZeroBasedSequence<"),
+              let lengthSyntax = call.arguments.first(where: { $0.label?.text == "length" })?.expression,
+              let valueSyntax = call.arguments.first(where: { $0.label?.text == "with" })?.expression,
+              let length = decodeStateExpr(lengthSyntax),
+              let value = decodeStateExpr(valueSyntax)
+        else { return nil }
+        return .functionLiteral(
+            .integerRange(.int(0), .subtract(length, .int(1))),
+            "__zeroBasedSequenceIndex",
+            value
+        )
     }
 
     private static func decodeBoundedSubsetDomain(_ expression: ExprSyntax) -> StateExpr? {

@@ -48,6 +48,28 @@ private struct NonEmptySubsetGeneratedModel {
     }
 }
 
+@TLAModel
+private struct ZeroBasedSequenceGeneratedModel {
+    static var spec: TLASpec {
+        #spec("ZeroBasedSequenceGeneratedModel") {
+            Algorithm("ZeroBasedSequenceGeneratedModel") {
+                let input = SharedVar(in: ZeroBasedSequences(
+                    of: SetExpr<Int>.literal(0, 1),
+                    lengths: 1...2
+                ))
+                let table = SharedVar(initial: ZeroBasedSequence<Int>.filled(
+                    length: input.count * 2 + 1,
+                    with: -1
+                ))
+
+                Do("writeFirst") {
+                    Assign(table, to: table.updating(0, to: input[0]))
+                }
+            }
+        }
+    }
+}
+
 @Suite(.serialized) struct TypedCollectionOperatorTests {
     @Test("typed interval, filter, map, and dynamic tuple access evaluate")
     func typedOperatorsEvaluate() throws {
@@ -144,6 +166,30 @@ private struct NonEmptySubsetGeneratedModel {
             .tuple([.int(1), .int(1)]), .tuple([.int(1), .int(2)]), .tuple([.int(2), .int(2)])
         ]))
         #expect(SpecParser.decodeStateExpr(terminalSyntax) != nil)
+    }
+
+    @Test("zero-based sequence domains and indexed updates survive both paths")
+    func zeroBasedSequencesSurviveThePipeline() throws {
+        let source = "ZeroBasedSequences(of: SetExpr<Int>.literal(0, 1), lengths: 1...2)"
+        let syntax = Parser.parse(source: source).statements.first!.item.as(ExprSyntax.self)!
+        let parsed = try #require(SpecParser.decodeStateExpr(syntax))
+        let runtime = ZeroBasedSequences(of: SetExpr<Int>.literal(0, 1), lengths: 1...2)
+
+        #expect(parsed == runtime.raw)
+        #expect(try runtime.raw.evaluate(in: [:]) == .set([
+            .function([.int(0): .int(0)]),
+            .function([.int(0): .int(1)]),
+            .function([.int(0): .int(0), .int(1): .int(0)]),
+            .function([.int(0): .int(0), .int(1): .int(1)]),
+            .function([.int(0): .int(1), .int(1): .int(0)]),
+            .function([.int(0): .int(1), .int(1): .int(1)])
+        ]))
+
+        ZeroBasedSequenceGeneratedModel._checkParserTree()
+        var model = ZeroBasedSequenceGeneratedModel()
+        let result = try model.apply(.writeFirst)
+        #expect(result.after.table[0] == result.after.input[0])
+        #expect(ZeroBasedSequenceGeneratedModel.spec.tlaModule.contains("0.."))
     }
 
     @Test("non-empty subset domains parse and exclude the empty formal set")

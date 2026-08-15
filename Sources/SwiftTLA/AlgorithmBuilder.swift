@@ -604,6 +604,32 @@ extension SharedVariable {
         Expr(.tupleDynamicAccess(stateExpr, index.stateExpr))
     }
 
+    /// Reads a zero-based formal sequence at a formal index.
+    public subscript<Element: TLAValueType>(_ index: Expr<Int>) -> Expr<Element>
+    where Value == ZeroBasedSequence<Element> {
+        Expr(.functionApply(stateExpr, index.raw))
+    }
+
+    public subscript<Element: TLAValueType>(_ index: Int) -> Expr<Element>
+    where Value == ZeroBasedSequence<Element> {
+        Expr(.functionApply(stateExpr, .int(index)))
+    }
+
+    /// Replaces one value in a zero-based formal sequence.
+    public func updating<Element: TLAValueType>(
+        _ index: Expr<Int>,
+        to value: Expr<Element>
+    ) -> Expr<ZeroBasedSequence<Element>> where Value == ZeroBasedSequence<Element> {
+        Expr(.except(stateExpr, index.raw, value.raw))
+    }
+
+    public func updating<Element: TLAValueType>(
+        _ index: Int,
+        to value: Expr<Element>
+    ) -> Expr<ZeroBasedSequence<Element>> where Value == ZeroBasedSequence<Element> {
+        Expr(.except(stateExpr, .int(index), value.raw))
+    }
+
     public subscript<Schema: TLARecordSchema, Field>(_ field: TLAField<Schema, Field>) -> Expr<Field>
     where Value == Record<Schema>, Field: TLAValueType {
         Expr<Field>(.recordAccess(stateExpr, field.name))
@@ -783,6 +809,13 @@ extension SharedVariable {
     public func contains<Element: TLAValueType>(_ element: Expr<Element>) -> StateExpr
     where Value == SetExpr<Element> {
         .in(element.raw, stateExpr)
+    }
+}
+
+extension SharedVariable where Value: FormalZeroBasedSequenceValue {
+    /// The formal number of elements in a zero-based sequence.
+    public var count: Expr<Int> {
+        Expr(.cardinality(.domain(stateExpr)))
     }
 }
 

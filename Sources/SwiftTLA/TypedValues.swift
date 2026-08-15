@@ -308,6 +308,80 @@ public struct TupleExpr<Element: TLAValueType>: TLAValueType, Hashable, Sendable
 public protocol FormalTupleValue: TLAValueType {}
 extension TupleExpr: FormalTupleValue {}
 
+/// A finite formal sequence whose first element is at index zero.
+///
+/// TLA+ represents this value as a function with domain `0..<(count)`. It is
+/// useful for source algorithms that use `ZSequences`; it is not a Swift
+/// array or dictionary.
+public struct ZeroBasedSequence<Element: TLAValueType>: TLAValueType, Hashable, Sendable {
+  private let values: [TLAValue: TLAValue]
+
+  public init() {
+    values = [:]
+  }
+
+  public init?(formalValue: TLAValue) {
+    guard case .function(let values) = formalValue else { return nil }
+    let indexes = values.keys.compactMap { value -> Int? in
+      guard case .int(let index) = value else { return nil }
+      return index
+    }
+    guard indexes.count == values.count,
+          indexes.allSatisfy({ $0 >= 0 }),
+          Set(indexes) == Set(0..<indexes.count),
+          values.values.allSatisfy({ Element(formalValue: $0) != nil })
+    else { return nil }
+    self.values = values
+  }
+
+  public var tlaValue: TLAValue { .function(values) }
+  public static var defaultValue: Self { Self() }
+
+  /// Creates a zero-based formal sequence from values in formal order.
+  public static func literal(_ elements: Element...) -> Expr<Self> {
+    literal(elements.map { .value($0.tlaValue) })
+  }
+
+  public static func literal(_ elements: Expr<Element>...) -> Expr<Self> {
+    literal(elements.map(\.raw))
+  }
+
+  /// Creates a zero-based formal sequence with the supplied formal length.
+  ///
+  /// The length and value may depend on earlier formal state. No application
+  /// code executes when the sequence is built.
+  public static func filled(
+    length: Expr<Int>,
+    with value: Expr<Element>
+  ) -> Expr<Self> {
+    let index = "__zeroBasedSequenceIndex"
+    return Expr(.functionLiteral(
+      .integerRange(.int(0), .subtract(length.raw, .int(1))),
+      index,
+      value.raw
+    ))
+  }
+
+  public static func filled(length: Expr<Int>, with value: Element) -> Expr<Self> {
+    filled(length: length, with: Expr(.value(value.tlaValue)))
+  }
+
+  private static func literal(_ elements: [StateExpr]) -> Expr<Self> {
+    let index = "__zeroBasedSequenceIndex"
+    let pairs = elements.enumerated().flatMap { offset, element in
+      [StateExpr.equal(.variable(index), .int(offset)), element]
+    }
+    return Expr(.functionLiteral(
+      .setLiteral(elements.indices.map { .int($0) }),
+      index,
+      .caseExpr(pairs, .value(Element.defaultValue.tlaValue))
+    ))
+  }
+}
+
+public protocol FormalZeroBasedSequenceValue: TLAValueType {}
+extension ZeroBasedSequence: FormalZeroBasedSequenceValue {}
+
 /// Creates a finite formal set of sequences for model checking.
 ///
 /// `Sequences(of:lengths:)` is the bounded authoring form of TLA+ `Seq(S)`.
@@ -324,6 +398,20 @@ public func Sequences<Element: TLAValueType>(
 
   let sequences = formalSequenceExpressions(members: members, lengths: lengths)
   return Expr<SetExpr<TupleExpr<Element>>>(.setLiteral(sequences))
+}
+
+/// Creates a finite formal set of zero-based sequences for model checking.
+///
+/// This is the bounded form of a `ZSeq(S)` input domain. The returned values
+/// have function domains `0..<(length)`, so indexing at zero stays formal.
+public func ZeroBasedSequences<Element: TLAValueType>(
+  of elements: Expr<SetExpr<Element>>,
+  lengths: ClosedRange<Int>
+) -> Expr<SetExpr<ZeroBasedSequence<Element>>> {
+  guard case .setLiteral(let members) = elements.raw else {
+    preconditionFailure("ZeroBasedSequences(of:lengths:) requires SetExpr.literal(...) as its element domain")
+  }
+  return Expr(.setLiteral(formalZeroBasedSequenceExpressions(members: members, lengths: lengths)))
 }
 
 /// Creates a finite formal set of nondecreasing integer sequences.
@@ -366,6 +454,27 @@ func formalSequenceExpressions(
     result += prefixes.map(StateExpr.tupleLiteral)
   }
   return result
+}
+
+func formalZeroBasedSequenceExpressions(
+  members: [StateExpr],
+  lengths: ClosedRange<Int>
+) -> [StateExpr] {
+  guard lengths.lowerBound >= 0 else {
+    preconditionFailure("ZeroBasedSequences(of:lengths:) does not accept negative lengths")
+  }
+  return formalSequenceExpressions(members: members, lengths: lengths).map { tuple in
+    guard case .tupleLiteral(let elements) = tuple else { return tuple }
+    let index = "__zeroBasedSequenceIndex"
+    let pairs = elements.enumerated().flatMap { offset, element in
+      [StateExpr.equal(.variable(index), .int(offset)), element]
+    }
+    return .functionLiteral(
+      .setLiteral(elements.indices.map { .int($0) }),
+      index,
+      .caseExpr(pairs, .value(.int(0)))
+    )
+  }
 }
 
 func formalIntegerSequenceIsSorted(_ expression: StateExpr) -> Bool {
@@ -604,6 +713,13 @@ extension Expr where T: FormalTupleValue {
   }
 }
 
+extension Expr where T: FormalZeroBasedSequenceValue {
+  /// The formal number of elements in a zero-based sequence.
+  public var count: Expr<Int> {
+    Expr<Int>(.cardinality(.domain(raw)))
+  }
+}
+
 extension Expr where T == Int {
   /// Divides formal integers with TLA+ integer-division semantics.
   public func integerDivided(by divisor: Int) -> Expr<Int> {
@@ -616,6 +732,32 @@ extension Expr {
   public func at<Element: TLAValueType>(_ index: Expr<Int>) -> Expr<Element>
   where T == TupleExpr<Element> {
     Expr<Element>(.tupleDynamicAccess(raw, index.raw))
+  }
+
+  /// Reads a zero-based formal sequence at a formal index.
+  public subscript<Element: TLAValueType>(_ index: Expr<Int>) -> Expr<Element>
+  where T == ZeroBasedSequence<Element> {
+    Expr<Element>(.functionApply(raw, index.raw))
+  }
+
+  public subscript<Element: TLAValueType>(_ index: Int) -> Expr<Element>
+  where T == ZeroBasedSequence<Element> {
+    Expr<Element>(.functionApply(raw, .int(index)))
+  }
+
+  /// Replaces one value in a zero-based formal sequence.
+  public func updating<Element: TLAValueType>(
+    _ index: Expr<Int>,
+    to value: Expr<Element>
+  ) -> Expr<ZeroBasedSequence<Element>> where T == ZeroBasedSequence<Element> {
+    Expr(.except(raw, index.raw, value.raw))
+  }
+
+  public func updating<Element: TLAValueType>(
+    _ index: Int,
+    to value: Expr<Element>
+  ) -> Expr<ZeroBasedSequence<Element>> where T == ZeroBasedSequence<Element> {
+    Expr(.except(raw, .int(index), value.raw))
   }
 }
 
