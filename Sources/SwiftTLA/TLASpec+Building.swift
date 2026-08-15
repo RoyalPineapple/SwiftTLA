@@ -417,6 +417,24 @@ private func substituteInState(_ expr: StateExpr, constants: [String: TLAValue])
       initial: substituteInState(initial, constants: constants),
       sequence: substituteInState(sequence, constants: constants)
     )
+  case .operatorApplication(let operation, let arguments):
+    let substitutedOperator: FormalOperator
+    switch operation {
+    case .lambda(let lambda):
+      let bodyConstants = constants.filter { !lambda.parameters.contains($0.key) }
+      substitutedOperator = .lambda(
+        FormalLambda(
+          parameters: lambda.parameters,
+          body: substituteInState(lambda.body, constants: bodyConstants)
+        )
+      )
+    case .reference:
+      substitutedOperator = operation
+    }
+    return .operatorApplication(
+      substitutedOperator,
+      arguments.map { substituteInState($0, constants: constants) }
+    )
   case .letIn(let operators, let body):
     return .letIn(
       operators.map { operation in

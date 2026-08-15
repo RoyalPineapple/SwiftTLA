@@ -397,6 +397,30 @@ extension StateExpr {
             }
             return result
 
+        case .operatorApplication(let operation, let arguments):
+            guard arguments.count == operation.arity else {
+                throw EvalError.typeMismatch(
+                    "Formal operator requires \(operation.arity) arguments, got \(arguments.count)"
+                )
+            }
+            let values = try arguments.map { try ev($0) }
+            switch operation {
+            case .lambda(let lambda):
+                var body = lambda.body
+                for (parameter, value) in zip(lambda.parameters, values) {
+                    body = Self.substituteVariable(parameter, value, in: body)
+                }
+                guard maxDepth > 0 else {
+                    throw EvalError.typeMismatch("Formal operator recursion depth exceeded")
+                }
+                return try evDepth(body, maxDepth - 1)
+            case .reference(let name, _):
+                return try evDepth(
+                    .recursiveCall(name, values.map(StateExpr.value)),
+                    maxDepth - 1
+                )
+            }
+
         case .caseExpr(let pairs, let other):
             for i in stride(from: 0, to: pairs.count, by: 2) {
                 if case .bool(true) = try ev(pairs[i]) {
@@ -610,6 +634,18 @@ extension StateExpr {
                 initial: sub(initial),
                 sequence: sub(sequence)
             )
+        case .operatorApplication(let operation, let arguments):
+            let substitutedOperator: FormalOperator
+            switch operation {
+            case .lambda(let lambda):
+                let scoped = underParameters(lambda.parameters, body: lambda.body)
+                substitutedOperator = .lambda(
+                    FormalLambda(parameters: scoped.parameters, body: scoped.body)
+                )
+            case .reference:
+                substitutedOperator = operation
+            }
+            return .operatorApplication(substitutedOperator, arguments.map(sub))
         case .recursiveCall(let n, let a): return .recursiveCall(n, a.map(sub))
         case .letIn(let operators, let body):
             return .letIn(
@@ -696,6 +732,17 @@ extension StateExpr {
                     initial: visit(initial),
                     sequence: visit(sequence)
                 )
+            case .operatorApplication(let operation, let arguments):
+                let renamedOperator: FormalOperator
+                switch operation {
+                case .lambda(let lambda):
+                    renamedOperator = .lambda(
+                        FormalLambda(parameters: lambda.parameters, body: visit(lambda.body))
+                    )
+                case .reference(let name, let arity):
+                    renamedOperator = .reference(rename(name), arity: arity)
+                }
+                return .operatorApplication(renamedOperator, arguments.map(visit))
             case .recursiveCall(let name, let arguments): return .recursiveCall(rename(name), arguments.map(visit))
             case .letIn(let operators, let body):
                 return .letIn(

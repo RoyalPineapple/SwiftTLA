@@ -47,6 +47,33 @@ public struct FormalLambda: Hashable, Sendable {
     }
 }
 
+/// A formal operator passed or applied by the specification.
+///
+/// This is deliberately not a Swift closure. A lambda retains its parameter
+/// names and body in the formal AST; a reference retains the TLA+ operator name
+/// and its required arity. Both can therefore be emitted, checked, and applied
+/// by the same formal runtime.
+public indirect enum FormalOperator: Hashable, Sendable {
+    case lambda(FormalLambda)
+    case reference(String, arity: Int)
+
+    public var arity: Int {
+        switch self {
+        case .lambda(let lambda): lambda.parameters.count
+        case .reference(_, let arity): arity
+        }
+    }
+
+    var tlaSource: String {
+        switch self {
+        case .lambda(let lambda):
+            "LAMBDA \(lambda.parameters.joined(separator: ", ")) : \(lambda.body)"
+        case .reference(let name, _):
+            name
+        }
+    }
+}
+
 public indirect enum StateExpr: Hashable, Sendable, CustomStringConvertible {
     case value(TLAValue)
     case variable(String)
@@ -111,6 +138,8 @@ public indirect enum StateExpr: Hashable, Sendable, CustomStringConvertible {
     case setSum(StateExpr, StateExpr)
     case functionSet(StateExpr, StateExpr)
     case foldFunction(FormalLambda, initial: StateExpr, sequence: StateExpr)
+
+    case operatorApplication(FormalOperator, [StateExpr])
 
     case recursiveCall(String, [StateExpr])
     case letIn([LocalOperator], StateExpr)
@@ -184,6 +213,11 @@ public indirect enum StateExpr: Hashable, Sendable, CustomStringConvertible {
         case .functionSet(let d, let r): return "[\(d) -> \(r)]"
         case .foldFunction(let operation, let initial, let sequence):
             return "FoldFunction(LAMBDA \(operation.parameters.joined(separator: ", ")) : \(operation.body), \(initial), \(sequence))"
+        case .operatorApplication(let operation, let arguments):
+            let arguments = arguments.map(\.description).joined(separator: ", ")
+            return operation.isLambda
+                ? "(\(operation.tlaSource))(\(arguments))"
+                : "\(operation.tlaSource)(\(arguments))"
         case .recursiveCall(let n, let a):
             return a.isEmpty ? n : "\(n)(\(a.map(\.description).joined(separator: ", ")))"
         case .letIn(let operators, let body):
@@ -209,6 +243,13 @@ public indirect enum StateExpr: Hashable, Sendable, CustomStringConvertible {
             }.joined(separator: "\n    ")
             return "LET \(recursiveDeclaration)\(declarations)\nIN \(body)"
         }
+    }
+}
+
+private extension FormalOperator {
+    var isLambda: Bool {
+        if case .lambda = self { return true }
+        return false
     }
 }
 
@@ -266,6 +307,13 @@ private func localOperatorCalls(in expression: StateExpr) -> Set<String> {
         return localOperatorCalls(in: operation.body)
             .union(localOperatorCalls(in: initial))
             .union(localOperatorCalls(in: sequence))
+    case .operatorApplication(let operation, let arguments):
+        let operatorCalls: Set<String>
+        switch operation {
+        case .lambda(let lambda): operatorCalls = localOperatorCalls(in: lambda.body)
+        case .reference: operatorCalls = []
+        }
+        return arguments.reduce(into: operatorCalls) { $0.formUnion(localOperatorCalls(in: $1)) }
     }
 }
 

@@ -339,6 +339,21 @@ private func stateKey(_ expression: StateExpr, environment: [String: String], ne
             return canonical
         }
         return "fold([\(parameters.joined(separator: ","))],\(key(operation.body, environment: lambdaEnvironment)),\(key(initial)),\(key(sequence)))"
+    case .operatorApplication(let operation, let arguments):
+        let operationKey: String
+        switch operation {
+        case .lambda(let lambda):
+            var lambdaEnvironment = environment
+            let parameters = lambda.parameters.map { parameter -> String in
+                let (canonical, extended) = fresh(parameter, environment: lambdaEnvironment, next: &next)
+                lambdaEnvironment = extended
+                return canonical
+            }
+            operationKey = "lambda([\(parameters.joined(separator: ","))],\(key(lambda.body, environment: lambdaEnvironment)))"
+        case .reference(let name, let arity):
+            operationKey = "operator(\(name),\(arity))"
+        }
+        return "apply(\(operationKey),[\(arguments.map { key($0) }.joined(separator: ","))])"
     case .recursiveCall(let name, let arguments): return "recursive(\(name),\(arguments.map { key($0) }.joined(separator: ",")))"
     case .letIn(let operators, let body):
         let declarations = operators.map { operation in

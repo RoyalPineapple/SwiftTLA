@@ -320,6 +320,16 @@ enum MacroExpander {
         case .foldFunction(let operation, let initial, let sequence):
             let parameters = operation.parameters.map { "\"\($0)\"" }.joined(separator: ", ")
             return "StateExpr.foldFunction(FormalLambda(parameters: [\(parameters)], body: \(cg(operation.body))), initial: \(cg(initial)), sequence: \(cg(sequence)))"
+        case .operatorApplication(let operation, let arguments):
+            let operatorSource: String
+            switch operation {
+            case .lambda(let lambda):
+                let parameters = lambda.parameters.map { "\"\($0)\"" }.joined(separator: ", ")
+                operatorSource = ".lambda(FormalLambda(parameters: [\(parameters)], body: \(cg(lambda.body))))"
+            case .reference(let name, let arity):
+                operatorSource = ".reference(\"\(name)\", arity: \(arity))"
+            }
+            return "StateExpr.operatorApplication(\(operatorSource), [\(arguments.map(cg).joined(separator: ", "))])"
         case .recursiveCall(let name, let arguments):
             return "StateExpr.recursiveCall(\"\(name)\", [\(arguments.map(cg).joined(separator: ", "))])"
         case .letIn(let operators, let body):
