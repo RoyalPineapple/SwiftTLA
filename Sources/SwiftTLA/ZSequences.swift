@@ -145,6 +145,16 @@ public enum ZSequences {
     Expr(.recursiveCall("ZIndices", [sequence.raw]))
   }
 
+  /// The bounded set of zero-indexed sequences over `elements`.
+  ///
+  /// `Import(ZSequences.module, configuring: ...)` supplies the finite `Nat`
+  /// domain used by the upstream `ZSeq` definition.
+  public static func sequences<Element: TLAValueType>(
+    over elements: Expr<SetExpr<Element>>
+  ) -> Expr<SetExpr<ZeroBasedSequence<Element>>> {
+    Expr(.recursiveCall("ZSeq", [elements.raw]))
+  }
+
   public static func length<Element: TLAValueType>(
     of sequence: Expr<ZeroBasedSequence<Element>>
   ) -> Expr<Int> {
@@ -156,6 +166,14 @@ public enum ZSequences {
     leftBy shift: Expr<Int>
   ) -> Expr<ZeroBasedSequence<Element>> {
     Expr(.recursiveCall("Rotation", [sequence.raw, shift.raw]))
+  }
+
+  /// Every left rotation of a zero-indexed sequence, as the upstream record
+  /// set `{ [shift |-> r, seq |-> Rotation(s, r)] : r \in ZIndices(s) }`.
+  public static func rotations<Element: TLAValueType>(
+    of sequence: Expr<ZeroBasedSequence<Element>>
+  ) -> Expr<SetExpr<TLAValue>> {
+    Expr(.recursiveCall("Rotations", [sequence.raw]))
   }
 
   public static func lexicographicallyPrecedesOrEquals(

@@ -115,6 +115,13 @@ struct TLAModuleBundleTests {
       return
     }
     #expect(values.count == 7)
+
+    let corpus = Var<ZeroBasedSequence<Int>>("corpus", .init())
+    let initialized = TLASpec("InitializedZSequences") {
+      Import(ZSequences.module, configuring: ZSequences.boundedNaturalNumbers(0...2))
+      Variable(from: corpus.name, ZSequences.sequences(over: SetExpr<Int>.literal(0, 1)).raw)
+    }
+    #expect(computeInitialStates(initialized).count == 7)
   }
 
   @Test("an import remains a source dependency and resolves its operators at runtime")

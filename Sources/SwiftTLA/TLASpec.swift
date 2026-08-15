@@ -690,7 +690,11 @@ public func computeInitialStates(_ spec: TLASpec) -> [[String: TLAValue]] {
     states = states.flatMap { state -> [[String: TLAValue]] in
       let expression = variable.lazySet ?? variable.initialSet
       guard let expression,
-        case .set(let values) = try? expression.evaluate(in: state)
+        case .set(let values) = try? expression.evaluate(
+          in: state,
+          runtimeFuncs: substituted.runtimeFuncs,
+          recursiveFuncs: substituted.resolvedRecursiveFuncs
+        )
       else { return [] }
       return TLAValue.sorted(values).map {
         state.merging([variable.name: $0]) { _, new in new }
@@ -699,7 +703,11 @@ public func computeInitialStates(_ spec: TLASpec) -> [[String: TLAValue]] {
   }
   for variable in substituted.variables where variable.initExpr != nil {
     states = states.compactMap { state in
-      guard let val = try? variable.initExpr!.evaluate(in: state) else { return nil }
+      guard let val = try? variable.initExpr!.evaluate(
+        in: state,
+        runtimeFuncs: substituted.runtimeFuncs,
+        recursiveFuncs: substituted.resolvedRecursiveFuncs
+      ) else { return nil }
       var s = state
       s[variable.name] = val
       return s
