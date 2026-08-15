@@ -427,6 +427,98 @@ private func buildTrace(
 
 // MARK: - Results
 
+/// The class of a model-checking result that needs an engineer's attention.
+/// This is deliberately a domain enum rather than a Boolean or a generic
+/// error string so tooling can present the failed formal concept directly.
+public enum ModelCheckingFailureKind: String, Sendable, Equatable {
+    case invariantViolated
+    case deadlock
+    case stateLimit
+    case liveness
+    case assumption
+    case initialState
+    case evaluation
+}
+
+/// One safely projected state in a counterexample trace.
+public struct ModelTraceEvidence: Sendable, Equatable, CustomStringConvertible {
+    public let action: String
+    public let state: TLAStateProjectionResult
+
+    package init(action: String, formalState: [String: TLAValue]) {
+        self.action = action
+        do {
+            self.state = .projected(try .init(formalValues: formalState))
+        } catch let diagnostic as TLAStateProjectionDiagnostic {
+            self.state = .unavailable(diagnostic)
+        } catch {
+            self.state = .unavailable(.projectionUnavailable(
+                path: "state",
+                reason: String(describing: error)
+            ))
+        }
+    }
+
+    public var description: String {
+        switch state {
+        case .projected(let projection): "[\(action)] \(projection)"
+        case .unavailable(let diagnostic): "[\(action)] state unavailable: \(diagnostic)"
+        }
+    }
+}
+
+/// Inspection-ready evidence for a model-checking failure.
+///
+/// The legacy `CheckResult` cases remain useful for graph tooling. This
+/// companion is the public diagnostic boundary: it retains the named formal
+/// property, the failing state, counterexample trace when there is one, the
+/// expected condition, actual result, mutation outcome, and recovery step.
+public struct ModelCheckingDiagnostic: Sendable, Equatable, CustomStringConvertible {
+    public let kind: ModelCheckingFailureKind
+    public let subject: String?
+    public let expected: String
+    public let actual: String
+    public let state: TLAStateProjectionResult?
+    public let trace: [ModelTraceEvidence]
+    public let stateCommitted: Bool
+    public let nextSafeAction: String
+
+    public init(
+        kind: ModelCheckingFailureKind,
+        subject: String? = nil,
+        expected: String,
+        actual: String,
+        state: TLAStateProjectionResult? = nil,
+        trace: [ModelTraceEvidence] = [],
+        stateCommitted: Bool = false,
+        nextSafeAction: String
+    ) {
+        self.kind = kind
+        self.subject = subject
+        self.expected = expected
+        self.actual = actual
+        self.state = state
+        self.trace = trace
+        self.stateCommitted = stateCommitted
+        self.nextSafeAction = nextSafeAction
+    }
+
+    public var description: String {
+        let label = subject.map { " \($0)" } ?? ""
+        let stateText: String
+        if let state {
+            switch state {
+            case .projected(let projection): stateText = " State: \(projection)."
+            case .unavailable(let projectionError): stateText = " State could not be projected: \(projectionError)."
+            }
+        } else {
+            stateText = ""
+        }
+        let traceText = trace.isEmpty ? "" : " Trace: " + trace.map(\.description).joined(separator: " → ") + "."
+        return "\(kind.rawValue)\(label): expected \(expected); found \(actual).\(stateText)\(traceText) State was \(stateCommitted ? "committed" : "not committed"). Next: \(nextSafeAction)"
+    }
+}
+
 public indirect enum CheckResult: CustomStringConvertible {
     case ok(statesCount: Int)
     case invariantViolated(invariant: String, state: [String: TLAValue], trace: [TraceStep])
@@ -446,19 +538,83 @@ public indirect enum CheckResult: CustomStringConvertible {
         return []
     }
 
+    /// The typed explanation of any non-success result. This preserves formal
+    /// state and counterexample evidence without exposing the engine's raw
+    /// string-keyed state map to application code.
+    public var diagnostic: ModelCheckingDiagnostic? {
+        func project(_ formalState: [String: TLAValue]) -> TLAStateProjectionResult {
+            do {
+                return .projected(try .init(formalValues: formalState))
+            } catch let diagnostic as TLAStateProjectionDiagnostic {
+                return .unavailable(diagnostic)
+            } catch {
+                return .unavailable(.projectionUnavailable(
+                    path: "state",
+                    reason: String(describing: error)
+                ))
+            }
+        }
+
+        switch self {
+        case .ok:
+            return nil
+        case .invariantViolated(let invariant, let state, let trace):
+            return .init(
+                kind: .invariantViolated,
+                subject: invariant,
+                expected: "the invariant to evaluate to true",
+                actual: "false",
+                state: project(state),
+                trace: trace.map { .init(action: $0.action, formalState: $0.state) },
+                nextSafeAction: "Inspect the final trace transition and revise the action guard, update, or invariant."
+            )
+        case .depthExceeded(let count, let limit):
+            return .init(
+                kind: .stateLimit,
+                expected: "at most \(limit) explored states",
+                actual: "\(count) states were needed before exploration completed",
+                nextSafeAction: "Increase the finite exploration limit only after confirming the model bounds are intentional."
+            )
+        case .deadlocked(let state):
+            return .init(
+                kind: .deadlock,
+                expected: "at least one enabled action",
+                actual: "no action produced a successor",
+                state: project(state),
+                nextSafeAction: "Inspect the guards and explicit unchanged clauses for this state."
+            )
+        case .livenessViolated(let message):
+            return .init(
+                kind: .liveness,
+                expected: "the declared temporal property to hold",
+                actual: message,
+                nextSafeAction: "Inspect the lasso or fairness diagnostic and revise the temporal property or transition relation."
+            )
+        case .error(let message):
+            let kind: ModelCheckingFailureKind
+            if message == "No initial states" { kind = .initialState }
+            else if message == "ASSUME failed" { kind = .assumption }
+            else { kind = .evaluation }
+            return .init(
+                kind: kind,
+                expected: kind == .assumption ? "ASSUME to evaluate to true" : "a complete evaluable model-checking step",
+                actual: message,
+                nextSafeAction: "Inspect the named construct in the diagnostic and correct the model before rerunning verification."
+            )
+        case .bounded(_, let outcome):
+            return outcome.diagnostic
+        }
+    }
+
     public var description: String {
         switch self {
         case .ok(let count): return "OK — explored " + String(count) + " state(s)"
-        case .invariantViolated(let inv, _, let trace):
-            let t = trace.enumerated().map {
-                "  " + String($0.offset) + ". [" + $0.element.action + "] " + formatState($0.element.state)
-            }
-            return "INVARIANT VIOLATED: " + inv + "\n" + t.joined(separator: "\n")
+        case .invariantViolated:
+            return diagnostic?.description ?? "Invariant violation"
         case .depthExceeded(let count, let l):
             return "DEPTH EXCEEDED — explored " + String(count) + " state(s) before hitting limit of " + String(l)
-        case .deadlocked(let s): return "DEADLOCK detected at " + formatState(s)
-        case .livenessViolated(let msg): return "LIVENESS VIOLATED: " + msg
-        case .error(let message): return "ERROR: " + message
+        case .deadlocked, .livenessViolated, .error:
+            return diagnostic?.description ?? "Verification diagnostic unavailable"
         case .bounded(let scopes, let outcome):
             return "BOUNDED VERIFICATION — " + scopes.map(\.description).joined(separator: "; ")
                 + "; this does not prove larger populations\n" + outcome.description

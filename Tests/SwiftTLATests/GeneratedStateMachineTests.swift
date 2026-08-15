@@ -819,8 +819,8 @@ struct GeneratedStateMachineTests {
             do {
                 _ = try machine.apply(invocation)
                 Issue.record("Expected malformed formal state to fail")
-            } catch let GeneratedMachineError.unexpected(error) {
-                #expect(error as? TLAStateProjectionDiagnostic == expectedDiagnostic)
+            } catch let GeneratedMachineError.stateDecodingFailed(diagnostic) {
+                #expect(diagnostic == expectedDiagnostic)
             }
 
             #expect(machine.snapshot == before)

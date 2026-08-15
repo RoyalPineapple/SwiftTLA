@@ -516,6 +516,28 @@ import UpstreamParity
     }
   }
 
+  @Test func invariantDiagnosticRetainsProjectedStateAndCounterexampleTrace() throws {
+    let x = Var<Int>("x")
+    let spec = TLASpec("DiagnosticCounter") {
+      Variable(x, 0)
+      Action("increment") { x.becomes(x + 1).when(x < 1) }
+      Invariant("mustStayZero") { x == 0 }
+    }
+
+    let result = try ModelChecker(spec: spec, maxStates: 10).check()
+    let diagnostic = try #require(result.diagnostic)
+    let xToken = try #require(TLAStateProjection.Token(validating: "x"))
+
+    #expect(diagnostic.kind == .invariantViolated)
+    #expect(diagnostic.subject == "mustStayZero")
+    #expect(diagnostic.expected == "the invariant to evaluate to true")
+    #expect(diagnostic.actual == "false")
+    #expect(diagnostic.stateCommitted == false)
+    #expect(diagnostic.state?.projection?.value(for: xToken) == .int(1))
+    #expect(diagnostic.trace.map(\.action) == ["init", "increment"])
+    #expect(diagnostic.nextSafeAction.contains("final trace transition"))
+  }
+
   @Test func maxStatesBound() throws {
     let x = Var<Int>("x")
     let spec = TLASpec("Test") {

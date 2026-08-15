@@ -6,6 +6,15 @@ public enum TLAStateProjectionDiagnostic: Error, Sendable, Equatable, CustomStri
     case invalidConstant(path: String)
     case missingValue(path: String)
     case invalidValue(path: String)
+    case projectionUnavailable(path: String, reason: String)
+    /// A generated typed state field was absent.  Unlike the legacy
+    /// `missingValue` spelling, this retains the Swift shape that the
+    /// generated machine expected to decode.
+    case missingRequiredValue(path: String, expected: String)
+    /// A generated typed state field had a formal value of the wrong kind.
+    /// The formal value is retained so callers can inspect it without
+    /// reaching back into the engine's raw state dictionary.
+    case typeMismatch(path: String, expected: String, actual: TLAValue)
 
     public var description: String {
         switch self {
@@ -17,6 +26,12 @@ public enum TLAStateProjectionDiagnostic: Error, Sendable, Equatable, CustomStri
             return "Missing TLA state value at \(path)"
         case .invalidValue(let path):
             return "Invalid TLA state value at \(path)"
+        case .projectionUnavailable(let path, let reason):
+            return "Cannot project formal state at \(path): \(reason). No state changed. Inspect the reported boundary before retrying."
+        case .missingRequiredValue(let path, let expected):
+            return "Cannot decode \(path): expected \(expected), but the formal state has no value; state was not committed. Supply \(expected) for \(path) before retrying."
+        case .typeMismatch(let path, let expected, let actual):
+            return "Cannot decode \(path): expected \(expected), found formal \(actual); state was not committed. Correct \(path) or its formal declaration before retrying."
         }
     }
 }
@@ -146,10 +161,12 @@ public enum TLAStateProjectionResult: Sendable, Equatable {
     }
 
     public func requireProjection() throws -> TLAStateProjection {
-        guard case .projected(let projection) = self else {
-            throw diagnostic ?? .invalidKey(path: "state")
+        switch self {
+        case .projected(let projection):
+            return projection
+        case .unavailable(let diagnostic):
+            throw diagnostic
         }
-        return projection
     }
 }
 
@@ -169,6 +186,9 @@ public struct CanonicalTransitionEvidence<Snapshot: Equatable & Sendable>: Equat
 /// Reports a generated-machine execution failure.
 public enum GeneratedMachineError: Error {
     case runtime(SpecRuntime.RuntimeError)
+    /// The formal successor could not be decoded into the generated Swift
+    /// state. The canonical snapshot remains unchanged.
+    case stateDecodingFailed(TLAStateProjectionDiagnostic)
     case unexpected(any Error)
     case unrepresentableActionLabel(TLAActionInvocation)
 }
@@ -230,7 +250,10 @@ public struct TLAMachineObservation: Sendable, Equatable {
                 )
             )
         } catch {
-            let diagnostic = TLAStateProjectionDiagnostic.invalidKey(path: "state")
+            let diagnostic = TLAStateProjectionDiagnostic.projectionUnavailable(
+                path: "state",
+                reason: String(describing: error)
+            )
             self.init(
                 state: .unavailable(diagnostic),
                 availability: .unavailable(
@@ -349,7 +372,10 @@ public struct CanonicalMachine<Snapshot: Equatable & Sendable>: Sendable {
         } catch let diagnostic as TLAStateProjectionDiagnostic {
             return .unavailable(diagnostic)
         } catch {
-            return .unavailable(.invalidKey(path: "state"))
+            return .unavailable(.projectionUnavailable(
+                path: "state",
+                reason: String(describing: error)
+            ))
         }
     }
 
@@ -388,7 +414,10 @@ public struct CanonicalMachine<Snapshot: Equatable & Sendable>: Sendable {
                 )
             )
         } catch {
-            let diagnostic = TLAStateProjectionDiagnostic.invalidKey(path: "state")
+            let diagnostic = TLAStateProjectionDiagnostic.projectionUnavailable(
+                path: "state",
+                reason: String(describing: error)
+            )
             return .init(
                 state: .unavailable(diagnostic),
                 availability: .unavailable(
@@ -440,12 +469,14 @@ public struct CanonicalMachine<Snapshot: Equatable & Sendable>: Sendable {
             do {
                 projection = try .init(formalValues: candidate)
             } catch let diagnostic as TLAStateProjectionDiagnostic {
-                throw GeneratedMachineError.unexpected(diagnostic)
+                throw GeneratedMachineError.stateDecodingFailed(diagnostic)
             }
             guard successor(projection) else { continue }
             let after: Snapshot
             do {
                 after = try snapshotFromDictionary(candidate)
+            } catch let diagnostic as TLAStateProjectionDiagnostic {
+                throw GeneratedMachineError.stateDecodingFailed(diagnostic)
             } catch {
                 throw GeneratedMachineError.unexpected(error)
             }
@@ -482,6 +513,8 @@ public struct CanonicalMachine<Snapshot: Equatable & Sendable>: Sendable {
         let after: Snapshot
         do {
             after = try snapshotFromDictionary(next)
+        } catch let diagnostic as TLAStateProjectionDiagnostic {
+            throw GeneratedMachineError.stateDecodingFailed(diagnostic)
         } catch {
             throw GeneratedMachineError.unexpected(error)
         }
