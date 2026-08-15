@@ -160,7 +160,15 @@ public enum SpecParser {
         if let prefix = expression.as(PrefixOperatorExprSyntax.self) {
             let operand = decodeStateExpr(prefix.expression)
             if prefix.operator.text == "!", let operand { return .not(operand) }
-            if prefix.operator.text == "-", let operand { return .negate(operand) }
+            if prefix.operator.text == "-", let operand {
+                // Keep a spelled negative literal identical to the runtime
+                // builder's integer literal. This matters to the parser-tree
+                // check even though both forms evaluate to the same value.
+                if case .value(.int(let value)) = operand {
+                    return .value(.int(-value))
+                }
+                return .negate(operand)
+            }
         }
         return nil
     }
@@ -318,7 +326,14 @@ public enum SpecParser {
            let operand = decodeTypedFacadeValue(prefix.expression, substitutions: substitutions) {
             switch prefix.operator.text {
             case "!": return .not(operand)
-            case "-": return .negate(operand)
+            case "-":
+                // The runtime typed facade receives `-1` as an Int literal.
+                // Canonicalize the macro-side spelling the same way before a
+                // bounded collection expands it into many formal values.
+                if case .value(.int(let value)) = operand {
+                    return .value(.int(-value))
+                }
+                return .negate(operand)
             default: return nil
             }
         }
@@ -708,36 +723,39 @@ public enum SpecParser {
             return decodeStateExpr(elements[0])
         }
         guard elements.count % 2 == 1 else { return nil }
-        if elements.count == 3 {
-            guard let opText = elements[1].as(BinaryOperatorExprSyntax.self)?.operator.text,
-                  let lhs = decodeStateExpr(elements[0]),
-                  let rhs = decodeStateExpr(elements[2]) else { return nil }
-            return applyInfixOp(opText, lhs, rhs)
+
+        // SequenceExprSyntax retains a flat token sequence. Reconstruct
+        // Swift precedence before lowering into the formal AST: a left fold
+        // would turn `index <= count + 1` into `(index <= count) + 1`.
+        func precedence(_ operation: String) -> Int? {
+            switch operation {
+            case "||": return 1
+            case "&&": return 2
+            case "==", "!=", "<", "<=", ">", ">=": return 3
+            case "...": return 4
+            case "+", "-": return 5
+            case "*", "/", "%": return 6
+            default: return nil
+            }
         }
-        if let orIdx = stride(from: 1, to: elements.count, by: 2).first(where: {
-            elements[$0].as(BinaryOperatorExprSyntax.self)?.operator.text == "||"
-        }) {
-            guard let left = decodeInfixExpr(Array(elements[0..<orIdx])),
-                  let right = decodeInfixExpr(Array(elements[(orIdx + 1)..<elements.count]))
+
+        let operators = stride(from: 1, to: elements.count, by: 2).compactMap { index -> (Int, String, Int)? in
+            guard let operation = elements[index].as(BinaryOperatorExprSyntax.self)?.operator.text,
+                  let level = precedence(operation)
             else { return nil }
-            return .or(left, right)
+            return (index, operation, level)
         }
-        if let andIdx = stride(from: 1, to: elements.count, by: 2).first(where: {
-            elements[$0].as(BinaryOperatorExprSyntax.self)?.operator.text == "&&"
-        }) {
-            guard let left = decodeInfixExpr(Array(elements[0..<andIdx])),
-                  let right = decodeInfixExpr(Array(elements[(andIdx + 1)..<elements.count]))
-            else { return nil }
-            return .and(left, right)
-        }
-        var result = decodeStateExpr(elements[0])
-        for i in stride(from: 1, to: elements.count, by: 2) {
-            guard let opText = elements[i].as(BinaryOperatorExprSyntax.self)?.operator.text,
-                  let lhs = result,
-                  let rhs = decodeStateExpr(elements[i + 1]) else { return nil }
-            result = applyInfixOp(opText, lhs, rhs)
-        }
-        return result
+        guard operators.count == (elements.count - 1) / 2,
+              let split = operators.min(by: { lhs, rhs in
+                  // Equal-precedence Swift operators associate from the left.
+                  lhs.2 == rhs.2 ? lhs.0 > rhs.0 : lhs.2 < rhs.2
+              })
+        else { return nil }
+
+        guard let lhs = decodeInfixExpr(Array(elements[..<split.0])),
+              let rhs = decodeInfixExpr(Array(elements[(split.0 + 1)...]))
+        else { return nil }
+        return applyInfixOp(split.1, lhs, rhs)
     }
 
     static func applyInfixOp(_ op: String, _ lhs: StateExpr, _ rhs: StateExpr) -> StateExpr? {

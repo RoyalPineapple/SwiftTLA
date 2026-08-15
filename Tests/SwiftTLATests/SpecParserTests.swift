@@ -464,6 +464,16 @@ private enum ParserNode: String, FiniteDomainKey {
         let x: StateExpr = .variable("x")
         #expect(SpecParser.decodeStateExpr(parseExpression("!x")) == StateExpr.not(x))
         #expect(SpecParser.decodeStateExpr(parseExpression("-x")) == StateExpr.negate(x))
+        #expect(SpecParser.decodeStateExpr(parseExpression("-1")) == StateExpr.value(.int(-1)))
+    }
+
+    @Test func preservesSwiftInfixPrecedence() {
+        let index: StateExpr = .variable("index")
+        let count: StateExpr = .variable("count")
+        #expect(
+            SpecParser.decodeStateExpr(parseExpression("index <= count + 1"))
+                == StateExpr.lessOrEqual(index, .add(count, .value(.int(1))))
+        )
     }
 
     @Test func parseParenthesized() {
@@ -628,7 +638,7 @@ private enum ParserNode: String, FiniteDomainKey {
             parseExpression("StateExpr.firstMatch((when: x < 0, then: -1))")
         )
         #expect(result == StateExpr.caseExpr(
-            [StateExpr.lessThan(.variable("x"), .value(.int(0))), StateExpr.negate(.value(.int(1)))],
+            [StateExpr.lessThan(.variable("x"), .value(.int(0))), StateExpr.value(.int(-1))],
             nil
         ))
     }
