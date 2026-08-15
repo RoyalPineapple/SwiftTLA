@@ -36,7 +36,7 @@ internal enum AlgorithmProcedureValidator {
                         names: Set(names),
                         arities: arities,
                         inProcedure: false,
-                        allowCalls: false,
+                        allowCalls: true,
                         diagnostics: &diagnostics
                     )
                 }

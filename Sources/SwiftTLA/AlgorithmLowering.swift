@@ -30,6 +30,7 @@ enum AlgorithmLowerer {
                 return state
             }
         }
+        let procedures = algorithm.procedures
         let declaredInvariants = algorithm.components.compactMap { component -> NamedInvariant? in
             guard case .invariant(let invariant) = component else { return nil }
             return invariant
@@ -117,9 +118,27 @@ enum AlgorithmLowerer {
             initial: .function([:]),
             initExpr: controlInitial
         ))
+        if !procedures.isEmpty {
+            for slot in procedureSlots(procedures) {
+                variables.append(NamedVar(
+                    name: slot.root,
+                    initial: staticInitialValue(
+                        constantFunction(domain: controlDomainValues(processes), value: slot.initial),
+                        named: slot.root
+                    )
+                ))
+            }
+            variables.append(NamedVar(
+                name: stackVariable,
+                initial: staticInitialValue(
+                    constantFunction(domain: controlDomainValues(processes), value: .tupleLiteral([])),
+                    named: stackVariable
+                )
+            ))
+        }
 
         let variableNames = variables.map(\.name)
-        let localRoots = Set(localStates.map(\.root))
+        let localRoots = Set(localStates.map(\.root) + procedureSlots(procedures).map(\.root))
         var generatedAssertionInvariants: [NamedInvariant] = []
         var fairness: [FairnessCondition] = []
         var actions = processes.flatMap { process in
@@ -133,7 +152,10 @@ enum AlgorithmLowerer {
                 let loweredStatements = lower(
                     atomic.statements,
                     localRoots: localRoots,
-                    processDomain: process.domain
+                    processDomain: process.domain,
+                    procedures: procedures,
+                    owner: nil,
+                    nextLabel: nextLabel
                 )
                 let body: ActionExpr
                 if let loopCondition = atomic.loopCondition {
@@ -164,6 +186,34 @@ enum AlgorithmLowerer {
                 return generatedAction
             }
         }
+
+        let procedureActions = procedures.flatMap { procedure in
+            procedure.steps.enumerated().map { index, atomic in
+                let label = emittedLabel(atomic.label.name, owner: procedure)
+                let nextLabel = procedure.steps.indices.contains(index + 1)
+                    ? emittedLabel(procedure.steps[index + 1].label.name, owner: procedure)
+                    : emittedLabel(doneLabel, owner: procedure)
+                let guardExpression = StateExpr.equal(
+                    .functionApply(.variable(controlVariable), .variable(processBinding)),
+                    .value(.string(label))
+                )
+                let loweredStatements = lower(
+                    atomic.statements,
+                    localRoots: localRoots,
+                    processDomain: controlDomainValues(processes),
+                    procedures: procedures,
+                    owner: procedure,
+                    nextLabel: nextLabel
+                )
+                let body = completingControl(loweredStatements, fallthrough: nextLabel)
+                return NamedAction(
+                    name: label,
+                    body: completeAction(.and(.guard_(guardExpression), body), allVars: variableNames),
+                    bindings: [ActionBinding(name: processBinding, values: controlDomainValues(processes))]
+                )
+            }
+        }
+        actions += procedureActions
 
         let allDone = processes.reduce(StateExpr.value(.bool(true))) { condition, process in
             let members = StateExpr.setLiteral(process.domain.map(StateExpr.value))
@@ -205,6 +255,10 @@ enum AlgorithmLowerer {
                 in: value
             )
         )
+    }
+
+    private static func controlDomainValues(_ processes: [AlgorithmProcessModel]) -> [TLAValue] {
+        Array(Set(processes.flatMap(\.domain))).sorted { $0.description < $1.description }
     }
 
     /// Lowers a PlusCal `begin ... end algorithm` body. This is deliberately
@@ -477,6 +531,82 @@ enum AlgorithmLowerer {
             .reduce(.guard_(.value(.bool(true))), ActionExpr.and)
     }
 
+    private static func processCallAction(
+        target: String,
+        arguments: [StateExpr],
+        returnTo: String,
+        procedures: [AlgorithmProcedureModel]
+    ) -> ActionExpr {
+        guard let procedure = procedures.first(where: { $0.name == target }),
+              let entry = procedure.steps.first?.label.name else {
+            return .guard_(.value(.bool(false)))
+        }
+        let process = StateExpr.variable(processBinding)
+        let stack = StateExpr.functionApply(.variable(stackVariable), process)
+        let frameFields = [(returnPCField, StateExpr.value(.string(returnTo)))]
+            + procedureSlots(procedures).map {
+                ($0.root, StateExpr.functionApply(.variable($0.root), process))
+            }
+        let push = ActionExpr.assign(
+            stackVariable,
+            .except(
+                .variable(stackVariable),
+                process,
+                .tupleConcatenate(.tupleLiteral([.recordLiteral(Dictionary(uniqueKeysWithValues: frameFields))]), stack)
+            )
+        )
+        let parameterAssignments = zip(procedure.parameters, arguments).map {
+            ActionExpr.assign($0.0.root, .except(.variable($0.0.root), process, $0.1))
+        }
+        let localRoots = Set(procedureSlots(procedures).map(\.root))
+        let localAssignments = procedure.locals.map {
+            ActionExpr.assign($0.root, .except(.variable($0.root), process, rewrite($0.initial, localRoots: localRoots)))
+        }
+        return (parameterAssignments + localAssignments + [push, transfer(to: emittedLabel(entry, owner: procedure))])
+            .reduce(.guard_(.value(.bool(true))), ActionExpr.and)
+    }
+
+    private static func processReturnAction(
+        owner: AlgorithmProcedureModel?,
+        procedures: [AlgorithmProcedureModel]
+    ) -> ActionExpr {
+        guard owner != nil else { return .guard_(.value(.bool(false))) }
+        let process = StateExpr.variable(processBinding)
+        let stack = StateExpr.functionApply(.variable(stackVariable), process)
+        let frame = StateExpr.tupleHead(stack)
+        let restore = procedureSlots(procedures).map {
+            ActionExpr.assign($0.root, .except(.variable($0.root), process, .recordAccess(frame, $0.root)))
+        } + [
+            .assign(stackVariable, .except(.variable(stackVariable), process, .tupleTail(stack))),
+            transfer(toExpression: .recordAccess(frame, returnPCField))
+        ]
+        return restore.reduce(
+            .guard_(.greaterThan(.tupleLength(stack), .int(0))),
+            ActionExpr.and
+        )
+    }
+
+    private static func processTailCallAction(
+        target: String,
+        arguments: [StateExpr],
+        procedures: [AlgorithmProcedureModel]
+    ) -> ActionExpr {
+        guard let procedure = procedures.first(where: { $0.name == target }),
+              let entry = procedure.steps.first?.label.name else {
+            return .guard_(.value(.bool(false)))
+        }
+        let process = StateExpr.variable(processBinding)
+        let parameterAssignments = zip(procedure.parameters, arguments).map {
+            ActionExpr.assign($0.0.root, .except(.variable($0.0.root), process, $0.1))
+        }
+        let localRoots = Set(procedureSlots(procedures).map(\.root))
+        let localAssignments = procedure.locals.map {
+            ActionExpr.assign($0.root, .except(.variable($0.root), process, rewrite($0.initial, localRoots: localRoots)))
+        }
+        return (parameterAssignments + localAssignments + [transfer(to: emittedLabel(entry, owner: procedure))])
+            .reduce(.guard_(.value(.bool(true))), ActionExpr.and)
+    }
+
     private static func procedureSlots(
         _ procedures: [AlgorithmProcedureModel]
     ) -> [(root: String, initial: StateExpr)] {
@@ -541,11 +671,36 @@ enum AlgorithmLowerer {
     private static func lower(
         _ statements: [AlgorithmStatementModel],
         localRoots: Set<String>,
-        processDomain: [TLAValue]
+        processDomain: [TLAValue],
+        procedures: [AlgorithmProcedureModel],
+        owner: AlgorithmProcedureModel?,
+        nextLabel: String
     ) -> ActionExpr {
-        statements.reduce(.guard_(.value(.bool(true)))) { partial, statement in
-            .and(partial, lower(statement, localRoots: localRoots, processDomain: processDomain))
+        var result = ActionExpr.guard_(.value(.bool(true)))
+        var index = 0
+        while index < statements.count {
+            if case .call(let target, let arguments) = statements[index],
+               index + 1 < statements.count,
+               case .return = statements[index + 1] {
+                result = .and(result, processTailCallAction(
+                    target: target,
+                    arguments: arguments.map { rewrite($0, localRoots: localRoots) },
+                    procedures: procedures
+                ))
+                index += 2
+            } else {
+                result = .and(result, lower(
+                    statements[index],
+                    localRoots: localRoots,
+                    processDomain: processDomain,
+                    procedures: procedures,
+                    owner: owner,
+                    nextLabel: nextLabel
+                ))
+                index += 1
+            }
         }
+        return result
     }
 
     private static func stopAction() -> ActionExpr {
@@ -553,12 +708,16 @@ enum AlgorithmLowerer {
     }
 
     private static func transfer(to label: String) -> ActionExpr {
+        transfer(toExpression: .value(.string(label)))
+    }
+
+    private static func transfer(toExpression label: StateExpr) -> ActionExpr {
         .assign(
             controlVariable,
             .except(
                 .variable(controlVariable),
                 .variable(processBinding),
-                .value(.string(label))))
+                label))
     }
 
     /// An `Each` machine continues to its next `Do` when it does not explicitly
@@ -576,7 +735,10 @@ enum AlgorithmLowerer {
     private static func lower(
         _ statement: AlgorithmStatementModel,
         localRoots: Set<String>,
-        processDomain: [TLAValue]
+        processDomain: [TLAValue],
+        procedures: [AlgorithmProcedureModel],
+        owner: AlgorithmProcedureModel?,
+        nextLabel: String
     ) -> ActionExpr {
         switch statement {
         case .await(let condition):
@@ -606,38 +768,38 @@ enum AlgorithmLowerer {
             return .define(
                 variable,
                 rewrite(value, localRoots: localRoots),
-                lower(body, localRoots: localRoots, processDomain: processDomain)
+                lower(body, localRoots: localRoots, processDomain: processDomain, procedures: procedures, owner: owner, nextLabel: nextLabel)
             )
         case .with(let variable, let source, let body):
             return .existsAction(
                 variable,
                 rewrite(source, localRoots: localRoots),
-                lower(body, localRoots: localRoots, processDomain: processDomain))
+                lower(body, localRoots: localRoots, processDomain: processDomain, procedures: procedures, owner: owner, nextLabel: nextLabel))
         case .ifElse(let condition, let then, let otherwise):
             return .ifElse(
                 rewrite(condition, localRoots: localRoots),
-                lower(then, localRoots: localRoots, processDomain: processDomain),
-                lower(otherwise, localRoots: localRoots, processDomain: processDomain))
+                lower(then, localRoots: localRoots, processDomain: processDomain, procedures: procedures, owner: owner, nextLabel: nextLabel),
+                lower(otherwise, localRoots: localRoots, processDomain: processDomain, procedures: procedures, owner: owner, nextLabel: nextLabel))
         case .either(let first, let second):
             return .or(
-                lower(first, localRoots: localRoots, processDomain: processDomain),
-                lower(second, localRoots: localRoots, processDomain: processDomain))
+                lower(first, localRoots: localRoots, processDomain: processDomain, procedures: procedures, owner: owner, nextLabel: nextLabel),
+                lower(second, localRoots: localRoots, processDomain: processDomain, procedures: procedures, owner: owner, nextLabel: nextLabel))
         case .choose(let variable, let domain, let body):
             return .existsAction(
                 variable,
                 .setLiteral(domain.map { .value($0) }),
-                lower(body, localRoots: localRoots, processDomain: processDomain))
+                lower(body, localRoots: localRoots, processDomain: processDomain, procedures: procedures, owner: owner, nextLabel: nextLabel))
         case .goto(let label):
-            return .assign(
-                controlVariable,
-                .except(
-                    .variable(controlVariable),
-                    .variable(processBinding),
-                    .value(.string(label.name))))
-        case .call, .return:
-            // Calls and returns are only admitted by the sequential procedure
-            // lowering path. Validation rejects them in an `Each` process.
-            return .guard_(.value(.bool(false)))
+            return transfer(to: emittedLabel(label.name, owner: owner))
+        case .call(let target, let arguments):
+            return processCallAction(
+                target: target,
+                arguments: arguments.map { rewrite($0, localRoots: localRoots) },
+                returnTo: nextLabel,
+                procedures: procedures
+            )
+        case .return:
+            return processReturnAction(owner: owner, procedures: procedures)
         case .stop:
             return stopAction()
         case .skip:

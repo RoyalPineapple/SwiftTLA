@@ -90,6 +90,75 @@ struct ProcedureLoweringTests {
         #expect(afterReturn["pc"] == .string("finished"))
     }
 
+    @Test("Each processes keep recursive procedure frames and parameter slots independent")
+    func eachProcessesIsolateProcedureFrames() throws {
+        let workers: [TLAValue] = [.int(1), .int(2)]
+        let model = AlgorithmModel(
+            name: "ProcessProcedureFrame",
+            components: [
+                .shared(.init(root: "seen", initial: .value(.function([
+                    .int(1): .int(0),
+                    .int(2): .int(0)
+                ])))),
+                .process(.init(
+                    typeName: "Worker",
+                    domain: workers,
+                    fairness: .none,
+                    components: [
+                        .step(.init(label: .init(name: "start"), statements: [
+                            .call(target: "outer", arguments: [.variable("__pcal_self")])
+                        ])),
+                        .step(.init(label: .init(name: "finished"), statements: [.stop]))
+                    ]
+                )),
+                .procedure(.init(
+                    name: "outer",
+                    parameters: [.init(root: "outerValue", initial: .int(0), swiftTypeName: "Int")],
+                    locals: [],
+                    steps: [.init(label: .init(name: "enter"), statements: [
+                        .call(target: "inner", arguments: [.variable("outerValue")])
+                    ]), .init(label: .init(name: "return"), statements: [
+                        .return
+                    ])]
+                )),
+                .procedure(.init(
+                    name: "inner",
+                    parameters: [.init(root: "innerValue", initial: .int(0), swiftTypeName: "Int")],
+                    locals: [],
+                    steps: [.init(label: .init(name: "enter"), statements: [
+                        .set(target: .function(root: "seen", key: .variable("innerValue")), value: .variable("innerValue")),
+                        .return
+                    ])]
+                ))
+            ]
+        )
+
+        #expect(AlgorithmValidator.validate(model).isEmpty)
+        let spec = AlgorithmLowerer.lower(model)
+        let initial = try #require(computeInitialStates(spec).first)
+        let oneInOuter = try apply("start", process: .int(1), in: spec, to: initial)
+        let bothInOuter = try apply("start", process: .int(2), in: spec, to: oneInOuter)
+        #expect(try functionValue("outerValue", key: .int(1), in: bothInOuter) == .int(1))
+        #expect(try functionValue("outerValue", key: .int(2), in: bothInOuter) == .int(2))
+
+        let oneInInner = try apply("procedure.outer.enter", process: .int(1), in: spec, to: bothInOuter)
+        #expect(try functionValue("innerValue", key: .int(1), in: oneInInner) == .int(1))
+        #expect(try functionValue("innerValue", key: .int(2), in: oneInInner) == .int(0))
+        #expect(try functionValue("__pcal_stack", key: .int(1), in: oneInInner) != try functionValue("__pcal_stack", key: .int(1), in: bothInOuter))
+
+        let oneReturned = try apply("procedure.inner.enter", process: .int(1), in: spec, to: oneInInner)
+        #expect(try functionValue("seen", key: .int(1), in: oneReturned) == .int(1))
+        #expect(try functionValue("seen", key: .int(2), in: oneReturned) == .int(0))
+        #expect(try functionValue("innerValue", key: .int(1), in: oneReturned) == .int(0))
+        #expect(try functionValue("outerValue", key: .int(1), in: oneReturned) == .int(1))
+        #expect(try functionValue("outerValue", key: .int(2), in: oneReturned) == .int(2))
+        #expect(try functionValue("pc", key: .int(1), in: oneReturned) == .string("procedure.outer.return"))
+
+        let oneFinished = try apply("procedure.outer.return", process: .int(1), in: spec, to: oneReturned)
+        #expect(try functionValue("pc", key: .int(1), in: oneFinished) == .string("finished"))
+        #expect(try functionValue("pc", key: .int(2), in: oneFinished) == .string("procedure.outer.enter"))
+    }
+
     private func apply(_ label: String, in spec: TLASpec, to state: [String: TLAValue]) throws -> [String: TLAValue] {
         let action = try #require(spec.actions.first(where: { $0.name == label }))
         let next = try ActionEnumerator.enumerate(
@@ -99,5 +168,23 @@ struct ProcedureLoweringTests {
         )
         #expect(next.count == 1)
         return try #require(next.first)
+    }
+
+    private func apply(
+        _ label: String,
+        process: TLAValue,
+        in spec: TLASpec,
+        to state: [String: TLAValue]
+    ) throws -> [String: TLAValue] {
+        let action = try #require(spec.actions.first(where: { $0.name == label }))
+        let variant = try #require(actionInvocations(action).first { $0.invocation.arguments == [process] })
+        let next = try ActionEnumerator.enumerate(variant.body, from: state, varNames: spec.variables.map(\.name))
+        #expect(next.count == 1)
+        return try #require(next.first)
+    }
+
+    private func functionValue(_ root: String, key: TLAValue, in state: [String: TLAValue]) throws -> TLAValue {
+        let value = try #require(state[root])
+        return try #require(value.functionValue[key])
     }
 }
