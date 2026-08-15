@@ -1376,6 +1376,24 @@ public func Choose<Value: FiniteDomainKey>(
     return StepStatement(model: .choose(variable: name, domain: domain.values.map(\.tlaValue), body(value).map(\.model)))
 }
 
+/// Binds one integer from an explicit, finite range for an atomic block.
+///
+/// This is the natural bounded spelling of PlusCal `with (value \in Nat)`
+/// when a TLC configuration supplies the finite range. The range is formal
+/// data: the closure describes one choice branch, not a Swift loop.
+public func Choose(
+    _ domain: ClosedRange<Int>,
+    @DoBuilder _ body: (WithValue<Int>) -> [StepStatement]
+) -> StepStatement {
+    let name = "__pcal_choice"
+    let value = WithValue<Int>(expression: .variable(name))
+    return StepStatement(model: .choose(
+        variable: name,
+        domain: domain.map(TLAValue.int),
+        body(value).map(\.model)
+    ))
+}
+
 public func Goto<Label: PlusCalLabel & RawRepresentable>(_ label: Label) -> StepStatement where Label.RawValue == String {
     StepStatement(model: .goto(AlgorithmLabelModel(name: label.rawValue)))
 }

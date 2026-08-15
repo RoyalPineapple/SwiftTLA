@@ -172,6 +172,43 @@ struct GeneratedRangeInitializedAlgorithmTests {
 }
 
 @TLAModel
+struct GeneratedIntegerChoiceAlgorithm {
+    enum Node: String, FiniteDomainKey {
+        case only
+
+        static let formalDomain: [Node] = [.only]
+        static let formalTypeIdentity = FormalTypeIdentity(rawValue: "test.generated-integer-choice-node")
+
+        var tlaValue: TLAValue { .string(rawValue) }
+    }
+
+    static var spec: TLASpec {
+        #spec("GeneratedIntegerChoice") {
+            Algorithm("GeneratedIntegerChoice") {
+                let selected = SharedVar(initial: 0)
+                Each(Node.all) { _ in
+                    Do("choose") {
+                        Choose(1...3) { choice in
+                            Assign(selected, to: choice.expr)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+struct GeneratedIntegerChoiceAlgorithmTests {
+    @Test("#spec retains a bounded integer choice")
+    func generatedModelRetainsIntegerChoice() throws {
+        GeneratedIntegerChoiceAlgorithm._checkParserTree()
+        let spec = GeneratedIntegerChoiceAlgorithm.spec
+        let graph = try ModelChecker(spec: spec).exploreGraph()
+        #expect(Set(graph.states.values.compactMap { $0["selected"] }) == [.int(0), .int(1), .int(2), .int(3)])
+    }
+}
+
+@TLAModel
 struct GeneratedDependentInitialAlgorithm {
     enum Node: String, FiniteDomainKey {
         case left

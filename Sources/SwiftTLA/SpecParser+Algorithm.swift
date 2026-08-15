@@ -558,16 +558,18 @@ extension SpecParser {
             return .either(first, second)
         case "Choose":
             guard let domainSyntax = call.arguments.first?.expression,
-                  let domain = finiteAlgorithmDomain(domainSyntax),
                   let closure = call.trailingClosure,
                   let choice = closureParameterNames(in: closure).first,
                   let body = parseAlgorithmStatements(closure.statements, processParameter: processParameter, macros: macros)
             else { return nil }
+            let values = finiteAlgorithmDomain(domainSyntax)?.values
+                ?? parseIntegerClosedRange(domainSyntax).map { $0.map(TLAValue.int) }
+            guard let values else { return nil }
             // Rebind the lexical choice to the stable IR binder after parsing.
             let replacement = "__pcal_choice"
             return .choose(
                 variable: replacement,
-                domain: domain.values,
+                domain: values,
                 body.map { replaceAlgorithmVariable($0, from: choice, to: replacement) }
             )
         case "With":

@@ -689,6 +689,29 @@ struct AlgorithmBuilderTests {
         ]))
     }
 
+    @Test("Choose accepts a bounded Swift integer range")
+    func lowersBoundedIntegerChoice() throws {
+        let algorithm = Algorithm("BoundedChoice") {
+            let selected = SharedVar("selected", initial: 0)
+            selected
+            Each(Node.all) { _ in
+                Do("choose") {
+                    Choose(1...3) { choice in
+                        Assign(selected, to: choice.expr)
+                    }
+                }
+            }
+        }
+
+        let spec = try algorithm.lower()
+        let initial = try #require(computeInitialStates(spec).first)
+        let action = try #require(spec.actions.first { $0.name == "choose" })
+        let successors = try actionInvocations(action).flatMap {
+            try ActionEnumerator.enumerate($0.body, from: initial, varNames: spec.variables.map(\.name))
+        }
+        #expect(Set(successors.compactMap { $0["selected"] }) == [.int(1), .int(2), .int(3)])
+    }
+
     @Test("dependent typed function initialization is evaluated after earlier initial state choices")
     func lowersDependentFunctionInitialization() throws {
         let algorithm = Algorithm("DependentInitial") {
