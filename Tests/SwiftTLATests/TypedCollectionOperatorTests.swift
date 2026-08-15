@@ -233,6 +233,44 @@ private struct FoldGeneratedModel {
         #expect(process.terminationStatus == 0, "SANY rejected bundled Functions:\n\(text)")
     }
 
+    @Test("the bundled KeyValueStore Util module preserves its upstream imports")
+    func bundledUtilModulePassesSANY() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let jar = root.appendingPathComponent(".build/tla-tools/tla2tools.jar")
+        let javaCandidates = [
+            ProcessInfo.processInfo.environment["TLC_JAVA"],
+            ProcessInfo.processInfo.environment["JAVA_HOME"].map { "\($0)/bin/java" },
+            "/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home/bin/java",
+            "/usr/local/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home/bin/java"
+        ].compactMap { $0 }
+        guard let java = javaCandidates.first(where: FileManager.default.isExecutableFile(atPath:)),
+              FileManager.default.fileExists(atPath: jar.path)
+        else { return }
+
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        try KeyValueStoreUtil.module.tlaBundle.write(to: directory)
+
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: java)
+        process.arguments = ["-cp", jar.path, "tla2sany.SANY", "Util.tla"]
+        process.currentDirectoryURL = directory
+        let output = Pipe()
+        process.standardOutput = output
+        process.standardError = output
+        try process.run()
+        process.waitUntilExit()
+
+        let text = String(
+            data: output.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8
+        ) ?? "<non-UTF-8 SANY output>"
+        #expect(process.terminationStatus == 0, "SANY rejected bundled Util:\n\(text)")
+        #expect(KeyValueStoreUtil.module.tlaBundle.imports.map(\.name) == ["Folds", "Functions"])
+    }
+
     @Test("bounded sequence domains and terminal predicates parse as formal expressions")
     func boundedSequencesAndFinishedParse() throws {
         let sequenceSource = "Sequences(of: SetExpr<Int>.literal(0, 1), lengths: 0...2)"

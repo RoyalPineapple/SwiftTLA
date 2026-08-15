@@ -193,6 +193,7 @@ public enum FormalModuleRegistry {
     switch name {
     case "Folds": Folds.module
     case "Functions", "FunctionsModule": FunctionsModule.module
+    case "Util", "KeyValueStoreUtil": KeyValueStoreUtil.module
     case "ZSequences": ZSequences.module
     default: nil
     }
