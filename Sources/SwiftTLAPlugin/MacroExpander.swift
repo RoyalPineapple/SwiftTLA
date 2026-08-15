@@ -353,6 +353,8 @@ enum MacroExpander {
             return "StateExpr.operatorApplication(\(operatorSource), [\(argumentSource)])"
         case .recursiveCall(let name, let arguments):
             return "StateExpr.recursiveCall(\"\(name)\", [\(arguments.map(cg).joined(separator: ", "))])"
+        case .letValue(let name, let value, let body):
+            return "StateExpr.letValue(\"\(name)\", \(cg(value)), \(cg(body)))"
         case .letIn(let operators, let body):
             let definitions = operators.map { operation in
                 let parameters = operation.parameters.map { "\"\($0)\"" }.joined(separator: ", ")

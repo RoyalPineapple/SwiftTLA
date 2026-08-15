@@ -190,6 +190,9 @@ public indirect enum StateExpr: Hashable, Sendable, CustomStringConvertible {
     case operatorApplication(FormalOperator, [FormalCallArgument])
 
     case recursiveCall(String, [StateExpr])
+    /// A scoped formal value. This is TLA+ `LET name == value IN body`, not a
+    /// Swift local and not a state update.
+    case letValue(String, StateExpr, StateExpr)
     case letIn([LocalOperator], StateExpr)
 
     public var description: String {
@@ -268,6 +271,8 @@ public indirect enum StateExpr: Hashable, Sendable, CustomStringConvertible {
                 : "\(operation.tlaSource)(\(arguments))"
         case .recursiveCall(let n, let a):
             return a.isEmpty ? n : "\(n)(\(a.map(\.description).joined(separator: ", ")))"
+        case .letValue(let name, let value, let body):
+            return "LET \(name) == \(value) IN \(body)"
         case .letIn(let operators, let body):
             let names = Set(operators.map(\.name))
             let recursiveNames = operators
@@ -326,6 +331,8 @@ private func localOperatorCalls(in expression: StateExpr) -> Set<String> {
         return Set([name]).union(
             arguments.reduce(into: Set<String>()) { $0.formUnion(localOperatorCalls(in: $1)) }
         )
+    case .letValue(_, let value, let body):
+        return localOperatorCalls(in: value).union(localOperatorCalls(in: body))
     case .letIn:
         // Nested scopes bring their own recursive declarations.
         return []

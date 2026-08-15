@@ -170,4 +170,115 @@ struct FormalOperatorTests {
     let result = try ModelChecker(spec: consumer, maxStates: 10).check()
     #expect({ if case .ok = result { true } else { false } }())
   }
+
+  @Test("Folds is executable after import, not only emitted source")
+  func executesImportedMapThenFoldSet() throws {
+    let add = FormalOperator.lambda(FormalLambda(
+      parameters: ["left", "right"],
+      body: .add(.variable("left"), .variable("right"))
+    ))
+    let chooseMember = FormalOperator.lambda(FormalLambda(
+      parameters: ["members"],
+      body: .choose(.variable("members"), "member", .bool(true))
+    ))
+    let expression = StateExpr.operatorApplication(
+      .reference("MapThenFoldSet", arity: 5),
+      [
+        .operator(add),
+        .value(.int(0)),
+        .operator(.lambda(FormalLambda(parameters: ["value"], body: .variable("value")))),
+        .operator(chooseMember),
+        .value(.setLiteral([.int(1), .int(2), .int(3)]))
+      ]
+    )
+
+    #expect(
+      try expression.evaluate(
+        in: [:],
+        formalOperatorDefinitions: Folds.module.resolvedFormalOperatorDefinitions
+      ) == .int(6)
+    )
+    #expect(Folds.module.tlaModule.contains("MapThenFoldSet(op(_, _), base, f(_), choose(_), S) =="))
+  }
+
+  @Test("Functions definitions execute through the imported formal environment")
+  func executesFunctionsModuleDefinitions() throws {
+    let function: StateExpr = .functionLiteral(
+      .setLiteral([.int(1), .int(2), .int(3)]),
+      "key",
+      .multiply(.variable("key"), .int(10))
+    )
+    let restrict = StateExpr.operatorApplication(
+      .reference("Restrict", arity: 2),
+      [.value(function), .value(.setLiteral([.int(1), .int(3)]))]
+    )
+    let range = StateExpr.operatorApplication(
+      .reference("Range", arity: 1), [.value(function)]
+    )
+    let pointwise = StateExpr.operatorApplication(
+      .reference("Pointwise", arity: 3), [
+        .value(function),
+        .value(.functionLiteral(
+          .setLiteral([.int(1), .int(2), .int(3)]),
+          "key",
+          .variable("key")
+        )),
+        .operator(.lambda(.init(
+          parameters: ["left", "right"],
+          body: .add(.variable("left"), .variable("right"))
+        )))
+      ]
+    )
+
+    #expect(try restrict.evaluate(in: [:], formalOperatorDefinitions: FunctionsModule.module.resolvedFormalOperatorDefinitions) == .function([
+      .int(1): .int(10), .int(3): .int(30)
+    ]))
+    #expect(try range.evaluate(in: [:], formalOperatorDefinitions: FunctionsModule.module.resolvedFormalOperatorDefinitions) == .set([
+      .int(10), .int(20), .int(30)
+    ]))
+    #expect(try pointwise.evaluate(in: [:], formalOperatorDefinitions: FunctionsModule.module.resolvedFormalOperatorDefinitions) == .function([
+      .int(1): .int(11), .int(2): .int(22), .int(3): .int(33)
+    ]))
+    #expect(FunctionsModule.module.tlaModule.contains("Restrict(f, S) =="))
+  }
+
+  @Test("Util definitions execute without flattening their Functions dependency")
+  func executesUtilModuleDefinitions() throws {
+    let add = FormalOperator.lambda(.init(
+      parameters: ["left", "right"],
+      body: .add(.variable("left"), .variable("right"))
+    ))
+    let reduced = StateExpr.operatorApplication(
+      .reference("ReduceSet", arity: 3), [
+        .operator(add),
+        .value(.setLiteral([.int(1), .int(2), .int(3)])),
+        .value(.int(0))
+      ]
+    )
+    let index = StateExpr.operatorApplication(
+      .reference("Index", arity: 2), [
+        .value(.tupleLiteral([.value(.string("a")), .value(.string("b"))])),
+        .value(.value(.string("b")))
+      ]
+    )
+    let sequenceSet = StateExpr.operatorApplication(
+      .reference("SeqToSet", arity: 1), [
+        .value(.tupleLiteral([.int(2), .int(1), .int(2)]))
+      ]
+    )
+    let permutations = StateExpr.operatorApplication(
+      .reference("PermSeqs", arity: 1), [
+        .value(.setLiteral([.int(1), .int(2)]))
+      ]
+    )
+
+    #expect(try reduced.evaluate(in: [:], formalOperatorDefinitions: KeyValueStoreUtil.module.resolvedFormalOperatorDefinitions) == .int(6))
+    #expect(try index.evaluate(in: [:], formalOperatorDefinitions: KeyValueStoreUtil.module.resolvedFormalOperatorDefinitions) == .int(2))
+    #expect(try sequenceSet.evaluate(in: [:], formalOperatorDefinitions: KeyValueStoreUtil.module.resolvedFormalOperatorDefinitions) == .set([.int(1), .int(2)]))
+    #expect(try permutations.evaluate(in: [:], formalOperatorDefinitions: KeyValueStoreUtil.module.resolvedFormalOperatorDefinitions) == .set([
+      .tuple([.int(1), .int(2)]), .tuple([.int(2), .int(1)])
+    ]))
+    #expect(KeyValueStoreUtil.module.tlaModule.contains("ReduceSet(op(_, _), set, base) =="))
+    #expect(KeyValueStoreUtil.module.tlaModule.contains("Remove(seq, elem) == SelectSeq(seq, LAMBDA e : e /= elem)"))
+  }
 }

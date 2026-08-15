@@ -402,12 +402,30 @@ extension StateExpr {
       ),
       ("recordLiteral", StateExpr.recordLiteral(["k": .int(1)])),
       ("recordAccess", StateExpr.recordAccess(.recordLiteral(["k": .int(1)]), "k")),
-      ("setFilter", StateExpr.setFilter(.setLiteral([.int(1)]), "x0", .bool(true))),
-      ("setMap", StateExpr.setMap(.variable("y"), "x0", .setLiteral([.int(1)]))),
-      ("forAll", StateExpr.forAll(.setLiteral([.int(1)]), "x0", .bool(true))),
-      ("exists", StateExpr.exists(.setLiteral([.int(1)]), "x0", .bool(true))),
-      ("choose", StateExpr.choose(.setLiteral([.int(1)]), "x0", .bool(true))),
-      ("functionLiteral", StateExpr.functionLiteral(.setLiteral([.int(1)]), "x0", .variable("z"))),
+      (
+        "setFilter",
+        StateExpr.setFilter(.setLiteral([.int(1)]), "x0", .equal(.variable("x0"), .int(1)))
+      ),
+      (
+        "setMap",
+        StateExpr.setMap(.add(.variable("x0"), .int(1)), "x0", .setLiteral([.int(1)]))
+      ),
+      (
+        "forAll",
+        StateExpr.forAll(.setLiteral([.int(1)]), "x0", .equal(.variable("x0"), .int(1)))
+      ),
+      (
+        "exists",
+        StateExpr.exists(.setLiteral([.int(1)]), "x0", .equal(.variable("x0"), .int(1)))
+      ),
+      (
+        "choose",
+        StateExpr.choose(.setLiteral([.int(1)]), "x0", .equal(.variable("x0"), .int(1)))
+      ),
+      (
+        "functionLiteral",
+        StateExpr.functionLiteral(.setLiteral([.int(1)]), "x0", .add(.variable("x0"), .int(1)))
+      ),
       ("caseExpr", StateExpr.caseExpr([.bool(true), .int(1), .bool(false), .int(2)], .int(0))),
       ("enabledAction", StateExpr.enabledAction("Tick"))
     ] as [(String, StateExpr)])

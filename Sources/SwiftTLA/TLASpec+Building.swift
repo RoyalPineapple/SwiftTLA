@@ -415,6 +415,13 @@ private func substituteInState(_ expr: StateExpr, constants: [String: TLAValue])
       substituteInState(f, constants: constants), substituteInState(s, constants: constants))
   case .recursiveCall(let n, let a):
     return .recursiveCall(n, a.map { substituteInState($0, constants: constants) })
+  case .letValue(let name, let value, let body):
+    let bodyConstants = constants.filter { $0.key != name }
+    return .letValue(
+      name,
+      substituteInState(value, constants: constants),
+      substituteInState(body, constants: bodyConstants)
+    )
   case .foldFunction(let operation, let initial, let sequence):
     let bodyConstants = constants.filter { !operation.parameters.contains($0.key) }
     return .foldFunction(

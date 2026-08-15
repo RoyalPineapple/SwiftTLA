@@ -6,15 +6,49 @@
 public enum Folds {
     /// The `Folds.tla` source module.
     public static let module = TLASpec("Folds") {
-        Definition(
-            """
-            MapThenFoldSet(op(_,_), base, f(_), choose(_), S) ==
-              LET iter[s \\in SUBSET S] ==
-                    IF s = {} THEN base
-                    ELSE LET x == choose(s)
-                         IN op(f(x), iter[s \\ {x}])
-              IN iter[S]
-            """
+        FormalDefinition(
+            "MapThenFoldSet",
+            parameters: [
+                .operator("op", arity: 2),
+                .value("base"),
+                .operator("f", arity: 1),
+                .operator("choose", arity: 1),
+                .value("S")
+            ],
+            body: .letIn(
+                [LocalOperator(
+                    "iter",
+                    parameters: ["s"],
+                    body: .ifThenElse(
+                        .equal(.variable("s"), .setLiteral([])),
+                        .variable("base"),
+                        .letValue(
+                            "x",
+                            .operatorApplication(
+                                .reference("choose", arity: 1),
+                                [.value(.variable("s"))]
+                            ),
+                            .operatorApplication(
+                                .reference("op", arity: 2),
+                                [
+                                    .value(.operatorApplication(
+                                        .reference("f", arity: 1),
+                                        [.value(.variable("x"))]
+                                    )),
+                                    .value(.recursiveCall(
+                                        "iter",
+                                        [.setDifference(
+                                            .variable("s"),
+                                            .setLiteral([.variable("x")])
+                                        )]
+                                    ))
+                                ]
+                            )
+                        )
+                    )
+                )],
+                .recursiveCall("iter", [.variable("S")])
+            )
         )
     }
 }

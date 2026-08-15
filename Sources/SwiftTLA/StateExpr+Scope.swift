@@ -81,6 +81,8 @@ extension StateExpr {
             }()
         case .recursiveCall(_, let arguments):
             arguments.reduce(into: Set<String>()) { $0.formUnion($1.freeVariableNames) }
+        case .letValue(let name, let value, let body):
+            value.freeVariableNames.union(body.freeVariableNames.subtracting([name]))
         case .letIn(let operators, let body):
             {
                 let operatorVariables = operators.reduce(into: Set<String>()) { names, operation in

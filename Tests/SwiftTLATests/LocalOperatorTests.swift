@@ -61,4 +61,23 @@ struct LocalOperatorTests {
       try expression.evaluate(in: [:])
     }
   }
+
+  @Test("LET value bindings are lexical, capture-safe, and emitted")
+  func evaluatesScopedValueBinding() throws {
+    let expression: StateExpr = .letValue(
+      "value",
+      .int(4),
+      .add(.variable("value"), .int(1))
+    )
+    let substituted = StateExpr.substituteVariable(
+      "value",
+      .int(99),
+      in: expression
+    )
+
+    #expect(try expression.evaluate(in: ["value": .int(0)]) == .int(5))
+    #expect(try substituted.evaluate(in: ["value": .int(0)]) == .int(5))
+    #expect(expression.description == "LET value == 4 IN (value + 1)")
+    #expect(expression.swiftSource.contains("StateExpr.letValue(\"value\", 4,"))
+  }
 }

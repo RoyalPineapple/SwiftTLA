@@ -812,6 +812,12 @@ enum AlgorithmLowerer {
                     }
                 )
             case .recursiveCall(let name, let arguments): return .recursiveCall(name, arguments.map { rewritten($0, localRoots: localRoots) })
+            case .letValue(let name, let value, let body):
+                return .letValue(
+                    name,
+                    rewritten(value, localRoots: localRoots),
+                    rewritten(body, localRoots: localRoots.subtracting([name]))
+                )
             case .letIn(let operators, let body):
                 return .letIn(
                     operators.map { operation in

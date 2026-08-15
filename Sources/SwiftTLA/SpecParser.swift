@@ -912,11 +912,25 @@ public enum SpecParser {
                   let thenVal = decodeStateExpr(args[1].expression),
                   let elseVal = decodeStateExpr(args[2].expression) else { return nil }
             return .ifThenElse(cond, thenVal, elseVal)
+        case "negate":
+            guard memberAccess.base?.as(DeclReferenceExprSyntax.self)?.baseName.text == "StateExpr",
+                  let value = args.first.flatMap({ decodeStateExpr($0.expression) })
+            else { return nil }
+            return .negate(value)
         case "enabled":
             guard memberAccess.base?.as(DeclReferenceExprSyntax.self)?.baseName.text == "StateExpr" else { return nil }
             let name = args.first?.expression.as(StringLiteralExprSyntax.self)?.segments.description
                 .replacingOccurrences(of: "\"", with: "") ?? ""
             return .enabledAction(name)
+        case "letValue":
+            guard memberAccess.base?.as(DeclReferenceExprSyntax.self)?.baseName.text == "StateExpr",
+                  args.count == 3,
+                  let name = args[0].expression.as(StringLiteralExprSyntax.self)?.segments.description
+                    .replacingOccurrences(of: "\"", with: ""),
+                  let value = decodeStateExpr(args[1].expression),
+                  let body = decodeStateExpr(args[2].expression)
+            else { return nil }
+            return .letValue(name, value, body)
         case "letIn":
             guard memberAccess.base?.as(DeclReferenceExprSyntax.self)?.baseName.text == "StateExpr",
                   args.count == 2,
@@ -928,8 +942,42 @@ public enum SpecParser {
             }
             guard definitions.count == definitionArray.elements.count else { return nil }
             return .letIn(definitions, body)
+        case "setFilter", "setMap", "forAll":
+            guard memberAccess.base?.as(DeclReferenceExprSyntax.self)?.baseName.text == "StateExpr",
+                  args.count == 3,
+                  let binder = args[1].expression.as(StringLiteralExprSyntax.self)?.segments.description
+                    .replacingOccurrences(of: "\"", with: "")
+            else { return nil }
+            switch methodName {
+            case "setFilter":
+                guard let set = decodeStateExpr(args[0].expression),
+                      let predicate = decodeStateExpr(args[2].expression) else { return nil }
+                return .setFilter(set, binder, predicate)
+            case "setMap":
+                guard let value = decodeStateExpr(args[0].expression),
+                      let set = decodeStateExpr(args[2].expression) else { return nil }
+                return .setMap(value, binder, set)
+            case "forAll":
+                guard let set = decodeStateExpr(args[0].expression),
+                      let predicate = decodeStateExpr(args[2].expression) else { return nil }
+                return .forAll(set, binder, predicate)
+            default:
+                return nil
+            }
         case "function", "for", "exists", "choose", "any", "functionLiteral":
             guard memberAccess.base?.as(DeclReferenceExprSyntax.self)?.baseName.text == "StateExpr" else { return nil }
+            if args.count == 3,
+               let binder = args[1].expression.as(StringLiteralExprSyntax.self)?.segments.description
+                .replacingOccurrences(of: "\"", with: "") {
+                guard let domain = decodeStateExpr(args[0].expression),
+                      let body = decodeStateExpr(args[2].expression) else { return nil }
+                switch methodName {
+                case "exists": return .exists(domain, binder, body)
+                case "choose": return .choose(domain, binder, body)
+                case "functionLiteral": return .functionLiteral(domain, binder, body)
+                default: return nil
+                }
+            }
             let exprs = args.compactMap { decodeStateExpr($0.expression) }
             switch methodName {
             case "function", "functionLiteral": return exprs.count >= 2 ? .functionLiteral(exprs[0], FreshVarName.fresh(), exprs[1]) : nil

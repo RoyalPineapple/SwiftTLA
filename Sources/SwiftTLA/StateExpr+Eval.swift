@@ -513,6 +513,19 @@ extension StateExpr {
             if let other = other { return try ev(other) }
             throw tm("CASE: no branch matched")
 
+        case .letValue(let name, let value, let body):
+            var nextValues = valueBindings
+            nextValues[name] = try ev(value)
+            return try body.evaluate(
+                in: state,
+                runtimeFuncs: runtimeFuncs,
+                recursiveFuncs: recursiveFuncs,
+                formalOperatorDefinitions: formalOperatorDefinitions,
+                valueBindings: nextValues,
+                operatorBindings: operatorBindings,
+                maxDepth: maxDepth
+            )
+
         case .letIn(let operators, let body):
             let names = operators.map(\.name)
             guard Set(names).count == names.count else {
@@ -755,6 +768,9 @@ extension StateExpr {
                 }
             })
         case .recursiveCall(let n, let a): return .recursiveCall(n, a.map(sub))
+        case .letValue(let binder, let value, let body):
+            let scoped = underBinder(binder, body: body)
+            return .letValue(scoped.name, sub(value), scoped.body)
         case .letIn(let operators, let body):
             return .letIn(
                 operators.map { operation in
@@ -863,6 +879,8 @@ extension StateExpr {
                     }
                 })
             case .recursiveCall(let name, let arguments): return .recursiveCall(rename(name), arguments.map(visit))
+            case .letValue(let name, let value, let body):
+                return .letValue(name, visit(value), visit(body))
             case .letIn(let operators, let body):
                 return .letIn(
                     operators.map { operation in
