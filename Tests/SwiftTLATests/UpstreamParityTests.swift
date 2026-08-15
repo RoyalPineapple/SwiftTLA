@@ -3,6 +3,12 @@ import SwiftTLA
 @testable import UpstreamParity
 
 struct UpstreamParityTests {
+    @Test("LearnProofs AddTwo preserves its PlusCal AST through both construction paths")
+    func addTwoParserBuilderFidelity() throws {
+        AddTwoModel._checkParserTree()
+        #expect(try AddTwoModel.verifySpec() == 5)
+    }
+
     @Test("ModelChecker count vs TLC-verified expected — they must match")
     func modelCheckerMatchesTLC() throws {
         for entry in Example.all {
