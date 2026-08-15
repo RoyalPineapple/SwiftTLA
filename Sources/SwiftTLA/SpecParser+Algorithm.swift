@@ -68,7 +68,7 @@ extension SpecParser {
                 let detail = algorithmParseFailure.map { " \($0)" } ?? ""
                 result.diagnostics.append(.init(
                     message: "Unsupported Algorithm declaration '\(statement.description.trimmingCharacters(in: .whitespacesAndNewlines))'. "
-                        + "Supported declarations are SharedVar, Macro, Each, Do, and While.\(detail)",
+                        + "Supported declarations are SharedVar, Macro, Procedure, Each, Do, While, and properties.\(detail)",
                     source: statement
                 ))
                 return
@@ -77,7 +77,7 @@ extension SpecParser {
                 let detail = algorithmParseFailure.map { " \($0)" } ?? ""
                 result.diagnostics.append(.init(
                     message: "Unsupported Algorithm declaration '\(expression.description.trimmingCharacters(in: .whitespacesAndNewlines))'. "
-                        + "Supported declarations are SharedVar, Macro, Each, Do, and While.\(detail)",
+                        + "Supported declarations are SharedVar, Macro, Procedure, Each, Do, While, and properties.\(detail)",
                     source: expression
                 ))
                 return
@@ -155,6 +155,14 @@ extension SpecParser {
                     guard case .local(let state) = $0 else { return nil }
                     return state
                 }
+            case .procedure(let procedure):
+                return procedure.parameters.map {
+                    .init(
+                        root: $0.root,
+                        initial: $0.initial,
+                        swiftTypeName: $0.swiftTypeName
+                    )
+                } + procedure.locals
             default: return []
             }
         }
@@ -169,6 +177,8 @@ extension SpecParser {
         else { return nil }
 
         switch name {
+        case "Procedure":
+            return parseProcedure(call, macros: macros)
         case "Each":
             let component = parseEach(call, macros: macros)
             if component == nil, algorithmParseFailure == nil {
@@ -193,6 +203,75 @@ extension SpecParser {
             return .stateConstraint(condition)
         default:
             return nil
+        }
+    }
+
+    private static func parseProcedure(
+        _ call: FunctionCallExprSyntax,
+        macros: [String: AlgorithmMacroDefinition]
+    ) -> AlgorithmComponentModel? {
+        guard let name = extractStringArg(call, index: 0), let closure = call.trailingClosure else {
+            algorithmParseFailure = "Procedure requires a string literal name and a builder body."
+            return nil
+        }
+        let bindings = closureParameterNames(in: closure)
+        let parameterArguments = call.arguments.dropFirst()
+        guard parameterArguments.count <= 4 else {
+            algorithmParseFailure = "Procedure '\(name)' has arity \(parameterArguments.count); SwiftTLA supports 0 through 4 typed parameters. No model was changed. Use a Record parameter or add a typed overload."
+            return nil
+        }
+        let parameterTypes = parameterArguments.map { argument in
+            argument.expression.description.trimmingCharacters(in: .whitespacesAndNewlines)
+                .replacingOccurrences(of: ".self", with: "")
+        }
+        guard parameterTypes.allSatisfy({ !$0.isEmpty }) else {
+            algorithmParseFailure = "Procedure '\(name)' parameter types could not be decoded. Expected metatype arguments such as Int.self; no model was changed."
+            return nil
+        }
+        guard bindings.count == parameterTypes.count else {
+            algorithmParseFailure = "Procedure '\(name)' expected \(parameterTypes.count) typed parameter binding(s), found \(bindings.count)."
+            return nil
+        }
+        let parameters = parameterTypes.enumerated().map { index, type in
+            AlgorithmProcedureParameterModel(root: "parameter\(index)", initial: procedureDefaultValue(for: type), swiftTypeName: type)
+        }
+        var locals: [AlgorithmStateModel] = []
+        var steps: [AlgorithmStepModel] = []
+        for item in closure.statements {
+            if case .decl(let declaration) = item.item,
+               let variable = declaration.as(VariableDeclSyntax.self),
+               let component = parseAlgorithmVariableDeclaration(variable, expectedKind: "LocalVar"),
+               case .local(let local) = component {
+                locals.append(local)
+                continue
+            }
+            guard case .expr(let expression) = item.item,
+                  let component = parseEachComponent(expression, processParameter: "__pcal_sequential", macros: macros),
+                  case .step(let step) = component
+            else {
+                algorithmParseFailure = "Procedure '\(name)' accepts LocalVar declarations and Do or While blocks."
+                return nil
+            }
+            let normalized = bindings.enumerated().reduce(step) { step, binding in
+                .init(
+                    label: step.label,
+                    statements: step.statements.map {
+                        replaceAlgorithmVariable($0, from: binding.element, to: "parameter\(binding.offset)")
+                    },
+                    loopCondition: step.loopCondition.map { renameVar(binding.element, to: "parameter\(binding.offset)", in: $0) }
+                )
+            }
+            steps.append(normalized)
+        }
+        return .procedure(.init(name: name, parameters: parameters, locals: locals, steps: steps))
+    }
+
+    private static func procedureDefaultValue(for type: String) -> StateExpr {
+        switch type {
+        case "Int": return .value(.int(0))
+        case "Bool": return .value(.bool(false))
+        case "String": return .value(.string(""))
+        default: return .value(.constant("default_\(type)"))
         }
     }
 
@@ -578,6 +657,27 @@ extension SpecParser {
         case "Goto":
             guard let label = algorithmLabel(call.arguments.first?.expression) else { return nil }
             return .goto(.init(name: label))
+        case "Call":
+            guard let target = extractStringArg(call, index: 0) else {
+                algorithmParseFailure = "Call requires a procedure name string literal."
+                return nil
+            }
+            let arguments = call.arguments.dropFirst().compactMap { argument in
+                decodeStateExpr(argument.expression).map {
+                    replacingProcessParameter(in: $0, named: processParameter)
+                }
+            }
+            guard arguments.count == call.arguments.count - 1 else {
+                algorithmParseFailure = "Call '\(target)' has an argument that is not a formal expression."
+                return nil
+            }
+            return .call(target: target, arguments: arguments)
+        case "Return":
+            guard call.arguments.isEmpty else {
+                algorithmParseFailure = "Return takes no arguments."
+                return nil
+            }
+            return .return
         case "Stop":
             return .stop
         case "Skip":
@@ -715,19 +815,49 @@ extension SpecParser {
             algorithmParseFailure = "Statement macro '\(name)' expects \(macro.parameters.count) arguments but received \(call.arguments.count)."
             return nil
         }
-        var arguments: [String] = []
+        var arguments: [StateExpr] = []
         for (index, argumentSyntax) in call.arguments.enumerated() {
-            guard let target = algorithmTarget(argumentSyntax.expression),
-                  case .root(let argument) = target
-            else {
-                algorithmParseFailure = "Statement macro '\(name)' argument \(index + 1) must be an algorithm variable; formal expressions cannot be assignment targets."
+            guard let argument = decodeStateExpr(argumentSyntax.expression) else {
+                algorithmParseFailure = "Statement macro '\(name)' argument \(index + 1) is not a formal expression; no state was changed. Use an expression understood by the SwiftTLA DSL."
                 return nil
             }
             arguments.append(argument)
         }
-        return zip(macro.parameters, arguments).reduce(macro.statements) { statements, binding in
-            statements.map { replaceAlgorithmVariable($0, from: binding.0, to: binding.1) }
+        for (parameter, argument) in zip(macro.parameters, arguments) {
+            let isVariable: Bool
+            if case .variable = argument { isVariable = true } else { isVariable = false }
+            guard !macroAssigns(to: parameter, in: macro.statements) || isVariable else {
+                algorithmParseFailure = "What failed: statement macro '\(name)' assigns through parameter '\(parameter)'. "
+                    + "Where: its invocation argument. Expected a formal variable assignment target; found \(argument). "
+                    + "What changed: no model was changed. Next safe action: pass a SharedVar or LocalVar, "
+                    + "or make the parameter read-only in the macro body."
+                return nil
+            }
         }
+        return zip(macro.parameters, arguments).reduce(macro.statements) { statements, binding in
+            statements.map { substituteAlgorithmVariable($0, from: binding.0, with: binding.1) }
+        }
+    }
+
+    private static func macroAssigns(
+        to parameter: String,
+        in statements: [AlgorithmStatementModel]
+    ) -> Bool {
+        for statement in statements {
+            switch statement {
+            case .set(let target, _):
+                if target.root == parameter { return true }
+            case .letBinding(_, _, let body), .with(_, _, let body), .choose(_, _, let body):
+                if macroAssigns(to: parameter, in: body) { return true }
+            case .ifElse(_, let then, let otherwise):
+                if macroAssigns(to: parameter, in: then) || macroAssigns(to: parameter, in: otherwise) { return true }
+            case .either(let first, let second):
+                if macroAssigns(to: parameter, in: first) || macroAssigns(to: parameter, in: second) { return true }
+            case .await, .assert, .call, .goto, .return, .stop, .skip:
+                continue
+            }
+        }
+        return false
     }
 
     private static func algorithmTarget(_ expression: ExprSyntax?) -> AlgorithmLValueModel? {

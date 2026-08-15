@@ -210,6 +210,14 @@ public struct MacroParameter<Value: TLAValueType>: StateExprConvertible, Sendabl
     }
 }
 
+/// A typed formal input of a PlusCal procedure.
+public struct ProcedureParameter<Value: TLAValueType>: StateExprConvertible, Sendable {
+    fileprivate let name: String
+    public var stateExpr: StateExpr { .variable(name) }
+    public var expr: Expr<Value> { Expr(stateExpr) }
+    public var algorithmLValue: AlgorithmLValue<Value> { AlgorithmLValue(model: .root(name)) }
+}
+
 extension MacroParameter where Value == Int {
     public static func == (lhs: MacroParameter, rhs: Int) -> StateExpr {
         .equal(lhs.stateExpr, .value(.int(rhs)))
@@ -260,6 +268,13 @@ public struct StatementMacro: Sendable {
         expand([.variable(argument.name)])
     }
 
+    /// Expands a macro with a formal expression. The expression is substituted
+    /// into read positions only; a macro parameter assigned by its body still
+    /// requires a variable argument.
+    public func callAsFunction<Value: TLAValueType>(_ argument: Expr<Value>) -> [StepStatement] {
+        expand([argument.raw])
+    }
+
     /// Expands a macro using the current process identifier as its formal
     /// argument. The expansion stays in its surrounding atomic `Do` block.
     public func callAsFunction<Value: FiniteDomainKey>(_ argument: ProcessIdentifier<Value>) -> [StepStatement] {
@@ -294,10 +309,26 @@ public struct StatementMacro: Sendable {
         expand([.variable(first.name), .variable(second.name)])
     }
 
+    /// Expands a macro with formal expression arguments. This preserves the
+    /// expressions in the algorithm IR instead of evaluating Swift values.
+    public func callAsFunction<First: TLAValueType, Second: TLAValueType>(
+        _ first: Expr<First>, _ second: Expr<Second>
+    ) -> [StepStatement] {
+        expand([first.raw, second.raw])
+    }
+
+    /// Expands a macro with any supported formal expressions. This is the
+    /// general form for mixed variable and expression arguments.
+    public func callAsFunction(_ arguments: any StateExprConvertible...) -> [StepStatement] {
+        expand(arguments.map(\.stateExpr))
+    }
+
     private func expand(_ arguments: [StateExpr]) -> [StepStatement] {
         precondition(
             parameterNames.count == arguments.count,
-            "Statement macro expected \(parameterNames.count) arguments but received \(arguments.count)."
+            "What failed: statement macro invocation arity. Where: macro expansion. "
+                + "Expected \(parameterNames.count) formal argument(s); found \(arguments.count). "
+                + "What changed: no algorithm model was changed. Next safe action: pass the declared number of arguments."
         )
         return parameterNames.enumerated().reduce(statements) { expanded, binding in
             expanded.map {
@@ -358,14 +389,24 @@ private func substituteMacroParameter(
         case .root(let root):
             guard root == from else { return .root(root) }
             guard case .variable(let replacementRoot) = replacement else {
-                preconditionFailure("A macro argument used as an assignment target must be a formal variable")
+                preconditionFailure(
+                    "What failed: macro assignment-target substitution. Where: macro parameter '\(from)'. "
+                        + "Expected a formal variable because the macro assigns to it; found \(replacement). "
+                        + "What changed: no algorithm model was changed. Next safe action: pass a shared or local variable, "
+                        + "or keep this parameter in read-only expressions."
+                )
             }
             return .root(replacementRoot)
         case .function(let root, let key):
             let replacementRoot: String
             if root == from {
                 guard case .variable(let name) = replacement else {
-                    preconditionFailure("A macro argument used as an assignment target must be a formal variable")
+                    preconditionFailure(
+                        "What failed: macro function-target substitution. Where: macro parameter '\(from)'. "
+                            + "Expected a formal variable because the macro assigns through it; found \(replacement). "
+                            + "What changed: no algorithm model was changed. Next safe action: pass a shared or local variable, "
+                            + "or keep this parameter in read-only expressions."
+                    )
                 }
                 replacementRoot = name
             } else {
@@ -1354,6 +1395,76 @@ public func When(_ condition: some StateExprConvertible) -> StepStatement {
 /// assertion and cannot be compiled out.
 public func Assert(_ condition: some StateExprConvertible) -> StepStatement {
     StepStatement(model: .assert(condition.stateExpr))
+}
+
+/// Invokes a declared PlusCal procedure from a sequential algorithm step.
+/// Arguments are formal expressions evaluated in the caller's pre-state.
+public func Call(_ target: String, with arguments: (any StateExprConvertible)... ) -> StepStatement {
+    StepStatement(model: .call(target: target, arguments: arguments.map(\.stateExpr)))
+}
+
+/// Returns from the enclosing PlusCal procedure.
+public func Return() -> StepStatement {
+    StepStatement(model: .return)
+}
+
+public func Procedure(
+    _ name: String,
+    @AlgorithmBuilder _ body: () -> [AlgorithmElement]
+) -> AlgorithmElement {
+    let components = body().map(\.model)
+    return AlgorithmElement(model: .procedure(.init(
+        name: name,
+        parameters: [],
+        locals: components.compactMap { if case .local(let value) = $0 { value } else { nil } },
+        steps: components.compactMap { if case .step(let value) = $0 { value } else { nil } }
+    )))
+}
+
+public func Procedure<Value: TLAValueType>(
+    _ name: String,
+    parameters: Value.Type,
+    @AlgorithmBuilder _ body: (ProcedureParameter<Value>) -> [AlgorithmElement]
+) -> AlgorithmElement {
+    let parameterName = "parameter0"
+    let components = body(ProcedureParameter(name: parameterName)).map(\.model)
+    return AlgorithmElement(model: .procedure(.init(
+        name: name,
+        parameters: [.init(root: parameterName, initial: .value(Value.defaultValue.tlaValue), swiftTypeName: String(reflecting: Value.self))],
+        locals: components.compactMap { if case .local(let value) = $0 { value } else { nil } },
+        steps: components.compactMap { if case .step(let value) = $0 { value } else { nil } }
+    )))
+}
+
+public func Procedure<First: TLAValueType, Second: TLAValueType>(
+    _ name: String, parameters: First.Type, _ second: Second.Type,
+    @AlgorithmBuilder _ body: (ProcedureParameter<First>, ProcedureParameter<Second>) -> [AlgorithmElement]
+) -> AlgorithmElement {
+    let components = body(.init(name: "parameter0"), .init(name: "parameter1")).map(\.model)
+    return AlgorithmElement(model: .procedure(.init(name: name, parameters: [
+        .init(root: "parameter0", initial: .value(First.defaultValue.tlaValue), swiftTypeName: String(reflecting: First.self)),
+        .init(root: "parameter1", initial: .value(Second.defaultValue.tlaValue), swiftTypeName: String(reflecting: Second.self))
+    ], locals: components.compactMap { if case .local(let value) = $0 { value } else { nil } }, steps: components.compactMap { if case .step(let value) = $0 { value } else { nil } })))
+}
+
+public func Procedure<A: TLAValueType, B: TLAValueType, C: TLAValueType>(
+    _ name: String, parameters: A.Type, _ b: B.Type, _ c: C.Type,
+    @AlgorithmBuilder _ body: (ProcedureParameter<A>, ProcedureParameter<B>, ProcedureParameter<C>) -> [AlgorithmElement]
+) -> AlgorithmElement {
+    let components = body(.init(name: "parameter0"), .init(name: "parameter1"), .init(name: "parameter2")).map(\.model)
+    return AlgorithmElement(model: .procedure(.init(name: name, parameters: [
+        .init(root: "parameter0", initial: .value(A.defaultValue.tlaValue), swiftTypeName: String(reflecting: A.self)), .init(root: "parameter1", initial: .value(B.defaultValue.tlaValue), swiftTypeName: String(reflecting: B.self)), .init(root: "parameter2", initial: .value(C.defaultValue.tlaValue), swiftTypeName: String(reflecting: C.self))
+    ], locals: components.compactMap { if case .local(let value) = $0 { value } else { nil } }, steps: components.compactMap { if case .step(let value) = $0 { value } else { nil } })))
+}
+
+public func Procedure<A: TLAValueType, B: TLAValueType, C: TLAValueType, D: TLAValueType>(
+    _ name: String, parameters: A.Type, _ b: B.Type, _ c: C.Type, _ d: D.Type,
+    @AlgorithmBuilder _ body: (ProcedureParameter<A>, ProcedureParameter<B>, ProcedureParameter<C>, ProcedureParameter<D>) -> [AlgorithmElement]
+) -> AlgorithmElement {
+    let components = body(.init(name: "parameter0"), .init(name: "parameter1"), .init(name: "parameter2"), .init(name: "parameter3")).map(\.model)
+    return AlgorithmElement(model: .procedure(.init(name: name, parameters: [
+        .init(root: "parameter0", initial: .value(A.defaultValue.tlaValue), swiftTypeName: String(reflecting: A.self)), .init(root: "parameter1", initial: .value(B.defaultValue.tlaValue), swiftTypeName: String(reflecting: B.self)), .init(root: "parameter2", initial: .value(C.defaultValue.tlaValue), swiftTypeName: String(reflecting: C.self)), .init(root: "parameter3", initial: .value(D.defaultValue.tlaValue), swiftTypeName: String(reflecting: D.self))
+    ], locals: components.compactMap { if case .local(let value) = $0 { value } else { nil } }, steps: components.compactMap { if case .step(let value) = $0 { value } else { nil } })))
 }
 
 /// Binds a nondeterministically chosen member of a bounded formal set for one

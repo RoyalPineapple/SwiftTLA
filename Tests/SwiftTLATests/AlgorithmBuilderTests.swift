@@ -59,6 +59,66 @@ struct AlgorithmBuilderTests {
         #expect(successor["source"] == .int(7))
     }
 
+    @Test("statement macros retain formal expression arguments in read positions")
+    func expandsExpressionMacroArguments() throws {
+        let algorithm = Algorithm("OffsetValue") {
+            let destination = SharedVar("destination", initial: 0)
+            let source = SharedVar("source", initial: 7)
+            destination
+            source
+            let copy = Macro { (target: MacroParameter<Int>, value: MacroParameter<Int>) in
+                Assign(target, to: value.expr)
+            }
+
+            Do("copy") { copy(destination, source.expr + 1) }
+        }
+
+        #expect(algorithm.validate().isEmpty)
+        let spec = try algorithm.lower()
+        let initial = try #require(computeInitialStates(spec).first)
+        let copy = try #require(spec.actions.first { $0.name == "copy" })
+        let successor = try #require(
+            ActionEnumerator.enumerate(copy.body, from: initial, varNames: spec.variables.map(\.name)).first
+        )
+        #expect(successor["destination"] == .int(8))
+    }
+
+    @Test("typed procedure builders use deterministic formal parameter slots")
+    func buildsTypedProcedure() throws {
+        let algorithm = Algorithm("ProcedureBuilder") {
+            let output = SharedVar("output", initial: 0)
+            output
+            Procedure("work", parameters: Int.self) { value in
+                let offset = LocalVar("offset", initial: 1)
+                offset
+                Do("enter") {
+                    Assign(output, to: value.expr + offset.expr)
+                    Return()
+                }
+            }
+            Do("start") { Call("work", with: 7) }
+            Do("finished") { Stop() }
+        }
+
+        #expect(algorithm.validate().isEmpty)
+        let spec = try algorithm.lower()
+        let initial = try #require(computeInitialStates(spec).first)
+        let afterCall = try #require(
+            ActionEnumerator.enumerate(
+                try #require(spec.actions.first { $0.name == "start" }).body,
+                from: initial,
+                varNames: spec.variables.map(\.name)
+            ).first
+        )
+        #expect(afterCall["parameter0"] == .int(7))
+        #expect(afterCall["pc"] == .string("procedure.work.enter"))
+    }
+
+    @Test("procedure source bindings normalize to builder formal slots")
+    func generatedProcedureKeepsParserFidelity() {
+        ProcedureGeneratedModel._checkParserTree()
+    }
+
     @Test("parameterless statement macros expand into their surrounding atomic block")
     func expandsParameterlessStatementMacro() throws {
         let algorithm = Algorithm("ParameterlessMacro") {
@@ -903,6 +963,27 @@ private enum AlgorithmLabel: String, PlusCalLabel {
     case receive
     case forward
     case done
+}
+
+@TLAModel
+private struct ProcedureGeneratedModel {
+    static var spec: TLASpec {
+        #spec("ProcedureGenerated") {
+            Algorithm("ProcedureGenerated") {
+                let output = SharedVar(initial: 0)
+                Procedure("work", parameters: Int.self) { value in
+                    let offset = LocalVar(initial: 1)
+                    Do("enter") {
+                        Await(value.expr >= 0)
+                        Assign(output, to: value.expr + offset.expr)
+                        Return()
+                    }
+                }
+                Do("start") { Call("work", with: 7) }
+                Do("finished") { Stop() }
+            }
+        }
+    }
 }
 
 @TLAModel

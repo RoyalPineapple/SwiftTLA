@@ -16,8 +16,20 @@ extension SpecParser {
         case .set(let target, let value):
             let rewritten: AlgorithmLValueModel
             switch target {
-            case .root(let root): rewritten = .root(root)
-            case .function(let root, let key): rewritten = .function(root: root, key: expression(key))
+            case .root(let root):
+                if root == name, case .variable(let replacementRoot) = replacement {
+                    rewritten = .root(replacementRoot)
+                } else {
+                    rewritten = .root(root)
+                }
+            case .function(let root, let key):
+                let rewrittenRoot: String
+                if root == name, case .variable(let replacementRoot) = replacement {
+                    rewrittenRoot = replacementRoot
+                } else {
+                    rewrittenRoot = root
+                }
+                rewritten = .function(root: rewrittenRoot, key: expression(key))
             }
             return .set(target: rewritten, value: expression(value))
         case .letBinding(let variable, let value, let body):

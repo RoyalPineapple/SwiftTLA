@@ -63,7 +63,7 @@ private func parseExpression(_ source: String) -> ExprSyntax {
         #expect(
             parsed.diagnostics.first?.message
                 == "Unsupported Algorithm declaration 'UnsupportedAlgorithmConstruct()'. "
-                    + "Supported declarations are SharedVar, Macro, Each, Do, and While."
+                    + "Supported declarations are SharedVar, Macro, Procedure, Each, Do, While, and properties."
         )
     }
 
@@ -146,6 +146,78 @@ private func parseExpression(_ source: String) -> ExprSyntax {
         #expect(parsed.diagnostics.isEmpty)
         #expect(parsed.actions.first?.body.description.contains("destination' = source") == true)
         #expect(parsed.actions.first?.body.description.contains("__pcal_macro_parameter") == false)
+    }
+
+    @Test("parser retains formal expression macro arguments")
+    func parsesExpressionStatementMacroArguments() {
+        let source = """
+        {
+            Algorithm("OffsetValue") {
+                let destination = SharedVar(initial: 0)
+                let source = SharedVar(initial: 7)
+                let copy = Macro { (target: MacroParameter<Int>, value: MacroParameter<Int>) in
+                    Assign(target, to: value.expr)
+                }
+                Do("copy") { copy(destination, source.expr + 1) }
+            }
+        }
+        """
+        let closure = Parser.parse(source: source).statements.first!.item.as(ClosureExprSyntax.self)!
+        let parsed = SpecParser.parseSpecClosure(closure)
+
+        #expect(parsed.diagnostics.isEmpty)
+        #expect(parsed.actions.first?.body.description.contains("destination' = (source + 1)") == true)
+    }
+
+    @Test("parser rejects an expression used for a macro assignment target")
+    func diagnosesExpressionMacroAssignmentTarget() {
+        let source = """
+        {
+            Algorithm("InvalidMacroTarget") {
+                let destination = SharedVar(initial: 0)
+                let write = Macro { (target: MacroParameter<Int>) in
+                    Assign(target, to: 1)
+                }
+                Do("write") { write(destination.expr + 1) }
+            }
+        }
+        """
+        let closure = Parser.parse(source: source).statements.first!.item.as(ClosureExprSyntax.self)!
+        let parsed = SpecParser.parseSpecClosure(closure)
+
+        #expect(parsed.actions.isEmpty)
+        let diagnostic = parsed.diagnostics.first?.message ?? ""
+        #expect(diagnostic.contains("What failed: statement macro 'write' assigns through parameter"))
+        #expect(diagnostic.contains("Expected a formal variable assignment target"))
+        #expect(diagnostic.contains("What changed: no model was changed"))
+        #expect(diagnostic.contains("Next safe action"))
+    }
+
+    @Test("parser lowers readable procedure bindings to deterministic formal slots")
+    func parsesTypedProcedureBindings() {
+        let source = """
+        {
+            Algorithm("ProcedureSource") {
+                let output = SharedVar(initial: 0)
+                Procedure("work", parameters: Int.self) { value in
+                    let offset = LocalVar(initial: 1)
+                    Do("enter") {
+                        Await(value.expr >= 0)
+                        Assign(output, to: value.expr + offset.expr)
+                        Return()
+                    }
+                }
+                Do("start") { Call("work", with: 7) }
+                Do("finished") { Stop() }
+            }
+        }
+        """
+        let closure = Parser.parse(source: source).statements.first!.item.as(ClosureExprSyntax.self)!
+        let parsed = SpecParser.parseSpecClosure(closure)
+
+        #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
+        #expect(parsed.variables.contains { $0.name == "parameter0" })
+        #expect(parsed.actions.contains { $0.name == "procedure.work.enter" })
     }
 
     @Test("statement macro arity diagnostics identify the declaration and safe repair")
