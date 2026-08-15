@@ -12,7 +12,11 @@ extension MacroExpander {
     }
 
     static func codegenFormalModuleInstance(_ instance: FormalModuleInstance) -> String {
-        "FormalModuleInstance(\"\(instance.name)\", " +
-            "of: FormalModuleRegistry.lookup(\"\(instance.module.name)\")!)"
+        let arguments = instance.arguments.map { argument in
+            "ModuleArgument(\"\(argument.parameter)\", expression: \(codegenStateExpr(argument.value)))"
+        }.joined(separator: ", ")
+        return "FormalModuleInstance(\"\(instance.name)\", " +
+            "of: FormalModuleRegistry.lookup(\"\(instance.module.name)\")!, " +
+            "with: [\(arguments)])"
     }
 }

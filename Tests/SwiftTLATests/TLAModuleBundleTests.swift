@@ -62,6 +62,25 @@ struct TLAModuleBundleTests {
     #expect(_tlaAlphaEquivalent(parserTree, runtimeTree))
   }
 
+  @Test("the parser retains formal module parameters for builder fidelity")
+  func parserRetainsFormalModuleParameters() {
+    let source = "{ Parameter(\"Base\") }"
+    let closure = Parser.parse(source: source).statements.first!.item.as(ClosureExprSyntax.self)!
+    let parsed = SpecParser.parseSpecClosure(closure)
+    let runtime = TLASpec("Parameterized") {
+      Parameter("Base")
+    }
+    let parserTree = ParsedSpecModel(
+      variables: [], actions: [], invariants: [], formalParameters: parsed.formalParameters
+    )
+    let runtimeTree = ParsedSpecModel(
+      variables: [], actions: [], invariants: [], formalParameters: runtime.formalParameters
+    )
+
+    #expect(parsed.diagnostics.isEmpty)
+    #expect(_tlaAlphaEquivalent(parserTree, runtimeTree))
+  }
+
   @Test("a generated model preserves a named module instance")
   func generatedModelRetainsNamedModuleInstance() {
     InstancedFormalModuleGeneratedModel._checkParserTree()
@@ -234,6 +253,33 @@ struct TLAModuleBundleTests {
     let result = try ModelChecker(spec: consumer).check()
     guard case .ok = result.underlyingOutcome else {
       Issue.record("The checker did not resolve recursive instance calls.")
+      return
+    }
+  }
+
+  @Test("an instance applies its declared module parameters")
+  func namedModuleInstanceAppliesArguments() throws {
+    let arithmetic = TLASpec("ParameterizedArithmetic") {
+      Parameter("Base")
+      DefineRecursive("AddBase", params: ["number"]) {
+        StateExpr.variable("number") + StateExpr.variable("Base")
+      }
+    }
+    let value = Var<Int>("value", 3)
+    let consumer = TLASpec("UsesParameterizedArithmetic") {
+      let math = Instance("Math", of: arithmetic, with: [ModuleArgument("Base", value: 2)])
+      math
+      Variable(value, 3)
+      Action("Stay") { value.stateExpr == 3 }
+      Invariant("AddsBase") { math.call("AddBase", value.stateExpr) == 5 }
+    }
+
+    #expect(consumer.tlaModule.contains("Math == INSTANCE ParameterizedArithmetic WITH Base <- 2"))
+    #expect(consumer.tlaBundle.imports[0].tla.contains("CONSTANTS Base"))
+    #expect(!consumer.tlaBundle.imports[0].tla.contains("ASSUME Base"))
+    let result = try ModelChecker(spec: consumer).check()
+    guard case .ok = result.underlyingOutcome else {
+      Issue.record("The checker did not apply the module argument.")
       return
     }
   }

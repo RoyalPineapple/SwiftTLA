@@ -88,6 +88,28 @@ public struct FormalModuleConfiguration: Sendable, Equatable {
   }
 }
 
+/// An actual expression supplied to a parameter of a named module instance.
+public struct ModuleArgument: Sendable, Equatable {
+  public let parameter: String
+  public let value: StateExpr
+
+  public init(_ parameter: String, value: some StateExprConvertible) {
+    precondition(!parameter.isEmpty, "A module argument needs a parameter name.")
+    self.parameter = parameter
+    self.value = value.stateExpr
+  }
+
+  /// Builds an argument from a parsed formal expression.
+  ///
+  /// This is primarily used by the macro parser. Public callers normally use
+  /// `value:` so Swift supplies the expression conversion.
+  public init(_ parameter: String, expression: StateExpr) {
+    precondition(!parameter.isEmpty, "A module argument needs a parameter name.")
+    self.parameter = parameter
+    self.value = expression
+  }
+}
+
 /// A named TLA+ module instance.
 ///
 /// `Instance("CC", of: ClientCentric.module)` exports as
@@ -97,15 +119,26 @@ public struct FormalModuleConfiguration: Sendable, Equatable {
 public struct FormalModuleInstance: SpecComponent, Sendable, Equatable {
   public let name: String
   public let module: TLASpec
+  public let arguments: [ModuleArgument]
 
-  public init(_ name: String, of module: TLASpec) {
+  public init(_ name: String, of module: TLASpec, with arguments: [ModuleArgument] = []) {
     precondition(!name.isEmpty, "A formal module instance needs a name.")
+    let declared = Set(module.formalParameters)
+    precondition(
+      Set(arguments.map(\.parameter)).count == arguments.count,
+      "A formal module instance cannot bind the same parameter twice."
+    )
+    precondition(
+      Set(arguments.map(\.parameter)).isSubset(of: declared),
+      "A formal module instance can bind only parameters declared by its module."
+    )
     self.name = name
     self.module = module
+    self.arguments = arguments
   }
 
   public static func == (lhs: FormalModuleInstance, rhs: FormalModuleInstance) -> Bool {
-    lhs.name == rhs.name && lhs.module.name == rhs.module.name
+    lhs.name == rhs.name && lhs.module.name == rhs.module.name && lhs.arguments == rhs.arguments
   }
 
   /// References one operator through this instance's TLA+ namespace.
@@ -146,9 +179,10 @@ public func Import(
 /// Adds a named, source-level TLA+ `INSTANCE` declaration.
 public func Instance(
   _ name: String,
-  of module: TLASpec
+  of module: TLASpec,
+  with arguments: [ModuleArgument] = []
 ) -> FormalModuleInstance {
-  FormalModuleInstance(name, of: module)
+  FormalModuleInstance(name, of: module, with: arguments)
 }
 // swiftlint:enable identifier_name
 

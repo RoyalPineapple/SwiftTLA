@@ -141,6 +141,7 @@ public struct ParsedSpecModel: Equatable, Sendable {
   public let imports: [String]
   public let importConfigurations: [FormalModuleConfiguration]
   public let moduleInstances: [FormalModuleInstance]
+  public let formalParameters: [String]
   public init(
     variables: [(String, TLAValue, StateExpr?)], actions: [(String, ActionExpr, [ActionBinding])],
     invariants: [(String, StateExpr)],
@@ -149,7 +150,8 @@ public struct ParsedSpecModel: Equatable, Sendable {
     constraint: StateExpr? = nil,
     imports: [String] = [],
     importConfigurations: [FormalModuleConfiguration] = [],
-    moduleInstances: [FormalModuleInstance] = []
+    moduleInstances: [FormalModuleInstance] = [],
+    formalParameters: [String] = []
   ) {
     self.variables = variables
     self.actions = actions
@@ -160,6 +162,7 @@ public struct ParsedSpecModel: Equatable, Sendable {
     self.imports = imports
     self.importConfigurations = importConfigurations
     self.moduleInstances = moduleInstances
+    self.formalParameters = formalParameters
   }
   public static func == (lhs: ParsedSpecModel, rhs: ParsedSpecModel) -> Bool {
     guard lhs.variables.count == rhs.variables.count,
@@ -170,7 +173,8 @@ public struct ParsedSpecModel: Equatable, Sendable {
       lhs.constraint == rhs.constraint,
       lhs.imports == rhs.imports,
       lhs.importConfigurations == rhs.importConfigurations,
-      lhs.moduleInstances == rhs.moduleInstances
+      lhs.moduleInstances == rhs.moduleInstances,
+      lhs.formalParameters == rhs.formalParameters
     else { return false }
     for (a, b) in zip(lhs.variables, rhs.variables) {
       if a.name != b.name || a.initial != b.initial || a.initialSet != b.initialSet { return false }
@@ -191,6 +195,8 @@ public struct TLASpec: Sendable {
   public let name: String
   public let variables: [NamedVar]
   public let constants: [String: TLAValue]
+  /// Parameters supplied by a named TLA+ `INSTANCE … WITH` declaration.
+  public let formalParameters: [String]
   public let actions: [NamedAction]
   public let invariants: [NamedInvariant]
   public let temporalProperties: [NamedTemporal]
@@ -216,6 +222,7 @@ public struct TLASpec: Sendable {
   public let symmetricCollections: [SymmetricCollectionDecl]
   public init(
     name: String, variables: [NamedVar], constants: [String: TLAValue] = [:],
+    formalParameters: [String] = [],
     actions: [NamedAction], invariants: [NamedInvariant], temporalProperties: [NamedTemporal] = [],
     fairness: [FairnessCondition] = [], assume: StateExpr? = nil, checkDeadlock: Bool = false,
     definitions: [String] = [], theorems: [String] = [], extendsModules: String = "Integers",
@@ -229,6 +236,7 @@ public struct TLASpec: Sendable {
     self.name = name
     self.variables = variables
     self.constants = constants
+    self.formalParameters = formalParameters
     self.actions = actions
     self.invariants = invariants
     self.temporalProperties = temporalProperties
@@ -281,7 +289,10 @@ public struct TLASpec: Sendable {
             seen.insert(qualifiedName).inserted,
             "Duplicate formal module instance operator: \(qualifiedName)"
           )
-          let qualifiedBody = StateExpr.renamingRecursiveCalls(in: function.body) { name in
+          let appliedArguments = instance.arguments.reduce(function.body) { body, argument in
+            StateExpr.substituteVariable(argument.parameter, with: argument.value, in: body)
+          }
+          let qualifiedBody = StateExpr.renamingRecursiveCalls(in: appliedArguments) { name in
             localNames.contains(name) ? "\(instance.name)!\(name)" : name
           }
           result.append(RecursiveFunc(
@@ -323,6 +334,7 @@ public struct TLASpec: Sendable {
       name: prefixedName,
       variables: self.variables + otherVars,
       constants: self.constants.merging(other.constants) { $1 },
+      formalParameters: self.formalParameters + other.formalParameters,
       actions: self.actions + other.actions,
       invariants: self.invariants + other.invariants,
       temporalProperties: self.temporalProperties + other.temporalProperties,
@@ -354,6 +366,7 @@ public struct TLASpec: Sendable {
       name: self.name,
       variables: self.variables,
       constants: constants,
+      formalParameters: self.formalParameters,
       actions: self.actions,
       invariants: self.invariants,
       temporalProperties: self.temporalProperties,
@@ -454,6 +467,13 @@ public struct ConstantDecl: SpecComponent {
   init(_ name: String, _ value: TLAValue) {
     self.name = name
     self.value = value
+  }
+}
+public struct FormalParameterDecl: SpecComponent {
+  public let name: String
+  init(_ name: String) {
+    precondition(!name.isEmpty, "A formal module parameter needs a name.")
+    self.name = name
   }
 }
 public struct NamedValueDecl: Equatable, Sendable {
@@ -608,6 +628,7 @@ public enum SpecBuilder {
   public static func buildExpression(_ expr: TemporalDecl) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: FairnessDecl) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: ConstantDecl) -> [SpecComponent] { [expr] }
+  public static func buildExpression(_ expr: FormalParameterDecl) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: DefinitionDecl) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: TheoremDecl) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: AssumeDecl) -> [SpecComponent] { [expr] }
@@ -810,6 +831,8 @@ public struct SymmetrySet: Hashable, Sendable, CustomStringConvertible {
 public func Constant(_ name: String, _ value: some TLAValueConvertible) -> ConstantDecl {
   ConstantDecl(name, value.tlaValue)
 }
+/// Declares a value that an `Instance` supplies with a `ModuleArgument`.
+public func Parameter(_ name: String) -> FormalParameterDecl { FormalParameterDecl(name) }
 /// Register a named value constant for use in spec expressions.
 /// `Value("poweredOn", 5)` makes `poweredOn` resolve to 5 in spec expressions.
 public func Value(_ name: String, _ value: some TLAValueConvertible) -> NamedValueDecl {

@@ -10,6 +10,7 @@ extension TLASpec {
     var temporalProperties: [NamedTemporal] = []
     var fairness: [FairnessCondition] = []
     var constants: [String: TLAValue] = [:]
+    var formalParameters: [String] = []
     var definitions: [String] = []
     var theorems: [String] = []
     var assumes: StateExpr?
@@ -72,6 +73,8 @@ extension TLASpec {
         fairness.append(f.condition)
       } else if let c = comp as? ConstantDecl {
         constants[c.name] = c.value
+      } else if let parameter = comp as? FormalParameterDecl {
+        formalParameters.append(parameter.name)
       } else if let d = comp as? DefinitionDecl {
         if let name = d.name, let body = d.body {
           definitions.append("\(name) == \(body)")
@@ -137,6 +140,7 @@ extension TLASpec {
       actions += used.actions
       invariants += used.invariants
       constants.merge(used.constants) { $1 }
+      formalParameters += used.formalParameters
       definitions += used.definitions
       recursiveDefs += used.recursiveDefs
       recursiveFuncs += used.recursiveFuncs
@@ -164,7 +168,8 @@ extension TLASpec {
         constraint: constraint,
         imports: importedModules.map(\.name),
         importConfigurations: importConfigurations,
-        moduleInstances: moduleInstances
+        moduleInstances: moduleInstances,
+        formalParameters: formalParameters
       )
       guard _tlaAlphaEquivalent(built, tree) else {
         fatalError(
@@ -183,6 +188,7 @@ extension TLASpec {
     self.name = name
     self.variables = variables
     self.constants = constants
+    self.formalParameters = formalParameters
     self.actions = actions
     self.invariants = invariants
     self.temporalProperties = temporalProperties
@@ -229,6 +235,7 @@ public func substituteConstants(_ spec: TLASpec) -> TLASpec {
     name: spec.name,
     variables: vars,
     constants: [:],
+    formalParameters: spec.formalParameters,
     actions: acts,
     invariants: invs,
     temporalProperties: spec.temporalProperties.map { t in

@@ -18,6 +18,7 @@ extension SpecParser {
         public var imports: [String] = []
         public var importConfigurations: [FormalModuleConfiguration] = []
         public var moduleInstances: [FormalModuleInstance] = []
+        public var formalParameters: [String] = []
         public var constants: [String: TLAValue] = [:]
         /// Local named values (from NamedValue declarations, resolved in expressions)
         public var localConstants: [String: TLAValue] = [:]
@@ -461,6 +462,16 @@ extension SpecParser {
             }
         case "Constant":
             parseConstantDecl(call, into: &result)
+        case "Parameter":
+            guard let name = extractStringArg(call, index: 0), !name.isEmpty else {
+                result.diagnostics.append(.init(message: "Parameter requires a name.", source: call))
+                return
+            }
+            guard !result.formalParameters.contains(name) else {
+                result.diagnostics.append(.init(message: "Parameter '\(name)' is declared more than once.", source: call))
+                return
+            }
+            result.formalParameters.append(name)
         case "LeadsTo", "Eventually", "Always", "AlwaysEventually", "EventuallyAlways":
             if let expr = decodeTemporal(call) {
                 result.temporal.append((name, expr))
@@ -519,11 +530,42 @@ extension SpecParser {
             result.diagnostics.append(.init(message: "Instance requires a registered formal module.", source: call))
             return
         }
-        guard call.arguments.first(where: { $0.label?.text == "with" }) == nil else {
-            result.diagnostics.append(.init(message: "Instance arguments are not yet supported by macro parsing.", source: call))
+        let arguments: [ModuleArgument]
+        if let withExpression = call.arguments.first(where: { $0.label?.text == "with" })?.expression {
+            guard let array = withExpression.as(ArrayExprSyntax.self) else {
+                result.diagnostics.append(.init(message: "Instance 'with' requires an array of ModuleArgument values.", source: call))
+                return
+            }
+            var parsedArguments: [ModuleArgument] = []
+            for element in array.elements {
+                guard let argumentCall = element.expression.as(FunctionCallExprSyntax.self),
+                      argumentCall.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "ModuleArgument",
+                      let parameter = extractStringArg(argumentCall, index: 0),
+                      let valueSyntax = argumentCall.arguments.first(where: { $0.label?.text == "value" })?.expression,
+                      let value = decodeStateExpr(valueSyntax)
+                else {
+                    result.diagnostics.append(.init(
+                        message: "Each Instance argument must be ModuleArgument(\"parameter\", value: expression).",
+                        source: element.expression
+                    ))
+                    return
+                }
+                parsedArguments.append(ModuleArgument(parameter, expression: value))
+            }
+            arguments = parsedArguments
+        } else {
+            arguments = []
+        }
+        guard Set(arguments.map(\.parameter)).count == arguments.count else {
+            result.diagnostics.append(.init(message: "An Instance cannot bind the same parameter twice.", source: call))
             return
         }
-        result.moduleInstances.append(FormalModuleInstance(name, of: module))
+        let declaredParameters = Set(module.formalParameters)
+        guard Set(arguments.map(\.parameter)).isSubset(of: declaredParameters) else {
+            result.diagnostics.append(.init(message: "Instance arguments must name parameters declared by '\(module.name)'.", source: call))
+            return
+        }
+        result.moduleInstances.append(FormalModuleInstance(name, of: module, with: arguments))
     }
 
     private static func parseFormalModuleConfiguration(

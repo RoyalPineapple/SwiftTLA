@@ -29,7 +29,7 @@ extension TLASpec {
                 collection.metadata.members.contains(.constant(symbol))
             }
         }
-        let allConstantSymbols = (constants.keys + generatedMemberSymbols).sorted()
+        let allConstantSymbols = (constants.keys + formalParameters + generatedMemberSymbols).sorted()
         if !allConstantSymbols.isEmpty {
             lines.append("CONSTANTS \(allConstantSymbols.joined(separator: ", "))")
             for (name, value) in constants.sorted(by: { $0.key < $1.key }) {
@@ -68,7 +68,11 @@ extension TLASpec {
         }
 
         for instance in moduleInstances {
-            lines.append("\(instance.name) == INSTANCE \(instance.module.name)")
+            let arguments = instance.arguments.map { argument in
+                "\(argument.parameter) <- \(argument.value)"
+            }.joined(separator: ", ")
+            let withClause = arguments.isEmpty ? "" : " WITH \(arguments)"
+            lines.append("\(instance.name) == INSTANCE \(instance.module.name)\(withClause)")
             lines.append("")
         }
 

@@ -12,6 +12,8 @@ public func _tlaAlphaEquivalent(_ lhs: ParsedSpecModel, _ rhs: ParsedSpecModel) 
           lhs.fairness == rhs.fairness,
           lhs.imports == rhs.imports,
           lhs.importConfigurations == rhs.importConfigurations,
+          lhs.moduleInstances == rhs.moduleInstances,
+          lhs.formalParameters == rhs.formalParameters,
           optionalStateEquivalent(lhs.constraint, rhs.constraint)
     else { return false }
 
@@ -37,6 +39,12 @@ public func _tlaFidelityDiagnostic(_ expected: ParsedSpecModel, _ actual: Parsed
     }
     guard expected.importConfigurations == actual.importConfigurations else {
         return "Imported module configurations differ: expected \(expected.importConfigurations), got \(actual.importConfigurations)."
+    }
+    guard expected.moduleInstances == actual.moduleInstances else {
+        return "Named module instances differ: expected \(expected.moduleInstances), got \(actual.moduleInstances)."
+    }
+    guard expected.formalParameters == actual.formalParameters else {
+        return "Formal parameters differ: expected \(expected.formalParameters), got \(actual.formalParameters)."
     }
     guard expected.variables.elementsEqual(actual.variables, by: variablesEquivalent) else {
         let sharedCount = min(expected.variables.count, actual.variables.count)

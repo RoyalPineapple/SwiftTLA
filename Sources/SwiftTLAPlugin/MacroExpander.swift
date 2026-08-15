@@ -166,6 +166,7 @@ enum MacroExpander {
             .joined(separator: ", ")
         let treeModuleInstances = model.moduleInstances.map(codegenFormalModuleInstance)
             .joined(separator: ", ")
+        let treeFormalParameters = model.formalParameters.map { "\"\($0)\"" }.joined(separator: ", ")
 
         let parserTreeSource = """
         static let _parserTree: ParsedSpecModel = ParsedSpecModel(
@@ -177,7 +178,8 @@ enum MacroExpander {
             constraint: \(treeConstraint),
             imports: [\(treeImports)],
             importConfigurations: [\(treeImportConfigurations)],
-            moduleInstances: [\(treeModuleInstances)]
+            moduleInstances: [\(treeModuleInstances)],
+            formalParameters: [\(treeFormalParameters)]
         )
         """
         let checkerSource = """
@@ -192,7 +194,8 @@ enum MacroExpander {
                 constraint: builtSpec.constraint,
                 imports: builtSpec.imports.map(\\.name),
                 importConfigurations: builtSpec.importConfigurations,
-                moduleInstances: builtSpec.moduleInstances
+                moduleInstances: builtSpec.moduleInstances,
+                formalParameters: builtSpec.formalParameters
             )
             if !_tlaAlphaEquivalent(built, _parserTree) {
                 preconditionFailure(
