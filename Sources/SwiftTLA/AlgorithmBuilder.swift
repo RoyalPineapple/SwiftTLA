@@ -864,6 +864,14 @@ public func LocalVar<Value: TLAValueType>(
     LocalVariable(name: name, initial: initial.raw, initialSet: nil, swiftTypeName: String(reflecting: Value.self))
 }
 
+/// Declares a process-local Boolean from a formal condition.
+///
+/// This is useful when a process starts in a role-dependent state, such as
+/// one designated initiator being active while the other processes wait.
+public func LocalVar(_ name: String, initial: StateExpr) -> LocalVariable<Bool> {
+    LocalVariable(name: name, initial: initial, initialSet: nil, swiftTypeName: "Bool")
+}
+
 /// The name is supplied from the enclosing `let` binding by `#spec`.
 public func LocalVar<Value: TLAValueType>(initial: Expr<Value>) -> LocalVariable<Value> {
     LocalVariable(name: "", initial: initial.raw, initialSet: nil, swiftTypeName: String(reflecting: Value.self))

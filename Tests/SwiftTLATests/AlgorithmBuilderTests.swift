@@ -421,6 +421,24 @@ struct AlgorithmBuilderTests {
         ]))
     }
 
+    @Test("local state can be initialized from its process identifier")
+    func lowersProcessDependentLocalState() throws {
+        let algorithm = Algorithm("ProcessDependentInitialState") {
+            Each(Node.all) { selfID in
+                let leader = LocalVar("leader", initial: selfID == .first)
+                leader
+                Do(AlgorithmLabel.done) { Stop() }
+            }
+        }
+
+        let spec = try algorithm.lower()
+        let initial = try #require(computeInitialStates(spec).first)
+        #expect(initial["leader"] == .function([
+            .string("first"): .bool(true),
+            .string("second"): .bool(false)
+        ]))
+    }
+
     @Test("string labels are contained by ProgramLabel and validated before lowering")
     func validatesStringLabels() throws {
         let algorithm = Algorithm("StringLabels") {

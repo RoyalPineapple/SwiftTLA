@@ -258,7 +258,15 @@ extension SpecParser {
             if case .decl(let declaration) = statement.item,
                let variable = declaration.as(VariableDeclSyntax.self),
                let component = parseAlgorithmVariableDeclaration(variable, expectedKind: "LocalVar") {
-                components.append(component)
+                guard case .local(let state) = component else { return nil }
+                components.append(.local(.init(
+                    root: state.root,
+                    initial: parameter == "__pcal_self"
+                        ? state.initial
+                        : renameVar(parameter, to: "__pcal_self", in: state.initial),
+                    initialSet: state.initialSet,
+                    swiftTypeName: state.swiftTypeName
+                )))
                 continue
             }
             guard case .expr(let expression) = statement.item else { return nil }

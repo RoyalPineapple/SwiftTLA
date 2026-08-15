@@ -170,7 +170,13 @@ enum AlgorithmLowerer {
         return .functionLiteral(
             .setLiteral(domain.map(StateExpr.value)),
             binding,
-            value
+            // A process-local initializer may refer to `self`. At this
+            // boundary `self` becomes the key of the initial formal function.
+            StateExpr.substituteVariable(
+                builderProcessIdentifier,
+                with: .variable(binding),
+                in: value
+            )
         )
     }
 
