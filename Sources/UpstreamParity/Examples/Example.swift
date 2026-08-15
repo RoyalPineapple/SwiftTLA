@@ -39,6 +39,7 @@ public enum Example {
         consensus,
         dieHardTypeOK,
         diningPhilosophersNP5,
+        dijkstraMutex,
         ewd840,
         ewd998,
         echo,

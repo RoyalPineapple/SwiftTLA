@@ -137,6 +137,18 @@ struct UpstreamParityTests {
         #expect(count == Example.findHighest.expectedDistinct)
     }
 
+    @Test("Dijkstra mutex preserves its bounded PlusCal model")
+    func dijkstraMutexParity() throws {
+        DijkstraMutexModel._checkParserTree()
+        let checker = ModelChecker(
+            spec: DijkstraMutexModel.spec,
+            maxStates: Example.dijkstraMutex.verificationStateLimit
+        )
+        let exploration = try checker.explore()
+        print("Dijkstra mutex: \(exploration.graph.states.count) states, \(exploration.result)")
+        #expect(exploration.graph.states.count == Example.dijkstraMutex.expectedDistinct)
+    }
+
     @Test("BinarySearch PlusCal port matches its bounded TLC configuration")
     func binarySearchParity() throws {
         let count = try BinarySearchModel.verifySpec()

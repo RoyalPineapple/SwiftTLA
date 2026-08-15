@@ -81,6 +81,11 @@ public struct ProcessIdentifier<Value: FiniteDomainKey>: StateExprConvertible, S
         expression
     }
 
+    /// The current process identifier as a typed formal expression.
+    public var expr: Expr<Value> {
+        Expr(expression)
+    }
+
     /// Compares the current process identifier with a typed formal value.
     public static func == (lhs: ProcessIdentifier<Value>, rhs: Value) -> StateExpr {
         .equal(lhs.stateExpr, .value(rhs.tlaValue))
