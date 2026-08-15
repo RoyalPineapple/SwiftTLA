@@ -1279,7 +1279,7 @@ public func With<Value: TLAValueType>(
     _ source: Expr<SetExpr<Value>>,
     @DoBuilder _ body: (WithValue<Value>) -> [StepStatement]
 ) -> StepStatement {
-    let variable = "__pcal_with"
+    let variable = FreshVarName.fresh()
     let value = WithValue<Value>(expression: .variable(variable))
     return StepStatement(model: .with(variable: variable, source: source.raw, body(value).map(\.model)))
 }
@@ -1433,7 +1433,7 @@ public func With<Value: FiniteDomainKey>(
     _ source: FiniteDomain<Value>,
     @DoBuilder _ body: (WithValue<Value>) -> [StepStatement]
 ) -> StepStatement {
-    let variable = "__pcal_with"
+    let variable = FreshVarName.fresh()
     let value = WithValue<Value>(expression: .variable(variable))
     return StepStatement(model: .with(
         variable: variable,
@@ -1542,7 +1542,7 @@ public func Choose<Value: FiniteDomainKey>(
     _ domain: FiniteDomain<Value>,
     @DoBuilder _ body: (ProcessIdentifier<Value>) -> [StepStatement]
 ) -> StepStatement {
-    let name = "__pcal_choice"
+    let name = FreshVarName.fresh()
     let value = ProcessIdentifier<Value>(expression: .variable(name))
     return StepStatement(model: .choose(variable: name, domain: domain.values.map(\.tlaValue), body(value).map(\.model)))
 }
@@ -1556,7 +1556,7 @@ public func Choose(
     _ domain: ClosedRange<Int>,
     @DoBuilder _ body: (WithValue<Int>) -> [StepStatement]
 ) -> StepStatement {
-    let name = "__pcal_choice"
+    let name = FreshVarName.fresh()
     let value = WithValue<Int>(expression: .variable(name))
     return StepStatement(model: .choose(
         variable: name,

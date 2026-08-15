@@ -491,6 +491,49 @@ extension StateExpr {
         with replacement: StateExpr,
         in expr: StateExpr
     ) -> StateExpr {
+        let replacementFreeVariables = replacement.freeVariableNames
+
+        func underBinder(_ binder: String, body: StateExpr) -> (name: String, body: StateExpr) {
+            guard binder != name else { return (binder, body) }
+            guard replacementFreeVariables.contains(binder) else {
+                return (binder, Self.substituteVariable(name, with: replacement, in: body))
+            }
+
+            let fresh = Self.freshBoundName(
+                binder,
+                avoiding: body.freeVariableNames
+                    .union(replacementFreeVariables)
+                    .union([name, binder])
+            )
+            let renamed = Self.substituteVariable(binder, with: .variable(fresh), in: body)
+            return (fresh, Self.substituteVariable(name, with: replacement, in: renamed))
+        }
+
+        func underParameters(
+            _ parameters: [String],
+            body: StateExpr
+        ) -> (parameters: [String], body: StateExpr) {
+            guard !parameters.contains(name) else { return (parameters, body) }
+            var renamedParameters = parameters
+            var renamedBody = body
+            for index in renamedParameters.indices where replacementFreeVariables.contains(renamedParameters[index]) {
+                let oldName = renamedParameters[index]
+                let fresh = Self.freshBoundName(
+                    oldName,
+                    avoiding: renamedBody.freeVariableNames
+                        .union(replacementFreeVariables)
+                        .union(Set(renamedParameters))
+                        .union([name])
+                )
+                renamedBody = Self.substituteVariable(oldName, with: .variable(fresh), in: renamedBody)
+                renamedParameters[index] = fresh
+            }
+            return (
+                renamedParameters,
+                Self.substituteVariable(name, with: replacement, in: renamedBody)
+            )
+        }
+
         switch expr {
         case .variable(let n) where n == name: return replacement
         case .variable: return expr
@@ -519,8 +562,12 @@ extension StateExpr {
         case .intersection(let a, let b): return .intersection(sub(a), sub(b))
         case .setDifference(let a, let b): return .setDifference(sub(a), sub(b))
         case .cardinality(let s): return .cardinality(sub(s))
-        case .setFilter(let s, let qv, let p): return .setFilter(sub(s), qv, qv == name ? p : sub(p))
-        case .setMap(let e, let qv, let s): return .setMap(sub(e), qv, qv == name ? s : sub(s))
+        case .setFilter(let set, let binder, let predicate):
+            let scoped = underBinder(binder, body: predicate)
+            return .setFilter(sub(set), scoped.name, scoped.body)
+        case .setMap(let value, let binder, let set):
+            let scoped = underBinder(binder, body: value)
+            return .setMap(scoped.body, scoped.name, sub(set))
         case .powerSet(let s): return .powerSet(sub(s))
         case .unionAll(let s): return .unionAll(sub(s))
         case .integerRange(let lower, let upper): return .integerRange(sub(lower), sub(upper))
@@ -535,21 +582,30 @@ extension StateExpr {
         case .recordLiteral(let fs): return .recordLiteral(fs.mapValues(sub))
         case .recordAccess(let r, let f): return .recordAccess(sub(r), f)
         case .domain(let f): return .domain(sub(f))
-        case .functionLiteral(let d, let qv, let body): return .functionLiteral(sub(d), qv, qv == name ? body : sub(body))
+        case .functionLiteral(let domain, let binder, let body):
+            let scoped = underBinder(binder, body: body)
+            return .functionLiteral(sub(domain), scoped.name, scoped.body)
         case .functionApply(let f, let x): return .functionApply(sub(f), sub(x))
         case .except(let f, let x, let e): return .except(sub(f), sub(x), sub(e))
         case .caseExpr(let ps, let fb): return .caseExpr(ps.map(sub), fb.map(sub))
-        case .forAll(let s, let qv, let p): return .forAll(sub(s), qv, qv == name ? p : sub(p))
-        case .exists(let s, let qv, let p): return .exists(sub(s), qv, qv == name ? p : sub(p))
-        case .choose(let s, let qv, let p): return .choose(sub(s), qv, qv == name ? p : sub(p))
+        case .forAll(let set, let binder, let predicate):
+            let scoped = underBinder(binder, body: predicate)
+            return .forAll(sub(set), scoped.name, scoped.body)
+        case .exists(let set, let binder, let predicate):
+            let scoped = underBinder(binder, body: predicate)
+            return .exists(sub(set), scoped.name, scoped.body)
+        case .choose(let set, let binder, let predicate):
+            let scoped = underBinder(binder, body: predicate)
+            return .choose(sub(set), scoped.name, scoped.body)
         case .sequenceFromSet(let s): return .sequenceFromSet(sub(s))
         case .setSum(let f, let s): return .setSum(sub(f), sub(s))
         case .functionSet(let d, let r): return .functionSet(sub(d), sub(r))
         case .foldFunction(let operation, let initial, let sequence):
+            let scoped = underParameters(operation.parameters, body: operation.body)
             return .foldFunction(
                 FormalLambda(
-                    parameters: operation.parameters,
-                    body: operation.parameters.contains(name) ? operation.body : sub(operation.body)
+                    parameters: scoped.parameters,
+                    body: scoped.body
                 ),
                 initial: sub(initial),
                 sequence: sub(sequence)
@@ -558,10 +614,11 @@ extension StateExpr {
         case .letIn(let operators, let body):
             return .letIn(
                 operators.map { operation in
-                    LocalOperator(
+                    let scoped = underParameters(operation.parameters, body: operation.body)
+                    return LocalOperator(
                         operation.name,
-                        parameters: operation.parameters,
-                        body: operation.parameters.contains(name) ? operation.body : sub(operation.body)
+                        parameters: scoped.parameters,
+                        body: scoped.body
                     )
                 },
                 sub(body)

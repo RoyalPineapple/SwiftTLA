@@ -748,6 +748,32 @@ struct AlgorithmBuilderTests {
         ])
     }
 
+    @Test("nested With statements keep independent lexical bindings")
+    func lowersNestedWithScopes() throws {
+        let algorithm = Algorithm("NestedWith") {
+            let selected = SharedVar("selected", initial: 0)
+            selected
+            Each(Node.all) { _ in
+                Do("choose") {
+                    With(SetExpr<Int>.literal(1, 2)) { outer in
+                        With(SetExpr<Int>.literal(10, 20)) { inner in
+                            Assign(selected, to: outer.expr + inner.expr)
+                        }
+                    }
+                }
+            }
+        }
+
+        let spec = try algorithm.lower()
+        let initial = try #require(computeInitialStates(spec).first)
+        let action = try #require(spec.actions.first { $0.name == "choose" })
+        let successors = try actionInvocations(action).flatMap {
+            try ActionEnumerator.enumerate($0.body, from: initial, varNames: spec.variables.map(\.name))
+        }
+
+        #expect(Set(successors.compactMap { $0["selected"] }) == [.int(11), .int(12), .int(21), .int(22)])
+    }
+
     @Test("Choose accepts a bounded Swift integer range")
     func lowersBoundedIntegerChoice() throws {
         let algorithm = Algorithm("BoundedChoice") {
