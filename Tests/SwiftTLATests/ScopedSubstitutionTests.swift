@@ -121,8 +121,12 @@ struct ScopedSubstitutionTests {
     let all = ForAll(in: values, and: values) { left, right in
       left.expr <= 2 && right.expr <= 2
     }
+    let condition = All(in: values, and: values) { left, right in
+      left.expr + right.expr <= 4
+    }
 
     #expect(try exists.raw.evaluateBool(in: [:]))
     #expect(try all.raw.evaluateBool(in: [:]))
+    #expect(try condition.evaluateBool(in: [:]))
   }
 }

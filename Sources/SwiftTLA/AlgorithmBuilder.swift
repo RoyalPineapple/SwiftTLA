@@ -1386,6 +1386,23 @@ public func All<Value: TLAValueType, Predicate: StateExprConvertible>(
     return .forAll(domain.raw, variable, predicate(WithValue(expression: .variable(variable))).stateExpr)
 }
 
+/// States that a predicate holds for every independently chosen pair of
+/// members from two bounded formal sets.
+///
+/// This is the direct condition-valued counterpart to `ForAll(in:and:where:)`.
+/// It lowers to nested universal binders, preserving each binder's scope.
+public func All<First: TLAValueType, Second: TLAValueType, Predicate: StateExprConvertible>(
+    in first: Expr<SetExpr<First>>,
+    and second: Expr<SetExpr<Second>>,
+    where predicate: (WithValue<First>, WithValue<Second>) -> Predicate
+) -> StateExpr {
+    All(in: first) { firstValue in
+        All(in: second) { secondValue in
+            predicate(firstValue, secondValue)
+        }
+    }
+}
+
 /// Tests a predicate for every member of a declared finite domain.
 ///
 /// This is the typed Swift spelling of a bounded TLA+ `\\A value \\in Type`
