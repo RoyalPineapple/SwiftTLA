@@ -168,6 +168,39 @@ extension TLCProcessErrorV1 {
         nextSafeAction: "Verify the Java executable, TLC JAR, bridge classes, and working directory in the retained invocation snapshot.",
         evidence: evidence
       )
+    case .invalidModuleBundle(let error):
+      switch error {
+      case .missingRootModule(let path):
+        return .init(
+          whatFailed: "The TLC root module is missing.",
+          whereItFailed: "module bundle root \(path)",
+          expected: "A root .tla file exists before TLC starts.",
+          actual: "No file exists at \(path).",
+          systemChange: "TLC was not launched and no comparison was published.",
+          nextSafeAction: "Write the complete module bundle to a fresh directory, then rerun TLC.",
+          evidence: evidence
+        )
+      case .unreadableModule(let path, let reason):
+        return .init(
+          whatFailed: "The emitted TLC module could not be read.",
+          whereItFailed: "module bundle source \(path)",
+          expected: "The emitted .tla source is readable as UTF-8 before TLC starts.",
+          actual: reason,
+          systemChange: "TLC was not launched and no comparison was published.",
+          nextSafeAction: "Check the emitted module file permissions and encoding, then write a fresh bundle before retrying.",
+          evidence: evidence
+        )
+      case .missingImportedModule(let module, let importedBy, let line, let expectedFile):
+        return .init(
+          whatFailed: "The emitted module bundle is missing an imported formal module.",
+          whereItFailed: "\(importedBy):\(line), which imports \(module)",
+          expected: "\(module).tla exists beside the root module at \(expectedFile).",
+          actual: "The emitted bundle has no \(module).tla file.",
+          systemChange: "TLC was not launched and no comparison was published.",
+          nextSafeAction: "Emit \(module).tla with its transitive imports beside the root module, then rerun TLC.",
+          evidence: evidence + [.init(role: "missing imported module", location: expectedFile)]
+        )
+      }
     case .requiredReplayFailed(let completed, let failed):
       return processFailureReport(
         what: "TLC replay did not reproduce the required trace.", phase: "replay", request: request,
