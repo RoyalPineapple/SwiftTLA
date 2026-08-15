@@ -27,6 +27,7 @@ struct CoreConformanceRunnerTests {
     #expect(fileManager.fileExists(atPath: output.appendingPathComponent("swift.json").path))
     #expect(fileManager.fileExists(atPath: output.appendingPathComponent("tlc.json").path))
     #expect(fileManager.fileExists(atPath: output.appendingPathComponent("comparison.json").path))
+    #expect(fileManager.fileExists(atPath: output.appendingPathComponent("comparison-diagnostics.json").path))
     #expect(fileManager.fileExists(atPath: output.appendingPathComponent("run.json").path))
     #expect(fileManager.fileExists(atPath: output.appendingPathComponent("case.json").path))
     #expect(fileManager.fileExists(atPath: output.appendingPathComponent("toolchain.json").path))
@@ -43,6 +44,15 @@ struct CoreConformanceRunnerTests {
       })
     #expect((edgeDifference["expected"] as? [[String: Any]])?.isEmpty == false)
     #expect((edgeDifference["actual"] as? [[String: Any]])?.isEmpty == false)
+    let comparisonReports = try json(at: output.appendingPathComponent("comparison-diagnostics.json"))
+    let report = try #require((comparisonReports["reports"] as? [[String: Any]])?.first {
+      ($0["whereItFailed"] as? String)?.contains("action") == true
+    })
+    #expect(report["whatFailed"] as? String == "The labeled transition multisets differ.")
+    #expect((report["expected"] as? String)?.contains("TLC permits") == true)
+    #expect((report["actual"] as? String)?.contains("SwiftTLA permits") == true)
+    #expect(report["systemChange"] as? String == "No graph or generated state machine was changed.")
+    #expect((report["nextSafeAction"] as? String)?.contains("guard") == true)
   }
   @Test("runner publishes partial evidence and a diagnostic after TLC capture failure")
   func retainsFailureEvidenceAtomically() throws {
@@ -77,6 +87,12 @@ struct CoreConformanceRunnerTests {
     let arguments = try json(at: output.appendingPathComponent("arguments.json"))
     #expect(diagnostic["code"] as? String == "tlc-execution-failed")
     #expect(diagnostic["phase"] as? String == "tlc-execution")
+    let report = try #require(diagnostic["report"] as? [String: Any])
+    #expect(report["whatFailed"] as? String == "TLC did not finish before the configured time limit.")
+    #expect((report["expected"] as? String)?.contains("complete") == true)
+    #expect((report["actual"] as? String)?.contains("terminated") == true)
+    #expect((report["nextSafeAction"] as? String)?.contains("retained stdout") == true)
+    #expect((report["toolOutput"] as? [[String: Any]])?.count == 2)
     #expect(arguments["arguments"] as? [String] == request.arguments)
     #expect(
       (try String(contentsOf: output.appendingPathComponent("logs/tlc.stdout.log"))).contains(

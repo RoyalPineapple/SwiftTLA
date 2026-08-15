@@ -38,16 +38,19 @@ public struct CoreConformanceCorrelationV1: Equatable, Sendable {
 public struct CoreConformanceDiagnosticV1: Equatable, Sendable {
   public let code: String
   public let message: String
+  public let report: ConformanceFailureReportV1
   public let correlation: CoreConformanceCorrelationV1
   public let phase: CoreConformancePhaseV1
   public init(
     code: String,
     message: String,
+    report: ConformanceFailureReportV1,
     correlation: CoreConformanceCorrelationV1,
     phase: CoreConformancePhaseV1
   ) {
     self.code = code
     self.message = message
+    self.report = report
     self.correlation = correlation
     self.phase = phase
   }
@@ -99,6 +102,7 @@ public struct CoreConformanceRunnerV1: Sendable {
         phase: .preflight,
         code: "output-exists",
         error: RunnerError.outputAlreadyExists,
+        request: tlcRequest,
         correlations: correlations
       )
       let evidenceDirectory: URL?
@@ -118,6 +122,7 @@ public struct CoreConformanceRunnerV1: Sendable {
           phase: .preflight,
           code: "preflight-evidence-retention-failed",
           error: error,
+          request: tlcRequest,
           correlations: correlations
         )
       }
@@ -183,7 +188,8 @@ public struct CoreConformanceRunnerV1: Sendable {
         diagnostic: nil
       )
     } catch {
-      let failureDiagnostic = diagnostic(phase: phase, error: error, correlations: correlations)
+      let failureDiagnostic = diagnostic(
+        phase: phase, error: error, request: tlcRequest, correlations: correlations)
       guard let staging else {
         return CoreConformanceRunResultV1(
           exitCode: .failure,
@@ -215,6 +221,7 @@ public struct CoreConformanceRunnerV1: Sendable {
             phase: .publication,
             code: "evidence-retention-failed",
             error: error,
+            request: tlcRequest,
             correlations: correlations
           )
           return CoreConformanceRunResultV1(
@@ -248,6 +255,7 @@ public struct CoreConformanceRunnerV1: Sendable {
           phase: .publication,
           code: "evidence-retention-failed",
           error: error,
+          request: tlcRequest,
           correlations: correlations
         )
         return CoreConformanceRunResultV1(
@@ -534,6 +542,11 @@ extension CoreConformanceRunnerV1 {
         "conformant": comparison.isConformant,
         "differences": comparison.differences.map(differenceJSON)
       ], to: directory.appendingPathComponent("comparison.json"))
+    if !comparison.isConformant {
+      try writeJSON(
+        ["reports": comparison.failureReports.map(failureReportJSON)],
+        to: directory.appendingPathComponent("comparison-diagnostics.json"))
+    }
   }
   private func writeDiagnostic(_ diagnostic: CoreConformanceDiagnosticV1, to directory: URL) throws {
     try writeJSON(
@@ -541,7 +554,8 @@ extension CoreConformanceRunnerV1 {
         "code": diagnostic.code,
         "message": diagnostic.message,
         "phase": diagnostic.phase.rawValue,
-        "correlation": correlationJSON(diagnostic.correlation)
+        "correlation": correlationJSON(diagnostic.correlation),
+        "report": failureReportJSON(diagnostic.report)
       ], to: directory.appendingPathComponent("diagnostic.json"))
   }
   private func writeRun(
@@ -575,11 +589,31 @@ extension CoreConformanceRunnerV1 {
     phase: CoreConformancePhaseV1,
     code: String? = nil,
     error: Error,
+    request: TLCProcessRequestV1,
     correlations: Correlations
   ) -> CoreConformanceDiagnosticV1 {
+    let report: ConformanceFailureReportV1
+    if let processError = error as? TLCProcessErrorV1 {
+      report = processError.failureReport(for: request)
+    } else {
+      report = .init(
+        whatFailed: "Core conformance could not complete \(phase.rawValue).",
+        whereItFailed: "\(phase.rawValue) for case \(request.caseID)",
+        expected: expectedWork(for: phase),
+        actual: sanitized(String(describing: error)),
+        systemChange: "No successful conformance claim was published; retained evidence records the completed work.",
+        nextSafeAction: nextSafeAction(for: phase),
+        evidence: [
+          .init(role: "TLA+ module", location: request.module.path),
+          .init(role: "TLC configuration", location: request.configuration.path),
+          .init(role: "TLC graph event output", location: request.graphEvents.path)
+        ]
+      )
+    }
     CoreConformanceDiagnosticV1(
       code: code ?? "\(phase.rawValue)-failed",
       message: sanitized(String(describing: error)),
+      report: report,
       correlation: correlations[phase.engine],
       phase: phase
     )
@@ -720,6 +754,38 @@ extension CoreConformanceRunnerV1 {
         "category": difference.category.rawValue, "expected": expected.map(traceJSON),
         "actual": actual.map(traceJSON)
       ]
+    }
+  }
+  private func failureReportJSON(_ report: ConformanceFailureReportV1) -> [String: Any] {
+    [
+      "whatFailed": report.whatFailed,
+      "whereItFailed": report.whereItFailed,
+      "expected": report.expected,
+      "actual": report.actual,
+      "systemChange": report.systemChange,
+      "nextSafeAction": report.nextSafeAction,
+      "evidence": report.evidence.map { ["role": $0.role, "location": $0.location] },
+      "toolOutput": report.toolOutput.map { ["stream": $0.stream, "content": $0.content] }
+    ]
+  }
+  private func expectedWork(for phase: CoreConformancePhaseV1) -> String {
+    switch phase {
+    case .preflight: "A fresh output location and a launch binding that matches the declared case."
+    case .swiftAdaptation: "Swift exploration adapts to complete canonical graph evidence for the declared case."
+    case .tlcExecution: "TLC launches and writes a complete graph event stream for the declared case."
+    case .tlcParsing: "The retained TLC graph event stream has the declared run ID and valid canonical events."
+    case .comparison: "The canonical TLC and SwiftTLA runs compare exactly."
+    case .publication: "The complete retained evidence is published atomically to the requested output directory."
+    }
+  }
+  private func nextSafeAction(for phase: CoreConformancePhaseV1) -> String {
+    switch phase {
+    case .preflight: "Choose a fresh output directory or inspect the existing retained evidence; do not overwrite it."
+    case .swiftAdaptation: "Inspect swift.json and the declared Swift model before changing the formal source."
+    case .tlcExecution: "Inspect the retained TLC invocation, stdout, and stderr before retrying."
+    case .tlcParsing: "Inspect graph-events.jsonl and the TLC module/configuration before rerunning."
+    case .comparison: "Inspect comparison-diagnostics.json, tlc.json, and swift.json before changing a guard or update."
+    case .publication: "Inspect the staging and destination paths; preserve the failure evidence before retrying publication."
     }
   }
   private func edgeOccurrencesJSON(_ occurrences: [CanonicalEdgeV1: Int]) -> [[String: Any]] {
