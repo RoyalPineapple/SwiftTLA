@@ -103,9 +103,10 @@ struct AlgorithmBuilderTests {
         #expect(algorithm.validate().isEmpty)
         let spec = try algorithm.lower()
         let initial = try #require(computeInitialStates(spec).first)
+        let start = try #require(spec.actions.first { $0.name == "start" })
         let afterCall = try #require(
             ActionEnumerator.enumerate(
-                try #require(spec.actions.first { $0.name == "start" }).body,
+                start.body,
                 from: initial,
                 varNames: spec.variables.map(\.name)
             ).first

@@ -144,7 +144,9 @@ struct ProcedureLoweringTests {
         let oneInInner = try apply("procedure.outer.enter", process: .int(1), in: spec, to: bothInOuter)
         #expect(try functionValue("innerValue", key: .int(1), in: oneInInner) == .int(1))
         #expect(try functionValue("innerValue", key: .int(2), in: oneInInner) == .int(0))
-        #expect(try functionValue("__pcal_stack", key: .int(1), in: oneInInner) != try functionValue("__pcal_stack", key: .int(1), in: bothInOuter))
+        let stackBeforeNestedCall = try functionValue("__pcal_stack", key: .int(1), in: bothInOuter)
+        let stackDuringNestedCall = try functionValue("__pcal_stack", key: .int(1), in: oneInInner)
+        #expect(stackDuringNestedCall != stackBeforeNestedCall)
 
         let oneReturned = try apply("procedure.inner.enter", process: .int(1), in: spec, to: oneInInner)
         #expect(try functionValue("seen", key: .int(1), in: oneReturned) == .int(1))
