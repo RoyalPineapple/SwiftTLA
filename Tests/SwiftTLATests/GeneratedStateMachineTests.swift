@@ -65,6 +65,44 @@ struct GeneratedAlgorithmMachineTests {
 }
 
 @TLAModel
+struct GeneratedRestrictedProcessDomain {
+    enum Member: Int, FiniteDomainKey {
+        case worker = 1
+        /// A value that is valid in state, but not a member of the process
+        /// domain. This is the usual shape for an optional parent pointer.
+        case none = 0
+
+        static let formalDomain: [Member] = [.worker]
+        static let formalTypeIdentity = FormalTypeIdentity(rawValue: "test.restricted-process-member")
+
+        var tlaValue: TLAValue { .int(rawValue) }
+    }
+
+    static var spec: TLASpec {
+        #spec("GeneratedRestrictedProcessDomain") {
+            Algorithm("GeneratedRestrictedProcessDomain") {
+                let count = SharedVar(initial: 0)
+                Each(Member.all) { _ in
+                    Do("increment") {
+                        Assign(count, to: count + 1)
+                    }
+                }
+            }
+        }
+    }
+}
+
+struct GeneratedRestrictedProcessDomainTests {
+    @Test("the parser preserves an explicitly restricted FiniteDomainKey domain")
+    func generatedModelUsesOnlyDeclaredProcessMembers() {
+        GeneratedRestrictedProcessDomain._checkParserTree()
+        #expect(GeneratedRestrictedProcessDomain.spec.actions.first?.bindings == [
+            ActionBinding(name: "process", values: [.int(1)])
+        ])
+    }
+}
+
+@TLAModel
 struct GeneratedSequentialCounter {
     static var spec: TLASpec {
         #spec("GeneratedSequentialCounter") {

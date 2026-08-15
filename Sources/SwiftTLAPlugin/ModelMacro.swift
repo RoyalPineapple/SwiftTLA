@@ -12,9 +12,15 @@ import SwiftTLA
 struct ParsedEnumInfo {
     let typeName: String
     let cases: [(name: String, value: TLAValue)]
-    init(typeName: String, cases: [(String, TLAValue)]) {
+    /// The values that belong to the formal domain. This is intentionally
+    /// separate from all Swift cases: a useful formal type can include a
+    /// sentinel such as `.none` without making it a process or map key.
+    let formalDomain: [TLAValue]
+
+    init(typeName: String, cases: [(String, TLAValue)], formalDomain: [TLAValue]? = nil) {
         self.typeName = typeName
         self.cases = cases
+        self.formalDomain = formalDomain ?? cases.map(\.1)
     }
     var domain: Set<TLAValue> { Set(cases.map(\.value)) }
 }
@@ -74,7 +80,7 @@ enum TLASpecVerifier {
         let enumInfos = Self.collectEnumStateVars(from: memberList)
         let (enumPhases, caseToType) = collectEnumMetadata(from: memberList)
         let enumDomains = Dictionary(
-            uniqueKeysWithValues: enumInfos.map { ($0.typeName, $0.cases.map(\.value)) }
+            uniqueKeysWithValues: enumInfos.map { ($0.typeName, $0.formalDomain) }
         )
         let rewriter = EnumDotRewriter(caseToType: caseToType)
         let dotRewrittenSyntax = rewriter.rewrite(rewritten)
@@ -460,10 +466,46 @@ enum TLASpecVerifier {
 
             result.append(ParsedEnumInfo(
                 typeName: enumDecl.name.text,
-                cases: cases
+                cases: cases,
+                formalDomain: formalDomain(in: enumDecl, cases: cases)
             ))
         }
         return result
+    }
+
+    /// Reads the finite domain declaration from source so macro parsing has
+    /// the same process/key members as the runtime builder. The Swift enum
+    /// may have additional values for optional fields or sentinels.
+    private static func formalDomain(
+        in enumDecl: EnumDeclSyntax,
+        cases: [(name: String, value: TLAValue)]
+    ) -> [TLAValue] {
+        guard let binding = enumDecl.memberBlock.members.lazy.compactMap({ member -> PatternBindingSyntax? in
+            guard let declaration = member.decl.as(VariableDeclSyntax.self),
+                  declaration.modifiers.contains(where: { $0.name.text == "static" })
+            else { return nil }
+            return declaration.bindings.first { binding in
+                binding.pattern.as(IdentifierPatternSyntax.self)?.identifier.text == "formalDomain"
+            }
+        }).first,
+        let initializer = binding.initializer?.value
+        else { return cases.map(\.value) }
+
+        if initializer.as(DeclReferenceExprSyntax.self)?.baseName.text == "allCases"
+            || initializer.description.trimmingCharacters(in: .whitespacesAndNewlines)
+                .hasSuffix(".allCases") {
+            return cases.map(\.value)
+        }
+
+        guard let array = initializer.as(ArrayExprSyntax.self) else {
+            return cases.map(\.value)
+        }
+        let values = array.elements.compactMap { element -> TLAValue? in
+            let name = element.expression.as(MemberAccessExprSyntax.self)?.declName.baseName.text
+                ?? element.expression.as(DeclReferenceExprSyntax.self)?.baseName.text
+            return cases.first { $0.name == name }?.value
+        }
+        return values.isEmpty ? cases.map(\.value) : values
     }
 
 }
