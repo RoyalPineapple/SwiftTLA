@@ -17,6 +17,7 @@ extension SpecParser {
         public var constraint: StateExpr?
         public var imports: [String] = []
         public var importConfigurations: [FormalModuleConfiguration] = []
+        public var moduleInstances: [FormalModuleInstance] = []
         public var constants: [String: TLAValue] = [:]
         /// Local named values (from NamedValue declarations, resolved in expressions)
         public var localConstants: [String: TLAValue] = [:]
@@ -494,9 +495,35 @@ extension SpecParser {
             ) {
                 result.importConfigurations.append(configuration)
             }
+        case "Instance":
+            parseFormalModuleInstance(call, into: &result)
         default:
             break
         }
+    }
+
+    private static func parseFormalModuleInstance(
+        _ call: FunctionCallExprSyntax,
+        into result: inout ParsedSpecComponents
+    ) {
+        guard let name = extractStringArg(call, index: 0),
+              let moduleArgument = call.arguments.first(where: { $0.label?.text == "of" })?.expression
+        else {
+            result.diagnostics.append(.init(message: "Instance requires a name and a named formal module.", source: call))
+            return
+        }
+        let source = moduleArgument.description.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let moduleName = source.split(separator: ".").first.map(String.init),
+              let module = FormalModuleRegistry.lookup(moduleName)
+        else {
+            result.diagnostics.append(.init(message: "Instance requires a registered formal module.", source: call))
+            return
+        }
+        guard call.arguments.first(where: { $0.label?.text == "with" }) == nil else {
+            result.diagnostics.append(.init(message: "Instance arguments are not yet supported by macro parsing.", source: call))
+            return
+        }
+        result.moduleInstances.append(FormalModuleInstance(name, of: module))
     }
 
     private static func parseFormalModuleConfiguration(

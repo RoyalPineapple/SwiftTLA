@@ -140,6 +140,7 @@ public struct ParsedSpecModel: Equatable, Sendable {
   public let constraint: StateExpr?
   public let imports: [String]
   public let importConfigurations: [FormalModuleConfiguration]
+  public let moduleInstances: [FormalModuleInstance]
   public init(
     variables: [(String, TLAValue, StateExpr?)], actions: [(String, ActionExpr, [ActionBinding])],
     invariants: [(String, StateExpr)],
@@ -147,7 +148,8 @@ public struct ParsedSpecModel: Equatable, Sendable {
     fairness: [FairnessCondition] = [],
     constraint: StateExpr? = nil,
     imports: [String] = [],
-    importConfigurations: [FormalModuleConfiguration] = []
+    importConfigurations: [FormalModuleConfiguration] = [],
+    moduleInstances: [FormalModuleInstance] = []
   ) {
     self.variables = variables
     self.actions = actions
@@ -157,6 +159,7 @@ public struct ParsedSpecModel: Equatable, Sendable {
     self.constraint = constraint
     self.imports = imports
     self.importConfigurations = importConfigurations
+    self.moduleInstances = moduleInstances
   }
   public static func == (lhs: ParsedSpecModel, rhs: ParsedSpecModel) -> Bool {
     guard lhs.variables.count == rhs.variables.count,
@@ -166,7 +169,8 @@ public struct ParsedSpecModel: Equatable, Sendable {
       lhs.fairness == rhs.fairness,
       lhs.constraint == rhs.constraint,
       lhs.imports == rhs.imports,
-      lhs.importConfigurations == rhs.importConfigurations
+      lhs.importConfigurations == rhs.importConfigurations,
+      lhs.moduleInstances == rhs.moduleInstances
     else { return false }
     for (a, b) in zip(lhs.variables, rhs.variables) {
       if a.name != b.name || a.initial != b.initial || a.initialSet != b.initialSet { return false }
@@ -203,6 +207,8 @@ public struct TLASpec: Sendable {
   public let imports: [TLASpec]
   /// Model-scoped replacement bindings for imported module operators.
   public let importConfigurations: [FormalModuleConfiguration]
+  /// Named source-level TLA+ `INSTANCE` declarations.
+  public let moduleInstances: [FormalModuleInstance]
   public var runtimeFuncs: [String: @Sendable ([TLAValue]) -> TLAValue] = [:]
   public var runtimeFuncBodies: [String] = []
   public let symmetrySets: [SymmetrySet]
@@ -215,7 +221,8 @@ public struct TLASpec: Sendable {
     definitions: [String] = [], theorems: [String] = [], extendsModules: String = "Integers",
     constraint: StateExpr? = nil, recursiveDefs: [String] = [],
     recursiveFuncs: [RecursiveFunc] = [], imports: [TLASpec] = [],
-    importConfigurations: [FormalModuleConfiguration] = [], symmetrySets: [SymmetrySet] = [],
+    importConfigurations: [FormalModuleConfiguration] = [],
+    moduleInstances: [FormalModuleInstance] = [], symmetrySets: [SymmetrySet] = [],
     symmetryGroups: [SymmetryVariableGroup] = [],
     symmetricCollections: [SymmetricCollectionDecl] = []
   ) {
@@ -236,6 +243,7 @@ public struct TLASpec: Sendable {
     self.recursiveFuncs = recursiveFuncs
     self.imports = imports
     self.importConfigurations = importConfigurations
+    self.moduleInstances = moduleInstances
     self.symmetrySets = symmetrySets
     self.symmetryGroups = symmetryGroups
     self.symmetricCollections = symmetricCollections
@@ -315,6 +323,7 @@ public struct TLASpec: Sendable {
       recursiveDefs: self.recursiveDefs + other.recursiveDefs,
       recursiveFuncs: self.recursiveFuncs + other.recursiveFuncs,
       imports: self.imports + other.imports,
+      moduleInstances: self.moduleInstances + other.moduleInstances,
       symmetrySets: self.symmetrySets + other.symmetrySets,
       symmetryGroups: self.symmetryGroups + other.symmetryGroups,
       symmetricCollections: self.symmetricCollections + other.symmetricCollections
@@ -339,6 +348,7 @@ public struct TLASpec: Sendable {
       recursiveDefs: self.recursiveDefs,
       recursiveFuncs: self.recursiveFuncs,
       imports: self.imports,
+      moduleInstances: self.moduleInstances,
       symmetrySets: self.symmetrySets,
       symmetryGroups: self.symmetryGroups,
       symmetricCollections: self.symmetricCollections
@@ -585,6 +595,7 @@ public enum SpecBuilder {
   public static func buildExpression(_ expr: ExtendsDecl) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: UseDecl) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: ImportDecl) -> [SpecComponent] { [expr] }
+  public static func buildExpression(_ expr: ModuleInstanceDecl) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: UseSpecDecl) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: DeadlockDecl) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: ConstraintDecl) -> [SpecComponent] { [expr] }

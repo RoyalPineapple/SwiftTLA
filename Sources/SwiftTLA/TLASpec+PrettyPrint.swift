@@ -67,6 +67,11 @@ extension TLASpec {
             }
         }
 
+        for instance in moduleInstances {
+            lines.append("\(instance.name) == INSTANCE \(instance.module.name)")
+            lines.append("")
+        }
+
         for def in definitions {
             lines.append(def)
             lines.append("")
@@ -246,6 +251,11 @@ extension TLASpec {
                 appendImports(of: imported)
                 guard emitted.insert(imported.name).inserted else { continue }
                 files.append(TLAModuleFile(name: imported.name, tla: imported.tlaModule))
+            }
+            for instance in module.moduleInstances {
+                appendImports(of: instance.module)
+                guard emitted.insert(instance.module.name).inserted else { continue }
+                files.append(TLAModuleFile(name: instance.module.name, tla: instance.module.tlaModule))
             }
         }
 

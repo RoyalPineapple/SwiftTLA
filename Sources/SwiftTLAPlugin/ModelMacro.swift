@@ -39,6 +39,7 @@ struct ParsedMacroModel {
     let constraint: StateExpr?
     let imports: [String]
     let importConfigurations: [FormalModuleConfiguration]
+    let moduleInstances: [FormalModuleInstance]
 }
 
 enum NestedAdapterModelRegistry {
@@ -141,6 +142,7 @@ enum TLASpecVerifier {
             constraint: parsed.constraint,
             imports: imports,
             importConfigurations: parsed.importConfigurations,
+            moduleInstances: parsed.moduleInstances,
             symmetricCollections: parsed.symmetricCollections.map(\.declaration)
         )
 
@@ -177,7 +179,8 @@ enum TLASpecVerifier {
             symmetricCollections: parsed.symmetricCollections, collectionActions: parsed.collectionActions,
             enumInfos: enumInfos, hasInvariants: hasInvs, invariants: parsed.invariants,
             temporal: parsed.temporal, fairness: parsed.fairness, constraint: parsed.constraint,
-            imports: parsed.imports, importConfigurations: parsed.importConfigurations
+            imports: parsed.imports, importConfigurations: parsed.importConfigurations,
+            moduleInstances: parsed.moduleInstances
         )
     }
 

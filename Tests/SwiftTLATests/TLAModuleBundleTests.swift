@@ -18,6 +18,19 @@ private struct ImportedFormalModuleGeneratedModel {
   }
 }
 
+@TLAModel
+private struct InstancedFormalModuleGeneratedModel {
+  static var spec: TLASpec {
+    #spec("InstancedFormalModuleGeneratedModel") {
+      Instance("Sequences", of: ZSequences.module)
+      Algorithm("InstancedFormalModuleGeneratedModel") {
+        let value = SharedVar(initial: 0)
+        Do("keep") { Assign(value, to: value.expr) }
+      }
+    }
+  }
+}
+
 @Suite("TLA+ module bundles")
 struct TLAModuleBundleTests {
   @Test("a generated model preserves its imported module")
@@ -47,6 +60,13 @@ struct TLAModuleBundleTests {
     )
 
     #expect(_tlaAlphaEquivalent(parserTree, runtimeTree))
+  }
+
+  @Test("a generated model preserves a named module instance")
+  func generatedModelRetainsNamedModuleInstance() {
+    InstancedFormalModuleGeneratedModel._checkParserTree()
+    #expect(InstancedFormalModuleGeneratedModel.spec.moduleInstances.map(\.name) == ["Sequences"])
+    #expect(InstancedFormalModuleGeneratedModel.spec.moduleInstances.map { $0.module.name } == ["ZSequences"])
   }
 
   @Test("the parser preserves qualified ZSequences calls")
@@ -152,4 +172,33 @@ struct TLAModuleBundleTests {
       return
     }
   }
+
+  @Test("a named instance stays a separate source module")
+  func namedModuleInstanceIsBundled() throws {
+    let arithmetic = TLASpec("InstanceArithmetic") {
+      DefineRecursive("Twice", params: ["value"]) {
+        StateExpr.variable("value") * 2
+      }
+    }
+    let value = Var<Int>("value", 1)
+    let consumer = TLASpec("UsesInstanceArithmetic") {
+      Instance("Math", of: arithmetic)
+      Variable(value, 1)
+      Action("Stay") { value.stateExpr == 1 }
+      Invariant("ValueIsOne") { value.stateExpr == 1 }
+    }
+
+    #expect(consumer.tlaModule.contains("Math == INSTANCE InstanceArithmetic"))
+    #expect(!consumer.tlaModule.contains("EXTENDS Integers, FiniteSets, Sequences, InstanceArithmetic"))
+    #expect(consumer.tlaBundle.imports.map(\.name) == ["InstanceArithmetic"])
+    #expect(consumer.tlaBundle.imports[0].tla.contains("Twice(value) =="))
+
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    try consumer.tlaBundle.write(to: directory)
+    #expect(FileManager.default.fileExists(
+      atPath: directory.appendingPathComponent("InstanceArithmetic.tla").path
+    ))
+  }
+
 }

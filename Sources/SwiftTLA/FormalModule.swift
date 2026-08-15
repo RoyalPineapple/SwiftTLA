@@ -88,6 +88,27 @@ public struct FormalModuleConfiguration: Sendable, Equatable {
   }
 }
 
+/// A named TLA+ module instance.
+///
+/// `Instance("CC", of: ClientCentric.module)` exports as
+/// `CC == INSTANCE ClientCentric`.  This is deliberately separate from
+/// `Import`: an import is an `EXTENDS` relationship, while an instance keeps
+/// the imported operators behind an explicit namespace such as `CC!Check`.
+public struct FormalModuleInstance: Sendable, Equatable {
+  public let name: String
+  public let module: TLASpec
+
+  public init(_ name: String, of module: TLASpec) {
+    precondition(!name.isEmpty, "A formal module instance needs a name.")
+    self.name = name
+    self.module = module
+  }
+
+  public static func == (lhs: FormalModuleInstance, rhs: FormalModuleInstance) -> Bool {
+    lhs.name == rhs.name && lhs.module.name == rhs.module.name
+  }
+}
+
 public struct ImportDecl: SpecComponent {
   public let module: TLASpec
   public let configuration: FormalModuleConfiguration?
@@ -102,6 +123,14 @@ public struct ImportDecl: SpecComponent {
   }
 }
 
+public struct ModuleInstanceDecl: SpecComponent {
+  public let instance: FormalModuleInstance
+
+  init(_ instance: FormalModuleInstance) {
+    self.instance = instance
+  }
+}
+
 // swiftlint:disable:next identifier_name
 public func Import(_ module: TLASpec) -> ImportDecl { ImportDecl(module) }
 
@@ -113,8 +142,18 @@ public func Import(
   ImportDecl(module, configuring: configuration)
 }
 
-/// The formal modules that macro expansion can resolve from an authored
-/// `Import(Module.module)` declaration.
+// swiftlint:disable identifier_name
+/// Adds a named, source-level TLA+ `INSTANCE` declaration.
+public func Instance(
+  _ name: String,
+  of module: TLASpec
+) -> ModuleInstanceDecl {
+  ModuleInstanceDecl(FormalModuleInstance(name, of: module))
+}
+// swiftlint:enable identifier_name
+
+/// The formal modules that macro expansion can resolve from authored
+/// `Import(Module.module)` and `Instance("name", of: Module.module)` declarations.
 public enum FormalModuleRegistry {
   public static func lookup(_ name: String) -> TLASpec? {
     switch name {
