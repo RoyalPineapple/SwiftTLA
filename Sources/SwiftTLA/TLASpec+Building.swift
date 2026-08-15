@@ -10,7 +10,7 @@ extension TLASpec {
     var temporalProperties: [NamedTemporal] = []
     var fairness: [FairnessCondition] = []
     var constants: [String: TLAValue] = [:]
-    var formalParameters: [String] = []
+    var formalParameters: [FormalModuleParameter] = []
     var definitions: [String] = []
     var theorems: [String] = []
     var assumes: StateExpr?
@@ -74,7 +74,7 @@ extension TLASpec {
       } else if let c = comp as? ConstantDecl {
         constants[c.name] = c.value
       } else if let parameter = comp as? FormalParameterDecl {
-        formalParameters.append(parameter.name)
+        formalParameters.append(parameter.parameter)
       } else if let d = comp as? DefinitionDecl {
         if let name = d.name, let body = d.body {
           definitions.append("\(name) == \(body)")

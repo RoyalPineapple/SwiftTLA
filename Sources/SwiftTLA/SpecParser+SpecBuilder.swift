@@ -18,7 +18,7 @@ extension SpecParser {
         public var imports: [String] = []
         public var importConfigurations: [FormalModuleConfiguration] = []
         public var moduleInstances: [FormalModuleInstance] = []
-        public var formalParameters: [String] = []
+        public var formalParameters: [FormalModuleParameter] = []
         public var constants: [String: TLAValue] = [:]
         /// Local named values (from NamedValue declarations, resolved in expressions)
         public var localConstants: [String: TLAValue] = [:]
@@ -467,11 +467,23 @@ extension SpecParser {
                 result.diagnostics.append(.init(message: "Parameter requires a name.", source: call))
                 return
             }
-            guard !result.formalParameters.contains(name) else {
+            guard !result.formalParameters.map(\.name).contains(name) else {
                 result.diagnostics.append(.init(message: "Parameter '\(name)' is declared more than once.", source: call))
                 return
             }
-            result.formalParameters.append(name)
+            let kind: FormalModuleParameterKind
+            if let kindExpression = call.arguments.first(where: { $0.label?.text == "kind" })?.expression {
+                guard let member = kindExpression.as(MemberAccessExprSyntax.self)?.declName.baseName.text,
+                      let parsedKind = FormalModuleParameterKind(rawValue: member)
+                else {
+                    result.diagnostics.append(.init(message: "Parameter kind must be .constant or .variable.", source: kindExpression))
+                    return
+                }
+                kind = parsedKind
+            } else {
+                kind = .constant
+            }
+            result.formalParameters.append(FormalModuleParameter(name, kind: kind))
         case "LeadsTo", "Eventually", "Always", "AlwaysEventually", "EventuallyAlways":
             if let expr = decodeTemporal(call) {
                 result.temporal.append((name, expr))
@@ -560,7 +572,7 @@ extension SpecParser {
             result.diagnostics.append(.init(message: "An Instance cannot bind the same parameter twice.", source: call))
             return
         }
-        let declaredParameters = Set(module.formalParameters)
+        let declaredParameters = Set(module.formalParameters.map(\.name))
         guard Set(arguments.map(\.parameter)).isSubset(of: declaredParameters) else {
             result.diagnostics.append(.init(message: "Instance arguments must name parameters declared by '\(module.name)'.", source: call))
             return

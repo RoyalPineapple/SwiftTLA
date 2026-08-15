@@ -284,4 +284,33 @@ struct TLAModuleBundleTests {
     }
   }
 
+  @Test("an instance can bind a state-level module parameter")
+  func namedModuleInstanceAppliesVariableArgument() throws {
+    let arithmetic = TLASpec("VariableParameterizedArithmetic") {
+      Parameter("Base", kind: .variable)
+      DefineRecursive("AddBase", params: ["number"]) {
+        StateExpr.variable("number") + StateExpr.variable("Base")
+      }
+    }
+    let value = Var<Int>("value", 3)
+    let consumer = TLASpec("UsesVariableParameterizedArithmetic") {
+      let math = Instance(
+        "Math", of: arithmetic,
+        with: [ModuleArgument("Base", value: value.stateExpr)]
+      )
+      math
+      Variable(value, 3)
+      Action("Stay") { value.stateExpr == 3 }
+      Invariant("AddsItsStateParameter") { math.call("AddBase", value.stateExpr) == 6 }
+    }
+
+    #expect(consumer.tlaModule.contains("Math == INSTANCE VariableParameterizedArithmetic WITH Base <- value"))
+    #expect(consumer.tlaBundle.imports[0].tla.contains("VARIABLES Base"))
+    let result = try ModelChecker(spec: consumer).check()
+    guard case .ok = result.underlyingOutcome else {
+      Issue.record("The checker did not substitute the state parameter.")
+      return
+    }
+  }
+
 }

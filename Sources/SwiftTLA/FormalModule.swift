@@ -123,7 +123,7 @@ public struct FormalModuleInstance: SpecComponent, Sendable, Equatable {
 
   public init(_ name: String, of module: TLASpec, with arguments: [ModuleArgument] = []) {
     precondition(!name.isEmpty, "A formal module instance needs a name.")
-    let declared = Set(module.formalParameters)
+    let declared = Set(module.formalParameters.map(\.name))
     precondition(
       Set(arguments.map(\.parameter)).count == arguments.count,
       "A formal module instance cannot bind the same parameter twice."

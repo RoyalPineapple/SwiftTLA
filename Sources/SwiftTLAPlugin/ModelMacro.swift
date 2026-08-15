@@ -40,7 +40,7 @@ struct ParsedMacroModel {
     let imports: [String]
     let importConfigurations: [FormalModuleConfiguration]
     let moduleInstances: [FormalModuleInstance]
-    let formalParameters: [String]
+    let formalParameters: [FormalModuleParameter]
 }
 
 enum NestedAdapterModelRegistry {

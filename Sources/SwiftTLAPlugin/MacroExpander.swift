@@ -166,7 +166,9 @@ enum MacroExpander {
             .joined(separator: ", ")
         let treeModuleInstances = model.moduleInstances.map(codegenFormalModuleInstance)
             .joined(separator: ", ")
-        let treeFormalParameters = model.formalParameters.map { "\"\($0)\"" }.joined(separator: ", ")
+        let treeFormalParameters = model.formalParameters.map {
+            "FormalModuleParameter(\"\($0.name)\", kind: .\($0.kind.rawValue))"
+        }.joined(separator: ", ")
 
         let parserTreeSource = """
         static let _parserTree: ParsedSpecModel = ParsedSpecModel(

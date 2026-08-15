@@ -29,7 +29,13 @@ extension TLASpec {
                 collection.metadata.members.contains(.constant(symbol))
             }
         }
-        let allConstantSymbols = (constants.keys + formalParameters + generatedMemberSymbols).sorted()
+        let formalConstantSymbols = formalParameters
+            .filter { $0.kind == .constant }
+            .map(\.name)
+        let formalVariableSymbols = formalParameters
+            .filter { $0.kind == .variable }
+            .map(\.name)
+        let allConstantSymbols = (constants.keys + formalConstantSymbols + generatedMemberSymbols).sorted()
         if !allConstantSymbols.isEmpty {
             lines.append("CONSTANTS \(allConstantSymbols.joined(separator: ", "))")
             for (name, value) in constants.sorted(by: { $0.key < $1.key }) {
@@ -55,8 +61,9 @@ extension TLASpec {
             lines.append("")
         }
 
-        if !isLibraryModule {
-            lines.append("VARIABLES \(varNames.joined(separator: ", "))")
+        if !isLibraryModule || !formalVariableSymbols.isEmpty {
+            let symbols = (varNames + formalVariableSymbols).joined(separator: ", ")
+            lines.append("VARIABLES \(symbols)")
             lines.append("")
         }
 

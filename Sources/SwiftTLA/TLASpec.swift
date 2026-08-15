@@ -141,7 +141,7 @@ public struct ParsedSpecModel: Equatable, Sendable {
   public let imports: [String]
   public let importConfigurations: [FormalModuleConfiguration]
   public let moduleInstances: [FormalModuleInstance]
-  public let formalParameters: [String]
+  public let formalParameters: [FormalModuleParameter]
   public init(
     variables: [(String, TLAValue, StateExpr?)], actions: [(String, ActionExpr, [ActionBinding])],
     invariants: [(String, StateExpr)],
@@ -151,7 +151,7 @@ public struct ParsedSpecModel: Equatable, Sendable {
     imports: [String] = [],
     importConfigurations: [FormalModuleConfiguration] = [],
     moduleInstances: [FormalModuleInstance] = [],
-    formalParameters: [String] = []
+    formalParameters: [FormalModuleParameter] = []
   ) {
     self.variables = variables
     self.actions = actions
@@ -196,7 +196,7 @@ public struct TLASpec: Sendable {
   public let variables: [NamedVar]
   public let constants: [String: TLAValue]
   /// Parameters supplied by a named TLA+ `INSTANCE … WITH` declaration.
-  public let formalParameters: [String]
+  public let formalParameters: [FormalModuleParameter]
   public let actions: [NamedAction]
   public let invariants: [NamedInvariant]
   public let temporalProperties: [NamedTemporal]
@@ -222,7 +222,7 @@ public struct TLASpec: Sendable {
   public let symmetricCollections: [SymmetricCollectionDecl]
   public init(
     name: String, variables: [NamedVar], constants: [String: TLAValue] = [:],
-    formalParameters: [String] = [],
+    formalParameters: [FormalModuleParameter] = [],
     actions: [NamedAction], invariants: [NamedInvariant], temporalProperties: [NamedTemporal] = [],
     fairness: [FairnessCondition] = [], assume: StateExpr? = nil, checkDeadlock: Bool = false,
     definitions: [String] = [], theorems: [String] = [], extendsModules: String = "Integers",
@@ -469,12 +469,28 @@ public struct ConstantDecl: SpecComponent {
     self.value = value
   }
 }
-public struct FormalParameterDecl: SpecComponent {
+public enum FormalModuleParameterKind: String, Sendable, Equatable {
+  /// Emits a TLA+ `CONSTANTS` declaration.
+  case constant
+  /// Emits a TLA+ `VARIABLES` declaration. This is used when an instance
+  /// substitutes a state-level module symbol, as `ClientCentric` does for
+  /// `Keys` and `Values`.
+  case variable
+}
+
+public struct FormalModuleParameter: Sendable, Equatable {
   public let name: String
-  init(_ name: String) {
+  public let kind: FormalModuleParameterKind
+
+  public init(_ name: String, kind: FormalModuleParameterKind = .constant) {
     precondition(!name.isEmpty, "A formal module parameter needs a name.")
     self.name = name
+    self.kind = kind
   }
+}
+public struct FormalParameterDecl: SpecComponent {
+  public let parameter: FormalModuleParameter
+  init(_ parameter: FormalModuleParameter) { self.parameter = parameter }
 }
 public struct NamedValueDecl: Equatable, Sendable {
   public let name: String
@@ -831,8 +847,13 @@ public struct SymmetrySet: Hashable, Sendable, CustomStringConvertible {
 public func Constant(_ name: String, _ value: some TLAValueConvertible) -> ConstantDecl {
   ConstantDecl(name, value.tlaValue)
 }
-/// Declares a value that an `Instance` supplies with a `ModuleArgument`.
-public func Parameter(_ name: String) -> FormalParameterDecl { FormalParameterDecl(name) }
+/// Declares a module symbol that an `Instance` supplies with a `ModuleArgument`.
+public func Parameter(
+  _ name: String,
+  kind: FormalModuleParameterKind = .constant
+) -> FormalParameterDecl {
+  FormalParameterDecl(FormalModuleParameter(name, kind: kind))
+}
 /// Register a named value constant for use in spec expressions.
 /// `Value("poweredOn", 5)` makes `poweredOn` resolve to 5 in spec expressions.
 public func Value(_ name: String, _ value: some TLAValueConvertible) -> NamedValueDecl {
