@@ -772,6 +772,34 @@ struct AlgorithmBuilderTests {
         #expect(Set(successors.compactMap { $0["selected"] }) == [.int(11), .int(12), .int(21), .int(22)])
     }
 
+    @Test("tuple patterns bind independently typed members")
+    func lowersPairPatternBindings() throws {
+        let algorithm = Algorithm("PairPattern") {
+            let selected = SharedVar("selected", initial: 0)
+            selected
+            Do("choose") {
+                With(SetExpr<Pair<Int, Bool>>.literal(
+                    Pair(first: 1, second: true),
+                    Pair(first: 2, second: false)
+                )) { number, flag in
+                    Assert((number.expr == 1) || !flag.expr)
+                    Assign(selected, to: number.expr)
+                }
+            }
+        }
+
+        let spec = try algorithm.lower()
+        let initial = try #require(computeInitialStates(spec).first)
+        let action = try #require(spec.actions.first { $0.name == "choose" })
+        let successors = try ActionEnumerator.enumerate(
+            action.body,
+            from: initial,
+            varNames: spec.variables.map(\.name)
+        )
+
+        #expect(Set(successors.compactMap { $0["selected"] }) == [.int(1), .int(2)])
+    }
+
     @Test("Choose accepts a bounded Swift integer range")
     func lowersBoundedIntegerChoice() throws {
         let algorithm = Algorithm("BoundedChoice") {

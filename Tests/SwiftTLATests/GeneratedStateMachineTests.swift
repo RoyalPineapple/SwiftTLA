@@ -165,6 +165,38 @@ struct GeneratedSimultaneousSwapTests {
 }
 
 @TLAModel
+struct GeneratedPairPattern {
+    static var spec: TLASpec {
+        #spec("GeneratedPairPattern") {
+            Algorithm("GeneratedPairPattern") {
+                let selected = SharedVar(initial: 0)
+                Do("choose") {
+                    With(SetExpr<Pair<Int, Bool>>.literal(
+                        Pair(first: 1, second: true),
+                        Pair(first: 2, second: false)
+                    )) { number, flag in
+                        Assert((number.expr == 1) || !flag.expr)
+                        Assign(selected, to: number.expr)
+                    }
+                }
+            }
+        }
+    }
+}
+
+struct GeneratedPairPatternTests {
+    @Test("a generated model preserves tuple-pattern selection")
+    func generatedMachineAppliesPairPatternBindings() throws {
+        GeneratedPairPattern._checkParserTree()
+
+        var model = GeneratedPairPattern()
+        let result = try model.apply(.choose)
+
+        #expect([1, 2].contains(result.after.selected))
+    }
+}
+
+@TLAModel
 struct GeneratedRangeInitializedAlgorithm {
     enum Node: String, FiniteDomainKey {
         case clock

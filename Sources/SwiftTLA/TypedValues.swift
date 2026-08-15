@@ -308,6 +308,58 @@ public struct TupleExpr<Element: TLAValueType>: TLAValueType, Hashable, Sendable
 public protocol FormalTupleValue: TLAValueType {}
 extension TupleExpr: FormalTupleValue {}
 
+/// A typed two-member TLA+ tuple.
+///
+/// Use `Pair` when the two positions have different formal types. This is a
+/// formal tuple, not a Swift tuple: it can be stored in formal state, used as
+/// a set member, and selected by a PlusCal `with` binding.
+public struct Pair<First: TLAValueType, Second: TLAValueType>: TLAValueType, Hashable, Sendable {
+  private let firstValue: TLAValue
+  private let secondValue: TLAValue
+
+  public init(first: First = .defaultValue, second: Second = .defaultValue) {
+    firstValue = first.tlaValue
+    secondValue = second.tlaValue
+  }
+
+  public init?(formalValue: TLAValue) {
+    guard case .tuple(let values) = formalValue,
+          values.count == 2,
+          First(formalValue: values[0]) != nil,
+          Second(formalValue: values[1]) != nil
+    else { return nil }
+    firstValue = values[0]
+    secondValue = values[1]
+  }
+
+  public var tlaValue: TLAValue { .tuple([firstValue, secondValue]) }
+  public static var defaultValue: Self { Self() }
+
+  public var first: First {
+    guard let value = First(formalValue: firstValue) else {
+      preconditionFailure("Pair contains an invalid first value")
+    }
+    return value
+  }
+
+  public var second: Second {
+    guard let value = Second(formalValue: secondValue) else {
+      preconditionFailure("Pair contains an invalid second value")
+    }
+    return value
+  }
+
+  public static func literal(_ first: First, _ second: Second) -> Expr<Self> {
+    Expr(.tupleLiteral([.value(first.tlaValue), .value(second.tlaValue)]))
+  }
+
+  public static func literal(_ first: Expr<First>, _ second: Expr<Second>) -> Expr<Self> {
+    Expr(.tupleLiteral([first.raw, second.raw]))
+  }
+}
+
+extension Pair: FormalTupleValue {}
+
 /// A finite formal sequence whose first element is at index zero.
 ///
 /// TLA+ represents this value as a function with domain `0..<(count)`. It is
@@ -569,6 +621,16 @@ extension Expr {
 
   public func at<Element: TLAValueType>(_ index: Int) -> Expr<Element> where T == TupleExpr<Element> {
     Expr<Element>(.tupleAccess(raw, index))
+  }
+
+  public func first<First: TLAValueType, Second: TLAValueType>() -> Expr<First>
+  where T == Pair<First, Second> {
+    Expr<First>(.tupleAccess(raw, 1))
+  }
+
+  public func second<First: TLAValueType, Second: TLAValueType>() -> Expr<Second>
+  where T == Pair<First, Second> {
+    Expr<Second>(.tupleAccess(raw, 2))
   }
 
   /// Reads a formal sequence at a one-based formal index.

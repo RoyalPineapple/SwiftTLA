@@ -425,6 +425,23 @@ public enum SpecParser {
            let substitution = substitutions[reference.baseName.text] {
             return substitution
         }
+        // `Pair(first:second:)` is normally inferred from an enclosing
+        // `SetExpr<Pair<...>>`, so SwiftSyntax sees the constructor without
+        // its generic arguments. Its two labeled formal values still retain
+        // the complete tuple shape.
+        if let call = expression.as(FunctionCallExprSyntax.self),
+           call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "Pair",
+           call.arguments.count == 2,
+           let firstSyntax = call.arguments.first(where: { $0.label?.text == "first" })?.expression,
+           let secondSyntax = call.arguments.first(where: { $0.label?.text == "second" })?.expression,
+           let first = decodeTypedFacadeValue(firstSyntax, substitutions: substitutions),
+           let second = decodeTypedFacadeValue(secondSyntax, substitutions: substitutions) {
+            if case .value(let firstValue) = first,
+               case .value(let secondValue) = second {
+                return .value(.tuple([firstValue, secondValue]))
+            }
+            return .tupleLiteral([first, second])
+        }
         // `If` is a freestanding Swift-shaped formal value constructor. Parse
         // it here, before falling back to the untyped decoder, so a value
         // bound by `Function.mapping` or `With` remains in scope.
@@ -547,6 +564,18 @@ public enum SpecParser {
                 }
                 guard elements.count == call.arguments.count else { return nil }
                 return .tupleLiteral(elements)
+            case "Pair":
+                guard call.arguments.count == 2,
+                      let first = decodeTypedFacadeValue(
+                        call.arguments[call.arguments.startIndex].expression,
+                        substitutions: substitutions
+                      ),
+                      let second = decodeTypedFacadeValue(
+                        call.arguments[call.arguments.index(after: call.arguments.startIndex)].expression,
+                        substitutions: substitutions
+                      )
+                else { return nil }
+                return .tupleLiteral([first, second])
             case "Function":
                 return decodeTypedFunctionLiteral(
                     call,

@@ -135,6 +135,16 @@ public struct WithValue<Value: TLAValueType>: StateExprConvertible, Sendable {
 }
 
 extension WithValue {
+    public func first<First: TLAValueType, Second: TLAValueType>() -> Expr<First>
+    where Value == Pair<First, Second> {
+        Expr<First>(.tupleAccess(stateExpr, 1))
+    }
+
+    public func second<First: TLAValueType, Second: TLAValueType>() -> Expr<Second>
+    where Value == Pair<First, Second> {
+        Expr<Second>(.tupleAccess(stateExpr, 2))
+    }
+
     public subscript<Schema: TLARecordSchema, Field>(_ field: TLAField<Schema, Field>) -> Expr<Field>
     where Value == Record<Schema>, Field: TLAValueType {
         Expr<Field>(.recordAccess(stateExpr, field.name))
@@ -1297,6 +1307,24 @@ public func With<First: TLAValueType, Second: TLAValueType>(
     With(first) { firstValue in
         With(second) { secondValue in
             body(firstValue, secondValue)
+        }
+    }
+}
+
+/// Destructures a selected two-member formal tuple for one atomic block.
+///
+/// This is the typed Swift spelling of PlusCal's
+/// `with <<first, second>> \in Pairs`. The generated bindings are still
+/// formal expressions and never become host-language tuple values.
+public func With<First: TLAValueType, Second: TLAValueType>(
+    _ pairs: Expr<SetExpr<Pair<First, Second>>>,
+    @DoBuilder _ body: (WithValue<First>, WithValue<Second>) -> [StepStatement]
+) -> StepStatement {
+    With(pairs) { pair in
+        Let(pair.first()) { first in
+            Let(pair.second()) { second in
+                body(first, second)
+            }
         }
     }
 }

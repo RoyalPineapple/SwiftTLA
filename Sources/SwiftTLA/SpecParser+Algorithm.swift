@@ -629,15 +629,49 @@ extension SpecParser {
                       StateExpr.setLiteral(domain.values.map(StateExpr.value))
                   } ?? decodeStateExpr(sourceSyntax)),
                   let closure = call.trailingClosure,
-                  let bound = closureParameterNames(in: closure).first,
                   let body = parseAlgorithmStatements(closure.statements, processParameter: processParameter, macros: macros)
             else { return nil }
-            let replacement = "__pcal_with"
-            return .with(
-                variable: replacement,
-                source: replacingProcessParameter(in: source, named: processParameter),
-                body.map { replaceAlgorithmVariable($0, from: bound, to: replacement) }
-            )
+            let bindings = closureParameterNames(in: closure)
+            switch bindings.count {
+            case 1:
+                let replacement = "__pcal_with"
+                return .with(
+                    variable: replacement,
+                    source: replacingProcessParameter(in: source, named: processParameter),
+                    body.map { replaceAlgorithmVariable($0, from: bindings[0], to: replacement) }
+                )
+            case 2:
+                // `With(SetExpr<Pair<A, B>>) { first, second in ... }` is
+                // PlusCal's `with <<first, second>> \in Pairs`. Keep one
+                // formal selection, then bind both tuple positions inside its
+                // scope so the emitted TLA+ and runtime builder agree.
+                let tupleBinding = FreshVarName.fresh()
+                let firstBinding = FreshVarName.fresh()
+                let secondBinding = FreshVarName.fresh()
+                let replacedBody = body
+                    .map { replaceAlgorithmVariable($0, from: bindings[0], to: firstBinding) }
+                    .map { replaceAlgorithmVariable($0, from: bindings[1], to: secondBinding) }
+                return .with(
+                    variable: tupleBinding,
+                    source: replacingProcessParameter(in: source, named: processParameter),
+                    [
+                        .letBinding(
+                            variable: firstBinding,
+                            value: .tupleAccess(.variable(tupleBinding), 1),
+                            [
+                                .letBinding(
+                                    variable: secondBinding,
+                                    value: .tupleAccess(.variable(tupleBinding), 2),
+                                    replacedBody
+                                )
+                            ]
+                        )
+                    ]
+                )
+            default:
+                algorithmParseFailure = "With requires one value or a two-member Pair pattern."
+                return nil
+            }
         case "Let":
             guard let valueSyntax = call.arguments.first?.expression,
                   let value = decodeStateExpr(valueSyntax),
