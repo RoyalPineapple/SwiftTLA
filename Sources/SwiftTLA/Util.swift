@@ -9,38 +9,127 @@ public enum KeyValueStoreUtil {
         Extends("Naturals, TLC")
         Import(FunctionsModule.module)
 
-        Definition(
-            """
-            intersects(a, b) == a \\cap b # {}
-            max(s) == CHOOSE i \\in s : (~\\E j \\in s : j > i)
-            min(s) == CHOOSE i \\in s : (~\\E j \\in s : j < i)
-
-            ReduceSet(op(_, _), set, base) ==
-              LET iter[s \\in SUBSET set] ==
-                    IF s = {} THEN base
-                    ELSE LET x == CHOOSE x \\in s : TRUE
-                         IN op(x, iter[s \\ {x}])
-              IN iter[set]
-
-            ReduceSeq(op(_, _), seq, acc) == FoldFunction(op, acc, seq)
-
-            Index(seq, e) == CHOOSE i \\in 1..Len(seq) : seq[i] = e
-            SeqToSet(s) == {s[i] : i \\in DOMAIN s}
-            Last(seq) == seq[Len(seq)]
-            IsEmpty(seq) == Len(seq) = 0
-            Remove(seq, elem) == SelectSeq(seq, LAMBDA e : e /= elem)
-
-            INTERSECTION(setOfSets) == ReduceSet(\\intersect, setOfSets, UNION setOfSets)
-
-            PermSeqs(S) ==
-              LET perms[ss \\in SUBSET S] ==
-                   IF ss = {} THEN { << >> }
-                   ELSE LET ps == [x \\in ss |-> {Append(sq, x) : sq \\in perms[ss \\ {x}]}]
-                        IN UNION {ps[x] : x \\in ss}
-              IN perms[S]
-
-            test(lhs, rhs) == lhs /= rhs => Print(<<lhs, " IS NOT ", rhs>>, FALSE)
-            """
+        FormalDefinition(
+            "intersects",
+            parameters: [.value("a"), .value("b")],
+            body: .notEqual(.intersection(.variable("a"), .variable("b")), .setLiteral([]))
         )
+        FormalDefinition(
+            "max",
+            parameters: [.value("s")],
+            body: .choose(.variable("s"), "i", .not(.exists(.variable("s"), "j", .greaterThan(.variable("j"), .variable("i")))))
+        )
+        FormalDefinition(
+            "min",
+            parameters: [.value("s")],
+            body: .choose(.variable("s"), "i", .not(.exists(.variable("s"), "j", .lessThan(.variable("j"), .variable("i")))))
+        )
+        FormalDefinition(
+            "ReduceSet",
+            parameters: [.operator("op", arity: 2), .value("set"), .value("base")],
+            body: .letIn(
+                [LocalOperator(
+                    "iter",
+                    parameters: ["s"],
+                    body: .ifThenElse(
+                        .equal(.variable("s"), .setLiteral([])),
+                        .variable("base"),
+                        .letValue(
+                            "x",
+                            .choose(.variable("s"), "x", .bool(true)),
+                            .operatorApplication(.reference("op", arity: 2), [
+                                .value(.variable("x")),
+                                .value(.recursiveCall("iter", [.setDifference(.variable("s"), .setLiteral([.variable("x")]))]))
+                            ])
+                        )
+                    )
+                )],
+                .recursiveCall("iter", [.variable("set")])
+            )
+        )
+        FormalDefinition(
+            "ReduceSeq",
+            parameters: [.operator("op", arity: 2), .value("seq"), .value("acc")],
+            body: .operatorApplication(.reference("FoldFunction", arity: 3), [
+                .operator(.reference("op", arity: 2)), .value(.variable("acc")), .value(.variable("seq"))
+            ])
+        )
+        FormalDefinition(
+            "Index",
+            parameters: [.value("seq"), .value("e")],
+            body: .choose(
+                .integerRange(.int(1), .tupleLength(.variable("seq"))),
+                "i",
+                .equal(.tupleDynamicAccess(.variable("seq"), .variable("i")), .variable("e"))
+            )
+        )
+        FormalDefinition(
+            "SeqToSet",
+            parameters: [.value("s")],
+            body: .setMap(
+                .functionApply(.variable("s"), .variable("i")),
+                "i",
+                .domain(.variable("s"))
+            )
+        )
+        FormalDefinition(
+            "Last",
+            parameters: [.value("seq")],
+            body: .tupleDynamicAccess(.variable("seq"), .tupleLength(.variable("seq")))
+        )
+        FormalDefinition(
+            "IsEmpty",
+            parameters: [.value("seq")],
+            body: .equal(.tupleLength(.variable("seq")), .int(0))
+        )
+        FormalDefinition(
+            "INTERSECTION",
+            parameters: [.value("setOfSets")],
+            body: .operatorApplication(.reference("ReduceSet", arity: 3), [
+                .operator(.lambda(.init(parameters: ["left", "right"], body: .intersection(.variable("left"), .variable("right"))))),
+                .value(.variable("setOfSets")),
+                .value(.unionAll(.variable("setOfSets")))
+            ])
+        )
+        FormalDefinition(
+            "PermSeqs",
+            parameters: [.value("S")],
+            body: .letIn(
+                [LocalOperator(
+                    "perms",
+                    parameters: ["ss"],
+                    body: .ifThenElse(
+                        .equal(.variable("ss"), .setLiteral([])),
+                        .setLiteral([.tupleLiteral([])]),
+                        .letValue(
+                            "ps",
+                            .functionLiteral(
+                                .variable("ss"),
+                                "x",
+                                .setMap(
+                                    .tupleAppend(.variable("sq"), .variable("x")),
+                                    "sq",
+                                    .recursiveCall("perms", [
+                                        .setDifference(.variable("ss"), .setLiteral([.variable("x")]))
+                                    ])
+                                )
+                            ),
+                            .unionAll(.setMap(
+                                .functionApply(.variable("ps"), .variable("x")),
+                                "x",
+                                .variable("ss")
+                            ))
+                        )
+                    )
+                )],
+                .recursiveCall("perms", [.variable("S")])
+            )
+        )
+
+        // `SelectSeq` and TLC's `Print` have no executable formal AST node.
+        // Keep their upstream source exact until K2 gives those operations a
+        // structured evaluator contract; see the focused failure tests.
+        Definition("Remove(seq, elem) == SelectSeq(seq, LAMBDA e : e /= elem)")
+        Definition("test(lhs, rhs) == lhs /= rhs => Print(<<lhs, \" IS NOT \", rhs>>, FALSE)")
     }
 }

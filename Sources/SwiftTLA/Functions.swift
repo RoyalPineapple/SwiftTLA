@@ -8,49 +8,193 @@ public enum FunctionsModule {
     public static let module = TLASpec("Functions") {
         Import(Folds.module)
 
-        Definition(
-            """
-            Restrict(f, S) == [x \\in S |-> f[x]]
-
-            RestrictDomain(f, Test(_)) == Restrict(f, {x \\in DOMAIN f : Test(x)})
-
-            RestrictValues(f, Test(_)) ==
-              LET S == {x \\in DOMAIN f : Test(f[x])}
-              IN Restrict(f, S)
-
-            IsRestriction(narrow, wide) ==
-              /\\ DOMAIN narrow \\subseteq DOMAIN wide
-              /\\ \\A x \\in DOMAIN narrow \\intersect DOMAIN wide: narrow[x] = wide[x]
-
-            Range(f) == {f[x] : x \\in DOMAIN f}
-
-            Pointwise(f, g, T(_,_)) == [e \\in DOMAIN f |-> T(f[e], g[e])]
-
-            Inverse(f, S, T) == [t \\in T |-> CHOOSE s \\in S : t \\in Range(f) => f[s] = t]
-
-            AntiFunction(f) == Inverse(f, DOMAIN f, Range(f))
-
-            IsInjective(f) == \\A a, b \\in DOMAIN f : f[a] = f[b] => a = b
-
-            Injection(S, T) == {M \\in [S -> T] : IsInjective(M)}
-
-            Surjection(S, T) == {M \\in [S -> T] : \\A t \\in T : \\E s \\in S : M[s] = t}
-
-            Bijection(S, T) == Injection(S, T) \\cap Surjection(S, T)
-
-            ExistsInjection(S, T) == Injection(S, T) # {}
-            ExistsSurjection(S, T) == Surjection(S, T) # {}
-            ExistsBijection(S, T) == Bijection(S, T) # {}
-
-            FoldFunctionOnSet(op(_,_), base, fun, indices) ==
-              MapThenFoldSet(op, base, LAMBDA i : fun[i], LAMBDA s : CHOOSE x \\in s : TRUE, indices)
-
-            FoldFunction(op(_,_), base, fun) ==
-              FoldFunctionOnSet(op, base, fun, DOMAIN fun)
-
-            SumFunctionOnSet(fun, indices) == FoldFunctionOnSet(+, 0, fun, indices)
-            SumFunction(fun) == SumFunctionOnSet(fun, DOMAIN fun)
-            """
+        FormalDefinition(
+            "Restrict",
+            parameters: [.value("f"), .value("S")],
+            body: .functionLiteral(.variable("S"), "x", .functionApply(.variable("f"), .variable("x")))
+        )
+        FormalDefinition(
+            "RestrictDomain",
+            parameters: [.value("f"), .operator("Test", arity: 1)],
+            body: .operatorApplication(.reference("Restrict", arity: 2), [
+                .value(.variable("f")),
+                .value(.setFilter(
+                    .domain(.variable("f")),
+                    "x",
+                    .operatorApplication(.reference("Test", arity: 1), [.value(.variable("x"))])
+                ))
+            ])
+        )
+        FormalDefinition(
+            "RestrictValues",
+            parameters: [.value("f"), .operator("Test", arity: 1)],
+            body: .letValue(
+                "S",
+                .setFilter(
+                    .domain(.variable("f")),
+                    "x",
+                    .operatorApplication(
+                        .reference("Test", arity: 1),
+                        [.value(.functionApply(.variable("f"), .variable("x")))]
+                    )
+                ),
+                .operatorApplication(.reference("Restrict", arity: 2), [
+                    .value(.variable("f")), .value(.variable("S"))
+                ])
+            )
+        )
+        FormalDefinition(
+            "IsRestriction",
+            parameters: [.value("narrow"), .value("wide")],
+            body: .and(
+                .subset(.domain(.variable("narrow")), .domain(.variable("wide"))),
+                .forAll(
+                    .intersection(.domain(.variable("narrow")), .domain(.variable("wide"))),
+                    "x",
+                    .equal(
+                        .functionApply(.variable("narrow"), .variable("x")),
+                        .functionApply(.variable("wide"), .variable("x"))
+                    )
+                )
+            )
+        )
+        FormalDefinition(
+            "Range",
+            parameters: [.value("f")],
+            body: .setMap(.functionApply(.variable("f"), .variable("x")), "x", .domain(.variable("f")))
+        )
+        FormalDefinition(
+            "Pointwise",
+            parameters: [.value("f"), .value("g"), .operator("T", arity: 2)],
+            body: .functionLiteral(
+                .domain(.variable("f")),
+                "e",
+                .operatorApplication(.reference("T", arity: 2), [
+                    .value(.functionApply(.variable("f"), .variable("e"))),
+                    .value(.functionApply(.variable("g"), .variable("e")))
+                ])
+            )
+        )
+        FormalDefinition(
+            "Inverse",
+            parameters: [.value("f"), .value("S"), .value("T")],
+            body: .functionLiteral(
+                .variable("T"),
+                "t",
+                .choose(
+                    .variable("S"),
+                    "s",
+                    .or(
+                        .not(.in(.variable("t"), .operatorApplication(.reference("Range", arity: 1), [.value(.variable("f"))]))),
+                        .equal(.functionApply(.variable("f"), .variable("s")), .variable("t"))
+                    )
+                )
+            )
+        )
+        FormalDefinition(
+            "AntiFunction",
+            parameters: [.value("f")],
+            body: .operatorApplication(.reference("Inverse", arity: 3), [
+                .value(.variable("f")),
+                .value(.domain(.variable("f"))),
+                .value(.operatorApplication(.reference("Range", arity: 1), [.value(.variable("f"))]))
+            ])
+        )
+        FormalDefinition(
+            "IsInjective",
+            parameters: [.value("f")],
+            body: .forAll(.domain(.variable("f")), "a",
+                .forAll(.domain(.variable("f")), "b",
+                    .or(
+                        .not(.equal(
+                            .functionApply(.variable("f"), .variable("a")),
+                            .functionApply(.variable("f"), .variable("b"))
+                        )),
+                        .equal(.variable("a"), .variable("b"))
+                    )
+                )
+            )
+        )
+        FormalDefinition(
+            "Injection",
+            parameters: [.value("S"), .value("T")],
+            body: .setFilter(
+                .functionSet(.variable("S"), .variable("T")),
+                "M",
+                .operatorApplication(.reference("IsInjective", arity: 1), [.value(.variable("M"))])
+            )
+        )
+        FormalDefinition(
+            "Surjection",
+            parameters: [.value("S"), .value("T")],
+            body: .setFilter(
+                .functionSet(.variable("S"), .variable("T")),
+                "M",
+                .forAll(.variable("T"), "t",
+                    .exists(.variable("S"), "s",
+                        .equal(.functionApply(.variable("M"), .variable("s")), .variable("t"))
+                    )
+                )
+            )
+        )
+        FormalDefinition(
+            "Bijection",
+            parameters: [.value("S"), .value("T")],
+            body: .intersection(
+                .operatorApplication(.reference("Injection", arity: 2), [.value(.variable("S")), .value(.variable("T"))]),
+                .operatorApplication(.reference("Surjection", arity: 2), [.value(.variable("S")), .value(.variable("T"))])
+            )
+        )
+        FormalDefinition(
+            "ExistsInjection",
+            parameters: [.value("S"), .value("T")],
+            body: .notEqual(.operatorApplication(.reference("Injection", arity: 2), [.value(.variable("S")), .value(.variable("T"))]), .setLiteral([]))
+        )
+        FormalDefinition(
+            "ExistsSurjection",
+            parameters: [.value("S"), .value("T")],
+            body: .notEqual(.operatorApplication(.reference("Surjection", arity: 2), [.value(.variable("S")), .value(.variable("T"))]), .setLiteral([]))
+        )
+        FormalDefinition(
+            "ExistsBijection",
+            parameters: [.value("S"), .value("T")],
+            body: .notEqual(.operatorApplication(.reference("Bijection", arity: 2), [.value(.variable("S")), .value(.variable("T"))]), .setLiteral([]))
+        )
+        FormalDefinition(
+            "FoldFunctionOnSet",
+            parameters: [.operator("op", arity: 2), .value("base"), .value("fun"), .value("indices")],
+            body: .operatorApplication(.reference("MapThenFoldSet", arity: 5), [
+                .operator(.reference("op", arity: 2)),
+                .value(.variable("base")),
+                .operator(.lambda(.init(parameters: ["i"], body: .functionApply(.variable("fun"), .variable("i"))))),
+                .operator(.lambda(.init(parameters: ["s"], body: .choose(.variable("s"), "x", .bool(true))))),
+                .value(.variable("indices"))
+            ])
+        )
+        FormalDefinition(
+            "FoldFunction",
+            parameters: [.operator("op", arity: 2), .value("base"), .value("fun")],
+            body: .operatorApplication(.reference("FoldFunctionOnSet", arity: 4), [
+                .operator(.reference("op", arity: 2)),
+                .value(.variable("base")),
+                .value(.variable("fun")),
+                .value(.domain(.variable("fun")))
+            ])
+        )
+        FormalDefinition(
+            "SumFunctionOnSet",
+            parameters: [.value("fun"), .value("indices")],
+            body: .operatorApplication(.reference("FoldFunctionOnSet", arity: 4), [
+                .operator(.lambda(.init(parameters: ["left", "right"], body: .add(.variable("left"), .variable("right"))))),
+                .value(.int(0)), .value(.variable("fun")), .value(.variable("indices"))
+            ])
+        )
+        FormalDefinition(
+            "SumFunction",
+            parameters: [.value("fun")],
+            body: .operatorApplication(.reference("SumFunctionOnSet", arity: 2), [
+                .value(.variable("fun")), .value(.domain(.variable("fun")))
+            ])
         )
     }
 }
