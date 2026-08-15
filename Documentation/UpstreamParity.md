@@ -62,9 +62,10 @@ configuration and its required typed surface are both available.
 
 | Upstream example | SwiftTLA can already express | Missing typed surface |
 | --- | --- | --- |
-| `KVsnap` | process families, function state, records, sequences, and non-empty finite subset choice | typed set-to-sequence enumeration, operation-log record comprehensions, and the external ClientCentric property interface |
+| `KVsnap` | process families, function state, records, sequences, non-empty finite subset choice, local `LET … IN` operators, and real module instances | higher-order formal operator parameters and application; formal lambdas; standard `FoldFunction`; and a typed injective set-to-sequence choice |
 | `EWD998PCal` | fair processes, `Either`, `When`, scoped choices, records | typed finite bags and bag-domain selection |
-| `LeastCircularSubstring` | labeled loops, integer arithmetic, function updates, zero-based bounded sequences, and modulo indexing | imported recursive zero-sequence definitions for rotation and lexicographic comparison, used by `Correctness` |
+| `LeastCircularSubstring` | labeled loops, integer arithmetic, function updates, zero-based bounded sequences, modulo indexing, and bundled imported recursive operators | no current language dependency; it is a module-bundle conformance case |
+| `TokenRing` | finite function state, parameterized actions, modulo, weak fairness, and `<>[]` properties | macro-side typed function-space preservation and an ordered finite-domain slice for the published `UniqueToken` property |
 | `Quicksort` | finite sequences, loops, scoped choices | constrained finite function choice and multi-binding `with` |
 | `Slush` | records, unions, `Either`, loops | typed sets of record variants and filtered record comprehensions |
 | `Sailfish` | process families, nested `With`, sets and tuples | typed filtered comprehensions, tuple/record relations, and multi-binding `with` |
@@ -74,11 +75,19 @@ configuration and its required typed surface are both available.
 provide a matching bounded configuration for that PlusCal module. It is not a
 parity-corpus candidate until one exists.
 
-The immediate order is: typed set-to-sequence enumeration and record
-comprehensions; typed bags; recursive formal definitions needed by the
-LeastCircularSubstring property; then multi-binding scoped choice. Each
-addition must be used by a bounded source port and checked through the
-parser/builder gate and TLC.
+The dependency order is deliberate. `KVsnap` is three real modules:
+`Util` provides general operators, `ClientCentric` imports `Util`, and
+`KVsnap` creates an instance of `ClientCentric`. The next implementation
+trunk is therefore higher-order operator application and formal lambdas.
+That unlocks `FoldFunction`, then `Util`, then `ClientCentric`, and only then
+the `KVsnap` consumer. The exporter must write all three `.tla` files beside
+the root module so TLC checks those imports and the named instance instead of
+a flattened approximation.
+
+After that chain, the next independent trunks are typed bags, constrained
+function choice, and multi-binding scoped choice. Each addition must be used
+by a bounded source port, pass the parser/builder fidelity gate, and run TLC
+against its emitted module bundle.
 
 ## Temporal and symmetry executable reference
 
