@@ -755,10 +755,8 @@ struct AlgorithmBuilderTests {
             selected
             Each(Node.all) { _ in
                 Do("choose") {
-                    With(SetExpr<Int>.literal(1, 2)) { outer in
-                        With(SetExpr<Int>.literal(10, 20)) { inner in
-                            Assign(selected, to: outer.expr + inner.expr)
-                        }
+                    With(SetExpr<Int>.literal(1, 2), SetExpr<Int>.literal(10, 20)) { outer, inner in
+                        Assign(selected, to: outer.expr + inner.expr)
                     }
                 }
             }

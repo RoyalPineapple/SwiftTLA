@@ -1284,6 +1284,23 @@ public func With<Value: TLAValueType>(
     return StepStatement(model: .with(variable: variable, source: source.raw, body(value).map(\.model)))
 }
 
+/// Binds two independent members for one atomic block.
+///
+/// This is the Swift spelling of PlusCal's `with (left \in Left; right \in Right)`.
+/// It lowers to nested formal binders, so each choice remains independently
+/// scoped and an empty source disables the whole block.
+public func With<First: TLAValueType, Second: TLAValueType>(
+    _ first: Expr<SetExpr<First>>,
+    _ second: Expr<SetExpr<Second>>,
+    @DoBuilder _ body: (WithValue<First>, WithValue<Second>) -> [StepStatement]
+) -> StepStatement {
+    With(first) { firstValue in
+        With(second) { secondValue in
+            body(firstValue, secondValue)
+        }
+    }
+}
+
 /// Binds a deterministic formal value for one atomic block.
 ///
 /// This is PlusCal's `with name = expression` form, not membership selection.
