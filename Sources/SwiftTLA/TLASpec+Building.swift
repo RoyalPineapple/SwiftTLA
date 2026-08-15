@@ -19,8 +19,8 @@ extension TLASpec {
     var recursiveDefs: [String] = []
     var recursiveFuncs: [RecursiveFunc] = []
     let imports = components.compactMap { $0 as? ImportDecl }
-    let importedModules = imports.map(\.module)
-    let importConfigurations = imports.compactMap(\.configuration)
+    var importedModules = imports.map(\.module)
+    var importConfigurations = imports.compactMap(\.configuration)
     var useSpecs: [TLASpec] = []
     var runtimeFuncCollector: [String: @Sendable ([TLAValue]) -> TLAValue] = [:]
     var runtimeFuncBodiesCollector: [String] = []
@@ -139,6 +139,13 @@ extension TLASpec {
       definitions += used.definitions
       recursiveDefs += used.recursiveDefs
       recursiveFuncs += used.recursiveFuncs
+      importedModules += used.imports
+      importConfigurations += used.importConfigurations
+      temporalProperties += used.temporalProperties
+      fairness += used.fairness
+      if let usedAssume = used.assume {
+        assumes = assumes.map { .and($0, usedAssume) } ?? usedAssume
+      }
       if let c = used.constraint { constraint = constraint.map { .and($0, c) } ?? c }
       if let a = used.assume { assumes = assumes.map { .and($0, a) } ?? a }
       symmetrySets += used.symmetrySets

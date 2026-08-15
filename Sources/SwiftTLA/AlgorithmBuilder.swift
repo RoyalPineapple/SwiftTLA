@@ -938,14 +938,20 @@ public func SharedVar<Value: TLAValueType>(
     _ name: String,
     in values: Expr<SetExpr<Value>>
 ) -> SharedVariable<Value> {
-    guard case .set(let members) = try? values.raw.evaluate(in: [:]), !members.isEmpty else {
-        preconditionFailure("SharedVar(in:) requires a non-empty static formal domain")
+    // The initial domain is a formal expression, not Swift collection data.
+    // Static sets keep a canonical declaration value for parser fidelity;
+    // dependent domains (for example `ZSeq(CharacterSet)`) use the type's
+    // neutral value solely as metadata. `initialSet` is the actual Init rule.
+    let representative: TLAValue
+    if case .set(let members) = try? values.raw.evaluate(in: [:]),
+       let first = members.min(by: { $0.description < $1.description }) {
+        representative = first
+    } else {
+        representative = Value.defaultValue.tlaValue
     }
-    let representative = members.min { $0.description < $1.description }!
     return SharedVariable(
         name: name,
-        // `initialSet` supplies every initial state. Its canonical first value
-        // keeps the builder's declaration metadata faithful to the parser.
+        // `initialSet` supplies every initial state.
         initial: .value(representative),
         initialSet: values.raw,
         swiftTypeName: String(reflecting: Value.self)

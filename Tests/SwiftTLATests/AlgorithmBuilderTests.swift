@@ -729,6 +729,25 @@ struct AlgorithmBuilderTests {
         ]))
     }
 
+    @Test("SharedVar initial domains can depend on earlier formal state")
+    func lowersDependentNondeterministicSharedInitialization() throws {
+        let algorithm = Algorithm("DependentInitialDomain") {
+            let maximum = SharedVar("maximum", initial: 2)
+            maximum
+            let candidate = SharedVar(
+                "candidate",
+                in: Expr<SetExpr<Int>>(.integerRange(.int(0), maximum.stateExpr))
+            )
+            candidate
+            Do("stop") { Stop() }
+        }
+
+        let spec = try algorithm.lower()
+        #expect(Set(computeInitialStates(spec).compactMap { $0["candidate"] }) == [
+            .int(0), .int(1), .int(2)
+        ])
+    }
+
     @Test("Choose accepts a bounded Swift integer range")
     func lowersBoundedIntegerChoice() throws {
         let algorithm = Algorithm("BoundedChoice") {
