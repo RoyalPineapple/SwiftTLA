@@ -19,6 +19,7 @@ extension TLASpec {
     var constraint: StateExpr?
     var recursiveDefs: [String] = []
     var recursiveFuncs: [RecursiveFunc] = []
+    var formalOperatorDefinitions: [FormalOperatorDefinition] = []
     let imports = components.compactMap { $0 as? ImportDecl }
     var importedModules = imports.map(\.module)
     var importConfigurations = imports.compactMap(\.configuration)
@@ -81,6 +82,9 @@ extension TLASpec {
         } else {
           definitions.append(d.tlaText)
         }
+      } else if let definition = comp as? FormalOperatorDecl {
+        formalOperatorDefinitions.append(definition.definition)
+        definitions.append(definition.tlaText)
       } else if let th = comp as? TheoremDecl {
         if !th.tlaText.isEmpty {
           theorems.append(th.tlaText)
@@ -144,6 +148,7 @@ extension TLASpec {
       definitions += used.definitions
       recursiveDefs += used.recursiveDefs
       recursiveFuncs += used.recursiveFuncs
+      formalOperatorDefinitions += used.formalOperatorDefinitions
       importedModules += used.imports
       importConfigurations += used.importConfigurations
       moduleInstances += used.moduleInstances
@@ -201,6 +206,7 @@ extension TLASpec {
     self.constraint = constraint
     self.recursiveDefs = recursiveDefs
     self.recursiveFuncs = recursiveFuncs
+    self.formalOperatorDefinitions = formalOperatorDefinitions
     self.imports = importedModules
     self.importConfigurations = importConfigurations
     self.moduleInstances = moduleInstances
@@ -250,6 +256,7 @@ public func substituteConstants(_ spec: TLASpec) -> TLASpec {
     constraint: spec.constraint.map { substituteInState($0, constants: constants) },
     recursiveDefs: spec.recursiveDefs,
     recursiveFuncs: spec.recursiveFuncs,
+    formalOperatorDefinitions: spec.formalOperatorDefinitions,
     imports: spec.imports,
     importConfigurations: spec.importConfigurations,
     moduleInstances: spec.moduleInstances,

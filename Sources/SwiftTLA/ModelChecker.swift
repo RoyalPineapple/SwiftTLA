@@ -109,8 +109,13 @@ public struct ModelChecker {
             seeds: seeds,
             variableNames: variableNames,
             expand: buildExpander(transitionRelation),
-            evaluate: buildEvaluator(runtimeFuncs: substituted.runtimeFuncs, recursiveFuncs: substituted.resolvedRecursiveFuncs),
+            evaluate: buildEvaluator(
+                runtimeFuncs: substituted.runtimeFuncs,
+                recursiveFuncs: substituted.resolvedRecursiveFuncs,
+                formalOperatorDefinitions: substituted.resolvedFormalOperatorDefinitions
+            ),
             actions: actions,
+            formalOperatorDefinitions: substituted.resolvedFormalOperatorDefinitions,
             invariants: substituted.invariants,
             checkDeadlock: substituted.checkDeadlock,
             specificationName: substituted.name,
@@ -136,13 +141,29 @@ public struct ModelChecker {
         }
     }
 
-    private func buildEvaluator(runtimeFuncs: [String: StateExpr.RuntimeFunc] = [:], recursiveFuncs: [RecursiveFunc] = []) -> (StateExpr, State) throws -> Bool {
-        { expression, state in try expression.evaluateBool(in: state, runtimeFuncs: runtimeFuncs, recursiveFuncs: recursiveFuncs) }
+    private func buildEvaluator(
+        runtimeFuncs: [String: StateExpr.RuntimeFunc] = [:],
+        recursiveFuncs: [RecursiveFunc] = [],
+        formalOperatorDefinitions: [FormalOperatorDefinition] = []
+    ) -> (StateExpr, State) throws -> Bool {
+        { expression, state in
+            try expression.evaluateBool(
+                in: state,
+                runtimeFuncs: runtimeFuncs,
+                recursiveFuncs: recursiveFuncs,
+                formalOperatorDefinitions: formalOperatorDefinitions
+            )
+        }
     }
 
     private func checkAssume(_ specification: TLASpec, initial: State) throws -> Bool {
         guard let assume = specification.assume else { return true }
-        return try assume.evaluateBool(in: initial, runtimeFuncs: specification.runtimeFuncs, recursiveFuncs: specification.resolvedRecursiveFuncs)
+        return try assume.evaluateBool(
+            in: initial,
+            runtimeFuncs: specification.runtimeFuncs,
+            recursiveFuncs: specification.resolvedRecursiveFuncs,
+            formalOperatorDefinitions: specification.resolvedFormalOperatorDefinitions
+        )
     }
 
     private func emptyExploration(
@@ -200,6 +221,7 @@ private func bfs(
     expand: (State) throws -> [(StateGraph.TransitionLabel, State)],
     evaluate: (StateExpr, State) throws -> Bool,
     actions: [NamedAction],
+    formalOperatorDefinitions: [FormalOperatorDefinition],
     invariants: [NamedInvariant],
     checkDeadlock: Bool,
     specificationName: String,
@@ -273,7 +295,12 @@ private func bfs(
 
         let enabled: State
         do {
-            enabled = try enabledState(current, actions: actions, variableNames: variableNames)
+            enabled = try enabledState(
+                current,
+                actions: actions,
+                variableNames: variableNames,
+                formalOperatorDefinitions: formalOperatorDefinitions
+            )
         } catch {
             return ModelExplorationResult(
                 graph: graph(),
@@ -360,13 +387,19 @@ private func bfs(
 private func enabledState(
     _ state: State,
     actions: [NamedAction],
-    variableNames: [String]
+    variableNames: [String],
+    formalOperatorDefinitions: [FormalOperatorDefinition]
 ) throws -> State {
     var result = state
     for action in actions where !action.name.isEmpty {
         do {
             let enabled = try actionInvocations(action).contains { variant in
-                if try !ActionEnumerator.enumerate(variant.body, from: state, varNames: variableNames).isEmpty {
+                if try !ActionEnumerator.enumerate(
+                    variant.body,
+                    from: state,
+                    varNames: variableNames,
+                    formalOperatorDefinitions: formalOperatorDefinitions
+                ).isEmpty {
                     return true
                 }
                 return false

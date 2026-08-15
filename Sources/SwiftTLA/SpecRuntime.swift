@@ -7,9 +7,7 @@ public struct SpecRuntime: Sendable {
 
     public init(
         spec: TLASpec,
-        actionEvaluator: @escaping ActionEvaluator = { action, state, varNames in
-            try ActionEnumerator.enumerate(action, from: state, varNames: varNames)
-        }
+        actionEvaluator: ActionEvaluator? = nil
     ) {
         let resolvedSpec = substituteConstants(spec)
         self.spec = spec
@@ -88,7 +86,12 @@ public struct SpecRuntime: Sendable {
     public func propertyOutcomes(in state: [String: TLAValue]) -> [RuntimePropertyOutcome] {
         var outcomes = invariants.map { invariant -> RuntimePropertyOutcome in
             do {
-                return try invariant.body.evaluateBool(in: state, runtimeFuncs: spec.runtimeFuncs, recursiveFuncs: spec.resolvedRecursiveFuncs)
+                return try invariant.body.evaluateBool(
+                    in: state,
+                    runtimeFuncs: spec.runtimeFuncs,
+                    recursiveFuncs: spec.resolvedRecursiveFuncs,
+                    formalOperatorDefinitions: spec.resolvedFormalOperatorDefinitions
+                )
                     ? .satisfied(name: invariant.name) : .violated(name: invariant.name)
             } catch {
                 return .evaluationFailed(name: invariant.name, diagnostic: .init(code: .evaluationError, message: String(describing: error)))
@@ -110,7 +113,12 @@ public struct SpecRuntime: Sendable {
         guard let inv = invariants.first(where: { $0.name == invariantName }) else {
             throw RuntimeError.invariantNotFound(invariantName)
         }
-        return try inv.body.evaluateBool(in: state, runtimeFuncs: spec.runtimeFuncs, recursiveFuncs: spec.resolvedRecursiveFuncs)
+        return try inv.body.evaluateBool(
+            in: state,
+            runtimeFuncs: spec.runtimeFuncs,
+            recursiveFuncs: spec.resolvedRecursiveFuncs,
+            formalOperatorDefinitions: spec.resolvedFormalOperatorDefinitions
+        )
     }
 
     public func step(_ invocation: TLAActionInvocation, from state: [String: TLAValue]) throws -> StepResult {
@@ -121,7 +129,12 @@ public struct SpecRuntime: Sendable {
         let next = try apply(invocation, to: state)
         var violations: [String] = []
         for inv in invariants {
-            if !(try inv.body.evaluateBool(in: next, runtimeFuncs: spec.runtimeFuncs, recursiveFuncs: spec.resolvedRecursiveFuncs)) {
+            if !(try inv.body.evaluateBool(
+                in: next,
+                runtimeFuncs: spec.runtimeFuncs,
+                recursiveFuncs: spec.resolvedRecursiveFuncs,
+                formalOperatorDefinitions: spec.resolvedFormalOperatorDefinitions
+            )) {
                 violations.append(inv.name)
             }
         }

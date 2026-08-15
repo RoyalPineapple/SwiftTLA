@@ -209,6 +209,9 @@ public struct TLASpec: Sendable {
   public let constraint: StateExpr?
   public let recursiveDefs: [String]
   public let recursiveFuncs: [RecursiveFunc]
+  /// Executable, higher-order operator definitions. These remain formal AST
+  /// data so the checker and runtime apply the same semantics.
+  public let formalOperatorDefinitions: [FormalOperatorDefinition]
   /// Imported modules remain separate source files and resolve their operators at runtime.
   public let imports: [TLASpec]
   /// Model-scoped replacement bindings for imported module operators.
@@ -227,7 +230,8 @@ public struct TLASpec: Sendable {
     fairness: [FairnessCondition] = [], assume: StateExpr? = nil, checkDeadlock: Bool = false,
     definitions: [String] = [], theorems: [String] = [], extendsModules: String = "Integers",
     constraint: StateExpr? = nil, recursiveDefs: [String] = [],
-    recursiveFuncs: [RecursiveFunc] = [], imports: [TLASpec] = [],
+    recursiveFuncs: [RecursiveFunc] = [],
+    formalOperatorDefinitions: [FormalOperatorDefinition] = [], imports: [TLASpec] = [],
     importConfigurations: [FormalModuleConfiguration] = [],
     moduleInstances: [FormalModuleInstance] = [], symmetrySets: [SymmetrySet] = [],
     symmetryGroups: [SymmetryVariableGroup] = [],
@@ -249,6 +253,7 @@ public struct TLASpec: Sendable {
     self.constraint = constraint
     self.recursiveDefs = recursiveDefs
     self.recursiveFuncs = recursiveFuncs
+    self.formalOperatorDefinitions = formalOperatorDefinitions
     self.imports = imports
     self.importConfigurations = importConfigurations
     self.moduleInstances = moduleInstances
@@ -308,6 +313,31 @@ public struct TLASpec: Sendable {
     visit(self, replacements: [], path: &path)
     return result
   }
+
+  /// Formal operator definitions visible after resolving `EXTENDS` imports.
+  /// Like TLA+ operator names, these form one namespace; ambiguous imports are
+  /// rejected rather than silently shadowed.
+  public var resolvedFormalOperatorDefinitions: [FormalOperatorDefinition] {
+    var seen = Set<String>()
+    var result: [FormalOperatorDefinition] = []
+    func visit(_ module: TLASpec, path: inout Set<String>) {
+      precondition(path.insert(module.name).inserted, "Cyclic formal module import: \(module.name)")
+      for imported in module.imports {
+        visit(imported, path: &path)
+      }
+      for definition in module.formalOperatorDefinitions {
+        precondition(
+          seen.insert(definition.name).inserted,
+          "Duplicate imported formal operator: \(definition.name)"
+        )
+        result.append(definition)
+      }
+      path.remove(module.name)
+    }
+    var path = Set<String>()
+    visit(self, path: &path)
+    return result
+  }
   public var description: String {
     var lines = ["Spec \"\(name)\""]
     lines.append("  Variables:")
@@ -353,6 +383,7 @@ public struct TLASpec: Sendable {
       }(),
       recursiveDefs: self.recursiveDefs + other.recursiveDefs,
       recursiveFuncs: self.recursiveFuncs + other.recursiveFuncs,
+      formalOperatorDefinitions: self.formalOperatorDefinitions + other.formalOperatorDefinitions,
       imports: self.imports + other.imports,
       moduleInstances: self.moduleInstances + other.moduleInstances,
       symmetrySets: self.symmetrySets + other.symmetrySets,
@@ -379,6 +410,7 @@ public struct TLASpec: Sendable {
       constraint: self.constraint,
       recursiveDefs: self.recursiveDefs,
       recursiveFuncs: self.recursiveFuncs,
+      formalOperatorDefinitions: self.formalOperatorDefinitions,
       imports: self.imports,
       moduleInstances: self.moduleInstances,
       symmetrySets: self.symmetrySets,
@@ -556,6 +588,36 @@ public struct DefinitionDecl: SpecComponent, Equatable {
     self.body = body
   }
 }
+
+/// A named formal operator that stays executable in the SwiftTLA AST.
+/// Use this for definitions whose body or parameters must participate in
+/// model checking, rather than `Definition`, which is source-only text.
+public struct FormalOperatorDecl: SpecComponent, Equatable {
+  public let definition: FormalOperatorDefinition
+
+  public init(_ definition: FormalOperatorDefinition) {
+    self.definition = definition
+  }
+
+  var tlaText: String {
+    let parameters = definition.parameters.map { parameter in
+      switch parameter {
+      case .value(let name): return name
+      case .operator(let name, let arity):
+        return "\(name)(\(Array(repeating: "_", count: arity).joined(separator: ", ")))"
+      }
+    }.joined(separator: ", ")
+    return "\(definition.name)(\(parameters)) == \(definition.body)"
+  }
+}
+
+public func FormalDefinition(
+  _ name: String,
+  parameters: [FormalParameter],
+  body: StateExpr
+) -> FormalOperatorDecl {
+  FormalOperatorDecl(FormalOperatorDefinition(name: name, parameters: parameters, body: body))
+}
 public struct TheoremDecl: SpecComponent, Equatable {
   public let tlaText: String
   public let name: String?
@@ -646,6 +708,7 @@ public enum SpecBuilder {
   public static func buildExpression(_ expr: ConstantDecl) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: FormalParameterDecl) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: DefinitionDecl) -> [SpecComponent] { [expr] }
+  public static func buildExpression(_ expr: FormalOperatorDecl) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: TheoremDecl) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: AssumeDecl) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: ExtendsDecl) -> [SpecComponent] { [expr] }

@@ -527,6 +527,9 @@ extension StateExpr {
                 in: state,
                 runtimeFuncs: runtimeFuncs,
                 recursiveFuncs: localFunctions + recursiveFuncs,
+                formalOperatorDefinitions: formalOperatorDefinitions,
+                valueBindings: valueBindings,
+                operatorBindings: operatorBindings,
                 maxDepth: maxDepth
             )
 
@@ -576,8 +579,18 @@ extension StateExpr {
 
     public func evaluateBool(in state: [String: TLAValue],
                              runtimeFuncs: [String: RuntimeFunc] = [:],
-                             recursiveFuncs: [RecursiveFunc] = []) throws -> Bool {
-        let result = try self.evaluate(in: state, runtimeFuncs: runtimeFuncs, recursiveFuncs: recursiveFuncs)
+                             recursiveFuncs: [RecursiveFunc] = [],
+                             formalOperatorDefinitions: [FormalOperatorDefinition] = [],
+                             valueBindings: [String: TLAValue] = [:],
+                             operatorBindings: [String: FormalOperator] = [:]) throws -> Bool {
+        let result = try self.evaluate(
+            in: state,
+            runtimeFuncs: runtimeFuncs,
+            recursiveFuncs: recursiveFuncs,
+            formalOperatorDefinitions: formalOperatorDefinitions,
+            valueBindings: valueBindings,
+            operatorBindings: operatorBindings
+        )
         guard case .bool(let b) = result else {
             throw EvalError.typeMismatch(
                 "Expected boolean expression, got \(result)"

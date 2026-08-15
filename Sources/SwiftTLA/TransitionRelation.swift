@@ -24,22 +24,25 @@ public struct TransitionRelation: Sendable {
 
     public init(
         spec: TLASpec,
-        actionEvaluator: @escaping ActionEvaluator = { action, state, variableNames in
-            try ActionEnumerator.enumerate(action, from: state, varNames: variableNames)
-        }
+        actionEvaluator: ActionEvaluator? = nil
     ) {
         self.init(resolvedSpec: substituteConstants(spec), actionEvaluator: actionEvaluator)
     }
 
     init(
         resolvedSpec: TLASpec,
-        actionEvaluator: @escaping ActionEvaluator = { action, state, variableNames in
-            try ActionEnumerator.enumerate(action, from: state, varNames: variableNames)
-        }
+        actionEvaluator: ActionEvaluator? = nil
     ) {
         self.spec = resolvedSpec
         self.variableNames = resolvedSpec.variables.map(\.name)
-        self.actionEvaluator = actionEvaluator
+        self.actionEvaluator = actionEvaluator ?? { action, state, variableNames in
+            try ActionEnumerator.enumerate(
+                action,
+                from: state,
+                varNames: variableNames,
+                formalOperatorDefinitions: resolvedSpec.resolvedFormalOperatorDefinitions
+            )
+        }
     }
 
     public func successors(from state: State) throws -> [Successor] {
@@ -75,7 +78,8 @@ public struct TransitionRelation: Sendable {
                     try constraint.evaluateBool(
                         in: successor,
                         runtimeFuncs: spec.runtimeFuncs,
-                        recursiveFuncs: spec.resolvedRecursiveFuncs
+                        recursiveFuncs: spec.resolvedRecursiveFuncs,
+                        formalOperatorDefinitions: spec.resolvedFormalOperatorDefinitions
                     ) ? Successor(invocation: variant.invocation, state: successor) : nil
                 }
             }

@@ -14,41 +14,84 @@ public enum ActionEnumerator {
     public static func enumerate(
         _ action: ActionExpr,
         from oldState: [String: TLAValue],
-        varNames: [String]
+        varNames: [String],
+        formalOperatorDefinitions: [FormalOperatorDefinition] = []
     ) throws -> [[String: TLAValue]] {
         let disjuncts = distributeOr(action)
-        return try disjuncts.flatMap { try processDisjunct($0, oldState: oldState, varNames: varNames) }
+        return try disjuncts.flatMap {
+            try processDisjunct(
+                $0,
+                oldState: oldState,
+                varNames: varNames,
+                formalOperatorDefinitions: formalOperatorDefinitions
+            )
+        }
     }
 
     private static func processDisjunct(
         _ action: ActionExpr,
         oldState: [String: TLAValue],
-        varNames: [String]
+        varNames: [String],
+        formalOperatorDefinitions: [FormalOperatorDefinition]
     ) throws -> [[String: TLAValue]] {
         // `distributeOr` turns an action conditional into guards plus a
         // selected branch. Check guards that are outside a `LET` or `WITH`
         // binding before evaluating that binding. A false loop guard must not
         // evaluate a body-local expression such as `sequence[mid]`.
-        guard try outerGuardsAreEnabled(in: action, oldState: oldState) else {
+        guard try outerGuardsAreEnabled(
+            in: action,
+            oldState: oldState,
+            formalOperatorDefinitions: formalOperatorDefinitions
+        ) else {
             return []
         }
 
         // Handle LET bindings: evaluate value, substitute into body
         if case .define(let name, let valueExpr, let body) = action {
-            let val = try valueExpr.evaluate(in: oldState)
+            let val = try valueExpr.evaluate(
+                in: oldState,
+                formalOperatorDefinitions: formalOperatorDefinitions
+            )
             let substituted = substituteVarInAction(name, val, body)
             let disjuncts = distributeOr(substituted)
-            return try disjuncts.flatMap { try processDisjunct($0, oldState: oldState, varNames: varNames) }
-        }
-
-        if let expanded = try expandFirstDefinition(in: action, oldState: oldState) {
-            return try expanded.flatMap {
-                try processDisjunct($0, oldState: oldState, varNames: varNames)
+            return try disjuncts.flatMap {
+                try processDisjunct(
+                    $0,
+                    oldState: oldState,
+                    varNames: varNames,
+                    formalOperatorDefinitions: formalOperatorDefinitions
+                )
             }
         }
 
-        if let expanded = try expandFirstExistsAction(in: action, oldState: oldState) {
-            return try expanded.flatMap { try processDisjunct($0, oldState: oldState, varNames: varNames) }
+        if let expanded = try expandFirstDefinition(
+            in: action,
+            oldState: oldState,
+            formalOperatorDefinitions: formalOperatorDefinitions
+        ) {
+            return try expanded.flatMap {
+                try processDisjunct(
+                    $0,
+                    oldState: oldState,
+                    varNames: varNames,
+                    formalOperatorDefinitions: formalOperatorDefinitions
+                )
+            }
+        }
+
+        if let expanded = try expandFirstExistsAction(
+            in: action,
+            oldState: oldState,
+            formalOperatorDefinitions: formalOperatorDefinitions
+        ) {
+            return try expanded.flatMap {
+                try processDisjunct(
+                    $0,
+                    oldState: oldState,
+                    varNames: varNames,
+                    formalOperatorDefinitions: formalOperatorDefinitions
+                )
+            }
         }
 
         let chooseAssignments = try extractChooseActions(action)
@@ -58,7 +101,10 @@ public enum ActionEnumerator {
                 var next: [[String: TLAValue]] = []
                 for partial in partials {
                     let env = oldState.merging(partial) { _, new in new }
-                    guard case .set(let sv) = try setExpr.evaluate(in: env) else {
+                    guard case .set(let sv) = try setExpr.evaluate(
+                        in: env,
+                        formalOperatorDefinitions: formalOperatorDefinitions
+                    ) else {
                         throw ActionError.invalidActionForm("CHOOSE set for \(varName) must be a set")
                     }
                     for elem in sv {
@@ -75,7 +121,11 @@ public enum ActionEnumerator {
             for partial in partials {
                 let enriched = oldState.merging(partial) { _, new in new }
                 guard let baseState = try applyNonChooseAssignments(
-                    action, oldState: enriched, varNames: varNames, skip: skip
+                    action,
+                    oldState: enriched,
+                    varNames: varNames,
+                    skip: skip,
+                    formalOperatorDefinitions: formalOperatorDefinitions
                 ) else { continue }
                 var finalState = baseState
                 for (name, value) in partial {
@@ -88,12 +138,18 @@ public enum ActionEnumerator {
 
         let (assignments, guards) = try extractAssignments(action)
         let guardExpr = guards.reduce(StateExpr.value(.bool(true))) { .and($0, $1) }
-        guard try guardExpr.evaluateBool(in: oldState) else { return [] }
+        guard try guardExpr.evaluateBool(
+            in: oldState,
+            formalOperatorDefinitions: formalOperatorDefinitions
+        ) else { return [] }
 
         var newState = oldState
         for varName in varNames {
             if let rhs = assignments[varName] {
-                newState[varName] = try rhs.evaluate(in: oldState)
+                newState[varName] = try rhs.evaluate(
+                    in: oldState,
+                    formalOperatorDefinitions: formalOperatorDefinitions
+                )
             }
         }
         return [newState]
@@ -103,16 +159,23 @@ public enum ActionEnumerator {
         _ action: ActionExpr,
         oldState: [String: TLAValue],
         varNames: [String],
-        skip: Set<String>
+        skip: Set<String>,
+        formalOperatorDefinitions: [FormalOperatorDefinition]
     ) throws -> [String: TLAValue]? {
         let (assignments, guards) = try extractAssignments(action)
         let guardExpr = guards.reduce(StateExpr.value(.bool(true))) { .and($0, $1) }
-        guard try guardExpr.evaluateBool(in: oldState) else { return nil }
+        guard try guardExpr.evaluateBool(
+            in: oldState,
+            formalOperatorDefinitions: formalOperatorDefinitions
+        ) else { return nil }
 
         var newState = oldState
         for varName in varNames where !skip.contains(varName) {
             if let rhs = assignments[varName] {
-                newState[varName] = try rhs.evaluate(in: oldState)
+                newState[varName] = try rhs.evaluate(
+                    in: oldState,
+                    formalOperatorDefinitions: formalOperatorDefinitions
+                )
             }
         }
         return newState
@@ -132,14 +195,25 @@ public enum ActionEnumerator {
     /// normal binding expansion below.
     private static func outerGuardsAreEnabled(
         in action: ActionExpr,
-        oldState: [String: TLAValue]
+        oldState: [String: TLAValue],
+        formalOperatorDefinitions: [FormalOperatorDefinition]
     ) throws -> Bool {
         switch action {
         case .guard_(let condition):
-            return try condition.evaluateBool(in: oldState)
+            return try condition.evaluateBool(
+                in: oldState,
+                formalOperatorDefinitions: formalOperatorDefinitions
+            )
         case .and(let lhs, let rhs):
-            return try outerGuardsAreEnabled(in: lhs, oldState: oldState)
-                && outerGuardsAreEnabled(in: rhs, oldState: oldState)
+            return try outerGuardsAreEnabled(
+                in: lhs,
+                oldState: oldState,
+                formalOperatorDefinitions: formalOperatorDefinitions
+            ) && outerGuardsAreEnabled(
+                in: rhs,
+                oldState: oldState,
+                formalOperatorDefinitions: formalOperatorDefinitions
+            )
         case .or, .ifElse, .define, .existsAction, .assign, .unchanged, .chooseAction:
             return true
         }
@@ -158,30 +232,53 @@ public enum ActionEnumerator {
     /// only its body would change the transition relation.
     private static func expandFirstExistsAction(
         in action: ActionExpr,
-        oldState: [String: TLAValue]
+        oldState: [String: TLAValue],
+        formalOperatorDefinitions: [FormalOperatorDefinition]
     ) throws -> [ActionExpr]? {
         switch action {
         case .existsAction(let name, let set, let body):
-            guard case .set(let values) = try set.evaluate(in: oldState) else {
+            guard case .set(let values) = try set.evaluate(
+                in: oldState,
+                formalOperatorDefinitions: formalOperatorDefinitions
+            ) else {
                 throw ActionError.invalidActionForm("\\E set must be a set")
             }
             return values.map { substituteVarInAction(name, $0, body) }
         case .and(let lhs, let rhs):
-            if let expanded = try expandFirstExistsAction(in: lhs, oldState: oldState) {
+            if let expanded = try expandFirstExistsAction(
+                in: lhs,
+                oldState: oldState,
+                formalOperatorDefinitions: formalOperatorDefinitions
+            ) {
                 return expanded.map { .and($0, rhs) }
             }
-            return try expandFirstExistsAction(in: rhs, oldState: oldState).map { expanded in
+            return try expandFirstExistsAction(
+                in: rhs,
+                oldState: oldState,
+                formalOperatorDefinitions: formalOperatorDefinitions
+            ).map { expanded in
                 expanded.map { .and(lhs, $0) }
             }
         case .or(let lhs, let rhs):
-            if let expanded = try expandFirstExistsAction(in: lhs, oldState: oldState) {
+            if let expanded = try expandFirstExistsAction(
+                in: lhs,
+                oldState: oldState,
+                formalOperatorDefinitions: formalOperatorDefinitions
+            ) {
                 return expanded.map { .or($0, rhs) }
             }
-            return try expandFirstExistsAction(in: rhs, oldState: oldState).map { expanded in
+            return try expandFirstExistsAction(
+                in: rhs,
+                oldState: oldState,
+                formalOperatorDefinitions: formalOperatorDefinitions
+            ).map { expanded in
                 expanded.map { .or(lhs, $0) }
             }
         case .ifElse(let condition, let then, let otherwise):
-            return [try condition.evaluateBool(in: oldState) ? then : otherwise]
+            return [try condition.evaluateBool(
+                in: oldState,
+                formalOperatorDefinitions: formalOperatorDefinitions
+            ) ? then : otherwise]
         case .assign, .unchanged, .guard_, .chooseAction, .define:
             return nil
         }
@@ -191,28 +288,51 @@ public enum ActionEnumerator {
     /// surrounding guards, control assignment, or sibling statements.
     private static func expandFirstDefinition(
         in action: ActionExpr,
-        oldState: [String: TLAValue]
+        oldState: [String: TLAValue],
+        formalOperatorDefinitions: [FormalOperatorDefinition]
     ) throws -> [ActionExpr]? {
         switch action {
         case .define(let name, let value, let body):
-            let resolved = try value.evaluate(in: oldState)
+            let resolved = try value.evaluate(
+                in: oldState,
+                formalOperatorDefinitions: formalOperatorDefinitions
+            )
             return [substituteVarInAction(name, resolved, body)]
         case .and(let lhs, let rhs):
-            if let expanded = try expandFirstDefinition(in: lhs, oldState: oldState) {
+            if let expanded = try expandFirstDefinition(
+                in: lhs,
+                oldState: oldState,
+                formalOperatorDefinitions: formalOperatorDefinitions
+            ) {
                 return expanded.map { .and($0, rhs) }
             }
-            return try expandFirstDefinition(in: rhs, oldState: oldState).map { expanded in
+            return try expandFirstDefinition(
+                in: rhs,
+                oldState: oldState,
+                formalOperatorDefinitions: formalOperatorDefinitions
+            ).map { expanded in
                 expanded.map { .and(lhs, $0) }
             }
         case .or(let lhs, let rhs):
-            if let expanded = try expandFirstDefinition(in: lhs, oldState: oldState) {
+            if let expanded = try expandFirstDefinition(
+                in: lhs,
+                oldState: oldState,
+                formalOperatorDefinitions: formalOperatorDefinitions
+            ) {
                 return expanded.map { .or($0, rhs) }
             }
-            return try expandFirstDefinition(in: rhs, oldState: oldState).map { expanded in
+            return try expandFirstDefinition(
+                in: rhs,
+                oldState: oldState,
+                formalOperatorDefinitions: formalOperatorDefinitions
+            ).map { expanded in
                 expanded.map { .or(lhs, $0) }
             }
         case .ifElse(let condition, let then, let otherwise):
-            return [try condition.evaluateBool(in: oldState) ? then : otherwise]
+            return [try condition.evaluateBool(
+                in: oldState,
+                formalOperatorDefinitions: formalOperatorDefinitions
+            ) ? then : otherwise]
         case .assign, .unchanged, .guard_, .chooseAction, .existsAction:
             return nil
         }
