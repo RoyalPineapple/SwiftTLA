@@ -96,9 +96,9 @@ struct SymmetryReductionTests { @Test("Symmetry reduces ChangRoberts state count
     #expect(spec.tlaCfg.contains("SYMMETRY Symmx"))
   }
 }
-// MARK: - StateVar parity: same behavior as Var + Variable
-@Suite(.serialized) struct StateVarParityTests { @Test("StateVar spec produces same StateGraph as Var + Variable spec")
-  func stateVarVsVar() throws {
+// MARK: - Initialized-variable parity
+@Suite(.serialized) struct InitializedVariableParityTests { @Test("initialized and explicitly declared variables produce the same StateGraph")
+  func initializedVarVsExplicitVariable() throws {
     let x = Var<Int>("x")
     let spec1 = TLASpec("Test") {
       Variable(x, 0)
@@ -146,8 +146,8 @@ enum Status: String, TLAValueType, StateExprConvertible {
     #expect(graph.states.count == 2)
   }
 
-  @Test("Int-backed enum StateVar model-checks correctly")
-  func intEnumStateVar() throws {
+  @Test("Int-backed initialized enum variable model-checks correctly")
+  func intEnumInitializedVar() throws {
     let mode = Var("mode", Mode.idle)
     let spec = TLASpec("IntEnumSV") {
       Variable(mode)
@@ -174,8 +174,8 @@ enum Status: String, TLAValueType, StateExprConvertible {
     #expect(graph.states.count == 2)
   }
 
-  @Test("String-backed enum StateVar model-checks correctly")
-  func stringEnumStateVar() throws {
+  @Test("String-backed initialized enum variable model-checks correctly")
+  func stringEnumInitializedVar() throws {
     let state = Var("state", Status.on)
     let spec = TLASpec("StringEnumSV") {
       Variable(state)

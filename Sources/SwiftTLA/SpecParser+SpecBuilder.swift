@@ -111,7 +111,7 @@ extension SpecParser {
                 parseForLoop(forStmt, into: &result)
             } else if case .decl(let decl) = statement.item,
                       let varDecl = decl.as(VariableDeclSyntax.self) {
-                parseStateVarDecl(varDecl, into: &result)
+                parseVarDecl(varDecl, into: &result)
             }
         }
         return result
@@ -146,9 +146,9 @@ extension SpecParser {
         }
     }
 
-    /// Parses `let x = Var(...)` or `let x = StateVar(...)` bindings into `ParsedSpecComponents.variables`.
+    /// Parses supported low-level `Var(...)` bindings into `ParsedSpecComponents.variables`.
     /// Handles both raw `Var("x", 0)` and rewrites where ModelMacro injected a string name.
-    static func parseStateVarDecl(_ varDecl: VariableDeclSyntax, into result: inout ParsedSpecComponents) {
+    static func parseVarDecl(_ varDecl: VariableDeclSyntax, into result: inout ParsedSpecComponents) {
         for binding in varDecl.bindings {
             guard let patternName = binding.pattern.as(IdentifierPatternSyntax.self)?.identifier.text,
                   let initializer = binding.initializer?.value,
@@ -220,16 +220,16 @@ extension SpecParser {
         }
     }
 
-    /// Resolves a StateVar call expression to (callName, swiftTypeName).
-    /// Returns nil if the call is not a StateVar constructor.
+    /// Resolves a supported low-level variable call expression.
+    /// Returns nil if the call is not a variable constructor.
     static func resolveVarCall(_ fc: FunctionCallExprSyntax) -> (String, String?)? {
         if let ref = fc.calledExpression.as(DeclReferenceExprSyntax.self) {
-            guard ["StateVar", "Var", "SharedVar"].contains(ref.baseName.text) else { return nil }
+            guard ["Var", "SharedVar"].contains(ref.baseName.text) else { return nil }
             return (ref.baseName.text, nil)
         }
         if let generic = fc.calledExpression.as(GenericSpecializationExprSyntax.self),
            let ref = generic.expression.as(DeclReferenceExprSyntax.self) {
-            guard ["StateVar", "Var"].contains(ref.baseName.text) else { return nil }
+            guard ref.baseName.text == "Var" else { return nil }
             let typeArgs = Array(generic.genericArgumentClause.arguments)
             let swiftTypeName = typeArgs.count >= 1
                 ? typeArgs[0].argument.description.trimmingCharacters(in: .whitespacesAndNewlines)

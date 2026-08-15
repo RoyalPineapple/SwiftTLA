@@ -82,7 +82,7 @@ enum TLASpecVerifier {
         }
 
         let rewritten = rewriteVarNames(in: closure)
-        let enumInfos = Self.collectEnumStateVars(from: memberList)
+        let enumInfos = Self.collectEnumVariables(from: memberList)
         let (enumPhases, caseToType) = collectEnumMetadata(from: memberList)
         let enumDomains = Dictionary(
             uniqueKeysWithValues: enumInfos.map { ($0.typeName, $0.formalDomain) }
@@ -274,9 +274,7 @@ enum TLASpecVerifier {
                 ?? callee.as(GenericSpecializationExprSyntax.self)?.expression.as(DeclReferenceExprSyntax.self)?.baseName.text
             let isVar = baseName == "Var"
             let isValue = baseName == "Value"
-            let isStateVar = baseName == "StateVar"
-
-            if isStateVar || isVar {
+            if isVar {
                 if let firstArg = fc.arguments.first,
                    let label = firstArg.label?.text,
                    label == "in" || label == "values" {
@@ -442,7 +440,7 @@ enum TLASpecVerifier {
         return nil
     }
 
-    static func collectEnumStateVars(from members: MemberBlockItemListSyntax) -> [ParsedEnumInfo] {
+    static func collectEnumVariables(from members: MemberBlockItemListSyntax) -> [ParsedEnumInfo] {
         var result: [ParsedEnumInfo] = []
         for member in members {
             guard let enumDecl = member.decl.as(EnumDeclSyntax.self) else { continue }

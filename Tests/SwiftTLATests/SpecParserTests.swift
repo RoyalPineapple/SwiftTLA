@@ -1067,10 +1067,10 @@ private let cameraModePhases: [String: [String: TLAValue]] = [
         #expect(parsed.invariants[0].body == .notEqual(.variable("mode"), .value(.string("error"))))
     }
 
-    @Test func parseEnumStateVarInit() {
+    @Test func parseInitializedEnumVar() {
         let source = """
         {
-            let mode = StateVar<CameraMode>(CameraMode.idle)
+            let mode = Var<CameraMode>(CameraMode.idle)
         }
         """
         let closure = Parser.parse(source: source).statements.first!.item.as(ClosureExprSyntax.self)!

@@ -5,7 +5,7 @@ extension TLASpecVerifier {
     static func collectEnumPhaseMap(
         from members: MemberBlockItemListSyntax
     ) -> (phases: EnumPhaseMap, caseToType: [String: String]) {
-        let infos = collectEnumStateVars(from: members)
+        let infos = collectEnumVariables(from: members)
         var phases: EnumPhaseMap = [:]
         var caseToType: [String: String] = [:]
         for info in infos {
