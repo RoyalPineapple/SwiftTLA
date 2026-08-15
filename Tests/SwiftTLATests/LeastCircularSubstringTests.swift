@@ -7,13 +7,17 @@ struct LeastCircularSubstringTests {
   @Test("emits the upstream dependency as a separate module with its scoped finite configuration")
   func emitsModuleBundle() {
     let bundle = LeastCircularSubstringModel.spec.tlaBundle
+    guard let config = bundle.root.cfg else {
+      Issue.record("The root module needs a TLC configuration.")
+      return
+    }
 
     #expect(bundle.imports.map(\.name) == ["ZSequences"])
     #expect(bundle.root.tla.contains("EXTENDS Integers, FiniteSets, Sequences, ZSequences"))
     #expect(bundle.root.tla.contains("ZSequencesNat == 0..6"))
-    #expect(bundle.root.cfg.contains("CONSTANT Nat <- [ZSequences]ZSequencesNat"))
-    #expect(bundle.root.cfg.contains("INVARIANT TypeInvariant"))
-    #expect(bundle.root.cfg.contains("INVARIANT Correctness"))
+    #expect(config.contains("CONSTANT Nat <- [ZSequences]ZSequencesNat"))
+    #expect(config.contains("INVARIANT TypeInvariant"))
+    #expect(config.contains("INVARIANT Correctness"))
   }
 
   @Test("preserves the published small-model state-space declaration")
