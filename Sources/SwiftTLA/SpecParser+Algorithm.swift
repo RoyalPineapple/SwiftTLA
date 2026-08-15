@@ -840,7 +840,8 @@ extension SpecParser {
                 domain: domain,
                 scopedBody
             )
-        case .goto, .stop, .skip: return statement
+        case .call(let target, let arguments): return .call(target: target, arguments: arguments.map { renameVar(from, to: to, in: $0) })
+        case .goto, .return, .stop, .skip: return statement
         }
     }
 

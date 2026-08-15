@@ -49,7 +49,8 @@ extension SpecParser {
                 domain: domain,
                 variable == name ? body : body.map { substituteAlgorithmVariable($0, from: name, with: replacement) }
             )
-        case .goto, .stop, .skip: return statement
+        case .call(let target, let arguments): return .call(target: target, arguments: arguments.map(expression))
+        case .goto, .return, .stop, .skip: return statement
         }
     }
 }

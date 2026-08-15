@@ -18,11 +18,19 @@ internal struct AlgorithmModel: Sendable {
             return step
         }
     }
+
+    var procedures: [AlgorithmProcedureModel] {
+        components.compactMap {
+            guard case .procedure(let procedure) = $0 else { return nil }
+            return procedure
+        }
+    }
 }
 
 internal indirect enum AlgorithmComponentModel: Sendable {
     case shared(AlgorithmStateModel)
     case process(AlgorithmProcessModel)
+    case procedure(AlgorithmProcedureModel)
     case invariant(NamedInvariant)
     case temporal(NamedTemporal)
     case fairness(FairnessCondition)
@@ -32,6 +40,21 @@ internal indirect enum AlgorithmComponentModel: Sendable {
     case local(AlgorithmStateModel)
     case step(AlgorithmStepModel)
     case propertyBoundary
+}
+
+/// One formal PlusCal procedure. The public builder does not expose this
+/// internal representation until its parser twin is available.
+internal struct AlgorithmProcedureModel: Sendable {
+    let name: String
+    let parameters: [AlgorithmProcedureParameterModel]
+    let locals: [AlgorithmStateModel]
+    let steps: [AlgorithmStepModel]
+}
+
+internal struct AlgorithmProcedureParameterModel: Sendable {
+    let root: String
+    let initial: StateExpr
+    let swiftTypeName: String?
 }
 
 internal struct AlgorithmProcessModel: Sendable {
@@ -113,6 +136,8 @@ internal indirect enum AlgorithmStatementModel: Sendable {
     case either([AlgorithmStatementModel], [AlgorithmStatementModel])
     case choose(variable: String, domain: [TLAValue], [AlgorithmStatementModel])
     case goto(AlgorithmLabelModel)
+    case call(target: String, arguments: [StateExpr])
+    case `return`
     case stop
     case skip
 }

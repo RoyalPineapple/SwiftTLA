@@ -427,7 +427,8 @@ private func substituteMacroParameter(
             domain: domain,
             scopedBody
         )
-    case .goto, .stop, .skip: return statement
+    case .call(let target, let arguments): return .call(target: target, arguments: arguments.map(substitute))
+    case .goto, .return, .stop, .skip: return statement
     }
 }
 
@@ -1785,6 +1786,7 @@ internal enum AlgorithmValidator {
     static func validate(_ model: AlgorithmModel) -> [AlgorithmDiagnostic] {
         var diagnostics: [AlgorithmDiagnostic] = []
         validateName(model.name, at: .algorithm, diagnostics: &diagnostics)
+        diagnostics += AlgorithmProcedureValidator.procedureDiagnostics(for: model)
 
         // PlusCal has two distinct control shapes: a `begin` body with one
         // scalar pc, and a process set with a function-valued pc. Mixing them
@@ -1803,6 +1805,8 @@ internal enum AlgorithmValidator {
                 validateName(state.root, at: .algorithm, diagnostics: &diagnostics)
             case .process(let process):
                 validate(process, index: index, diagnostics: &diagnostics)
+            case .procedure:
+                break
             case .invariant(let invariant):
                 validateName(invariant.name, at: .algorithm, diagnostics: &diagnostics)
             case .temporal(let temporal):
@@ -1863,7 +1867,7 @@ internal enum AlgorithmValidator {
                 validateName(invariant.name, at: processAnchor, diagnostics: &diagnostics)
             case .temporal, .fairness, .stateConstraint, .propertyBoundary:
                 diagnostics.append(AlgorithmDiagnostic(.propertyBoundary, at: processAnchor))
-            case .shared, .process:
+            case .shared, .process, .procedure:
                 diagnostics.append(AlgorithmDiagnostic(.invalidAlgorithmComponent, at: processAnchor))
             }
         }
@@ -1908,6 +1912,8 @@ internal enum AlgorithmValidator {
                 if !labels.contains(label.name) {
                     diagnostics.append(AlgorithmDiagnostic(.invalidTarget, at: anchor))
                 }
+            case .call, .return:
+                break
             case .stop:
                 break
             }
@@ -1924,7 +1930,7 @@ internal enum AlgorithmValidator {
                 statementPaths = writePaths(then) + writePaths(otherwise)
             case .choose(_, _, let body):
                 statementPaths = writePaths(body)
-            case .await, .assert, .goto, .stop, .skip:
+            case .await, .assert, .goto, .call, .return, .stop, .skip:
                 statementPaths = [[]]
             case .letBinding(_, _, let body), .with(_, _, let body):
                 statementPaths = writePaths(body)

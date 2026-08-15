@@ -8,6 +8,8 @@ extension Algorithm {
 
 enum AlgorithmLowerer {
     private static let controlVariable = "pc"
+    private static let stackVariable = "__pcal_stack"
+    private static let returnPCField = "returnPC"
     private static let processBinding = "process"
     private static let builderProcessIdentifier = "__pcal_self"
     private static let doneLabel = "Done"
@@ -210,6 +212,7 @@ enum AlgorithmLowerer {
     /// unparameterized action labels.
     private static func lowerSequential(_ algorithm: AlgorithmModel) -> TLASpec {
         let steps = algorithm.sequentialSteps
+        let procedures = algorithm.procedures
         let shared = algorithm.components.compactMap { component -> AlgorithmStateModel? in
             guard case .shared(let state) = component else { return nil }
             return state
@@ -240,6 +243,20 @@ enum AlgorithmLowerer {
                 NamedVar(name: state.root, initial: .int(0), initExpr: state.initial)
             }
         }
+        for procedure in procedures {
+            for parameter in procedure.parameters {
+                variables.append(NamedVar(
+                    name: parameter.root,
+                    initial: staticInitialValue(parameter.initial, named: parameter.root)
+                ))
+            }
+            for local in procedure.locals {
+                variables.append(NamedVar(
+                    name: local.root,
+                    initial: staticInitialValue(local.initial, named: local.root)
+                ))
+            }
+        }
         guard let first = steps.first else {
             return TLASpec(
                 name: algorithm.name,
@@ -252,38 +269,51 @@ enum AlgorithmLowerer {
             )
         }
         variables.append(NamedVar(name: controlVariable, initial: .string(first.label.name)))
+        if !procedures.isEmpty {
+            variables.append(NamedVar(name: stackVariable, initial: .tuple([])))
+        }
         let variableNames = variables.map(\.name)
 
         var actions: [NamedAction] = []
         var generatedAssertionInvariants: [NamedInvariant] = []
-        for (index, atomic) in steps.enumerated() {
-            let nextLabel = steps.indices.contains(index + 1)
-                ? steps[index + 1].label.name
-                : doneLabel
-            let statements = lowerSequential(atomic.statements)
+        let actionSources = [(steps, Optional<AlgorithmProcedureModel>.none)]
+            + procedures.map { ($0.steps, Optional($0)) }
+        for (sourceSteps, owner) in actionSources {
+            for (index, atomic) in sourceSteps.enumerated() {
+            let nextLabel = sourceSteps.indices.contains(index + 1)
+                ? emittedLabel(sourceSteps[index + 1].label.name, owner: owner)
+                : (owner == nil ? doneLabel : emittedLabel(doneLabel, owner: owner))
+            let label = emittedLabel(atomic.label.name, owner: owner)
+            let statements = lowerSequential(
+                atomic.statements,
+                nextLabel: nextLabel,
+                procedures: procedures,
+                owner: owner
+            )
             let body: ActionExpr
             if let condition = atomic.loopCondition {
                 body = .ifElse(
                     condition,
-                    completingSequentialControl(statements, fallthrough: atomic.label.name),
+                    completingSequentialControl(statements, fallthrough: label),
                     sequentialTransfer(to: nextLabel)
                 )
             } else {
                 body = completingSequentialControl(statements, fallthrough: nextLabel)
             }
             actions.append(NamedAction(
-                name: atomic.label.name,
+                name: label,
                 body: completeAction(
-                    .and(.guard_(.equal(.variable(controlVariable), .value(.string(atomic.label.name)))), body),
+                    .and(.guard_(.equal(.variable(controlVariable), .value(.string(label)))), body),
                     allVars: variableNames
                 )
             ))
             generatedAssertionInvariants += sequentialAssertionInvariants(
                 in: atomic.statements,
-                label: atomic.label.name,
+                label: label,
                 executionCondition: atomic.loopCondition,
                 pathCondition: .value(.bool(true))
             )
+            }
         }
 
         let terminate = variableNames
@@ -309,6 +339,11 @@ enum AlgorithmLowerer {
         .assign(controlVariable, .value(.string(label)))
     }
 
+    private static func emittedLabel(_ label: String, owner: AlgorithmProcedureModel?) -> String {
+        guard let owner else { return label }
+        return "procedure.\(owner.name).\(label)"
+    }
+
     private static func completingSequentialControl(_ action: ActionExpr, fallthrough label: String) -> ActionExpr {
         let branches = distributeOr(action)
         let completed = branches.map { branch in
@@ -319,13 +354,39 @@ enum AlgorithmLowerer {
         return completed.dropFirst().reduce(completed.first ?? sequentialTransfer(to: label), ActionExpr.or)
     }
 
-    private static func lowerSequential(_ statements: [AlgorithmStatementModel]) -> ActionExpr {
-        statements.reduce(.guard_(.value(.bool(true)))) { partial, statement in
-            .and(partial, lowerSequential(statement))
+    private static func lowerSequential(
+        _ statements: [AlgorithmStatementModel],
+        nextLabel: String,
+        procedures: [AlgorithmProcedureModel],
+        owner: AlgorithmProcedureModel?
+    ) -> ActionExpr {
+        var result = ActionExpr.guard_(.value(.bool(true)))
+        var index = 0
+        while index < statements.count {
+            if case .call(let target, let arguments) = statements[index],
+               index + 1 < statements.count,
+               case .return = statements[index + 1] {
+                result = .and(result, tailCallAction(target: target, arguments: arguments, procedures: procedures))
+                index += 2
+            } else {
+                result = .and(result, lowerSequential(
+                    statements[index],
+                    nextLabel: nextLabel,
+                    procedures: procedures,
+                    owner: owner
+                ))
+                index += 1
+            }
         }
+        return result
     }
 
-    private static func lowerSequential(_ statement: AlgorithmStatementModel) -> ActionExpr {
+    private static func lowerSequential(
+        _ statement: AlgorithmStatementModel,
+        nextLabel: String,
+        procedures: [AlgorithmProcedureModel],
+        owner: AlgorithmProcedureModel?
+    ) -> ActionExpr {
         switch statement {
         case .await(let condition): return .guard_(condition)
         case .assert: return .guard_(.value(.bool(true)))
@@ -335,18 +396,93 @@ enum AlgorithmLowerer {
             case .function(let root, let key): return .assign(root, .except(.variable(root), key, value))
             }
         case .letBinding(let variable, let value, let body):
-            return .define(variable, value, lowerSequential(body))
+            return .define(variable, value, lowerSequential(body, nextLabel: nextLabel, procedures: procedures, owner: owner))
         case .with(let variable, let source, let body):
-            return .existsAction(variable, source, lowerSequential(body))
+            return .existsAction(variable, source, lowerSequential(body, nextLabel: nextLabel, procedures: procedures, owner: owner))
         case .ifElse(let condition, let then, let otherwise):
-            return .ifElse(condition, lowerSequential(then), lowerSequential(otherwise))
+            return .ifElse(condition, lowerSequential(then, nextLabel: nextLabel, procedures: procedures, owner: owner), lowerSequential(otherwise, nextLabel: nextLabel, procedures: procedures, owner: owner))
         case .either(let first, let second):
-            return .or(lowerSequential(first), lowerSequential(second))
+            return .or(lowerSequential(first, nextLabel: nextLabel, procedures: procedures, owner: owner), lowerSequential(second, nextLabel: nextLabel, procedures: procedures, owner: owner))
         case .choose(let variable, let domain, let body):
-            return .existsAction(variable, .setLiteral(domain.map(StateExpr.value)), lowerSequential(body))
-        case .goto(let label): return sequentialTransfer(to: label.name)
+            return .existsAction(variable, .setLiteral(domain.map(StateExpr.value)), lowerSequential(body, nextLabel: nextLabel, procedures: procedures, owner: owner))
+        case .goto(let label): return sequentialTransfer(to: emittedLabel(label.name, owner: owner))
+        case .call(let target, let arguments):
+            return callAction(target: target, arguments: arguments, returnTo: nextLabel, procedures: procedures)
+        case .return:
+            return returnAction(owner: owner, procedures: procedures)
         case .stop: return sequentialTransfer(to: doneLabel)
         case .skip: return .guard_(.value(.bool(true)))
+        }
+    }
+
+    private static func callAction(
+        target: String,
+        arguments: [StateExpr],
+        returnTo: String,
+        procedures: [AlgorithmProcedureModel]
+    ) -> ActionExpr {
+        guard let procedure = procedures.first(where: { $0.name == target }),
+              let entry = procedure.steps.first?.label.name else {
+            return .guard_(.value(.bool(false)))
+        }
+        // A frame captures every procedure-owned slot, not only the callee's.
+        // That makes a tail call safe: it reuses the caller's continuation and
+        // return restores the entire pre-call procedural environment at once.
+        let frameFields = [(returnPCField, StateExpr.value(.string(returnTo)))]
+            + procedureSlots(procedures).map { ($0.root, StateExpr.variable($0.root)) }
+        let push = ActionExpr.assign(
+            stackVariable,
+            .tupleConcatenate(.tupleLiteral([.recordLiteral(Dictionary(uniqueKeysWithValues: frameFields))]), .variable(stackVariable))
+        )
+        let parameterAssignments = zip(procedure.parameters, arguments).map {
+            ActionExpr.assign($0.0.root, $0.1)
+        }
+        let localAssignments = procedure.locals.map { ActionExpr.assign($0.root, $0.initial) }
+        return (parameterAssignments + localAssignments + [push, sequentialTransfer(to: emittedLabel(entry, owner: procedure))])
+            .reduce(.guard_(.value(.bool(true))), ActionExpr.and)
+    }
+
+    private static func returnAction(
+        owner: AlgorithmProcedureModel?,
+        procedures: [AlgorithmProcedureModel]
+    ) -> ActionExpr {
+        guard owner != nil else { return .guard_(.value(.bool(false))) }
+        let stack = StateExpr.variable(stackVariable)
+        let frame = StateExpr.tupleHead(stack)
+        let restore = (procedureSlots(procedures).map { ActionExpr.assign($0.root, .recordAccess(frame, $0.root)) }
+            + [
+                .assign(stackVariable, .tupleTail(stack)),
+                .assign(controlVariable, .recordAccess(frame, returnPCField))
+            ])
+        return restore.reduce(
+            .guard_(.greaterThan(.tupleLength(stack), .int(0))),
+            ActionExpr.and
+        )
+    }
+
+    private static func tailCallAction(
+        target: String,
+        arguments: [StateExpr],
+        procedures: [AlgorithmProcedureModel]
+    ) -> ActionExpr {
+        guard let procedure = procedures.first(where: { $0.name == target }),
+              let entry = procedure.steps.first?.label.name else {
+            return .guard_(.value(.bool(false)))
+        }
+        let parameterAssignments = zip(procedure.parameters, arguments).map {
+            ActionExpr.assign($0.0.root, $0.1)
+        }
+        let localAssignments = procedure.locals.map { ActionExpr.assign($0.root, $0.initial) }
+        return (parameterAssignments + localAssignments + [sequentialTransfer(to: emittedLabel(entry, owner: procedure))])
+            .reduce(.guard_(.value(.bool(true))), ActionExpr.and)
+    }
+
+    private static func procedureSlots(
+        _ procedures: [AlgorithmProcedureModel]
+    ) -> [(root: String, initial: StateExpr)] {
+        procedures.flatMap { procedure in
+            procedure.parameters.map { ($0.root, $0.initial) }
+                + procedure.locals.map { ($0.root, $0.initial) }
         }
     }
 
@@ -388,7 +524,7 @@ enum AlgorithmLowerer {
                     .map { invariant in
                         NamedInvariant(name: invariant.name, body: .forAll(source, variable, invariant.body))
                     }
-            case .await, .set, .goto, .stop, .skip: return []
+            case .await, .set, .goto, .call, .return, .stop, .skip: return []
             }
         }
     }
@@ -498,6 +634,10 @@ enum AlgorithmLowerer {
                     .variable(controlVariable),
                     .variable(processBinding),
                     .value(.string(label.name))))
+        case .call, .return:
+            // Calls and returns are only admitted by the sequential procedure
+            // lowering path. Validation rejects them in an `Each` process.
+            return .guard_(.value(.bool(false)))
         case .stop:
             return stopAction()
         case .skip:
@@ -603,7 +743,7 @@ enum AlgorithmLowerer {
                     pathCondition: pathCondition,
                     quantifiedBindings: quantifiedBindings + [(variable, source)]
                 )
-            case .await, .set, .goto, .stop, .skip:
+            case .await, .set, .goto, .call, .return, .stop, .skip:
                 return []
             }
         }
@@ -691,7 +831,8 @@ enum AlgorithmLowerer {
                     ? body
                     : body.map { substituteAlgorithmVariable($0, name: name, with: replacement) }
             )
-        case .goto, .stop, .skip: return statement
+        case .call(let target, let arguments): return .call(target: target, arguments: arguments.map(expression))
+        case .goto, .return, .stop, .skip: return statement
         }
     }
 
