@@ -786,9 +786,11 @@ extension MacroExpander {
         let guardBlock = guardExprs.isEmpty ? "" : "guard \(guardExprs.joined(separator: ", ")) else { return }"
         let assignments = extracted.assignments.compactMap { name, expr -> String? in
             if case .variable(let refName) = expr, refName == name { return nil }
-            return "_state.\(name) = \(codegenExpr(expr, variables: variables, enumInfos: enumInfos))"
+            let rhs = codegenExpr(expr, variables: variables, enumInfos: enumInfos)
+                .replacingOccurrences(of: "_state.", with: "_saved.")
+            return "_state.\(name) = \(rhs)"
         }
-        let body = [guardBlock].filter { !$0.isEmpty } + assignments
+        let body = ["let _saved = _state", guardBlock].filter { !$0.isEmpty } + assignments
         return body.filter { !$0.isEmpty }.joined(separator: "\n        ")
     }
     static func codegenMultiDisjunct(

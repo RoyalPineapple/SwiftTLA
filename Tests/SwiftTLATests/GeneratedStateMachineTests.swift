@@ -134,6 +134,37 @@ struct GeneratedSequentialMachineTests {
 }
 
 @TLAModel
+struct GeneratedSimultaneousSwap {
+    static var spec: TLASpec {
+        #spec("GeneratedSimultaneousSwap") {
+            Algorithm("GeneratedSimultaneousSwap") {
+                let left = SharedVar(initial: 1)
+                let right = SharedVar(initial: 2)
+                Do("swap") {
+                    Assign(left, to: right)
+                    Assign(right, to: left)
+                }
+            }
+        }
+    }
+}
+
+struct GeneratedSimultaneousSwapTests {
+    @Test("generated updates read one old state and commit together")
+    func generatedMachineSwapsValues() throws {
+        var model = GeneratedSimultaneousSwap()
+
+        let result = try model.apply(.swap)
+
+        #expect(result.before.left == 1)
+        #expect(result.before.right == 2)
+        #expect(result.after.left == 2)
+        #expect(result.after.right == 1)
+        #expect(model.state == result.after)
+    }
+}
+
+@TLAModel
 struct GeneratedRangeInitializedAlgorithm {
     enum Node: String, FiniteDomainKey {
         case clock
