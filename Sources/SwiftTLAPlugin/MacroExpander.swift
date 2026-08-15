@@ -169,6 +169,15 @@ enum MacroExpander {
         let treeFormalParameters = model.formalParameters.map {
             "FormalModuleParameter(\"\($0.name)\", kind: .\($0.kind.rawValue))"
         }.joined(separator: ", ")
+        let treeFormalOperatorDefinitions = model.formalOperatorDefinitions.map { definition in
+            let parameters = definition.parameters.map { parameter -> String in
+                switch parameter {
+                case .value(let name): return ".value(\"\(name)\")"
+                case .operator(let name, let arity): return ".operator(\"\(name)\", arity: \(arity))"
+                }
+            }.joined(separator: ", ")
+            return "FormalOperatorDefinition(name: \"\(definition.name)\", parameters: [\(parameters)], body: \(codegenStateExpr(definition.body)))"
+        }.joined(separator: ", ")
 
         let parserTreeSource = """
         static let _parserTree: ParsedSpecModel = ParsedSpecModel(
@@ -181,7 +190,8 @@ enum MacroExpander {
             imports: [\(treeImports)],
             importConfigurations: [\(treeImportConfigurations)],
             moduleInstances: [\(treeModuleInstances)],
-            formalParameters: [\(treeFormalParameters)]
+            formalParameters: [\(treeFormalParameters)],
+            formalOperatorDefinitions: [\(treeFormalOperatorDefinitions)]
         )
         """
         let checkerSource = """
@@ -197,7 +207,8 @@ enum MacroExpander {
                 imports: builtSpec.imports.map(\\.name),
                 importConfigurations: builtSpec.importConfigurations,
                 moduleInstances: builtSpec.moduleInstances,
-                formalParameters: builtSpec.formalParameters
+                formalParameters: builtSpec.formalParameters,
+                formalOperatorDefinitions: builtSpec.formalOperatorDefinitions
             )
             if !_tlaAlphaEquivalent(built, _parserTree) {
                 preconditionFailure(

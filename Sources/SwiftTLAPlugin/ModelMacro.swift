@@ -41,6 +41,7 @@ struct ParsedMacroModel {
     let importConfigurations: [FormalModuleConfiguration]
     let moduleInstances: [FormalModuleInstance]
     let formalParameters: [FormalModuleParameter]
+    let formalOperatorDefinitions: [FormalOperatorDefinition]
 }
 
 enum NestedAdapterModelRegistry {
@@ -142,6 +143,7 @@ enum TLASpecVerifier {
             temporalProperties: parsed.temporal.map { NamedTemporal(name: $0.name, expr: $0.expr) },
             fairness: parsed.fairness,
             constraint: parsed.constraint,
+            formalOperatorDefinitions: parsed.formalOperatorDefinitions,
             imports: imports,
             importConfigurations: parsed.importConfigurations,
             moduleInstances: parsed.moduleInstances,
@@ -183,7 +185,8 @@ enum TLASpecVerifier {
             temporal: parsed.temporal, fairness: parsed.fairness, constraint: parsed.constraint,
             imports: parsed.imports, importConfigurations: parsed.importConfigurations,
             moduleInstances: parsed.moduleInstances,
-            formalParameters: parsed.formalParameters
+            formalParameters: parsed.formalParameters,
+            formalOperatorDefinitions: parsed.formalOperatorDefinitions
         )
     }
 

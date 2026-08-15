@@ -142,6 +142,10 @@ public struct ParsedSpecModel: Equatable, Sendable {
   public let importConfigurations: [FormalModuleConfiguration]
   public let moduleInstances: [FormalModuleInstance]
   public let formalParameters: [FormalModuleParameter]
+  /// Executable formal operators are formal model data. Keeping them in the
+  /// parser tree makes a missing definition visible at the parser/builder
+  /// boundary instead of failing later during evaluation.
+  public let formalOperatorDefinitions: [FormalOperatorDefinition]
   public init(
     variables: [(String, TLAValue, StateExpr?)], actions: [(String, ActionExpr, [ActionBinding])],
     invariants: [(String, StateExpr)],
@@ -151,7 +155,8 @@ public struct ParsedSpecModel: Equatable, Sendable {
     imports: [String] = [],
     importConfigurations: [FormalModuleConfiguration] = [],
     moduleInstances: [FormalModuleInstance] = [],
-    formalParameters: [FormalModuleParameter] = []
+    formalParameters: [FormalModuleParameter] = [],
+    formalOperatorDefinitions: [FormalOperatorDefinition] = []
   ) {
     self.variables = variables
     self.actions = actions
@@ -163,6 +168,7 @@ public struct ParsedSpecModel: Equatable, Sendable {
     self.importConfigurations = importConfigurations
     self.moduleInstances = moduleInstances
     self.formalParameters = formalParameters
+    self.formalOperatorDefinitions = formalOperatorDefinitions
   }
   public static func == (lhs: ParsedSpecModel, rhs: ParsedSpecModel) -> Bool {
     guard lhs.variables.count == rhs.variables.count,
@@ -174,7 +180,8 @@ public struct ParsedSpecModel: Equatable, Sendable {
       lhs.imports == rhs.imports,
       lhs.importConfigurations == rhs.importConfigurations,
       lhs.moduleInstances == rhs.moduleInstances,
-      lhs.formalParameters == rhs.formalParameters
+      lhs.formalParameters == rhs.formalParameters,
+      lhs.formalOperatorDefinitions == rhs.formalOperatorDefinitions
     else { return false }
     for (a, b) in zip(lhs.variables, rhs.variables) {
       if a.name != b.name || a.initial != b.initial || a.initialSet != b.initialSet { return false }

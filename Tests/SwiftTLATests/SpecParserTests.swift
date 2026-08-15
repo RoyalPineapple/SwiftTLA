@@ -428,6 +428,66 @@ private enum ParserNode: String, FiniteDomainKey {
         #expect(evidence?.description.contains("Next safe action:") == true)
     }
 
+    @Test func formalOperatorDefinitionsArePartOfParserBuilderFidelity() {
+        let parserTree = ParsedSpecModel(
+            variables: [],
+            actions: [],
+            invariants: [],
+            formalOperatorDefinitions: [
+                FormalOperatorDefinition(
+                    name: "increment",
+                    parameters: [.value("value")],
+                    body: .add(.variable("value"), .int(1))
+                )
+            ]
+        )
+        let builderTree = ParsedSpecModel(
+            variables: [],
+            actions: [],
+            invariants: [],
+            formalOperatorDefinitions: [
+                FormalOperatorDefinition(
+                    name: "increment",
+                    parameters: [.value("value")],
+                    body: .add(.variable("value"), .int(2))
+                )
+            ]
+        )
+
+        let evidence = _tlaFidelityEvidence(parserTree, builderTree)
+
+        #expect(!_tlaAlphaEquivalent(parserTree, builderTree))
+        #expect(evidence?.location == .semanticPath("formalOperatorDefinitions[0] (increment)"))
+        #expect(evidence?.expected.contains("value(1)") == true)
+        #expect(evidence?.actual.contains("value(2)") == true)
+        #expect(evidence?.changeStatus == .noSpecificationWasCommitted)
+        #expect(evidence?.sourceSpan.description == "source span unavailable")
+        #expect(evidence?.nextSafeAction.contains("FormalDefinition") == true)
+    }
+
+    @Test func formalDefinitionIsParsedIntoTheCanonicalFormalModel() {
+        let source = """
+        {
+            FormalDefinition(
+                "increment",
+                parameters: [.value("value")],
+                body: value + 1
+            )
+        }
+        """
+        let closure = Parser.parse(source: source).statements.first!.item.as(ClosureExprSyntax.self)!
+        let parsed = SpecParser.parseSpecClosure(closure)
+
+        #expect(parsed.diagnostics.isEmpty)
+        #expect(parsed.formalOperatorDefinitions == [
+            FormalOperatorDefinition(
+                name: "increment",
+                parameters: [.value("value")],
+                body: .add(.variable("value"), .int(1))
+            )
+        ])
+    }
+
     @Test func localOperatorParameterNamesAreAlphaEquivalent() {
         let parserTree = ParsedSpecModel(
             variables: [],

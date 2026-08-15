@@ -174,7 +174,8 @@ extension TLASpec {
         imports: importedModules.map(\.name),
         importConfigurations: importConfigurations,
         moduleInstances: moduleInstances,
-        formalParameters: formalParameters
+        formalParameters: formalParameters,
+        formalOperatorDefinitions: formalOperatorDefinitions
       )
       guard _tlaAlphaEquivalent(built, tree) else {
         fatalError(

@@ -19,6 +19,7 @@ extension SpecParser {
         public var importConfigurations: [FormalModuleConfiguration] = []
         public var moduleInstances: [FormalModuleInstance] = []
         public var formalParameters: [FormalModuleParameter] = []
+        public var formalOperatorDefinitions: [FormalOperatorDefinition] = []
         public var constants: [String: TLAValue] = [:]
         /// Local named values (from NamedValue declarations, resolved in expressions)
         public var localConstants: [String: TLAValue] = [:]
@@ -559,6 +560,8 @@ extension SpecParser {
                 kind = .constant
             }
             result.formalParameters.append(FormalModuleParameter(name, kind: kind))
+        case "FormalDefinition":
+            parseFormalDefinition(call, into: &result)
         case "LeadsTo", "Eventually", "Always", "AlwaysEventually", "EventuallyAlways":
             if let expr = decodeTemporal(call) {
                 result.temporal.append((name, expr))
@@ -600,6 +603,65 @@ extension SpecParser {
         default:
             break
         }
+    }
+
+    private static func parseFormalDefinition(
+        _ call: FunctionCallExprSyntax,
+        into result: inout ParsedSpecComponents
+    ) {
+        guard let name = extractStringArg(call, index: 0), !name.isEmpty,
+              let parametersSyntax = call.arguments.first(where: { $0.label?.text == "parameters" })?.expression,
+              let bodySyntax = call.arguments.first(where: { $0.label?.text == "body" })?.expression,
+              let parameters = parseFormalParameters(parametersSyntax),
+              let body = decodeStateExpr(bodySyntax)
+        else {
+            result.diagnostics.append(.init(
+                message: "FormalDefinition requires a name, supported formal parameters, and a formal body expression.",
+                source: call.description,
+                expected: "FormalDefinition(\"name\", parameters: [.value(\"value\")], body: expression)",
+                nextSafeAction: "Use FormalDefinition with .value or .operator parameters and a supported StateExpr body."
+            ))
+            return
+        }
+        guard !result.formalOperatorDefinitions.contains(where: { $0.name == name }) else {
+            result.diagnostics.append(.init(
+                message: "FormalDefinition '\(name)' is declared more than once.",
+                source: call
+            ))
+            return
+        }
+        guard Set(parameters.map(\.name)).count == parameters.count else {
+            result.diagnostics.append(.init(
+                message: "FormalDefinition '\(name)' cannot repeat a parameter name.",
+                source: call
+            ))
+            return
+        }
+        result.formalOperatorDefinitions.append(
+            FormalOperatorDefinition(name: name, parameters: parameters, body: body)
+        )
+    }
+
+    private static func parseFormalParameters(_ expression: ExprSyntax) -> [FormalParameter]? {
+        guard let array = expression.as(ArrayExprSyntax.self) else { return nil }
+        let parameters: [FormalParameter?] = array.elements.map { element -> FormalParameter? in
+            guard let call = element.expression.as(FunctionCallExprSyntax.self),
+                  let member = call.calledExpression.as(MemberAccessExprSyntax.self),
+                  let name = extractStringArg(call, index: 0)
+            else { return nil }
+            switch member.declName.baseName.text {
+            case "value": return .value(name)
+            case "operator":
+                guard let arityExpression = call.arguments.first(where: { $0.label?.text == "arity" })?.expression,
+                      let arityLiteral = arityExpression.as(IntegerLiteralExprSyntax.self),
+                      let arity = Int(arityLiteral.literal.text), arity >= 0
+                else { return nil }
+                return .operator(name, arity: arity)
+            default: return nil
+            }
+        }
+        guard parameters.allSatisfy({ $0 != nil }) else { return nil }
+        return parameters.compactMap { $0 }
     }
 
     private static func parseFormalModuleInstance(

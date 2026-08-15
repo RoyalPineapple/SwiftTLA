@@ -14,6 +14,7 @@ public func _tlaAlphaEquivalent(_ lhs: ParsedSpecModel, _ rhs: ParsedSpecModel) 
           lhs.importConfigurations == rhs.importConfigurations,
           lhs.moduleInstances == rhs.moduleInstances,
           lhs.formalParameters == rhs.formalParameters,
+          formalOperatorDefinitionsEquivalent(lhs.formalOperatorDefinitions, rhs.formalOperatorDefinitions),
           optionalStateEquivalent(lhs.constraint, rhs.constraint)
     else { return false }
 
@@ -37,6 +38,21 @@ public func _tlaAlphaEquivalent(_ lhs: ParsedSpecModel, _ rhs: ParsedSpecModel) 
 /// the first differing formal component intact so a macro diagnostic, test,
 /// or caller can report more than an unqualified "tree mismatch".
 public struct TLAParserFidelityDiagnostic: Error, Sendable, Hashable, CustomStringConvertible {
+    public struct SourceSpan: Sendable, Hashable, CustomStringConvertible {
+        public let utf8Offset: Int?
+        public let utf8Length: Int?
+
+        public init(utf8Offset: Int? = nil, utf8Length: Int? = nil) {
+            self.utf8Offset = utf8Offset
+            self.utf8Length = utf8Length
+        }
+
+        public var description: String {
+            guard let utf8Offset, let utf8Length else { return "source span unavailable" }
+            return "UTF-8 offset \(utf8Offset), length \(utf8Length)"
+        }
+    }
+
     public enum Location: Sendable, Hashable, CustomStringConvertible {
         /// Parser and builder trees do not retain SwiftSyntax nodes after
         /// expansion. The semantic path identifies the precise formal node.
@@ -55,6 +71,7 @@ public struct TLAParserFidelityDiagnostic: Error, Sendable, Hashable, CustomStri
 
     public let whatFailed: String
     public let location: Location
+    public let sourceSpan: SourceSpan
     public let expected: String
     public let actual: String
     public let changeStatus: ChangeStatus
@@ -63,6 +80,7 @@ public struct TLAParserFidelityDiagnostic: Error, Sendable, Hashable, CustomStri
     public init(
         whatFailed: String,
         location: Location,
+        sourceSpan: SourceSpan = .init(),
         expected: String,
         actual: String,
         changeStatus: ChangeStatus = .noSpecificationWasCommitted,
@@ -70,6 +88,7 @@ public struct TLAParserFidelityDiagnostic: Error, Sendable, Hashable, CustomStri
     ) {
         self.whatFailed = whatFailed
         self.location = location
+        self.sourceSpan = sourceSpan
         self.expected = expected
         self.actual = actual
         self.changeStatus = changeStatus
@@ -77,7 +96,7 @@ public struct TLAParserFidelityDiagnostic: Error, Sendable, Hashable, CustomStri
     }
 
     public var description: String {
-        "Parser fidelity check did not agree. What failed: \(whatFailed). Where: \(location). "
+        "Parser fidelity check did not agree. What failed: \(whatFailed). Where: \(location), \(sourceSpan). "
             + "Expected: \(expected). Actual: \(actual). "
             + "Change status: \(changeStatus.rawValue). Next safe action: \(nextSafeAction)"
     }
@@ -120,6 +139,35 @@ public func _tlaFidelityEvidence(
     }
     guard expected.formalParameters == actual.formalParameters else {
         return difference("formal module parameter differs", at: "formalParameters", expected: "\(expected.formalParameters)", actual: "\(actual.formalParameters)")
+    }
+    guard formalOperatorDefinitionsEquivalent(
+        expected.formalOperatorDefinitions,
+        actual.formalOperatorDefinitions
+    ) else {
+        let sharedCount = min(
+            expected.formalOperatorDefinitions.count,
+            actual.formalOperatorDefinitions.count
+        )
+        for index in 0..<sharedCount {
+            let expectedDefinition = expected.formalOperatorDefinitions[index]
+            let actualDefinition = actual.formalOperatorDefinitions[index]
+            guard formalOperatorDefinitionEquivalent(expectedDefinition, actualDefinition) else {
+                return difference(
+                    "formal operator definition differs after alpha normalization",
+                    at: "formalOperatorDefinitions[\(index)] (\(expectedDefinition.name))",
+                    expected: formalOperatorDefinitionKey(expectedDefinition),
+                    actual: formalOperatorDefinitionKey(actualDefinition),
+                    next: "Inspect this FormalDefinition in the #spec body, then make its parameters and body match the parser's formal definition."
+                )
+            }
+        }
+        return difference(
+            "formal operator definition count differs",
+            at: "formalOperatorDefinitions",
+            expected: "\(expected.formalOperatorDefinitions.count) definitions",
+            actual: "\(actual.formalOperatorDefinitions.count) definitions",
+            next: "Inspect FormalDefinition declarations in the #spec body and retain every formal operator in the builder tree."
+        )
     }
     guard expected.variables.elementsEqual(actual.variables, by: variablesEquivalent) else {
         let sharedCount = min(expected.variables.count, actual.variables.count)
@@ -219,6 +267,27 @@ private func variablesEquivalent(
     case let (.some(left), .some(right)): return alphaKey(left) == alphaKey(right)
     case (nil, .some), (.some, nil): return false
     }
+}
+
+private func formalOperatorDefinitionsEquivalent(
+    _ lhs: [FormalOperatorDefinition],
+    _ rhs: [FormalOperatorDefinition]
+) -> Bool {
+    lhs.count == rhs.count && zip(lhs, rhs).allSatisfy { left, right in
+        formalOperatorDefinitionEquivalent(left, right)
+    }
+}
+
+private func formalOperatorDefinitionEquivalent(
+    _ lhs: FormalOperatorDefinition,
+    _ rhs: FormalOperatorDefinition
+) -> Bool {
+    lhs.name == rhs.name && lhs.parameters == rhs.parameters
+        && alphaKey(lhs.body) == alphaKey(rhs.body)
+}
+
+private func formalOperatorDefinitionKey(_ definition: FormalOperatorDefinition) -> String {
+    "definition(\(definition.name),parameters:\(definition.parameters),body:\(alphaKey(definition.body)))"
 }
 
 private func alphaKey(_ action: ActionExpr) -> String {
