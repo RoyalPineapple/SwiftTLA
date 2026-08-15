@@ -612,21 +612,26 @@ extension SpecParser {
             else { return nil }
             return .either(first, second)
         case "Choose":
-            guard let domainSyntax = call.arguments.first?.expression,
-                  let closure = call.trailingClosure,
-                  let choice = closureParameterNames(in: closure).first,
+            guard let closure = call.trailingClosure,
+                  !call.arguments.isEmpty,
                   let body = parseAlgorithmStatements(closure.statements, processParameter: processParameter, macros: macros)
             else { return nil }
-            let values = finiteAlgorithmDomain(domainSyntax)?.values
-                ?? parseIntegerClosedRange(domainSyntax).map { $0.map(TLAValue.int) }
-            guard let values else { return nil }
-            // Rebind the lexical choice to the stable IR binder after parsing.
-            let replacement = "__pcal_choice"
-            return .choose(
-                variable: replacement,
-                domain: values,
-                body.map { replaceAlgorithmVariable($0, from: choice, to: replacement) }
-            )
+            let choices = closureParameterNames(in: closure)
+            guard choices.count == call.arguments.count else { return nil }
+            let domains = call.arguments.map(\.expression).compactMap { syntax in
+                finiteAlgorithmDomain(syntax)?.values
+                    ?? parseIntegerClosedRange(syntax).map { $0.map(TLAValue.int) }
+            }
+            guard domains.count == choices.count else { return nil }
+            var nestedBody = body
+            for index in choices.indices.reversed() {
+                let replacement = "__pcal_choice_\(index)"
+                nestedBody = nestedBody.map {
+                    replaceAlgorithmVariable($0, from: choices[index], to: replacement)
+                }
+                nestedBody = [.choose(variable: replacement, domain: domains[index], nestedBody)]
+            }
+            return nestedBody[0]
         case "With":
             guard let sourceSyntax = call.arguments.first?.expression,
                   let source = (finiteAlgorithmDomain(sourceSyntax).map { domain in

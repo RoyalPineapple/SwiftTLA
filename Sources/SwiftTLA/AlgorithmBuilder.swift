@@ -1711,6 +1711,24 @@ public func Choose<Value: FiniteDomainKey>(
     return StepStatement(model: .choose(variable: name, domain: domain.values.map(\.tlaValue), body(value).map(\.model)))
 }
 
+/// Binds an ordered pair of values from finite domains. This lowers to nested
+/// PlusCal choices, so the second binder is scoped inside the first.
+public func Choose<First: FiniteDomainKey, Second: FiniteDomainKey>(
+    _ firstDomain: FiniteDomain<First>,
+    _ secondDomain: FiniteDomain<Second>,
+    @DoBuilder _ body: (ProcessIdentifier<First>, ProcessIdentifier<Second>) -> [StepStatement]
+) -> StepStatement {
+    let firstName = FreshVarName.fresh()
+    let secondName = FreshVarName.fresh()
+    let first = ProcessIdentifier<First>(expression: .variable(firstName))
+    let second = ProcessIdentifier<Second>(expression: .variable(secondName))
+    return StepStatement(model: .choose(
+        variable: firstName,
+        domain: firstDomain.values.map(\.tlaValue),
+        [.choose(variable: secondName, domain: secondDomain.values.map(\.tlaValue), body(first, second).map(\.model))]
+    ))
+}
+
 /// Binds one integer from an explicit, finite range for an atomic block.
 ///
 /// This is the natural bounded spelling of PlusCal `with (value \in Nat)`
@@ -1726,6 +1744,23 @@ public func Choose(
         variable: name,
         domain: domain.map(TLAValue.int),
         body(value).map(\.model)
+    ))
+}
+
+/// Binds an ordered pair of integers from explicit finite ranges.
+public func Choose(
+    _ firstDomain: ClosedRange<Int>,
+    _ secondDomain: ClosedRange<Int>,
+    @DoBuilder _ body: (WithValue<Int>, WithValue<Int>) -> [StepStatement]
+) -> StepStatement {
+    let firstName = FreshVarName.fresh()
+    let secondName = FreshVarName.fresh()
+    let first = WithValue<Int>(expression: .variable(firstName))
+    let second = WithValue<Int>(expression: .variable(secondName))
+    return StepStatement(model: .choose(
+        variable: firstName,
+        domain: firstDomain.map(TLAValue.int),
+        [.choose(variable: secondName, domain: secondDomain.map(TLAValue.int), body(first, second).map(\.model))]
     ))
 }
 
