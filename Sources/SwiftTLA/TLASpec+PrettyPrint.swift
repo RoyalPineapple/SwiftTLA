@@ -7,6 +7,7 @@ extension TLASpec {
         validateSymmetricCollectionExport()
         let varNames = variables.map(\.name)
         let varsTuple = varNames.count == 1 ? varNames[0] : "<<\(varNames.joined(separator: ", "))>>"
+        let isLibraryModule = variables.isEmpty && actions.isEmpty
         var lines: [String] = []
 
         let modName = name.replacingOccurrences(of: " ", with: "")
@@ -54,8 +55,10 @@ extension TLASpec {
             lines.append("")
         }
 
-        lines.append("VARIABLES \(varNames.joined(separator: ", "))")
-        lines.append("")
+        if !isLibraryModule {
+            lines.append("VARIABLES \(varNames.joined(separator: ", "))")
+            lines.append("")
+        }
 
         for configuration in importConfigurations {
             for replacement in configuration.replacements {
@@ -88,7 +91,7 @@ extension TLASpec {
         }
 
         let varsDef = "vars == \(varsTuple)"
-        if varNames.count > 1 { lines.append(varsDef); lines.append("") }
+        if !isLibraryModule, varNames.count > 1 { lines.append(varsDef); lines.append("") }
 
         for inv in invariants {
             lines.append("\(inv.name) == \(inv.body)")
@@ -98,6 +101,11 @@ extension TLASpec {
         if let constraint = constraint {
             lines.append("StateConstraint == \(constraint)")
             lines.append("")
+        }
+
+        guard !isLibraryModule else {
+            lines.append("====")
+            return lines.joined(separator: "\n") + "\n"
         }
 
         let symmetricMetadataByName = Dictionary(

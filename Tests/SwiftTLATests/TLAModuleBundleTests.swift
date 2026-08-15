@@ -84,6 +84,8 @@ struct TLAModuleBundleTests {
     #expect(consumer.tlaModule.contains("EXTENDS Integers, FiniteSets, Sequences, ZSequences"))
     #expect(consumer.tlaBundle.imports.map { $0.name } == ["ZSequences"])
     #expect(consumer.tlaBundle.imports[0].tla.contains("Rotation(sequence, shift) =="))
+    #expect(!consumer.tlaBundle.imports[0].tla.contains("VARIABLES"))
+    #expect(!consumer.tlaBundle.imports[0].tla.contains("Spec =="))
     let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? FileManager.default.removeItem(at: directory) }
     try consumer.tlaBundle.write(to: directory)
