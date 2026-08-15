@@ -606,6 +606,9 @@ public struct ModelMacro: MemberMacro, ExtensionMacro {
         } catch let diagnostic as SpecParser.SymmetricCollectionParseDiagnostic {
             context.diagnose(parserDiagnostic(diagnostic, in: declaration))
             return []
+        } catch {
+            context.diagnose(modelCompilationDiagnostic(error, in: declaration))
+            return []
         }
         NestedAdapterModelRegistry.record(parsed)
         return MacroExpander.generate(
@@ -785,13 +788,33 @@ private struct ParserDiagnosticMessage: DiagnosticMessage {
     let severity: DiagnosticSeverity = .error
 }
 
+/// SwiftDiagnostics only transports a rendered message, while the parser
+/// retains the structured diagnostic separately. Keep this rendering explicit
+/// so an error at the compiler boundary still answers the next useful question.
+private struct ModelCompilationDiagnosticMessage: DiagnosticMessage {
+    let whatFailed: String
+    let expected: String
+    let actual: String
+    let nextSafeAction: String
+
+    let diagnosticID = MessageID(domain: "SwiftTLA", id: "model-compilation-failure")
+    let severity: DiagnosticSeverity = .error
+
+    var message: String {
+        "What failed: \(whatFailed). Where: this @TLAModel declaration. "
+            + "Expected: \(expected). Actual: \(actual). "
+            + "Change status: no generated model was emitted. "
+            + "Next safe action: \(nextSafeAction)"
+    }
+}
+
 private func parserDiagnostic(
     _ diagnostic: SpecParser.SymmetricCollectionParseDiagnostic,
     in declaration: some DeclGroupSyntax
 ) -> Diagnostic {
     let finder = ParserDiagnosticNodeFinder(
         source: diagnostic.source,
-        offset: diagnostic.sourceOffset
+        location: diagnostic.sourceSpan.location
     )
     finder.walk(Syntax(declaration))
     return Diagnostic(
@@ -800,23 +823,45 @@ private func parserDiagnostic(
     )
 }
 
+private func modelCompilationDiagnostic(
+    _ error: Error,
+    in declaration: some DeclGroupSyntax
+) -> Diagnostic {
+    Diagnostic(
+        node: Syntax(declaration),
+        message: ModelCompilationDiagnosticMessage(
+            whatFailed: "the formal model could not be parsed or verified",
+            expected: "a bounded @TLAModel specification whose declarations, imports, and properties are valid",
+            actual: String(describing: error),
+            nextSafeAction: "Inspect the reported formal construct, correct the model, and compile again; no generated state machine is available until this succeeds."
+        )
+    )
+}
+
 private final class ParserDiagnosticNodeFinder: SyntaxAnyVisitor {
     let source: String
-    let offset: Int?
+    let location: SpecParser.SymmetricCollectionParseDiagnostic.SourceSpan.Location
     var node: Syntax?
     private var sourceMatch: Syntax?
 
-    init(source: String, offset: Int?) {
+    init(
+        source: String,
+        location: SpecParser.SymmetricCollectionParseDiagnostic.SourceSpan.Location
+    ) {
         self.source = source.trimmingCharacters(in: .whitespacesAndNewlines)
-        self.offset = offset
+        self.location = location
         super.init(viewMode: .sourceAccurate)
     }
 
     override func visitAny(_ candidate: Syntax) -> SyntaxVisitorContinueKind {
         guard node == nil else { return .skipChildren }
-        let matchesOffset = offset.map {
-            candidate.positionAfterSkippingLeadingTrivia.utf8Offset == $0
-        } ?? false
+        let matchesOffset: Bool
+        switch location {
+        case .utf8Offset(let offset):
+            matchesOffset = candidate.positionAfterSkippingLeadingTrivia.utf8Offset == offset
+        case .unavailable:
+            matchesOffset = false
+        }
         let matchesSource = candidate.description.trimmingCharacters(in: .whitespacesAndNewlines) == source
         if matchesSource, sourceMatch == nil {
             sourceMatch = candidate

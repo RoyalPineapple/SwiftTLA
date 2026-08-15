@@ -31,20 +31,95 @@ public func _tlaAlphaEquivalent(_ lhs: ParsedSpecModel, _ rhs: ParsedSpecModel) 
     return true
 }
 
-/// Explains the first semantic difference that remains after normalization.
-/// This is intentionally concise enough to be useful in a macro runtime trap.
-public func _tlaFidelityDiagnostic(_ expected: ParsedSpecModel, _ actual: ParsedSpecModel) -> String {
+/// Structured evidence for a parser-to-builder fidelity difference.
+///
+/// A failed comparison never changes the built specification. This value keeps
+/// the first differing formal component intact so a macro diagnostic, test,
+/// or caller can report more than an unqualified "tree mismatch".
+public struct TLAParserFidelityDiagnostic: Error, Sendable, Hashable, CustomStringConvertible {
+    public enum Location: Sendable, Hashable, CustomStringConvertible {
+        /// Parser and builder trees do not retain SwiftSyntax nodes after
+        /// expansion. The semantic path identifies the precise formal node.
+        case semanticPath(String)
+
+        public var description: String {
+            switch self {
+            case .semanticPath(let path): return path
+            }
+        }
+    }
+
+    public enum ChangeStatus: String, Sendable, Hashable {
+        case noSpecificationWasCommitted
+    }
+
+    public let whatFailed: String
+    public let location: Location
+    public let expected: String
+    public let actual: String
+    public let changeStatus: ChangeStatus
+    public let nextSafeAction: String
+
+    public init(
+        whatFailed: String,
+        location: Location,
+        expected: String,
+        actual: String,
+        changeStatus: ChangeStatus = .noSpecificationWasCommitted,
+        nextSafeAction: String
+    ) {
+        self.whatFailed = whatFailed
+        self.location = location
+        self.expected = expected
+        self.actual = actual
+        self.changeStatus = changeStatus
+        self.nextSafeAction = nextSafeAction
+    }
+
+    public var description: String {
+        "Parser fidelity check did not agree. What failed: \(whatFailed). Where: \(location). "
+            + "Expected: \(expected). Actual: \(actual). "
+            + "Change status: \(changeStatus.rawValue). Next safe action: \(nextSafeAction)"
+    }
+}
+
+/// Returns the first semantic difference that remains after normalization.
+///
+/// The parser tree intentionally has no retained SwiftSyntax node at this
+/// boundary, so `location` is a stable semantic path. Macro diagnostics still
+/// point at the original declaration; callers can inspect this value for the
+/// expected and actual formal trees without scraping text.
+public func _tlaFidelityEvidence(
+    _ expected: ParsedSpecModel,
+    _ actual: ParsedSpecModel
+) -> TLAParserFidelityDiagnostic? {
+    func difference(
+        _ whatFailed: String,
+        at path: String,
+        expected expectedValue: String,
+        actual actualValue: String,
+        next: String = "Inspect this declaration in the #spec body, then make the builder and parser spell the same formal construct."
+    ) -> TLAParserFidelityDiagnostic {
+        TLAParserFidelityDiagnostic(
+            whatFailed: whatFailed,
+            location: .semanticPath(path),
+            expected: expectedValue,
+            actual: actualValue,
+            nextSafeAction: next
+        )
+    }
+
     guard expected.imports == actual.imports else {
-        return "Imported modules differ: expected \(expected.imports), got \(actual.imports)."
+        return difference("imported module list differs", at: "imports", expected: "\(expected.imports)", actual: "\(actual.imports)")
     }
     guard expected.importConfigurations == actual.importConfigurations else {
-        return "Imported module configurations differ: expected \(expected.importConfigurations), got \(actual.importConfigurations)."
+        return difference("import configuration differs", at: "importConfigurations", expected: "\(expected.importConfigurations)", actual: "\(actual.importConfigurations)")
     }
     guard expected.moduleInstances == actual.moduleInstances else {
-        return "Named module instances differ: expected \(expected.moduleInstances), got \(actual.moduleInstances)."
+        return difference("named module instance differs", at: "moduleInstances", expected: "\(expected.moduleInstances)", actual: "\(actual.moduleInstances)")
     }
     guard expected.formalParameters == actual.formalParameters else {
-        return "Formal parameters differ: expected \(expected.formalParameters), got \(actual.formalParameters)."
+        return difference("formal module parameter differs", at: "formalParameters", expected: "\(expected.formalParameters)", actual: "\(actual.formalParameters)")
     }
     guard expected.variables.elementsEqual(actual.variables, by: variablesEquivalent) else {
         let sharedCount = min(expected.variables.count, actual.variables.count)
@@ -52,56 +127,75 @@ public func _tlaFidelityDiagnostic(_ expected: ParsedSpecModel, _ actual: Parsed
             let expectedVariable = expected.variables[index]
             let actualVariable = actual.variables[index]
             guard variablesEquivalent(expectedVariable, actualVariable) else {
-                return "Variable \(index) differs: expected '\(expectedVariable.name)' initial \(expectedVariable.initial) domain \(String(describing: expectedVariable.initialSet)); built '\(actualVariable.name)' initial \(actualVariable.initial) domain \(String(describing: actualVariable.initialSet))."
+                return difference(
+                    "variable declaration differs",
+                    at: "variables[\(index)]",
+                    expected: "name '\(expectedVariable.name)', initial \(expectedVariable.initial), domain \(String(describing: expectedVariable.initialSet))",
+                    actual: "name '\(actualVariable.name)', initial \(actualVariable.initial), domain \(String(describing: actualVariable.initialSet))"
+                )
             }
         }
-        return "Variable count differs: expected \(expected.variables.count), got \(actual.variables.count)."
+        return difference("variable count differs", at: "variables", expected: "\(expected.variables.count) declarations", actual: "\(actual.variables.count) declarations")
     }
     guard expected.actions.count == actual.actions.count else {
-        return "Action count differs: expected \(expected.actions.count), got \(actual.actions.count)."
+        return difference("action count differs", at: "actions", expected: "\(expected.actions.count) actions", actual: "\(actual.actions.count) actions")
     }
-    for (left, right) in zip(expected.actions, actual.actions) {
+    for (index, pair) in zip(expected.actions, actual.actions).enumerated() {
+        let (left, right) = pair
         guard left.name == right.name else {
-            return "Action order or name differs: expected '\(left.name)', got '\(right.name)'."
+            return difference("action name or order differs", at: "actions[\(index)]", expected: "action '\(left.name)'", actual: "action '\(right.name)'")
         }
         guard left.bindings == right.bindings else {
-            return "Action '\(left.name)' has different finite bindings."
+            return difference("action finite bindings differ", at: "actions[\(index)].bindings", expected: "\(left.bindings)", actual: "\(right.bindings)")
         }
         let expectedKey = alphaKey(left.body)
         let actualKey = alphaKey(right.body)
         guard expectedKey == actualKey else {
-            return "Action '\(left.name)' differs after normalization. Expected \(expectedKey); built \(actualKey)."
+            return difference("action body differs after alpha normalization", at: "actions[\(index)].body (\(left.name))", expected: expectedKey, actual: actualKey)
         }
     }
     guard expected.invariants.count == actual.invariants.count else {
-        return "Invariant count differs: expected \(expected.invariants.count), got \(actual.invariants.count)."
+        return difference("invariant count differs", at: "invariants", expected: "\(expected.invariants.count) invariants", actual: "\(actual.invariants.count) invariants")
     }
-    for (left, right) in zip(expected.invariants, actual.invariants) {
+    for (index, pair) in zip(expected.invariants, actual.invariants).enumerated() {
+        let (left, right) = pair
         guard left.name == right.name else {
-            return "Invariant order or name differs: expected '\(left.name)', got '\(right.name)'."
+            return difference("invariant name or order differs", at: "invariants[\(index)]", expected: "invariant '\(left.name)'", actual: "invariant '\(right.name)'")
         }
-        guard alphaKey(left.body) == alphaKey(right.body) else {
-            return "Invariant '\(left.name)' differs after normalizing local binders and logical grouping."
+        let expectedKey = alphaKey(left.body)
+        let actualKey = alphaKey(right.body)
+        guard expectedKey == actualKey else {
+            return difference("invariant body differs after alpha normalization", at: "invariants[\(index)].body (\(left.name))", expected: expectedKey, actual: actualKey)
         }
     }
     guard expected.temporal.count == actual.temporal.count else {
-        return "Temporal property count differs: expected \(expected.temporal.count), got \(actual.temporal.count)."
+        return difference("temporal property count differs", at: "temporal", expected: "\(expected.temporal.count) properties", actual: "\(actual.temporal.count) properties")
     }
-    for (left, right) in zip(expected.temporal, actual.temporal) {
+    for (index, pair) in zip(expected.temporal, actual.temporal).enumerated() {
+        let (left, right) = pair
         guard left.name == right.name else {
-            return "Temporal property order or name differs: expected '\(left.name)', got '\(right.name)'."
+            return difference("temporal property name or order differs", at: "temporal[\(index)]", expected: "property '\(left.name)'", actual: "property '\(right.name)'")
         }
-        guard alphaKey(left.expr) == alphaKey(right.expr) else {
-            return "Temporal property '\(left.name)' differs after normalizing local binders and logical grouping."
+        let expectedKey = alphaKey(left.expr)
+        let actualKey = alphaKey(right.expr)
+        guard expectedKey == actualKey else {
+            return difference("temporal property differs after alpha normalization", at: "temporal[\(index)] (\(left.name))", expected: expectedKey, actual: actualKey)
         }
     }
     guard expected.fairness == actual.fairness else {
-        return "Fairness declarations differ: expected \(expected.fairness), got \(actual.fairness)."
+        return difference("fairness declarations differ", at: "fairness", expected: "\(expected.fairness)", actual: "\(actual.fairness)")
     }
     guard optionalStateEquivalent(expected.constraint, actual.constraint) else {
-        return "State constraint differs after normalizing local binders. Expected \(String(describing: expected.constraint)); built \(String(describing: actual.constraint))."
+        return difference("state constraint differs after alpha normalization", at: "constraint", expected: "\(String(describing: expected.constraint))", actual: "\(String(describing: actual.constraint))")
     }
-    return "The parser tree differs in an unsupported semantic field."
+    return nil
+}
+
+/// Compatibility text for traps emitted by existing generated code.
+/// Prefer ``_tlaFidelityEvidence(_:_: )`` when a caller can retain evidence.
+public func _tlaFidelityDiagnostic(_ expected: ParsedSpecModel, _ actual: ParsedSpecModel) -> String {
+    _tlaFidelityEvidence(expected, actual)?.description
+        ?? "Parser fidelity check was requested although the parser and builder trees agree. Next safe action: retain the matching trees or rerun the comparison with the values that differed."
 }
 
 private func optionalStateEquivalent(_ lhs: StateExpr?, _ rhs: StateExpr?) -> Bool {
@@ -367,9 +461,13 @@ private func stateKey(_ expression: StateExpr, environment: [String: String], ne
                 }
                 return "operatorLambda([\(parameters.joined(separator: ","))],\(key(lambda.body, environment: lambdaEnvironment)))"
             }
-        }
-        return "apply(\(operationKey),[\(argumentKeys.joined(separator: ","))])"
+    }
+    return "apply(\(operationKey),[\(argumentKeys.joined(separator: ","))])"
     case .recursiveCall(let name, let arguments): return "recursive(\(name),\(arguments.map { key($0) }.joined(separator: ",")))"
+    case .letValue(let name, let value, let body):
+        let valueKey = key(value)
+        let (canonical, extended) = fresh(name, environment: environment, next: &next)
+        return "letValue(\(canonical),\(valueKey),\(key(body, environment: extended)))"
     case .letIn(let operators, let body):
         let declarations = operators.map { operation in
             let parameterNames = operation.parameters.joined(separator: ",")

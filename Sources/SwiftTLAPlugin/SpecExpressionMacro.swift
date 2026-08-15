@@ -1,3 +1,4 @@
+import Foundation
 import SwiftDiagnostics
 import SwiftParser
 import SwiftSyntax
@@ -16,7 +17,9 @@ public struct SpecExpressionMacro: ExpressionMacro {
         else {
             context.diagnose(Diagnostic(
                 node: Syntax(node),
-                message: SpecExpressionDiagnostic("#spec requires a string literal name and a builder body")
+                message: SpecExpressionDiagnostic(
+                    actual: node.description.trimmingCharacters(in: .whitespacesAndNewlines)
+                )
             ))
             return "TLASpec(\"InvalidSpec\") {}"
         }
@@ -80,11 +83,14 @@ private final class DeclarationRegistrationRewriter: SyntaxRewriter {
 }
 
 private struct SpecExpressionDiagnostic: DiagnosticMessage {
-    let message: String
     let diagnosticID = MessageID(domain: "SwiftTLA", id: "invalid-spec-expression")
     let severity: DiagnosticSeverity = .error
+    let actual: String
 
-    init(_ message: String) {
-        self.message = message
+    var message: String {
+        "What failed: #spec invocation could not be parsed. Where: this #spec expression. "
+            + "Expected: a string literal specification name followed by a builder closure. "
+            + "Actual: \(actual). Change status: no formal specification was built. "
+            + "Next safe action: write #spec(\"Name\") { ... } and compile again."
     }
 }

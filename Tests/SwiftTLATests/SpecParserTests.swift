@@ -396,6 +396,60 @@ private enum ParserNode: String, FiniteDomainKey {
         #expect(_tlaAlphaEquivalent(parsed, built))
     }
 
+    @Test func fidelityDifferenceRetainsTheFirstFormalNodeAndRecoveryAction() {
+        let parserTree = ParsedSpecModel(
+            variables: [(
+                name: "counter",
+                initial: .int(0),
+                initialSet: nil
+            )],
+            actions: [("advance", .assign("counter", .int(1)), [])],
+            invariants: []
+        )
+        let builderTree = ParsedSpecModel(
+            variables: [(
+                name: "counter",
+                initial: .int(0),
+                initialSet: nil
+            )],
+            actions: [("advance", .assign("counter", .int(2)), [])],
+            invariants: []
+        )
+
+        let evidence = _tlaFidelityEvidence(parserTree, builderTree)
+
+        #expect(evidence?.whatFailed == "action body differs after alpha normalization")
+        #expect(evidence?.location == .semanticPath("actions[0].body (advance)"))
+        #expect(evidence?.expected.contains("assign(counter,value(1))") == true)
+        #expect(evidence?.actual.contains("assign(counter,value(2))") == true)
+        #expect(evidence?.changeStatus == .noSpecificationWasCommitted)
+        #expect(evidence?.nextSafeAction.contains("#spec body") == true)
+        #expect(evidence?.description.contains("What failed:") == true)
+        #expect(evidence?.description.contains("Next safe action:") == true)
+    }
+
+    @Test func parserDiagnosticRetainsSourceSpanAndNoCommitStatus() {
+        let source = """
+        {
+            Variable(missing)
+        }
+        """
+        let closure = Parser.parse(source: source).statements.first!.item.as(ClosureExprSyntax.self)!
+        let parsed = SpecParser.parseSpecClosure(closure)
+
+        guard let diagnostic = parsed.diagnostics.first else {
+            Issue.record("Expected a diagnostic for the unbound variable declaration")
+            return
+        }
+        #expect(diagnostic.source == "Variable(missing)")
+        #expect(diagnostic.expected == "a supported SwiftTLA declaration or expression")
+        #expect(diagnostic.actual == "Variable(missing)")
+        #expect(diagnostic.changeStatus == .noFormalModelWasBuilt)
+        #expect(diagnostic.sourceSpan.utf8Length == "Variable(missing)".utf8.count)
+        #expect(diagnostic.description.contains("Where:") == true)
+        #expect(diagnostic.description.contains("Next safe action:") == true)
+    }
+
     @Test func oneArgumentVariableRejectsUnboundReference() {
         let source = """
         {

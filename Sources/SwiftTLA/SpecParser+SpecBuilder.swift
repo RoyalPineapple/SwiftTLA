@@ -65,26 +65,101 @@ extension SpecParser {
         public let source: String
     }
 
-    public struct SymmetricCollectionParseDiagnostic: Error, CustomStringConvertible {
-        public let message: String
-        public let source: String
-        public let sourceOffset: Int?
+    /// Evidence retained when the source parser cannot form a formal model.
+    ///
+    /// The historical name is kept because callers already catch this error;
+    /// it now covers every source-parser diagnostic, not only collections.
+    public struct SymmetricCollectionParseDiagnostic: Error, Sendable, Hashable, CustomStringConvertible {
+        public struct SourceSpan: Sendable, Hashable, CustomStringConvertible {
+            public enum Location: Sendable, Hashable, CustomStringConvertible {
+                case utf8Offset(Int)
+                case unavailable
 
-        public init(message: String, source: String, sourceOffset: Int? = nil) {
+                public var description: String {
+                    switch self {
+                    case .utf8Offset(let offset): return "UTF-8 offset \(offset)"
+                    case .unavailable: return "source offset unavailable"
+                    }
+                }
+            }
+
+            public let location: Location
+            public let utf8Length: Int
+
+            public init(location: Location, utf8Length: Int) {
+                self.location = location
+                self.utf8Length = utf8Length
+            }
+
+            public var description: String {
+                "\(location), length \(utf8Length)"
+            }
+        }
+
+        public enum ChangeStatus: String, Sendable, Hashable {
+            case noFormalModelWasBuilt
+        }
+
+        /// Short stable summary for clients that already display a headline.
+        public let message: String
+        /// The exact Swift source fragment that the parser rejected.
+        public let source: String
+        public let sourceSpan: SourceSpan
+        public let expected: String
+        public let actual: String
+        public let changeStatus: ChangeStatus
+        public let nextSafeAction: String
+
+        public init(
+            message: String,
+            source: String,
+            expected: String = "a supported SwiftTLA declaration or expression",
+            actual: String = "",
+            nextSafeAction: String = "Rewrite this source fragment using the supported SwiftTLA builder form, then compile again."
+        ) {
+            self.init(
+                message: message,
+                source: source,
+                sourceSpan: SourceSpan(location: .unavailable, utf8Length: source.utf8.count),
+                expected: expected,
+                actual: actual,
+                nextSafeAction: nextSafeAction
+            )
+        }
+
+        public init(
+            message: String,
+            source: String,
+            sourceSpan: SourceSpan,
+            expected: String = "a supported SwiftTLA declaration or expression",
+            actual: String = "",
+            nextSafeAction: String = "Rewrite this source fragment using the supported SwiftTLA builder form, then compile again."
+        ) {
             self.message = message
             self.source = source
-            self.sourceOffset = sourceOffset
+            self.sourceSpan = sourceSpan
+            self.expected = expected
+            self.actual = actual.isEmpty ? source.trimmingCharacters(in: .whitespacesAndNewlines) : actual
+            self.changeStatus = .noFormalModelWasBuilt
+            self.nextSafeAction = nextSafeAction
         }
 
         public init<Node: SyntaxProtocol>(message: String, source: Node) {
             self.init(
                 message: message,
                 source: source.description,
-                sourceOffset: source.positionAfterSkippingLeadingTrivia.utf8Offset
+                sourceSpan: SourceSpan(
+                    location: .utf8Offset(source.positionAfterSkippingLeadingTrivia.utf8Offset),
+                    utf8Length: source.description.utf8.count
+                )
             )
         }
 
-        public var description: String { message }
+        public var description: String {
+            "What failed: \(message) Where: \(sourceSpan). Expected: \(expected). "
+                + "Actual: \(actual). Change status: \(changeStatus.rawValue). "
+                + "Next safe action: \(nextSafeAction)"
+        }
     }
 
       public static func parseSpecClosure(
