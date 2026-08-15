@@ -272,6 +272,25 @@ public struct TLASpec: Sendable {
         }
         result.append(RecursiveFunc(name: function.name, params: function.params, body: configuredBody))
       }
+      for instance in module.moduleInstances {
+        let instanceFunctions = instance.module.resolvedRecursiveFuncs
+        let localNames = Set(instanceFunctions.map(\.name))
+        for function in instanceFunctions {
+          let qualifiedName = "\(instance.name)!\(function.name)"
+          precondition(
+            seen.insert(qualifiedName).inserted,
+            "Duplicate formal module instance operator: \(qualifiedName)"
+          )
+          let qualifiedBody = StateExpr.renamingRecursiveCalls(in: function.body) { name in
+            localNames.contains(name) ? "\(instance.name)!\(name)" : name
+          }
+          result.append(RecursiveFunc(
+            name: qualifiedName,
+            params: function.params,
+            body: qualifiedBody
+          ))
+        }
+      }
       path.remove(module.name)
     }
     var path = Set<String>()
@@ -595,7 +614,7 @@ public enum SpecBuilder {
   public static func buildExpression(_ expr: ExtendsDecl) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: UseDecl) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: ImportDecl) -> [SpecComponent] { [expr] }
-  public static func buildExpression(_ expr: ModuleInstanceDecl) -> [SpecComponent] { [expr] }
+  public static func buildExpression(_ expr: FormalModuleInstance) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: UseSpecDecl) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: DeadlockDecl) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: ConstraintDecl) -> [SpecComponent] { [expr] }

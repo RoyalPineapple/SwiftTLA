@@ -182,13 +182,15 @@ struct TLAModuleBundleTests {
     }
     let value = Var<Int>("value", 1)
     let consumer = TLASpec("UsesInstanceArithmetic") {
-      Instance("Math", of: arithmetic)
+      let math = Instance("Math", of: arithmetic)
+      math
       Variable(value, 1)
       Action("Stay") { value.stateExpr == 1 }
-      Invariant("ValueIsOne") { value.stateExpr == 1 }
+      Invariant("ValueIsTwoTimesOne") { math.call("Twice", value.stateExpr) == 2 }
     }
 
     #expect(consumer.tlaModule.contains("Math == INSTANCE InstanceArithmetic"))
+    #expect(consumer.tlaModule.contains("ValueIsTwoTimesOne == (Math!Twice(value) = 2)"))
     #expect(!consumer.tlaModule.contains("EXTENDS Integers, FiniteSets, Sequences, InstanceArithmetic"))
     #expect(consumer.tlaBundle.imports.map(\.name) == ["InstanceArithmetic"])
     #expect(consumer.tlaBundle.imports[0].tla.contains("Twice(value) =="))
@@ -199,6 +201,41 @@ struct TLAModuleBundleTests {
     #expect(FileManager.default.fileExists(
       atPath: directory.appendingPathComponent("InstanceArithmetic.tla").path
     ))
+    let result = try ModelChecker(spec: consumer).check()
+    guard case .ok = result.underlyingOutcome else {
+      Issue.record("The checker did not resolve the qualified module operator.")
+      return
+    }
+  }
+
+  @Test("an instance keeps recursive calls inside its namespace")
+  func namedModuleInstanceKeepsRecursiveCallsQualified() throws {
+    let counting = TLASpec("InstanceCounting") {
+      DefineRecursive("CountDown", params: ["number"]) {
+        let number = StateExpr.variable("number")
+        return .ifThenElse(
+          .equal(number, .int(0)),
+          .int(0),
+          .add(.int(1), .recursiveCall("CountDown", [.subtract(number, .int(1))]))
+        )
+      }
+    }
+    let value = Var<Int>("value", 3)
+    let consumer = TLASpec("UsesInstanceCounting") {
+      let math = Instance("Math", of: counting)
+      math
+      Variable(value, 3)
+      Action("Stay") { value.stateExpr == 3 }
+      Invariant("CountsDown") { math.call("CountDown", value.stateExpr) == 3 }
+    }
+
+    #expect(consumer.resolvedRecursiveFuncs.map(\.name) == ["Math!CountDown"])
+    #expect(consumer.resolvedRecursiveFuncs[0].body.description.contains("Math!CountDown"))
+    let result = try ModelChecker(spec: consumer).check()
+    guard case .ok = result.underlyingOutcome else {
+      Issue.record("The checker did not resolve recursive instance calls.")
+      return
+    }
   }
 
 }

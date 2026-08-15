@@ -21,7 +21,7 @@ extension TLASpec {
     let imports = components.compactMap { $0 as? ImportDecl }
     var importedModules = imports.map(\.module)
     var importConfigurations = imports.compactMap(\.configuration)
-    var moduleInstances = components.compactMap { ($0 as? ModuleInstanceDecl)?.instance }
+    var moduleInstances = components.compactMap { $0 as? FormalModuleInstance }
     var useSpecs: [TLASpec] = []
     var runtimeFuncCollector: [String: @Sendable ([TLAValue]) -> TLAValue] = [:]
     var runtimeFuncBodiesCollector: [String] = []

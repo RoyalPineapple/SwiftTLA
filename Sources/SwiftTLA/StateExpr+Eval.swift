@@ -499,4 +499,70 @@ extension StateExpr {
             Self.substituteVariable(name, with: replacement, in: e)
         }
     }
+
+    /// Renames operator calls while retaining every formal value and binder.
+    /// Module instances use this to keep their recursive operators inside the
+    /// namespace emitted to TLA+.
+    static func renamingRecursiveCalls(
+        in expression: StateExpr,
+        using rename: (String) -> String
+    ) -> StateExpr {
+        func visit(_ expression: StateExpr) -> StateExpr {
+            switch expression {
+            case .value, .variable, .enabledAction: return expression
+            case .add(let a, let b): return .add(visit(a), visit(b))
+            case .subtract(let a, let b): return .subtract(visit(a), visit(b))
+            case .multiply(let a, let b): return .multiply(visit(a), visit(b))
+            case .divide(let a, let b): return .divide(visit(a), visit(b))
+            case .modulo(let a, let b): return .modulo(visit(a), visit(b))
+            case .negate(let value): return .negate(visit(value))
+            case .integerDivide(let a, let b): return .integerDivide(visit(a), visit(b))
+            case .equal(let a, let b): return .equal(visit(a), visit(b))
+            case .notEqual(let a, let b): return .notEqual(visit(a), visit(b))
+            case .lessThan(let a, let b): return .lessThan(visit(a), visit(b))
+            case .lessOrEqual(let a, let b): return .lessOrEqual(visit(a), visit(b))
+            case .greaterThan(let a, let b): return .greaterThan(visit(a), visit(b))
+            case .greaterOrEqual(let a, let b): return .greaterOrEqual(visit(a), visit(b))
+            case .and(let a, let b): return .and(visit(a), visit(b))
+            case .or(let a, let b): return .or(visit(a), visit(b))
+            case .not(let value): return .not(visit(value))
+            case .ifThenElse(let c, let t, let e): return .ifThenElse(visit(c), visit(t), visit(e))
+            case .setLiteral(let values): return .setLiteral(values.map(visit))
+            case .in(let value, let set): return .in(visit(value), visit(set))
+            case .subset(let a, let b): return .subset(visit(a), visit(b))
+            case .union(let a, let b): return .union(visit(a), visit(b))
+            case .intersection(let a, let b): return .intersection(visit(a), visit(b))
+            case .setDifference(let a, let b): return .setDifference(visit(a), visit(b))
+            case .cardinality(let value): return .cardinality(visit(value))
+            case .setFilter(let set, let name, let body): return .setFilter(visit(set), name, visit(body))
+            case .setMap(let value, let name, let set): return .setMap(visit(value), name, visit(set))
+            case .powerSet(let value): return .powerSet(visit(value))
+            case .unionAll(let value): return .unionAll(visit(value))
+            case .integerRange(let lower, let upper): return .integerRange(visit(lower), visit(upper))
+            case .tupleLiteral(let values): return .tupleLiteral(values.map(visit))
+            case .tupleAccess(let value, let index): return .tupleAccess(visit(value), index)
+            case .tupleDynamicAccess(let value, let index): return .tupleDynamicAccess(visit(value), visit(index))
+            case .tupleLength(let value): return .tupleLength(visit(value))
+            case .tupleAppend(let tuple, let value): return .tupleAppend(visit(tuple), visit(value))
+            case .tupleHead(let value): return .tupleHead(visit(value))
+            case .tupleTail(let value): return .tupleTail(visit(value))
+            case .tupleConcatenate(let a, let b): return .tupleConcatenate(visit(a), visit(b))
+            case .recordLiteral(let fields): return .recordLiteral(fields.mapValues(visit))
+            case .recordAccess(let value, let field): return .recordAccess(visit(value), field)
+            case .domain(let value): return .domain(visit(value))
+            case .functionLiteral(let domain, let name, let body): return .functionLiteral(visit(domain), name, visit(body))
+            case .functionApply(let function, let value): return .functionApply(visit(function), visit(value))
+            case .except(let function, let value, let update): return .except(visit(function), visit(value), visit(update))
+            case .caseExpr(let pairs, let fallback): return .caseExpr(pairs.map(visit), fallback.map(visit))
+            case .forAll(let set, let name, let body): return .forAll(visit(set), name, visit(body))
+            case .exists(let set, let name, let body): return .exists(visit(set), name, visit(body))
+            case .choose(let set, let name, let body): return .choose(visit(set), name, visit(body))
+            case .sequenceFromSet(let value): return .sequenceFromSet(visit(value))
+            case .setSum(let function, let set): return .setSum(visit(function), visit(set))
+            case .functionSet(let domain, let range): return .functionSet(visit(domain), visit(range))
+            case .recursiveCall(let name, let arguments): return .recursiveCall(rename(name), arguments.map(visit))
+            }
+        }
+        return visit(expression)
+    }
 }

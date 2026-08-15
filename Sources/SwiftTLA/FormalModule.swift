@@ -94,7 +94,7 @@ public struct FormalModuleConfiguration: Sendable, Equatable {
 /// `CC == INSTANCE ClientCentric`.  This is deliberately separate from
 /// `Import`: an import is an `EXTENDS` relationship, while an instance keeps
 /// the imported operators behind an explicit namespace such as `CC!Check`.
-public struct FormalModuleInstance: Sendable, Equatable {
+public struct FormalModuleInstance: SpecComponent, Sendable, Equatable {
   public let name: String
   public let module: TLASpec
 
@@ -106,6 +106,14 @@ public struct FormalModuleInstance: Sendable, Equatable {
 
   public static func == (lhs: FormalModuleInstance, rhs: FormalModuleInstance) -> Bool {
     lhs.name == rhs.name && lhs.module.name == rhs.module.name
+  }
+
+  /// References one operator through this instance's TLA+ namespace.
+  ///
+  /// The expression exports as `Name!Operator(...)` and the checker resolves
+  /// it against this instance's separately declared module.
+  public func call(_ operatorName: String, _ arguments: StateExpr...) -> StateExpr {
+    .recursiveCall("\(name)!\(operatorName)", arguments)
   }
 }
 
@@ -120,14 +128,6 @@ public struct ImportDecl: SpecComponent {
     )
     self.module = module
     self.configuration = configuration
-  }
-}
-
-public struct ModuleInstanceDecl: SpecComponent {
-  public let instance: FormalModuleInstance
-
-  init(_ instance: FormalModuleInstance) {
-    self.instance = instance
   }
 }
 
@@ -147,8 +147,8 @@ public func Import(
 public func Instance(
   _ name: String,
   of module: TLASpec
-) -> ModuleInstanceDecl {
-  ModuleInstanceDecl(FormalModuleInstance(name, of: module))
+) -> FormalModuleInstance {
+  FormalModuleInstance(name, of: module)
 }
 // swiftlint:enable identifier_name
 
