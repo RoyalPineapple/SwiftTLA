@@ -111,4 +111,18 @@ struct ScopedSubstitutionTests {
       .recursiveCall("keep", [.value(.int(0))])
     ))
   }
+
+  @Test("two-value quantifiers lower to independently scoped binders")
+  func evaluatesMultiBindingQuantifiers() throws {
+    let values = SetExpr<Int>.literal(1, 2)
+    let exists = Exists(in: values, and: values) { left, right in
+      left.expr + right.expr == 3
+    }
+    let all = ForAll(in: values, and: values) { left, right in
+      left.expr <= 2 && right.expr <= 2
+    }
+
+    #expect(try exists.raw.evaluateBool(in: [:]))
+    #expect(try all.raw.evaluateBool(in: [:]))
+  }
 }

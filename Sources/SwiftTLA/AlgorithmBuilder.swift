@@ -1333,6 +1333,23 @@ public func Exists<Value: TLAValueType, Predicate: StateExprConvertible>(
     return Expr(.exists(domain.raw, variable, predicate(WithValue(expression: .variable(variable))).stateExpr))
 }
 
+/// Tests a predicate for two independently bound members.
+///
+/// This is the Swift spelling of nested TLA+ existential quantifiers. The
+/// nested AST preserves the same scope and short-circuit semantics as the
+/// source language's multi-binder form.
+public func Exists<First: TLAValueType, Second: TLAValueType, Predicate: StateExprConvertible>(
+    in first: Expr<SetExpr<First>>,
+    and second: Expr<SetExpr<Second>>,
+    where predicate: (WithValue<First>, WithValue<Second>) -> Predicate
+) -> Expr<Bool> {
+    Exists(in: first) { firstValue in
+        Exists(in: second) { secondValue in
+            predicate(firstValue, secondValue)
+        }
+    }
+}
+
 /// Tests whether every bounded formal set member satisfies `predicate`.
 ///
 /// This is the typed Swift spelling of TLA+ `\\A value \\in domain : predicate`.
@@ -1342,6 +1359,19 @@ public func ForAll<Value: TLAValueType, Predicate: StateExprConvertible>(
 ) -> Expr<Bool> {
     let variable = FreshVarName.fresh()
     return Expr(.forAll(domain.raw, variable, predicate(WithValue(expression: .variable(variable))).stateExpr))
+}
+
+/// Tests a predicate for every pair of independently bound members.
+public func ForAll<First: TLAValueType, Second: TLAValueType, Predicate: StateExprConvertible>(
+    in first: Expr<SetExpr<First>>,
+    and second: Expr<SetExpr<Second>>,
+    where predicate: (WithValue<First>, WithValue<Second>) -> Predicate
+) -> Expr<Bool> {
+    ForAll(in: first) { firstValue in
+        ForAll(in: second) { secondValue in
+            predicate(firstValue, secondValue)
+        }
+    }
 }
 
 /// States that every member of a bounded formal set satisfies `predicate`.
