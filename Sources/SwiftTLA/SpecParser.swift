@@ -35,10 +35,8 @@ public enum SpecParser {
         if let controlLocation = decodeControlLocation(expression) {
             return controlLocation
         }
-        if let call = expression.as(FunctionCallExprSyntax.self),
-           call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "Finished",
-           call.arguments.isEmpty {
-            return .equal(.variable("pc"), .value(.string("Done")))
+        if let finished = decodeFinishedControlLocation(expression) {
+            return finished
         }
         if let sequences = decodeBoundedSequenceDomain(expression) {
             return sequences
@@ -214,6 +212,27 @@ public enum SpecParser {
         return .equal(
             .functionApply(.variable("pc"), process),
             .value(.string(label))
+        )
+    }
+
+    /// Parses `Finished()` for a sequential algorithm and
+    /// `Finished(process)` for an `Each` process family. The public DSL keeps
+    /// the generated program counter private; both spellings lower to its
+    /// canonical formal representation here.
+    private static func decodeFinishedControlLocation(_ expression: ExprSyntax) -> StateExpr? {
+        guard let call = expression.as(FunctionCallExprSyntax.self),
+              call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "Finished"
+        else { return nil }
+
+        if call.arguments.isEmpty {
+            return .equal(.variable("pc"), .value(.string("Done")))
+        }
+        guard call.arguments.count == 1,
+              let process = call.arguments.first.map(\.expression).flatMap(decodeStateExpr)
+        else { return nil }
+        return .equal(
+            .functionApply(.variable("pc"), process),
+            .value(.string("Done"))
         )
     }
 

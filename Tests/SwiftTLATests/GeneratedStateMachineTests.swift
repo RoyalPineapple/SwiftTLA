@@ -235,6 +235,56 @@ struct GeneratedAlgorithmStateConstraintTests {
 }
 
 @TLAModel
+struct GeneratedProcessLocalInvariant {
+    enum Node: String, FiniteDomainKey {
+        case left
+        case right
+
+        static let formalDomain: [Node] = [.left, .right]
+        static let formalTypeIdentity = FormalTypeIdentity(rawValue: "test.process-local-invariant-node")
+
+        var tlaValue: TLAValue { .string(rawValue) }
+    }
+
+    enum Label: String, PlusCalLabel {
+        case receive
+    }
+
+    static var spec: TLASpec {
+        #spec("GeneratedProcessLocalInvariant") {
+            Algorithm("GeneratedProcessLocalInvariant") {
+                Each(Node.all) { selfID in
+                    let count = LocalVar(initial: 0)
+                    Do(Label.receive) {
+                        Skip()
+                    }
+                    Invariant("LocalCount") { count == 0 }
+                    Invariant("ControlLocation") {
+                        At(Label.receive, selfID) || Finished(selfID)
+                    }
+                }
+            }
+        }
+    }
+}
+
+struct GeneratedProcessLocalInvariantTests {
+    @Test("#spec preserves a process-local invariant through both construction paths")
+    func generatedModelPreservesProcessLocalInvariant() {
+        GeneratedProcessLocalInvariant._checkParserTree()
+        #expect(GeneratedProcessLocalInvariant.spec.invariants.map(\.name) == ["LocalCount", "ControlLocation"])
+        #expect(GeneratedProcessLocalInvariant.spec.invariants[0].body == .forAll(
+            .setLiteral([.value(.string("left")), .value(.string("right"))]),
+            "process",
+            .equal(
+                .functionApply(.variable("count"), .variable("process")),
+                .value(.int(0))
+            )
+        ))
+    }
+}
+
+@TLAModel
 struct GeneratedDependentInitialAlgorithm {
     enum Node: String, FiniteDomainKey {
         case left

@@ -456,6 +456,12 @@ extension SpecParser {
                 loopCondition = nil
             }
             return .step(.init(label: .init(name: label), statements: statements, loopCondition: loopCondition))
+        case "Invariant":
+            guard let invariant = parseAlgorithmInvariant(call) else { return nil }
+            return .invariant(.init(
+                name: invariant.name,
+                body: replacingProcessParameter(in: invariant.body, named: processParameter)
+            ))
         default:
             return nil
         }

@@ -132,6 +132,14 @@ public struct BoulangerModel {
                             Assign(num, to: num.updating(selfID, to: 0))
                         }
                     }
+
+                    // These are the process-local parts of the source
+                    // `TypeOK` property. The lowerer quantifies them over
+                    // every process, so the public DSL never exposes the
+                    // generated formal functions for local state.
+                    Invariant("LocalTypeOK") {
+                        max >= 0 && previous >= -1
+                    }
                 }
 
                 // The published TLC configuration retains only tickets below 3.

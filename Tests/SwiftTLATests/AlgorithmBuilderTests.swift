@@ -278,6 +278,44 @@ struct AlgorithmBuilderTests {
         #expect(spec.constraint == .lessThan(.variable("value"), .value(.int(3))))
     }
 
+    @Test("a process-local invariant lowers over its process family")
+    func lowersProcessLocalInvariant() throws {
+        let algorithm = Algorithm("LocalProperty") {
+            Each(Node.all) { selfID in
+                let count = LocalVar("count", initial: 0)
+                // Direct builders register declarations as expressions. `#spec`
+                // supplies this registration automatically for source `let`s.
+                count
+                Do(AlgorithmLabel.receive) { Skip() }
+                Invariant("LocalCount") { count == 0 }
+                Invariant("ControlLocation") {
+                    At(AlgorithmLabel.receive, selfID) || Finished(selfID)
+                }
+            }
+        }
+
+        #expect(algorithm.validate().isEmpty)
+        let spec = try algorithm.lower()
+        #expect(spec.invariants.map(\.name) == ["LocalCount", "ControlLocation"])
+        guard case .forAll(_, let binding, let localCount) = spec.invariants[0].body else {
+            Issue.record("A process-local invariant must lower to a bounded universal property.")
+            return
+        }
+        #expect(binding == "process")
+        #expect(localCount == .equal(
+            .functionApply(.variable("count"), .variable("process")),
+            .value(.int(0))
+        ))
+        guard case .forAll(_, _, let controlLocation) = spec.invariants[1].body else {
+            Issue.record("A control-location property must lower to a bounded universal property.")
+            return
+        }
+        #expect(controlLocation == .or(
+            .equal(.functionApply(.variable("pc"), .variable("process")), .value(.string("receive"))),
+            .equal(.functionApply(.variable("pc"), .variable("process")), .value(.string("Done")))
+        ))
+    }
+
     @Test("validation fails closed for invalid bounded algorithms")
     func rejectsInvalidAlgorithms() {
         let invalid = Algorithm("__pcal_invalid") {

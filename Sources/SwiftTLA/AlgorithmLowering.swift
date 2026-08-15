@@ -32,6 +32,24 @@ enum AlgorithmLowerer {
             guard case .invariant(let invariant) = component else { return nil }
             return invariant
         }
+        let processInvariants = processes.flatMap { process -> [NamedInvariant] in
+            let localRoots = Set(process.components.compactMap { component -> String? in
+                guard case .local(let state) = component else { return nil }
+                return state.root
+            })
+            let processDomain = StateExpr.setLiteral(process.domain.map(StateExpr.value))
+            return process.components.compactMap { component -> NamedInvariant? in
+                guard case .invariant(let invariant) = component else { return nil }
+                return NamedInvariant(
+                    name: invariant.name,
+                    body: .forAll(
+                        processDomain,
+                        processBinding,
+                        rewrite(invariant.body, localRoots: localRoots)
+                    )
+                )
+            }
+        }
         let declaredTemporal = algorithm.components.compactMap { component -> NamedTemporal? in
             guard case .temporal(let temporal) = component else { return nil }
             return temporal
@@ -166,7 +184,7 @@ enum AlgorithmLowerer {
             name: algorithm.name,
             variables: variables,
             actions: actions,
-            invariants: declaredInvariants + generatedAssertionInvariants,
+            invariants: declaredInvariants + processInvariants + generatedAssertionInvariants,
             temporalProperties: declaredTemporal,
             fairness: declaredFairness + fairness,
             constraint: declaredConstraint)

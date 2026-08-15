@@ -1326,6 +1326,14 @@ public func Finished<Value: FiniteDomainKey>(_ process: WithValue<Value>) -> Sta
     )
 }
 
+/// True when the current `Each` process has reached `Done`.
+public func Finished<Value: FiniteDomainKey>(_ process: ProcessIdentifier<Value>) -> StateExpr {
+    .equal(
+        .functionApply(.variable("pc"), process.stateExpr),
+        .value(.string("Done"))
+    )
+}
+
 /// True when one process is at a named PlusCal label.
 ///
 /// This is the typed way to state properties about algorithm control flow.
@@ -1333,6 +1341,17 @@ public func Finished<Value: FiniteDomainKey>(_ process: WithValue<Value>) -> Sta
 public func At<Label: PlusCalLabel & RawRepresentable, Value: FiniteDomainKey>(
     _ label: Label,
     _ process: WithValue<Value>
+) -> StateExpr where Label.RawValue == String {
+    .equal(
+        .functionApply(.variable("pc"), process.stateExpr),
+        .value(.string(label.rawValue))
+    )
+}
+
+/// True when the current `Each` process is at a named PlusCal label.
+public func At<Label: PlusCalLabel & RawRepresentable, Value: FiniteDomainKey>(
+    _ label: Label,
+    _ process: ProcessIdentifier<Value>
 ) -> StateExpr where Label.RawValue == String {
     .equal(
         .functionApply(.variable("pc"), process.stateExpr),
@@ -1595,7 +1614,9 @@ internal enum AlgorithmValidator {
                 validateName(state.root, at: processAnchor, diagnostics: &diagnostics)
             case .step(let step):
                 validate(step, process: index, labels: Set(labels), diagnostics: &diagnostics)
-            case .invariant, .temporal, .fairness, .stateConstraint, .propertyBoundary:
+            case .invariant(let invariant):
+                validateName(invariant.name, at: processAnchor, diagnostics: &diagnostics)
+            case .temporal, .fairness, .stateConstraint, .propertyBoundary:
                 diagnostics.append(AlgorithmDiagnostic(.propertyBoundary, at: processAnchor))
             case .shared, .process:
                 diagnostics.append(AlgorithmDiagnostic(.invalidAlgorithmComponent, at: processAnchor))
