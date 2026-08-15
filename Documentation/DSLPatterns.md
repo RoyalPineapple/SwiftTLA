@@ -17,9 +17,14 @@ AST, runs global model checking, and emits executable state-machine or actor
 behavior only after that check succeeds. The generated runtime reuses the
 verified model's actions rather than accepting a separate implementation.
 
-## Symmetric collection rule: lower behavior, hide identity
+## Legacy symmetric-collection boundary
 
-`SymmetricCollectionVar<Element, Value>` separates two identity domains.
+`SymmetricCollectionVar<Element, Value>` is retained for formal-engine and
+parity fixtures only. Do not use it in new application models, demos, or
+authoring documentation. New models use `#spec` with `Algorithm`, `SharedVar`,
+and typed `Function`, `SetExpr`, and `Record` expressions.
+
+The retained engine surface separates two identity domains.
 Runtime storage is keyed by concrete `Element.ID` values and may contain an
 arbitrary number of live entries. Verification derives exactly
 `verificationScope` opaque `.constant` model members; concrete IDs, including

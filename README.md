@@ -88,11 +88,12 @@ print(result.after.hour)
 
 ## Symmetric collections
 
-Symmetric-collection verification remains available for the existing finite
-core fixtures. Its public authoring surface is being migrated to the
-PlusCal-shaped record and map vocabulary; do not start a new model with the
-older `SymmetricCollectionVar` API. See the [language fragment](Documentation/Design.md)
-for the current supported boundary.
+Symmetric-collection verification remains a formal-engine/parity facility for
+existing finite fixtures. New application models use `#spec`, `Algorithm`,
+`SharedVar`, and typed `Function`, `SetExpr`, and `Record` values; do not start
+a model with `SymmetricCollectionVar`. The legacy API remains only while
+equivalent canonical symmetry evidence is established. See the [language
+fragment](Documentation/Design.md) for the supported boundary.
 
 ## Bootstrap
 
