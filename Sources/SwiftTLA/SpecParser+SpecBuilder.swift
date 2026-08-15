@@ -15,6 +15,7 @@ extension SpecParser {
         public var temporal: [(name: String, expr: TemporalExpr)] = []
         public var fairness: [FairnessCondition] = []
         public var constraint: StateExpr?
+        public var imports: [String] = []
         public var constants: [String: TLAValue] = [:]
         /// Local named values (from NamedValue declarations, resolved in expressions)
         public var localConstants: [String: TLAValue] = [:]
@@ -476,6 +477,16 @@ extension SpecParser {
                 result.invariants += spec.invariants.map { (name: $0.name, body: $0.body) }
                 result.actions += spec.actions.map { ParsedAction(name: $0.name, body: $0.body, bindings: $0.bindings) }
             }
+        case "Import":
+            guard let argument = call.arguments.first?.expression else { return }
+            let reference = argument.description.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard let moduleName = reference.split(separator: ".").first,
+                  !moduleName.isEmpty
+            else {
+                result.diagnostics.append(.init(message: "Import requires a named formal module.", source: call))
+                return
+            }
+            result.imports.append(String(moduleName))
         default:
             break
         }

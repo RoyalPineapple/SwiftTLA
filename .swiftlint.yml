@@ -117,6 +117,7 @@ identifier_name:
     - Constraint
     - Recursive
     - Use
+    - Import
     - DefineRecursive
     - RuntimeFunc
     - Operator

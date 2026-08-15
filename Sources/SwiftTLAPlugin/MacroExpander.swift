@@ -161,6 +161,7 @@ enum MacroExpander {
         }.joined(separator: ", ")
         let treeFairness = model.fairness.map(codegenFairness).joined(separator: ", ")
         let treeConstraint = model.constraint.map(codegenStateExpr) ?? "nil"
+        let treeImports = model.imports.map { "\"\($0)\"" }.joined(separator: ", ")
 
         let parserTreeSource = """
         static let _parserTree: ParsedSpecModel = ParsedSpecModel(
@@ -169,7 +170,8 @@ enum MacroExpander {
             invariants: [\(treeInvs)],
             temporal: [\(treeTemporal)],
             fairness: [\(treeFairness)],
-            constraint: \(treeConstraint)
+            constraint: \(treeConstraint),
+            imports: [\(treeImports)]
         )
         """
         let checkerSource = """
@@ -181,7 +183,8 @@ enum MacroExpander {
                 invariants: builtSpec.invariants.map { ($0.name, $0.body) },
                 temporal: builtSpec.temporalProperties.map { ($0.name, $0.expr) },
                 fairness: builtSpec.fairness,
-                constraint: builtSpec.constraint
+                constraint: builtSpec.constraint,
+                imports: builtSpec.imports.map(\\.name)
             )
             if !_tlaAlphaEquivalent(built, _parserTree) {
                 preconditionFailure(

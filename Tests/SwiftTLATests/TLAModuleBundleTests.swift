@@ -1,9 +1,54 @@
 import Testing
 import Foundation
+import SwiftParser
+import SwiftSyntax
 @testable import SwiftTLA
+import SwiftTLAMacros
+
+@TLAModel
+private struct ImportedFormalModuleGeneratedModel {
+  static var spec: TLASpec {
+    #spec("ImportedFormalModuleGeneratedModel") {
+      Import(ZSequences.module)
+      Algorithm("ImportedFormalModuleGeneratedModel") {
+        let value = SharedVar(initial: 0)
+        Do("keep") { Assign(value, to: value.expr) }
+      }
+    }
+  }
+}
 
 @Suite("TLA+ module bundles")
 struct TLAModuleBundleTests {
+  @Test("a generated model preserves its imported module")
+  func generatedModelRetainsImportedModule() {
+    ImportedFormalModuleGeneratedModel._checkParserTree()
+    #expect(ImportedFormalModuleGeneratedModel.spec.imports.map { $0.name } == ["ZSequences"])
+  }
+
+  @Test("the parser records imports for builder fidelity")
+  func parserRetainsImportedModule() {
+    let source = "{ Import(ZSequences.module) }"
+    let closure = Parser.parse(source: source).statements.first!.item.as(ClosureExprSyntax.self)!
+    let parsed = SpecParser.parseSpecClosure(closure)
+    let runtime = TLASpec("Imported") {
+      Import(ZSequences.module)
+    }
+    let parserTree = ParsedSpecModel(variables: [], actions: [], invariants: [], imports: parsed.imports)
+    let runtimeTree = ParsedSpecModel(variables: [], actions: [], invariants: [], imports: runtime.imports.map(\.name))
+
+    #expect(_tlaAlphaEquivalent(parserTree, runtimeTree))
+  }
+
+  @Test("the parser preserves qualified ZSequences calls")
+  func parserRetainsQualifiedModuleCalls() {
+    let source = "ZSequences.rotation(of: corpus, leftBy: 1)"
+    let expression = Parser.parse(source: source).statements.first!.item.as(ExprSyntax.self)!
+    let parsed = SpecParser.decodeStateExpr(expression)
+
+    #expect(parsed == .recursiveCall("Rotation", [.variable("corpus"), .int(1)]))
+  }
+
   @Test("ZSequences keeps the upstream operators in its own importable module")
   func zeroBasedSequenceModuleIsExecutable() throws {
     let sequence = ZeroBasedSequence<Int>.literal(3, 1, 2)

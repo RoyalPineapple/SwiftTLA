@@ -138,12 +138,14 @@ public struct ParsedSpecModel: Equatable, Sendable {
   public let temporal: [(name: String, expr: TemporalExpr)]
   public let fairness: [FairnessCondition]
   public let constraint: StateExpr?
+  public let imports: [String]
   public init(
     variables: [(String, TLAValue, StateExpr?)], actions: [(String, ActionExpr, [ActionBinding])],
     invariants: [(String, StateExpr)],
     temporal: [(String, TemporalExpr)] = [],
     fairness: [FairnessCondition] = [],
-    constraint: StateExpr? = nil
+    constraint: StateExpr? = nil,
+    imports: [String] = []
   ) {
     self.variables = variables
     self.actions = actions
@@ -151,6 +153,7 @@ public struct ParsedSpecModel: Equatable, Sendable {
     self.temporal = temporal
     self.fairness = fairness
     self.constraint = constraint
+    self.imports = imports
   }
   public static func == (lhs: ParsedSpecModel, rhs: ParsedSpecModel) -> Bool {
     guard lhs.variables.count == rhs.variables.count,
@@ -158,7 +161,8 @@ public struct ParsedSpecModel: Equatable, Sendable {
       lhs.invariants.count == rhs.invariants.count,
       lhs.temporal.count == rhs.temporal.count,
       lhs.fairness == rhs.fairness,
-      lhs.constraint == rhs.constraint
+      lhs.constraint == rhs.constraint,
+      lhs.imports == rhs.imports
     else { return false }
     for (a, b) in zip(lhs.variables, rhs.variables) {
       if a.name != b.name || a.initial != b.initial || a.initialSet != b.initialSet { return false }

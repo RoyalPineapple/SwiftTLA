@@ -150,7 +150,8 @@ extension TLASpec {
         invariants: invariants.map { ($0.name, $0.body) },
         temporal: temporalProperties.map { ($0.name, $0.expr) },
         fairness: fairness,
-        constraint: constraint
+        constraint: constraint,
+        imports: importedModules.map(\.name)
       )
       guard _tlaAlphaEquivalent(built, tree) else {
         fatalError(

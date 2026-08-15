@@ -775,6 +775,29 @@ public enum SpecParser {
         let methodName = memberAccess.declName.baseName.text
         let args = Array(call.arguments)
         let base = memberAccess.base
+        if base?.as(DeclReferenceExprSyntax.self)?.baseName.text == "ZSequences" {
+            switch methodName {
+            case "indices":
+                guard let sequence = args.first(where: { $0.label?.text == "of" }).flatMap({ decodeStateExpr($0.expression) }) else { return nil }
+                return .recursiveCall("ZIndices", [sequence])
+            case "length":
+                guard let sequence = args.first(where: { $0.label?.text == "of" }).flatMap({ decodeStateExpr($0.expression) }) else { return nil }
+                return .recursiveCall("ZLen", [sequence])
+            case "rotation":
+                guard let sequence = args.first(where: { $0.label?.text == "of" }).flatMap({ decodeStateExpr($0.expression) }),
+                      let shift = args.first(where: { $0.label?.text == "leftBy" }).flatMap({ decodeStateExpr($0.expression) })
+                else { return nil }
+                return .recursiveCall("Rotation", [sequence, shift])
+            case "lexicographicallyPrecedesOrEquals":
+                guard args.count == 2,
+                      let left = decodeStateExpr(args[0].expression),
+                      let right = decodeStateExpr(args[1].expression)
+                else { return nil }
+                return .recursiveCall("LexicographicallyPrecedesOrEquals", [left, right])
+            default:
+                return nil
+            }
+        }
         let selfExpr = base.flatMap { decodeStateExpr($0) }
         switch methodName {
         case "isIn", "contains", "union", "intersection", "subtracting", "isSubset", "applying",

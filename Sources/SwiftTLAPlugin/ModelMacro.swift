@@ -37,6 +37,7 @@ struct ParsedMacroModel {
     let temporal: [(String, TemporalExpr)]
     let fairness: [FairnessCondition]
     let constraint: StateExpr?
+    let imports: [String]
 }
 
 enum NestedAdapterModelRegistry {
@@ -122,6 +123,12 @@ enum TLASpecVerifier {
             }
         }
 
+        let imports = try parsed.imports.map { name -> TLASpec in
+            guard let module = FormalModuleRegistry.lookup(name) else {
+                throw SimpleError("Unknown formal module '\(name)'.")
+            }
+            return module
+        }
         let spec = TLASpec(
             name: typeName,
             variables: parsed.variables.map { NamedVar(name: $0.name, initial: $0.initial, initialSet: $0.initialSet) },
@@ -131,6 +138,7 @@ enum TLASpecVerifier {
             temporalProperties: parsed.temporal.map { NamedTemporal(name: $0.name, expr: $0.expr) },
             fairness: parsed.fairness,
             constraint: parsed.constraint,
+            imports: imports,
             symmetricCollections: parsed.symmetricCollections.map(\.declaration)
         )
 
@@ -166,7 +174,8 @@ enum TLASpecVerifier {
             typeName: typeName, variables: parsed.variables, actions: parsed.actions,
             symmetricCollections: parsed.symmetricCollections, collectionActions: parsed.collectionActions,
             enumInfos: enumInfos, hasInvariants: hasInvs, invariants: parsed.invariants,
-            temporal: parsed.temporal, fairness: parsed.fairness, constraint: parsed.constraint
+            temporal: parsed.temporal, fairness: parsed.fairness, constraint: parsed.constraint,
+            imports: parsed.imports
         )
     }
 

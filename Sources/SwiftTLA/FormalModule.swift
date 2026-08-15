@@ -66,3 +66,14 @@ public struct ImportDecl: SpecComponent {
 
 // swiftlint:disable:next identifier_name
 public func Import(_ module: TLASpec) -> ImportDecl { ImportDecl(module) }
+
+/// The formal modules that macro expansion can resolve from an authored
+/// `Import(Module.module)` declaration.
+public enum FormalModuleRegistry {
+  public static func lookup(_ name: String) -> TLASpec? {
+    switch name {
+    case "ZSequences": ZSequences.module
+    default: nil
+    }
+  }
+}

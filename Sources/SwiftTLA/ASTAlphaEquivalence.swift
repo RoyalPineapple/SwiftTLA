@@ -10,6 +10,7 @@ public func _tlaAlphaEquivalent(_ lhs: ParsedSpecModel, _ rhs: ParsedSpecModel) 
           lhs.invariants.count == rhs.invariants.count,
           lhs.temporal.count == rhs.temporal.count,
           lhs.fairness == rhs.fairness,
+          lhs.imports == rhs.imports,
           optionalStateEquivalent(lhs.constraint, rhs.constraint)
     else { return false }
 
@@ -30,6 +31,9 @@ public func _tlaAlphaEquivalent(_ lhs: ParsedSpecModel, _ rhs: ParsedSpecModel) 
 /// Explains the first semantic difference that remains after normalization.
 /// This is intentionally concise enough to be useful in a macro runtime trap.
 public func _tlaFidelityDiagnostic(_ expected: ParsedSpecModel, _ actual: ParsedSpecModel) -> String {
+    guard expected.imports == actual.imports else {
+        return "Imported modules differ: expected \(expected.imports), got \(actual.imports)."
+    }
     guard expected.variables.elementsEqual(actual.variables, by: variablesEquivalent) else {
         let sharedCount = min(expected.variables.count, actual.variables.count)
         for index in 0..<sharedCount {
