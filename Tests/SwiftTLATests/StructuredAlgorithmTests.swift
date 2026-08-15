@@ -86,4 +86,33 @@ struct StructuredAlgorithmTests {
         #expect(result.after.cars[.north][StructuredCarModel.CarRecord.floor] == 1)
         #expect(result.after.cars[.south][StructuredCarModel.CarRecord.door] == .closed)
     }
+
+    @Test("function comprehensions retain typed record values through lowering and evaluation")
+    func loweredFunctionComprehensionRetainsRecords() throws {
+        let algorithm = Algorithm("StructuredComprehension") {
+            let cars = SharedVar(
+                "cars",
+                initial: Function<StructuredCarModel.Car, Record<StructuredCarModel.CarRecord>>.mapping { _ in
+                    Record.literal(
+                        .init(StructuredCarModel.CarRecord.floor, 4),
+                        .init(StructuredCarModel.CarRecord.door, .closed)
+                    )
+                }
+            )
+            cars
+            Do("hold") { Assign(cars, to: cars.expr) }
+        }
+
+        let spec = try algorithm.lower()
+        let initial = try #require(computeInitialStates(spec).first)
+
+        for car in StructuredCarModel.Car.allCases {
+            let record = try #require(Record<StructuredCarModel.CarRecord>(formalValue: StateExpr.functionApply(
+                .variable("cars"),
+                .value(car.tlaValue)
+            ).evaluate(in: initial)))
+            #expect(record[StructuredCarModel.CarRecord.floor] == 4)
+            #expect(record[StructuredCarModel.CarRecord.door] == .closed)
+        }
+    }
 }
