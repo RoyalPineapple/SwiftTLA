@@ -139,6 +139,11 @@ struct UpstreamParityTests {
         #expect(BinarySearchModel.spec.tlaModule.contains("(Next)"))
     }
 
+    @Test("Boulangerie preserves its bounded PlusCal AST through both construction paths")
+    func boulangerParserBuilderFidelity() {
+        BoulangerModel._checkParserTree()
+    }
+
     @Test("Consensus PlusCal port matches its bounded TLC configuration")
     func consensusParity() throws {
         let count = try ConsensusModel.verifySpec()

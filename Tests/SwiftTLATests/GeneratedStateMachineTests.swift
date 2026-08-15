@@ -209,6 +209,32 @@ struct GeneratedIntegerChoiceAlgorithmTests {
 }
 
 @TLAModel
+struct GeneratedAlgorithmStateConstraint {
+    static var spec: TLASpec {
+        #spec("GeneratedAlgorithmStateConstraint") {
+            Algorithm("GeneratedAlgorithmStateConstraint") {
+                let count = SharedVar(initial: 0)
+                Do("advance") {
+                    Assign(count, to: count + 1)
+                }
+                StateConstraint(count < 2)
+            }
+        }
+    }
+}
+
+struct GeneratedAlgorithmStateConstraintTests {
+    @Test("#spec preserves an algorithm-local state constraint through both construction paths")
+    func generatedModelPreservesStateConstraint() throws {
+        GeneratedAlgorithmStateConstraint._checkParserTree()
+        #expect(GeneratedAlgorithmStateConstraint.spec.constraint
+            == .lessThan(.variable("count"), .value(.int(2))))
+        let graph = try ModelChecker(spec: GeneratedAlgorithmStateConstraint.spec).exploreGraph()
+        #expect(Set(graph.states.values.compactMap { $0["count"] }) == [.int(0), .int(1)])
+    }
+}
+
+@TLAModel
 struct GeneratedDependentInitialAlgorithm {
     enum Node: String, FiniteDomainKey {
         case left

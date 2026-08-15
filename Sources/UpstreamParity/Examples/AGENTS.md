@@ -47,6 +47,7 @@ them as templates for new work.
 | `macro M(x) { ... }` / `M(v)` | `let m = Macro { (x: MacroParameter<Value>) in ... }` / `m(v)` inside `Do` |
 | `goto` / `skip` / termination | `Goto` / `Skip` / `Stop` |
 | process fairness | `Each(S, fairness: .weak)` or `.strong` |
+| TLC `CONSTRAINT` bound | `StateConstraint(condition)` inside `Algorithm` |
 
 `Do` is atomic. Every accepted `DoBuilder` statement becomes part of one
 formal transition. Do not put an ordinary Swift side effect in a `Do` block.

@@ -36,6 +36,7 @@ struct ParsedMacroModel {
     let invariants: [(String, StateExpr)]
     let temporal: [(String, TemporalExpr)]
     let fairness: [FairnessCondition]
+    let constraint: StateExpr?
 }
 
 enum NestedAdapterModelRegistry {
@@ -129,6 +130,7 @@ enum TLASpecVerifier {
             invariants: allInvariants,
             temporalProperties: parsed.temporal.map { NamedTemporal(name: $0.name, expr: $0.expr) },
             fairness: parsed.fairness,
+            constraint: parsed.constraint,
             symmetricCollections: parsed.symmetricCollections.map(\.declaration)
         )
 
@@ -164,7 +166,7 @@ enum TLASpecVerifier {
             typeName: typeName, variables: parsed.variables, actions: parsed.actions,
             symmetricCollections: parsed.symmetricCollections, collectionActions: parsed.collectionActions,
             enumInfos: enumInfos, hasInvariants: hasInvs, invariants: parsed.invariants,
-            temporal: parsed.temporal, fairness: parsed.fairness
+            temporal: parsed.temporal, fairness: parsed.fairness, constraint: parsed.constraint
         )
     }
 

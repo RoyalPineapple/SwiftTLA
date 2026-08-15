@@ -9,7 +9,8 @@ public func _tlaAlphaEquivalent(_ lhs: ParsedSpecModel, _ rhs: ParsedSpecModel) 
           lhs.actions.count == rhs.actions.count,
           lhs.invariants.count == rhs.invariants.count,
           lhs.temporal.count == rhs.temporal.count,
-          lhs.fairness == rhs.fairness
+          lhs.fairness == rhs.fairness,
+          optionalStateEquivalent(lhs.constraint, rhs.constraint)
     else { return false }
 
     for (left, right) in zip(lhs.actions, rhs.actions) {
@@ -81,7 +82,21 @@ public func _tlaFidelityDiagnostic(_ expected: ParsedSpecModel, _ actual: Parsed
     guard expected.fairness == actual.fairness else {
         return "Fairness declarations differ: expected \(expected.fairness), got \(actual.fairness)."
     }
+    guard optionalStateEquivalent(expected.constraint, actual.constraint) else {
+        return "State constraint differs after normalizing local binders. Expected \(String(describing: expected.constraint)); built \(String(describing: actual.constraint))."
+    }
     return "The parser tree differs in an unsupported semantic field."
+}
+
+private func optionalStateEquivalent(_ lhs: StateExpr?, _ rhs: StateExpr?) -> Bool {
+    switch (lhs, rhs) {
+    case (nil, nil):
+        true
+    case let (.some(left), .some(right)):
+        alphaKey(left) == alphaKey(right)
+    case (nil, .some), (.some, nil):
+        false
+    }
 }
 
 private func variablesEquivalent(

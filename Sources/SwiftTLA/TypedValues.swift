@@ -420,6 +420,12 @@ extension Expr {
     .in(element.raw, raw)
   }
 
+  /// Tests membership of the current PlusCal process identifier.
+  public func contains<Element: FiniteDomainKey>(_ element: ProcessIdentifier<Element>) -> StateExpr
+  where T == SetExpr<Element> {
+    .in(element.stateExpr, raw)
+  }
+
   /// Tests membership of a value selected by a bounded `With` statement.
   ///
   /// The selected value remains formal data. This avoids leaking the

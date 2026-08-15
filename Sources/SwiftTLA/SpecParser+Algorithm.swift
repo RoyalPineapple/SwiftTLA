@@ -141,6 +141,9 @@ extension SpecParser {
         result.invariants += lowered.invariants.map { ($0.name, $0.body) }
         result.temporal += lowered.temporalProperties.map { ($0.name, $0.expr) }
         result.fairness += lowered.fairness
+        if let constraint = lowered.constraint {
+            result.constraint = result.constraint.map { .and($0, constraint) } ?? constraint
+        }
     }
 
     private static func algorithmStateDeclarations(in model: AlgorithmModel) -> [AlgorithmStateModel] {
@@ -183,6 +186,11 @@ extension SpecParser {
         case "WeakFairness", "StrongFairness":
             guard let fairness = decodeFairness(call) else { return nil }
             return .fairness(fairness)
+        case "StateConstraint":
+            guard let argument = call.arguments.first,
+                  let condition = decodeStateExpr(argument.expression)
+            else { return nil }
+            return .stateConstraint(condition)
         default:
             return nil
         }

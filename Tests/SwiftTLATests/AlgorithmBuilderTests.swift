@@ -267,6 +267,7 @@ struct AlgorithmBuilderTests {
             Invariant("NonNegative") { value >= 0 }
             LeadsTo("EventuallyPositive", value == 0, value > 0)
             WeakFairness("receive")
+            StateConstraint(value < 3)
         }
 
         #expect(algorithm.validate().isEmpty)
@@ -274,6 +275,7 @@ struct AlgorithmBuilderTests {
         #expect(spec.invariants.map(\.name) == ["NonNegative"])
         #expect(spec.temporalProperties.map(\.name) == ["EventuallyPositive"])
         #expect(spec.fairness.contains(.weakFairness("receive")))
+        #expect(spec.constraint == .lessThan(.variable("value"), .value(.int(3))))
     }
 
     @Test("validation fails closed for invalid bounded algorithms")

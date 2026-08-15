@@ -14,6 +14,7 @@ extension SpecParser {
         public var invariants: [(name: String, body: StateExpr)] = []
         public var temporal: [(name: String, expr: TemporalExpr)] = []
         public var fairness: [FairnessCondition] = []
+        public var constraint: StateExpr?
         public var constants: [String: TLAValue] = [:]
         /// Local named values (from NamedValue declarations, resolved in expressions)
         public var localConstants: [String: TLAValue] = [:]
@@ -439,6 +440,11 @@ extension SpecParser {
             parseAction(call, into: &result, loopVar: loopVar, loopValue: loopValue)
         case "Invariant":
             parseInvariant(call, into: &result)
+        case "Constraint":
+            if let argument = call.arguments.first,
+               let expression = decodeStateExpr(argument.expression) {
+                result.constraint = result.constraint.map { .and($0, expression) } ?? expression
+            }
         case "Constant":
             parseConstantDecl(call, into: &result)
         case "LeadsTo", "Eventually", "Always", "AlwaysEventually", "EventuallyAlways":

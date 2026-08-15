@@ -40,6 +40,12 @@ enum AlgorithmLowerer {
             guard case .fairness(let fairness) = component else { return nil }
             return fairness
         }
+        let declaredConstraint = algorithm.components.compactMap { component -> StateExpr? in
+            guard case .stateConstraint(let constraint) = component else { return nil }
+            return constraint
+        }.reduce(nil) { partial, constraint in
+            partial.map { .and($0, constraint) } ?? constraint
+        }
 
         var variables = shared.map { state in
             if let initial = try? state.initial.evaluate(in: [:]) {
@@ -162,7 +168,8 @@ enum AlgorithmLowerer {
             actions: actions,
             invariants: declaredInvariants + generatedAssertionInvariants,
             temporalProperties: declaredTemporal,
-            fairness: declaredFairness + fairness)
+            fairness: declaredFairness + fairness,
+            constraint: declaredConstraint)
     }
 
     private static func constantFunction(domain: [TLAValue], value: StateExpr) -> StateExpr {
@@ -201,6 +208,12 @@ enum AlgorithmLowerer {
             guard case .fairness(let fairness) = component else { return nil }
             return fairness
         }
+        let declaredConstraint = algorithm.components.compactMap { component -> StateExpr? in
+            guard case .stateConstraint(let constraint) = component else { return nil }
+            return constraint
+        }.reduce(nil) { partial, constraint in
+            partial.map { .and($0, constraint) } ?? constraint
+        }
 
         var variables = shared.map { state in
             if let initial = try? state.initial.evaluate(in: [:]) {
@@ -216,7 +229,8 @@ enum AlgorithmLowerer {
                 actions: [],
                 invariants: declaredInvariants,
                 temporalProperties: declaredTemporal,
-                fairness: declaredFairness
+                fairness: declaredFairness,
+                constraint: declaredConstraint
             )
         }
         variables.append(NamedVar(name: controlVariable, initial: .string(first.label.name)))
@@ -268,7 +282,8 @@ enum AlgorithmLowerer {
             actions: actions,
             invariants: declaredInvariants + generatedAssertionInvariants,
             temporalProperties: declaredTemporal,
-            fairness: declaredFairness
+            fairness: declaredFairness,
+            constraint: declaredConstraint
         )
     }
 

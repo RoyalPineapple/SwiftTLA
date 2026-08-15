@@ -91,3 +91,15 @@ public func -(_ lhs: Int, _ rhs: Var<Int>) -> Expr<Int> { Expr(.subtract(.int(lh
 public func -(_ lhs: Int, _ rhs: Expr<Int>) -> Expr<Int> { Expr(.subtract(.int(lhs), rhs.raw)) }
 public func +(_ lhs: Expr<Int>, _ rhs: Var<Int>) -> Expr<Int> { Expr(.add(lhs.raw, rhs.stateExpr)) }
 public func %(_ lhs: Expr<Int>, _ rhs: Int) -> Expr<Int> { Expr(.modulo(lhs.raw, .int(rhs))) }
+public func <(_ lhs: Expr<Int>, _ rhs: Expr<Int>) -> StateExpr { .lessThan(lhs.raw, rhs.raw) }
+public func >(_ lhs: Expr<Int>, _ rhs: Expr<Int>) -> StateExpr { .greaterThan(lhs.raw, rhs.raw) }
+public func <=(_ lhs: Expr<Int>, _ rhs: Expr<Int>) -> StateExpr { .lessOrEqual(lhs.raw, rhs.raw) }
+public func >=(_ lhs: Expr<Int>, _ rhs: Expr<Int>) -> StateExpr { .greaterOrEqual(lhs.raw, rhs.raw) }
+public func <(_ lhs: Expr<Int>, _ rhs: LocalVariable<Int>) -> StateExpr { .lessThan(lhs.raw, rhs.stateExpr) }
+public func >(_ lhs: Expr<Int>, _ rhs: LocalVariable<Int>) -> StateExpr { .greaterThan(lhs.raw, rhs.stateExpr) }
+public func <=(_ lhs: Expr<Int>, _ rhs: LocalVariable<Int>) -> StateExpr { .lessOrEqual(lhs.raw, rhs.stateExpr) }
+public func >=(_ lhs: Expr<Int>, _ rhs: LocalVariable<Int>) -> StateExpr { .greaterOrEqual(lhs.raw, rhs.stateExpr) }
+public func == <T: TLAValueType>(_ lhs: Expr<T>, _ rhs: Expr<T>) -> StateExpr { .equal(lhs.raw, rhs.raw) }
+public func != <T: TLAValueType>(_ lhs: Expr<T>, _ rhs: Expr<T>) -> StateExpr { .notEqual(lhs.raw, rhs.raw) }
+public func == <T: TLAValueType>(_ lhs: Expr<T>, _ rhs: LocalVariable<T>) -> StateExpr { .equal(lhs.raw, rhs.stateExpr) }
+public func != <T: TLAValueType>(_ lhs: Expr<T>, _ rhs: LocalVariable<T>) -> StateExpr { .notEqual(lhs.raw, rhs.stateExpr) }

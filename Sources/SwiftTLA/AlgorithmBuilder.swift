@@ -38,6 +38,42 @@ extension FiniteDomainKey {
     }
 }
 
+extension FiniteDomain {
+    /// The declared members before the current process member.
+    ///
+    /// The declaration order is the formal order. This gives an ordered
+    /// process algorithm an explicit, finite set without treating a Swift
+    /// enum's raw value as application data.
+    public func members(before current: ProcessIdentifier<Value>) -> Expr<SetExpr<Value>> {
+        members(before: current.stateExpr)
+    }
+
+    /// The declared members before a process-local member.
+    public func members(before current: LocalVariable<Value>) -> Expr<SetExpr<Value>> {
+        members(before: current.stateExpr)
+    }
+
+    /// The declared members before a value selected by `With`.
+    public func members(before current: WithValue<Value>) -> Expr<SetExpr<Value>> {
+        members(before: current.stateExpr)
+    }
+
+    private func members(before current: StateExpr) -> Expr<SetExpr<Value>> {
+        var result = Expr<SetExpr<Value>>(.setLiteral([]))
+        for (index, candidate) in values.enumerated().reversed() {
+            let earlier = Expr<SetExpr<Value>>(
+                .setLiteral(values.prefix(index).map { .value($0.tlaValue) })
+            )
+            result = If(
+                StateExpr.equal(current, .value(candidate.tlaValue)),
+                then: earlier,
+                else: result
+            )
+        }
+        return result
+    }
+}
+
 public struct ProcessIdentifier<Value: FiniteDomainKey>: StateExprConvertible, Sendable {
     fileprivate let expression: StateExpr
 
@@ -82,6 +118,14 @@ public struct WithValue<Value: TLAValueType>: StateExprConvertible, Sendable {
 
     public static func != (lhs: Value, rhs: WithValue<Value>) -> StateExpr {
         .notEqual(.value(lhs.tlaValue), rhs.stateExpr)
+    }
+
+    public static func == (lhs: WithValue<Value>, rhs: WithValue<Value>) -> StateExpr {
+        .equal(lhs.stateExpr, rhs.stateExpr)
+    }
+
+    public static func != (lhs: WithValue<Value>, rhs: WithValue<Value>) -> StateExpr {
+        .notEqual(lhs.stateExpr, rhs.stateExpr)
     }
 }
 
@@ -458,6 +502,26 @@ extension SharedVariable where Value == Int {
 
 }
 
+// A process-local formal variable reads like a shared formal variable. The
+// distinction is scope and lowering, not an author-facing loss of arithmetic.
+extension LocalVariable where Value == Int {
+    public static func + (_ lhs: LocalVariable, _ rhs: Int) -> Expr<Int> {
+        Expr(.add(lhs.stateExpr, .int(rhs)))
+    }
+
+    public static func - (_ lhs: LocalVariable, _ rhs: Int) -> Expr<Int> {
+        Expr(.subtract(lhs.stateExpr, .int(rhs)))
+    }
+
+    public static func == (_ lhs: LocalVariable, _ rhs: Int) -> StateExpr {
+        .equal(lhs.stateExpr, .int(rhs))
+    }
+
+    public static func != (_ lhs: LocalVariable, _ rhs: Int) -> StateExpr {
+        .notEqual(lhs.stateExpr, .int(rhs))
+    }
+}
+
 extension SharedVariable {
     public static func == (_ lhs: SharedVariable, _ rhs: Value) -> StateExpr {
         .equal(lhs.stateExpr, .value(rhs.tlaValue))
@@ -761,6 +825,25 @@ extension LocalVariable {
     }
 }
 
+extension LocalVariable where Value: FormalSetValue {
+    /// Tests whether the current process-local formal set is empty.
+    public var isEmpty: StateExpr {
+        .equal(.cardinality(stateExpr), .value(.int(0)))
+    }
+
+    /// Returns this process-local set without a value selected by `With`.
+    public func removing<Element: TLAValueType>(_ element: WithValue<Element>) -> Expr<SetExpr<Element>>
+    where Value == SetExpr<Element> {
+        Expr(.setDifference(stateExpr, .setLiteral([element.stateExpr])))
+    }
+
+    /// Returns this process-local set without another local formal value.
+    public func removing<Element: TLAValueType>(_ element: Expr<Element>) -> Expr<SetExpr<Element>>
+    where Value == SetExpr<Element> {
+        Expr(.setDifference(stateExpr, .setLiteral([element.raw])))
+    }
+}
+
 /// Declares a shared PlusCal-shaped variable.
 ///
 /// Use it as a local declaration inside `#spec`; the macro registers the
@@ -978,8 +1061,17 @@ public enum AlgorithmBuilder {
     }
 
     public static func buildExpression(_ component: ConstraintDecl) -> [AlgorithmElement] {
-        [AlgorithmElement(model: .propertyBoundary)]
+        [AlgorithmElement(model: .stateConstraint(component.body))]
     }
+}
+
+/// Bounds the states that TLC retains while it explores this algorithm.
+///
+/// Put this beside the algorithm state it refers to. It is deliberately named
+/// differently from a correctness `Invariant`: a state constraint limits
+/// exploration, while an invariant is checked in every retained state.
+public func StateConstraint(_ expression: some StateExprConvertible) -> AlgorithmElement {
+    AlgorithmElement(model: .stateConstraint(expression.stateExpr))
 }
 
 extension SpecBuilder {
@@ -1234,6 +1326,20 @@ public func Finished<Value: FiniteDomainKey>(_ process: WithValue<Value>) -> Sta
     )
 }
 
+/// True when one process is at a named PlusCal label.
+///
+/// This is the typed way to state properties about algorithm control flow.
+/// The generated program counter remains an implementation detail.
+public func At<Label: PlusCalLabel & RawRepresentable, Value: FiniteDomainKey>(
+    _ label: Label,
+    _ process: WithValue<Value>
+) -> StateExpr where Label.RawValue == String {
+    .equal(
+        .functionApply(.variable("pc"), process.stateExpr),
+        .value(.string(label.rawValue))
+    )
+}
+
 public func With<Value: TLAValueType>(
     _ source: Var<SetExpr<Value>>,
     @DoBuilder _ body: (WithValue<Value>) -> [StepStatement]
@@ -1439,6 +1545,8 @@ internal enum AlgorithmValidator {
                 validateName(temporal.name, at: .algorithm, diagnostics: &diagnostics)
             case .fairness:
                 break
+            case .stateConstraint:
+                break
             case .propertyBoundary:
                 diagnostics.append(AlgorithmDiagnostic(.propertyBoundary, at: .algorithm))
             case .step(let step):
@@ -1487,7 +1595,7 @@ internal enum AlgorithmValidator {
                 validateName(state.root, at: processAnchor, diagnostics: &diagnostics)
             case .step(let step):
                 validate(step, process: index, labels: Set(labels), diagnostics: &diagnostics)
-            case .invariant, .temporal, .fairness, .propertyBoundary:
+            case .invariant, .temporal, .fairness, .stateConstraint, .propertyBoundary:
                 diagnostics.append(AlgorithmDiagnostic(.propertyBoundary, at: processAnchor))
             case .shared, .process:
                 diagnostics.append(AlgorithmDiagnostic(.invalidAlgorithmComponent, at: processAnchor))

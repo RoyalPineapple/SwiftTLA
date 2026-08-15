@@ -54,6 +54,9 @@ extension TLASpec {
           invariants += lowered.invariants
           temporalProperties += lowered.temporalProperties
           fairness += lowered.fairness
+          if let loweredConstraint = lowered.constraint {
+            constraint = constraint.map { .and($0, loweredConstraint) } ?? loweredConstraint
+          }
         } catch {
           preconditionFailure("Invalid algorithm '\(algorithm.model.name)': \(error)")
         }
@@ -145,7 +148,8 @@ extension TLASpec {
         actions: actions.map { ($0.name, $0.body, $0.bindings) },
         invariants: invariants.map { ($0.name, $0.body) },
         temporal: temporalProperties.map { ($0.name, $0.expr) },
-        fairness: fairness
+        fairness: fairness,
+        constraint: constraint
       )
       guard _tlaAlphaEquivalent(built, tree) else {
         fatalError(

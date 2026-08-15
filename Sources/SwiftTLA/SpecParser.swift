@@ -29,6 +29,12 @@ public enum SpecParser {
     // MARK: - Compact expression decoder
 
     public static func decodeStateExpr(_ expression: ExprSyntax) -> StateExpr? {
+        if let precedingMembers = decodePrecedingFormalMembers(expression) {
+            return precedingMembers
+        }
+        if let controlLocation = decodeControlLocation(expression) {
+            return controlLocation
+        }
         if let call = expression.as(FunctionCallExprSyntax.self),
            call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "Finished",
            call.arguments.isEmpty {
@@ -171,6 +177,57 @@ public enum SpecParser {
             }
         }
         return nil
+    }
+
+    /// Parses `Domain.all.members(before: process)`, the typed formal set of
+    /// members declared before a process. This stays finite and explicit; it
+    /// is not a Swift collection operation.
+    private static func decodePrecedingFormalMembers(_ expression: ExprSyntax) -> StateExpr? {
+        guard let call = expression.as(FunctionCallExprSyntax.self),
+              call.calledExpression.as(MemberAccessExprSyntax.self)?.declName.baseName.text == "members",
+              let base = call.calledExpression.as(MemberAccessExprSyntax.self)?.base,
+              let domain = finiteAlgorithmDomain(base),
+              let currentSyntax = call.arguments.first(where: { $0.label?.text == "before" })?.expression,
+              let current = decodeStateExpr(currentSyntax)
+        else { return nil }
+
+        var result = StateExpr.setLiteral([])
+        for (index, candidate) in domain.values.enumerated().reversed() {
+            result = .ifThenElse(
+                .equal(current, .value(candidate)),
+                .setLiteral(domain.values.prefix(index).map(StateExpr.value)),
+                result
+            )
+        }
+        return result
+    }
+
+    /// Parses `At(Label.name, process)`, keeping the lowered `pc` variable
+    /// private to the builder and macro implementation.
+    private static func decodeControlLocation(_ expression: ExprSyntax) -> StateExpr? {
+        guard let call = expression.as(FunctionCallExprSyntax.self),
+              call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "At",
+              call.arguments.count == 2,
+              let label = controlLabel(call.arguments.first?.expression),
+              let process = call.arguments.dropFirst().first.map(\.expression).flatMap(decodeStateExpr)
+        else { return nil }
+        return .equal(
+            .functionApply(.variable("pc"), process),
+            .value(.string(label))
+        )
+    }
+
+    private static func controlLabel(_ expression: ExprSyntax?) -> String? {
+        guard let expression else { return nil }
+        if let literal = expression.as(StringLiteralExprSyntax.self) {
+            return literal.segments.compactMap { $0.as(StringSegmentSyntax.self)?.content.text }.joined()
+        }
+        guard let access = expression.as(MemberAccessExprSyntax.self) else { return nil }
+        if let type = access.base?.as(DeclReferenceExprSyntax.self)?.baseName.text,
+           case .string(let label) = _enumPhases[type]?[access.declName.baseName.text] {
+            return label
+        }
+        return access.declName.baseName.text
     }
 
     /// Independently expands the bounded `Sequences(of:lengths:)` spelling
