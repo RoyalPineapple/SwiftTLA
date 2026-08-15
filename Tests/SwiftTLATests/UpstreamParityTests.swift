@@ -166,6 +166,13 @@ struct UpstreamParityTests {
         #expect(count == Example.parallelReachable.expectedDistinct)
     }
 
+    @Test("Echo PlusCal port matches its three-node TLC configuration")
+    func echoParity() throws {
+        EchoModel._checkParserTree()
+        let count = try EchoModel.verifySpec()
+        #expect(count == Example.echo.expectedDistinct)
+    }
+
     @Test("EWD840 uses typed finite function state")
     func ewd840TypedFunctionParity() throws {
         try EWD840Model.verifySpec()

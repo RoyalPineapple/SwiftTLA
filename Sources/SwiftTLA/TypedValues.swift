@@ -420,6 +420,15 @@ extension Expr {
     .in(element.raw, raw)
   }
 
+  /// Tests membership of a value selected by a bounded `With` statement.
+  ///
+  /// The selected value remains formal data. This avoids leaking the
+  /// underlying expression representation into algorithm source.
+  public func contains<Element: TLAValueType>(_ element: WithValue<Element>) -> StateExpr
+  where T == SetExpr<Element> {
+    .in(element.stateExpr, raw)
+  }
+
   public func appending<Element: TLAValueType>(_ element: Element) -> Expr<TupleExpr<Element>>
   where T == TupleExpr<Element> {
     Expr<TupleExpr<Element>>(.tupleAppend(raw, .value(element.tlaValue)))

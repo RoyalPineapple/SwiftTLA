@@ -551,6 +551,12 @@ extension SharedVariable {
         Expr<Range>(.functionApply(stateExpr, index.stateExpr))
     }
 
+    /// Reads a finite function using a process-local formal key.
+    public subscript<Domain: FiniteDomainKey, Range>(_ index: LocalVariable<Domain>) -> Expr<Range>
+    where Value == Function<Domain, Range>, Range: TLAValueType {
+        Expr<Range>(.functionApply(stateExpr, index.stateExpr))
+    }
+
     /// Reads a finite function using a typed statement-macro parameter.
     public subscript<Domain: FiniteDomainKey, Range>(_ index: MacroParameter<Domain>) -> Expr<Range>
     where Value == Function<Domain, Range>, Range: TLAValueType {
@@ -601,6 +607,14 @@ extension SharedVariable {
         to value: Range
     ) -> Expr<Function<Domain, Range>> where Value == Function<Domain, Range>, Range: TLAValueType {
         updating(index, to: Expr<Range>(.value(value.tlaValue)))
+    }
+
+    /// Replaces a finite function value using a process-local formal key.
+    public func updating<Domain: FiniteDomainKey, Range>(
+        _ index: LocalVariable<Domain>,
+        to value: Expr<Range>
+    ) -> Expr<Function<Domain, Range>> where Value == Function<Domain, Range>, Range: TLAValueType {
+        Expr<Function<Domain, Range>>(.except(stateExpr, index.stateExpr, value.raw))
     }
 
     /// Replaces a finite function value using a typed statement-macro parameter.

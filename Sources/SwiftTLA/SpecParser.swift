@@ -316,6 +316,19 @@ public enum SpecParser {
            let substitution = substitutions[reference.baseName.text] {
             return substitution
         }
+        // `If` is a freestanding Swift-shaped formal value constructor. Parse
+        // it here, before falling back to the untyped decoder, so a value
+        // bound by `Function.mapping` or `With` remains in scope.
+        if let call = expression.as(FunctionCallExprSyntax.self),
+           call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "If",
+           let conditionSyntax = call.arguments.first?.expression,
+           let thenSyntax = call.arguments.first(where: { $0.label?.text == "then" })?.expression,
+           let elseSyntax = call.arguments.first(where: { $0.label?.text == "else" })?.expression,
+           let condition = decodeTypedFacadeValue(conditionSyntax, substitutions: substitutions),
+           let thenValue = decodeTypedFacadeValue(thenSyntax, substitutions: substitutions),
+           let elseValue = decodeTypedFacadeValue(elseSyntax, substitutions: substitutions) {
+            return .ifThenElse(condition, thenValue, elseValue)
+        }
         if let infix = expression.as(InfixOperatorExprSyntax.self),
            let operation = infix.operator.as(BinaryOperatorExprSyntax.self)?.operator.text,
            let lhs = decodeTypedFacadeValue(infix.leftOperand, substitutions: substitutions),
@@ -432,6 +445,11 @@ public enum SpecParser {
         else { return nil }
 
         switch access.declName.baseName.text {
+        case "contains":
+            guard let memberSyntax = call.arguments.first?.expression,
+                  let member = decodeTypedFacadeValue(memberSyntax, substitutions: substitutions)
+            else { return nil }
+            return .in(member, base)
         case "union":
             guard let otherSyntax = call.arguments.first?.expression,
                   let other = decodeTypedFacadeValue(otherSyntax, substitutions: substitutions)
