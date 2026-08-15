@@ -8,6 +8,35 @@ import SwiftParser
 import SwiftTLA
 
 enum MacroExpander {
+    /// The formal action label is external specification data and is kept
+    /// verbatim in `TLAActionInvocation`. Generated Swift declarations need a
+    /// separate, collision-safe identifier surface.
+    static func generatedActionIdentifiers(actions: [SpecParser.ParsedAction]) -> [String] {
+        let reserved: Set<String> = ["init", "deinit", "subscript", "toInvocation", "rawValue"]
+        var used: Set<String> = []
+        return actions.map { action in
+            let scalars = action.name.unicodeScalars.map { scalar -> Character in
+                switch scalar.value {
+                case 65...90, 97...122, 48...57, 95: return Character(String(scalar))
+                default: return "_"
+                }
+            }
+            var base = String(scalars)
+            if base.isEmpty { base = "action" }
+            if base.unicodeScalars.first.map({ (48...57).contains($0.value) }) == true || reserved.contains(base) {
+                base = "action_\(base)"
+            }
+            var identifier = base
+            var suffix = 2
+            while used.contains(identifier) {
+                identifier = "\(base)_\(suffix)"
+                suffix += 1
+            }
+            used.insert(identifier)
+            return identifier
+        }
+    }
+
     static func swiftType(for action: SpecParser.ParsedAction, binding: ActionBinding) -> String {
         action.bindingSwiftTypes[binding.name] ?? swiftType(for: binding.values[0])
     }
@@ -410,10 +439,10 @@ enum MacroExpander {
                 }
             },
             memberBlock: MemberBlockSyntax {
-                for a in actions {
+                for (a, identifier) in zip(actions, generatedActionIdentifiers(actions: actions)) {
                     EnumCaseDeclSyntax {
                         EnumCaseElementSyntax(
-                            name: .identifier(a.name),
+                            name: .identifier(identifier),
                             rawValue: InitializerClauseSyntax(value: StringLiteralExprSyntax(content: a.name))
                         )
                     }
@@ -423,6 +452,7 @@ enum MacroExpander {
     }
 
     static func generateActionLabel(actions: [SpecParser.ParsedAction]) -> DeclSyntax {
+        let identifiers = generatedActionIdentifiers(actions: actions)
         func swiftType(for action: SpecParser.ParsedAction, binding: ActionBinding) -> String {
             Self.swiftType(for: action, binding: binding)
         }
@@ -453,14 +483,14 @@ enum MacroExpander {
             }
         }
 
-        let cases = actions.map { action in
+        let cases = zip(actions, identifiers).map { action, identifier in
             let bindings = publicBindings(for: action)
-            guard !bindings.isEmpty else { return "case \(action.name)" }
+            guard !bindings.isEmpty else { return "case \(identifier)" }
             let parameters = bindings.map { "\($0.name): \(swiftType(for: action, binding: $0))" }.joined(separator: ", ")
-            return "case \(action.name)(\(parameters))"
+            return "case \(identifier)(\(parameters))"
         }.joined(separator: "\n    ")
 
-        let toInvocationCases = actions.map { action in
+        let toInvocationCases = zip(actions, identifiers).map { action, identifier in
             let publicBindings = publicBindings(for: action)
             let arguments = action.bindings.map { binding in
                 publicBindings.contains(where: { $0.name == binding.name })
@@ -468,15 +498,15 @@ enum MacroExpander {
                     : fixedArgument(binding)
             }.joined(separator: ", ")
             let pattern = publicBindings.isEmpty
-                ? ".\(action.name)"
-                : ".\(action.name)(\(publicBindings.map { "let \($0.name)" }.joined(separator: ", ")))"
+                ? ".\(identifier)"
+                : ".\(identifier)(\(publicBindings.map { "let \($0.name)" }.joined(separator: ", ")))"
             return "case \(pattern): return .init(name: \"\(action.name)\", arguments: [\(arguments)])"
         }.joined(separator: "\n        ")
 
-        let fromInvocationCases = actions.map { action in
+        let fromInvocationCases = zip(actions, identifiers).map { action, identifier in
             let publicBindings = publicBindings(for: action)
             if action.bindings.isEmpty {
-                return "case \"\(action.name)\" where invocation.arguments.isEmpty: self = .\(action.name)"
+                return "case \"\(action.name)\" where invocation.arguments.isEmpty: self = .\(identifier)"
             }
             let patterns = action.bindings.enumerated().map { index, binding -> String in
                 if publicBindings.contains(where: { $0.name == binding.name }) {
@@ -486,7 +516,7 @@ enum MacroExpander {
             }.joined(separator: ", ")
             let arguments = publicBindings.map { "\($0.name): \($0.name)" }.joined(separator: ", ")
             return "case \"\(action.name)\" where invocation.arguments.count == \(action.bindings.count): "
-                + "guard \(patterns) else { return nil }; self = .\(action.name)\(arguments.isEmpty ? "" : "(\(arguments))")"
+                + "guard \(patterns) else { return nil }; self = .\(identifier)\(arguments.isEmpty ? "" : "(\(arguments))")"
         }.joined(separator: "\n        ")
 
         return DeclSyntax(stringLiteral: """
@@ -707,7 +737,8 @@ extension MacroExpander {
         variables: [(name: String, initial: TLAValue, initialSet: StateExpr?, swiftTypeName: String?)],
         enumInfos: [ParsedEnumInfo]
     ) -> (methods: [FunctionDeclSyntax], nativeActionNames: Set<String>) {
-        let methods = actions.map { action -> FunctionDeclSyntax in
+        let identifiers = generatedActionIdentifiers(actions: actions)
+        let methods = zip(actions, identifiers).map { action, identifier -> FunctionDeclSyntax in
             if action.bindings.isEmpty,
                let collectionAction = collectionActions.first(where: { $0.name == action.name }),
                let collection = symmetricCollections.first(where: { $0.name == collectionAction.collectionName }) {
@@ -731,7 +762,7 @@ extension MacroExpander {
                             throw GeneratedMachineError.unexpected(error)
                         }
                         return TransitionResult(
-                            action: .\(action.name),
+                            action: .\(identifier),
                             before: evidence.before,
                             after: evidence.after
                         )
@@ -739,7 +770,7 @@ extension MacroExpander {
                     } ?? """
                     let evidence = try _machine.apply(.init(name: \"\(action.name)\"), from: _stateWithLiveCollections()) { _ in true }
                     return TransitionResult(
-                        action: .\(action.name),
+                        action: .\(identifier),
                         before: evidence.before,
                         after: evidence.after
                     )
@@ -757,7 +788,7 @@ extension MacroExpander {
                     : ""
                 let source = """
                 @discardableResult
-                \(isActor ? "fileprivate" : "public mutating") func \(action.name)(id: \(collection.elementType).ID) throws -> TransitionResult {
+                \(isActor ? "fileprivate" : "public mutating") func \(identifier)(id: \(collection.elementType).ID) throws -> TransitionResult {
                     let projection = \(collection.name).projection()
                     let targetKey: TLAValue
                     do {
@@ -783,11 +814,11 @@ extension MacroExpander {
                 "\(binding.name): \(swiftType(for: action, binding: binding))"
             }.joined(separator: ", ")
             let labels = bindings.map { "\($0.name): \($0.name)" }.joined(separator: ", ")
-            let methodName = isActor ? "_\(action.name)" : "apply\(action.name)"
+            let methodName = isActor ? "_\(identifier)" : "apply\(identifier.prefix(1).uppercased())\(identifier.dropFirst())"
             if bindings.isEmpty {
                 let source = """
                 \(isActor ? "fileprivate" : "public mutating") func \(methodName)() throws -> TransitionResult {
-                    try apply(.\(action.name))
+                    try apply(.\(identifier))
                 }
                 """
                 return DeclSyntax(stringLiteral: source).as(FunctionDeclSyntax.self)!
@@ -795,7 +826,7 @@ extension MacroExpander {
             let modifier = isActor ? "fileprivate" : "public mutating"
             let source = """
             \(modifier) func \(methodName)(\(parameters)) throws -> TransitionResult {
-                try apply(.\(action.name)\(labels.isEmpty ? "" : "(\(labels))"))
+                try apply(.\(identifier)\(labels.isEmpty ? "" : "(\(labels))"))
             }
             """
             return DeclSyntax(stringLiteral: source).as(FunctionDeclSyntax.self)!

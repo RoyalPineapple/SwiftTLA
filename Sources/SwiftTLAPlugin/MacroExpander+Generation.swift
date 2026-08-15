@@ -114,8 +114,9 @@ extension MacroExpander {
         enumInfos: [ParsedEnumInfo] = []
     ) -> [DeclSyntax] {
         var decls: [DeclSyntax] = []
-        for a in actions {
-            let callbackName = "on" + a.name.prefix(1).capitalized + a.name.dropFirst()
+        let actionIdentifiers = generatedActionIdentifiers(actions: actions)
+        for (a, identifier) in zip(actions, actionIdentifiers) {
+            let callbackName = "on" + identifier.prefix(1).capitalized + identifier.dropFirst()
             let callbackType: String
             if !a.bindings.isEmpty {
                 let parameterTypes = a.bindings.map { swiftType(for: a, binding: $0) }.joined(separator: ", ")
@@ -168,16 +169,17 @@ extension MacroExpander {
         variables: [(name: String, initial: TLAValue, initialSet: StateExpr?, swiftTypeName: String?)],
         actions: [SpecParser.ParsedAction]
     ) -> [FunctionDeclSyntax] {
-        actions.map { a in
-            let callbackName = "on" + a.name.prefix(1).capitalized + a.name.dropFirst()
+        let identifiers = generatedActionIdentifiers(actions: actions)
+        return zip(actions, identifiers).map { a, identifier in
+            let callbackName = "on" + identifier.prefix(1).capitalized + identifier.dropFirst()
             if !a.bindings.isEmpty {
                 let parameters = a.bindings.map { binding in
                     "\(binding.name): \(swiftType(for: a, binding: binding))"
                 }.joined(separator: ", ")
                 let callbackArguments = a.bindings.map(\.name).joined(separator: ", ")
                 let source = """
-                public func _\(a.name)(\(parameters)) throws -> TransitionResult {
-                    let evidence = try apply(.\(a.name)(\(a.bindings.map { "\($0.name): \($0.name)" }.joined(separator: ", "))))
+                public func _\(identifier)(\(parameters)) throws -> TransitionResult {
+                    let evidence = try apply(.\(identifier)(\(a.bindings.map { "\($0.name): \($0.name)" }.joined(separator: ", "))))
                     if let h = \(callbackName) { h(\(callbackArguments), evidence.before, evidence.after) }
                     return evidence
                 }
@@ -185,8 +187,8 @@ extension MacroExpander {
                 return DeclSyntax(stringLiteral: source).as(FunctionDeclSyntax.self)!
             }
             let source = """
-                public func _\(a.name)() throws -> TransitionResult {
-                let evidence = try apply(.\(a.name))
+                public func _\(identifier)() throws -> TransitionResult {
+                let evidence = try apply(.\(identifier))
                 if let h = \(callbackName) { Task { await h(evidence.before, evidence.after) } }
                 return evidence
             }
@@ -214,8 +216,8 @@ extension MacroExpander {
         let protoName = "\(typeName)Actions"
         var callbackDecls: [String] = []
         var defaultDecls: [String] = []
-        for a in actions {
-            let callbackName = "on" + a.name.prefix(1).capitalized + a.name.dropFirst()
+        for (a, identifier) in zip(actions, generatedActionIdentifiers(actions: actions)) {
+            let callbackName = "on" + identifier.prefix(1).capitalized + identifier.dropFirst()
             callbackDecls.append("func \(callbackName)()")
             defaultDecls.append("""
                 func \(callbackName)() {
@@ -851,12 +853,13 @@ extension MacroExpander {
         nativeNames: Set<String>,
         isActor: Bool = false
     ) -> FunctionDeclSyntax {
-        let switchCases = actions.map { a in
+        let identifiers = generatedActionIdentifiers(actions: actions)
+        let switchCases = zip(actions, identifiers).map { a, identifier in
             if nativeNames.contains(a.name) {
-                let methodName = isActor ? "_\(a.name)" : "apply\(a.name)"
-                return "case .\(a.name): \(methodName)()"
+                let methodName = isActor ? "_\(identifier)" : "apply\(identifier.prefix(1).uppercased())\(identifier.dropFirst())"
+                return "case .\(identifier): \(methodName)()"
             } else {
-                return "case .\(a.name): _state = _apply(action)"
+                return "case .\(identifier): _state = _apply(action)"
             }
         }.joined(separator: "\n        ")
         let source = """

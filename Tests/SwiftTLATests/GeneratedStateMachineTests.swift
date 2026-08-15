@@ -5,6 +5,19 @@ import SwiftTLAMacros
 import SwiftParser
 import SwiftSyntax
 
+@TLAModel
+private struct SanitizedActionLabelModel {
+    static var spec: TLASpec {
+        #spec("SanitizedActionLabelModel") {
+            let value = Var<Int>("value")
+            Variable(value, 0)
+            Action("procedure.work.enter") { value.becomes(1) }
+            Action("procedure_work_enter") { value.becomes(2) }
+            Action("step-2") { value.becomes(3) }
+        }
+    }
+}
+
 // MARK: - Minimal spec: counter with no invariants
 
 @TLAModel
@@ -48,6 +61,23 @@ struct GeneratedAlgorithmCounter {
 }
 
 struct GeneratedAlgorithmMachineTests {
+    @Test("formal action labels retain raw names behind collision-safe Swift cases")
+    func sanitizesGeneratedActionLabels() {
+        #expect(SanitizedActionLabelModel.Actions.procedure_work_enter.rawValue == "procedure.work.enter")
+        #expect(SanitizedActionLabelModel.Actions.procedure_work_enter_2.rawValue == "procedure_work_enter")
+        #expect(SanitizedActionLabelModel.Actions.step_2.rawValue == "step-2")
+
+        let dotted = SanitizedActionLabelModel.ActionLabel.procedure_work_enter
+        let underscored = SanitizedActionLabelModel.ActionLabel.procedure_work_enter_2
+        let dashed = SanitizedActionLabelModel.ActionLabel.step_2
+        #expect(dotted.toInvocation() == .init(name: "procedure.work.enter"))
+        #expect(underscored.toInvocation() == .init(name: "procedure_work_enter"))
+        #expect(dashed.toInvocation() == .init(name: "step-2"))
+        #expect(SanitizedActionLabelModel.ActionLabel(invocation: dotted.toInvocation()) == dotted)
+        #expect(SanitizedActionLabelModel.ActionLabel(invocation: underscored.toInvocation()) == underscored)
+        #expect(SanitizedActionLabelModel.ActionLabel(invocation: dashed.toInvocation()) == dashed)
+    }
+
     @Test("a bounded Algorithm generates the ordinary typed state machine")
     func generatedAlgorithmUsesTheSharedLowering() throws {
         var model = GeneratedAlgorithmCounter()
