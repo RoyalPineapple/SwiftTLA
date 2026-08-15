@@ -97,6 +97,17 @@ extension WithValue {
     }
 }
 
+extension Expr {
+    /// Reads a finite function using a value selected by `With`.
+    ///
+    /// This keeps a scoped formal choice in the typed DSL; it is not a
+    /// host-language dictionary lookup.
+    public subscript<Domain: FiniteDomainKey, Range>(_ index: WithValue<Domain>) -> Expr<Range>
+    where T == Function<Domain, Range>, Range: TLAValueType {
+        Expr<Range>(.functionApply(raw, index.stateExpr))
+    }
+}
+
 extension Function where Domain: FiniteDomainKey {
     /// Builds a total finite formal function from an expression over each key.
     ///
@@ -482,6 +493,12 @@ extension SharedVariable {
     public func contains<Element: TLAValueType>(_ element: Element) -> StateExpr
     where Value == SetExpr<Element> {
         .in(.value(element.tlaValue), stateExpr)
+    }
+
+    /// Tests membership of a value selected by `With`.
+    public func contains<Element: TLAValueType>(_ element: WithValue<Element>) -> StateExpr
+    where Value == SetExpr<Element> {
+        .in(element.stateExpr, stateExpr)
     }
 
     public func appending<Element: TLAValueType>(_ element: Element) -> Expr<TupleExpr<Element>>

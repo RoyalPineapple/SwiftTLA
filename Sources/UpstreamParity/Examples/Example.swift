@@ -56,6 +56,7 @@ public enum Example {
         singleLaneBridge,
         syncTD,
         sumSequence,
+        reachable,
         tCommit,
         teachingSimpleN2,
         teachingSimpleN3,
