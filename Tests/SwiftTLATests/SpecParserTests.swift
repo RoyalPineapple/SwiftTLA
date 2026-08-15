@@ -465,6 +465,42 @@ private enum ParserNode: String, FiniteDomainKey {
         #expect(evidence?.nextSafeAction.contains("FormalDefinition") == true)
     }
 
+    @Test func formalDefinitionParameterNamesAreAlphaEquivalent() {
+        let parserTree = ParsedSpecModel(
+            variables: [],
+            actions: [],
+            invariants: [],
+            formalOperatorDefinitions: [
+                FormalOperatorDefinition(
+                    name: "apply",
+                    parameters: [.operator("transform", arity: 1), .value("input")],
+                    body: .operatorApplication(
+                        .reference("transform", arity: 1),
+                        [.value(.variable("input"))]
+                    )
+                )
+            ]
+        )
+        let builderTree = ParsedSpecModel(
+            variables: [],
+            actions: [],
+            invariants: [],
+            formalOperatorDefinitions: [
+                FormalOperatorDefinition(
+                    name: "apply",
+                    parameters: [.operator("operation", arity: 1), .value("value")],
+                    body: .operatorApplication(
+                        .reference("operation", arity: 1),
+                        [.value(.variable("value"))]
+                    )
+                )
+            ]
+        )
+
+        #expect(_tlaAlphaEquivalent(parserTree, builderTree))
+        #expect(_tlaFidelityEvidence(parserTree, builderTree) == nil)
+    }
+
     @Test func formalDefinitionIsParsedIntoTheCanonicalFormalModel() {
         let source = """
         {

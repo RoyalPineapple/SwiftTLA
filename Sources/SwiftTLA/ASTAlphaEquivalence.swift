@@ -282,12 +282,23 @@ private func formalOperatorDefinitionEquivalent(
     _ lhs: FormalOperatorDefinition,
     _ rhs: FormalOperatorDefinition
 ) -> Bool {
-    lhs.name == rhs.name && lhs.parameters == rhs.parameters
-        && alphaKey(lhs.body) == alphaKey(rhs.body)
+    formalOperatorDefinitionKey(lhs) == formalOperatorDefinitionKey(rhs)
 }
 
 private func formalOperatorDefinitionKey(_ definition: FormalOperatorDefinition) -> String {
-    "definition(\(definition.name),parameters:\(definition.parameters),body:\(alphaKey(definition.body)))"
+    var next = 0
+    var environment: [String: String] = [:]
+    let parameters = definition.parameters.map { parameter -> String in
+        let (canonical, extended) = fresh(parameter.name, environment: environment, next: &next)
+        environment = extended
+        switch parameter {
+        case .value:
+            return "value:\(canonical)"
+        case .operator(_, let arity):
+            return "operator:\(canonical)/\(arity)"
+        }
+    }
+    return "definition(\(definition.name),parameters:[\(parameters.joined(separator: ","))],body:\(stateKey(definition.body, environment: environment, next: &next)))"
 }
 
 private func alphaKey(_ action: ActionExpr) -> String {
@@ -514,13 +525,13 @@ private func stateKey(_ expression: StateExpr, environment: [String: String], ne
             }
             operationKey = "lambda([\(parameters.joined(separator: ","))],\(key(lambda.body, environment: lambdaEnvironment)))"
         case .reference(let name, let arity):
-            operationKey = "operator(\(name),\(arity))"
+            operationKey = "operator(\(environment[name] ?? name),\(arity))"
         }
         let argumentKeys = arguments.map { argument -> String in
             switch argument {
             case .value(let expression): return "value(\(key(expression)))"
             case .operator(.reference(let name, let arity)):
-                return "operator(\(name),\(arity))"
+                return "operator(\(environment[name] ?? name),\(arity))"
             case .operator(.lambda(let lambda)):
                 var lambdaEnvironment = environment
                 let parameters = lambda.parameters.map { parameter -> String in
