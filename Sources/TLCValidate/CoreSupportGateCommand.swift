@@ -248,7 +248,21 @@ func swiftSpec(_ identifier: String) throws -> TLASpec {
     case "hour-clock": return Example.hourClock.spec
     case "die-hard-type-ok": return Example.dieHardTypeOK.spec
     case "multicar-elevator", "multicar-elevator-edge-mismatch": return MultiCarElevatorModel.spec
+    case "simultaneous-swap": return simultaneousSwapConformanceSpec()
     default: throw CoreConformanceCLIError.unsupportedSwiftSpec(identifier)
+    }
+}
+
+private func simultaneousSwapConformanceSpec() -> TLASpec {
+    let left = Var<Int>("left")
+    let right = Var<Int>("right")
+    return TLASpec("SimultaneousSwap") {
+        Variable(left, 1)
+        Variable(right, 2)
+        Action("Swap") {
+            left.becomes(right)
+            right.becomes(left)
+        }
     }
 }
 
