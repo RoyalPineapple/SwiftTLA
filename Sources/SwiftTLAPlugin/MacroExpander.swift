@@ -295,8 +295,11 @@ enum MacroExpander {
             return "StateExpr.exists(\(cg(set)), \"\(variable)\", \(cg(predicate)))"
         case .choose(let set, let variable, let predicate):
             return "StateExpr.choose(\(cg(set)), \"\(variable)\", \(cg(predicate)))"
-        case .sequenceFromSet, .setSum, .recursiveCall, .enabledAction:
-            return "StateExpr.value(.int(0))"
+        case .enabledAction(let name): return "StateExpr.enabled(\"\(name)\")"
+        case .sequenceFromSet(let values): return "StateExpr.sequenceFromSet(\(cg(values)))"
+        case .setSum(let function, let values): return "StateExpr.setSum(\(cg(function)), \(cg(values)))"
+        case .recursiveCall(let name, let arguments):
+            return "StateExpr.recursiveCall(\"\(name)\", [\(arguments.map(cg).joined(separator: ", "))])"
         }
     }
 
