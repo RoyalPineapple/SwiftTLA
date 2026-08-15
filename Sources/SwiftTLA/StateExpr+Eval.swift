@@ -375,12 +375,34 @@ extension StateExpr {
             if let other = other { return try ev(other) }
             throw tm("CASE: no branch matched")
 
+        case .letIn(let operators, let body):
+            let names = operators.map(\.name)
+            guard Set(names).count == names.count else {
+                throw EvalError.typeMismatch("LET contains duplicate local operator names")
+            }
+            let localFunctions = operators.map {
+                RecursiveFunc(name: $0.name, params: $0.parameters, body: $0.body)
+            }
+            // The local definitions come first, exactly as a TLA+ LET scope
+            // shadows an outer operator with the same name.
+            return try body.evaluate(
+                in: state,
+                runtimeFuncs: runtimeFuncs,
+                recursiveFuncs: localFunctions + recursiveFuncs,
+                maxDepth: maxDepth
+            )
+
         case .recursiveCall(let name, let args):
             if let impl = runtimeFuncs[name] {
                 let evald = try args.map { try ev($0) }
                 return impl(evald)
             }
             if let def = recursiveFuncs.first(where: { $0.name == name }) {
+                guard args.count == def.params.count else {
+                    throw EvalError.typeMismatch(
+                        "Operator '\(name)' requires \(def.params.count) arguments, got \(args.count)"
+                    )
+                }
                 let evald = try args.map { try ev($0) }
                 var body = def.body
                 for (i, param) in def.params.enumerated() where i < evald.count {
@@ -493,6 +515,17 @@ extension StateExpr {
         case .setSum(let f, let s): return .setSum(sub(f), sub(s))
         case .functionSet(let d, let r): return .functionSet(sub(d), sub(r))
         case .recursiveCall(let n, let a): return .recursiveCall(n, a.map(sub))
+        case .letIn(let operators, let body):
+            return .letIn(
+                operators.map { operation in
+                    LocalOperator(
+                        operation.name,
+                        parameters: operation.parameters,
+                        body: operation.parameters.contains(name) ? operation.body : sub(operation.body)
+                    )
+                },
+                sub(body)
+            )
         }
 
         func sub(_ e: StateExpr) -> StateExpr {
@@ -561,6 +594,17 @@ extension StateExpr {
             case .setSum(let function, let set): return .setSum(visit(function), visit(set))
             case .functionSet(let domain, let range): return .functionSet(visit(domain), visit(range))
             case .recursiveCall(let name, let arguments): return .recursiveCall(rename(name), arguments.map(visit))
+            case .letIn(let operators, let body):
+                return .letIn(
+                    operators.map { operation in
+                        LocalOperator(
+                            rename(operation.name),
+                            parameters: operation.parameters,
+                            body: visit(operation.body)
+                        )
+                    },
+                    visit(body)
+                )
             }
         }
         return visit(expression)

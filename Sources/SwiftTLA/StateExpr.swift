@@ -14,6 +14,22 @@ public enum FreshVarName {
     public static func resetCounter() { _lock.withLock { _counter = 0 } }
 }
 
+/// A local TLA+ operator declared inside a `LET … IN` expression.
+///
+/// Local operators are formal expressions, not Swift closures.  They remain
+/// in the AST so the evaluator and the emitted module use the same scope.
+public struct LocalOperator: Hashable, Sendable {
+    public let name: String
+    public let parameters: [String]
+    public let body: StateExpr
+
+    public init(_ name: String, parameters: [String] = [], body: StateExpr) {
+        self.name = name
+        self.parameters = parameters
+        self.body = body
+    }
+}
+
 public indirect enum StateExpr: Hashable, Sendable, CustomStringConvertible {
     case value(TLAValue)
     case variable(String)
@@ -79,6 +95,7 @@ public indirect enum StateExpr: Hashable, Sendable, CustomStringConvertible {
     case functionSet(StateExpr, StateExpr)
 
     case recursiveCall(String, [StateExpr])
+    case letIn([LocalOperator], StateExpr)
 
     public var description: String {
         switch self {
@@ -147,8 +164,84 @@ public indirect enum StateExpr: Hashable, Sendable, CustomStringConvertible {
         case .sequenceFromSet(let s): return "SeqFromSet(\(s))"
         case .setSum(let f, let s): return "Sum(\(f), \(s))"
         case .functionSet(let d, let r): return "[\(d) -> \(r)]"
-        case .recursiveCall(let n, let a): return "\(n)(\(a.map(\.description).joined(separator: ", ")))"
+        case .recursiveCall(let n, let a):
+            return a.isEmpty ? n : "\(n)(\(a.map(\.description).joined(separator: ", ")))"
+        case .letIn(let operators, let body):
+            let names = Set(operators.map(\.name))
+            let recursiveNames = operators
+                .flatMap { localOperatorCalls(in: $0.body) }
+                .filter(names.contains)
+            let recursiveDeclaration: String
+            if recursiveNames.isEmpty {
+                recursiveDeclaration = ""
+            } else {
+                recursiveDeclaration = "RECURSIVE " + operators
+                    .filter { recursiveNames.contains($0.name) }
+                    .map { operation in
+                        let slots = operation.parameters.map { _ in "_" }.joined(separator: ", ")
+                        return operation.parameters.isEmpty ? operation.name : "\(operation.name)(\(slots))"
+                    }
+                    .joined(separator: ", ") + "\n    "
+            }
+            let declarations = operators.map { operation in
+                let parameters = operation.parameters.isEmpty ? "" : "(\(operation.parameters.joined(separator: ", ")))"
+                return "\(operation.name)\(parameters) == \(operation.body)"
+            }.joined(separator: "\n    ")
+            return "LET \(recursiveDeclaration)\(declarations)\nIN \(body)"
         }
+    }
+}
+
+private func localOperatorCalls(in expression: StateExpr) -> Set<String> {
+    switch expression {
+    case .value, .variable, .enabledAction:
+        return []
+    case .recursiveCall(let name, let arguments):
+        return Set([name]).union(
+            arguments.reduce(into: Set<String>()) { $0.formUnion(localOperatorCalls(in: $1)) }
+        )
+    case .letIn:
+        // Nested scopes bring their own recursive declarations.
+        return []
+    case .negate(let value), .not(let value), .cardinality(let value), .powerSet(let value),
+         .unionAll(let value), .tupleLength(let value), .tupleHead(let value), .tupleTail(let value),
+         .domain(let value), .sequenceFromSet(let value):
+        return localOperatorCalls(in: value)
+    case .add(let lhs, let rhs), .subtract(let lhs, let rhs), .multiply(let lhs, let rhs),
+         .divide(let lhs, let rhs), .modulo(let lhs, let rhs), .integerDivide(let lhs, let rhs),
+         .equal(let lhs, let rhs), .notEqual(let lhs, let rhs), .lessThan(let lhs, let rhs),
+         .lessOrEqual(let lhs, let rhs), .greaterThan(let lhs, let rhs), .greaterOrEqual(let lhs, let rhs),
+         .and(let lhs, let rhs), .or(let lhs, let rhs), .in(let lhs, let rhs), .subset(let lhs, let rhs),
+         .union(let lhs, let rhs), .intersection(let lhs, let rhs), .setDifference(let lhs, let rhs),
+         .tupleDynamicAccess(let lhs, let rhs), .tupleAppend(let lhs, let rhs),
+         .tupleConcatenate(let lhs, let rhs), .functionApply(let lhs, let rhs),
+         .functionSet(let lhs, let rhs), .setSum(let lhs, let rhs):
+        return localOperatorCalls(in: lhs).union(localOperatorCalls(in: rhs))
+    case .ifThenElse(let condition, let then, let otherwise):
+        return localOperatorCalls(in: condition)
+            .union(localOperatorCalls(in: then))
+            .union(localOperatorCalls(in: otherwise))
+    case .setLiteral(let values), .tupleLiteral(let values):
+        return values.reduce(into: Set<String>()) { $0.formUnion(localOperatorCalls(in: $1)) }
+    case .tupleAccess(let tuple, _), .recordAccess(let tuple, _):
+        return localOperatorCalls(in: tuple)
+    case .recordLiteral(let fields):
+        return fields.values.reduce(into: Set<String>()) { $0.formUnion(localOperatorCalls(in: $1)) }
+    case .functionLiteral(let domain, _, let body), .setFilter(let domain, _, let body),
+         .forAll(let domain, _, let body), .exists(let domain, _, let body), .choose(let domain, _, let body):
+        return localOperatorCalls(in: domain).union(localOperatorCalls(in: body))
+    case .setMap(let value, _, let domain):
+        return localOperatorCalls(in: value).union(localOperatorCalls(in: domain))
+    case .except(let function, let key, let value):
+        return localOperatorCalls(in: function)
+            .union(localOperatorCalls(in: key))
+            .union(localOperatorCalls(in: value))
+    case .caseExpr(let pairs, let fallback):
+        return pairs.reduce(into: fallback.map(localOperatorCalls(in:)) ?? Set<String>()) {
+            $0.formUnion(localOperatorCalls(in: $1))
+        }
+    case .integerRange(let lower, let upper):
+        return localOperatorCalls(in: lower).union(localOperatorCalls(in: upper))
     }
 }
 

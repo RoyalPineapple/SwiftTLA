@@ -857,6 +857,17 @@ public enum SpecParser {
             let name = args.first?.expression.as(StringLiteralExprSyntax.self)?.segments.description
                 .replacingOccurrences(of: "\"", with: "") ?? ""
             return .enabledAction(name)
+        case "letIn":
+            guard memberAccess.base?.as(DeclReferenceExprSyntax.self)?.baseName.text == "StateExpr",
+                  args.count == 2,
+                  let definitionArray = args[0].expression.as(ArrayExprSyntax.self),
+                  let body = decodeStateExpr(args[1].expression)
+            else { return nil }
+            let definitions = definitionArray.elements.compactMap {
+                decodeLocalOperator($0.expression)
+            }
+            guard definitions.count == definitionArray.elements.count else { return nil }
+            return .letIn(definitions, body)
         case "function", "for", "exists", "choose", "any", "functionLiteral":
             guard memberAccess.base?.as(DeclReferenceExprSyntax.self)?.baseName.text == "StateExpr" else { return nil }
             let exprs = args.compactMap { decodeStateExpr($0.expression) }
@@ -883,6 +894,30 @@ public enum SpecParser {
         default:
             return nil
         }
+    }
+
+    private static func decodeLocalOperator(_ expression: ExprSyntax) -> LocalOperator? {
+        guard let call = expression.as(FunctionCallExprSyntax.self),
+              call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "LocalOperator",
+              let nameSyntax = call.arguments.first?.expression.as(StringLiteralExprSyntax.self)
+        else { return nil }
+
+        let name = nameSyntax.segments.description.replacingOccurrences(of: "\"", with: "")
+        let parameters: [String]
+        if let parameterArray = call.arguments.first(where: { $0.label?.text == "parameters" })?
+            .expression.as(ArrayExprSyntax.self) {
+            parameters = parameterArray.elements.compactMap { element in
+                element.expression.as(StringLiteralExprSyntax.self)?.segments.description
+                    .replacingOccurrences(of: "\"", with: "")
+            }
+            guard parameters.count == parameterArray.elements.count else { return nil }
+        } else {
+            parameters = []
+        }
+        guard let bodySyntax = call.arguments.first(where: { $0.label?.text == "body" })?.expression,
+              let body = decodeStateExpr(bodySyntax)
+        else { return nil }
+        return LocalOperator(name, parameters: parameters, body: body)
     }
 
     static func decodeInfixExpr(_ elements: [ExprSyntax]) -> StateExpr? {

@@ -332,5 +332,11 @@ private func stateKey(_ expression: StateExpr, environment: [String: String], ne
     case .setSum(let function, let set): return pair("sum", function, set)
     case .functionSet(let domain, let range): return pair("functionSet", domain, range)
     case .recursiveCall(let name, let arguments): return "recursive(\(name),\(arguments.map { key($0) }.joined(separator: ",")))"
+    case .letIn(let operators, let body):
+        let declarations = operators.map { operation in
+            let parameterNames = operation.parameters.joined(separator: ",")
+            return "local(\(operation.name),[\(parameterNames)],\(key(operation.body)))"
+        }.joined(separator: ",")
+        return "letIn([\(declarations)],\(key(body)))"
     }
 }

@@ -768,6 +768,20 @@ enum AlgorithmLowerer {
             case .setSum(let function, let set): return .setSum(rewritten(function, localRoots: localRoots), rewritten(set, localRoots: localRoots))
             case .functionSet(let domain, let range): return .functionSet(rewritten(domain, localRoots: localRoots), rewritten(range, localRoots: localRoots))
             case .recursiveCall(let name, let arguments): return .recursiveCall(name, arguments.map { rewritten($0, localRoots: localRoots) })
+            case .letIn(let operators, let body):
+                return .letIn(
+                    operators.map { operation in
+                        LocalOperator(
+                            operation.name,
+                            parameters: operation.parameters,
+                            body: rewritten(
+                                operation.body,
+                                localRoots: localRoots.subtracting(operation.parameters)
+                            )
+                        )
+                    },
+                    rewritten(body, localRoots: localRoots)
+                )
             }
         }
 

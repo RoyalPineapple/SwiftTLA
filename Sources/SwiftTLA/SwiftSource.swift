@@ -162,6 +162,12 @@ extension StateExpr {
     case .recursiveCall(let name, let args):
       let argsStr = args.map(\.swiftSource).joined(separator: ", ")
       return "StateExpr.recursiveCall(\"\(name)\", [\(argsStr)])"
+    case .letIn(let operators, let body):
+      let definitions = operators.map { operation in
+        let parameters = operation.parameters.map { "\"\($0)\"" }.joined(separator: ", ")
+        return "LocalOperator(\"\(operation.name)\", parameters: [\(parameters)], body: \(operation.body.swiftSource))"
+      }.joined(separator: ", ")
+      return "StateExpr.letIn([\(definitions)], \(body.swiftSource))"
     }
   }
 }

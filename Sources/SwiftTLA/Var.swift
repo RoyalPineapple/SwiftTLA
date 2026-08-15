@@ -498,7 +498,9 @@ extension StateExpr {
 /// Replaces `.variable(from)` with `.variable(to)` throughout a StateExpr AST.
 public func renameVar(_ from: String, to: String, in expr: StateExpr) -> StateExpr {
   switch expr {
-  case .value, .enabledAction, .recursiveCall: return expr
+  case .value, .enabledAction: return expr
+  case .recursiveCall(let name, let arguments):
+    return .recursiveCall(name, arguments.map { renameVar(from, to: to, in: $0) })
   case .variable(let n): return .variable(n == from ? to : n)
   case .add(let a, let b):
     return .add(renameVar(from, to: to, in: a), renameVar(from, to: to, in: b))
@@ -587,5 +589,18 @@ public func renameVar(_ from: String, to: String, in expr: StateExpr) -> StateEx
     return .setSum(renameVar(from, to: to, in: f), renameVar(from, to: to, in: s))
   case .functionSet(let d, let r):
     return .functionSet(renameVar(from, to: to, in: d), renameVar(from, to: to, in: r))
+  case .letIn(let operators, let body):
+    return .letIn(
+      operators.map { operation in
+        LocalOperator(
+          operation.name,
+          parameters: operation.parameters,
+          body: operation.parameters.contains(from)
+            ? operation.body
+            : renameVar(from, to: to, in: operation.body)
+        )
+      },
+      renameVar(from, to: to, in: body)
+    )
   }
 }

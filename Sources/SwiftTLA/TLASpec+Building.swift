@@ -407,6 +407,17 @@ private func substituteInState(_ expr: StateExpr, constants: [String: TLAValue])
       substituteInState(f, constants: constants), substituteInState(s, constants: constants))
   case .recursiveCall(let n, let a):
     return .recursiveCall(n, a.map { substituteInState($0, constants: constants) })
+  case .letIn(let operators, let body):
+    return .letIn(
+      operators.map { operation in
+        LocalOperator(
+          operation.name,
+          parameters: operation.parameters,
+          body: substituteInState(operation.body, constants: constants)
+        )
+      },
+      substituteInState(body, constants: constants)
+    )
   }
 }
 

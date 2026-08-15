@@ -319,6 +319,12 @@ enum MacroExpander {
         case .setSum(let function, let values): return "StateExpr.setSum(\(cg(function)), \(cg(values)))"
         case .recursiveCall(let name, let arguments):
             return "StateExpr.recursiveCall(\"\(name)\", [\(arguments.map(cg).joined(separator: ", "))])"
+        case .letIn(let operators, let body):
+            let definitions = operators.map { operation in
+                let parameters = operation.parameters.map { "\"\($0)\"" }.joined(separator: ", ")
+                return "LocalOperator(\"\(operation.name)\", parameters: [\(parameters)], body: \(cg(operation.body)))"
+            }.joined(separator: ", ")
+            return "StateExpr.letIn([\(definitions)], \(cg(body)))"
         }
     }
 
