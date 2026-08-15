@@ -85,7 +85,9 @@ extension StateExpr {
         switch self {
         case .value(let v): return v
         case .variable(let name):
-            guard let val = state[name] ?? valueBindings[name] else {
+            // Formal parameters are lexical bindings and therefore shadow
+            // a same-named state variable, just as they do in TLA+.
+            guard let val = valueBindings[name] ?? state[name] else {
                 throw EvalError.undefinedVariable(name)
             }
             return val

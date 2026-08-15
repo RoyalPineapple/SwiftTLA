@@ -57,4 +57,24 @@ struct FormalOperatorTests {
       try expression.evaluate(in: [:], formalOperatorDefinitions: [applyTwice]) == .int(6)
     )
   }
+
+  @Test("formal value parameters shadow state variables")
+  func formalParametersAreLexicallyScoped() throws {
+    let identity = FormalOperatorDefinition(
+      name: "identity",
+      parameters: [.value("value")],
+      body: .variable("value")
+    )
+    let expression = StateExpr.operatorApplication(
+      .reference("identity", arity: 1),
+      [.value(.int(4))]
+    )
+
+    #expect(
+      try expression.evaluate(
+        in: ["value": .int(99)],
+        formalOperatorDefinitions: [identity]
+      ) == .int(4)
+    )
+  }
 }
