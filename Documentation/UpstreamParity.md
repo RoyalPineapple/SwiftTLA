@@ -64,7 +64,7 @@ configuration and its required typed surface are both available.
 | --- | --- | --- |
 | `KVsnap` | process families, function state, records, sequences, and non-empty finite subset choice | typed set-to-sequence enumeration, operation-log record comprehensions, and the external ClientCentric property interface |
 | `EWD998PCal` | fair processes, `Either`, `When`, scoped choices, records | typed finite bags and bag-domain selection |
-| `LeastCircularSubstring` | labeled loops, integer arithmetic, function updates | zero-indexed bounded sequences and modulo indexing |
+| `LeastCircularSubstring` | labeled loops, integer arithmetic, function updates, zero-based bounded sequences, and modulo indexing | imported recursive zero-sequence definitions for rotation and lexicographic comparison, used by `Correctness` |
 | `Quicksort` | finite sequences, loops, scoped choices | constrained finite function choice and multi-binding `with` |
 | `Slush` | records, unions, `Either`, loops | typed sets of record variants and filtered record comprehensions |
 | `Sailfish` | process families, nested `With`, sets and tuples | typed filtered comprehensions, tuple/record relations, and multi-binding `with` |
@@ -75,9 +75,10 @@ provide a matching bounded configuration for that PlusCal module. It is not a
 parity-corpus candidate until one exists.
 
 The immediate order is: typed set-to-sequence enumeration and record
-comprehensions; typed bags; zero-indexed sequences; then multi-binding scoped
-choice. Each addition must be used by a bounded source port and checked
-through the parser/builder gate and TLC.
+comprehensions; typed bags; recursive formal definitions needed by the
+LeastCircularSubstring property; then multi-binding scoped choice. Each
+addition must be used by a bounded source port and checked through the
+parser/builder gate and TLC.
 
 ## Temporal and symmetry executable reference
 
