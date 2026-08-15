@@ -610,7 +610,7 @@ extension CoreConformanceRunnerV1 {
         ]
       )
     }
-    CoreConformanceDiagnosticV1(
+    return CoreConformanceDiagnosticV1(
       code: code ?? "\(phase.rawValue)-failed",
       message: sanitized(String(describing: error)),
       report: report,
