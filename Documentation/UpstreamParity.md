@@ -62,7 +62,7 @@ configuration and its required typed surface are both available.
 
 | Upstream example | SwiftTLA can already express | Missing typed surface |
 | --- | --- | --- |
-| `KVsnap` | process families, function state, records, sequences | finite powerset choice, comprehensions over typed domains, and a typed append-only operation log |
+| `KVsnap` | process families, function state, records, sequences, and non-empty finite subset choice | typed set-to-sequence enumeration, operation-log record comprehensions, and the external ClientCentric property interface |
 | `EWD998PCal` | fair processes, `Either`, `When`, scoped choices, records | typed finite bags and bag-domain selection |
 | `LeastCircularSubstring` | labeled loops, integer arithmetic, function updates | zero-indexed bounded sequences and modulo indexing |
 | `Quicksort` | finite sequences, loops, scoped choices | constrained finite function choice and multi-binding `with` |
@@ -74,10 +74,10 @@ configuration and its required typed surface are both available.
 provide a matching bounded configuration for that PlusCal module. It is not a
 parity-corpus candidate until one exists.
 
-The immediate order is: finite powerset choice and comprehensions; typed bags;
-zero-indexed sequences; then multi-binding scoped choice. Each addition must
-be used by a bounded source port and checked through the parser/builder gate
-and TLC.
+The immediate order is: typed set-to-sequence enumeration and record
+comprehensions; typed bags; zero-indexed sequences; then multi-binding scoped
+choice. Each addition must be used by a bounded source port and checked
+through the parser/builder gate and TLC.
 
 ## Temporal and symmetry executable reference
 

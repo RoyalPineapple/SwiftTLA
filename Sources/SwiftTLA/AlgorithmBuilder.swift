@@ -908,10 +908,12 @@ public func SharedVar<Value: TLAValueType>(
     guard case .set(let members) = try? values.raw.evaluate(in: [:]), !members.isEmpty else {
         preconditionFailure("SharedVar(in:) requires a non-empty static formal domain")
     }
+    let representative = members.min { $0.description < $1.description }!
     return SharedVariable(
         name: name,
-        // `initialSet` is the authoritative initializer for state construction.
-        initial: .value(.int(0)),
+        // `initialSet` supplies every initial state. Its canonical first value
+        // keeps the builder's declaration metadata faithful to the parser.
+        initial: .value(representative),
         initialSet: values.raw,
         swiftTypeName: String(reflecting: Value.self)
     )

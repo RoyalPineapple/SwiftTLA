@@ -34,6 +34,20 @@ private struct TypedQuantifierGeneratedModel {
     }
 }
 
+@TLAModel
+private struct NonEmptySubsetGeneratedModel {
+    static var spec: TLASpec {
+        #spec("NonEmptySubsetGeneratedModel") {
+            Algorithm("NonEmptySubsetGeneratedModel") {
+                let selectedKeys = SharedVar(in: NonEmptySubsets(
+                    of: SetExpr<Int>.literal(1, 2)
+                ))
+                Do("keep") { Assign(selectedKeys, to: selectedKeys.expr) }
+            }
+        }
+    }
+}
+
 @Suite(.serialized) struct TypedCollectionOperatorTests {
     @Test("typed interval, filter, map, and dynamic tuple access evaluate")
     func typedOperatorsEvaluate() throws {
@@ -130,6 +144,28 @@ private struct TypedQuantifierGeneratedModel {
             .tuple([.int(1), .int(1)]), .tuple([.int(1), .int(2)]), .tuple([.int(2), .int(2)])
         ]))
         #expect(SpecParser.decodeStateExpr(terminalSyntax) != nil)
+    }
+
+    @Test("non-empty subset domains parse and exclude the empty formal set")
+    func nonEmptySubsetDomainsSurviveThePipeline() throws {
+        let source = "NonEmptySubsets(of: SetExpr<Int>.literal(1, 2))"
+        let syntax = Parser.parse(source: source).statements.first!.item.as(ExprSyntax.self)!
+        let parsed = try #require(SpecParser.decodeStateExpr(syntax))
+        let runtime = NonEmptySubsets(of: SetExpr<Int>.literal(1, 2))
+
+        #expect(parsed == runtime.raw)
+        #expect(try runtime.raw.evaluate(in: [:]) == .set([
+            .set([.int(1)]),
+            .set([.int(2)]),
+            .set([.int(1), .int(2)])
+        ]))
+
+        NonEmptySubsetGeneratedModel._checkParserTree()
+        let initialStates = computeInitialStates(NonEmptySubsetGeneratedModel.spec)
+        #expect(initialStates.count == 3)
+        let representative = NonEmptySubsetGeneratedModel.spec.variables.first?.initial
+        #expect(initialStates.contains { $0["selectedKeys"] == representative })
+        #expect(NonEmptySubsetGeneratedModel.spec.tlaModule.contains("SUBSET"))
     }
 
     @Test("typed bounded quantifiers parse, evaluate, and generate")

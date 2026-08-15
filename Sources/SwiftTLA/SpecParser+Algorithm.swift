@@ -353,7 +353,7 @@ extension SpecParser {
             }
             state = AlgorithmStateModel(
                 root: declaredName,
-                initial: .value(.int(0)),
+                initial: .value(elements.min { $0.description < $1.description }!),
                 initialSet: initialSet,
                 swiftTypeName: typeName
             )

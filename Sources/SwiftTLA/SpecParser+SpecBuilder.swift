@@ -275,7 +275,8 @@ extension SpecParser {
             return setExpressionElementTypeName(candidates)
         }
         if let call = expression.as(FunctionCallExprSyntax.self),
-           call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "Subsets",
+           let name = call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text,
+           name == "Subsets" || name == "NonEmptySubsets",
            let values = call.arguments.first(where: { $0.label?.text == "of" })?.expression,
            let element = setExpressionElementTypeName(values) {
             return "SetExpr<\(element)>"

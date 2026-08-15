@@ -177,6 +177,19 @@ public func Subsets<Element: TLAValueType>(
   Expr(.powerSet(values.raw))
 }
 
+// swiftlint:disable identifier_name
+/// All non-empty subsets of a finite formal set.
+///
+/// This is the formal choice domain used by a PlusCal `with` statement such
+/// as `rk \in SUBSET Key \ { { } }`. It is not a Swift `Set` filter.
+public func NonEmptySubsets<Element: TLAValueType>(
+  of values: Expr<SetExpr<Element>>
+) -> Expr<SetExpr<SetExpr<Element>>> {
+  let emptySet = StateExpr.setLiteral([])
+  return Expr(.setDifference(.powerSet(values.raw), .setLiteral([emptySet])))
+}
+// swiftlint:enable identifier_name
+
 /// Narrows a finite formal set to the values that satisfy a formal predicate.
 /// The closure describes TLA+ syntax; it does not execute as application code.
 public func Where<Value: TLAValueType>(

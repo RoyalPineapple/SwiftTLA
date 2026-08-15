@@ -268,7 +268,8 @@ public enum SpecParser {
 
     private static func decodeBoundedSubsetDomain(_ expression: ExprSyntax) -> StateExpr? {
         guard let call = expression.as(FunctionCallExprSyntax.self),
-              call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "Subsets"
+              let name = call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text,
+              name == "Subsets" || name == "NonEmptySubsets"
         else { return nil }
         guard let valuesSyntax = call.arguments.first(where: { $0.label?.text == "of" })?.expression,
               let values = decodeStateExpr(valuesSyntax)
@@ -276,7 +277,9 @@ public enum SpecParser {
             algorithmParseFailure = "Subsets could not decode its finite formal set."
             return nil
         }
-        return .powerSet(values)
+        let subsets = StateExpr.powerSet(values)
+        guard name == "NonEmptySubsets" else { return subsets }
+        return .setDifference(subsets, .setLiteral([.setLiteral([])]))
     }
 
     private static func decodeBoundedFunctionDomain(_ expression: ExprSyntax) -> StateExpr? {
