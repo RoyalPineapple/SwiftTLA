@@ -257,7 +257,9 @@ extension SpecParser {
               let domain = finiteAlgorithmDomain(domainSyntax),
               let closure = call.trailingClosure
         else {
-            algorithmParseFailure = "Each could not resolve its finite domain."
+            let knownDomains = _enumDomains.keys.sorted()
+            let known = knownDomains.isEmpty ? "none" : knownDomains.joined(separator: ", ")
+            algorithmParseFailure = "Each could not resolve its finite domain. Known finite domains: \(known)."
             return nil
         }
         let parameter = closureParameterNames(in: closure).first ?? "__pcal_self"
@@ -474,6 +476,26 @@ extension SpecParser {
     ) -> [AlgorithmStatementModel]? {
         var result: [AlgorithmStatementModel] = []
         for (index, statement) in statements.enumerated() {
+            if case .decl(let declaration) = statement.item,
+               let variable = declaration.as(VariableDeclSyntax.self) {
+                guard let binding = parseFormalLet(variable) else {
+                    if algorithmParseFailure == nil {
+                        algorithmParseFailure = "Statement \(index + 1) could not be decoded: "
+                            + "'\(statement.description.trimmingCharacters(in: .whitespacesAndNewlines))'."
+                    }
+                    return nil
+                }
+                let remaining = CodeBlockItemListSyntax(Array(statements.dropFirst(index + 1)))
+                guard let body = parseAlgorithmStatements(
+                    remaining,
+                    processParameter: processParameter,
+                    macros: macros
+                ) else { return nil }
+                let value = replacingProcessParameter(in: binding.value, named: processParameter)
+                return result + body.map {
+                    substituteAlgorithmVariable($0, from: binding.name, with: value)
+                }
+            }
             guard case .expr(let expression) = statement.item
             else {
                 if algorithmParseFailure == nil {
@@ -506,6 +528,20 @@ extension SpecParser {
             result.append(parsed)
         }
         return result
+    }
+
+    /// Parses a Swift `let` inside a formal block as a lexical formal alias.
+    /// It never evaluates host-language code. The initializer must be an
+    /// expression the formal parser can represent.
+    private static func parseFormalLet(_ declaration: VariableDeclSyntax) -> (name: String, value: StateExpr)? {
+        guard declaration.bindingSpecifier.text == "let",
+              declaration.bindings.count == 1,
+              let binding = declaration.bindings.first,
+              let name = binding.pattern.as(IdentifierPatternSyntax.self)?.identifier.text,
+              let initializer = binding.initializer?.value,
+              let value = decodeStateExpr(initializer)
+        else { return nil }
+        return (name, value)
     }
 
     private static func parseAlgorithmStatement(

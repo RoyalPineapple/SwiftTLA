@@ -454,6 +454,24 @@ public enum SpecParser {
               let access = call.calledExpression.as(MemberAccessExprSyntax.self)
         else { return nil }
 
+        // `OneOf` preserves an ordinary TLA+ union, so lifting an
+        // alternative does not emit a tag or wrapper value.
+        if ["first", "second"].contains(access.declName.baseName.text),
+           let unionType = typedLiteralType(access.base),
+           unionType.name == "OneOf",
+           let valueSyntax = call.arguments.first?.expression,
+           let value = decodeTypedFacadeValue(valueSyntax, substitutions: substitutions) {
+            return value
+        }
+
+        // A typed union view is justified by the surrounding PlusCal label.
+        // Its formal representation remains the original value.
+        if ["assumingFirst", "assumingSecond"].contains(access.declName.baseName.text),
+           let baseSyntax = access.base,
+           let base = decodeTypedFacadeValue(baseSyntax, substitutions: substitutions) {
+            return base
+        }
+
         if access.declName.baseName.text == "literal",
            let literalType = typedLiteralType(access.base) {
             switch literalType.name {
