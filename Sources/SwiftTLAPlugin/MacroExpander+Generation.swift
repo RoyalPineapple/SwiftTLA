@@ -216,7 +216,7 @@ extension MacroExpander {
         let protoName = "\(typeName)Actions"
         var callbackDecls: [String] = []
         var defaultDecls: [String] = []
-        for (a, identifier) in zip(actions, generatedActionIdentifiers(actions: actions)) {
+        for (_, identifier) in zip(actions, generatedActionIdentifiers(actions: actions)) {
             let callbackName = "on" + identifier.prefix(1).capitalized + identifier.dropFirst()
             callbackDecls.append("func \(callbackName)()")
             defaultDecls.append("""
@@ -856,7 +856,7 @@ extension MacroExpander {
         let identifiers = generatedActionIdentifiers(actions: actions)
         let switchCases = zip(actions, identifiers).map { a, identifier in
             if nativeNames.contains(a.name) {
-                let methodName = isActor ? "_\(identifier)" : "apply\(identifier.prefix(1).uppercased())\(identifier.dropFirst())"
+                let methodName = isActor ? "_\(identifier)" : "apply\(identifier)"
                 return "case .\(identifier): \(methodName)()"
             } else {
                 return "case .\(identifier): _state = _apply(action)"

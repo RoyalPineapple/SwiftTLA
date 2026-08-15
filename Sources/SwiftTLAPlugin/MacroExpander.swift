@@ -814,7 +814,7 @@ extension MacroExpander {
                 "\(binding.name): \(swiftType(for: action, binding: binding))"
             }.joined(separator: ", ")
             let labels = bindings.map { "\($0.name): \($0.name)" }.joined(separator: ", ")
-            let methodName = isActor ? "_\(identifier)" : "apply\(identifier.prefix(1).uppercased())\(identifier.dropFirst())"
+            let methodName = isActor ? "_\(identifier)" : "apply\(identifier)"
             if bindings.isEmpty {
                 let source = """
                 \(isActor ? "fileprivate" : "public mutating") func \(methodName)() throws -> TransitionResult {
