@@ -62,7 +62,7 @@ struct SimultaneousUpdateSemanticsTests {
             Variable(right, 2)
             Action("reject") {
                 left.becomes(left + 1)
-                .assign(right.name, .variable("missing"))
+                ActionExpr.assign(right.name, .variable("missing"))
             }
         }
         let runtime = SpecRuntime(spec: spec)
@@ -93,7 +93,7 @@ struct SimultaneousUpdateSemanticsTests {
         #expect(machine.snapshot == before)
         let report = runtime.actionReport(named: "reject", in: before)
         #expect(report.stateCommitted == false)
-        #expect(report.status == .evaluationFailed(.init(
+        #expect(report.status == SpecRuntime.RuntimeActionReport.Status.evaluationFailed(.init(
             code: .evaluationError,
             message: "Undefined variable: missing"
         )))

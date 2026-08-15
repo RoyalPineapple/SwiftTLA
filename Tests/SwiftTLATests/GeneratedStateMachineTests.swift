@@ -162,6 +162,34 @@ struct GeneratedSimultaneousSwapTests {
         #expect(result.after.right == 1)
         #expect(model.state == result.after)
     }
+
+    @Test("generated swap rejects an undecodable successor without a partial commit")
+    func generatedMachineKeepsItsStateWhenOneSimultaneousFieldCannotDecode() throws {
+        let runtime = SpecRuntime(spec: GeneratedSimultaneousSwap.spec) { _, _, _ in
+            [["left": .int(2), "right": .string("wrong"), "pc": .string("swap")]]
+        }
+        var machine = CanonicalMachine(
+            runtime: runtime,
+            initial: GeneratedSimultaneousSwap.State(left: 1, right: 2, pc: "swap"),
+            stateDictionary: { $0.asDictionary },
+            snapshotFromDictionary: { try GeneratedSimultaneousSwap.State(formalDictionary: $0) }
+        )
+        let before = machine.snapshot
+
+        do {
+            _ = try machine.apply(.init(name: "swap"))
+            Issue.record("Expected the generated State decoder to reject the malformed right value")
+        } catch let GeneratedMachineError.stateDecodingFailed(diagnostic) {
+            #expect(diagnostic == .typeMismatch(
+                path: "right",
+                expected: "Int",
+                actual: .string("wrong")
+            ))
+            #expect(diagnostic.description.contains("state was not committed"))
+        }
+
+        #expect(machine.snapshot == before)
+    }
 }
 
 @TLAModel
@@ -800,8 +828,8 @@ struct GeneratedStateMachineTests {
             arguments: [.int(2), .int(20), .int(200)]
         )
         let malformedStates: [([String: TLAValue], TLAStateProjectionDiagnostic)] = [
-            ([:], .missingValue(path: "floor")),
-            (["floor": .string("wrong")], .invalidValue(path: "floor"))
+            ([:], .missingRequiredValue(path: "floor", expected: "Int")),
+            (["floor": .string("wrong")], .typeMismatch(path: "floor", expected: "Int", actual: .string("wrong")))
         ]
 
         for (malformedState, expectedDiagnostic) in malformedStates {
