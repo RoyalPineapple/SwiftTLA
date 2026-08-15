@@ -57,6 +57,13 @@ extension TLASpec {
         lines.append("VARIABLES \(varNames.joined(separator: ", "))")
         lines.append("")
 
+        for configuration in importConfigurations {
+            for replacement in configuration.replacements {
+                lines.append("\(replacement.definitionName) == \(replacement.expression)")
+                lines.append("")
+            }
+        }
+
         for def in definitions {
             lines.append(def)
             lines.append("")
@@ -195,6 +202,13 @@ extension TLASpec {
         }
         for (name, value) in constants.sorted(by: { $0.key < $1.key }) {
             lines.append("CONSTANT \(name) = \(value)")
+        }
+        for configuration in importConfigurations {
+            for replacement in configuration.replacements {
+                lines.append(
+                    "CONSTANT \(replacement.operatorName) <- [\(configuration.moduleName)]\(replacement.definitionName)"
+                )
+            }
         }
         for collection in symmetricCollections {
             for member in collection.metadata.members {

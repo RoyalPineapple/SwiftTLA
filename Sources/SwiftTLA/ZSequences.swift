@@ -7,9 +7,8 @@ public enum ZSequences {
   /// The formal module exported as `ZSequences.tla`.
   ///
   /// `ZSeq` follows the upstream definition and ranges over `Nat`. A model
-  /// checker therefore must supply a finite override for that operator before
-  /// using it as an initial-state domain. The bounded import configuration is
-  /// the next dependency in this port chain.
+  /// checker therefore supplies a finite replacement for that operator in the
+  /// consuming model's TLC configuration.
   public static let module = TLASpec("ZSequences") {
     DefineRecursive("ZIndices", params: ["sequence"]) {
       let sequence = StateExpr.variable("sequence")
@@ -164,5 +163,21 @@ public enum ZSequences {
     _ right: Expr<ZeroBasedSequence<Int>>
   ) -> StateExpr {
     .recursiveCall("LexicographicallyPrecedesOrEquals", [left.raw, right.raw])
+  }
+
+  /// Gives the imported module's `Nat` operator a finite TLC model domain.
+  public static func boundedNaturalNumbers(
+    _ range: ClosedRange<Int>
+  ) -> FormalModuleConfiguration {
+    FormalModuleConfiguration(
+      moduleName: module.name,
+      replacements: [
+        FormalModuleReplacement(
+          operatorName: "Nat",
+          definitionName: "ZSequencesNat",
+          expression: .integerRange(.int(range.lowerBound), .int(range.upperBound))
+        )
+      ]
+    )
   }
 }

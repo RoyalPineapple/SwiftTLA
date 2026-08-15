@@ -18,7 +18,9 @@ extension TLASpec {
     var constraint: StateExpr?
     var recursiveDefs: [String] = []
     var recursiveFuncs: [RecursiveFunc] = []
-    let importedModules = components.compactMap { ($0 as? ImportDecl)?.module }
+    let imports = components.compactMap { $0 as? ImportDecl }
+    let importedModules = imports.map(\.module)
+    let importConfigurations = imports.compactMap(\.configuration)
     var useSpecs: [TLASpec] = []
     var runtimeFuncCollector: [String: @Sendable ([TLAValue]) -> TLAValue] = [:]
     var runtimeFuncBodiesCollector: [String] = []
@@ -151,7 +153,8 @@ extension TLASpec {
         temporal: temporalProperties.map { ($0.name, $0.expr) },
         fairness: fairness,
         constraint: constraint,
-        imports: importedModules.map(\.name)
+        imports: importedModules.map(\.name),
+        importConfigurations: importConfigurations
       )
       guard _tlaAlphaEquivalent(built, tree) else {
         fatalError(
@@ -183,6 +186,7 @@ extension TLASpec {
     self.recursiveDefs = recursiveDefs
     self.recursiveFuncs = recursiveFuncs
     self.imports = importedModules
+    self.importConfigurations = importConfigurations
     self.runtimeFuncs = runtimeFuncCollector
     self.runtimeFuncBodies = runtimeFuncBodiesCollector
     self.symmetrySets = symmetrySets
@@ -229,6 +233,7 @@ public func substituteConstants(_ spec: TLASpec) -> TLASpec {
     recursiveDefs: spec.recursiveDefs,
     recursiveFuncs: spec.recursiveFuncs,
     imports: spec.imports,
+    importConfigurations: spec.importConfigurations,
     symmetrySets: spec.symmetrySets,
     symmetryGroups: spec.symmetryGroups,
     symmetricCollections: spec.symmetricCollections

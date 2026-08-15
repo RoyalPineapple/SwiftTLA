@@ -9,7 +9,7 @@ import SwiftTLAMacros
 private struct ImportedFormalModuleGeneratedModel {
   static var spec: TLASpec {
     #spec("ImportedFormalModuleGeneratedModel") {
-      Import(ZSequences.module)
+      Import(ZSequences.module, configuring: ZSequences.boundedNaturalNumbers(0...2))
       Algorithm("ImportedFormalModuleGeneratedModel") {
         let value = SharedVar(initial: 0)
         Do("keep") { Assign(value, to: value.expr) }
@@ -24,18 +24,27 @@ struct TLAModuleBundleTests {
   func generatedModelRetainsImportedModule() {
     ImportedFormalModuleGeneratedModel._checkParserTree()
     #expect(ImportedFormalModuleGeneratedModel.spec.imports.map { $0.name } == ["ZSequences"])
+    #expect(ImportedFormalModuleGeneratedModel.spec.importConfigurations == [
+      ZSequences.boundedNaturalNumbers(0...2)
+    ])
   }
 
   @Test("the parser records imports for builder fidelity")
   func parserRetainsImportedModule() {
-    let source = "{ Import(ZSequences.module) }"
+    let source = "{ Import(ZSequences.module, configuring: ZSequences.boundedNaturalNumbers(0...2)) }"
     let closure = Parser.parse(source: source).statements.first!.item.as(ClosureExprSyntax.self)!
     let parsed = SpecParser.parseSpecClosure(closure)
     let runtime = TLASpec("Imported") {
-      Import(ZSequences.module)
+      Import(ZSequences.module, configuring: ZSequences.boundedNaturalNumbers(0...2))
     }
-    let parserTree = ParsedSpecModel(variables: [], actions: [], invariants: [], imports: parsed.imports)
-    let runtimeTree = ParsedSpecModel(variables: [], actions: [], invariants: [], imports: runtime.imports.map(\.name))
+    let parserTree = ParsedSpecModel(
+      variables: [], actions: [], invariants: [], imports: parsed.imports,
+      importConfigurations: parsed.importConfigurations
+    )
+    let runtimeTree = ParsedSpecModel(
+      variables: [], actions: [], invariants: [], imports: runtime.imports.map(\.name),
+      importConfigurations: runtime.importConfigurations
+    )
 
     #expect(_tlaAlphaEquivalent(parserTree, runtimeTree))
   }
@@ -85,6 +94,27 @@ struct TLAModuleBundleTests {
       Issue.record("The imported ZSequences operators did not evaluate successfully.")
       return
     }
+  }
+
+  @Test("an imported module keeps its source boundary while receiving a typed TLC replacement")
+  func importedModuleUsesScopedFiniteReplacement() throws {
+    let consumer = TLASpec("BoundedZSequences") {
+      Import(ZSequences.module, configuring: ZSequences.boundedNaturalNumbers(0...2))
+    }
+
+    #expect(consumer.tlaModule.contains("ZSequencesNat == 0..2"))
+    #expect(consumer.tlaCfg.contains("CONSTANT Nat <- [ZSequences]ZSequencesNat"))
+    #expect(consumer.tlaBundle.imports.map(\.name) == ["ZSequences"])
+    #expect(!consumer.tlaBundle.root.tla.contains("ZSeq(elements) =="))
+
+    let sequences = try StateExpr.recursiveCall("ZSeq", [
+      .setLiteral([.int(0), .int(1)])
+    ]).evaluate(in: [:], recursiveFuncs: consumer.resolvedRecursiveFuncs)
+    guard case .set(let values) = sequences else {
+      Issue.record("The bounded ZSeq result was not a set.")
+      return
+    }
+    #expect(values.count == 7)
   }
 
   @Test("an import remains a source dependency and resolves its operators at runtime")

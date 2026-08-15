@@ -16,6 +16,7 @@ extension SpecParser {
         public var fairness: [FairnessCondition] = []
         public var constraint: StateExpr?
         public var imports: [String] = []
+        public var importConfigurations: [FormalModuleConfiguration] = []
         public var constants: [String: TLAValue] = [:]
         /// Local named values (from NamedValue declarations, resolved in expressions)
         public var localConstants: [String: TLAValue] = [:]
@@ -487,9 +488,36 @@ extension SpecParser {
                 return
             }
             result.imports.append(String(moduleName))
+            if let configuration = parseFormalModuleConfiguration(
+                call,
+                moduleName: String(moduleName)
+            ) {
+                result.importConfigurations.append(configuration)
+            }
         default:
             break
         }
+    }
+
+    private static func parseFormalModuleConfiguration(
+        _ call: FunctionCallExprSyntax,
+        moduleName: String
+    ) -> FormalModuleConfiguration? {
+        guard let argument = call.arguments.first(where: { $0.label?.text == "configuring" })?.expression
+        else { return nil }
+        let source = argument.description.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard moduleName == "ZSequences", source.hasPrefix("ZSequences.boundedNaturalNumbers(") else {
+            return nil
+        }
+        let contents = source
+            .replacingOccurrences(of: "ZSequences.boundedNaturalNumbers(", with: "")
+            .dropLast()
+        let bounds = contents.components(separatedBy: "...")
+        guard bounds.count == 2,
+              let lower = Int(bounds[0].trimmingCharacters(in: .whitespacesAndNewlines)),
+              let upper = Int(bounds[1].trimmingCharacters(in: .whitespacesAndNewlines))
+        else { return nil }
+        return ZSequences.boundedNaturalNumbers(lower...upper)
     }
 
     static func mergeVariableDeclaration(

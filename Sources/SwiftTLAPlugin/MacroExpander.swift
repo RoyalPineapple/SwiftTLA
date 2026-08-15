@@ -162,6 +162,8 @@ enum MacroExpander {
         let treeFairness = model.fairness.map(codegenFairness).joined(separator: ", ")
         let treeConstraint = model.constraint.map(codegenStateExpr) ?? "nil"
         let treeImports = model.imports.map { "\"\($0)\"" }.joined(separator: ", ")
+        let treeImportConfigurations = model.importConfigurations.map(codegenFormalModuleConfiguration)
+            .joined(separator: ", ")
 
         let parserTreeSource = """
         static let _parserTree: ParsedSpecModel = ParsedSpecModel(
@@ -171,7 +173,8 @@ enum MacroExpander {
             temporal: [\(treeTemporal)],
             fairness: [\(treeFairness)],
             constraint: \(treeConstraint),
-            imports: [\(treeImports)]
+            imports: [\(treeImports)],
+            importConfigurations: [\(treeImportConfigurations)]
         )
         """
         let checkerSource = """
@@ -184,7 +187,8 @@ enum MacroExpander {
                 temporal: builtSpec.temporalProperties.map { ($0.name, $0.expr) },
                 fairness: builtSpec.fairness,
                 constraint: builtSpec.constraint,
-                imports: builtSpec.imports.map(\\.name)
+                imports: builtSpec.imports.map(\\.name),
+                importConfigurations: builtSpec.importConfigurations
             )
             if !_tlaAlphaEquivalent(built, _parserTree) {
                 preconditionFailure(
@@ -195,6 +199,13 @@ enum MacroExpander {
         }
         """
         return [DeclSyntax(stringLiteral: parserTreeSource), DeclSyntax(stringLiteral: checkerSource)]
+    }
+
+    static func codegenFormalModuleConfiguration(_ configuration: FormalModuleConfiguration) -> String {
+        let replacements = configuration.replacements.map { replacement in
+            "FormalModuleReplacement(operatorName: \"\(replacement.operatorName)\", definitionName: \"\(replacement.definitionName)\", expression: \(codegenStateExpr(replacement.expression)))"
+        }.joined(separator: ", ")
+        return "FormalModuleConfiguration(moduleName: \"\(configuration.moduleName)\", replacements: [\(replacements)])"
     }
 
     static func codegenTemporalExpr(_ expression: TemporalExpr) -> String {

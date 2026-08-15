@@ -139,13 +139,15 @@ public struct ParsedSpecModel: Equatable, Sendable {
   public let fairness: [FairnessCondition]
   public let constraint: StateExpr?
   public let imports: [String]
+  public let importConfigurations: [FormalModuleConfiguration]
   public init(
     variables: [(String, TLAValue, StateExpr?)], actions: [(String, ActionExpr, [ActionBinding])],
     invariants: [(String, StateExpr)],
     temporal: [(String, TemporalExpr)] = [],
     fairness: [FairnessCondition] = [],
     constraint: StateExpr? = nil,
-    imports: [String] = []
+    imports: [String] = [],
+    importConfigurations: [FormalModuleConfiguration] = []
   ) {
     self.variables = variables
     self.actions = actions
@@ -154,6 +156,7 @@ public struct ParsedSpecModel: Equatable, Sendable {
     self.fairness = fairness
     self.constraint = constraint
     self.imports = imports
+    self.importConfigurations = importConfigurations
   }
   public static func == (lhs: ParsedSpecModel, rhs: ParsedSpecModel) -> Bool {
     guard lhs.variables.count == rhs.variables.count,
@@ -162,7 +165,8 @@ public struct ParsedSpecModel: Equatable, Sendable {
       lhs.temporal.count == rhs.temporal.count,
       lhs.fairness == rhs.fairness,
       lhs.constraint == rhs.constraint,
-      lhs.imports == rhs.imports
+      lhs.imports == rhs.imports,
+      lhs.importConfigurations == rhs.importConfigurations
     else { return false }
     for (a, b) in zip(lhs.variables, rhs.variables) {
       if a.name != b.name || a.initial != b.initial || a.initialSet != b.initialSet { return false }
@@ -197,6 +201,8 @@ public struct TLASpec: Sendable {
   public let recursiveFuncs: [RecursiveFunc]
   /// Imported modules remain separate source files and resolve their operators at runtime.
   public let imports: [TLASpec]
+  /// Model-scoped replacement bindings for imported module operators.
+  public let importConfigurations: [FormalModuleConfiguration]
   public var runtimeFuncs: [String: @Sendable ([TLAValue]) -> TLAValue] = [:]
   public var runtimeFuncBodies: [String] = []
   public let symmetrySets: [SymmetrySet]
@@ -208,7 +214,8 @@ public struct TLASpec: Sendable {
     fairness: [FairnessCondition] = [], assume: StateExpr? = nil, checkDeadlock: Bool = false,
     definitions: [String] = [], theorems: [String] = [], extendsModules: String = "Integers",
     constraint: StateExpr? = nil, recursiveDefs: [String] = [],
-    recursiveFuncs: [RecursiveFunc] = [], imports: [TLASpec] = [], symmetrySets: [SymmetrySet] = [],
+    recursiveFuncs: [RecursiveFunc] = [], imports: [TLASpec] = [],
+    importConfigurations: [FormalModuleConfiguration] = [], symmetrySets: [SymmetrySet] = [],
     symmetryGroups: [SymmetryVariableGroup] = [],
     symmetricCollections: [SymmetricCollectionDecl] = []
   ) {
@@ -228,6 +235,7 @@ public struct TLASpec: Sendable {
     self.recursiveDefs = recursiveDefs
     self.recursiveFuncs = recursiveFuncs
     self.imports = imports
+    self.importConfigurations = importConfigurations
     self.symmetrySets = symmetrySets
     self.symmetryGroups = symmetryGroups
     self.symmetricCollections = symmetricCollections
@@ -239,17 +247,27 @@ public struct TLASpec: Sendable {
   public var resolvedRecursiveFuncs: [RecursiveFunc] {
     var seen = Set<String>()
     var result: [RecursiveFunc] = []
-    func visit(_ module: TLASpec, path: inout Set<String>) {
+    func visit(
+      _ module: TLASpec,
+      replacements: [FormalModuleReplacement],
+      path: inout Set<String>
+    ) {
       precondition(path.insert(module.name).inserted, "Cyclic formal module import: \(module.name)")
-      for imported in module.imports { visit(imported, path: &path) }
+      for imported in module.imports {
+        let configuration = module.importConfigurations.first { $0.moduleName == imported.name }
+        visit(imported, replacements: configuration?.replacements ?? [], path: &path)
+      }
       for function in module.recursiveFuncs {
         precondition(seen.insert(function.name).inserted, "Duplicate imported formal operator: \(function.name)")
-        result.append(function)
+        let configuredBody = replacements.reduce(function.body) { body, replacement in
+          StateExpr.substituteVariable(replacement.operatorName, with: replacement.expression, in: body)
+        }
+        result.append(RecursiveFunc(name: function.name, params: function.params, body: configuredBody))
       }
       path.remove(module.name)
     }
     var path = Set<String>()
-    visit(self, path: &path)
+    visit(self, replacements: [], path: &path)
     return result
   }
   public var description: String {

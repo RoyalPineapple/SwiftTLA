@@ -59,13 +59,59 @@ public struct TLAModuleBundle: Sendable, Equatable {
 /// Unlike `Use(spec:)`, this does not merge declarations into the consumer.
 /// The exporter writes the module separately and the consumer emits an
 /// `EXTENDS` relationship, matching TLA+ module semantics.
+public struct FormalModuleReplacement: Sendable, Equatable {
+  /// The imported module operator to replace in a TLC configuration.
+  public let operatorName: String
+  /// The consumer-module definition that supplies the replacement value.
+  public let definitionName: String
+  /// The finite formal expression used by both SwiftTLA and TLC.
+  public let expression: StateExpr
+
+  public init(operatorName: String, definitionName: String, expression: StateExpr) {
+    self.operatorName = operatorName
+    self.definitionName = definitionName
+    self.expression = expression
+  }
+}
+
+/// Typed TLC configuration for one imported formal module.
+///
+/// The module remains a separate `.tla` source file. Its replacement values
+/// live in the consumer module and are connected with scoped `.cfg` bindings.
+public struct FormalModuleConfiguration: Sendable, Equatable {
+  public let moduleName: String
+  public let replacements: [FormalModuleReplacement]
+
+  public init(moduleName: String, replacements: [FormalModuleReplacement]) {
+    self.moduleName = moduleName
+    self.replacements = replacements
+  }
+}
+
 public struct ImportDecl: SpecComponent {
   public let module: TLASpec
-  init(_ module: TLASpec) { self.module = module }
+  public let configuration: FormalModuleConfiguration?
+
+  init(_ module: TLASpec, configuring configuration: FormalModuleConfiguration? = nil) {
+    precondition(
+      configuration == nil || configuration?.moduleName == module.name,
+      "Formal module configuration must name the imported module."
+    )
+    self.module = module
+    self.configuration = configuration
+  }
 }
 
 // swiftlint:disable:next identifier_name
 public func Import(_ module: TLASpec) -> ImportDecl { ImportDecl(module) }
+
+// swiftlint:disable:next identifier_name
+public func Import(
+  _ module: TLASpec,
+  configuring configuration: FormalModuleConfiguration
+) -> ImportDecl {
+  ImportDecl(module, configuring: configuration)
+}
 
 /// The formal modules that macro expansion can resolve from an authored
 /// `Import(Module.module)` declaration.
