@@ -43,6 +43,9 @@ public enum SpecParser {
         if let functions = decodeBoundedFunctionDomain(expression) {
             return functions
         }
+        if let choice = decodeStaticFormalChoice(expression) {
+            return choice
+        }
         if let filtered = decodeBoundedFilteredDomain(expression) {
             return filtered
         }
@@ -209,6 +212,30 @@ public enum SpecParser {
             return nil
         }
         return .functionSet(.setLiteral(domain.values.map(StateExpr.value)), range)
+    }
+
+    private static func decodeStaticFormalChoice(_ expression: ExprSyntax) -> StateExpr? {
+        guard let call = expression.as(FunctionCallExprSyntax.self),
+              call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "Select",
+              let candidatesSyntax = call.arguments.first(where: { $0.label?.text == "from" })?.expression,
+              let candidates = decodeStateExpr(candidatesSyntax),
+              let closure = call.trailingClosure
+                ?? call.arguments.first(where: { $0.label?.text == "matching" })?.expression.as(ClosureExprSyntax.self),
+              closureParameterNames(in: closure).count == 1,
+              let parameter = closureParameterNames(in: closure).first,
+              closure.statements.count == 1,
+              case .expr(let predicateSyntax) = closure.statements.first?.item,
+              let predicate = decodeTypedFacadeValue(
+                predicateSyntax,
+                substitutions: [parameter: .variable(parameter)]
+              )
+        else { return nil }
+        let canonicalBinding = "__tla_static_choice"
+        return .choose(
+            candidates,
+            canonicalBinding,
+            renameVar(parameter, to: canonicalBinding, in: predicate)
+        )
     }
 
     private static func decodeBoundedFilteredDomain(_ expression: ExprSyntax) -> StateExpr? {

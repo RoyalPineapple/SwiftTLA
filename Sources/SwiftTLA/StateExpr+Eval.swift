@@ -317,7 +317,11 @@ extension StateExpr {
 
         case .choose(let set, let qv, let predicate):
             guard case .set(let sv) = try ev(set) else { throw tm("CHOOSE", got: try ev(set)) }
-            for elem in sv {
+            // A formal CHOOSE needs one stable representative in the bounded
+            // evaluator. Swift Set iteration is deliberately unordered, so
+            // sorting here keeps the builder and syntax parser faithful to
+            // the same formal value across runs.
+            for elem in sv.sorted(by: { $0.description < $1.description }) {
                 let substituted = Self.substituteVariable(qv, elem, in: predicate)
                 if case .bool(true) = try ev(substituted) {
                     return elem

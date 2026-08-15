@@ -375,10 +375,18 @@ extension SpecParser {
         guard declaration.bindings.count == 1,
               let binding = declaration.bindings.first,
               let name = binding.pattern.as(IdentifierPatternSyntax.self)?.identifier.text,
-              let initializer = binding.initializer?.value,
-              let expression = decodeStateExpr(initializer),
-              let value = try? expression.evaluate(in: [:])
+              let initializer = binding.initializer?.value
         else { return nil }
+
+        guard let expression = decodeStateExpr(initializer) else {
+            algorithmParseFailure = algorithmParseFailure
+                ?? "Algorithm let '\(name)' must be a closed formal value; its expression could not be decoded."
+            return nil
+        }
+        guard let value = try? expression.evaluate(in: [:]) else {
+            algorithmParseFailure = "Algorithm let '\(name)' must be a closed formal value; it depends on runtime state or has no matching value."
+            return nil
+        }
         return (name, value)
     }
 

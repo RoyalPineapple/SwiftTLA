@@ -80,10 +80,45 @@ struct AlgorithmBuilderTests {
         #expect(computeInitialStates(spec).count == 4)
     }
 
+    @Test("static formal selection uses the matching finite value")
+    func selectsStaticFormalValue() {
+        let selected = Select(
+            from: SetExpr<Int>.literal(1, 2, 3),
+            matching: { value in value.expr % 2 == 0 }
+        )
+
+        #expect(selected.raw == .value(.int(2)))
+    }
+
+    @Test("static formal selection can choose a filtered function")
+    func selectsFilteredFormalFunction() {
+        let nodes = SetExpr<Node>.literal(.first, .second)
+        let selected = Select(
+            from: Where(Functions(from: Node.all, to: Subsets(of: nodes))) { successor in
+                All(Node.all) { node in successor[node].cardinality == 1 }
+            },
+            matching: { successor in successor.expr == successor.expr }
+        )
+
+        #expect((try? selected.raw.evaluate(in: [:])) != nil)
+    }
+
     @Test("generated models retain typed filtered function domains")
     func generatedModelRetainsFilteredFunctionDomain() throws {
         FunctionDomainGeneratedModel._checkParserTree()
         #expect(computeInitialStates(FunctionDomainGeneratedModel.spec).count == 4)
+    }
+
+    @Test("generated models retain static formal selections")
+    func generatedModelRetainsStaticFormalSelection() {
+        StaticFormalSelectionModel._checkParserTree()
+        #expect(computeInitialStates(StaticFormalSelectionModel.spec).first?["current"] == .int(2))
+    }
+
+    @Test("generated models retain static filtered function selections")
+    func generatedModelRetainsStaticFilteredFunctionSelection() {
+        StaticFilteredFunctionSelectionModel._checkParserTree()
+        #expect(computeInitialStates(StaticFilteredFunctionSelectionModel.spec).count == 1)
     }
 
     @Test("statement macros accept the current typed process identifier")
@@ -751,6 +786,59 @@ private struct FunctionDomainGeneratedModel {
                         successors[node].cardinality == 1
                     }
                 }
+            }
+        }
+    }
+}
+
+@TLAModel
+private struct StaticFormalSelectionModel {
+    static var spec: TLASpec {
+        #spec("StaticFormalSelection") {
+            Algorithm("StaticFormalSelection") {
+                let selected = Select(
+                    from: SetExpr<Int>.literal(1, 2, 3),
+                    matching: { value in value.expr % 2 == 0 }
+                )
+                let current = SharedVar(initial: selected)
+
+                Do("done") { Stop() }
+                Invariant("SelectedEven") { current == 2 }
+            }
+        }
+    }
+}
+
+@TLAModel
+private struct StaticFilteredFunctionSelectionModel {
+    enum Node: String, CaseIterable, FiniteDomainKey {
+        case first
+        case second
+        case third
+        case fourth
+
+        static let formalDomain = allCases
+        static let formalTypeIdentity = FormalTypeIdentity(rawValue: "test.pluscal.static-function-selection-node")
+
+        var tlaValue: TLAValue { .string(rawValue) }
+    }
+
+    static var spec: TLASpec {
+        #spec("StaticFilteredFunctionSelection") {
+            Algorithm("StaticFilteredFunctionSelection") {
+                let successors = Select(
+                    from: Where(Functions(
+                        from: Node.all,
+                        to: Subsets(of: SetExpr<Node>.literal(.first, .second, .third, .fourth))
+                    )) { successor in
+                        All(Node.all) { node in successor[node].cardinality == 2 }
+                    },
+                    matching: { successor in successor.expr == successor.expr }
+                )
+                let current = SharedVar(initial: successors)
+
+                Do("done") { Stop() }
+                Invariant("CurrentIsDefined") { current == current.expr }
             }
         }
     }

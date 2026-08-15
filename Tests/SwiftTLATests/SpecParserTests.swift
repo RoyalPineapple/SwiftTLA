@@ -174,6 +174,27 @@ private func parseExpression(_ source: String) -> ExprSyntax {
         #expect(parsed.variables.first?.initialSet?.description.contains("Cardinality") == true)
     }
 
+    @Test("parser resolves a static formal selection before algorithm lowering")
+    func parsesStaticFormalSelection() {
+        let source = """
+        {
+            Algorithm("StaticChoice") {
+                let selected = Select(
+                    from: SetExpr<Int>.literal(1, 2, 3),
+                    matching: { value in value.expr % 2 == 0 }
+                )
+                let current = SharedVar(initial: selected)
+                Do("done") { Stop() }
+            }
+        }
+        """
+        let closure = Parser.parse(source: source).statements.first!.item.as(ClosureExprSyntax.self)!
+        let parsed = SpecParser.parseSpecClosure(closure)
+
+        #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
+        #expect(parsed.variables.first?.initial == .int(2))
+    }
+
     @Test("parser expands a statement macro with the current process identifier")
     func parsesStatementMacroWithProcessIdentifier() {
         let source = """

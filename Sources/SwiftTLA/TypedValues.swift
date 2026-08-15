@@ -191,6 +191,27 @@ public func Where<Value: TLAValueType>(
   ))
 }
 
+/// Selects one value from a finite formal domain.
+///
+/// Use this for a fixed model value, such as a graph supplied by a TLC
+/// configuration. The selection is evaluated by the formal evaluator while
+/// the spec is built; it is not application control flow.
+public func Select<Value: TLAValueType>(
+  from candidates: Expr<SetExpr<Value>>,
+  matching predicate: (WithValue<Value>) -> StateExpr
+) -> Expr<Value> {
+  let binding = "__tla_static_choice"
+  let choice = StateExpr.choose(
+    candidates.raw,
+    binding,
+    predicate(WithValue<Value>(expression: .variable(binding)))
+  )
+  guard let value = try? choice.evaluate(in: [:]) else {
+    preconditionFailure("Select(from:matching:) requires a non-empty static formal domain")
+  }
+  return Expr(.value(value))
+}
+
 public struct SetExpr<Element: TLAValueType>: TLAValueType, Hashable, Sendable {
   private let values: Set<TLAValue>
 
