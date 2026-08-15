@@ -317,6 +317,9 @@ enum MacroExpander {
         case .enabledAction(let name): return "StateExpr.enabled(\"\(name)\")"
         case .sequenceFromSet(let values): return "StateExpr.sequenceFromSet(\(cg(values)))"
         case .setSum(let function, let values): return "StateExpr.setSum(\(cg(function)), \(cg(values)))"
+        case .foldFunction(let operation, let initial, let sequence):
+            let parameters = operation.parameters.map { "\"\($0)\"" }.joined(separator: ", ")
+            return "StateExpr.foldFunction(FormalLambda(parameters: [\(parameters)], body: \(cg(operation.body))), initial: \(cg(initial)), sequence: \(cg(sequence)))"
         case .recursiveCall(let name, let arguments):
             return "StateExpr.recursiveCall(\"\(name)\", [\(arguments.map(cg).joined(separator: ", "))])"
         case .letIn(let operators, let body):

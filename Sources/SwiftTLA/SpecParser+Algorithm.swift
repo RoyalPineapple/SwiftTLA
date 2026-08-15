@@ -324,7 +324,8 @@ extension SpecParser {
 
         let state: AlgorithmStateModel
         if let initialSyntax = initializer.arguments.first(where: { $0.label?.text == "initial" })?.expression,
-           let initial = decodeStateExpr(initialSyntax) {
+           let initial = decodeTypedFacadeValue(initialSyntax, substitutions: [:])
+                ?? decodeStateExpr(initialSyntax) {
             state = AlgorithmStateModel(
                 root: declaredName,
                 initial: initial,

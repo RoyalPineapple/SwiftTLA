@@ -84,7 +84,9 @@ extension Expr where T == Bool {
 }
 
 public func +(_ lhs: Expr<Int>, _ rhs: Int) -> Expr<Int> { Expr(.add(lhs.raw, .int(rhs))) }
+public func +(_ lhs: Expr<Int>, _ rhs: Expr<Int>) -> Expr<Int> { Expr(.add(lhs.raw, rhs.raw)) }
 public func -(_ lhs: Expr<Int>, _ rhs: Int) -> Expr<Int> { Expr(.subtract(lhs.raw, .int(rhs))) }
+public func -(_ lhs: Expr<Int>, _ rhs: Expr<Int>) -> Expr<Int> { Expr(.subtract(lhs.raw, rhs.raw)) }
 public func *(_ lhs: Expr<Int>, _ rhs: Expr<Int>) -> Expr<Int> { Expr(.multiply(lhs.raw, rhs.raw)) }
 public func *(_ lhs: Expr<Int>, _ rhs: Int) -> Expr<Int> { Expr(.multiply(lhs.raw, .int(rhs))) }
 public func -(_ lhs: Int, _ rhs: Var<Int>) -> Expr<Int> { Expr(.subtract(.int(lhs), rhs.stateExpr)) }

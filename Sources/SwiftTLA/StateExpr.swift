@@ -30,6 +30,23 @@ public struct LocalOperator: Hashable, Sendable {
     }
 }
 
+/// A formal function body with named, scoped inputs.
+///
+/// This is syntax in the specification, not a Swift closure and never a state
+/// value. The evaluator binds its inputs only while evaluating the formal
+/// operator that receives it.
+public struct FormalLambda: Hashable, Sendable {
+    public let parameters: [String]
+    public let body: StateExpr
+
+    public init(parameters: [String], body: StateExpr) {
+        precondition(!parameters.isEmpty, "A formal lambda needs at least one parameter.")
+        precondition(Set(parameters).count == parameters.count, "A formal lambda cannot repeat a parameter name.")
+        self.parameters = parameters
+        self.body = body
+    }
+}
+
 public indirect enum StateExpr: Hashable, Sendable, CustomStringConvertible {
     case value(TLAValue)
     case variable(String)
@@ -93,6 +110,7 @@ public indirect enum StateExpr: Hashable, Sendable, CustomStringConvertible {
     case sequenceFromSet(StateExpr)
     case setSum(StateExpr, StateExpr)
     case functionSet(StateExpr, StateExpr)
+    case foldFunction(FormalLambda, initial: StateExpr, sequence: StateExpr)
 
     case recursiveCall(String, [StateExpr])
     case letIn([LocalOperator], StateExpr)
@@ -164,6 +182,8 @@ public indirect enum StateExpr: Hashable, Sendable, CustomStringConvertible {
         case .sequenceFromSet(let s): return "SeqFromSet(\(s))"
         case .setSum(let f, let s): return "Sum(\(f), \(s))"
         case .functionSet(let d, let r): return "[\(d) -> \(r)]"
+        case .foldFunction(let operation, let initial, let sequence):
+            return "FoldFunction(LAMBDA \(operation.parameters.joined(separator: ", ")) : \(operation.body), \(initial), \(sequence))"
         case .recursiveCall(let n, let a):
             return a.isEmpty ? n : "\(n)(\(a.map(\.description).joined(separator: ", ")))"
         case .letIn(let operators, let body):
@@ -242,6 +262,10 @@ private func localOperatorCalls(in expression: StateExpr) -> Set<String> {
         }
     case .integerRange(let lower, let upper):
         return localOperatorCalls(in: lower).union(localOperatorCalls(in: upper))
+    case .foldFunction(let operation, let initial, let sequence):
+        return localOperatorCalls(in: operation.body)
+            .union(localOperatorCalls(in: initial))
+            .union(localOperatorCalls(in: sequence))
     }
 }
 

@@ -713,6 +713,42 @@ extension Expr where T: FormalTupleValue {
   }
 }
 
+/// Combines a formal function with the upstream `Functions.FoldFunction` operator.
+///
+/// The closure builds a `LAMBDA` in the specification. The upstream operator
+/// selects a function-domain member with `CHOOSE`, so use an operation whose
+/// result does not depend on that selection order. Import `FunctionsModule.module`
+/// into the surrounding specification so TLC receives the upstream operator.
+public func Fold<Element: TLAValueType, Result: TLAValueType>(
+  _ sequence: Expr<TupleExpr<Element>>,
+  startingWith initial: Expr<Result>,
+  _ combine: (Expr<Element>, Expr<Result>) -> Expr<Result>
+) -> Expr<Result> {
+  let elementName = FreshVarName.fresh()
+  let resultName = FreshVarName.fresh()
+  let element = Expr<Element>(.variable(elementName))
+  let accumulated = Expr<Result>(.variable(resultName))
+  return Expr<Result>(
+    .foldFunction(
+      FormalLambda(
+        parameters: [elementName, resultName],
+        body: combine(element, accumulated).raw
+      ),
+      initial: initial.raw,
+      sequence: sequence.raw
+    )
+  )
+}
+
+/// Starts a formal fold from a concrete formal value.
+public func Fold<Element: TLAValueType, Result: TLAValueType>(
+  _ sequence: Expr<TupleExpr<Element>>,
+  startingWith initial: Result,
+  _ combine: (Expr<Element>, Expr<Result>) -> Expr<Result>
+) -> Expr<Result> {
+  Fold(sequence, startingWith: Expr<Result>(.value(initial.tlaValue)), combine)
+}
+
 extension Expr where T: FormalZeroBasedSequenceValue {
   /// The formal number of elements in a zero-based sequence.
   public var count: Expr<Int> {

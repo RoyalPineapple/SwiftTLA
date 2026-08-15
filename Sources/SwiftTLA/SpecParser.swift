@@ -438,6 +438,31 @@ public enum SpecParser {
            let elseValue = decodeTypedFacadeValue(elseSyntax, substitutions: substitutions) {
             return .ifThenElse(condition, thenValue, elseValue)
         }
+        if let call = expression.as(FunctionCallExprSyntax.self),
+           call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "Fold",
+           let sequenceSyntax = call.arguments.first?.expression,
+           let initialSyntax = call.arguments.first(where: { $0.label?.text == "startingWith" })?.expression,
+           let sequence = decodeTypedFacadeValue(sequenceSyntax, substitutions: substitutions),
+           let initial = decodeTypedFacadeValue(initialSyntax, substitutions: substitutions),
+           let closure = call.trailingClosure,
+           closure.statements.count == 1,
+           case .expr(let bodySyntax) = closure.statements.first?.item,
+           closureParameterNames(in: closure).count == 2 {
+            let parameters = closureParameterNames(in: closure)
+            let bindings = [
+                parameters[0]: StateExpr.variable(parameters[0]),
+                parameters[1]: StateExpr.variable(parameters[1])
+            ]
+            guard let body = decodeTypedFacadeValue(
+                bodySyntax,
+                substitutions: substitutions.merging(bindings) { _, replacement in replacement }
+            ) else { return nil }
+            return .foldFunction(
+                FormalLambda(parameters: parameters, body: body),
+                initial: initial,
+                sequence: sequence
+            )
+        }
         if let infix = expression.as(InfixOperatorExprSyntax.self),
            let operation = infix.operator.as(BinaryOperatorExprSyntax.self)?.operator.text,
            let lhs = decodeTypedFacadeValue(infix.leftOperand, substitutions: substitutions),
@@ -516,6 +541,12 @@ public enum SpecParser {
                     elementType: literalType.arguments.first,
                     substitutions: substitutions
                 )
+            case "TupleExpr":
+                let elements = call.arguments.compactMap {
+                    decodeTypedFacadeValue($0.expression, substitutions: substitutions)
+                }
+                guard elements.count == call.arguments.count else { return nil }
+                return .tupleLiteral(elements)
             case "Function":
                 return decodeTypedFunctionLiteral(
                     call,

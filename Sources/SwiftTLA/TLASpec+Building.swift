@@ -407,13 +407,24 @@ private func substituteInState(_ expr: StateExpr, constants: [String: TLAValue])
       substituteInState(f, constants: constants), substituteInState(s, constants: constants))
   case .recursiveCall(let n, let a):
     return .recursiveCall(n, a.map { substituteInState($0, constants: constants) })
+  case .foldFunction(let operation, let initial, let sequence):
+    let bodyConstants = constants.filter { !operation.parameters.contains($0.key) }
+    return .foldFunction(
+      FormalLambda(
+        parameters: operation.parameters,
+        body: substituteInState(operation.body, constants: bodyConstants)
+      ),
+      initial: substituteInState(initial, constants: constants),
+      sequence: substituteInState(sequence, constants: constants)
+    )
   case .letIn(let operators, let body):
     return .letIn(
       operators.map { operation in
-        LocalOperator(
+        let bodyConstants = constants.filter { !operation.parameters.contains($0.key) }
+        return LocalOperator(
           operation.name,
           parameters: operation.parameters,
-          body: substituteInState(operation.body, constants: constants)
+          body: substituteInState(operation.body, constants: bodyConstants)
         )
       },
       substituteInState(body, constants: constants)

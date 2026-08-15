@@ -366,6 +366,37 @@ extension StateExpr {
             if !domainArr.isEmpty { build(0, []) } else { result.insert(.function([:])) }
             return .set(result)
 
+        case .foldFunction(let operation, let initial, let sequence):
+            guard operation.parameters.count == 2 else {
+                throw EvalError.typeMismatch(
+                    "FoldFunction requires a formal lambda with exactly two parameters"
+                )
+            }
+            let sequenceValue = try ev(sequence)
+            let values: [TLAValue]
+            switch sequenceValue {
+            case .tuple(let elements):
+                // The upstream definition chooses the lowest remaining index
+                // then applies the operation while unwinding recursion.
+                values = Array(elements.reversed())
+            case .function(let mapping):
+                let keys = mapping.keys.sorted { $0.description < $1.description }
+                values = keys.reversed().compactMap { mapping[$0] }
+            default:
+                throw tm("FoldFunction function", got: sequenceValue)
+            }
+            var result = try ev(initial)
+            for value in values {
+                let withElement = Self.substituteVariable(
+                    operation.parameters[0], value, in: operation.body
+                )
+                let withAccumulator = Self.substituteVariable(
+                    operation.parameters[1], result, in: withElement
+                )
+                result = try ev(withAccumulator)
+            }
+            return result
+
         case .caseExpr(let pairs, let other):
             for i in stride(from: 0, to: pairs.count, by: 2) {
                 if case .bool(true) = try ev(pairs[i]) {
@@ -514,6 +545,15 @@ extension StateExpr {
         case .sequenceFromSet(let s): return .sequenceFromSet(sub(s))
         case .setSum(let f, let s): return .setSum(sub(f), sub(s))
         case .functionSet(let d, let r): return .functionSet(sub(d), sub(r))
+        case .foldFunction(let operation, let initial, let sequence):
+            return .foldFunction(
+                FormalLambda(
+                    parameters: operation.parameters,
+                    body: operation.parameters.contains(name) ? operation.body : sub(operation.body)
+                ),
+                initial: sub(initial),
+                sequence: sub(sequence)
+            )
         case .recursiveCall(let n, let a): return .recursiveCall(n, a.map(sub))
         case .letIn(let operators, let body):
             return .letIn(
@@ -593,6 +633,12 @@ extension StateExpr {
             case .sequenceFromSet(let value): return .sequenceFromSet(visit(value))
             case .setSum(let function, let set): return .setSum(visit(function), visit(set))
             case .functionSet(let domain, let range): return .functionSet(visit(domain), visit(range))
+            case .foldFunction(let operation, let initial, let sequence):
+                return .foldFunction(
+                    FormalLambda(parameters: operation.parameters, body: visit(operation.body)),
+                    initial: visit(initial),
+                    sequence: visit(sequence)
+                )
             case .recursiveCall(let name, let arguments): return .recursiveCall(rename(name), arguments.map(visit))
             case .letIn(let operators, let body):
                 return .letIn(

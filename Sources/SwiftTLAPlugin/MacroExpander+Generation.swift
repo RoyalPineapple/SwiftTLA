@@ -430,7 +430,7 @@ extension MacroExpander {
             return "\(cg(d)).asFunctionLiteral { \(qv) in \(body) }"
         case .caseExpr:
             return "StateExpr.caseExpr([], nil)"
-        case .forAll, .exists, .choose, .sequenceFromSet, .setSum, .functionSet, .recursiveCall, .letIn, .enabledAction:
+        case .forAll, .exists, .choose, .sequenceFromSet, .setSum, .functionSet, .foldFunction, .recursiveCall, .letIn, .enabledAction:
             return "Self.runtime.evaluateExpr(\(expr.description), in: _state.asDictionary)"
         case .tupleLength(let t):
             return "TLAValue.int((\(cg(t)).tupleValue.count))"
@@ -507,6 +507,10 @@ extension MacroExpander {
         case .recordLiteral(let fs): fs.values.forEach { walkStateExpr($0, visitor: visitor) }
         case .setLiteral(let es): es.forEach { walkStateExpr($0, visitor: visitor) }
         case .functionLiteral(let d, _, let b): walkStateExpr(d, visitor: visitor); walkStateExpr(b, visitor: visitor)
+        case .foldFunction(let operation, let initial, let sequence):
+            walkStateExpr(operation.body, visitor: visitor)
+            walkStateExpr(initial, visitor: visitor)
+            walkStateExpr(sequence, visitor: visitor)
         case .caseExpr(let ps, let fb): ps.forEach { walkStateExpr($0, visitor: visitor) }; fb.map { walkStateExpr($0, visitor: visitor) }
         case .forAll, .exists, .choose, .sequenceFromSet, .setSum, .functionSet, .recursiveCall, .enabledAction: break
         case .letIn(let operators, let body):
@@ -722,6 +726,15 @@ extension MacroExpander {
         case .recordLiteral(let fs): return .recordLiteral(fs.mapValues(sub))
         case .setLiteral(let es): return .setLiteral(es.map(sub))
         case .functionLiteral(let d, let qv, let b): return .functionLiteral(sub(d), qv, sub(b))
+        case .foldFunction(let operation, let initial, let sequence):
+            return .foldFunction(
+                FormalLambda(
+                    parameters: operation.parameters,
+                    body: operation.parameters.contains(name) ? operation.body : sub(operation.body)
+                ),
+                initial: sub(initial),
+                sequence: sub(sequence)
+            )
         case .caseExpr(let ps, let fb): return .caseExpr(ps.map(sub), fb.map(sub))
         case .forAll, .exists, .choose, .sequenceFromSet, .setSum, .functionSet,
              .recursiveCall, .enabledAction: break

@@ -511,10 +511,12 @@ extension SpecParser {
                 result.diagnostics.append(.init(message: "Import requires a named formal module.", source: call))
                 return
             }
-            result.imports.append(String(moduleName))
+            let resolvedModuleName = FormalModuleRegistry.lookup(String(moduleName))?.name
+                ?? String(moduleName)
+            result.imports.append(resolvedModuleName)
             if let configuration = parseFormalModuleConfiguration(
                 call,
-                moduleName: String(moduleName)
+                moduleName: resolvedModuleName
             ) {
                 result.importConfigurations.append(configuration)
             }

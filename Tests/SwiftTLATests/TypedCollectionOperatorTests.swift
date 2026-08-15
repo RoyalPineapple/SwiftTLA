@@ -3,6 +3,7 @@ import SwiftTLAMacros
 import SwiftParser
 import SwiftSyntax
 import Testing
+import Foundation
 
 @TLAModel
 private struct TypedCollectionGeneratedModel {
@@ -64,6 +65,24 @@ private struct ZeroBasedSequenceGeneratedModel {
 
                 Do("writeFirst") {
                     Assign(table, to: table.updating(0, to: input[0]))
+                }
+            }
+        }
+    }
+}
+
+@TLAModel
+private struct FoldGeneratedModel {
+    static var spec: TLASpec {
+        #spec("FoldGeneratedModel") {
+            Import(FunctionsModule.module)
+            Algorithm("FoldGeneratedModel") {
+                let values = SharedVar(initial: TupleExpr<Int>.literal(1, 2, 3))
+                let total = SharedVar(initial: 0)
+                Do("sum") {
+                    Assign(total, to: Fold(values.expr, startingWith: 0) { element, accumulated in
+                        element + accumulated
+                    })
                 }
             }
         }
@@ -136,6 +155,82 @@ private struct ZeroBasedSequenceGeneratedModel {
             SpecParser.decodeStateExpr(syntax)
                 == .ifThenElse(.value(.bool(true)), .value(.int(1)), .value(.int(2)))
         )
+    }
+
+    @Test("formal folds evaluate, emit TLC syntax, and survive parser fidelity")
+    func foldFunctionIsFormalAndRoundTrips() throws {
+        let values = TupleExpr<Int>.literal(1, 2, 3)
+        let runtime = Fold(values, startingWith: 0) { element, accumulated in
+            element + accumulated
+        }
+        let source = "Fold(TupleExpr<Int>.literal(1, 2, 3), startingWith: 0) { element, accumulated in element + accumulated }"
+        let syntax = Parser.parse(source: source).statements.first!.item.as(ExprSyntax.self)!
+        let parsed = try #require(SpecParser.decodeStateExpr(syntax))
+
+        #expect(try runtime.raw.evaluate(in: [:]) == .int(6))
+        #expect(runtime.raw.description.contains("FoldFunction(LAMBDA"))
+        #expect(_tlaAlphaEquivalent(
+            ParsedSpecModel(variables: [], actions: [("fold", .guard_(runtime.raw), [])], invariants: []),
+            ParsedSpecModel(variables: [], actions: [("fold", .guard_(parsed), [])], invariants: [])
+        ))
+
+        let ordered = StateExpr.foldFunction(
+            FormalLambda(
+                parameters: ["element", "accumulated"],
+                body: .subtract(.variable("element"), .variable("accumulated"))
+            ),
+            initial: .int(4),
+            sequence: .tupleLiteral([.int(1), .int(2)])
+        )
+        #expect(try ordered.evaluate(in: [:]) == .int(3))
+    }
+
+    @Test("generated machines preserve formal fold behavior")
+    func generatedMachineUsesFormalFold() throws {
+        FoldGeneratedModel._checkParserTree()
+        var model = FoldGeneratedModel()
+        let result = try model.apply(.sum)
+
+        #expect(result.after.total == 6)
+        #expect(FoldGeneratedModel.spec.tlaModule.contains("FoldFunction(LAMBDA"))
+        #expect(FoldGeneratedModel.spec.tlaBundle.imports.map(\.name) == ["Folds", "Functions"])
+    }
+
+    @Test("the bundled Functions module makes FoldFunction valid TLA+ source")
+    func bundledFunctionsModulePassesSANY() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let jar = root.appendingPathComponent(".build/tla-tools/tla2tools.jar")
+        let javaCandidates = [
+            ProcessInfo.processInfo.environment["TLC_JAVA"],
+            ProcessInfo.processInfo.environment["JAVA_HOME"].map { "\($0)/bin/java" },
+            "/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home/bin/java",
+            "/usr/local/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home/bin/java"
+        ].compactMap { $0 }
+        guard let java = javaCandidates.first(where: FileManager.default.isExecutableFile(atPath:)),
+              FileManager.default.fileExists(atPath: jar.path)
+        else { return }
+
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        try FoldGeneratedModel.spec.tlaBundle.write(to: directory)
+
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: java)
+        process.arguments = ["-cp", jar.path, "tla2sany.SANY", "FoldGeneratedModel.tla"]
+        process.currentDirectoryURL = directory
+        let output = Pipe()
+        process.standardOutput = output
+        process.standardError = output
+        try process.run()
+        process.waitUntilExit()
+
+        let text = String(
+            data: output.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8
+        ) ?? "<non-UTF-8 SANY output>"
+        #expect(process.terminationStatus == 0, "SANY rejected bundled Functions:\n\(text)")
     }
 
     @Test("bounded sequence domains and terminal predicates parse as formal expressions")

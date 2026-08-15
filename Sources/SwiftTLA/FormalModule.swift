@@ -191,6 +191,8 @@ public func Instance(
 public enum FormalModuleRegistry {
   public static func lookup(_ name: String) -> TLASpec? {
     switch name {
+    case "Folds": Folds.module
+    case "Functions", "FunctionsModule": FunctionsModule.module
     case "ZSequences": ZSequences.module
     default: nil
     }

@@ -767,6 +767,18 @@ enum AlgorithmLowerer {
             case .sequenceFromSet(let set): return .sequenceFromSet(rewritten(set, localRoots: localRoots))
             case .setSum(let function, let set): return .setSum(rewritten(function, localRoots: localRoots), rewritten(set, localRoots: localRoots))
             case .functionSet(let domain, let range): return .functionSet(rewritten(domain, localRoots: localRoots), rewritten(range, localRoots: localRoots))
+            case .foldFunction(let operation, let initial, let sequence):
+                return .foldFunction(
+                    FormalLambda(
+                        parameters: operation.parameters,
+                        body: rewritten(
+                            operation.body,
+                            localRoots: localRoots.subtracting(operation.parameters)
+                        )
+                    ),
+                    initial: rewritten(initial, localRoots: localRoots),
+                    sequence: rewritten(sequence, localRoots: localRoots)
+                )
             case .recursiveCall(let name, let arguments): return .recursiveCall(name, arguments.map { rewritten($0, localRoots: localRoots) })
             case .letIn(let operators, let body):
                 return .letIn(

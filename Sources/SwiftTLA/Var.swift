@@ -589,6 +589,17 @@ public func renameVar(_ from: String, to: String, in expr: StateExpr) -> StateEx
     return .setSum(renameVar(from, to: to, in: f), renameVar(from, to: to, in: s))
   case .functionSet(let d, let r):
     return .functionSet(renameVar(from, to: to, in: d), renameVar(from, to: to, in: r))
+  case .foldFunction(let operation, let initial, let sequence):
+    return .foldFunction(
+      FormalLambda(
+        parameters: operation.parameters,
+        body: operation.parameters.contains(from)
+          ? operation.body
+          : renameVar(from, to: to, in: operation.body)
+      ),
+      initial: renameVar(from, to: to, in: initial),
+      sequence: renameVar(from, to: to, in: sequence)
+    )
   case .letIn(let operators, let body):
     return .letIn(
       operators.map { operation in

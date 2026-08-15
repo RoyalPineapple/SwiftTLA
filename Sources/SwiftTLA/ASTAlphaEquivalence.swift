@@ -331,6 +331,14 @@ private func stateKey(_ expression: StateExpr, environment: [String: String], ne
     case .sequenceFromSet(let value): return "sequence(\(key(value)))"
     case .setSum(let function, let set): return pair("sum", function, set)
     case .functionSet(let domain, let range): return pair("functionSet", domain, range)
+    case .foldFunction(let operation, let initial, let sequence):
+        var lambdaEnvironment = environment
+        let parameters = operation.parameters.map { parameter -> String in
+            let (canonical, extended) = fresh(parameter, environment: lambdaEnvironment, next: &next)
+            lambdaEnvironment = extended
+            return canonical
+        }
+        return "fold([\(parameters.joined(separator: ","))],\(key(operation.body, environment: lambdaEnvironment)),\(key(initial)),\(key(sequence)))"
     case .recursiveCall(let name, let arguments): return "recursive(\(name),\(arguments.map { key($0) }.joined(separator: ",")))"
     case .letIn(let operators, let body):
         let declarations = operators.map { operation in

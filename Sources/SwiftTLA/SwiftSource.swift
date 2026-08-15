@@ -159,6 +159,9 @@ extension StateExpr {
     case .setSum(let f, let s): return "StateExpr.setSum(\(f.swiftSource), \(s.swiftSource))"
     case .functionSet(let d, let r):
       return "StateExpr.functionSet(\(d.swiftSource), \(r.swiftSource))"
+    case .foldFunction(let operation, let initial, let sequence):
+      let parameters = operation.parameters.map { "\"\($0)\"" }.joined(separator: ", ")
+      return "StateExpr.foldFunction(FormalLambda(parameters: [\(parameters)], body: \(operation.body.swiftSource)), initial: \(initial.swiftSource), sequence: \(sequence.swiftSource))"
     case .recursiveCall(let name, let args):
       let argsStr = args.map(\.swiftSource).joined(separator: ", ")
       return "StateExpr.recursiveCall(\"\(name)\", [\(argsStr)])"
