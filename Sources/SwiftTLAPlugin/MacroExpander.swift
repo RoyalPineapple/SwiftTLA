@@ -644,15 +644,15 @@ extension MacroExpander {
                     .joined(separator: "\n")
                 return """
                 guard let rawValue = dict[\(key)] else {
-                    throw TLAStateProjectionDiagnostic.missingValue(path: \(key))
+                    throw TLAStateProjectionDiagnostic.missingRequiredValue(path: \(key), expected: "\(typeName)")
                 }
                 guard case .string(let value) = rawValue else {
-                    throw TLAStateProjectionDiagnostic.invalidValue(path: \(key))
+                    throw TLAStateProjectionDiagnostic.typeMismatch(path: \(key), expected: "\(typeName) encoded as a formal string", actual: rawValue)
                 }
                 switch value {
                 \(cases)
                 default:
-                    throw TLAStateProjectionDiagnostic.invalidValue(path: \(key))
+                    throw TLAStateProjectionDiagnostic.typeMismatch(path: \(key), expected: "a declared \(typeName) case", actual: rawValue)
                 }
                 """
             }
@@ -660,7 +660,7 @@ extension MacroExpander {
             if type == "TLAValue" {
                 return """
                 guard let value = dict[\(key)] else {
-                    throw TLAStateProjectionDiagnostic.missingValue(path: \(key))
+                    throw TLAStateProjectionDiagnostic.missingRequiredValue(path: \(key), expected: "\(type)")
                 }
                 self.\(variable.name) = value
                 """
@@ -669,10 +669,10 @@ extension MacroExpander {
                !["Int", "Bool", "String", "TLAValue"].contains(typeName) {
                 return """
                 guard let rawValue = dict[\(key)] else {
-                    throw TLAStateProjectionDiagnostic.missingValue(path: \(key))
+                    throw TLAStateProjectionDiagnostic.missingRequiredValue(path: \(key), expected: "\(typeName)")
                 }
                 guard let value = \(typeName)(formalValue: rawValue) else {
-                    throw TLAStateProjectionDiagnostic.invalidValue(path: \(key))
+                    throw TLAStateProjectionDiagnostic.typeMismatch(path: \(key), expected: "\(typeName)", actual: rawValue)
                 }
                 self.\(variable.name) = value
                 """
@@ -680,10 +680,10 @@ extension MacroExpander {
             let pattern = tlaValuePattern(forSwiftType: type, binding: "value")
             return """
             guard let rawValue = dict[\(key)] else {
-                throw TLAStateProjectionDiagnostic.missingValue(path: \(key))
+                throw TLAStateProjectionDiagnostic.missingRequiredValue(path: \(key), expected: "\(type)")
             }
             guard \(pattern) else {
-                throw TLAStateProjectionDiagnostic.invalidValue(path: \(key))
+                throw TLAStateProjectionDiagnostic.typeMismatch(path: \(key), expected: "\(type)", actual: rawValue)
             }
             self.\(variable.name) = value
             """
