@@ -436,6 +436,16 @@ public enum SpecParser {
            let value = call.arguments.first?.expression {
             return decodeTypedFacadeValue(value, substitutions: substitutions)
         }
+        // `OneOf` is a type-level union: its alternatives retain their
+        // underlying TLA+ value and therefore need no runtime wrapper.
+        if let call = expression.as(FunctionCallExprSyntax.self),
+           let access = call.calledExpression.as(MemberAccessExprSyntax.self),
+           access.base?.as(DeclReferenceExprSyntax.self) != nil,
+           ["first", "second"].contains(access.declName.baseName.text),
+           call.arguments.count == 1,
+           let value = call.arguments.first?.expression {
+            return decodeTypedFacadeValue(value, substitutions: substitutions)
+        }
         if let call = expression.as(FunctionCallExprSyntax.self),
            (typedLiteralType(call.calledExpression)?.name == "FormalCall"
              || call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "FormalCall"),
