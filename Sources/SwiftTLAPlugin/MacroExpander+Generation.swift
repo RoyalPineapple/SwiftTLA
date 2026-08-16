@@ -16,15 +16,18 @@ extension MacroExpander {
         }
         """),
         DeclSyntax(stringLiteral: """
-        public static func verifySpec() throws {
-            let result = try ModelChecker(spec: Self.spec, maxStates: 100_000).check()
+        @discardableResult
+        public static func verifySpec() throws -> Int {
+            let result = try ModelChecker(spec: Self.spec, maxStates: Self.verificationStateLimit).check()
             switch result {
             case .ok(let count):
                 guard count > 0 else { throw VerificationError("No states found") }
+                return count
             case .bounded(_, let outcome):
                 switch outcome {
                 case .ok(let count):
                     guard count > 0 else { throw VerificationError("No states found") }
+                    return count
                 default:
                     throw VerificationError("Spec verification failed: \\(result)")
                 }
@@ -37,7 +40,7 @@ extension MacroExpander {
     static func generateTransitionMatrix() -> [DeclSyntax] {
         [DeclSyntax(stringLiteral: """
         private static func _formalTransitionMatrix() throws -> [(from: [String: TLAValue], invocation: TLAActionInvocation, to: [String: TLAValue])] {
-            let graph = try ModelChecker(spec: Self.spec, maxStates: 100_000).exploreGraph()
+            let graph = try ModelChecker(spec: Self.spec, maxStates: Self.verificationStateLimit).exploreGraph()
             var matrix: [(from: [String: TLAValue], invocation: TLAActionInvocation, to: [String: TLAValue])] = []
             for (fromID, transitions) in graph.transitions {
                 guard let fromState = graph.states[fromID] else { continue }
@@ -111,8 +114,9 @@ extension MacroExpander {
         enumInfos: [ParsedEnumInfo] = []
     ) -> [DeclSyntax] {
         var decls: [DeclSyntax] = []
-        for a in actions {
-            let callbackName = "on" + a.name.prefix(1).capitalized + a.name.dropFirst()
+        let actionIdentifiers = generatedActionIdentifiers(actions: actions)
+        for (a, identifier) in zip(actions, actionIdentifiers) {
+            let callbackName = "on" + identifier.prefix(1).capitalized + identifier.dropFirst()
             let callbackType: String
             if !a.bindings.isEmpty {
                 let parameterTypes = a.bindings.map { swiftType(for: a, binding: $0) }.joined(separator: ", ")
@@ -165,16 +169,17 @@ extension MacroExpander {
         variables: [(name: String, initial: TLAValue, initialSet: StateExpr?, swiftTypeName: String?)],
         actions: [SpecParser.ParsedAction]
     ) -> [FunctionDeclSyntax] {
-        actions.map { a in
-            let callbackName = "on" + a.name.prefix(1).capitalized + a.name.dropFirst()
+        let identifiers = generatedActionIdentifiers(actions: actions)
+        return zip(actions, identifiers).map { a, identifier in
+            let callbackName = "on" + identifier.prefix(1).capitalized + identifier.dropFirst()
             if !a.bindings.isEmpty {
                 let parameters = a.bindings.map { binding in
                     "\(binding.name): \(swiftType(for: a, binding: binding))"
                 }.joined(separator: ", ")
                 let callbackArguments = a.bindings.map(\.name).joined(separator: ", ")
                 let source = """
-                public func _\(a.name)(\(parameters)) throws -> TransitionResult {
-                    let evidence = try apply(.\(a.name)(\(a.bindings.map { "\($0.name): \($0.name)" }.joined(separator: ", "))))
+                public func _\(identifier)(\(parameters)) throws -> TransitionResult {
+                    let evidence = try apply(.\(identifier)(\(a.bindings.map { "\($0.name): \($0.name)" }.joined(separator: ", "))))
                     if let h = \(callbackName) { h(\(callbackArguments), evidence.before, evidence.after) }
                     return evidence
                 }
@@ -182,8 +187,8 @@ extension MacroExpander {
                 return DeclSyntax(stringLiteral: source).as(FunctionDeclSyntax.self)!
             }
             let source = """
-                public func _\(a.name)() throws -> TransitionResult {
-                let evidence = try apply(.\(a.name))
+                public func _\(identifier)() throws -> TransitionResult {
+                let evidence = try apply(.\(identifier))
                 if let h = \(callbackName) { Task { await h(evidence.before, evidence.after) } }
                 return evidence
             }
@@ -211,8 +216,8 @@ extension MacroExpander {
         let protoName = "\(typeName)Actions"
         var callbackDecls: [String] = []
         var defaultDecls: [String] = []
-        for a in actions {
-            let callbackName = "on" + a.name.prefix(1).capitalized + a.name.dropFirst()
+        for (_, identifier) in zip(actions, generatedActionIdentifiers(actions: actions)) {
+            let callbackName = "on" + identifier.prefix(1).capitalized + identifier.dropFirst()
             callbackDecls.append("func \(callbackName)()")
             defaultDecls.append("""
                 func \(callbackName)() {
@@ -381,6 +386,8 @@ extension MacroExpander {
         case .setDifference(let a, let b): return "\(cg(a)).subtracting(\(cg(b)))"
         case .subset(let a, let b): return "\(cg(a)).isSubset(of: \(cg(b)))"
         case .tupleAccess(let t, let i): return "(\(cg(t)))[\(i)]"
+        case .tupleDynamicAccess(let tuple, let index):
+            return "(\(cg(tuple)))[(\(cg(index))) - 1]"
         case .tupleAppend(let t, let e): return "(\(cg(t)) + [\(cg(e))])"
         case .tupleHead(let t): return "(\(cg(t))).first!"
         case .tupleTail(let t): return "Array((\(cg(t))).dropFirst())"
@@ -406,6 +413,8 @@ extension MacroExpander {
             return "\(cg(s)).map { \(qv) in \(mapping) }"
         case .powerSet(let s): return "\(cg(s)).powerSet"
         case .unionAll(let s): return "\(cg(s)).flattened"
+        case .integerRange(let lower, let upper):
+            return "Set(\(cg(lower))...\(cg(upper)))"
         case .tupleLiteral(let es):
             return "[\(es.map { cg($0) }.joined(separator: ", "))]"
         case .recordLiteral(let fs):
@@ -423,7 +432,7 @@ extension MacroExpander {
             return "\(cg(d)).asFunctionLiteral { \(qv) in \(body) }"
         case .caseExpr:
             return "StateExpr.caseExpr([], nil)"
-        case .forAll, .exists, .choose, .sequenceFromSet, .setSum, .functionSet, .recursiveCall, .enabledAction:
+        case .forAll, .exists, .choose, .sequenceFromSet, .setSum, .functionSet, .foldFunction, .operatorApplication, .recursiveCall, .letValue, .letIn, .enabledAction:
             return "Self.runtime.evaluateExpr(\(expr.description), in: _state.asDictionary)"
         case .tupleLength(let t):
             return "TLAValue.int((\(cg(t)).tupleValue.count))"
@@ -481,6 +490,8 @@ extension MacroExpander {
         case .setDifference(let a, let b): walkStateExpr(a, visitor: visitor); walkStateExpr(b, visitor: visitor)
         case .subset(let a, let b): walkStateExpr(a, visitor: visitor); walkStateExpr(b, visitor: visitor)
         case .tupleAccess(let t, _): walkStateExpr(t, visitor: visitor)
+        case .tupleDynamicAccess(let tuple, let index):
+            walkStateExpr(tuple, visitor: visitor); walkStateExpr(index, visitor: visitor)
         case .tupleAppend(let t, let e): walkStateExpr(t, visitor: visitor); walkStateExpr(e, visitor: visitor)
         case .tupleHead(let t): walkStateExpr(t, visitor: visitor)
         case .tupleTail(let t): walkStateExpr(t, visitor: visitor)
@@ -492,12 +503,35 @@ extension MacroExpander {
         case .setMap(let e, _, let s): walkStateExpr(e, visitor: visitor); walkStateExpr(s, visitor: visitor)
         case .powerSet(let s): walkStateExpr(s, visitor: visitor)
         case .unionAll(let s): walkStateExpr(s, visitor: visitor)
+        case .integerRange(let lower, let upper):
+            walkStateExpr(lower, visitor: visitor); walkStateExpr(upper, visitor: visitor)
         case .tupleLiteral(let es): es.forEach { walkStateExpr($0, visitor: visitor) }
         case .recordLiteral(let fs): fs.values.forEach { walkStateExpr($0, visitor: visitor) }
         case .setLiteral(let es): es.forEach { walkStateExpr($0, visitor: visitor) }
         case .functionLiteral(let d, _, let b): walkStateExpr(d, visitor: visitor); walkStateExpr(b, visitor: visitor)
+        case .foldFunction(let operation, let initial, let sequence):
+            walkStateExpr(operation.body, visitor: visitor)
+            walkStateExpr(initial, visitor: visitor)
+            walkStateExpr(sequence, visitor: visitor)
+        case .operatorApplication(let operation, let arguments):
+            if case .lambda(let lambda) = operation {
+                walkStateExpr(lambda.body, visitor: visitor)
+            }
+            arguments.forEach { argument in
+                switch argument {
+                case .value(let expression): walkStateExpr(expression, visitor: visitor)
+                case .operator(.lambda(let lambda)): walkStateExpr(lambda.body, visitor: visitor)
+                case .operator(.reference): break
+                }
+            }
         case .caseExpr(let ps, let fb): ps.forEach { walkStateExpr($0, visitor: visitor) }; fb.map { walkStateExpr($0, visitor: visitor) }
         case .forAll, .exists, .choose, .sequenceFromSet, .setSum, .functionSet, .recursiveCall, .enabledAction: break
+        case .letValue(_, let value, let body):
+            walkStateExpr(value, visitor: visitor)
+            walkStateExpr(body, visitor: visitor)
+        case .letIn(let operators, let body):
+            operators.forEach { walkStateExpr($0.body, visitor: visitor) }
+            walkStateExpr(body, visitor: visitor)
         }
     }
     static func isTLAValueField(
@@ -691,6 +725,7 @@ extension MacroExpander {
         case .setDifference(let a, let b): return .setDifference(sub(a), sub(b))
         case .subset(let a, let b): return .subset(sub(a), sub(b))
         case .tupleAccess(let t, let i): return .tupleAccess(sub(t), i)
+        case .tupleDynamicAccess(let tuple, let index): return .tupleDynamicAccess(sub(tuple), sub(index))
         case .tupleAppend(let t, let e): return .tupleAppend(sub(t), sub(e))
         case .tupleHead(let t): return .tupleHead(sub(t))
         case .tupleTail(let t): return .tupleTail(sub(t))
@@ -702,13 +737,61 @@ extension MacroExpander {
         case .setMap(let e, let qv, let s): return .setMap(sub(e), qv, sub(s))
         case .powerSet(let s): return .powerSet(sub(s))
         case .unionAll(let s): return .unionAll(sub(s))
+        case .integerRange(let lower, let upper): return .integerRange(sub(lower), sub(upper))
         case .tupleLiteral(let es): return .tupleLiteral(es.map(sub))
         case .recordLiteral(let fs): return .recordLiteral(fs.mapValues(sub))
         case .setLiteral(let es): return .setLiteral(es.map(sub))
         case .functionLiteral(let d, let qv, let b): return .functionLiteral(sub(d), qv, sub(b))
+        case .foldFunction(let operation, let initial, let sequence):
+            return .foldFunction(
+                FormalLambda(
+                    parameters: operation.parameters,
+                    body: operation.parameters.contains(name) ? operation.body : sub(operation.body)
+                ),
+                initial: sub(initial),
+                sequence: sub(sequence)
+            )
+        case .operatorApplication(let operation, let arguments):
+            let substitutedOperator: FormalOperator
+            switch operation {
+            case .lambda(let lambda):
+                substitutedOperator = .lambda(
+                    FormalLambda(
+                        parameters: lambda.parameters,
+                        body: lambda.parameters.contains(name) ? lambda.body : sub(lambda.body)
+                    )
+                )
+            case .reference:
+                substitutedOperator = operation
+            }
+            return .operatorApplication(substitutedOperator, arguments.map { argument in
+                switch argument {
+                case .value(let expression): return FormalCallArgument.value(sub(expression))
+                case .operator(.reference(let name, let arity)):
+                    return FormalCallArgument.operator(.reference(name, arity: arity))
+                case .operator(.lambda(let lambda)):
+                    return FormalCallArgument.operator(.lambda(FormalLambda(
+                        parameters: lambda.parameters,
+                        body: lambda.parameters.contains(name) ? lambda.body : sub(lambda.body)
+                    )))
+                }
+            })
         case .caseExpr(let ps, let fb): return .caseExpr(ps.map(sub), fb.map(sub))
         case .forAll, .exists, .choose, .sequenceFromSet, .setSum, .functionSet,
              .recursiveCall, .enabledAction: break
+        case .letValue(let local, let value, let body):
+            return .letValue(local, sub(value), local == name ? body : sub(body))
+        case .letIn(let operators, let body):
+            return .letIn(
+                operators.map { operation in
+                    LocalOperator(
+                        operation.name,
+                        parameters: operation.parameters,
+                        body: operation.parameters.contains(name) ? operation.body : sub(operation.body)
+                    )
+                },
+                sub(body)
+            )
         }
         return state
     }
@@ -727,9 +810,11 @@ extension MacroExpander {
         let guardBlock = guardExprs.isEmpty ? "" : "guard \(guardExprs.joined(separator: ", ")) else { return }"
         let assignments = extracted.assignments.compactMap { name, expr -> String? in
             if case .variable(let refName) = expr, refName == name { return nil }
-            return "_state.\(name) = \(codegenExpr(expr, variables: variables, enumInfos: enumInfos))"
+            let rhs = codegenExpr(expr, variables: variables, enumInfos: enumInfos)
+                .replacingOccurrences(of: "_state.", with: "_saved.")
+            return "_state.\(name) = \(rhs)"
         }
-        let body = [guardBlock].filter { !$0.isEmpty } + assignments
+        let body = ["let _saved = _state", guardBlock].filter { !$0.isEmpty } + assignments
         return body.filter { !$0.isEmpty }.joined(separator: "\n        ")
     }
     static func codegenMultiDisjunct(
@@ -768,12 +853,13 @@ extension MacroExpander {
         nativeNames: Set<String>,
         isActor: Bool = false
     ) -> FunctionDeclSyntax {
-        let switchCases = actions.map { a in
+        let identifiers = generatedActionIdentifiers(actions: actions)
+        let switchCases = zip(actions, identifiers).map { a, identifier in
             if nativeNames.contains(a.name) {
-                let methodName = isActor ? "_\(a.name)" : "apply\(a.name)"
-                return "case .\(a.name): \(methodName)()"
+                let methodName = isActor ? "_\(identifier)" : "apply\(identifier)"
+                return "case .\(identifier): \(methodName)()"
             } else {
-                return "case .\(a.name): _state = _apply(action)"
+                return "case .\(identifier): _state = _apply(action)"
             }
         }.joined(separator: "\n        ")
         let source = """

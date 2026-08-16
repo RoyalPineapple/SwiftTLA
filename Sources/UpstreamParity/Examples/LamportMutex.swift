@@ -17,7 +17,7 @@ public struct LamportMutexModel {
             .int(1): TLAValue.function([.int(1): 0, .int(2): 0]),
             .int(2): TLAValue.function([.int(1): 0, .int(2): 0])]
 
-        return TLASpec("LamportMutex") {
+        return #spec("LamportMutex") {
             Extends("Integers")
             let clock = Var<TLAValue>("clock")
             let req = Var<TLAValue>("req")

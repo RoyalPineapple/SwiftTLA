@@ -1,4 +1,5 @@
 import SwiftTLA
+import SwiftTLAMacros
 
 /// Conway's Game of Life — N=4 grid, blinker start.
 /// Upstream uses function constructor `[p \in Pos |-> ...]` — we use `functionLiteral`.
@@ -52,7 +53,7 @@ private func gameOfLifeSpec() -> TLASpec {
             || StateExpr.not(alive) && StateExpr.equal(score, StateExpr.int(3))
     }
 
-    return TLASpec("GameOfLife") {
+    return #spec("GameOfLife") {
         Extends("Integers")
         Variable(grid, initFunc)
 

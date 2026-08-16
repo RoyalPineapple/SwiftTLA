@@ -24,6 +24,13 @@ struct CoreConformanceComparisonTests {
         #expect(!comparison.isConformant)
         #expect(comparison.differences.contains { $0.category == .edges })
         #expect(comparison.differences.contains { $0.category == .mapping })
+        // Edge witnesses are selected in canonical sort order. The missing
+        // upstream `advance` edge therefore precedes the extra `reset` edge.
+        let edgeReport = try #require(comparison.failureReports.first { $0.whereItFailed.contains("action advance") })
+        #expect(edgeReport.expected.contains("TLC permits this transition 1 time(s)."))
+        #expect(edgeReport.actual.contains("SwiftTLA permits this transition 0 time(s)."))
+        #expect(edgeReport.systemChange == "No graph or generated state machine was changed.")
+        #expect(edgeReport.nextSafeAction.contains("advance"))
     }
 
     @Test("partial name mappings and incomplete outcomes cannot pass")

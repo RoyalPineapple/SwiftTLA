@@ -6,14 +6,24 @@ extension TLASpec {
     public var tlaModule: String {
         validateSymmetricCollectionExport()
         let varNames = variables.map(\.name)
+        let algorithmSymbols = algorithmExportSymbols(sourceAlgorithms, actions: actions)
+        let emittedActionNames = tlaActionNames(actions, preferredNames: algorithmSymbols.actionNames)
         let varsTuple = varNames.count == 1 ? varNames[0] : "<<\(varNames.joined(separator: ", "))>>"
+        let isLibraryModule = variables.isEmpty && actions.isEmpty
         var lines: [String] = []
 
         let modName = name.replacingOccurrences(of: " ", with: "")
         lines.append("---- MODULE \(modName) ----")
 
-        let symmetryModule = symmetrySets.isEmpty && symmetricCollections.isEmpty ? "" : ", TLC"
-        lines.append("EXTENDS \(extendsModules), FiniteSets, Sequences\(symmetryModule)")
+        let symmetryModule = symmetrySets.isEmpty && symmetricCollections.isEmpty ? [] : ["TLC"]
+        let importedNames = imports.map(\.name)
+        let modules = (extendsModules.split(separator: ",").map {
+            $0.trimmingCharacters(in: .whitespaces)
+        } + ["FiniteSets", "Sequences"] + symmetryModule + importedNames)
+            .reduce(into: [String]()) { names, module in
+                if !names.contains(module) { names.append(module) }
+            }
+        lines.append("EXTENDS \(modules.joined(separator: ", "))")
         lines.append("")
 
         let generatedMemberSymbols = symmetricCollections.flatMap { collection in
@@ -21,7 +31,13 @@ extension TLASpec {
                 collection.metadata.members.contains(.constant(symbol))
             }
         }
-        let allConstantSymbols = (constants.keys + generatedMemberSymbols).sorted()
+        let formalConstantSymbols = formalParameters
+            .filter { $0.kind == .constant }
+            .map(\.name)
+        let formalVariableSymbols = formalParameters
+            .filter { $0.kind == .variable }
+            .map(\.name)
+        let allConstantSymbols = (constants.keys + formalConstantSymbols + generatedMemberSymbols).sorted()
         if !allConstantSymbols.isEmpty {
             lines.append("CONSTANTS \(allConstantSymbols.joined(separator: ", "))")
             for (name, value) in constants.sorted(by: { $0.key < $1.key }) {
@@ -43,12 +59,31 @@ extension TLASpec {
         if !symmetricCollections.isEmpty || !symmetrySets.isEmpty { lines.append("") }
 
         if let assume = assume {
-            lines.append("ASSUME \(assume)")
+            lines.append("ASSUME \(assume.tlaModuleSource)")
             lines.append("")
         }
 
-        lines.append("VARIABLES \(varNames.joined(separator: ", "))")
-        lines.append("")
+        if !isLibraryModule || !formalVariableSymbols.isEmpty {
+            let symbols = (varNames + formalVariableSymbols).joined(separator: ", ")
+            lines.append("VARIABLES \(symbols)")
+            lines.append("")
+        }
+
+        for configuration in importConfigurations {
+            for replacement in configuration.replacements {
+                lines.append("\(replacement.definitionName) == \(replacement.expression)")
+                lines.append("")
+            }
+        }
+
+        for instance in moduleInstances {
+            let arguments = instance.arguments.map { argument in
+                "\(argument.parameter) <- \(argument.value)"
+            }.joined(separator: ", ")
+            let withClause = arguments.isEmpty ? "" : " WITH \(arguments)"
+            lines.append("\(instance.name) == INSTANCE \(instance.module.name)\(withClause)")
+            lines.append("")
+        }
 
         for def in definitions {
             lines.append(def)
@@ -74,16 +109,21 @@ extension TLASpec {
         }
 
         let varsDef = "vars == \(varsTuple)"
-        if varNames.count > 1 { lines.append(varsDef); lines.append("") }
+        if !isLibraryModule, varNames.count > 1 { lines.append(varsDef); lines.append("") }
 
         for inv in invariants {
-            lines.append("\(inv.name) == \(inv.body)")
+            lines.append("\(inv.name) == \(inv.body.tlaModuleSource)")
         }
         if !invariants.isEmpty { lines.append("") }
 
         if let constraint = constraint {
-            lines.append("StateConstraint == \(constraint)")
+            lines.append("StateConstraint == \(constraint.tlaModuleSource)")
             lines.append("")
+        }
+
+        guard !isLibraryModule else {
+            lines.append("====")
+            return lines.joined(separator: "\n") + "\n"
         }
 
         let symmetricMetadataByName = Dictionary(
@@ -95,7 +135,7 @@ extension TLASpec {
             }
             if let s = v.lazySet { return "\(v.name) \\in \(s)" }
             if let s = v.initialSet { return "\(v.name) \\in \(s)" }
-            if let expr = v.initExpr { return "\(v.name) = \(expr)" }
+            if let expr = v.initExpr { return "\(v.name) = \(expr.tlaModuleSource)" }
             return "\(v.name) = \(v.initial)"
         }
         if inits.count == 1 {
@@ -108,11 +148,12 @@ extension TLASpec {
 
         for action in actions where !action.name.isEmpty {
             let parameters = action.bindings.map(\.name).joined(separator: ", ")
-            let header = parameters.isEmpty ? action.name : "\(action.name)(\(parameters))"
-            lines.append("\(header) == \(action.body)")
+            let emittedName = emittedActionNames[action.name] ?? action.name
+            let header = parameters.isEmpty ? emittedName : "\(emittedName)(\(parameters))"
+            lines.append("\(header) == \(action.body.tlaModuleSource)")
             for variant in actionInvocations(action) where !variant.indices.isEmpty {
                 let suffix = variant.indices.map(String.init).joined(separator: "_")
-                lines.append("\(action.name)__\(suffix) == \(variant.invocation)")
+                lines.append("\(emittedName)__\(suffix) == \(variant.invocation)")
             }
         }
         lines.append("")
@@ -120,8 +161,9 @@ extension TLASpec {
         let actionNames = actions.filter { !$0.name.isEmpty }
         let invocations = actionNames.flatMap { action in
             actionInvocations(action).map { variant -> String in
-                guard !variant.indices.isEmpty else { return action.name }
-                return "\(action.name)__\(variant.indices.map(String.init).joined(separator: "_"))"
+                let emittedName = emittedActionNames[action.name] ?? action.name
+                guard !variant.indices.isEmpty else { return emittedName }
+                return "\(emittedName)__\(variant.indices.map(String.init).joined(separator: "_"))"
             }
         }
         if invocations.count == 1 && invocations[0] == "Next" {
@@ -140,12 +182,12 @@ extension TLASpec {
         lines.append("  /\\ Init")
         lines.append("  /\\ [][Next]_\(varsTuple)")
         for f in fairness {
-            lines.append("  /\\ \(fairnessForm(f, vars: varsTuple))")
+            lines.append("  /\\ \(fairnessForm(f, vars: varsTuple, emittedActionNames: emittedActionNames))")
         }
         lines.append("")
 
         for t in temporalProperties {
-            lines.append("\(t.name) == \(t.expr)")
+            lines.append("\(t.name) == \(t.expr.tlaModuleSource)")
         }
         if !temporalProperties.isEmpty { lines.append("") }
 
@@ -155,10 +197,14 @@ extension TLASpec {
         }
 
         lines.append("====")
-        return lines.joined(separator: "\n") + "\n"
+        return algorithmSymbols.rewrite(lines.joined(separator: "\n") + "\n")
     }
 
-    private func fairnessForm(_ condition: FairnessCondition, vars: String) -> String {
+    private func fairnessForm(
+        _ condition: FairnessCondition,
+        vars: String,
+        emittedActionNames: [String: String]
+    ) -> String {
         switch condition {
         case .weakFairness, .strongFairness:
             return condition.tlaForm(vars: vars)
@@ -167,9 +213,10 @@ extension TLASpec {
                 .flatMap(actionInvocations)
                 .first(where: { $0.invocation == invocation })
                 .map { variant in
-                    guard !variant.indices.isEmpty else { return invocation.name }
-                    return "\(invocation.name)__\(variant.indices.map(String.init).joined(separator: "_"))"
-                } ?? invocation.name
+                    let emittedName = emittedActionNames[invocation.name] ?? invocation.name
+                    guard !variant.indices.isEmpty else { return emittedName }
+                    return "\(emittedName)__\(variant.indices.map(String.init).joined(separator: "_"))"
+                } ?? (emittedActionNames[invocation.name] ?? invocation.name)
             return condition.isStrong
                 ? "SF_\(vars)(\(operatorName))"
                 : "WF_\(vars)(\(operatorName))"
@@ -189,6 +236,13 @@ extension TLASpec {
         for (name, value) in constants.sorted(by: { $0.key < $1.key }) {
             lines.append("CONSTANT \(name) = \(value)")
         }
+        for configuration in importConfigurations {
+            for replacement in configuration.replacements {
+                lines.append(
+                    "CONSTANT \(replacement.operatorName) <- [\(configuration.moduleName)]\(replacement.definitionName)"
+                )
+            }
+        }
         for collection in symmetricCollections {
             for member in collection.metadata.members {
                 lines.append("CONSTANT \(member) = \(member)")
@@ -206,9 +260,30 @@ extension TLASpec {
         return lines.joined(separator: "\n") + "\n"
     }
 
-    /// Complete TLA+ bundle: .tla module + .cfg file.
-    public var tlaBundle: (tla: String, cfg: String) {
-        (tlaModule, tlaCfg)
+    /// Complete TLA+ source bundle: the root module, its configuration, and
+    /// each imported module in dependency order.
+    public var tlaBundle: TLAModuleBundle {
+        var emitted = Set<String>()
+        var files: [TLAModuleFile] = []
+
+        func appendImports(of module: TLASpec) {
+            for imported in module.imports {
+                appendImports(of: imported)
+                guard emitted.insert(imported.name).inserted else { continue }
+                files.append(TLAModuleFile(name: imported.name, tla: imported.tlaModule))
+            }
+            for instance in module.moduleInstances {
+                appendImports(of: instance.module)
+                guard emitted.insert(instance.module.name).inserted else { continue }
+                files.append(TLAModuleFile(name: instance.module.name, tla: instance.module.tlaModule))
+            }
+        }
+
+        appendImports(of: self)
+        return TLAModuleBundle(
+            root: TLAModuleFile(name: name, tla: tlaModule, cfg: tlaCfg),
+            imports: files
+        )
     }
 
     private func validateSymmetricCollectionExport() {
@@ -216,6 +291,89 @@ extension TLASpec {
             preconditionFailure("Cannot export symmetric collection specification: \(error)")
         }
     }
+}
+
+/// Runtime labels retain authored names. TLA+ operator identifiers cannot
+/// contain every character the generated Swift surface may expose, so module
+/// export owns a deterministic, collision-free symbol table.
+private func tlaActionNames(
+    _ actions: [NamedAction],
+    preferredNames: [String: String] = [:]
+) -> [String: String] {
+    var emitted: [String: String] = [:]
+    var used: Set<String> = []
+    for action in actions where emitted[action.name] == nil {
+        let raw = (preferredNames[action.name] ?? action.name).unicodeScalars.map { scalar -> String in
+            switch scalar.value {
+            case 48...57, 65...90, 97...122, 95: String(scalar)
+            default: "_"
+            }
+        }.joined()
+        let stem = raw.first?.isNumber == true ? "_\(raw)" : raw
+        var candidate = stem.isEmpty ? "Action" : stem
+        var suffix = 2
+        while used.contains(candidate) {
+            candidate = "\(stem)__\(suffix)"
+            suffix += 1
+        }
+        emitted[action.name] = candidate
+        used.insert(candidate)
+    }
+    return emitted
+}
+
+/// The generated Swift machine deliberately keeps qualified procedure action
+/// names so application code never loses its source-level context.  PlusCal's
+/// translator, however, emits the procedure label itself as the TLA+ operator
+/// and stores that same label in `pc`.  Keep that distinction at the export
+/// boundary: the executable Swift model remains stable while the independently
+/// translated TLA+ modules expose the same administrative state.
+private struct AlgorithmExportSymbols {
+    let actionNames: [String: String]
+    let stringLiterals: [String: String]
+
+    func rewrite(_ source: String) -> String {
+        var result = source
+        // `__pcal_stack` is a SwiftTLA implementation identifier.  The
+        // official translator calls the corresponding PlusCal variable
+        // `stack`; its name is part of the TLC state graph.
+        result = result.replacingOccurrences(of: "__pcal_stack", with: "stack")
+        for (from, to) in stringLiterals {
+            result = result.replacingOccurrences(of: "\"\(from)\"", with: "\"\(to)\"")
+        }
+        return result
+    }
+}
+
+private func algorithmExportSymbols(
+    _ algorithms: [Algorithm],
+    actions: [NamedAction]
+) -> AlgorithmExportSymbols {
+    let actionNames = Set(actions.map(\.name))
+    var candidates: [(qualified: String, label: String)] = []
+    for algorithm in algorithms {
+        for procedure in algorithm.model.procedures {
+            for step in procedure.steps {
+                candidates.append((
+                    qualified: "procedure.\(procedure.name).\(step.label.name)",
+                    label: step.label.name
+                ))
+            }
+        }
+    }
+
+    // A PlusCal label is global.  Do not silently merge two SwiftTLA actions
+    // if an unsupported source program reuses a label across scopes; the
+    // normal renderer/translator path will then report the source problem.
+    let labelCounts = Dictionary(grouping: candidates, by: { $0.label }).mapValues { $0.count }
+    let unqualifiedActions = Set(actions.map(\.name)).subtracting(Set(candidates.map { $0.qualified }))
+    let usable = candidates.filter {
+        actionNames.contains($0.qualified)
+            && labelCounts[$0.label] == 1
+            && !unqualifiedActions.contains($0.label)
+    }
+    let names = Dictionary(uniqueKeysWithValues: usable.map { ($0.qualified, $0.label) })
+    return AlgorithmExportSymbols(actionNames: names, stringLiterals: names)
 }
 
 /// Push UNCHANGED into every OR branch after distributing AND over OR.
@@ -246,8 +404,8 @@ public func distributeOr(_ action: ActionExpr) -> [ActionExpr] {
         return lhs.flatMap { l in rhs.map { r in .and(l, r) } }
     case .ifElse(let c, let t, let e):
         return distributeOr(.and(.guard_(c), t)) + distributeOr(.and(.guard_(StateExpr.not(c)), e))
-    case .define(_, _, let b):
-        return distributeOr(b)
+    case .define(let variable, let value, let body):
+        return distributeOr(body).map { .define(variable, value, $0) }
     case .existsAction(let v, let s, let b):
         return distributeOr(b).map { .existsAction(v, s, $0) }
     default:

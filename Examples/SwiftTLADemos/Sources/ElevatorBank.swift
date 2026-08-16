@@ -209,19 +209,16 @@ public struct ElevatorBank {
                             })
                                         } or: {
                                             Either {
-                            With(Rider.all) { rider in
-                                When(cars[car][CarSchema.door] == .open)
-                                When(cars[car][CarSchema.rider] == rider)
-                                When(rider != .none)
-                                When(riders[rider][RiderSchema.phase] == .onboard)
-                                When(cars[car][CarSchema.floor] == riders[rider][RiderSchema.destination])
-                                Assign(cars, to: cars.updating(car) { vehicle in
-                                    vehicle.updating(CarSchema.rider, to: .none)
-                                })
-                                Assign(riders, to: riders.updating(rider) { passenger in
-                                    passenger.updating(RiderSchema.phase, to: .arrived)
-                                })
-                            }
+                            When(cars[car][CarSchema.door] == .open)
+                            When(cars[car][CarSchema.rider] != .none)
+                            When(riders[cars[car][CarSchema.rider]][RiderSchema.phase] == .onboard)
+                            When(cars[car][CarSchema.floor] == riders[cars[car][CarSchema.rider]][RiderSchema.destination])
+                            Assign(cars, to: cars.updating(car) { vehicle in
+                                vehicle.updating(CarSchema.rider, to: .none)
+                            })
+                            Assign(riders, to: riders.updating(cars[car][CarSchema.rider]) { passenger in
+                                passenger.updating(RiderSchema.phase, to: .arrived)
+                            })
                                             } or: {
                             When(cars[car][CarSchema.door] == .open)
                             When(cars[car][CarSchema.rider] == .none)

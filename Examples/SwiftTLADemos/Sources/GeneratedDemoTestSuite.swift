@@ -49,13 +49,16 @@ public enum GeneratedDemoTestSuite {
 
     private static func testResults<State>(
         for model: String,
-        verifySpec: () throws -> Void,
+        verifySpec: () throws -> Int,
         matrix: () throws -> [(from: State, invocation: TLAActionInvocation, to: State)],
         verifyTransitions: () throws -> Void,
         verifyInvariants: () throws -> Void
     ) -> [GeneratedDemoTestResult] {
         [
-            result(model: model, check: "Specification", action: verifySpec),
+            result(model: model, check: "Specification") {
+                let count = try verifySpec()
+                return "\(count) verified states"
+            },
             result(model: model, check: "Reachable graph") {
                 let count = try matrix().count
                 guard count > 0 else { throw GeneratedDemoSuiteError.emptyMatrix }

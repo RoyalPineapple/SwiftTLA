@@ -1,13 +1,19 @@
 import Testing
 import SwiftTLA
-import UpstreamParity
+@testable import UpstreamParity
 
 struct UpstreamParityTests {
+    @Test("LearnProofs AddTwo preserves its PlusCal AST through both construction paths")
+    func addTwoParserBuilderFidelity() throws {
+        AddTwoModel._checkParserTree()
+        #expect(try AddTwoModel.verifySpec() == 5)
+    }
+
     @Test("ModelChecker count vs TLC-verified expected — they must match")
     func modelCheckerMatchesTLC() throws {
         for entry in Example.all {
 
-            let mc = ModelChecker(spec: entry.spec, maxStates: 50_000)
+            let mc = ModelChecker(spec: entry.spec, maxStates: entry.verificationStateLimit)
             let count = try mc.exploreGraph().states.count
             let result = try mc.check()
 
@@ -30,6 +36,44 @@ struct UpstreamParityTests {
             return
         }
         #expect(count == 2)
+    }
+
+    @Test("N-Queens FourQueens PlusCal port matches the published TLC graph")
+    func nQueensMatchesTLC() throws {
+        try NQueensModel.verifySpec()
+        let checker = ModelChecker(spec: Example.nQueensFour.spec, maxStates: 5_000)
+        #expect(try checker.exploreGraph().states.count == Example.nQueensFour.expectedDistinct)
+        guard case .ok = try checker.check() else {
+            Issue.record("N-Queens did not verify")
+            return
+        }
+    }
+
+    @Test("two-process Lock PlusCal port matches TLC")
+    func lockMatchesTLC() throws {
+        try LockModel.verifySpec()
+        let checker = ModelChecker(spec: Example.lockTwoProcess.spec, maxStates: 100)
+        #expect(try checker.exploreGraph().states.count == Example.lockTwoProcess.expectedDistinct)
+        guard case .ok = try checker.check() else {
+            Issue.record("Lock did not verify")
+            return
+        }
+    }
+
+    @Test("two-process Peterson PlusCal port matches TLC")
+    func petersonMatchesTLC() throws {
+        try PetersonModel.verifySpec()
+        let checker = ModelChecker(spec: Example.petersonTwoProcess.spec, maxStates: 1_000)
+        #expect(try checker.exploreGraph().states.count == Example.petersonTwoProcess.expectedDistinct)
+        guard case .ok = try checker.check() else {
+            Issue.record("Peterson did not verify")
+            return
+        }
+    }
+
+    @Test("N=6 two-chamber Barriers PlusCal port matches TLC")
+    func barriersMatchTLC() throws {
+        #expect(try BarriersN6Model.verifySpec() == Example.barriersN6.expectedDistinct)
     }
 
     @Test("HourClock .tlaModule is TLC-shaped")
@@ -80,6 +124,71 @@ struct UpstreamParityTests {
         let n3 = ModelChecker(spec: TeachingSimpleN3Model.spec, maxStates: 50_000)
         #expect(try n2.exploreGraph().states.count == Example.teachingSimpleN2.expectedDistinct)
         #expect(try n3.exploreGraph().states.count == Example.teachingSimpleN3.expectedDistinct)
+    }
+
+    @Test("TeachingConcurrency SimpleRegular uses bounded regular-register state")
+    func teachingSimpleRegularParity() throws {
+        #expect(try TeachingSimpleRegularN8Model.verifySpec() == Example.teachingSimpleRegularN8.expectedDistinct)
+    }
+
+    @Test("FindHighest PlusCal port matches its bounded TLC configuration")
+    func findHighestParity() throws {
+        let count = try FindHighestModel.verifySpec()
+        #expect(count == Example.findHighest.expectedDistinct)
+    }
+
+    @Test("Dijkstra mutex preserves its bounded PlusCal model")
+    func dijkstraMutexParity() throws {
+        DijkstraMutexModel._checkParserTree()
+        let checker = ModelChecker(
+            spec: DijkstraMutexModel.spec,
+            maxStates: Example.dijkstraMutex.verificationStateLimit
+        )
+        let exploration = try checker.explore()
+        print("Dijkstra mutex: \(exploration.graph.states.count) states, \(exploration.result)")
+        #expect(exploration.graph.states.count == Example.dijkstraMutex.expectedDistinct)
+    }
+
+    @Test("BinarySearch PlusCal port matches its bounded TLC configuration")
+    func binarySearchParity() throws {
+        let count = try BinarySearchModel.verifySpec()
+        #expect(count == Example.binarySearch.expectedDistinct)
+        #expect(BinarySearchModel.spec.tlaModule.contains("WF_"))
+        #expect(BinarySearchModel.spec.tlaModule.contains("(Next)"))
+    }
+
+    @Test("Consensus PlusCal port matches its bounded TLC configuration")
+    func consensusParity() throws {
+        let count = try ConsensusModel.verifySpec()
+        #expect(count == Example.consensus.expectedDistinct)
+    }
+
+    @Test("SumSequence bounded source port verifies")
+    func sumSequenceBoundedPort() throws {
+        SumSequenceModel._checkParserTree()
+        let count = try SumSequenceModel.verifySpec()
+        #expect(count == Example.sumSequence.expectedDistinct)
+    }
+
+    @Test("Reachable bounded source port compiles its formal graph choice")
+    func reachableBoundedPort() throws {
+        ReachableModel._checkParserTree()
+        let count = try ReachableModel.verifySpec()
+        #expect(count == Example.reachable.expectedDistinct)
+    }
+
+    @Test("Parallel Reachable bounded source port verifies")
+    func parallelReachableBoundedPort() throws {
+        ParallelReachableModel._checkParserTree()
+        let count = try ParallelReachableModel.verifySpec()
+        #expect(count == Example.parallelReachable.expectedDistinct)
+    }
+
+    @Test("Echo PlusCal port matches its three-node TLC configuration")
+    func echoParity() throws {
+        EchoModel._checkParserTree()
+        let count = try EchoModel.verifySpec()
+        #expect(count == Example.echo.expectedDistinct)
     }
 
     @Test("EWD840 uses typed finite function state")
@@ -157,6 +266,21 @@ struct UpstreamParityNativeTests {
     // TwoPhase
     @Test("TwoPhase native verifySpec")
     func twoPhaseNativeVerifySpec() throws { try TwoPhaseModel.verifySpec() }
+
+    @Test("TwoPhase with backup manager preserves the published PlusCal model")
+    func twoPhaseWithBackupManagerParity() throws {
+        TwoPhaseWithBackupManagerModel._checkParserTree()
+        #expect(
+            try TwoPhaseWithBackupManagerModel.verifySpec()
+                == Example.twoPhaseWithBackupManager.expectedDistinct
+        )
+    }
+
+    @Test("Consensus preserves the published parameterless macro model")
+    func consensusNativeParity() throws {
+        ConsensusModel._checkParserTree()
+        #expect(try ConsensusModel.verifySpec() == Example.consensus.expectedDistinct)
+    }
 
     // Barrier
     @Test("Barrier_N6 native verifySpec")

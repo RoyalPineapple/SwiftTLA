@@ -1,4 +1,5 @@
 import SwiftTLA
+import SwiftTLAMacros
 
 /// Paxos consensus - Lamport's classic spec, small model: 1 acceptor, 1 value, 2 ballots.
 /// Upstream: specifications/Paxos/Paxos.tla
@@ -45,7 +46,7 @@ private func paxosSpec() -> TLASpec {
         .assign(msgs.name, .union(msgs.stateExpr, StateExpr.singleton(m)))
     }
 
-    return TLASpec("Paxos") {
+    return #spec("Paxos") {
         Extends("Integers")
 
         Variable(maxBal, initFunc)

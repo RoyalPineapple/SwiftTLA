@@ -10,6 +10,7 @@ extension TLASpec {
     var temporalProperties: [NamedTemporal] = []
     var fairness: [FairnessCondition] = []
     var constants: [String: TLAValue] = [:]
+    var formalParameters: [FormalModuleParameter] = []
     var definitions: [String] = []
     var theorems: [String] = []
     var assumes: StateExpr?
@@ -18,12 +19,19 @@ extension TLASpec {
     var constraint: StateExpr?
     var recursiveDefs: [String] = []
     var recursiveFuncs: [RecursiveFunc] = []
+    var formalOperatorDefinitions: [FormalOperatorDefinition] = []
+    let imports = components.compactMap { $0 as? ImportDecl }
+    var importedModules = imports.map(\.module)
+    var importConfigurations = imports.compactMap(\.configuration)
+    var moduleInstances = components.compactMap { $0 as? FormalModuleInstance }
     var useSpecs: [TLASpec] = []
     var runtimeFuncCollector: [String: @Sendable ([TLAValue]) -> TLAValue] = [:]
     var runtimeFuncBodiesCollector: [String] = []
     var symmetrySets: [SymmetrySet] = []
     var symmetryGroups: [SymmetryVariableGroup] = []
     var symmetricCollections: [SymmetricCollectionDecl] = []
+    var algorithmFidelityTokens: [AlgorithmFidelityToken] = []
+    var sourceAlgorithms: [Algorithm] = []
     var operators: [String: OpDecl] = [:]
 
     // Pass 1: collect operators
@@ -47,6 +55,10 @@ extension TLASpec {
       } else if let a = comp as? ActionDecl {
         actions.append(NamedAction(name: a.name, body: a.body, bindings: a.bindings))
       } else if let algorithm = comp as? Algorithm {
+        // Retain source-level evidence directly from the builder model; do
+        // not lower a second time merely to form a fidelity token.
+        algorithmFidelityTokens.append(AlgorithmFidelityToken(model: algorithm.model))
+        sourceAlgorithms.append(algorithm)
         do {
           let lowered = try algorithm.lower()
           variables += lowered.variables
@@ -54,6 +66,9 @@ extension TLASpec {
           invariants += lowered.invariants
           temporalProperties += lowered.temporalProperties
           fairness += lowered.fairness
+          if let loweredConstraint = lowered.constraint {
+            constraint = constraint.map { .and($0, loweredConstraint) } ?? loweredConstraint
+          }
         } catch {
           preconditionFailure("Invalid algorithm '\(algorithm.model.name)': \(error)")
         }
@@ -65,12 +80,17 @@ extension TLASpec {
         fairness.append(f.condition)
       } else if let c = comp as? ConstantDecl {
         constants[c.name] = c.value
+      } else if let parameter = comp as? FormalParameterDecl {
+        formalParameters.append(parameter.parameter)
       } else if let d = comp as? DefinitionDecl {
         if let name = d.name, let body = d.body {
           definitions.append("\(name) == \(body)")
         } else {
           definitions.append(d.tlaText)
         }
+      } else if let definition = comp as? FormalOperatorDecl {
+        formalOperatorDefinitions.append(definition.definition)
+        definitions.append(definition.tlaText)
       } else if let th = comp as? TheoremDecl {
         if !th.tlaText.isEmpty {
           theorems.append(th.tlaText)
@@ -130,9 +150,19 @@ extension TLASpec {
       actions += used.actions
       invariants += used.invariants
       constants.merge(used.constants) { $1 }
+      formalParameters += used.formalParameters
       definitions += used.definitions
       recursiveDefs += used.recursiveDefs
       recursiveFuncs += used.recursiveFuncs
+      formalOperatorDefinitions += used.formalOperatorDefinitions
+      importedModules += used.imports
+      importConfigurations += used.importConfigurations
+      moduleInstances += used.moduleInstances
+      temporalProperties += used.temporalProperties
+      fairness += used.fairness
+      if let usedAssume = used.assume {
+        assumes = assumes.map { .and($0, usedAssume) } ?? usedAssume
+      }
       if let c = used.constraint { constraint = constraint.map { .and($0, c) } ?? c }
       if let a = used.assume { assumes = assumes.map { .and($0, a) } ?? a }
       symmetrySets += used.symmetrySets
@@ -145,7 +175,13 @@ extension TLASpec {
         actions: actions.map { ($0.name, $0.body, $0.bindings) },
         invariants: invariants.map { ($0.name, $0.body) },
         temporal: temporalProperties.map { ($0.name, $0.expr) },
-        fairness: fairness
+        fairness: fairness,
+        constraint: constraint,
+        imports: importedModules.map(\.name),
+        importConfigurations: importConfigurations,
+        moduleInstances: moduleInstances,
+        formalParameters: formalParameters,
+        formalOperatorDefinitions: formalOperatorDefinitions
       )
       guard _tlaAlphaEquivalent(built, tree) else {
         fatalError(
@@ -164,6 +200,7 @@ extension TLASpec {
     self.name = name
     self.variables = variables
     self.constants = constants
+    self.formalParameters = formalParameters
     self.actions = actions
     self.invariants = invariants
     self.temporalProperties = temporalProperties
@@ -176,11 +213,26 @@ extension TLASpec {
     self.constraint = constraint
     self.recursiveDefs = recursiveDefs
     self.recursiveFuncs = recursiveFuncs
+    self.formalOperatorDefinitions = formalOperatorDefinitions
+    self.imports = importedModules
+    self.importConfigurations = importConfigurations
+    self.moduleInstances = moduleInstances
     self.runtimeFuncs = runtimeFuncCollector
     self.runtimeFuncBodies = runtimeFuncBodiesCollector
     self.symmetrySets = symmetrySets
     self.symmetryGroups = symmetryGroups
     self.symmetricCollections = symmetricCollections
+    self.algorithmFidelityTokens = algorithmFidelityTokens
+    self.sourceAlgorithms = sourceAlgorithms
+  }
+}
+
+public extension TLASpec {
+  /// Renders each Algorithm authored in this builder as an independent
+  /// PlusCal module. Direct TLA+ specifications have no Algorithm source and
+  /// therefore return an empty array instead of inventing a reverse lowering.
+  func renderAuthoredPlusCalModules() throws -> [String] {
+    try sourceAlgorithms.map { try $0.renderPlusCalModule() }
   }
 }
 
@@ -207,6 +259,7 @@ public func substituteConstants(_ spec: TLASpec) -> TLASpec {
     name: spec.name,
     variables: vars,
     constants: [:],
+    formalParameters: spec.formalParameters,
     actions: acts,
     invariants: invs,
     temporalProperties: spec.temporalProperties.map { t in
@@ -221,9 +274,15 @@ public func substituteConstants(_ spec: TLASpec) -> TLASpec {
     constraint: spec.constraint.map { substituteInState($0, constants: constants) },
     recursiveDefs: spec.recursiveDefs,
     recursiveFuncs: spec.recursiveFuncs,
+    formalOperatorDefinitions: spec.formalOperatorDefinitions,
+    imports: spec.imports,
+    importConfigurations: spec.importConfigurations,
+    moduleInstances: spec.moduleInstances,
     symmetrySets: spec.symmetrySets,
     symmetryGroups: spec.symmetryGroups,
-    symmetricCollections: spec.symmetricCollections
+    symmetricCollections: spec.symmetricCollections,
+    algorithmFidelityTokens: spec.algorithmFidelityTokens,
+    sourceAlgorithms: spec.sourceAlgorithms
   )
   resolved.runtimeFuncs = spec.runtimeFuncs
   resolved.runtimeFuncBodies = spec.runtimeFuncBodies
@@ -320,10 +379,14 @@ private func substituteInState(_ expr: StateExpr, constants: [String: TLAValue])
       substituteInState(a, constants: constants), qv, substituteInState(b, constants: constants))
   case .powerSet(let a): return .powerSet(substituteInState(a, constants: constants))
   case .unionAll(let a): return .unionAll(substituteInState(a, constants: constants))
+  case .integerRange(let lower, let upper):
+    return .integerRange(substituteInState(lower, constants: constants), substituteInState(upper, constants: constants))
   case .tupleLiteral(let elems):
     return .tupleLiteral(elems.map { substituteInState($0, constants: constants) })
   case .tupleAccess(let a, let i):
     return .tupleAccess(substituteInState(a, constants: constants), i)
+  case .tupleDynamicAccess(let tuple, let index):
+    return .tupleDynamicAccess(substituteInState(tuple, constants: constants), substituteInState(index, constants: constants))
   case .tupleLength(let a): return .tupleLength(substituteInState(a, constants: constants))
   case .tupleAppend(let a, let b):
     return .tupleAppend(
@@ -371,6 +434,65 @@ private func substituteInState(_ expr: StateExpr, constants: [String: TLAValue])
       substituteInState(f, constants: constants), substituteInState(s, constants: constants))
   case .recursiveCall(let n, let a):
     return .recursiveCall(n, a.map { substituteInState($0, constants: constants) })
+  case .letValue(let name, let value, let body):
+    let bodyConstants = constants.filter { $0.key != name }
+    return .letValue(
+      name,
+      substituteInState(value, constants: constants),
+      substituteInState(body, constants: bodyConstants)
+    )
+  case .foldFunction(let operation, let initial, let sequence):
+    let bodyConstants = constants.filter { !operation.parameters.contains($0.key) }
+    return .foldFunction(
+      FormalLambda(
+        parameters: operation.parameters,
+        body: substituteInState(operation.body, constants: bodyConstants)
+      ),
+      initial: substituteInState(initial, constants: constants),
+      sequence: substituteInState(sequence, constants: constants)
+    )
+  case .operatorApplication(let operation, let arguments):
+    let substitutedOperator: FormalOperator
+    switch operation {
+    case .lambda(let lambda):
+      let bodyConstants = constants.filter { !lambda.parameters.contains($0.key) }
+      substitutedOperator = .lambda(
+        FormalLambda(
+          parameters: lambda.parameters,
+          body: substituteInState(lambda.body, constants: bodyConstants)
+        )
+      )
+    case .reference:
+      substitutedOperator = operation
+    }
+    return .operatorApplication(
+      substitutedOperator,
+      arguments.map { argument in
+        switch argument {
+        case .value(let expression):
+          FormalCallArgument.value(substituteInState(expression, constants: constants))
+        case .operator(.reference(let name, let arity)):
+          FormalCallArgument.operator(.reference(name, arity: arity))
+        case .operator(.lambda(let lambda)):
+          FormalCallArgument.operator(.lambda(FormalLambda(
+            parameters: lambda.parameters,
+            body: substituteInState(lambda.body, constants: constants)
+          )))
+        }
+      }
+    )
+  case .letIn(let operators, let body):
+    return .letIn(
+      operators.map { operation in
+        let bodyConstants = constants.filter { !operation.parameters.contains($0.key) }
+        return LocalOperator(
+          operation.name,
+          parameters: operation.parameters,
+          body: substituteInState(operation.body, constants: bodyConstants)
+        )
+      },
+      substituteInState(body, constants: constants)
+    )
   }
 }
 

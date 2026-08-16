@@ -1,8 +1,177 @@
 import SwiftTLA
+import SwiftTLAMacros
 
 // Dining Philosophers — Chandy-Misra solution. NP=5.
-// Port: 1:1 structural match. TypeOK + ExclusiveAccess. 67 states.
 // Upstream: specifications/DiningPhilosophers/DiningPhilosophers.tla
+
+@TLAModel
+public struct DiningPhilosophersModel {
+    public enum Philosopher: Int, FiniteDomainKey {
+        case one = 1
+        case two = 2
+        case three = 3
+        case four = 4
+        case five = 5
+
+        public static let formalDomain: [Self] = [.one, .two, .three, .four, .five]
+        public static let formalTypeIdentity = FormalTypeIdentity(rawValue: "upstream.dining-philosophers.philosopher")
+
+        public var tlaValue: TLAValue { .int(rawValue) }
+    }
+
+    public struct ForkFields {
+        let holder: Philosopher
+        let clean: Bool
+    }
+
+    public enum Fork: TLARecordSchema {
+        public typealias Fields = ForkFields
+
+        public static let fieldNames: Set<String> = ["holder", "clean"]
+        public static let defaultRecord: TLAValue = .record(["holder": .int(1), "clean": .bool(false)])
+
+        public static func fieldName<Value>(for field: KeyPath<ForkFields, Value>) -> String? {
+            let key = field as AnyKeyPath
+            if key == \ForkFields.holder { return "holder" }
+            if key == \ForkFields.clean { return "clean" }
+            return nil
+        }
+
+        public static let holder = field(\ForkFields.holder)
+        public static let clean = field(\ForkFields.clean)
+    }
+
+    private enum Step: String, PlusCalLabel {
+        case loop = "Loop"
+        case think = "Think"
+        case eat = "Eat"
+    }
+
+    public static var spec: TLASpec {
+        #spec("DiningPhilosophers") {
+            Extends("Integers")
+
+            Algorithm("DiningPhilosophers") {
+                let forks = SharedVar(initial: Function<Philosopher, Record<Fork>>.literal(
+                    (Philosopher.one, Record.literal(.init(Fork.holder, Philosopher.one), .init(Fork.clean, false))),
+                    (Philosopher.two, Record.literal(.init(Fork.holder, Philosopher.one), .init(Fork.clean, false))),
+                    (Philosopher.three, Record.literal(.init(Fork.holder, Philosopher.three), .init(Fork.clean, false))),
+                    (Philosopher.four, Record.literal(.init(Fork.holder, Philosopher.four), .init(Fork.clean, false))),
+                    (Philosopher.five, Record.literal(.init(Fork.holder, Philosopher.five), .init(Fork.clean, false)))
+                ))
+
+                Each(Philosopher.all) { philosopher in
+                    let hungry = LocalVar(initial: true)
+
+                    Do(Step.loop) {
+                        let right = If(philosopher == Philosopher.one, then: Philosopher.two, else:
+                            If(philosopher == Philosopher.two, then: Philosopher.three, else:
+                                If(philosopher == Philosopher.three, then: Philosopher.four, else:
+                                    If(philosopher == Philosopher.four, then: Philosopher.five, else: Philosopher.one))))
+                        let left = If(philosopher == Philosopher.one, then: Philosopher.five, else:
+                            If(philosopher == Philosopher.two, then: Philosopher.one, else:
+                                If(philosopher == Philosopher.three, then: Philosopher.two, else:
+                                    If(philosopher == Philosopher.four, then: Philosopher.three, else: Philosopher.four))))
+                        let leftFork = forks[philosopher]
+                        let rightFork = forks[right]
+                        let canEat = leftFork[Fork.holder] == philosopher
+                            && rightFork[Fork.holder] == philosopher
+                            && leftFork[Fork.clean] == true
+                            && rightFork[Fork.clean] == true
+
+                        Either {
+                            When(leftFork[Fork.holder] == philosopher && leftFork[Fork.clean] == false)
+                            Assign(forks, to: forks.updating(
+                                philosopher,
+                                to: Record.literal(
+                                    .init(Fork.holder, left),
+                                    .init(Fork.clean, true)
+                                )
+                            ))
+                        } or: {
+                            Either {
+                                When(
+                                    rightFork[Fork.holder] == philosopher
+                                        && rightFork[Fork.clean] == false
+                                        && !(leftFork[Fork.holder] == philosopher && leftFork[Fork.clean] == false)
+                                )
+                                Assign(forks, to: forks.updating(
+                                    right,
+                                    to: Record.literal(
+                                        .init(Fork.holder, right),
+                                        .init(Fork.clean, true)
+                                    )
+                                ))
+                            } or: {
+                                When(
+                                    !(leftFork[Fork.holder] == philosopher && leftFork[Fork.clean] == false)
+                                        && !(rightFork[Fork.holder] == philosopher && rightFork[Fork.clean] == false)
+                                )
+                            }
+                        }
+
+                        Either {
+                            When(canEat && hungry == true)
+                            Goto(Step.eat)
+                        } or: {
+                            Either {
+                                When(!canEat && hungry == true)
+                                Goto(Step.loop)
+                            } or: {
+                                When(hungry == false)
+                                Goto(Step.think)
+                            }
+                        }
+                    }
+
+                    Do(Step.think) {
+                        Assign(hungry, to: true)
+                        Goto(Step.loop)
+                    }
+
+                    Do(Step.eat) {
+                        let right = If(philosopher == Philosopher.one, then: Philosopher.two, else:
+                            If(philosopher == Philosopher.two, then: Philosopher.three, else:
+                                If(philosopher == Philosopher.three, then: Philosopher.four, else:
+                                    If(philosopher == Philosopher.four, then: Philosopher.five, else: Philosopher.one))))
+                        let leftFork = forks[philosopher]
+                        let rightFork = forks[right]
+                        Assign(hungry, to: false)
+                        Assign(forks, to: forks
+                            .updating(philosopher, to: leftFork.updating(Fork.clean, to: false))
+                            .updating(right, to: rightFork.updating(Fork.clean, to: false))
+                        )
+                        Goto(Step.loop)
+                    }
+
+                    Invariant("TypeOK") {
+                        (forks[philosopher][Fork.holder] == .one
+                            || forks[philosopher][Fork.holder] == .two
+                            || forks[philosopher][Fork.holder] == .three
+                            || forks[philosopher][Fork.holder] == .four
+                            || forks[philosopher][Fork.holder] == .five)
+                            && (hungry == true || hungry == false)
+                            && (At(Step.loop, philosopher) || At(Step.think, philosopher) || At(Step.eat, philosopher))
+                    }
+                }
+
+                Invariant("ExclusiveAccess") {
+                    All(Philosopher.all) { first in
+                        All(Philosopher.all) { second in
+                            first == second
+                                || !(At(Step.eat, first) && At(Step.eat, second)
+                                    && ((first == Philosopher.one && second == Philosopher.two)
+                                        || (first == Philosopher.two && second == Philosopher.three)
+                                        || (first == Philosopher.three && second == Philosopher.four)
+                                        || (first == Philosopher.four && second == Philosopher.five)
+                                        || (first == Philosopher.five && second == Philosopher.one)))
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
 
 extension Example {
     static let diningPhilosophersNP5 = Example.Entry(
@@ -11,140 +180,7 @@ extension Example {
         upstreamModule: "specifications/DiningPhilosophers/DiningPhilosophers.tla",
         upstreamCfg: "specifications/DiningPhilosophers/DiningPhilosophers.cfg",
         expectedDistinct: 67,
-        spec: diningPhilosophersSpec(),
-        notes: "NP=5. Records (holder/clean), existsAction, ExclusiveAccess. Matching upstream structure.",
+        spec: DiningPhilosophersModel.spec,
+        notes: "NP=5. Canonical PlusCal-shaped process model with typed fork records.",
     )
-}
-
-private func diningPhilosophersSpec() -> TLASpec {
-    let NP = 5
-
-    let forks = Var<TLAValue>("forks")
-    let pc = Var<TLAValue>("pc")
-    let hungry = Var<TLAValue>("hungry")
-
-    let loop = StateExpr.value(.string("Loop"))
-    let eat = StateExpr.value(.string("Eat"))
-    let think = StateExpr.value(.string("Think"))
-    let trueE = StateExpr.value(.bool(true))
-    let falseE = StateExpr.value(.bool(false))
-    let npE = StateExpr.value(.int(NP))
-
-    func rec(_ f: StateExpr, _ field: String) -> StateExpr { .recordAccess(f, field) }
-    func leftFork(_ p: StateExpr) -> StateExpr { p }
-    func rightFork(_ p: StateExpr) -> StateExpr {
-        StateExpr.ifThenElse(StateExpr.equal(p, npE), 1, p + 1)
-    }
-    func leftPhilosopher(_ p: StateExpr) -> StateExpr {
-        StateExpr.ifThenElse(StateExpr.equal(p, 1), npE, p - 1)
-    }
-    func rightPhilosopher(_ p: StateExpr) -> StateExpr {
-        StateExpr.ifThenElse(StateExpr.equal(p, npE), 1, p + 1)
-    }
-
-    var forkInits: [TLAValue: TLAValue] = [:]
-    for fk in 1...NP {
-        forkInits[.int(fk)] = .record(["holder": .int(fk == 2 ? 1 : fk), "clean": .bool(false)])
-    }
-    let hungryInit = TLAValue.function(Dictionary(uniqueKeysWithValues: (1...NP).map { (.int($0), .bool(true)) }))
-    let pcInit = TLAValue.function(Dictionary(uniqueKeysWithValues: (1...NP).map { (.int($0), .string("Loop")) }))
-
-    func typeOkLine(_ i: Int) -> StateExpr {
-        let ci = StateExpr.value(.int(i))
-        let f = StateExpr.variable("forks")
-        let h = StateExpr.variable("hungry")
-        let p = StateExpr.variable("pc")
-        return rec(f.applying(ci), "holder") >= 1
-            && rec(f.applying(ci), "holder") <= NP
-            && rec(f.applying(ci), "clean").isIn(StateExpr.set([trueE, falseE]))
-            && h.applying(ci).isIn(StateExpr.set([trueE, falseE]))
-            && p.applying(ci).isIn(StateExpr.set([loop, eat, think]))
-    }
-
-    func exclusiveLine(_ i: Int, _ j: Int) -> StateExpr {
-        let p = StateExpr.variable("pc")
-        let pi = StateExpr.value(.int(i))
-        let pj = StateExpr.value(.int(j))
-        let sharesFork = StateExpr.intersection(
-            StateExpr.set([leftFork(pi), rightFork(pi)]),
-            StateExpr.set([leftFork(pj), rightFork(pj)]))
-        return StateExpr.not(
-            sharesFork.cardinality > 0
-            && StateExpr.equal(p.applying(pi), eat)
-            && StateExpr.equal(p.applying(pj), eat))
-    }
-
-    return TLASpec("DiningPhilosophers") {
-        Extends("Integers")
-
-        Variable(forks, TLAValue.function(forkInits))
-        Variable(pc, pcInit)
-        Variable(hungry, hungryInit)
-
-        Invariant("TypeOK") {
-            for i in 1...NP { typeOkLine(i) }
-        }
-
-        Invariant("ExclusiveAccess") {
-            for i in 1...NP {
-                for j in 1...NP where i != j { exclusiveLine(i, j) }
-            }
-        }
-
-        for p in 1...NP {
-            let pE = StateExpr.value(.int(p))
-            let lf = leftFork(pE)
-            let rf = rightFork(pE)
-            let lp = leftPhilosopher(pE)
-            let rp = rightPhilosopher(pE)
-
-            let hld = rec(StateExpr.variable("forks").applying(lf), "holder")
-            let lc = rec(StateExpr.variable("forks").applying(lf), "clean")
-            let hrd = rec(StateExpr.variable("forks").applying(rf), "holder")
-            let rc = rec(StateExpr.variable("forks").applying(rf), "clean")
-
-            let canEat = StateExpr.equal(hld, pE) && StateExpr.equal(hrd, pE)
-                && StateExpr.equal(lc, trueE) && StateExpr.equal(rc, trueE)
-
-            // Loop: pass dirty forks to neighbor, then update pc
-            let passLeft: ActionExpr = .and(.guard_(StateExpr.equal(hld, pE) && StateExpr.equal(lc, falseE)),
-                .assign("forks", StateExpr.variable("forks").updated(at: lf, to: StateExpr.recordLiteral(["holder": lp, "clean": trueE]))))
-            let passRight: ActionExpr = .and(.guard_(
-                StateExpr.equal(hrd, pE) && StateExpr.equal(rc, falseE)
-                    && StateExpr.not(StateExpr.equal(hld, pE) && StateExpr.equal(lc, falseE))),
-                .assign("forks", StateExpr.variable("forks").updated(at: rf, to: StateExpr.recordLiteral(["holder": rp, "clean": trueE]))))
-            let keepGuards: StateExpr = StateExpr.not(StateExpr.equal(hld, pE) && StateExpr.equal(lc, falseE))
-                && StateExpr.not(StateExpr.equal(hrd, pE) && StateExpr.equal(rc, falseE))
-
-            let hSe = StateExpr.variable("hungry")
-            let goEat: ActionExpr = .and(.guard_(canEat && StateExpr.equal(hSe.applying(pE), trueE)),
-                .assign("pc", StateExpr.variable("pc").updated(at: pE, to: eat)))
-            let stayLoopPc: ActionExpr = .and(.guard_(StateExpr.not(canEat) && StateExpr.equal(hSe.applying(pE), trueE)),
-                .assign("pc", StateExpr.variable("pc").updated(at: pE, to: loop)))
-            let goThinkPc: ActionExpr = .and(.guard_(StateExpr.not(StateExpr.equal(hSe.applying(pE), trueE))),
-                .assign("pc", StateExpr.variable("pc").updated(at: pE, to: think)))
-
-            let forkBranch: ActionExpr = .or(passLeft, .or(passRight, .guard_(keepGuards)))
-            let pcBranch: ActionExpr = .or(goEat, .or(stayLoopPc, goThinkPc))
-
-            Action("Loop_\(p)") {
-                StateExpr.variable("pc").applying(pE) == loop
-                && forkBranch
-                && pcBranch
-            }
-            Action("Think_\(p)") {
-                StateExpr.variable("pc").applying(pE) == think
-                && .assign(hungry.name, hSe.updated(at: pE, to: trueE))
-                && .assign(pc.name, StateExpr.variable("pc").updated(at: pE, to: loop))
-            }
-            Action("Eat_\(p)") {
-                StateExpr.variable("pc").applying(pE) == eat
-                && .assign(hungry.name, hSe.updated(at: pE, to: falseE))
-                && .assign(pc.name, StateExpr.variable("pc").updated(at: pE, to: loop))
-                && .assign(forks.name, StateExpr.variable("forks")
-                    .updated(at: lf, to: StateExpr.recordLiteral(["holder": hld, "clean": falseE]))
-                    .updated(at: rf, to: StateExpr.recordLiteral(["holder": hrd, "clean": falseE])))
-            }
-        }
-    }
 }

@@ -16,6 +16,18 @@ public enum TemporalExpr: Hashable, Sendable, CustomStringConvertible {
     }
 }
 
+extension TemporalExpr {
+    var tlaModuleSource: String {
+        switch self {
+        case .always(let predicate): return "[]\(predicate.tlaModuleSource)"
+        case .eventually(let predicate): return "<>\(predicate.tlaModuleSource)"
+        case .alwaysEventually(let predicate): return "[]<>\(predicate.tlaModuleSource)"
+        case .eventuallyAlways(let predicate): return "<>[]\(predicate.tlaModuleSource)"
+        case .leadsTo(let lhs, let rhs): return "(\(lhs.tlaModuleSource) ~> \(rhs.tlaModuleSource))"
+        }
+    }
+}
+
 extension StateExprConvertible {
     public func leadsTo(_ q: some StateExprConvertible) -> TemporalExpr {
         .leadsTo(self.stateExpr, q.stateExpr)

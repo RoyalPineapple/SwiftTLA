@@ -15,6 +15,10 @@ public enum SpecParser {
     nonisolated(unsafe) static var _enumPhases: [String: [String: TLAValue]] = [:]
 
     nonisolated(unsafe) static var _enumDomains: [String: [TLAValue]] = [:]
+    /// Tuple-shaped algorithm state currently in scope. This lets the parser
+    /// distinguish `sequence[index]` from a finite-function lookup without
+    /// exposing raw type maps to authors.
+    nonisolated(unsafe) static var _algorithmTupleVariables: Set<String> = []
     nonisolated(unsafe) static var algorithmParseFailure: String?
 
     /// The parser carries enum information while it decodes one macro body.
@@ -25,6 +29,72 @@ public enum SpecParser {
     // MARK: - Compact expression decoder
 
     public static func decodeStateExpr(_ expression: ExprSyntax) -> StateExpr? {
+        if let precedingMembers = decodePrecedingFormalMembers(expression) {
+            return precedingMembers
+        }
+        if let controlLocation = decodeControlLocation(expression) {
+            return controlLocation
+        }
+        if let finished = decodeFinishedControlLocation(expression) {
+            return finished
+        }
+        if let sequences = decodeBoundedSequenceDomain(expression) {
+            return sequences
+        }
+        if let filledSequence = decodeZeroBasedSequenceFill(expression) {
+            return filledSequence
+        }
+        if let subsets = decodeBoundedSubsetDomain(expression) {
+            return subsets
+        }
+        if let functions = decodeBoundedFunctionDomain(expression) {
+            return functions
+        }
+        if let choice = decodeStaticFormalChoice(expression) {
+            return choice
+        }
+        if let filtered = decodeBoundedFilteredDomain(expression) {
+            return filtered
+        }
+        if let boundedQuantifier = decodeAlgorithmDomainQuantifier(expression) {
+            return boundedQuantifier
+        }
+        if let call = expression.as(FunctionCallExprSyntax.self),
+           call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "If",
+           let conditionSyntax = call.arguments.first?.expression,
+           let thenSyntax = call.arguments.first(where: { $0.label?.text == "then" })?.expression,
+           let elseSyntax = call.arguments.first(where: { $0.label?.text == "else" })?.expression,
+           let condition = decodeStateExpr(conditionSyntax),
+           let thenValue = decodeStateExpr(thenSyntax),
+           let elseValue = decodeStateExpr(elseSyntax) {
+            return .ifThenElse(condition, thenValue, elseValue)
+        }
+        if let call = expression.as(FunctionCallExprSyntax.self),
+           let name = call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text,
+           name == "Exists" || name == "ForAll" || name == "All",
+           let domainSyntax = call.arguments.first(where: { $0.label?.text == "in" })?.expression,
+           let domain = decodeStateExpr(domainSyntax),
+           let closure = call.trailingClosure,
+           closure.statements.count == 1,
+           case .expr(let bodySyntax) = closure.statements.first?.item,
+           let parameter = closureParameterNames(in: closure).first,
+           closureParameterNames(in: closure).count == 1,
+           let predicate = decodeTypedFacadeValue(
+               bodySyntax,
+               substitutions: [parameter: .variable(parameter)]
+           ) {
+            return name == "Exists"
+                ? .exists(domain, parameter, predicate)
+                : .forAll(domain, parameter, predicate)
+        }
+        if let call = expression.as(FunctionCallExprSyntax.self),
+           call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "IntRange",
+           let lower = call.arguments.first?.expression,
+           let upper = call.arguments.first(where: { $0.label?.text == "through" })?.expression,
+           let lowerExpression = decodeStateExpr(lower),
+           let upperExpression = decodeStateExpr(upper) {
+            return .integerRange(lowerExpression, upperExpression)
+        }
         // Empty typed formal values are ordinary initializers in the Swift
         // surface. Decode them directly so the source parser and runtime
         // builder agree on the same collection-shaped initial state.
@@ -63,6 +133,7 @@ public enum SpecParser {
            let selfExpr = decodeStateExpr(base) {
             let propName = memberAccess.declName.baseName.text
             switch propName {
+            case "stateExpr": return selfExpr
             case "expr": return selfExpr
             case "cardinality": return .cardinality(selfExpr)
             case "flattened": return .unionAll(selfExpr)
@@ -96,9 +167,254 @@ public enum SpecParser {
         if let prefix = expression.as(PrefixOperatorExprSyntax.self) {
             let operand = decodeStateExpr(prefix.expression)
             if prefix.operator.text == "!", let operand { return .not(operand) }
-            if prefix.operator.text == "-", let operand { return .negate(operand) }
+            if prefix.operator.text == "-", let operand {
+                // Keep a spelled negative literal identical to the runtime
+                // builder's integer literal. This matters to the parser-tree
+                // check even though both forms evaluate to the same value.
+                if case .value(.int(let value)) = operand {
+                    return .value(.int(-value))
+                }
+                return .negate(operand)
+            }
         }
         return nil
+    }
+
+    /// Parses `Domain.all.members(before: process)`, the typed formal set of
+    /// members declared before a process. This stays finite and explicit; it
+    /// is not a Swift collection operation.
+    private static func decodePrecedingFormalMembers(_ expression: ExprSyntax) -> StateExpr? {
+        guard let call = expression.as(FunctionCallExprSyntax.self),
+              call.calledExpression.as(MemberAccessExprSyntax.self)?.declName.baseName.text == "members",
+              let base = call.calledExpression.as(MemberAccessExprSyntax.self)?.base,
+              let domain = finiteAlgorithmDomain(base),
+              let currentSyntax = call.arguments.first(where: { $0.label?.text == "before" })?.expression,
+              let current = decodeStateExpr(currentSyntax)
+        else { return nil }
+
+        var result = StateExpr.setLiteral([])
+        for (index, candidate) in domain.values.enumerated().reversed() {
+            result = .ifThenElse(
+                .equal(current, .value(candidate)),
+                .setLiteral(domain.values.prefix(index).map(StateExpr.value)),
+                result
+            )
+        }
+        return result
+    }
+
+    /// Parses `At(Label.name, process)`, keeping the lowered `pc` variable
+    /// private to the builder and macro implementation.
+    private static func decodeControlLocation(_ expression: ExprSyntax) -> StateExpr? {
+        guard let call = expression.as(FunctionCallExprSyntax.self),
+              call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "At",
+              call.arguments.count == 2,
+              let label = controlLabel(call.arguments.first?.expression),
+              let process = call.arguments.dropFirst().first.map(\.expression).flatMap(decodeStateExpr)
+        else { return nil }
+        return .equal(
+            .functionApply(.variable("pc"), process),
+            .value(.string(label))
+        )
+    }
+
+    /// Parses `Finished()` for a sequential algorithm and
+    /// `Finished(process)` for an `Each` process family. The public DSL keeps
+    /// the generated program counter private; both spellings lower to its
+    /// canonical formal representation here.
+    private static func decodeFinishedControlLocation(_ expression: ExprSyntax) -> StateExpr? {
+        guard let call = expression.as(FunctionCallExprSyntax.self),
+              call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "Finished"
+        else { return nil }
+
+        if call.arguments.isEmpty {
+            return .equal(.variable("pc"), .value(.string("Done")))
+        }
+        guard call.arguments.count == 1,
+              let process = call.arguments.first.map(\.expression).flatMap(decodeStateExpr)
+        else { return nil }
+        return .equal(
+            .functionApply(.variable("pc"), process),
+            .value(.string("Done"))
+        )
+    }
+
+    private static func controlLabel(_ expression: ExprSyntax?) -> String? {
+        guard let expression else { return nil }
+        if let literal = expression.as(StringLiteralExprSyntax.self) {
+            return literal.segments.compactMap { $0.as(StringSegmentSyntax.self)?.content.text }.joined()
+        }
+        guard let access = expression.as(MemberAccessExprSyntax.self) else { return nil }
+        if let type = access.base?.as(DeclReferenceExprSyntax.self)?.baseName.text,
+           case .string(let label) = _enumPhases[type]?[access.declName.baseName.text] {
+            return label
+        }
+        return access.declName.baseName.text
+    }
+
+    /// Independently expands the bounded `Sequences(of:lengths:)` spelling
+    /// used by the algorithm builder. This is the finite model-checking form
+    /// of TLA+ `Seq(S)`, not a Swift array literal.
+    private static func decodeBoundedSequenceDomain(_ expression: ExprSyntax) -> StateExpr? {
+        guard let call = expression.as(FunctionCallExprSyntax.self),
+              let name = call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text,
+              name == "Sequences" || name == "SortedSequences" || name == "ZeroBasedSequences",
+              let memberSyntax = call.arguments.first(where: { $0.label?.text == "of" })?.expression,
+              let lengthSyntax = call.arguments.first(where: { $0.label?.text == "lengths" })?.expression,
+              let memberSet = decodeStateExpr(memberSyntax),
+              case .setLiteral(let members) = memberSet,
+              let lengths = parseIntegerClosedRange(lengthSyntax)
+        else { return nil }
+        let sequences = formalSequenceExpressions(members: members, lengths: lengths)
+        switch name {
+        case "SortedSequences":
+            return .setLiteral(sequences.filter(formalIntegerSequenceIsSorted))
+        case "ZeroBasedSequences":
+            return .setLiteral(formalZeroBasedSequenceExpressions(members: members, lengths: lengths))
+        default:
+            return .setLiteral(sequences)
+        }
+    }
+
+    /// Parses `ZeroBasedSequence<Element>.filled(length:with:)` into the
+    /// TLA+ function literal used by the runtime builder.
+    private static func decodeZeroBasedSequenceFill(_ expression: ExprSyntax) -> StateExpr? {
+        guard let call = expression.as(FunctionCallExprSyntax.self),
+              let access = call.calledExpression.as(MemberAccessExprSyntax.self),
+              access.declName.baseName.text == "filled",
+              let base = access.base,
+              base.description.trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix("ZeroBasedSequence<"),
+              let lengthSyntax = call.arguments.first(where: { $0.label?.text == "length" })?.expression,
+              let valueSyntax = call.arguments.first(where: { $0.label?.text == "with" })?.expression,
+              let length = decodeStateExpr(lengthSyntax),
+              let value = decodeStateExpr(valueSyntax)
+        else { return nil }
+        return .functionLiteral(
+            .integerRange(.int(0), .subtract(length, .int(1))),
+            "__zeroBasedSequenceIndex",
+            value
+        )
+    }
+
+    private static func decodeBoundedSubsetDomain(_ expression: ExprSyntax) -> StateExpr? {
+        guard let call = expression.as(FunctionCallExprSyntax.self),
+              let name = call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text,
+              name == "Subsets" || name == "NonEmptySubsets"
+        else { return nil }
+        guard let valuesSyntax = call.arguments.first(where: { $0.label?.text == "of" })?.expression,
+              let values = decodeStateExpr(valuesSyntax)
+        else {
+            algorithmParseFailure = "Subsets could not decode its finite formal set."
+            return nil
+        }
+        let subsets = StateExpr.powerSet(values)
+        guard name == "NonEmptySubsets" else { return subsets }
+        return .setDifference(subsets, .setLiteral([.setLiteral([])]))
+    }
+
+    private static func decodeBoundedFunctionDomain(_ expression: ExprSyntax) -> StateExpr? {
+        guard let call = expression.as(FunctionCallExprSyntax.self),
+              call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "Functions"
+        else { return nil }
+        guard let domainSyntax = call.arguments.first(where: { $0.label?.text == "from" })?.expression,
+              let domain = finiteAlgorithmDomain(domainSyntax)
+        else {
+            algorithmParseFailure = "Functions requires a finite enum domain, for example Functions(from: Node.all, ...)."
+            return nil
+        }
+        guard let rangeSyntax = call.arguments.first(where: { $0.label?.text == "to" })?.expression,
+              let range = decodeStateExpr(rangeSyntax)
+        else {
+            algorithmParseFailure = "Functions could not decode its formal result domain."
+            return nil
+        }
+        return .functionSet(.setLiteral(domain.values.map(StateExpr.value)), range)
+    }
+
+    private static func decodeStaticFormalChoice(_ expression: ExprSyntax) -> StateExpr? {
+        guard let call = expression.as(FunctionCallExprSyntax.self),
+              call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "Select",
+              let candidatesSyntax = call.arguments.first(where: { $0.label?.text == "from" })?.expression,
+              let candidates = decodeStateExpr(candidatesSyntax),
+              let closure = call.trailingClosure
+                ?? call.arguments.first(where: { $0.label?.text == "matching" })?.expression.as(ClosureExprSyntax.self),
+              closureParameterNames(in: closure).count == 1,
+              let parameter = closureParameterNames(in: closure).first,
+              closure.statements.count == 1,
+              case .expr(let predicateSyntax) = closure.statements.first?.item,
+              let predicate = decodeTypedFacadeValue(
+                predicateSyntax,
+                substitutions: [parameter: .variable(parameter)]
+              )
+        else { return nil }
+        let canonicalBinding = "__tla_static_choice"
+        return .choose(
+            candidates,
+            canonicalBinding,
+            renameVar(parameter, to: canonicalBinding, in: predicate)
+        )
+    }
+
+    private static func decodeBoundedFilteredDomain(_ expression: ExprSyntax) -> StateExpr? {
+        guard let call = expression.as(FunctionCallExprSyntax.self),
+              call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "Where"
+        else { return nil }
+        guard let candidatesSyntax = call.arguments.first?.expression,
+              let candidates = decodeStateExpr(candidatesSyntax)
+        else {
+            algorithmParseFailure = algorithmParseFailure ?? "Where could not decode its candidate domain."
+            return nil
+        }
+        guard let closure = call.trailingClosure,
+              closureParameterNames(in: closure).count == 1,
+              let parameter = closureParameterNames(in: closure).first,
+              closure.statements.count == 1,
+              case .expr(let predicateSyntax) = closure.statements.first?.item,
+              let predicate = decodeTypedFacadeValue(
+                predicateSyntax,
+                substitutions: [parameter: .variable(parameter)]
+              )
+        else {
+            algorithmParseFailure = "Where requires one parameter and one decodable predicate expression."
+            return nil
+        }
+        let canonicalBinding = "__pcal_filtered_value"
+        return .setFilter(
+            candidates,
+            canonicalBinding,
+            renameVar(parameter, to: canonicalBinding, in: predicate)
+        )
+    }
+
+    private static func decodeAlgorithmDomainQuantifier(_ expression: ExprSyntax) -> StateExpr? {
+        guard let call = expression.as(FunctionCallExprSyntax.self),
+              let name = call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text,
+              name == "All",
+              let domainSyntax = call.arguments.first?.expression,
+              let domain = finiteAlgorithmDomain(domainSyntax),
+              let closure = call.trailingClosure,
+              closure.statements.count == 1,
+              case .expr(let bodySyntax) = closure.statements.first?.item,
+              let parameter = closureParameterNames(in: closure).first,
+              closureParameterNames(in: closure).count == 1
+        else { return nil }
+
+        let binding = StateExpr.variable(parameter)
+        let predicate: StateExpr?
+        if let finished = bodySyntax.as(FunctionCallExprSyntax.self),
+           finished.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "Finished",
+           let argument = finished.arguments.first?.expression,
+           decodeTypedFacadeValue(argument, substitutions: [parameter: binding]) != nil {
+            predicate = .equal(
+                .functionApply(.variable("pc"), binding),
+                .value(.string("Done"))
+            )
+        } else {
+            predicate = decodeTypedFacadeValue(bodySyntax, substitutions: [parameter: binding])
+        }
+        guard let predicate else { return nil }
+        let values = StateExpr.setLiteral(domain.values.map(StateExpr.value))
+        return .forAll(values, parameter, predicate)
     }
 
     static func decodeTypedFacadeExpr(
@@ -109,6 +425,93 @@ public enum SpecParser {
            let substitution = substitutions[reference.baseName.text] {
             return substitution
         }
+        // `Expr<T>` is a phantom type wrapper. Its one value argument is
+        // already a formal expression, including the canonical formal
+        // operator application spelling, so preserve that parser path rather
+        // than attempting to infer it as a typed collection operation.
+        if let call = expression.as(FunctionCallExprSyntax.self),
+           let type = typedLiteralType(call.calledExpression),
+           type.name == "Expr",
+           call.arguments.count == 1,
+           let value = call.arguments.first?.expression {
+            return decodeTypedFacadeValue(value, substitutions: substitutions)
+        }
+        // `Pair(first:second:)` is normally inferred from an enclosing
+        // `SetExpr<Pair<...>>`, so SwiftSyntax sees the constructor without
+        // its generic arguments. Its two labeled formal values still retain
+        // the complete tuple shape.
+        if let call = expression.as(FunctionCallExprSyntax.self),
+           call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "Pair",
+           call.arguments.count == 2,
+           let firstSyntax = call.arguments.first(where: { $0.label?.text == "first" })?.expression,
+           let secondSyntax = call.arguments.first(where: { $0.label?.text == "second" })?.expression,
+           let first = decodeTypedFacadeValue(firstSyntax, substitutions: substitutions),
+           let second = decodeTypedFacadeValue(secondSyntax, substitutions: substitutions) {
+            if case .value(let firstValue) = first,
+               case .value(let secondValue) = second {
+                return .value(.tuple([firstValue, secondValue]))
+            }
+            return .tupleLiteral([first, second])
+        }
+        // `If` is a freestanding Swift-shaped formal value constructor. Parse
+        // it here, before falling back to the untyped decoder, so a value
+        // bound by `Function.mapping` or `With` remains in scope.
+        if let call = expression.as(FunctionCallExprSyntax.self),
+           call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "If",
+           let conditionSyntax = call.arguments.first?.expression,
+           let thenSyntax = call.arguments.first(where: { $0.label?.text == "then" })?.expression,
+           let elseSyntax = call.arguments.first(where: { $0.label?.text == "else" })?.expression,
+           let condition = decodeTypedFacadeValue(conditionSyntax, substitutions: substitutions),
+           let thenValue = decodeTypedFacadeValue(thenSyntax, substitutions: substitutions),
+           let elseValue = decodeTypedFacadeValue(elseSyntax, substitutions: substitutions) {
+            return .ifThenElse(condition, thenValue, elseValue)
+        }
+        if let call = expression.as(FunctionCallExprSyntax.self),
+           call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "Fold",
+           let sequenceSyntax = call.arguments.first?.expression,
+           let initialSyntax = call.arguments.first(where: { $0.label?.text == "startingWith" })?.expression,
+           let sequence = decodeTypedFacadeValue(sequenceSyntax, substitutions: substitutions),
+           let initial = decodeTypedFacadeValue(initialSyntax, substitutions: substitutions),
+           let closure = call.trailingClosure,
+           closure.statements.count == 1,
+           case .expr(let bodySyntax) = closure.statements.first?.item,
+           closureParameterNames(in: closure).count == 2 {
+            let parameters = closureParameterNames(in: closure)
+            let bindings = [
+                parameters[0]: StateExpr.variable(parameters[0]),
+                parameters[1]: StateExpr.variable(parameters[1])
+            ]
+            guard let body = decodeTypedFacadeValue(
+                bodySyntax,
+                substitutions: substitutions.merging(bindings) { _, replacement in replacement }
+            ) else { return nil }
+            return .foldFunction(
+                FormalLambda(parameters: parameters, body: body),
+                initial: initial,
+                sequence: sequence
+            )
+        }
+        if let infix = expression.as(InfixOperatorExprSyntax.self),
+           let operation = infix.operator.as(BinaryOperatorExprSyntax.self)?.operator.text,
+           let lhs = decodeTypedFacadeValue(infix.leftOperand, substitutions: substitutions),
+           let rhs = decodeTypedFacadeValue(infix.rightOperand, substitutions: substitutions) {
+            return applyInfixOp(operation, lhs, rhs)
+        }
+        if let prefix = expression.as(PrefixOperatorExprSyntax.self),
+           let operand = decodeTypedFacadeValue(prefix.expression, substitutions: substitutions) {
+            switch prefix.operator.text {
+            case "!": return .not(operand)
+            case "-":
+                // The runtime typed facade receives `-1` as an Int literal.
+                // Canonicalize the macro-side spelling the same way before a
+                // bounded collection expands it into many formal values.
+                if case .value(.int(let value)) = operand {
+                    return .value(.int(-value))
+                }
+                return .negate(operand)
+            default: return nil
+            }
+        }
         if let subscriptCall = expression.as(SubscriptCallExprSyntax.self),
            subscriptCall.arguments.count == 1,
            let base = decodeTypedFacadeValue(subscriptCall.calledExpression, substitutions: substitutions),
@@ -117,11 +520,43 @@ public enum SpecParser {
                 return .recordAccess(base, fieldName)
             }
             guard let index = decodeTypedFacadeValue(selector, substitutions: substitutions) else { return nil }
+            if let reference = subscriptCall.calledExpression.as(DeclReferenceExprSyntax.self),
+               _algorithmTupleVariables.contains(reference.baseName.text) {
+                return .tupleDynamicAccess(base, index)
+            }
             return .functionApply(base, index)
+        }
+        if let member = expression.as(MemberAccessExprSyntax.self),
+           let baseSyntax = member.base,
+           let base = decodeTypedFacadeValue(baseSyntax, substitutions: substitutions) {
+            switch member.declName.baseName.text {
+            case "cardinality": return .cardinality(base)
+            case "isEmpty": return .equal(.cardinality(base), .value(.int(0)))
+            case "subsets": return .powerSet(base)
+            default: break
+            }
         }
         guard let call = expression.as(FunctionCallExprSyntax.self),
               let access = call.calledExpression.as(MemberAccessExprSyntax.self)
         else { return nil }
+
+        // `OneOf` preserves an ordinary TLA+ union, so lifting an
+        // alternative does not emit a tag or wrapper value.
+        if ["first", "second"].contains(access.declName.baseName.text),
+           let unionType = typedLiteralType(access.base),
+           unionType.name == "OneOf",
+           let valueSyntax = call.arguments.first?.expression,
+           let value = decodeTypedFacadeValue(valueSyntax, substitutions: substitutions) {
+            return value
+        }
+
+        // A typed union view is justified by the surrounding PlusCal label.
+        // Its formal representation remains the original value.
+        if ["assumingFirst", "assumingSecond"].contains(access.declName.baseName.text),
+           let baseSyntax = access.base,
+           let base = decodeTypedFacadeValue(baseSyntax, substitutions: substitutions) {
+            return base
+        }
 
         if access.declName.baseName.text == "literal",
            let literalType = typedLiteralType(access.base) {
@@ -129,7 +564,29 @@ public enum SpecParser {
             case "Record":
                 return decodeTypedRecordLiteral(call, substitutions: substitutions)
             case "SetExpr":
-                return decodeTypedSetLiteral(call, substitutions: substitutions)
+                return decodeTypedSetLiteral(
+                    call,
+                    elementType: literalType.arguments.first,
+                    substitutions: substitutions
+                )
+            case "TupleExpr":
+                let elements = call.arguments.compactMap {
+                    decodeTypedFacadeValue($0.expression, substitutions: substitutions)
+                }
+                guard elements.count == call.arguments.count else { return nil }
+                return .tupleLiteral(elements)
+            case "Pair":
+                guard call.arguments.count == 2,
+                      let first = decodeTypedFacadeValue(
+                        call.arguments[call.arguments.startIndex].expression,
+                        substitutions: substitutions
+                      ),
+                      let second = decodeTypedFacadeValue(
+                        call.arguments[call.arguments.index(after: call.arguments.startIndex)].expression,
+                        substitutions: substitutions
+                      )
+                else { return nil }
+                return .tupleLiteral([first, second])
             case "Function":
                 return decodeTypedFunctionLiteral(
                     call,
@@ -186,6 +643,16 @@ public enum SpecParser {
         else { return nil }
 
         switch access.declName.baseName.text {
+        case "contains":
+            guard let memberSyntax = call.arguments.first?.expression,
+                  let member = decodeTypedFacadeValue(memberSyntax, substitutions: substitutions)
+            else { return nil }
+            return .in(member, base)
+        case "union":
+            guard let otherSyntax = call.arguments.first?.expression,
+                  let other = decodeTypedFacadeValue(otherSyntax, substitutions: substitutions)
+            else { return nil }
+            return .union(base, other)
         case "inserting", "removing":
             guard let elementSyntax = call.arguments.first?.expression,
                   let element = decodeTypedFacadeValue(elementSyntax, substitutions: substitutions)
@@ -196,6 +663,38 @@ public enum SpecParser {
                 : .setDifference(base, singleton)
         case "updating":
             break
+        case "filtering":
+            guard let closure = call.trailingClosure,
+                  closure.statements.count == 1,
+                  case .expr(let body) = closure.statements.first?.item,
+                  let parameter = closureParameterNames(in: closure).first,
+                  closureParameterNames(in: closure).count == 1,
+                  let predicate = decodeTypedFacadeValue(
+                    body,
+                    substitutions: substitutions.merging([parameter: .variable(parameter)]) { _, replacement in replacement }
+                  )
+            else { return nil }
+            return .setFilter(base, parameter, predicate)
+        case "mapping":
+            guard let closure = call.trailingClosure,
+                  closure.statements.count == 1,
+                  case .expr(let body) = closure.statements.first?.item,
+                  let parameter = closureParameterNames(in: closure).first,
+                  closureParameterNames(in: closure).count == 1,
+                  let mapping = decodeTypedFacadeValue(
+                    body,
+                    substitutions: substitutions.merging([parameter: .variable(parameter)]) { _, replacement in replacement }
+                  )
+            else { return nil }
+            return .setMap(mapping, parameter, base)
+        case "at":
+            guard let indexSyntax = call.arguments.first?.expression,
+                  let index = decodeTypedFacadeValue(indexSyntax, substitutions: substitutions)
+            else { return nil }
+            if case .value(.int(let position)) = index {
+                return .tupleAccess(base, position)
+            }
+            return .tupleDynamicAccess(base, index)
         default:
             return nil
         }
@@ -265,11 +764,25 @@ public enum SpecParser {
 
     static func typedFieldName(_ expression: ExprSyntax) -> String? {
         guard let member = expression.as(MemberAccessExprSyntax.self),
-              let base = member.base?.as(DeclReferenceExprSyntax.self),
-              _enumPhases[base.baseName.text] == nil,
               member.declName.baseName.text != "finiteValues"
         else { return nil }
+        if let typeName = terminalTypeName(in: member.base), _enumPhases[typeName] != nil {
+            return nil
+        }
         return member.declName.baseName.text
+    }
+
+    /// A record field may be qualified by its enclosing model type, while an
+    /// enum case must remain a formal enum value. Reduce either spelling to
+    /// its terminal type name before consulting the enum namespace.
+    static func terminalTypeName(in expression: ExprSyntax?) -> String? {
+        if let reference = expression?.as(DeclReferenceExprSyntax.self) {
+            return reference.baseName.text
+        }
+        if let member = expression?.as(MemberAccessExprSyntax.self) {
+            return member.declName.baseName.text
+        }
+        return nil
     }
 
     static func typedLiteralType(_ expression: ExprSyntax?) -> (name: String, arguments: [String])? {
@@ -296,18 +809,40 @@ public enum SpecParser {
                   entry.arguments.count == 2,
                   let field = entry.arguments.first.flatMap({ typedFieldName($0.expression) }),
                   fields[field] == nil,
-                  let value = entry.arguments.dropFirst().first.flatMap({ decodeTypedFacadeValue($0.expression, substitutions: substitutions) })
+                  let value = entry.arguments.dropFirst().first.flatMap({
+                      decodeTypedFacadeValue($0.expression, substitutions: substitutions)
+                          ?? decodeUniqueUnqualifiedEnumCase($0.expression)
+                  })
             else { return nil }
             fields[field] = value
         }
         return .recordLiteral(fields)
     }
 
+    /// A record literal can omit an enum type when the field's Swift context
+    /// supplies it. The syntax parser has no type checker, so accept that
+    /// spelling only when its formal enum value is globally unambiguous.
+    static func decodeUniqueUnqualifiedEnumCase(_ expression: ExprSyntax) -> StateExpr? {
+        guard let member = expression.as(MemberAccessExprSyntax.self), member.base == nil else { return nil }
+        let matches = _enumPhases.values.compactMap { $0[member.declName.baseName.text] }
+        guard matches.count == 1, let value = matches.first else { return nil }
+        return .value(value)
+    }
+
     static func decodeTypedSetLiteral(
         _ call: FunctionCallExprSyntax,
+        elementType: String?,
         substitutions: [String: StateExpr]
     ) -> StateExpr? {
-        let elements = call.arguments.compactMap { decodeTypedFacadeValue($0.expression, substitutions: substitutions) }
+        let elements = call.arguments.compactMap { element in
+            if let member = element.expression.as(MemberAccessExprSyntax.self),
+               member.base == nil,
+               let elementType,
+               let value = _enumPhases[elementType]?[member.declName.baseName.text] {
+                return StateExpr.value(value)
+            }
+            return decodeTypedFacadeValue(element.expression, substitutions: substitutions)
+        }
         guard elements.count == call.arguments.count else { return nil }
         return .setLiteral(elements)
     }
@@ -341,6 +876,29 @@ public enum SpecParser {
         let methodName = memberAccess.declName.baseName.text
         let args = Array(call.arguments)
         let base = memberAccess.base
+        if base?.as(DeclReferenceExprSyntax.self)?.baseName.text == "ZSequences" {
+            switch methodName {
+            case "indices":
+                guard let sequence = args.first(where: { $0.label?.text == "of" }).flatMap({ decodeStateExpr($0.expression) }) else { return nil }
+                return .recursiveCall("ZIndices", [sequence])
+            case "length":
+                guard let sequence = args.first(where: { $0.label?.text == "of" }).flatMap({ decodeStateExpr($0.expression) }) else { return nil }
+                return .recursiveCall("ZLen", [sequence])
+            case "rotation":
+                guard let sequence = args.first(where: { $0.label?.text == "of" }).flatMap({ decodeStateExpr($0.expression) }),
+                      let shift = args.first(where: { $0.label?.text == "leftBy" }).flatMap({ decodeStateExpr($0.expression) })
+                else { return nil }
+                return .recursiveCall("Rotation", [sequence, shift])
+            case "lexicographicallyPrecedesOrEquals":
+                guard args.count == 2,
+                      let left = decodeStateExpr(args[0].expression),
+                      let right = decodeStateExpr(args[1].expression)
+                else { return nil }
+                return .recursiveCall("LexicographicallyPrecedesOrEquals", [left, right])
+            default:
+                return nil
+            }
+        }
         let selfExpr = base.flatMap { decodeStateExpr($0) }
         switch methodName {
         case "isIn", "contains", "union", "intersection", "subtracting", "isSubset", "applying",
@@ -388,6 +946,12 @@ public enum SpecParser {
                 fields[label] = val
             }
             return .recordLiteral(fields)
+        case "variable":
+            guard memberAccess.base?.as(DeclReferenceExprSyntax.self)?.baseName.text == "StateExpr",
+                  let name = args.first?.expression.as(StringLiteralExprSyntax.self)?.segments.description
+                    .replacingOccurrences(of: "\"", with: "")
+            else { return nil }
+            return .variable(name)
         case "if":
             guard memberAccess.base?.as(DeclReferenceExprSyntax.self)?.baseName.text == "StateExpr",
                   args.count >= 3,
@@ -395,13 +959,81 @@ public enum SpecParser {
                   let thenVal = decodeStateExpr(args[1].expression),
                   let elseVal = decodeStateExpr(args[2].expression) else { return nil }
             return .ifThenElse(cond, thenVal, elseVal)
+        case "negate":
+            guard memberAccess.base?.as(DeclReferenceExprSyntax.self)?.baseName.text == "StateExpr",
+                  let value = args.first.flatMap({ decodeStateExpr($0.expression) })
+            else { return nil }
+            return .negate(value)
         case "enabled":
             guard memberAccess.base?.as(DeclReferenceExprSyntax.self)?.baseName.text == "StateExpr" else { return nil }
             let name = args.first?.expression.as(StringLiteralExprSyntax.self)?.segments.description
                 .replacingOccurrences(of: "\"", with: "") ?? ""
             return .enabledAction(name)
+        case "letValue":
+            guard memberAccess.base?.as(DeclReferenceExprSyntax.self)?.baseName.text == "StateExpr",
+                  args.count == 3,
+                  let name = args[0].expression.as(StringLiteralExprSyntax.self)?.segments.description
+                    .replacingOccurrences(of: "\"", with: ""),
+                  let value = decodeStateExpr(args[1].expression),
+                  let body = decodeStateExpr(args[2].expression)
+            else { return nil }
+            return .letValue(name, value, body)
+        case "letIn":
+            guard memberAccess.base?.as(DeclReferenceExprSyntax.self)?.baseName.text == "StateExpr",
+                  args.count == 2,
+                  let definitionArray = args[0].expression.as(ArrayExprSyntax.self),
+                  let body = decodeStateExpr(args[1].expression)
+            else { return nil }
+            let definitions = definitionArray.elements.compactMap {
+                decodeLocalOperator($0.expression)
+            }
+            guard definitions.count == definitionArray.elements.count else { return nil }
+            return .letIn(definitions, body)
+        case "operatorApplication":
+            guard memberAccess.base?.as(DeclReferenceExprSyntax.self)?.baseName.text == "StateExpr",
+                  args.count == 2,
+                  let operation = decodeFormalOperator(args[0].expression),
+                  let argumentArray = args[1].expression.as(ArrayExprSyntax.self)
+            else { return nil }
+            let arguments = argumentArray.elements.compactMap { decodeFormalCallArgument($0.expression) }
+            guard arguments.count == argumentArray.elements.count else { return nil }
+            return .operatorApplication(operation, arguments)
+        case "setFilter", "setMap", "forAll":
+            guard memberAccess.base?.as(DeclReferenceExprSyntax.self)?.baseName.text == "StateExpr",
+                  args.count == 3,
+                  let binder = args[1].expression.as(StringLiteralExprSyntax.self)?.segments.description
+                    .replacingOccurrences(of: "\"", with: "")
+            else { return nil }
+            switch methodName {
+            case "setFilter":
+                guard let set = decodeStateExpr(args[0].expression),
+                      let predicate = decodeStateExpr(args[2].expression) else { return nil }
+                return .setFilter(set, binder, predicate)
+            case "setMap":
+                guard let value = decodeStateExpr(args[0].expression),
+                      let set = decodeStateExpr(args[2].expression) else { return nil }
+                return .setMap(value, binder, set)
+            case "forAll":
+                guard let set = decodeStateExpr(args[0].expression),
+                      let predicate = decodeStateExpr(args[2].expression) else { return nil }
+                return .forAll(set, binder, predicate)
+            default:
+                return nil
+            }
         case "function", "for", "exists", "choose", "any", "functionLiteral":
             guard memberAccess.base?.as(DeclReferenceExprSyntax.self)?.baseName.text == "StateExpr" else { return nil }
+            if args.count == 3,
+               let binder = args[1].expression.as(StringLiteralExprSyntax.self)?.segments.description
+                .replacingOccurrences(of: "\"", with: "") {
+                guard let domain = decodeStateExpr(args[0].expression),
+                      let body = decodeStateExpr(args[2].expression) else { return nil }
+                switch methodName {
+                case "exists": return .exists(domain, binder, body)
+                case "choose": return .choose(domain, binder, body)
+                case "functionLiteral": return .functionLiteral(domain, binder, body)
+                default: return nil
+                }
+            }
             let exprs = args.compactMap { decodeStateExpr($0.expression) }
             switch methodName {
             case "function", "functionLiteral": return exprs.count >= 2 ? .functionLiteral(exprs[0], FreshVarName.fresh(), exprs[1]) : nil
@@ -428,38 +1060,131 @@ public enum SpecParser {
         }
     }
 
+    private static func decodeLocalOperator(_ expression: ExprSyntax) -> LocalOperator? {
+        guard let call = expression.as(FunctionCallExprSyntax.self),
+              call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "LocalOperator",
+              let nameSyntax = call.arguments.first?.expression.as(StringLiteralExprSyntax.self)
+        else { return nil }
+
+        let name = nameSyntax.segments.description.replacingOccurrences(of: "\"", with: "")
+        let parameters: [String]
+        if let parameterArray = call.arguments.first(where: { $0.label?.text == "parameters" })?
+            .expression.as(ArrayExprSyntax.self) {
+            parameters = parameterArray.elements.compactMap { element in
+                element.expression.as(StringLiteralExprSyntax.self)?.segments.description
+                    .replacingOccurrences(of: "\"", with: "")
+            }
+            guard parameters.count == parameterArray.elements.count else { return nil }
+        } else {
+            parameters = []
+        }
+        guard let bodySyntax = call.arguments.first(where: { $0.label?.text == "body" })?.expression,
+              let body = decodeStateExpr(bodySyntax)
+        else { return nil }
+        return LocalOperator(name, parameters: parameters, body: body)
+    }
+
+    /// Decodes formal operators as syntax, rather than Swift closures. This is
+    /// the source-side half of higher-order operator fidelity.
+    private static func decodeFormalOperator(_ expression: ExprSyntax) -> FormalOperator? {
+        guard let call = expression.as(FunctionCallExprSyntax.self),
+              let member = call.calledExpression.as(MemberAccessExprSyntax.self)
+        else { return nil }
+
+        switch member.declName.baseName.text {
+        case "reference":
+            guard let name = call.arguments.first?.expression.as(StringLiteralExprSyntax.self)?
+                    .segments.description.replacingOccurrences(of: "\"", with: ""),
+                  let aritySyntax = call.arguments.first(where: { $0.label?.text == "arity" })?
+                    .expression.as(IntegerLiteralExprSyntax.self),
+                  let arity = Int(aritySyntax.literal.text), arity >= 0
+            else { return nil }
+            return .reference(name, arity: arity)
+        case "lambda":
+            guard let lambdaSyntax = call.arguments.first?.expression,
+                  let lambda = decodeFormalLambda(lambdaSyntax)
+            else { return nil }
+            return .lambda(lambda)
+        default:
+            return nil
+        }
+    }
+
+    private static func decodeFormalLambda(_ expression: ExprSyntax) -> FormalLambda? {
+        guard let call = expression.as(FunctionCallExprSyntax.self),
+              call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "FormalLambda",
+              let parameterArray = call.arguments.first(where: { $0.label?.text == "parameters" })?
+                .expression.as(ArrayExprSyntax.self),
+              let bodySyntax = call.arguments.first(where: { $0.label?.text == "body" })?.expression
+        else { return nil }
+
+        let parameters = parameterArray.elements.compactMap { element in
+            element.expression.as(StringLiteralExprSyntax.self)?.segments.description
+                .replacingOccurrences(of: "\"", with: "")
+        }
+        guard parameters.count == parameterArray.elements.count,
+              !parameters.isEmpty,
+              Set(parameters).count == parameters.count,
+              let body = decodeStateExpr(bodySyntax)
+        else { return nil }
+        return FormalLambda(parameters: parameters, body: body)
+    }
+
+    private static func decodeFormalCallArgument(_ expression: ExprSyntax) -> FormalCallArgument? {
+        guard let call = expression.as(FunctionCallExprSyntax.self),
+              let member = call.calledExpression.as(MemberAccessExprSyntax.self),
+              let argument = call.arguments.first?.expression
+        else { return nil }
+
+        switch member.declName.baseName.text {
+        case "value":
+            return decodeStateExpr(argument).map(FormalCallArgument.value)
+        case "operator":
+            return decodeFormalOperator(argument).map(FormalCallArgument.operator)
+        default:
+            return nil
+        }
+    }
+
     static func decodeInfixExpr(_ elements: [ExprSyntax]) -> StateExpr? {
-        guard elements.count >= 3, elements.count % 2 == 1 else { return nil }
-        if elements.count == 3 {
-            guard let opText = elements[1].as(BinaryOperatorExprSyntax.self)?.operator.text,
-                  let lhs = decodeStateExpr(elements[0]),
-                  let rhs = decodeStateExpr(elements[2]) else { return nil }
-            return applyInfixOp(opText, lhs, rhs)
+        guard !elements.isEmpty else { return nil }
+        if elements.count == 1 {
+            return decodeStateExpr(elements[0])
         }
-        if let orIdx = stride(from: 1, to: elements.count, by: 2).first(where: {
-            elements[$0].as(BinaryOperatorExprSyntax.self)?.operator.text == "||"
-        }) {
-            guard let left = decodeInfixExpr(Array(elements[0..<orIdx])),
-                  let right = decodeInfixExpr(Array(elements[(orIdx + 1)..<elements.count]))
+        guard elements.count % 2 == 1 else { return nil }
+
+        // SequenceExprSyntax retains a flat token sequence. Reconstruct
+        // Swift precedence before lowering into the formal AST: a left fold
+        // would turn `index <= count + 1` into `(index <= count) + 1`.
+        func precedence(_ operation: String) -> Int? {
+            switch operation {
+            case "||": return 1
+            case "&&": return 2
+            case "==", "!=", "<", "<=", ">", ">=": return 3
+            case "...": return 4
+            case "+", "-": return 5
+            case "*", "/", "%": return 6
+            default: return nil
+            }
+        }
+
+        let operators = stride(from: 1, to: elements.count, by: 2).compactMap { index -> (Int, String, Int)? in
+            guard let operation = elements[index].as(BinaryOperatorExprSyntax.self)?.operator.text,
+                  let level = precedence(operation)
             else { return nil }
-            return .or(left, right)
+            return (index, operation, level)
         }
-        if let andIdx = stride(from: 1, to: elements.count, by: 2).first(where: {
-            elements[$0].as(BinaryOperatorExprSyntax.self)?.operator.text == "&&"
-        }) {
-            guard let left = decodeInfixExpr(Array(elements[0..<andIdx])),
-                  let right = decodeInfixExpr(Array(elements[(andIdx + 1)..<elements.count]))
-            else { return nil }
-            return .and(left, right)
-        }
-        var result = decodeStateExpr(elements[0])
-        for i in stride(from: 1, to: elements.count, by: 2) {
-            guard let opText = elements[i].as(BinaryOperatorExprSyntax.self)?.operator.text,
-                  let lhs = result,
-                  let rhs = decodeStateExpr(elements[i + 1]) else { return nil }
-            result = applyInfixOp(opText, lhs, rhs)
-        }
-        return result
+        guard operators.count == (elements.count - 1) / 2,
+              let split = operators.min(by: { lhs, rhs in
+                  // Equal-precedence Swift operators associate from the left.
+                  lhs.2 == rhs.2 ? lhs.0 > rhs.0 : lhs.2 < rhs.2
+              })
+        else { return nil }
+
+        guard let lhs = decodeInfixExpr(Array(elements[..<split.0])),
+              let rhs = decodeInfixExpr(Array(elements[(split.0 + 1)...]))
+        else { return nil }
+        return applyInfixOp(split.1, lhs, rhs)
     }
 
     static func applyInfixOp(_ op: String, _ lhs: StateExpr, _ rhs: StateExpr) -> StateExpr? {
@@ -673,13 +1398,19 @@ extension SpecParser {
     }
 
     public static func decodeFairness(_ call: FunctionCallExprSyntax) -> FairnessCondition? {
-        guard let ref = call.calledExpression.as(MemberAccessExprSyntax.self) else { return nil }
-        let name = ref.declName.baseName.text
+        let name: String
+        if let ref = call.calledExpression.as(MemberAccessExprSyntax.self) {
+            name = ref.declName.baseName.text
+        } else if let reference = call.calledExpression.as(DeclReferenceExprSyntax.self) {
+            name = reference.baseName.text
+        } else {
+            return nil
+        }
         let actionName = call.arguments.first?.expression.as(StringLiteralExprSyntax.self)?
             .segments.description.replacingOccurrences(of: "\"", with: "") ?? ""
         switch name {
-        case "weakFairness": return .weakFairness(actionName)
-        case "strongFairness": return .strongFairness(actionName)
+        case "weakFairness", "WeakFairness": return .weakFairness(actionName)
+        case "strongFairness", "StrongFairness": return .strongFairness(actionName)
         default: return nil
         }
     }

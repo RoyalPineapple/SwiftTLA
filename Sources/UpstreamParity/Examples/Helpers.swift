@@ -1,4 +1,5 @@
 import SwiftTLA
+import SwiftTLAMacros
 
     // MARK: Helpers
 
@@ -23,7 +24,7 @@ func coffeeCans(maxBeanCount: Int) -> [TLAValue] {
 func coffeeCanSpec(maxBeanCount: Int) -> TLASpec {
         let can = Var<TLAValue>("can")
         let cans = coffeeCans(maxBeanCount: maxBeanCount)
-        return TLASpec("CoffeeCan") {
+        return #spec("CoffeeCan") {
             Extends("Naturals")
             Variable(can, in: cans)
             Action("PickSameColorBlack") {

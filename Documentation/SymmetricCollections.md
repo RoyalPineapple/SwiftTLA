@@ -1,8 +1,15 @@
-# Symmetric Collections
+# Symmetric Collections (formal-engine boundary)
+
+New application models do not use `SymmetricCollectionVar`. Author them with
+`#spec`, `Algorithm`, `SharedVar`, and typed `Function`, `SetExpr`, and
+`Record` values. This document describes the retained formal-engine and parity
+support for legacy symmetric-collection fixtures; it is not a second public
+authoring language.
 
 A symmetric collection models a finite group of members that are exchangeable
-for the property being checked. It separates the application identity needed
-at runtime from the identity-free values needed for sound symmetry reduction.
+for a checked property. Equivalent symmetry evidence for the canonical
+PlusCal-shaped collection vocabulary is required before this legacy boundary
+can be removed.
 
 ## Compiler pipeline
 
@@ -25,7 +32,8 @@ the generated executable surface.
 
 ## Runtime identity and model identity
 
-`SymmetricCollectionVar<Element, Value>` requires `Element: Identifiable`.
+The retained `SymmetricCollectionVar<Element, Value>` engine API requires
+`Element: Identifiable`.
 The generated runtime uses `IdentifiedModelCollection<Element, Value>`, keyed
 by `Element.ID`, so an application can register and route actions to its real
 members (for example, a `UUID`). The runtime population is not capped by the
@@ -37,21 +45,11 @@ collection is a function from those values to `Value`. Those opaque values are
 the only identities TLC permutes; a concrete `Element.ID` must never enter the
 verification AST, `TLAValue`, generated TLA+ module, or TLC configuration.
 
-```swift
-import Foundation
-import SwiftTLA
-
-struct Device: Identifiable {
-    let id: UUID
-}
-
-let phases = SymmetricCollectionVar<Device, Int>("phases")
-
-SymmetricCollection(phases, verificationScope: 4, initial: 0)
-CollectionAction("beginConnect", on: phases) { member in
-    phases[member] == 0 && phases.update(member, to: 1)
-}
-```
+For new models, represent the finite relation directly in the canonical
+language—for example, a `SharedVar` initialized with a typed
+`Function<Device, Record<...>>` or `SetExpr<Record<...>>`, and update it in a
+labeled `Do` block. Keep identity distinctions in modeled state rather than
+introducing a separate collection façade.
 
 At runtime, the corresponding generated collection accepts `insert(_:)` and
 the generated action accepts a concrete `Device.ID`. An unknown ID or an
@@ -60,7 +58,7 @@ action that is not enabled for the selected live entry reports a typed
 
 ## DSL lowering and the symmetry contract
 
-`SymmetricCollection` declares a modeled function initialized uniformly over
+The legacy `SymmetricCollection` declaration creates a modeled function initialized uniformly over
 its opaque member domain. `CollectionAction` lowers its closure to an
 existential action over that function's domain. A read such as `phases[member]`
 lowers to function application; `phases.update(member, to:)` lowers to the

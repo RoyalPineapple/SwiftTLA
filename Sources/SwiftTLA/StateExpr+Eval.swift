@@ -14,6 +14,193 @@ public enum EvalError: Error, CustomStringConvertible {
     }
 }
 
+/// The common finite-state expression subset is evaluated with an explicit
+/// work stack. This prevents a syntactically ordinary function constructor
+/// from consuming one Swift stack frame per formal expression node.
+private final class StateExprWorkStack {
+    enum Error: Swift.Error { case unsupportedExpression }
+
+    private enum Task {
+        case expression(StateExpr, [String: TLAValue])
+        case binary((TLAValue, TLAValue) throws -> TLAValue)
+        case unary((TLAValue) throws -> TLAValue)
+        case and(StateExpr, [String: TLAValue])
+        case or(StateExpr, [String: TLAValue])
+        case conditional(StateExpr, StateExpr, [String: TLAValue])
+        case collectSet([StateExpr], [TLAValue], [String: TLAValue], Bool)
+        case functionDomain(String, StateExpr, [String: TLAValue])
+        case functionElement([TLAValue], TLAValue?, String, StateExpr, [String: TLAValue], [TLAValue: TLAValue])
+    }
+
+    private let state: [String: TLAValue]
+    private let runtimeFuncs: [String: StateExpr.RuntimeFunc]
+    private let recursiveFuncs: [RecursiveFunc]
+    private let formalOperatorDefinitions: [FormalOperatorDefinition]
+    private let valueBindings: [String: TLAValue]
+    private let operatorBindings: [String: FormalOperator]
+    private let maxDepth: Int
+
+    init(state: [String: TLAValue], runtimeFuncs: [String: StateExpr.RuntimeFunc], recursiveFuncs: [RecursiveFunc], formalOperatorDefinitions: [FormalOperatorDefinition], valueBindings: [String: TLAValue], operatorBindings: [String: FormalOperator], maxDepth: Int) {
+        self.state = state
+        self.runtimeFuncs = runtimeFuncs
+        self.recursiveFuncs = recursiveFuncs
+        self.formalOperatorDefinitions = formalOperatorDefinitions
+        self.valueBindings = valueBindings
+        self.operatorBindings = operatorBindings
+        self.maxDepth = maxDepth
+    }
+
+    func evaluate(_ expression: StateExpr) throws -> TLAValue {
+        var tasks: [Task] = [.expression(expression, valueBindings)]
+        var values: [TLAValue] = []
+        func pop() throws -> TLAValue {
+            guard let value = values.popLast() else { throw Error.unsupportedExpression }
+            return value
+        }
+        func integer(_ value: TLAValue) throws -> Int {
+            guard case .int(let integer) = value else { throw Error.unsupportedExpression }
+            return integer
+        }
+        func boolean(_ value: TLAValue) throws -> Bool {
+            guard case .bool(let boolean) = value else { throw Error.unsupportedExpression }
+            return boolean
+        }
+
+        while let task = tasks.popLast() {
+            switch task {
+            case .expression(let expr, let bindings):
+                switch expr {
+                case .value(let value): values.append(value)
+                case .variable(let name):
+                    guard let value = bindings[name] ?? state[name] else { throw Error.unsupportedExpression }
+                    values.append(value)
+                case .add(let lhs, let rhs):
+                    tasks.append(.binary { .int(try integer($0) + integer($1)) })
+                    tasks.append(.expression(rhs, bindings)); tasks.append(.expression(lhs, bindings))
+                case .subtract(let lhs, let rhs):
+                    tasks.append(.binary { .int(try integer($0) - integer($1)) })
+                    tasks.append(.expression(rhs, bindings)); tasks.append(.expression(lhs, bindings))
+                case .multiply(let lhs, let rhs):
+                    tasks.append(.binary { .int(try integer($0) * integer($1)) })
+                    tasks.append(.expression(rhs, bindings)); tasks.append(.expression(lhs, bindings))
+                case .equal(let lhs, let rhs):
+                    tasks.append(.binary { .bool($0 == $1) })
+                    tasks.append(.expression(rhs, bindings)); tasks.append(.expression(lhs, bindings))
+                case .lessThan(let lhs, let rhs):
+                    tasks.append(.binary { .bool(try integer($0) < integer($1)) })
+                    tasks.append(.expression(rhs, bindings)); tasks.append(.expression(lhs, bindings))
+                case .lessOrEqual(let lhs, let rhs):
+                    tasks.append(.binary { .bool(try integer($0) <= integer($1)) })
+                    tasks.append(.expression(rhs, bindings)); tasks.append(.expression(lhs, bindings))
+                case .greaterThan(let lhs, let rhs):
+                    tasks.append(.binary { .bool(try integer($0) > integer($1)) })
+                    tasks.append(.expression(rhs, bindings)); tasks.append(.expression(lhs, bindings))
+                case .greaterOrEqual(let lhs, let rhs):
+                    tasks.append(.binary { .bool(try integer($0) >= integer($1)) })
+                    tasks.append(.expression(rhs, bindings)); tasks.append(.expression(lhs, bindings))
+                case .and(let lhs, let rhs):
+                    tasks.append(.and(rhs, bindings)); tasks.append(.expression(lhs, bindings))
+                case .or(let lhs, let rhs):
+                    tasks.append(.or(rhs, bindings)); tasks.append(.expression(lhs, bindings))
+                case .not(let value):
+                    tasks.append(.unary { .bool(!(try boolean($0))) }); tasks.append(.expression(value, bindings))
+                case .ifThenElse(let condition, let then, let otherwise):
+                    tasks.append(.conditional(then, otherwise, bindings)); tasks.append(.expression(condition, bindings))
+                case .tupleLiteral(let elements):
+                    // Game of Life uses only fixed two-element positions.
+                    guard elements.count == 2 else { throw Error.unsupportedExpression }
+                    tasks.append(.binary { .tuple([$0, $1]) })
+                    tasks.append(.expression(elements[1], bindings)); tasks.append(.expression(elements[0], bindings))
+                case .tupleAccess(let tuple, let index):
+                    tasks.append(.unary {
+                        guard case .tuple(let values) = $0, index >= 1, index <= values.count else { throw Error.unsupportedExpression }
+                        return values[index - 1]
+                    }); tasks.append(.expression(tuple, bindings))
+                case .functionLiteral(let domain, let binder, let body):
+                    tasks.append(.functionDomain(binder, body, bindings)); tasks.append(.expression(domain, bindings))
+                case .functionApply(let function, let argument):
+                    tasks.append(.binary {
+                        switch $0 {
+                        case .function(let mapping):
+                            guard let value = mapping[$1] else { throw Error.unsupportedExpression }
+                            return value
+                        case .tuple(let values):
+                            guard case .int(let index) = $1, index >= 1, index <= values.count else {
+                                throw Error.unsupportedExpression
+                            }
+                            return values[index - 1]
+                        default:
+                            throw Error.unsupportedExpression
+                        }
+                    }); tasks.append(.expression(argument, bindings)); tasks.append(.expression(function, bindings))
+                case .setLiteral(let members):
+                    tasks.append(.collectSet(members, [], bindings, false))
+                case .in(let member, let set):
+                    tasks.append(.binary {
+                        guard case .set(let members) = $1 else { throw Error.unsupportedExpression }
+                        return .bool(members.contains($0))
+                    }); tasks.append(.expression(set, bindings)); tasks.append(.expression(member, bindings))
+                default: throw Error.unsupportedExpression
+                }
+            case .binary(let operation):
+                let rhs = try pop(); let lhs = try pop(); values.append(try operation(lhs, rhs))
+            case .unary(let operation): values.append(try operation(try pop()))
+            case .and(let rhs, let bindings):
+                values.append(.bool(try boolean(pop())))
+                if case .bool(true) = values.removeLast() {
+                    tasks.append(.expression(rhs, bindings))
+                } else {
+                    values.append(.bool(false))
+                }
+            case .or(let rhs, let bindings):
+                values.append(.bool(try boolean(pop())))
+                if case .bool(false) = values.removeLast() {
+                    tasks.append(.expression(rhs, bindings))
+                } else {
+                    values.append(.bool(true))
+                }
+            case .conditional(let then, let otherwise, let bindings):
+                tasks.append(.expression(try boolean(pop()) ? then : otherwise, bindings))
+            case .collectSet(var remaining, var collected, let bindings, let awaiting):
+                if awaiting { collected.append(try pop()) }
+                guard let next = remaining.first else { values.append(.set(Set(collected))); continue }
+                remaining.removeFirst()
+                tasks.append(.collectSet(remaining, collected, bindings, true))
+                tasks.append(.expression(next, bindings))
+            case .functionDomain(let binder, let body, let bindings):
+                guard case .set(let domain) = try pop() else { throw Error.unsupportedExpression }
+                tasks.append(.functionElement(domain.sorted(), nil, binder, body, bindings, [:]))
+            case .functionElement(var remaining, let awaiting, let binder, let body, let bindings, var mapping):
+                if let awaiting { mapping[awaiting] = try pop() }
+                guard let element = remaining.first else { values.append(.function(mapping)); continue }
+                remaining.removeFirst()
+                var nextBindings = bindings
+                nextBindings[binder] = element
+                tasks.append(.functionElement(remaining, element, binder, body, bindings, mapping))
+                tasks.append(.expression(body, nextBindings))
+            }
+        }
+        guard values.count == 1, let result = values.last else { throw Error.unsupportedExpression }
+        return result
+    }
+}
+
+final class StateExprEvaluationContext {
+    struct FunctionSetKey: Hashable { let domain: Set<TLAValue>; let range: Set<TLAValue> }
+    var functionSets: [FunctionSetKey: TLAValue] = [:]
+    private(set) var functionSetCacheHits = 0
+
+    func cachedFunctionSet(for key: FunctionSetKey) -> TLAValue? {
+        guard let result = functionSets[key] else { return nil }
+        functionSetCacheHits += 1
+        return result
+    }
+
+    func storeFunctionSet(_ result: TLAValue, for key: FunctionSetKey) {
+        functionSets[key] = result
+    }
+}
+
 extension StateExpr {
     public typealias RuntimeFunc = @Sendable ([TLAValue]) -> TLAValue
 
@@ -22,11 +209,63 @@ extension StateExpr {
         case seqFromSet = "SeqFromSet"
     }
 
-    // swiftlint:disable function_body_length
     public func evaluate(in state: [String: TLAValue],
                          runtimeFuncs: [String: RuntimeFunc] = [:],
                          recursiveFuncs: [RecursiveFunc] = [],
+                         formalOperatorDefinitions: [FormalOperatorDefinition] = [],
+                         valueBindings: [String: TLAValue] = [:],
+                         operatorBindings: [String: FormalOperator] = [:],
                          maxDepth: Int = 1000) throws -> TLAValue {
+        try evaluate(
+            in: state, runtimeFuncs: runtimeFuncs, recursiveFuncs: recursiveFuncs,
+            formalOperatorDefinitions: formalOperatorDefinitions, valueBindings: valueBindings,
+            operatorBindings: operatorBindings, maxDepth: maxDepth,
+            evaluationContext: StateExprEvaluationContext()
+        )
+    }
+
+    func evaluate(in state: [String: TLAValue],
+                  runtimeFuncs: [String: RuntimeFunc] = [:],
+                  recursiveFuncs: [RecursiveFunc] = [],
+                  formalOperatorDefinitions: [FormalOperatorDefinition] = [],
+                  valueBindings: [String: TLAValue] = [:],
+                  operatorBindings: [String: FormalOperator] = [:],
+                  maxDepth: Int = 1000,
+                  evaluationContext: StateExprEvaluationContext) throws -> TLAValue {
+        let evaluator = StateExprWorkStack(
+            state: state,
+            runtimeFuncs: runtimeFuncs,
+            recursiveFuncs: recursiveFuncs,
+            formalOperatorDefinitions: formalOperatorDefinitions,
+            valueBindings: valueBindings,
+            operatorBindings: operatorBindings,
+            maxDepth: maxDepth
+        )
+        do {
+            return try evaluator.evaluate(self)
+        } catch StateExprWorkStack.Error.unsupportedExpression {
+            return try evaluateRecursively(
+                in: state,
+                runtimeFuncs: runtimeFuncs,
+                recursiveFuncs: recursiveFuncs,
+                formalOperatorDefinitions: formalOperatorDefinitions,
+                valueBindings: valueBindings,
+                operatorBindings: operatorBindings,
+                maxDepth: maxDepth,
+                evaluationContext: evaluationContext
+            )
+        }
+    }
+
+    // swiftlint:disable function_body_length
+    private func evaluateRecursively(in state: [String: TLAValue],
+                                     runtimeFuncs: [String: RuntimeFunc] = [:],
+                                     recursiveFuncs: [RecursiveFunc] = [],
+                                     formalOperatorDefinitions: [FormalOperatorDefinition] = [],
+                                     valueBindings: [String: TLAValue] = [:],
+                                     operatorBindings: [String: FormalOperator] = [:],
+                                     maxDepth: Int = 1000,
+                                     evaluationContext: StateExprEvaluationContext) throws -> TLAValue {
         func tm(_ op: String, got: TLAValue...) -> EvalError {
             .typeMismatch("\(op): expected matching types, got \(got.map(\.description).joined(separator: ", "))")
         }
@@ -40,10 +279,26 @@ extension StateExpr {
             }
         }
         func ev(_ expr: StateExpr) throws -> TLAValue {
-            try expr.evaluate(in: state, runtimeFuncs: runtimeFuncs, recursiveFuncs: recursiveFuncs, maxDepth: maxDepth)
+            try expr.evaluate(
+                in: state,
+                runtimeFuncs: runtimeFuncs,
+                recursiveFuncs: recursiveFuncs,
+                formalOperatorDefinitions: formalOperatorDefinitions,
+                valueBindings: valueBindings,
+                operatorBindings: operatorBindings,
+                maxDepth: maxDepth, evaluationContext: evaluationContext
+            )
         }
         func evDepth(_ expr: StateExpr, _ depth: Int) throws -> TLAValue {
-            try expr.evaluate(in: state, runtimeFuncs: runtimeFuncs, recursiveFuncs: recursiveFuncs, maxDepth: depth)
+            try expr.evaluate(
+                in: state,
+                runtimeFuncs: runtimeFuncs,
+                recursiveFuncs: recursiveFuncs,
+                formalOperatorDefinitions: formalOperatorDefinitions,
+                valueBindings: valueBindings,
+                operatorBindings: operatorBindings,
+                maxDepth: depth, evaluationContext: evaluationContext
+            )
         }
 
         func intOp(_ a: StateExpr, _ b: StateExpr, _ op: (Int, Int) throws -> Int) throws -> TLAValue {
@@ -66,7 +321,11 @@ extension StateExpr {
         switch self {
         case .value(let v): return v
         case .variable(let name):
-            guard let val = state[name] else { throw EvalError.undefinedVariable(name) }
+            // Formal parameters are lexical bindings and therefore shadow
+            // a same-named state variable, just as they do in TLA+.
+            guard let val = valueBindings[name] ?? state[name] else {
+                throw EvalError.undefinedVariable(name)
+            }
             return val
 
         case .add(let a, let b): return try intOp(a, b, +)
@@ -186,6 +445,13 @@ extension StateExpr {
             }
             return .set(result)
 
+        case .integerRange(let lower, let upper):
+            guard case .int(let lowerValue) = try ev(lower),
+                  case .int(let upperValue) = try ev(upper)
+            else { throw tm("integer range", got: try ev(lower)) }
+            guard lowerValue <= upperValue else { return .set([]) }
+            return .set(Set((lowerValue...upperValue).map(TLAValue.int)))
+
         case .tupleLiteral(let elements):
             return .tuple(try elements.map { try ev($0) })
 
@@ -193,6 +459,15 @@ extension StateExpr {
             guard case .tuple(let tv) = try ev(t) else { throw tm("tuple access", got: try ev(t)) }
             guard index >= 1, index <= tv.count else { throw EvalError.indexOutOfBounds(index, tv.count) }
             return tv[index - 1]
+
+        case .tupleDynamicAccess(let tuple, let index):
+            guard case .tuple(let values) = try ev(tuple), case .int(let position) = try ev(index) else {
+                throw tm("tuple access", got: try ev(tuple))
+            }
+            guard position >= 1, position <= values.count else {
+                throw EvalError.indexOutOfBounds(position, values.count)
+            }
+            return values[position - 1]
 
         case .tupleLength(let t):
             guard case .tuple(let tv) = try ev(t) else { throw tm("Len", got: try ev(t)) }
@@ -232,6 +507,11 @@ extension StateExpr {
             switch value {
             case .function(let mapping): return .set(Set(mapping.keys))
             case .record(let record): return .set(Set(record.keys.map { .string($0) }))
+            // A TLA+ sequence is a function whose domain is 1..Len(sequence).
+            // `TLAValue` stores sequences as tuples, so preserve that formal
+            // meaning instead of treating the tuple as an invalid function.
+            case .tuple(let values):
+                return .set(Set((1...values.count).map(TLAValue.int)))
             default: throw tm("DOMAIN", got: value)
             }
 
@@ -255,6 +535,14 @@ extension StateExpr {
                     throw tm("function apply: key \(key) not found in domain")
                 }
                 return result
+            case .tuple(let values):
+                guard case .int(let index) = key else {
+                    throw tm("sequence apply: expected an integer index", got: key)
+                }
+                guard index >= 1, index <= values.count else {
+                    throw EvalError.indexOutOfBounds(index, values.count)
+                }
+                return values[index - 1]
             case .record(let record):
                 guard let result = record[str(key)] else {
                     throw tm("record field not found")
@@ -301,7 +589,11 @@ extension StateExpr {
 
         case .choose(let set, let qv, let predicate):
             guard case .set(let sv) = try ev(set) else { throw tm("CHOOSE", got: try ev(set)) }
-            for elem in sv {
+            // A formal CHOOSE needs one stable representative in the bounded
+            // evaluator. Swift Set iteration is deliberately unordered, so
+            // sorting here keeps the builder and syntax parser faithful to
+            // the same formal value across runs.
+            for elem in sv.sorted(by: { $0.description < $1.description }) {
                 let substituted = Self.substituteVariable(qv, elem, in: predicate)
                 if case .bool(true) = try ev(substituted) {
                     return elem
@@ -331,20 +623,143 @@ extension StateExpr {
         case .functionSet(let domain, let range):
             guard case .set(let domainSet) = try ev(domain) else { throw tm("functionSet domain", got: try ev(domain)) }
             guard case .set(let rangeSet) = try ev(range) else { throw tm("functionSet range", got: try ev(range)) }
+            let functionSetKey = StateExprEvaluationContext.FunctionSetKey(domain: domainSet, range: rangeSet)
+            if let cached = evaluationContext.cachedFunctionSet(for: functionSetKey) { return cached }
             let domainArr = domainSet.sorted()
             let rangeArr = rangeSet.sorted()
-            var result = Set<TLAValue>()
-            func build(_ idx: Int, _ cur: [(TLAValue, TLAValue)]) {
-                if idx == domainArr.count {
-                    result.insert(.function(Dictionary(uniqueKeysWithValues: cur)))
-                    return
+            var partialFunctions: [[TLAValue: TLAValue]] = [[:]]
+            for key in domainArr {
+                var next: [[TLAValue: TLAValue]] = []
+                next.reserveCapacity(partialFunctions.count * rangeArr.count)
+                for partial in partialFunctions {
+                    for value in rangeArr {
+                        var extended = partial
+                        extended[key] = value
+                        next.append(extended)
+                    }
                 }
-                for r in rangeArr {
-                    build(idx + 1, cur + [(domainArr[idx], r)])
-                }
+                partialFunctions = next
             }
-            if !domainArr.isEmpty { build(0, []) } else { result.insert(.function([:])) }
-            return .set(result)
+            let result = TLAValue.set(Set(partialFunctions.map(TLAValue.function)))
+            // Store only the completed result. A failed construction must be
+            // evaluated again rather than being represented in this cache.
+            evaluationContext.storeFunctionSet(result, for: functionSetKey)
+            return result
+
+        case .foldFunction(let operation, let initial, let sequence):
+            guard operation.parameters.count == 2 else {
+                throw EvalError.typeMismatch(
+                    "FoldFunction requires a formal lambda with exactly two parameters"
+                )
+            }
+            let sequenceValue = try ev(sequence)
+            let values: [TLAValue]
+            switch sequenceValue {
+            case .tuple(let elements):
+                // The upstream definition chooses the lowest remaining index
+                // then applies the operation while unwinding recursion.
+                values = Array(elements.reversed())
+            case .function(let mapping):
+                let keys = mapping.keys.sorted { $0.description < $1.description }
+                values = keys.reversed().compactMap { mapping[$0] }
+            default:
+                throw tm("FoldFunction function", got: sequenceValue)
+            }
+            var result = try ev(initial)
+            for value in values {
+                let withElement = Self.substituteVariable(
+                    operation.parameters[0], value, in: operation.body
+                )
+                let withAccumulator = Self.substituteVariable(
+                    operation.parameters[1], result, in: withElement
+                )
+                result = try ev(withAccumulator)
+            }
+            return result
+
+        case .operatorApplication(let operation, let arguments):
+            let resolvedOperation: FormalOperator
+            if case .reference(let name, _) = operation,
+               let boundOperation = operatorBindings[name] {
+                resolvedOperation = boundOperation
+            } else {
+                resolvedOperation = operation
+            }
+            guard arguments.count == resolvedOperation.arity else {
+                throw EvalError.typeMismatch(
+                    "Formal operator requires \(operation.arity) arguments, got \(arguments.count)"
+                )
+            }
+            switch resolvedOperation {
+            case .lambda(let lambda):
+                let values = try arguments.map { argument -> TLAValue in
+                    guard case .value(let expression) = argument else {
+                        throw EvalError.typeMismatch(
+                            "A value-only formal operator received an operator argument"
+                        )
+                    }
+                    return try ev(expression)
+                }
+                var body = lambda.body
+                for (parameter, value) in zip(lambda.parameters, values) {
+                    body = Self.substituteVariable(parameter, value, in: body)
+                }
+                guard maxDepth > 0 else {
+                    throw EvalError.typeMismatch("Formal operator recursion depth exceeded")
+                }
+                return try evDepth(body, maxDepth - 1)
+            case .reference(let name, _):
+                if let definition = formalOperatorDefinitions.first(where: { $0.name == name }) {
+                    guard definition.parameters.count == arguments.count else {
+                        throw EvalError.typeMismatch(
+                            "Operator '\(name)' requires \(definition.parameters.count) arguments, got \(arguments.count)"
+                        )
+                    }
+                    var nextValues = valueBindings
+                    var nextOperators = operatorBindings
+                    for (parameter, argument) in zip(definition.parameters, arguments) {
+                        switch (parameter, argument) {
+                        case (.value(let parameterName), .value(let expression)):
+                            nextValues[parameterName] = try ev(expression)
+                        case (.operator(let parameterName, let arity), .operator(let supplied)):
+                            guard supplied.arity == arity else {
+                                throw EvalError.typeMismatch(
+                                    "Operator parameter '\(parameterName)' requires arity \(arity)"
+                                )
+                            }
+                            nextOperators[parameterName] = supplied
+                        case (.value(let parameterName), .operator):
+                            throw EvalError.typeMismatch("Parameter '\(parameterName)' requires a formal value")
+                        case (.operator(let parameterName, _), .value):
+                            throw EvalError.typeMismatch("Parameter '\(parameterName)' requires a formal operator")
+                        }
+                    }
+                    guard maxDepth > 0 else {
+                        throw EvalError.typeMismatch("Formal operator recursion depth exceeded")
+                    }
+                    return try definition.body.evaluate(
+                        in: state,
+                        runtimeFuncs: runtimeFuncs,
+                        recursiveFuncs: recursiveFuncs,
+                        formalOperatorDefinitions: formalOperatorDefinitions,
+                        valueBindings: nextValues,
+                        operatorBindings: nextOperators,
+                        maxDepth: maxDepth - 1, evaluationContext: evaluationContext
+                    )
+                }
+                let values = try arguments.map { argument -> TLAValue in
+                    guard case .value(let expression) = argument else {
+                        throw EvalError.typeMismatch(
+                            "A value-only formal operator received an operator argument"
+                        )
+                    }
+                    return try ev(expression)
+                }
+                return try evDepth(
+                    .recursiveCall(name, values.map(StateExpr.value)),
+                    maxDepth - 1
+                )
+            }
 
         case .caseExpr(let pairs, let other):
             for i in stride(from: 0, to: pairs.count, by: 2) {
@@ -355,12 +770,50 @@ extension StateExpr {
             if let other = other { return try ev(other) }
             throw tm("CASE: no branch matched")
 
+        case .letValue(let name, let value, let body):
+            var nextValues = valueBindings
+            nextValues[name] = try ev(value)
+            return try body.evaluate(
+                in: state,
+                runtimeFuncs: runtimeFuncs,
+                recursiveFuncs: recursiveFuncs,
+                formalOperatorDefinitions: formalOperatorDefinitions,
+                valueBindings: nextValues,
+                operatorBindings: operatorBindings,
+                maxDepth: maxDepth, evaluationContext: evaluationContext
+            )
+
+        case .letIn(let operators, let body):
+            let names = operators.map(\.name)
+            guard Set(names).count == names.count else {
+                throw EvalError.typeMismatch("LET contains duplicate local operator names")
+            }
+            let localFunctions = operators.map {
+                RecursiveFunc(name: $0.name, params: $0.parameters, body: $0.body)
+            }
+            // The local definitions come first, exactly as a TLA+ LET scope
+            // shadows an outer operator with the same name.
+            return try body.evaluate(
+                in: state,
+                runtimeFuncs: runtimeFuncs,
+                recursiveFuncs: localFunctions + recursiveFuncs,
+                formalOperatorDefinitions: formalOperatorDefinitions,
+                valueBindings: valueBindings,
+                operatorBindings: operatorBindings,
+                maxDepth: maxDepth, evaluationContext: evaluationContext
+            )
+
         case .recursiveCall(let name, let args):
             if let impl = runtimeFuncs[name] {
                 let evald = try args.map { try ev($0) }
                 return impl(evald)
             }
             if let def = recursiveFuncs.first(where: { $0.name == name }) {
+                guard args.count == def.params.count else {
+                    throw EvalError.typeMismatch(
+                        "Operator '\(name)' requires \(def.params.count) arguments, got \(args.count)"
+                    )
+                }
                 let evald = try args.map { try ev($0) }
                 var body = def.body
                 for (i, param) in def.params.enumerated() where i < evald.count {
@@ -396,8 +849,42 @@ extension StateExpr {
 
     public func evaluateBool(in state: [String: TLAValue],
                              runtimeFuncs: [String: RuntimeFunc] = [:],
-                             recursiveFuncs: [RecursiveFunc] = []) throws -> Bool {
-        let result = try self.evaluate(in: state, runtimeFuncs: runtimeFuncs, recursiveFuncs: recursiveFuncs)
+                             recursiveFuncs: [RecursiveFunc] = [],
+                             formalOperatorDefinitions: [FormalOperatorDefinition] = [],
+                             valueBindings: [String: TLAValue] = [:],
+                             operatorBindings: [String: FormalOperator] = [:]) throws -> Bool {
+        let result = try self.evaluate(
+            in: state,
+            runtimeFuncs: runtimeFuncs,
+            recursiveFuncs: recursiveFuncs,
+            formalOperatorDefinitions: formalOperatorDefinitions,
+            valueBindings: valueBindings,
+            operatorBindings: operatorBindings
+        )
+        guard case .bool(let b) = result else {
+            throw EvalError.typeMismatch(
+                "Expected boolean expression, got \(result)"
+            )
+        }
+        return b
+    }
+
+    func evaluateBool(in state: [String: TLAValue],
+                      runtimeFuncs: [String: RuntimeFunc] = [:],
+                      recursiveFuncs: [RecursiveFunc] = [],
+                      formalOperatorDefinitions: [FormalOperatorDefinition] = [],
+                      valueBindings: [String: TLAValue] = [:],
+                      operatorBindings: [String: FormalOperator] = [:],
+                      evaluationContext: StateExprEvaluationContext) throws -> Bool {
+        let result = try evaluate(
+            in: state,
+            runtimeFuncs: runtimeFuncs,
+            recursiveFuncs: recursiveFuncs,
+            formalOperatorDefinitions: formalOperatorDefinitions,
+            valueBindings: valueBindings,
+            operatorBindings: operatorBindings,
+            evaluationContext: evaluationContext
+        )
         guard case .bool(let b) = result else {
             throw EvalError.typeMismatch(
                 "Expected boolean expression, got \(result)"
@@ -407,8 +894,62 @@ extension StateExpr {
     }
 
     public static func substituteVariable(_ name: String, _ value: TLAValue, in expr: StateExpr) -> StateExpr {
+        substituteVariable(name, with: .value(value), in: expr)
+    }
+
+    /// Capture-aware substitution of a formal expression. This is used for
+    /// deterministic PlusCal local bindings, which are TLA+ `LET` values rather
+    /// than runtime state entries.
+    public static func substituteVariable(
+        _ name: String,
+        with replacement: StateExpr,
+        in expr: StateExpr
+    ) -> StateExpr {
+        let replacementFreeVariables = replacement.freeVariableNames
+
+        func underBinder(_ binder: String, body: StateExpr) -> (name: String, body: StateExpr) {
+            guard binder != name else { return (binder, body) }
+            guard replacementFreeVariables.contains(binder) else {
+                return (binder, Self.substituteVariable(name, with: replacement, in: body))
+            }
+
+            let fresh = Self.freshBoundName(
+                binder,
+                avoiding: body.freeVariableNames
+                    .union(replacementFreeVariables)
+                    .union([name, binder])
+            )
+            let renamed = Self.substituteVariable(binder, with: .variable(fresh), in: body)
+            return (fresh, Self.substituteVariable(name, with: replacement, in: renamed))
+        }
+
+        func underParameters(
+            _ parameters: [String],
+            body: StateExpr
+        ) -> (parameters: [String], body: StateExpr) {
+            guard !parameters.contains(name) else { return (parameters, body) }
+            var renamedParameters = parameters
+            var renamedBody = body
+            for index in renamedParameters.indices where replacementFreeVariables.contains(renamedParameters[index]) {
+                let oldName = renamedParameters[index]
+                let fresh = Self.freshBoundName(
+                    oldName,
+                    avoiding: renamedBody.freeVariableNames
+                        .union(replacementFreeVariables)
+                        .union(Set(renamedParameters))
+                        .union([name])
+                )
+                renamedBody = Self.substituteVariable(oldName, with: .variable(fresh), in: renamedBody)
+                renamedParameters[index] = fresh
+            }
+            return (
+                renamedParameters,
+                Self.substituteVariable(name, with: replacement, in: renamedBody)
+            )
+        }
+
         switch expr {
-        case .variable(let n) where n == name: return .value(value)
+        case .variable(let n) where n == name: return replacement
         case .variable: return expr
         case .value, .enabledAction: return expr
         case .add(let l, let r): return .add(sub(l), sub(r))
@@ -435,12 +976,18 @@ extension StateExpr {
         case .intersection(let a, let b): return .intersection(sub(a), sub(b))
         case .setDifference(let a, let b): return .setDifference(sub(a), sub(b))
         case .cardinality(let s): return .cardinality(sub(s))
-        case .setFilter(let s, let qv, let p): return .setFilter(sub(s), qv, qv == name ? p : sub(p))
-        case .setMap(let e, let qv, let s): return .setMap(sub(e), qv, qv == name ? s : sub(s))
+        case .setFilter(let set, let binder, let predicate):
+            let scoped = underBinder(binder, body: predicate)
+            return .setFilter(sub(set), scoped.name, scoped.body)
+        case .setMap(let value, let binder, let set):
+            let scoped = underBinder(binder, body: value)
+            return .setMap(scoped.body, scoped.name, sub(set))
         case .powerSet(let s): return .powerSet(sub(s))
         case .unionAll(let s): return .unionAll(sub(s))
+        case .integerRange(let lower, let upper): return .integerRange(sub(lower), sub(upper))
         case .tupleLiteral(let es): return .tupleLiteral(es.map(sub))
         case .tupleAccess(let t, let i): return .tupleAccess(sub(t), i)
+        case .tupleDynamicAccess(let tuple, let index): return .tupleDynamicAccess(sub(tuple), sub(index))
         case .tupleLength(let t): return .tupleLength(sub(t))
         case .tupleAppend(let t, let e): return .tupleAppend(sub(t), sub(e))
         case .tupleHead(let t): return .tupleHead(sub(t))
@@ -449,19 +996,202 @@ extension StateExpr {
         case .recordLiteral(let fs): return .recordLiteral(fs.mapValues(sub))
         case .recordAccess(let r, let f): return .recordAccess(sub(r), f)
         case .domain(let f): return .domain(sub(f))
-        case .functionLiteral(let d, let qv, let body): return .functionLiteral(sub(d), qv, qv == name ? body : sub(body))
+        case .functionLiteral(let domain, let binder, let body):
+            let scoped = underBinder(binder, body: body)
+            return .functionLiteral(sub(domain), scoped.name, scoped.body)
         case .functionApply(let f, let x): return .functionApply(sub(f), sub(x))
         case .except(let f, let x, let e): return .except(sub(f), sub(x), sub(e))
         case .caseExpr(let ps, let fb): return .caseExpr(ps.map(sub), fb.map(sub))
-        case .forAll(let s, let qv, let p): return .forAll(sub(s), qv, qv == name ? p : sub(p))
-        case .exists(let s, let qv, let p): return .exists(sub(s), qv, qv == name ? p : sub(p))
-        case .choose(let s, let qv, let p): return .choose(sub(s), qv, qv == name ? p : sub(p))
+        case .forAll(let set, let binder, let predicate):
+            let scoped = underBinder(binder, body: predicate)
+            return .forAll(sub(set), scoped.name, scoped.body)
+        case .exists(let set, let binder, let predicate):
+            let scoped = underBinder(binder, body: predicate)
+            return .exists(sub(set), scoped.name, scoped.body)
+        case .choose(let set, let binder, let predicate):
+            let scoped = underBinder(binder, body: predicate)
+            return .choose(sub(set), scoped.name, scoped.body)
         case .sequenceFromSet(let s): return .sequenceFromSet(sub(s))
         case .setSum(let f, let s): return .setSum(sub(f), sub(s))
         case .functionSet(let d, let r): return .functionSet(sub(d), sub(r))
+        case .foldFunction(let operation, let initial, let sequence):
+            let scoped = underParameters(operation.parameters, body: operation.body)
+            return .foldFunction(
+                FormalLambda(
+                    parameters: scoped.parameters,
+                    body: scoped.body
+                ),
+                initial: sub(initial),
+                sequence: sub(sequence)
+            )
+        case .operatorApplication(let operation, let arguments):
+            let substitutedOperator: FormalOperator
+            switch operation {
+            case .lambda(let lambda):
+                let scoped = underParameters(lambda.parameters, body: lambda.body)
+                substitutedOperator = .lambda(
+                    FormalLambda(parameters: scoped.parameters, body: scoped.body)
+                )
+            case .reference:
+                substitutedOperator = operation
+            }
+            return .operatorApplication(substitutedOperator, arguments.map { argument -> FormalCallArgument in
+                switch argument {
+                case .value(let value): return FormalCallArgument.value(sub(value))
+                case .operator(.reference(let name, let arity)):
+                    return FormalCallArgument.operator(.reference(name, arity: arity))
+                case .operator(.lambda(let lambda)):
+                    let scoped = underParameters(lambda.parameters, body: lambda.body)
+                    return FormalCallArgument.operator(.lambda(FormalLambda(
+                        parameters: scoped.parameters,
+                        body: scoped.body
+                    )))
+                }
+            })
         case .recursiveCall(let n, let a): return .recursiveCall(n, a.map(sub))
+        case .letValue(let binder, let value, let body):
+            let scoped = underBinder(binder, body: body)
+            return .letValue(scoped.name, sub(value), scoped.body)
+        case .letIn(let operators, let body):
+            return .letIn(
+                operators.map { operation in
+                    let scoped = underParameters(operation.parameters, body: operation.body)
+                    return LocalOperator(
+                        operation.name,
+                        parameters: scoped.parameters,
+                        body: scoped.body
+                    )
+                },
+                sub(body)
+            )
         }
 
-        func sub(_ e: StateExpr) -> StateExpr { Self.substituteVariable(name, value, in: e) }
+        func sub(_ e: StateExpr) -> StateExpr {
+            Self.substituteVariable(name, with: replacement, in: e)
+        }
+    }
+
+    /// Renames operator calls while retaining every formal value and binder.
+    /// Module instances use this to keep their recursive operators inside the
+    /// namespace emitted to TLA+.
+    static func renamingRecursiveCalls(
+        in expression: StateExpr,
+        using rename: (String) -> String,
+        lowerAnonymousLambdaApplications: Bool = false
+    ) -> StateExpr {
+        func visit(_ expression: StateExpr) -> StateExpr {
+            switch expression {
+            case .value, .variable, .enabledAction: return expression
+            case .add(let a, let b): return .add(visit(a), visit(b))
+            case .subtract(let a, let b): return .subtract(visit(a), visit(b))
+            case .multiply(let a, let b): return .multiply(visit(a), visit(b))
+            case .divide(let a, let b): return .divide(visit(a), visit(b))
+            case .modulo(let a, let b): return .modulo(visit(a), visit(b))
+            case .negate(let value): return .negate(visit(value))
+            case .integerDivide(let a, let b): return .integerDivide(visit(a), visit(b))
+            case .equal(let a, let b): return .equal(visit(a), visit(b))
+            case .notEqual(let a, let b): return .notEqual(visit(a), visit(b))
+            case .lessThan(let a, let b): return .lessThan(visit(a), visit(b))
+            case .lessOrEqual(let a, let b): return .lessOrEqual(visit(a), visit(b))
+            case .greaterThan(let a, let b): return .greaterThan(visit(a), visit(b))
+            case .greaterOrEqual(let a, let b): return .greaterOrEqual(visit(a), visit(b))
+            case .and(let a, let b): return .and(visit(a), visit(b))
+            case .or(let a, let b): return .or(visit(a), visit(b))
+            case .not(let value): return .not(visit(value))
+            case .ifThenElse(let c, let t, let e): return .ifThenElse(visit(c), visit(t), visit(e))
+            case .setLiteral(let values): return .setLiteral(values.map(visit))
+            case .in(let value, let set): return .in(visit(value), visit(set))
+            case .subset(let a, let b): return .subset(visit(a), visit(b))
+            case .union(let a, let b): return .union(visit(a), visit(b))
+            case .intersection(let a, let b): return .intersection(visit(a), visit(b))
+            case .setDifference(let a, let b): return .setDifference(visit(a), visit(b))
+            case .cardinality(let value): return .cardinality(visit(value))
+            case .setFilter(let set, let name, let body): return .setFilter(visit(set), name, visit(body))
+            case .setMap(let value, let name, let set): return .setMap(visit(value), name, visit(set))
+            case .powerSet(let value): return .powerSet(visit(value))
+            case .unionAll(let value): return .unionAll(visit(value))
+            case .integerRange(let lower, let upper): return .integerRange(visit(lower), visit(upper))
+            case .tupleLiteral(let values): return .tupleLiteral(values.map(visit))
+            case .tupleAccess(let value, let index): return .tupleAccess(visit(value), index)
+            case .tupleDynamicAccess(let value, let index): return .tupleDynamicAccess(visit(value), visit(index))
+            case .tupleLength(let value): return .tupleLength(visit(value))
+            case .tupleAppend(let tuple, let value): return .tupleAppend(visit(tuple), visit(value))
+            case .tupleHead(let value): return .tupleHead(visit(value))
+            case .tupleTail(let value): return .tupleTail(visit(value))
+            case .tupleConcatenate(let a, let b): return .tupleConcatenate(visit(a), visit(b))
+            case .recordLiteral(let fields): return .recordLiteral(fields.mapValues(visit))
+            case .recordAccess(let value, let field): return .recordAccess(visit(value), field)
+            case .domain(let value): return .domain(visit(value))
+            case .functionLiteral(let domain, let name, let body): return .functionLiteral(visit(domain), name, visit(body))
+            case .functionApply(let function, let value): return .functionApply(visit(function), visit(value))
+            case .except(let function, let value, let update): return .except(visit(function), visit(value), visit(update))
+            case .caseExpr(let pairs, let fallback): return .caseExpr(pairs.map(visit), fallback.map(visit))
+            case .forAll(let set, let name, let body): return .forAll(visit(set), name, visit(body))
+            case .exists(let set, let name, let body): return .exists(visit(set), name, visit(body))
+            case .choose(let set, let name, let body): return .choose(visit(set), name, visit(body))
+            case .sequenceFromSet(let value): return .sequenceFromSet(visit(value))
+            case .setSum(let function, let set): return .setSum(visit(function), visit(set))
+            case .functionSet(let domain, let range): return .functionSet(visit(domain), visit(range))
+            case .foldFunction(let operation, let initial, let sequence):
+                return .foldFunction(
+                    FormalLambda(parameters: operation.parameters, body: visit(operation.body)),
+                    initial: visit(initial),
+                    sequence: visit(sequence)
+                )
+            case .operatorApplication(let operation, let arguments):
+                let renamedOperator: FormalOperator
+                switch operation {
+                case .lambda(let lambda):
+                    renamedOperator = .lambda(
+                        FormalLambda(parameters: lambda.parameters, body: visit(lambda.body))
+                    )
+                case .reference(let name, let arity):
+                    renamedOperator = .reference(rename(name), arity: arity)
+                }
+                let renamedArguments = arguments.map { argument -> FormalCallArgument in
+                    switch argument {
+                    case .value(let value): return FormalCallArgument.value(visit(value))
+                    case .operator(.reference(let name, let arity)):
+                        return FormalCallArgument.operator(.reference(rename(name), arity: arity))
+                    case .operator(.lambda(let lambda)):
+                        return FormalCallArgument.operator(.lambda(FormalLambda(
+                            parameters: lambda.parameters,
+                            body: visit(lambda.body)
+                        )))
+                    }
+                }
+                // TLA+ does not permit an anonymous LAMBDA expression in
+                // operator position. A direct application is capture-safe
+                // beta reduction because formal expressions are pure.
+                if lowerAnonymousLambdaApplications,
+                   case .lambda(let lambda) = renamedOperator,
+                   lambda.parameters.count == renamedArguments.count,
+                   renamedArguments.allSatisfy({
+                       if case .value = $0 { return true }
+                       return false
+                   }) {
+                    return zip(lambda.parameters, renamedArguments).reduce(lambda.body) { body, binding in
+                        guard case .value(let argument) = binding.1 else { return body }
+                        return Self.substituteVariable(binding.0, with: argument, in: body)
+                    }
+                }
+                return .operatorApplication(renamedOperator, renamedArguments)
+            case .recursiveCall(let name, let arguments): return .recursiveCall(rename(name), arguments.map(visit))
+            case .letValue(let name, let value, let body):
+                return .letValue(name, visit(value), visit(body))
+            case .letIn(let operators, let body):
+                return .letIn(
+                    operators.map { operation in
+                        LocalOperator(
+                            rename(operation.name),
+                            parameters: operation.parameters,
+                            body: visit(operation.body)
+                        )
+                    },
+                    visit(body)
+                )
+            }
+        }
+        return visit(expression)
     }
 }

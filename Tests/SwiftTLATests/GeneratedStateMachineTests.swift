@@ -5,6 +5,19 @@ import SwiftTLAMacros
 import SwiftParser
 import SwiftSyntax
 
+@TLAModel
+private struct SanitizedActionLabelModel {
+    static var spec: TLASpec {
+        #spec("SanitizedActionLabelModel") {
+            let value = Var<Int>("value")
+            Variable(value, 0)
+            Action("procedure.work.enter") { value.becomes(1) }
+            Action("procedure_work_enter") { value.becomes(2) }
+            Action("step-2") { value.becomes(3) }
+        }
+    }
+}
+
 // MARK: - Minimal spec: counter with no invariants
 
 @TLAModel
@@ -48,6 +61,23 @@ struct GeneratedAlgorithmCounter {
 }
 
 struct GeneratedAlgorithmMachineTests {
+    @Test("formal action labels retain raw names behind collision-safe Swift cases")
+    func sanitizesGeneratedActionLabels() {
+        #expect(SanitizedActionLabelModel.Actions.procedure_work_enter.rawValue == "procedure.work.enter")
+        #expect(SanitizedActionLabelModel.Actions.procedure_work_enter_2.rawValue == "procedure_work_enter")
+        #expect(SanitizedActionLabelModel.Actions.step_2.rawValue == "step-2")
+
+        let dotted = SanitizedActionLabelModel.ActionLabel.procedure_work_enter
+        let underscored = SanitizedActionLabelModel.ActionLabel.procedure_work_enter_2
+        let dashed = SanitizedActionLabelModel.ActionLabel.step_2
+        #expect(dotted.toInvocation() == .init(name: "procedure.work.enter"))
+        #expect(underscored.toInvocation() == .init(name: "procedure_work_enter"))
+        #expect(dashed.toInvocation() == .init(name: "step-2"))
+        #expect(SanitizedActionLabelModel.ActionLabel(invocation: dotted.toInvocation()) == dotted)
+        #expect(SanitizedActionLabelModel.ActionLabel(invocation: underscored.toInvocation()) == underscored)
+        #expect(SanitizedActionLabelModel.ActionLabel(invocation: dashed.toInvocation()) == dashed)
+    }
+
     @Test("a bounded Algorithm generates the ordinary typed state machine")
     func generatedAlgorithmUsesTheSharedLowering() throws {
         var model = GeneratedAlgorithmCounter()
@@ -61,6 +91,166 @@ struct GeneratedAlgorithmMachineTests {
             .string("left"): .string("increment"),
             .string("right"): .string("increment")
         ]))
+    }
+}
+
+@TLAModel
+struct GeneratedRestrictedProcessDomain {
+    enum Member: Int, FiniteDomainKey {
+        case worker = 1
+        /// A value that is valid in state, but not a member of the process
+        /// domain. This is the usual shape for an optional parent pointer.
+        case none = 0
+
+        static let formalDomain: [Member] = [.worker]
+        static let formalTypeIdentity = FormalTypeIdentity(rawValue: "test.restricted-process-member")
+
+        var tlaValue: TLAValue { .int(rawValue) }
+    }
+
+    static var spec: TLASpec {
+        #spec("GeneratedRestrictedProcessDomain") {
+            Algorithm("GeneratedRestrictedProcessDomain") {
+                let count = SharedVar(initial: 0)
+                Each(Member.all) { _ in
+                    Do("increment") {
+                        Assign(count, to: count + 1)
+                    }
+                }
+            }
+        }
+    }
+}
+
+struct GeneratedRestrictedProcessDomainTests {
+    @Test("the parser preserves an explicitly restricted FiniteDomainKey domain")
+    func generatedModelUsesOnlyDeclaredProcessMembers() {
+        GeneratedRestrictedProcessDomain._checkParserTree()
+        #expect(GeneratedRestrictedProcessDomain.spec.actions.first?.bindings == [
+            ActionBinding(name: "process", values: [.int(1)])
+        ])
+    }
+}
+
+@TLAModel
+struct GeneratedSequentialCounter {
+    static var spec: TLASpec {
+        #spec("GeneratedSequentialCounter") {
+            Algorithm("GeneratedSequentialCounter") {
+                let count = SharedVar(initial: 0)
+                Do("increment") {
+                    Let(count + 1) { nextCount in
+                        Assign(count, to: nextCount.expr)
+                    }
+                }
+                Do("finish") {
+                    Stop()
+                }
+            }
+        }
+    }
+}
+
+struct GeneratedSequentialMachineTests {
+    @Test("a begin-style Algorithm generates scalar control state")
+    func generatedSequentialAlgorithmPreservesScalarPC() throws {
+        GeneratedSequentialCounter._checkParserTree()
+
+        var model = GeneratedSequentialCounter()
+        let result = try model.apply(.increment)
+        #expect(result.after.count == 1)
+        #expect(result.after.pc == "finish")
+    }
+}
+
+@TLAModel
+struct GeneratedSimultaneousSwap {
+    static var spec: TLASpec {
+        #spec("GeneratedSimultaneousSwap") {
+            Algorithm("GeneratedSimultaneousSwap") {
+                let left = SharedVar(initial: 1)
+                let right = SharedVar(initial: 2)
+                Do("swap") {
+                    Assign(left, to: right)
+                    Assign(right, to: left)
+                }
+            }
+        }
+    }
+}
+
+struct GeneratedSimultaneousSwapTests {
+    @Test("generated updates read one old state and commit together")
+    func generatedMachineSwapsValues() throws {
+        var model = GeneratedSimultaneousSwap()
+
+        let result = try model.apply(.swap)
+
+        #expect(result.before.left == 1)
+        #expect(result.before.right == 2)
+        #expect(result.after.left == 2)
+        #expect(result.after.right == 1)
+        #expect(model.state == result.after)
+    }
+
+    @Test("generated swap rejects an undecodable successor without a partial commit")
+    func generatedMachineKeepsItsStateWhenOneSimultaneousFieldCannotDecode() throws {
+        let runtime = SpecRuntime(spec: GeneratedSimultaneousSwap.spec) { _, _, _ in
+            [["left": .int(2), "right": .string("wrong"), "pc": .string("swap")]]
+        }
+        var machine = CanonicalMachine(
+            runtime: runtime,
+            initial: GeneratedSimultaneousSwap.State(left: 1, right: 2, pc: "swap"),
+            stateDictionary: { $0.asDictionary },
+            snapshotFromDictionary: { try GeneratedSimultaneousSwap.State(formalDictionary: $0) }
+        )
+        let before = machine.snapshot
+
+        do {
+            _ = try machine.apply(.init(name: "swap"))
+            Issue.record("Expected the generated State decoder to reject the malformed right value")
+        } catch let GeneratedMachineError.stateDecodingFailed(diagnostic) {
+            #expect(diagnostic == .typeMismatch(
+                path: "right",
+                expected: "Int",
+                actual: .string("wrong")
+            ))
+            #expect(diagnostic.description.contains("state was not committed"))
+        }
+
+        #expect(machine.snapshot == before)
+    }
+}
+
+@TLAModel
+struct GeneratedPairPattern {
+    static var spec: TLASpec {
+        #spec("GeneratedPairPattern") {
+            Algorithm("GeneratedPairPattern") {
+                let selected = SharedVar(initial: 0)
+                Do("choose") {
+                    With(SetExpr<Pair<Int, Bool>>.literal(
+                        Pair(first: 1, second: true),
+                        Pair(first: 2, second: false)
+                    )) { number, flag in
+                        Assert((number.expr == 1) || !flag.expr)
+                        Assign(selected, to: number.expr)
+                    }
+                }
+            }
+        }
+    }
+}
+
+struct GeneratedPairPatternTests {
+    @Test("a generated model preserves tuple-pattern selection")
+    func generatedMachineAppliesPairPatternBindings() throws {
+        GeneratedPairPattern._checkParserTree()
+
+        var model = GeneratedPairPattern()
+        let result = try model.apply(.choose)
+
+        #expect([1, 2].contains(result.after.selected))
     }
 }
 
@@ -103,6 +293,119 @@ struct GeneratedRangeInitializedAlgorithmTests {
 }
 
 @TLAModel
+struct GeneratedIntegerChoiceAlgorithm {
+    enum Node: String, FiniteDomainKey {
+        case only
+
+        static let formalDomain: [Node] = [.only]
+        static let formalTypeIdentity = FormalTypeIdentity(rawValue: "test.generated-integer-choice-node")
+
+        var tlaValue: TLAValue { .string(rawValue) }
+    }
+
+    static var spec: TLASpec {
+        #spec("GeneratedIntegerChoice") {
+            Algorithm("GeneratedIntegerChoice") {
+                let selected = SharedVar(initial: 0)
+                Each(Node.all) { _ in
+                    Do("choose") {
+                        Choose(1...3) { choice in
+                            Assign(selected, to: choice.expr)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+struct GeneratedIntegerChoiceAlgorithmTests {
+    @Test("#spec retains a bounded integer choice")
+    func generatedModelRetainsIntegerChoice() throws {
+        GeneratedIntegerChoiceAlgorithm._checkParserTree()
+        let spec = GeneratedIntegerChoiceAlgorithm.spec
+        let graph = try ModelChecker(spec: spec).exploreGraph()
+        #expect(Set(graph.states.values.compactMap { $0["selected"] }) == [.int(0), .int(1), .int(2), .int(3)])
+    }
+}
+
+@TLAModel
+struct GeneratedAlgorithmStateConstraint {
+    static var spec: TLASpec {
+        #spec("GeneratedAlgorithmStateConstraint") {
+            Algorithm("GeneratedAlgorithmStateConstraint") {
+                let count = SharedVar(initial: 0)
+                Do("advance") {
+                    Assign(count, to: count + 1)
+                }
+                StateConstraint(count < 2)
+            }
+        }
+    }
+}
+
+struct GeneratedAlgorithmStateConstraintTests {
+    @Test("#spec preserves an algorithm-local state constraint through both construction paths")
+    func generatedModelPreservesStateConstraint() throws {
+        GeneratedAlgorithmStateConstraint._checkParserTree()
+        #expect(GeneratedAlgorithmStateConstraint.spec.constraint
+            == .lessThan(.variable("count"), .value(.int(2))))
+        let graph = try ModelChecker(spec: GeneratedAlgorithmStateConstraint.spec).exploreGraph()
+        #expect(Set(graph.states.values.compactMap { $0["count"] }) == [.int(0), .int(1)])
+    }
+}
+
+@TLAModel
+struct GeneratedProcessLocalInvariant {
+    enum Node: String, FiniteDomainKey {
+        case left
+        case right
+
+        static let formalDomain: [Node] = [.left, .right]
+        static let formalTypeIdentity = FormalTypeIdentity(rawValue: "test.process-local-invariant-node")
+
+        var tlaValue: TLAValue { .string(rawValue) }
+    }
+
+    enum Label: String, PlusCalLabel {
+        case receive
+    }
+
+    static var spec: TLASpec {
+        #spec("GeneratedProcessLocalInvariant") {
+            Algorithm("GeneratedProcessLocalInvariant") {
+                Each(Node.all) { selfID in
+                    let count = LocalVar(initial: 0)
+                    Do(Label.receive) {
+                        Skip()
+                    }
+                    Invariant("LocalCount") { count == 0 }
+                    Invariant("ControlLocation") {
+                        At(Label.receive, selfID) || Finished(selfID)
+                    }
+                }
+            }
+        }
+    }
+}
+
+struct GeneratedProcessLocalInvariantTests {
+    @Test("#spec preserves a process-local invariant through both construction paths")
+    func generatedModelPreservesProcessLocalInvariant() {
+        GeneratedProcessLocalInvariant._checkParserTree()
+        #expect(GeneratedProcessLocalInvariant.spec.invariants.map(\.name) == ["LocalCount", "ControlLocation"])
+        #expect(GeneratedProcessLocalInvariant.spec.invariants[0].body == .forAll(
+            .setLiteral([.value(.string("left")), .value(.string("right"))]),
+            "process",
+            .equal(
+                .functionApply(.variable("count"), .variable("process")),
+                .value(.int(0))
+            )
+        ))
+    }
+}
+
+@TLAModel
 struct GeneratedDependentInitialAlgorithm {
     enum Node: String, FiniteDomainKey {
         case left
@@ -124,7 +427,7 @@ struct GeneratedDependentInitialAlgorithm {
             Algorithm("GeneratedDependentInitialAlgorithm") {
                 let seed = SharedVar(in: SetExpr<Bool>.literal(false, true))
                 let mirrors = SharedVar(initial: Function<Node, Phase>.mapping { node in
-                    Expr<Phase>.ifThenElse(node == .left && seed == true, then: .active, else: .inactive)
+                    If(node == .left && seed == true, then: .active, else: .inactive)
                 })
                 Each(Node.all) { _ in
                     Do("stop") {
@@ -333,9 +636,9 @@ struct EndToEndThreeParameterActionMachine {
     static var spec: TLASpec {
         TLASpec("EndToEndThreeParameterActionMachine") {
             let floor = Var<Int>("floor")
-            let person = Var<Int>("person")
-            let elevator = Var<Int>("elevator")
-            let direction = Var<Int>("direction")
+            let person = Expr<Int>(.variable("person"))
+            let elevator = Expr<Int>(.variable("elevator"))
+            let direction = Expr<Int>(.variable("direction"))
             Variable(floor, 0)
             Action("board", parameters: [
                 ActionParameter("person", values: [1, 2]),
@@ -459,9 +762,9 @@ struct GeneratedStateMachineTests {
         let closure = try #require(Parser.parse(source: source).statements.first?.item.as(ClosureExprSyntax.self))
         let parsed = SpecParser.parseSpecClosure(closure)
         let floor = Var<Int>("floor")
-        let person = Var<Int>("person")
-        let elevator = Var<Int>("elevator")
-        let direction = Var<Int>("direction")
+        let person = Expr<Int>(.variable("person"))
+        let elevator = Expr<Int>(.variable("elevator"))
+        let direction = Expr<Int>(.variable("direction"))
         let builder = TLASpec("EndToEndThreeParameterActionMachine") {
             Variable(floor, 0)
             Action("board", parameters: [
@@ -555,8 +858,8 @@ struct GeneratedStateMachineTests {
             arguments: [.int(2), .int(20), .int(200)]
         )
         let malformedStates: [([String: TLAValue], TLAStateProjectionDiagnostic)] = [
-            ([:], .missingValue(path: "floor")),
-            (["floor": .string("wrong")], .invalidValue(path: "floor"))
+            ([:], .missingRequiredValue(path: "floor", expected: "Int")),
+            (["floor": .string("wrong")], .typeMismatch(path: "floor", expected: "Int", actual: .string("wrong")))
         ]
 
         for (malformedState, expectedDiagnostic) in malformedStates {
@@ -574,8 +877,8 @@ struct GeneratedStateMachineTests {
             do {
                 _ = try machine.apply(invocation)
                 Issue.record("Expected malformed formal state to fail")
-            } catch let GeneratedMachineError.unexpected(error) {
-                #expect(error as? TLAStateProjectionDiagnostic == expectedDiagnostic)
+            } catch let GeneratedMachineError.stateDecodingFailed(diagnostic) {
+                #expect(diagnostic == expectedDiagnostic)
             }
 
             #expect(machine.snapshot == before)

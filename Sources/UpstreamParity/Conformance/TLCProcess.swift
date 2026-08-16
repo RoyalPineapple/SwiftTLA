@@ -31,9 +31,25 @@ public struct TLCProcessExecutionFailureV1: Equatable, Sendable {
   }
 }
 
+/// A source dependency required by an emitted TLC module bundle was absent.
+///
+/// TLA+ reports this only after TLC starts. SwiftTLA validates it before launch
+/// so a user sees the importing source line and the missing file directly.
+public enum TLCModuleBundleErrorV1: Error, Equatable, Sendable {
+  case missingRootModule(path: String)
+  case unreadableModule(path: String, reason: String)
+  case missingImportedModule(
+    module: String,
+    importedBy: String,
+    line: Int,
+    expectedFile: String
+  )
+}
+
 public indirect enum TLCProcessErrorV1: Error, Equatable, Sendable {
   case timedOut(partialStdout: String, partialStderr: String)
   case failedToStart(String)
+  case invalidModuleBundle(TLCModuleBundleErrorV1)
   case requiredReplayFailed(completed: TLCProcessRunV1, failed: TLCProcessResultV1)
   case traceCaptureFailed(completed: TLCProcessRunV1, failed: TLCProcessResultV1)
   case requiredReplayExecutionFailed(completed: TLCProcessRunV1, error: TLCProcessExecutionFailureV1)
@@ -116,6 +132,44 @@ public struct TLCProcessRequestV1: Equatable, Sendable {
     )
   }
 
+  /// Checks source-level module dependencies that TLC must resolve from the
+  /// emitted bundle directory. Standard-library modules are supplied by TLC;
+  /// every other `EXTENDS` or `INSTANCE` target must have its own `.tla` file.
+  public func validateModuleBundle() throws {
+    guard FileManager.default.fileExists(atPath: module.path) else {
+      throw TLCProcessErrorV1.invalidModuleBundle(.missingRootModule(path: module.path))
+    }
+    var visited: Set<URL> = []
+    try validateModuleDependencies(module, visited: &visited)
+  }
+
+  private func validateModuleDependencies(_ sourceURL: URL, visited: inout Set<URL>) throws {
+    let normalized = sourceURL.standardizedFileURL
+    guard visited.insert(normalized).inserted else { return }
+    let source: String
+    do {
+      source = try String(contentsOf: normalized, encoding: .utf8)
+    } catch {
+      throw TLCProcessErrorV1.invalidModuleBundle(.unreadableModule(
+        path: normalized.path, reason: sanitized(error.localizedDescription)
+      ))
+    }
+    for dependency in moduleDependencies(in: source) {
+      guard !Self.tlcStandardModules.contains(dependency.name) else { continue }
+      let expected = normalized.deletingLastPathComponent()
+        .appendingPathComponent("\(dependency.name).tla")
+      guard FileManager.default.fileExists(atPath: expected.path) else {
+        throw TLCProcessErrorV1.invalidModuleBundle(.missingImportedModule(
+          module: dependency.name,
+          importedBy: normalized.path,
+          line: dependency.line,
+          expectedFile: expected.path
+        ))
+      }
+      try validateModuleDependencies(expected, visited: &visited)
+    }
+  }
+
   public func validateReferenceBinding(pin: TLCReferencePinV1, artifacts: TLCReferenceArtifactsV1)
     throws {
     guard expectedCase.pin == pin else {
@@ -162,6 +216,36 @@ public struct TLCProcessRequestV1: Equatable, Sendable {
     lhs.resolvingSymlinksInPath().standardizedFileURL
       == rhs.resolvingSymlinksInPath().standardizedFileURL
   }
+
+  private struct ModuleDependency: Sendable {
+    let name: String
+    let line: Int
+  }
+
+  private func moduleDependencies(in source: String) -> [ModuleDependency] {
+    source.split(separator: "\n", omittingEmptySubsequences: false).enumerated().flatMap { offset, rawLine in
+      let line = rawLine.trimmingCharacters(in: .whitespaces)
+      if line.hasPrefix("EXTENDS ") {
+        return line.dropFirst("EXTENDS ".count).split(separator: ",").compactMap { token in
+          let name = token.trimmingCharacters(in: .whitespaces)
+          return isModuleIdentifier(name) ? ModuleDependency(name: name, line: offset + 1) : nil
+        }
+      }
+      guard let range = line.range(of: "== INSTANCE ") else { return [] }
+      let remainder = line[range.upperBound...]
+      let name = remainder.prefix { $0.isLetter || $0.isNumber || $0 == "_" }
+      guard isModuleIdentifier(String(name)) else { return [] }
+      return [ModuleDependency(name: String(name), line: offset + 1)]
+    }
+  }
+
+  private func isModuleIdentifier(_ value: String) -> Bool {
+    !value.isEmpty && value.first?.isLetter == true
+  }
+
+  private static let tlcStandardModules: Set<String> = [
+    "Bags", "FiniteSets", "Integers", "Naturals", "Randomization", "RealTime", "Sequences", "TLC"
+  ]
 
   public static let fixture = Self(
     javaExecutable: URL(fileURLWithPath: "/usr/bin/java"),
@@ -222,6 +306,7 @@ public struct SystemTLCProcessExecutorV1: TLCProcessExecuting {
 
   public func execute(_ request: TLCProcessRequestV1) throws -> TLCProcessResultV1 {
     try request.validateLaunchBinding()
+    try request.validateModuleBundle()
     if validatesReferences {
       guard let pin = request.referencePin, let artifacts = request.referenceArtifacts else {
         throw CoreConformanceCaseErrorV1.missingArtifact("reference pin and artifacts")

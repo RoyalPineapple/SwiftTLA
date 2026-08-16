@@ -1,4 +1,5 @@
 import SwiftTLA
+import SwiftTLAMacros
 
 // Chameneos concurrency game. Creatures meet, complement colors, eventually fade.
 // N=4 meetings max, M=4 creatures. Uses nested functions, tuples, EXCEPT @ self-ref.
@@ -29,7 +30,7 @@ private func chameneosSpec() -> TLASpec {
     let colorRange = Set(colors.map { TLAValue.tuple([$0, .int(0)]) })
     let allFuncs = TLAValue.functionSet(domain: ids, range: colorRange)
 
-    return TLASpec("Chameneos") {
+    return #spec("Chameneos") {
         Extends("Integers")
 
         DefineRecursive("Sum", params: ["f", "S"]) {

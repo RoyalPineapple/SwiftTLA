@@ -16,7 +16,7 @@ public struct NanoBlockchainModel {
         let initDL: TLAValue = .function([.string("n1"): emptyLedger, .string("n2"): emptyLedger])
         let initRecv: TLAValue = .function([.string("n1"): .set([]), .string("n2"): .set([])])
 
-        return TLASpec("NanoBlockchain") {
+        return #spec("NanoBlockchain") {
             Extends("Integers")
 
             let lastHash = Var<String>("lastHash")

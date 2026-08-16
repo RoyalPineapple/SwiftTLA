@@ -16,7 +16,8 @@ struct PublicWorkflowConformanceRunnerTests {
     #expect(result.report.schema == PublicWorkflowDiagnosticReportV1.schema)
     if case .diagnostic = result.report.authority {} else { Issue.record("report must be diagnostic locally") }
     #expect(result.report.claimStatus == "diagnosticOnly")
-    #expect(result.report.checks.count == 6)
+    let diagnostic = result.report.checks.compactMap(\.diagnostic).joined(separator: "\n")
+    #expect(result.report.checks.count == 6, Comment(rawValue: diagnostic))
     #expect(result.report.checks.allSatisfy { $0.status == .matched })
     if case .success = result.report.finalExitClass {} else { Issue.record("matched corpus must succeed") }
     #expect(FileManager.default.fileExists(atPath: result.reportURL.path))
