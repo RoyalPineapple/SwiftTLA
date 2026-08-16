@@ -6,6 +6,7 @@ extension TLASpec {
     public var tlaModule: String {
         validateSymmetricCollectionExport()
         let varNames = variables.map(\.name)
+        let emittedActionNames = tlaActionNames(actions)
         let varsTuple = varNames.count == 1 ? varNames[0] : "<<\(varNames.joined(separator: ", "))>>"
         let isLibraryModule = variables.isEmpty && actions.isEmpty
         var lines: [String] = []
@@ -57,7 +58,7 @@ extension TLASpec {
         if !symmetricCollections.isEmpty || !symmetrySets.isEmpty { lines.append("") }
 
         if let assume = assume {
-            lines.append("ASSUME \(assume)")
+            lines.append("ASSUME \(assume.tlaModuleSource)")
             lines.append("")
         }
 
@@ -110,12 +111,12 @@ extension TLASpec {
         if !isLibraryModule, varNames.count > 1 { lines.append(varsDef); lines.append("") }
 
         for inv in invariants {
-            lines.append("\(inv.name) == \(inv.body)")
+            lines.append("\(inv.name) == \(inv.body.tlaModuleSource)")
         }
         if !invariants.isEmpty { lines.append("") }
 
         if let constraint = constraint {
-            lines.append("StateConstraint == \(constraint)")
+            lines.append("StateConstraint == \(constraint.tlaModuleSource)")
             lines.append("")
         }
 
@@ -133,7 +134,7 @@ extension TLASpec {
             }
             if let s = v.lazySet { return "\(v.name) \\in \(s)" }
             if let s = v.initialSet { return "\(v.name) \\in \(s)" }
-            if let expr = v.initExpr { return "\(v.name) = \(expr)" }
+            if let expr = v.initExpr { return "\(v.name) = \(expr.tlaModuleSource)" }
             return "\(v.name) = \(v.initial)"
         }
         if inits.count == 1 {
@@ -146,11 +147,12 @@ extension TLASpec {
 
         for action in actions where !action.name.isEmpty {
             let parameters = action.bindings.map(\.name).joined(separator: ", ")
-            let header = parameters.isEmpty ? action.name : "\(action.name)(\(parameters))"
-            lines.append("\(header) == \(action.body)")
+            let emittedName = emittedActionNames[action.name] ?? action.name
+            let header = parameters.isEmpty ? emittedName : "\(emittedName)(\(parameters))"
+            lines.append("\(header) == \(action.body.tlaModuleSource)")
             for variant in actionInvocations(action) where !variant.indices.isEmpty {
                 let suffix = variant.indices.map(String.init).joined(separator: "_")
-                lines.append("\(action.name)__\(suffix) == \(variant.invocation)")
+                lines.append("\(emittedName)__\(suffix) == \(variant.invocation)")
             }
         }
         lines.append("")
@@ -158,8 +160,9 @@ extension TLASpec {
         let actionNames = actions.filter { !$0.name.isEmpty }
         let invocations = actionNames.flatMap { action in
             actionInvocations(action).map { variant -> String in
-                guard !variant.indices.isEmpty else { return action.name }
-                return "\(action.name)__\(variant.indices.map(String.init).joined(separator: "_"))"
+                let emittedName = emittedActionNames[action.name] ?? action.name
+                guard !variant.indices.isEmpty else { return emittedName }
+                return "\(emittedName)__\(variant.indices.map(String.init).joined(separator: "_"))"
             }
         }
         if invocations.count == 1 && invocations[0] == "Next" {
@@ -178,12 +181,12 @@ extension TLASpec {
         lines.append("  /\\ Init")
         lines.append("  /\\ [][Next]_\(varsTuple)")
         for f in fairness {
-            lines.append("  /\\ \(fairnessForm(f, vars: varsTuple))")
+            lines.append("  /\\ \(fairnessForm(f, vars: varsTuple, emittedActionNames: emittedActionNames))")
         }
         lines.append("")
 
         for t in temporalProperties {
-            lines.append("\(t.name) == \(t.expr)")
+            lines.append("\(t.name) == \(t.expr.tlaModuleSource)")
         }
         if !temporalProperties.isEmpty { lines.append("") }
 
@@ -196,7 +199,11 @@ extension TLASpec {
         return lines.joined(separator: "\n") + "\n"
     }
 
-    private func fairnessForm(_ condition: FairnessCondition, vars: String) -> String {
+    private func fairnessForm(
+        _ condition: FairnessCondition,
+        vars: String,
+        emittedActionNames: [String: String]
+    ) -> String {
         switch condition {
         case .weakFairness, .strongFairness:
             return condition.tlaForm(vars: vars)
@@ -205,9 +212,10 @@ extension TLASpec {
                 .flatMap(actionInvocations)
                 .first(where: { $0.invocation == invocation })
                 .map { variant in
-                    guard !variant.indices.isEmpty else { return invocation.name }
-                    return "\(invocation.name)__\(variant.indices.map(String.init).joined(separator: "_"))"
-                } ?? invocation.name
+                    let emittedName = emittedActionNames[invocation.name] ?? invocation.name
+                    guard !variant.indices.isEmpty else { return emittedName }
+                    return "\(emittedName)__\(variant.indices.map(String.init).joined(separator: "_"))"
+                } ?? (emittedActionNames[invocation.name] ?? invocation.name)
             return condition.isStrong
                 ? "SF_\(vars)(\(operatorName))"
                 : "WF_\(vars)(\(operatorName))"
@@ -282,6 +290,32 @@ extension TLASpec {
             preconditionFailure("Cannot export symmetric collection specification: \(error)")
         }
     }
+}
+
+/// Runtime labels retain authored names. TLA+ operator identifiers cannot
+/// contain every character the generated Swift surface may expose, so module
+/// export owns a deterministic, collision-free symbol table.
+private func tlaActionNames(_ actions: [NamedAction]) -> [String: String] {
+    var emitted: [String: String] = [:]
+    var used: Set<String> = []
+    for action in actions where emitted[action.name] == nil {
+        let raw = action.name.unicodeScalars.map { scalar -> String in
+            switch scalar.value {
+            case 48...57, 65...90, 97...122, 95: String(scalar)
+            default: "_"
+            }
+        }.joined()
+        let stem = raw.first?.isNumber == true ? "_\(raw)" : raw
+        var candidate = stem.isEmpty ? "Action" : stem
+        var suffix = 2
+        while used.contains(candidate) {
+            candidate = "\(stem)__\(suffix)"
+            suffix += 1
+        }
+        emitted[action.name] = candidate
+        used.insert(candidate)
+    }
+    return emitted
 }
 
 /// Push UNCHANGED into every OR branch after distributing AND over OR.

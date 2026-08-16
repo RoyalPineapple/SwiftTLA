@@ -1076,7 +1076,8 @@ extension StateExpr {
     /// namespace emitted to TLA+.
     static func renamingRecursiveCalls(
         in expression: StateExpr,
-        using rename: (String) -> String
+        using rename: (String) -> String,
+        lowerAnonymousLambdaApplications: Bool = false
     ) -> StateExpr {
         func visit(_ expression: StateExpr) -> StateExpr {
             switch expression {
@@ -1147,7 +1148,7 @@ extension StateExpr {
                 case .reference(let name, let arity):
                     renamedOperator = .reference(rename(name), arity: arity)
                 }
-                return .operatorApplication(renamedOperator, arguments.map { argument -> FormalCallArgument in
+                let renamedArguments = arguments.map { argument -> FormalCallArgument in
                     switch argument {
                     case .value(let value): return FormalCallArgument.value(visit(value))
                     case .operator(.reference(let name, let arity)):
@@ -1158,7 +1159,23 @@ extension StateExpr {
                             body: visit(lambda.body)
                         )))
                     }
-                })
+                }
+                // TLA+ does not permit an anonymous LAMBDA expression in
+                // operator position. A direct application is capture-safe
+                // beta reduction because formal expressions are pure.
+                if lowerAnonymousLambdaApplications,
+                   case .lambda(let lambda) = renamedOperator,
+                   lambda.parameters.count == renamedArguments.count,
+                   renamedArguments.allSatisfy({
+                       if case .value = $0 { return true }
+                       return false
+                   }) {
+                    return zip(lambda.parameters, renamedArguments).reduce(lambda.body) { body, binding in
+                        guard case .value(let argument) = binding.1 else { return body }
+                        return Self.substituteVariable(binding.0, with: argument, in: body)
+                    }
+                }
+                return .operatorApplication(renamedOperator, renamedArguments)
             case .recursiveCall(let name, let arguments): return .recursiveCall(rename(name), arguments.map(visit))
             case .letValue(let name, let value, let body):
                 return .letValue(name, visit(value), visit(body))

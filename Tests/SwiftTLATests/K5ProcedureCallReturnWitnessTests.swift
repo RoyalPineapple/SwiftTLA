@@ -24,4 +24,12 @@ struct K5ProcedureCallReturnWitnessTests {
         #expect(source.contains("return;"))
         #expect(source.contains("call addOffset(5);"))
     }
+
+    @Test("K5 TLA export gives procedure actions legal operator names")
+    func tlaModuleSanitizesProcedureActionOperator() {
+        let source = K5ProcedureCallReturnWitness.spec.tlaModule
+
+        #expect(source.contains("procedure_addOffset_apply =="))
+        #expect(!source.contains("procedure.addOffset.apply =="))
+    }
 }

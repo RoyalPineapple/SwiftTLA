@@ -23,4 +23,12 @@ struct K2ScopedFormalLambdaTLCWitnessTests {
         #expect(source.contains("LAMBDA value : (value + 1)"))
         #expect(fixture.configuration.contains("SPECIFICATION Spec"))
     }
+
+    @Test("K2 TLA export beta-reduces anonymous formal-lambda application")
+    func tlaModuleUsesLegalOperatorApplication() {
+        let source = K2ScopedFormalLambdaTLCWitness.spec.tlaModule
+
+        #expect(!source.contains("(LAMBDA"))
+        #expect(source.contains("(counters[process] + 1)"))
+    }
 }

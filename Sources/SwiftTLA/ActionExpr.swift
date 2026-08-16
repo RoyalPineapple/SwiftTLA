@@ -31,6 +31,45 @@ public indirect enum ActionExpr: Hashable, Sendable, CustomStringConvertible {
             return "(\(a) \\/ \(b))"
         }
 }
+
+extension StateExpr {
+    /// TLA+ export spelling. The AST retains anonymous formal lambdas for
+    /// parser fidelity and PlusCal source; direct applications lower only for
+    /// TLA+, where anonymous operators cannot occupy operator position.
+    var tlaModuleSource: String {
+        StateExpr.renamingRecursiveCalls(
+            in: self,
+            using: { $0 },
+            lowerAnonymousLambdaApplications: true
+        ).description
+    }
+}
+
+extension ActionExpr {
+    /// TLA+ export spelling, distinct from the lossless authoring spelling.
+    var tlaModuleSource: String {
+        switch self {
+        case .assign(let variable, let value):
+            "\(variable)' = \(value.tlaModuleSource)"
+        case .unchanged(let variable):
+            "UNCHANGED \(variable)"
+        case .guard_(let condition):
+            condition.tlaModuleSource
+        case .chooseAction(let variable, let set):
+            "\(variable)' \\in \(set.tlaModuleSource)"
+        case .existsAction(let variable, let set, let body):
+            "\\E \(variable) \\in \(set.tlaModuleSource): \(body.tlaModuleSource)"
+        case .define(let variable, let value, let body):
+            "LET \(variable) == \(value.tlaModuleSource) IN \(body.tlaModuleSource)"
+        case .ifElse(let condition, let then, let otherwise):
+            "IF \(condition.tlaModuleSource) THEN (\(then.tlaModuleSource)) ELSE (\(otherwise.tlaModuleSource))"
+        case .and(let lhs, let rhs):
+            "(\(lhs.tlaModuleSource) /\\ \(rhs.tlaModuleSource))"
+        case .or(let lhs, let rhs):
+            "(\(lhs.tlaModuleSource) \\/ \(rhs.tlaModuleSource))"
+        }
+    }
+}
 }
 
 /// Substitute a free variable reference with a concrete value in an ActionExpr.
