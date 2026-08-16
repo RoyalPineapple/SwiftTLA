@@ -671,14 +671,6 @@ public func FormalDefinition(
   FormalOperatorDecl(FormalOperatorDefinition(name: name, parameters: parameters, body: body.stateExpr))
 }
 
-/// Declares a nullary executable formal operator from a typed formal body.
-public func FormalDefinition(
-  _ name: String,
-  body: some StateExprConvertible
-) -> FormalOperatorDecl {
-  FormalOperatorDecl(FormalOperatorDefinition(name: name, parameters: [], body: body.stateExpr))
-}
-
 /// Declares a unary executable formal operator without exposing raw AST values.
 public func FormalDefinition<Input: TLAValueType>(
   _ name: String,
