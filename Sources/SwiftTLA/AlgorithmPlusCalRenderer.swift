@@ -62,6 +62,15 @@ internal struct AlgorithmPlusCalRenderer {
         try properties(in: model.components, path: "components")
     }
 
+    /// PlusCal's translator defines this temporal operator for a single
+    /// process family.  Emitting the equivalent authored spelling after the
+    /// comment would redeclare the translator-owned name.
+    func translatorOwnedPropertyNames() -> Set<String> {
+        Set(temporals(in: model.components).compactMap { temporal in
+            isTranslatorTermination(temporal) ? temporal.name : nil
+        })
+    }
+
     func render(
         moduleName: String? = nil,
         extendsModules: [String]? = nil,
@@ -365,12 +374,49 @@ internal struct AlgorithmPlusCalRenderer {
                     "\(invariant.name) == \(try expression(invariant.body, path: "\(componentPath).invariant"))"
                 )]
             case .temporal(let temporal):
+                if isTranslatorTermination(temporal) {
+                    return []
+                }
+                if temporal.name == "Termination" {
+                    throw AlgorithmPlusCalRenderDiagnostic(
+                        failedConcept: "PlusCal temporal property export",
+                        path: componentPath,
+                        expected: "the translator's standard Termination predicate for this process family",
+                        actual: "a distinct property named Termination",
+                        nextSafeAction: "Rename the custom property, or use Eventually(All(domain) { Finished($0) }) so the official translator owns Termination."
+                    )
+                }
                 return [(temporal.name, "\(temporal.name) == \(try self.temporal(temporal.expr, path: "\(componentPath).temporal"))")]
             case .process(let process):
                 return try properties(in: process.components, path: "\(componentPath).components")
             case .shared, .procedure, .fairness, .stateConstraint, .local, .step, .propertyBoundary:
                 return []
             }
+        }
+    }
+
+    private func temporals(in components: [AlgorithmComponentModel]) -> [NamedTemporal] {
+        components.flatMap { component in
+            switch component {
+            case .temporal(let temporal): [temporal]
+            case .process(let process): temporals(in: process.components)
+            case .shared, .procedure, .invariant, .fairness, .stateConstraint, .local, .step, .propertyBoundary: []
+            }
+        }
+    }
+
+    private func isTranslatorTermination(_ temporal: NamedTemporal) -> Bool {
+        guard temporal.name == "Termination", model.processes.count == 1,
+              case .eventually(let expression) = temporal.expr,
+              case .forAll(let domain, let binding, let predicate) = expression,
+              domain == .setLiteral(model.processes[0].domain.map(StateExpr.value))
+        else { return false }
+        switch predicate {
+        case .equal(.functionApply(.variable("pc"), .variable(let process)), .value(.string("Done"))),
+             .equal(.value(.string("Done")), .functionApply(.variable("pc"), .variable(let process))):
+            return process == binding
+        default:
+            return false
         }
     }
 

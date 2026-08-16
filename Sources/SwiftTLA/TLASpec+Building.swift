@@ -245,7 +245,7 @@ public extension TLASpec {
       let loweredPropertyNames = invariants.map(\.name) + temporalProperties.map(\.name)
       guard Set(sourcePropertyNames).count == sourcePropertyNames.count,
             Set(loweredPropertyNames).count == loweredPropertyNames.count,
-            Set(sourcePropertyNames) == Set(loweredPropertyNames)
+            Set(sourcePropertyNames).union(renderer.translatorOwnedPropertyNames()) == Set(loweredPropertyNames)
       else {
         throw AlgorithmPlusCalRenderDiagnostic(
           failedConcept: "authored PlusCal property export",

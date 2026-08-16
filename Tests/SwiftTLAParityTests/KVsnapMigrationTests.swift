@@ -19,6 +19,7 @@ struct KVsnapMigrationTests {
         #expect(plusCal.contains("CC == INSTANCE ClientCentric"))
         #expect(plusCal.contains("InitialState =="))
         #expect(plusCal.contains("SnapshotIsolation == CC!SnapshotIsolation(InitialState, Range(ops))"))
+        #expect(!plusCal.contains("Termination =="))
         #expect(!plusCal.contains("__pcal_local_family:"))
     }
 }
