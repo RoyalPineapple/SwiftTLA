@@ -15,6 +15,7 @@ struct ByzPaxosConsensusModuleTests {
     #expect(consumer.tlaBundle.imports.map(\.name) == ["Consensus"])
     #expect(ByzPaxosConsensus.module.tlaModule.contains("CONSTANTS Value"))
     #expect(ByzPaxosConsensus.module.tlaModule.contains("VARIABLES chosen"))
+    #expect(ByzPaxosConsensus.module.tlaModule.contains("vars == <<chosen>>"))
     #expect(ByzPaxosConsensus.module.tlaModule.contains("LiveSpecEquals == LiveSpec"))
   }
 }

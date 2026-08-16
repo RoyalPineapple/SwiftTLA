@@ -9,7 +9,7 @@ public enum ByzPaxosConsensus {
     Parameter("Value")
     Parameter("chosen", kind: .variable)
 
-    Definition("vars == chosen")
+    Definition("vars == <<chosen>>")
     Definition("Init == chosen = {}")
     Definition("""
       Next == /\\ chosen = {}
