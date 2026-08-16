@@ -137,24 +137,51 @@ public struct ParsedSpecModel: Equatable, Sendable {
   public let invariants: [(name: String, body: StateExpr)]
   public let temporal: [(name: String, expr: TemporalExpr)]
   public let fairness: [FairnessCondition]
+  public let constraint: StateExpr?
+  public let imports: [String]
+  public let importConfigurations: [FormalModuleConfiguration]
+  public let moduleInstances: [FormalModuleInstance]
+  public let formalParameters: [FormalModuleParameter]
+  /// Executable formal operators are formal model data. Keeping them in the
+  /// parser tree makes a missing definition visible at the parser/builder
+  /// boundary instead of failing later during evaluation.
+  public let formalOperatorDefinitions: [FormalOperatorDefinition]
   public init(
     variables: [(String, TLAValue, StateExpr?)], actions: [(String, ActionExpr, [ActionBinding])],
     invariants: [(String, StateExpr)],
     temporal: [(String, TemporalExpr)] = [],
-    fairness: [FairnessCondition] = []
+    fairness: [FairnessCondition] = [],
+    constraint: StateExpr? = nil,
+    imports: [String] = [],
+    importConfigurations: [FormalModuleConfiguration] = [],
+    moduleInstances: [FormalModuleInstance] = [],
+    formalParameters: [FormalModuleParameter] = [],
+    formalOperatorDefinitions: [FormalOperatorDefinition] = []
   ) {
     self.variables = variables
     self.actions = actions
     self.invariants = invariants
     self.temporal = temporal
     self.fairness = fairness
+    self.constraint = constraint
+    self.imports = imports
+    self.importConfigurations = importConfigurations
+    self.moduleInstances = moduleInstances
+    self.formalParameters = formalParameters
+    self.formalOperatorDefinitions = formalOperatorDefinitions
   }
   public static func == (lhs: ParsedSpecModel, rhs: ParsedSpecModel) -> Bool {
     guard lhs.variables.count == rhs.variables.count,
       lhs.actions.count == rhs.actions.count,
       lhs.invariants.count == rhs.invariants.count,
       lhs.temporal.count == rhs.temporal.count,
-      lhs.fairness == rhs.fairness
+      lhs.fairness == rhs.fairness,
+      lhs.constraint == rhs.constraint,
+      lhs.imports == rhs.imports,
+      lhs.importConfigurations == rhs.importConfigurations,
+      lhs.moduleInstances == rhs.moduleInstances,
+      lhs.formalParameters == rhs.formalParameters,
+      lhs.formalOperatorDefinitions == rhs.formalOperatorDefinitions
     else { return false }
     for (a, b) in zip(lhs.variables, rhs.variables) {
       if a.name != b.name || a.initial != b.initial || a.initialSet != b.initialSet { return false }
@@ -175,6 +202,8 @@ public struct TLASpec: Sendable {
   public let name: String
   public let variables: [NamedVar]
   public let constants: [String: TLAValue]
+  /// Parameters supplied by a named TLA+ `INSTANCE … WITH` declaration.
+  public let formalParameters: [FormalModuleParameter]
   public let actions: [NamedAction]
   public let invariants: [NamedInvariant]
   public let temporalProperties: [NamedTemporal]
@@ -187,24 +216,49 @@ public struct TLASpec: Sendable {
   public let constraint: StateExpr?
   public let recursiveDefs: [String]
   public let recursiveFuncs: [RecursiveFunc]
+  /// Executable, higher-order operator definitions. These remain formal AST
+  /// data so the checker and runtime apply the same semantics.
+  public let formalOperatorDefinitions: [FormalOperatorDefinition]
+  /// Imported modules remain separate source files and resolve their operators at runtime.
+  public let imports: [TLASpec]
+  /// Model-scoped replacement bindings for imported module operators.
+  public let importConfigurations: [FormalModuleConfiguration]
+  /// Named source-level TLA+ `INSTANCE` declarations.
+  public let moduleInstances: [FormalModuleInstance]
   public var runtimeFuncs: [String: @Sendable ([TLAValue]) -> TLAValue] = [:]
   public var runtimeFuncBodies: [String] = []
   public let symmetrySets: [SymmetrySet]
   public let symmetryGroups: [SymmetryVariableGroup]
   public let symmetricCollections: [SymmetricCollectionDecl]
+  /// Opaque source-level Algorithm evidence. This is distinct from the
+  /// lowered variables/actions and never exposes the Algorithm IR.
+  public let algorithmFidelityTokens: [AlgorithmFidelityToken]
+  /// Canonical Algorithm declarations retained solely for source rendering.
+  ///
+  /// The formal runtime still uses the one lowered `TLASpec` representation.
+  /// Keeping these declarations lets a tooling boundary render the exact
+  /// authored Algorithm as PlusCal without reconstructing it from TLA+ AST.
+  let sourceAlgorithms: [Algorithm]
   public init(
     name: String, variables: [NamedVar], constants: [String: TLAValue] = [:],
+    formalParameters: [FormalModuleParameter] = [],
     actions: [NamedAction], invariants: [NamedInvariant], temporalProperties: [NamedTemporal] = [],
     fairness: [FairnessCondition] = [], assume: StateExpr? = nil, checkDeadlock: Bool = false,
     definitions: [String] = [], theorems: [String] = [], extendsModules: String = "Integers",
     constraint: StateExpr? = nil, recursiveDefs: [String] = [],
-    recursiveFuncs: [RecursiveFunc] = [], symmetrySets: [SymmetrySet] = [],
+    recursiveFuncs: [RecursiveFunc] = [],
+    formalOperatorDefinitions: [FormalOperatorDefinition] = [], imports: [TLASpec] = [],
+    importConfigurations: [FormalModuleConfiguration] = [],
+    moduleInstances: [FormalModuleInstance] = [], symmetrySets: [SymmetrySet] = [],
     symmetryGroups: [SymmetryVariableGroup] = [],
-    symmetricCollections: [SymmetricCollectionDecl] = []
+    symmetricCollections: [SymmetricCollectionDecl] = [],
+    algorithmFidelityTokens: [AlgorithmFidelityToken] = [],
+    sourceAlgorithms: [Algorithm] = []
   ) {
     self.name = name
     self.variables = variables
     self.constants = constants
+    self.formalParameters = formalParameters
     self.actions = actions
     self.invariants = invariants
     self.temporalProperties = temporalProperties
@@ -217,9 +271,92 @@ public struct TLASpec: Sendable {
     self.constraint = constraint
     self.recursiveDefs = recursiveDefs
     self.recursiveFuncs = recursiveFuncs
+    self.formalOperatorDefinitions = formalOperatorDefinitions
+    self.imports = imports
+    self.importConfigurations = importConfigurations
+    self.moduleInstances = moduleInstances
     self.symmetrySets = symmetrySets
     self.symmetryGroups = symmetryGroups
     self.symmetricCollections = symmetricCollections
+    self.algorithmFidelityTokens = algorithmFidelityTokens
+    self.sourceAlgorithms = sourceAlgorithms
+  }
+
+  /// Recursive definitions visible after resolving the module import graph.
+  /// TLA+ `EXTENDS` exports imported operator names into the consumer scope,
+  /// so duplicate names are rejected instead of being silently shadowed.
+  public var resolvedRecursiveFuncs: [RecursiveFunc] {
+    var seen = Set<String>()
+    var result: [RecursiveFunc] = []
+    func visit(
+      _ module: TLASpec,
+      replacements: [FormalModuleReplacement],
+      path: inout Set<String>
+    ) {
+      precondition(path.insert(module.name).inserted, "Cyclic formal module import: \(module.name)")
+      for imported in module.imports {
+        let configuration = module.importConfigurations.first { $0.moduleName == imported.name }
+        visit(imported, replacements: configuration?.replacements ?? [], path: &path)
+      }
+      for function in module.recursiveFuncs {
+        precondition(seen.insert(function.name).inserted, "Duplicate imported formal operator: \(function.name)")
+        let configuredBody = replacements.reduce(function.body) { body, replacement in
+          StateExpr.substituteVariable(replacement.operatorName, with: replacement.expression, in: body)
+        }
+        result.append(RecursiveFunc(name: function.name, params: function.params, body: configuredBody))
+      }
+      for instance in module.moduleInstances {
+        let instanceFunctions = instance.module.resolvedRecursiveFuncs
+        let localNames = Set(instanceFunctions.map(\.name))
+        for function in instanceFunctions {
+          let qualifiedName = "\(instance.name)!\(function.name)"
+          precondition(
+            seen.insert(qualifiedName).inserted,
+            "Duplicate formal module instance operator: \(qualifiedName)"
+          )
+          let appliedArguments = instance.arguments.reduce(function.body) { body, argument in
+            StateExpr.substituteVariable(argument.parameter, with: argument.value, in: body)
+          }
+          let qualifiedBody = StateExpr.renamingRecursiveCalls(in: appliedArguments) { name in
+            localNames.contains(name) ? "\(instance.name)!\(name)" : name
+          }
+          result.append(RecursiveFunc(
+            name: qualifiedName,
+            params: function.params,
+            body: qualifiedBody
+          ))
+        }
+      }
+      path.remove(module.name)
+    }
+    var path = Set<String>()
+    visit(self, replacements: [], path: &path)
+    return result
+  }
+
+  /// Formal operator definitions visible after resolving `EXTENDS` imports.
+  /// Like TLA+ operator names, these form one namespace; ambiguous imports are
+  /// rejected rather than silently shadowed.
+  public var resolvedFormalOperatorDefinitions: [FormalOperatorDefinition] {
+    var seen = Set<String>()
+    var result: [FormalOperatorDefinition] = []
+    func visit(_ module: TLASpec, path: inout Set<String>) {
+      precondition(path.insert(module.name).inserted, "Cyclic formal module import: \(module.name)")
+      for imported in module.imports {
+        visit(imported, path: &path)
+      }
+      for definition in module.formalOperatorDefinitions {
+        precondition(
+          seen.insert(definition.name).inserted,
+          "Duplicate imported formal operator: \(definition.name)"
+        )
+        result.append(definition)
+      }
+      path.remove(module.name)
+    }
+    var path = Set<String>()
+    visit(self, path: &path)
+    return result
   }
   public var description: String {
     var lines = ["Spec \"\(name)\""]
@@ -247,6 +384,7 @@ public struct TLASpec: Sendable {
       name: prefixedName,
       variables: self.variables + otherVars,
       constants: self.constants.merging(other.constants) { $1 },
+      formalParameters: self.formalParameters + other.formalParameters,
       actions: self.actions + other.actions,
       invariants: self.invariants + other.invariants,
       temporalProperties: self.temporalProperties + other.temporalProperties,
@@ -265,6 +403,9 @@ public struct TLASpec: Sendable {
       }(),
       recursiveDefs: self.recursiveDefs + other.recursiveDefs,
       recursiveFuncs: self.recursiveFuncs + other.recursiveFuncs,
+      formalOperatorDefinitions: self.formalOperatorDefinitions + other.formalOperatorDefinitions,
+      imports: self.imports + other.imports,
+      moduleInstances: self.moduleInstances + other.moduleInstances,
       symmetrySets: self.symmetrySets + other.symmetrySets,
       symmetryGroups: self.symmetryGroups + other.symmetryGroups,
       symmetricCollections: self.symmetricCollections + other.symmetricCollections
@@ -276,6 +417,7 @@ public struct TLASpec: Sendable {
       name: self.name,
       variables: self.variables,
       constants: constants,
+      formalParameters: self.formalParameters,
       actions: self.actions,
       invariants: self.invariants,
       temporalProperties: self.temporalProperties,
@@ -288,6 +430,9 @@ public struct TLASpec: Sendable {
       constraint: self.constraint,
       recursiveDefs: self.recursiveDefs,
       recursiveFuncs: self.recursiveFuncs,
+      formalOperatorDefinitions: self.formalOperatorDefinitions,
+      imports: self.imports,
+      moduleInstances: self.moduleInstances,
       symmetrySets: self.symmetrySets,
       symmetryGroups: self.symmetryGroups,
       symmetricCollections: self.symmetricCollections
@@ -376,6 +521,29 @@ public struct ConstantDecl: SpecComponent {
     self.value = value
   }
 }
+public enum FormalModuleParameterKind: String, Sendable, Equatable {
+  /// Emits a TLA+ `CONSTANTS` declaration.
+  case constant
+  /// Emits a TLA+ `VARIABLES` declaration. This is used when an instance
+  /// substitutes a state-level module symbol, as `ClientCentric` does for
+  /// `Keys` and `Values`.
+  case variable
+}
+
+public struct FormalModuleParameter: Sendable, Equatable {
+  public let name: String
+  public let kind: FormalModuleParameterKind
+
+  public init(_ name: String, kind: FormalModuleParameterKind = .constant) {
+    precondition(!name.isEmpty, "A formal module parameter needs a name.")
+    self.name = name
+    self.kind = kind
+  }
+}
+public struct FormalParameterDecl: SpecComponent {
+  public let parameter: FormalModuleParameter
+  init(_ parameter: FormalModuleParameter) { self.parameter = parameter }
+}
 public struct NamedValueDecl: Equatable, Sendable {
   public let name: String
   public let value: TLAValue
@@ -440,6 +608,36 @@ public struct DefinitionDecl: SpecComponent, Equatable {
     self.body = body
   }
 }
+
+/// A named formal operator that stays executable in the SwiftTLA AST.
+/// Use this for definitions whose body or parameters must participate in
+/// model checking, rather than `Definition`, which is source-only text.
+public struct FormalOperatorDecl: SpecComponent, Equatable {
+  public let definition: FormalOperatorDefinition
+
+  public init(_ definition: FormalOperatorDefinition) {
+    self.definition = definition
+  }
+
+  var tlaText: String {
+    let parameters = definition.parameters.map { parameter in
+      switch parameter {
+      case .value(let name): return name
+      case .operator(let name, let arity):
+        return "\(name)(\(Array(repeating: "_", count: arity).joined(separator: ", ")))"
+      }
+    }.joined(separator: ", ")
+    return "\(definition.name)(\(parameters)) == \(definition.body)"
+  }
+}
+
+public func FormalDefinition(
+  _ name: String,
+  parameters: [FormalParameter],
+  body: StateExpr
+) -> FormalOperatorDecl {
+  FormalOperatorDecl(FormalOperatorDefinition(name: name, parameters: parameters, body: body))
+}
 public struct TheoremDecl: SpecComponent, Equatable {
   public let tlaText: String
   public let name: String?
@@ -476,6 +674,7 @@ public struct UseDecl: SpecComponent {
   public let spec: TLASpec
   init(_ spec: TLASpec) { self.spec = spec }
 }
+
 public struct ConstraintDecl: SpecComponent, Equatable {
   public let body: StateExpr
   init(_ body: StateExpr) { self.body = body }
@@ -527,11 +726,15 @@ public enum SpecBuilder {
   public static func buildExpression(_ expr: TemporalDecl) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: FairnessDecl) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: ConstantDecl) -> [SpecComponent] { [expr] }
+  public static func buildExpression(_ expr: FormalParameterDecl) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: DefinitionDecl) -> [SpecComponent] { [expr] }
+  public static func buildExpression(_ expr: FormalOperatorDecl) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: TheoremDecl) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: AssumeDecl) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: ExtendsDecl) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: UseDecl) -> [SpecComponent] { [expr] }
+  public static func buildExpression(_ expr: ImportDecl) -> [SpecComponent] { [expr] }
+  public static func buildExpression(_ expr: FormalModuleInstance) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: UseSpecDecl) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: DeadlockDecl) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: ConstraintDecl) -> [SpecComponent] { [expr] }
@@ -630,6 +833,13 @@ public func Variable(from name: String, _ range: StateExpr) -> VarDecl {
 }
 // MARK: - Shared initial state computation
 public func computeInitialStates(_ spec: TLASpec) -> [[String: TLAValue]] {
+  computeInitialStates(spec, evaluationContext: StateExprEvaluationContext())
+}
+
+func computeInitialStates(
+  _ spec: TLASpec,
+  evaluationContext: StateExprEvaluationContext
+) -> [[String: TLAValue]] {
   let substituted = substituteConstants(spec)
   let base = Dictionary(uniqueKeysWithValues: substituted.variables.map { ($0.name, $0.initial) })
   let nondeterministic = substituted.variables.filter { $0.initialSet != nil || $0.lazySet != nil }
@@ -637,7 +847,12 @@ public func computeInitialStates(_ spec: TLASpec) -> [[String: TLAValue]] {
     states = states.flatMap { state -> [[String: TLAValue]] in
       let expression = variable.lazySet ?? variable.initialSet
       guard let expression,
-        case .set(let values) = try? expression.evaluate(in: state)
+        case .set(let values) = try? expression.evaluate(
+          in: state,
+          runtimeFuncs: substituted.runtimeFuncs,
+          recursiveFuncs: substituted.resolvedRecursiveFuncs,
+          evaluationContext: evaluationContext
+        )
       else { return [] }
       return TLAValue.sorted(values).map {
         state.merging([variable.name: $0]) { _, new in new }
@@ -646,7 +861,12 @@ public func computeInitialStates(_ spec: TLASpec) -> [[String: TLAValue]] {
   }
   for variable in substituted.variables where variable.initExpr != nil {
     states = states.compactMap { state in
-      guard let val = try? variable.initExpr!.evaluate(in: state) else { return nil }
+      guard let val = try? variable.initExpr!.evaluate(
+        in: state,
+        runtimeFuncs: substituted.runtimeFuncs,
+        recursiveFuncs: substituted.resolvedRecursiveFuncs,
+        evaluationContext: evaluationContext
+      ) else { return nil }
       var s = state
       s[variable.name] = val
       return s
@@ -718,6 +938,13 @@ public struct SymmetrySet: Hashable, Sendable, CustomStringConvertible {
 }
 public func Constant(_ name: String, _ value: some TLAValueConvertible) -> ConstantDecl {
   ConstantDecl(name, value.tlaValue)
+}
+/// Declares a module symbol that an `Instance` supplies with a `ModuleArgument`.
+public func Parameter(
+  _ name: String,
+  kind: FormalModuleParameterKind = .constant
+) -> FormalParameterDecl {
+  FormalParameterDecl(FormalModuleParameter(name, kind: kind))
 }
 /// Register a named value constant for use in spec expressions.
 /// `Value("poweredOn", 5)` makes `poweredOn` resolve to 5 in spec expressions.

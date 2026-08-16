@@ -81,65 +81,27 @@ extension Expr where T == Bool {
     public static prefix func !(_ value: Expr<Bool>) -> Expr<Bool> {
         Expr(.not(value.raw))
     }
-
-    public static func ifThenElse(_ cond: some StateExprConvertible, _ then: Bool, _ else: Var<Bool>) -> Expr {
-        Expr(.ifThenElse(cond.stateExpr, .value(.bool(then)), `else`.stateExpr))
-    }
-    public static func ifThenElse(_ cond: some StateExprConvertible, _ then: StateExpr, _ else: StateExpr) -> Expr {
-        Expr(.ifThenElse(cond.stateExpr, then, `else`))
-    }
-}
-
-extension Expr {
-    /// Builds a typed formal conditional without leaving the typed DSL.
-    public static func ifThenElse(
-        _ condition: some StateExprConvertible,
-        then: T,
-        else otherwise: T
-    ) -> Expr<T> {
-        Expr<T>(.ifThenElse(
-            condition.stateExpr,
-            .value(then.tlaValue),
-            .value(otherwise.tlaValue)
-        ))
-    }
-
-    /// Builds a typed conditional when one branch is already a formal expression.
-    public static func ifThenElse(
-        _ condition: some StateExprConvertible,
-        then: T,
-        else otherwise: Expr<T>
-    ) -> Expr<T> {
-        Expr<T>(.ifThenElse(
-            condition.stateExpr,
-            .value(then.tlaValue),
-            otherwise.raw
-        ))
-    }
-
-    /// Builds a typed conditional when one branch is already a formal expression.
-    public static func ifThenElse(
-        _ condition: some StateExprConvertible,
-        then: Expr<T>,
-        else otherwise: T
-    ) -> Expr<T> {
-        Expr<T>(.ifThenElse(
-            condition.stateExpr,
-            then.raw,
-            .value(otherwise.tlaValue)
-        ))
-    }
-}
-
-extension Expr where T == String {
-    public static func ifThenElse(_ cond: some StateExprConvertible, _ then: String, _ else: Var<String>) -> Expr {
-        Expr(.ifThenElse(cond.stateExpr, .value(.string(then)), `else`.stateExpr))
-    }
 }
 
 public func +(_ lhs: Expr<Int>, _ rhs: Int) -> Expr<Int> { Expr(.add(lhs.raw, .int(rhs))) }
+public func +(_ lhs: Expr<Int>, _ rhs: Expr<Int>) -> Expr<Int> { Expr(.add(lhs.raw, rhs.raw)) }
 public func -(_ lhs: Expr<Int>, _ rhs: Int) -> Expr<Int> { Expr(.subtract(lhs.raw, .int(rhs))) }
+public func -(_ lhs: Expr<Int>, _ rhs: Expr<Int>) -> Expr<Int> { Expr(.subtract(lhs.raw, rhs.raw)) }
+public func *(_ lhs: Expr<Int>, _ rhs: Expr<Int>) -> Expr<Int> { Expr(.multiply(lhs.raw, rhs.raw)) }
+public func *(_ lhs: Expr<Int>, _ rhs: Int) -> Expr<Int> { Expr(.multiply(lhs.raw, .int(rhs))) }
 public func -(_ lhs: Int, _ rhs: Var<Int>) -> Expr<Int> { Expr(.subtract(.int(lhs), rhs.stateExpr)) }
 public func -(_ lhs: Int, _ rhs: Expr<Int>) -> Expr<Int> { Expr(.subtract(.int(lhs), rhs.raw)) }
 public func +(_ lhs: Expr<Int>, _ rhs: Var<Int>) -> Expr<Int> { Expr(.add(lhs.raw, rhs.stateExpr)) }
 public func %(_ lhs: Expr<Int>, _ rhs: Int) -> Expr<Int> { Expr(.modulo(lhs.raw, .int(rhs))) }
+public func <(_ lhs: Expr<Int>, _ rhs: Expr<Int>) -> StateExpr { .lessThan(lhs.raw, rhs.raw) }
+public func >(_ lhs: Expr<Int>, _ rhs: Expr<Int>) -> StateExpr { .greaterThan(lhs.raw, rhs.raw) }
+public func <=(_ lhs: Expr<Int>, _ rhs: Expr<Int>) -> StateExpr { .lessOrEqual(lhs.raw, rhs.raw) }
+public func >=(_ lhs: Expr<Int>, _ rhs: Expr<Int>) -> StateExpr { .greaterOrEqual(lhs.raw, rhs.raw) }
+public func <(_ lhs: Expr<Int>, _ rhs: LocalVariable<Int>) -> StateExpr { .lessThan(lhs.raw, rhs.stateExpr) }
+public func >(_ lhs: Expr<Int>, _ rhs: LocalVariable<Int>) -> StateExpr { .greaterThan(lhs.raw, rhs.stateExpr) }
+public func <=(_ lhs: Expr<Int>, _ rhs: LocalVariable<Int>) -> StateExpr { .lessOrEqual(lhs.raw, rhs.stateExpr) }
+public func >=(_ lhs: Expr<Int>, _ rhs: LocalVariable<Int>) -> StateExpr { .greaterOrEqual(lhs.raw, rhs.stateExpr) }
+public func == <T: TLAValueType>(_ lhs: Expr<T>, _ rhs: Expr<T>) -> StateExpr { .equal(lhs.raw, rhs.raw) }
+public func != <T: TLAValueType>(_ lhs: Expr<T>, _ rhs: Expr<T>) -> StateExpr { .notEqual(lhs.raw, rhs.raw) }
+public func == <T: TLAValueType>(_ lhs: Expr<T>, _ rhs: LocalVariable<T>) -> StateExpr { .equal(lhs.raw, rhs.stateExpr) }
+public func != <T: TLAValueType>(_ lhs: Expr<T>, _ rhs: LocalVariable<T>) -> StateExpr { .notEqual(lhs.raw, rhs.stateExpr) }

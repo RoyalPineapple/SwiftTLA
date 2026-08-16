@@ -19,6 +19,51 @@ struct CoreConformanceTLCAdapterTests { @Test("frozen graph stream becomes compl
     #expect(run.observableActions == ["Next"])
   }
 
+  @Test("module-bundle validation identifies a missing transitive formal import before TLC starts")
+  func reportsMissingFormalModuleWithSourceEvidence() throws {
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    let root = directory.appendingPathComponent("UsesFunctions.tla")
+    let functions = directory.appendingPathComponent("Functions.tla")
+    try "---- MODULE UsesFunctions ----\nEXTENDS Functions\n====\n".write(
+      to: root, atomically: true, encoding: .utf8)
+    try "---- MODULE Functions ----\nEXTENDS Folds\n====\n".write(
+      to: functions, atomically: true, encoding: .utf8)
+    let request = TLCProcessRequestV1(
+      javaExecutable: URL(fileURLWithPath: "/usr/bin/java"),
+      jar: directory.appendingPathComponent("tla2tools.jar"),
+      bridgeClasses: directory.appendingPathComponent("bridge"),
+      module: root,
+      configuration: directory.appendingPathComponent("UsesFunctions.cfg"),
+      graphEvents: directory.appendingPathComponent("events.jsonl"),
+      traceOutput: directory.appendingPathComponent("trace.json"),
+      replayInput: directory.appendingPathComponent("replay.json"),
+      workingDirectory: directory,
+      arguments: ["-workers", "1"],
+      expectedCase: fixtureCase(.fixture, arguments: ["-workers", "1"]),
+      runID: UUID()
+    )
+
+    do {
+      try request.validateModuleBundle()
+      Issue.record("Module-bundle validation accepted a missing Folds.tla dependency.")
+    } catch let error as TLCProcessErrorV1 {
+      let expected = TLCProcessErrorV1.invalidModuleBundle(.missingImportedModule(
+        module: "Folds", importedBy: functions.path, line: 2,
+        expectedFile: directory.appendingPathComponent("Folds.tla").path
+      ))
+      #expect(error == expected)
+      let report = error.failureReport(for: request)
+      #expect(report.whatFailed == "The emitted module bundle is missing an imported formal module.")
+      #expect(report.whereItFailed == "\(functions.path):2, which imports Folds")
+      #expect(report.expected.contains("Folds.tla"))
+      #expect(report.actual == "The emitted bundle has no Folds.tla file.")
+      #expect(report.systemChange == "TLC was not launched and no comparison was published.")
+      #expect(report.nextSafeAction.contains("transitive imports"))
+    }
+  }
+
   @Test("TLC violations remain non-passing canonical outcomes")
   func preservesViolationOutcome() throws {
     let expectedCase = fixtureCase(.fixture)

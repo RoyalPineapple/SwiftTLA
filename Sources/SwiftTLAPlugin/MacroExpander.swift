@@ -8,6 +8,35 @@ import SwiftParser
 import SwiftTLA
 
 enum MacroExpander {
+    /// The formal action label is external specification data and is kept
+    /// verbatim in `TLAActionInvocation`. Generated Swift declarations need a
+    /// separate, collision-safe identifier surface.
+    static func generatedActionIdentifiers(actions: [SpecParser.ParsedAction]) -> [String] {
+        let reserved: Set<String> = ["init", "deinit", "subscript", "toInvocation", "rawValue"]
+        var used: Set<String> = []
+        return actions.map { action in
+            let scalars = action.name.unicodeScalars.map { scalar -> Character in
+                switch scalar.value {
+                case 65...90, 97...122, 48...57, 95: return Character(String(scalar))
+                default: return "_"
+                }
+            }
+            var base = String(scalars)
+            if base.isEmpty { base = "action" }
+            if base.unicodeScalars.first.map({ (48...57).contains($0.value) }) == true || reserved.contains(base) {
+                base = "action_\(base)"
+            }
+            var identifier = base
+            var suffix = 2
+            while used.contains(identifier) {
+                identifier = "\(base)_\(suffix)"
+                suffix += 1
+            }
+            used.insert(identifier)
+            return identifier
+        }
+    }
+
     static func swiftType(for action: SpecParser.ParsedAction, binding: ActionBinding) -> String {
         action.bindingSwiftTypes[binding.name] ?? swiftType(for: binding.values[0])
     }
@@ -160,6 +189,27 @@ enum MacroExpander {
             "(\"\(property.0)\", \(codegenTemporalExpr(property.1)))"
         }.joined(separator: ", ")
         let treeFairness = model.fairness.map(codegenFairness).joined(separator: ", ")
+        let treeConstraint = model.constraint.map(codegenStateExpr) ?? "nil"
+        let treeImports = model.imports.map { "\"\($0)\"" }.joined(separator: ", ")
+        let treeImportConfigurations = model.importConfigurations.map(codegenFormalModuleConfiguration)
+            .joined(separator: ", ")
+        let treeModuleInstances = model.moduleInstances.map(codegenFormalModuleInstance)
+            .joined(separator: ", ")
+        let treeFormalParameters = model.formalParameters.map {
+            "FormalModuleParameter(\"\($0.name)\", kind: .\($0.kind.rawValue))"
+        }.joined(separator: ", ")
+        let treeFormalOperatorDefinitions = model.formalOperatorDefinitions.map { definition in
+            let parameters = definition.parameters.map { parameter -> String in
+                switch parameter {
+                case .value(let name): return ".value(\"\(name)\")"
+                case .operator(let name, let arity): return ".operator(\"\(name)\", arity: \(arity))"
+                }
+            }.joined(separator: ", ")
+            return "FormalOperatorDefinition(name: \"\(definition.name)\", parameters: [\(parameters)], body: \(codegenStateExpr(definition.body)))"
+        }.joined(separator: ", ")
+        let treeAlgorithmTokens = model.algorithmFidelityTokens.map { token in
+            "AlgorithmFidelityToken(encodedCanonicalForm: \"\(token.encodedCanonicalForm.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\""))\")"
+        }.joined(separator: ", ")
 
         let parserTreeSource = """
         static let _parserTree: ParsedSpecModel = ParsedSpecModel(
@@ -167,18 +217,40 @@ enum MacroExpander {
             actions: [\(treeActions)],
             invariants: [\(treeInvs)],
             temporal: [\(treeTemporal)],
-            fairness: [\(treeFairness)]
+            fairness: [\(treeFairness)],
+            constraint: \(treeConstraint),
+            imports: [\(treeImports)],
+            importConfigurations: [\(treeImportConfigurations)],
+            moduleInstances: [\(treeModuleInstances)],
+            formalParameters: [\(treeFormalParameters)],
+            formalOperatorDefinitions: [\(treeFormalOperatorDefinitions)]
         )
+        static let _parserAlgorithmTokens: [AlgorithmFidelityToken] = [\(treeAlgorithmTokens)]
         """
         let checkerSource = """
         static func _checkParserTree() {
             let builtSpec = Self.spec
+            if let evidence = _tlaAlgorithmFidelityEvidence(
+                _parserAlgorithmTokens,
+                builtSpec.algorithmFidelityTokens
+            ) {
+                preconditionFailure(
+                    "SwiftTLA Algorithm parser tree mismatch for " + String(reflecting: Self.self) + ". " +
+                    evidence.description
+                )
+            }
             let built = ParsedSpecModel(
                 variables: builtSpec.variables.map { ($0.name, $0.initial, $0.initialSet) },
                 actions: builtSpec.actions.map { ($0.name, $0.body, $0.bindings) },
                 invariants: builtSpec.invariants.map { ($0.name, $0.body) },
                 temporal: builtSpec.temporalProperties.map { ($0.name, $0.expr) },
-                fairness: builtSpec.fairness
+                fairness: builtSpec.fairness,
+                constraint: builtSpec.constraint,
+                imports: builtSpec.imports.map(\\.name),
+                importConfigurations: builtSpec.importConfigurations,
+                moduleInstances: builtSpec.moduleInstances,
+                formalParameters: builtSpec.formalParameters,
+                formalOperatorDefinitions: builtSpec.formalOperatorDefinitions
             )
             if !_tlaAlphaEquivalent(built, _parserTree) {
                 preconditionFailure(
@@ -264,6 +336,7 @@ enum MacroExpander {
         case .setDifference(let a, let b): return "StateExpr.setDifference(\(cg(a)), \(cg(b)))"
         case .subset(let a, let b): return "StateExpr.subset(\(cg(a)), \(cg(b)))"
         case .tupleAccess(let t, let i): return "StateExpr.tupleAccess(\(cg(t)), \(i))"
+        case .tupleDynamicAccess(let tuple, let index): return "StateExpr.tupleDynamicAccess(\(cg(tuple)), \(cg(index)))"
         case .tupleAppend(let t, let e): return "StateExpr.tupleAppend(\(cg(t)), \(cg(e)))"
         case .tupleHead(let t): return "StateExpr.tupleHead(\(cg(t)))"
         case .tupleTail(let t): return "StateExpr.tupleTail(\(cg(t)))"
@@ -275,12 +348,15 @@ enum MacroExpander {
         case .setMap(let e, let qv, let s): return "StateExpr.setMap(\(cg(e)), \"\(qv)\", \(cg(s)))"
         case .powerSet(let s): return "StateExpr.powerSet(\(cg(s)))"
         case .unionAll(let s): return "StateExpr.unionAll(\(cg(s)))"
+        case .integerRange(let lower, let upper): return "StateExpr.integerRange(\(cg(lower)), \(cg(upper)))"
         case .tupleLiteral(let es): return "StateExpr.tupleLiteral([\(es.map(cg).joined(separator: ", "))])"
         case .recordLiteral(let fs):
             let fields = fs.map { "\"\($0.key)\": \(cg($0.value))" }.joined(separator: ", ")
             return "StateExpr.recordLiteral([\(fields)])"
         case .setLiteral(let es): return "StateExpr.setLiteral([\(es.map(cg).joined(separator: ", "))])"
         case .functionLiteral(let d, let qv, let b): return "StateExpr.functionLiteral(\(cg(d)), \"\(qv)\", \(cg(b)))"
+        case .functionSet(let domain, let range):
+            return "StateExpr.functionSet(\(cg(domain)), \(cg(range)))"
         case .caseExpr(let ps, let fb):
             let patterns = ps.map(cg).joined(separator: ", ")
             let fallback = fb.map { cg($0) } ?? "nil"
@@ -291,8 +367,42 @@ enum MacroExpander {
             return "StateExpr.exists(\(cg(set)), \"\(variable)\", \(cg(predicate)))"
         case .choose(let set, let variable, let predicate):
             return "StateExpr.choose(\(cg(set)), \"\(variable)\", \(cg(predicate)))"
-        case .sequenceFromSet, .setSum, .functionSet, .recursiveCall, .enabledAction:
-            return "StateExpr.value(.int(0))"
+        case .enabledAction(let name): return "StateExpr.enabled(\"\(name)\")"
+        case .sequenceFromSet(let values): return "StateExpr.sequenceFromSet(\(cg(values)))"
+        case .setSum(let function, let values): return "StateExpr.setSum(\(cg(function)), \(cg(values)))"
+        case .foldFunction(let operation, let initial, let sequence):
+            let parameters = operation.parameters.map { "\"\($0)\"" }.joined(separator: ", ")
+            return "StateExpr.foldFunction(FormalLambda(parameters: [\(parameters)], body: \(cg(operation.body))), initial: \(cg(initial)), sequence: \(cg(sequence)))"
+        case .operatorApplication(let operation, let arguments):
+            let operatorSource: String
+            switch operation {
+            case .lambda(let lambda):
+                let parameters = lambda.parameters.map { "\"\($0)\"" }.joined(separator: ", ")
+                operatorSource = ".lambda(FormalLambda(parameters: [\(parameters)], body: \(cg(lambda.body))))"
+            case .reference(let name, let arity):
+                operatorSource = ".reference(\"\(name)\", arity: \(arity))"
+            }
+            let argumentSource = arguments.map { argument -> String in
+                switch argument {
+                case .value(let expression): return ".value(\(cg(expression)))"
+                case .operator(.reference(let name, let arity)):
+                    return ".operator(.reference(\"\(name)\", arity: \(arity)))"
+                case .operator(.lambda(let lambda)):
+                    let parameters = lambda.parameters.map { "\"\($0)\"" }.joined(separator: ", ")
+                    return ".operator(.lambda(FormalLambda(parameters: [\(parameters)], body: \(cg(lambda.body)))))"
+                }
+            }.joined(separator: ", ")
+            return "StateExpr.operatorApplication(\(operatorSource), [\(argumentSource)])"
+        case .recursiveCall(let name, let arguments):
+            return "StateExpr.recursiveCall(\"\(name)\", [\(arguments.map(cg).joined(separator: ", "))])"
+        case .letValue(let name, let value, let body):
+            return "StateExpr.letValue(\"\(name)\", \(cg(value)), \(cg(body)))"
+        case .letIn(let operators, let body):
+            let definitions = operators.map { operation in
+                let parameters = operation.parameters.map { "\"\($0)\"" }.joined(separator: ", ")
+                return "LocalOperator(\"\(operation.name)\", parameters: [\(parameters)], body: \(cg(operation.body)))"
+            }.joined(separator: ", ")
+            return "StateExpr.letIn([\(definitions)], \(cg(body)))"
         }
     }
 
@@ -342,10 +452,10 @@ enum MacroExpander {
                 }
             },
             memberBlock: MemberBlockSyntax {
-                for a in actions {
+                for (a, identifier) in zip(actions, generatedActionIdentifiers(actions: actions)) {
                     EnumCaseDeclSyntax {
                         EnumCaseElementSyntax(
-                            name: .identifier(a.name),
+                            name: .identifier(identifier),
                             rawValue: InitializerClauseSyntax(value: StringLiteralExprSyntax(content: a.name))
                         )
                     }
@@ -355,6 +465,7 @@ enum MacroExpander {
     }
 
     static func generateActionLabel(actions: [SpecParser.ParsedAction]) -> DeclSyntax {
+        let identifiers = generatedActionIdentifiers(actions: actions)
         func swiftType(for action: SpecParser.ParsedAction, binding: ActionBinding) -> String {
             Self.swiftType(for: action, binding: binding)
         }
@@ -385,14 +496,14 @@ enum MacroExpander {
             }
         }
 
-        let cases = actions.map { action in
+        let cases = zip(actions, identifiers).map { action, identifier in
             let bindings = publicBindings(for: action)
-            guard !bindings.isEmpty else { return "case \(action.name)" }
+            guard !bindings.isEmpty else { return "case \(identifier)" }
             let parameters = bindings.map { "\($0.name): \(swiftType(for: action, binding: $0))" }.joined(separator: ", ")
-            return "case \(action.name)(\(parameters))"
+            return "case \(identifier)(\(parameters))"
         }.joined(separator: "\n    ")
 
-        let toInvocationCases = actions.map { action in
+        let toInvocationCases = zip(actions, identifiers).map { action, identifier in
             let publicBindings = publicBindings(for: action)
             let arguments = action.bindings.map { binding in
                 publicBindings.contains(where: { $0.name == binding.name })
@@ -400,15 +511,15 @@ enum MacroExpander {
                     : fixedArgument(binding)
             }.joined(separator: ", ")
             let pattern = publicBindings.isEmpty
-                ? ".\(action.name)"
-                : ".\(action.name)(\(publicBindings.map { "let \($0.name)" }.joined(separator: ", ")))"
+                ? ".\(identifier)"
+                : ".\(identifier)(\(publicBindings.map { "let \($0.name)" }.joined(separator: ", ")))"
             return "case \(pattern): return .init(name: \"\(action.name)\", arguments: [\(arguments)])"
         }.joined(separator: "\n        ")
 
-        let fromInvocationCases = actions.map { action in
+        let fromInvocationCases = zip(actions, identifiers).map { action, identifier in
             let publicBindings = publicBindings(for: action)
             if action.bindings.isEmpty {
-                return "case \"\(action.name)\" where invocation.arguments.isEmpty: self = .\(action.name)"
+                return "case \"\(action.name)\" where invocation.arguments.isEmpty: self = .\(identifier)"
             }
             let patterns = action.bindings.enumerated().map { index, binding -> String in
                 if publicBindings.contains(where: { $0.name == binding.name }) {
@@ -418,7 +529,7 @@ enum MacroExpander {
             }.joined(separator: ", ")
             let arguments = publicBindings.map { "\($0.name): \($0.name)" }.joined(separator: ", ")
             return "case \"\(action.name)\" where invocation.arguments.count == \(action.bindings.count): "
-                + "guard \(patterns) else { return nil }; self = .\(action.name)\(arguments.isEmpty ? "" : "(\(arguments))")"
+                + "guard \(patterns) else { return nil }; self = .\(identifier)\(arguments.isEmpty ? "" : "(\(arguments))")"
         }.joined(separator: "\n        ")
 
         return DeclSyntax(stringLiteral: """
@@ -576,15 +687,15 @@ extension MacroExpander {
                     .joined(separator: "\n")
                 return """
                 guard let rawValue = dict[\(key)] else {
-                    throw TLAStateProjectionDiagnostic.missingValue(path: \(key))
+                    throw TLAStateProjectionDiagnostic.missingRequiredValue(path: \(key), expected: "\(typeName)")
                 }
                 guard case .string(let value) = rawValue else {
-                    throw TLAStateProjectionDiagnostic.invalidValue(path: \(key))
+                    throw TLAStateProjectionDiagnostic.typeMismatch(path: \(key), expected: "\(typeName) encoded as a formal string", actual: rawValue)
                 }
                 switch value {
                 \(cases)
                 default:
-                    throw TLAStateProjectionDiagnostic.invalidValue(path: \(key))
+                    throw TLAStateProjectionDiagnostic.typeMismatch(path: \(key), expected: "a declared \(typeName) case", actual: rawValue)
                 }
                 """
             }
@@ -592,7 +703,7 @@ extension MacroExpander {
             if type == "TLAValue" {
                 return """
                 guard let value = dict[\(key)] else {
-                    throw TLAStateProjectionDiagnostic.missingValue(path: \(key))
+                    throw TLAStateProjectionDiagnostic.missingRequiredValue(path: \(key), expected: "\(type)")
                 }
                 self.\(variable.name) = value
                 """
@@ -601,10 +712,10 @@ extension MacroExpander {
                !["Int", "Bool", "String", "TLAValue"].contains(typeName) {
                 return """
                 guard let rawValue = dict[\(key)] else {
-                    throw TLAStateProjectionDiagnostic.missingValue(path: \(key))
+                    throw TLAStateProjectionDiagnostic.missingRequiredValue(path: \(key), expected: "\(typeName)")
                 }
                 guard let value = \(typeName)(formalValue: rawValue) else {
-                    throw TLAStateProjectionDiagnostic.invalidValue(path: \(key))
+                    throw TLAStateProjectionDiagnostic.typeMismatch(path: \(key), expected: "\(typeName)", actual: rawValue)
                 }
                 self.\(variable.name) = value
                 """
@@ -612,10 +723,10 @@ extension MacroExpander {
             let pattern = tlaValuePattern(forSwiftType: type, binding: "value")
             return """
             guard let rawValue = dict[\(key)] else {
-                throw TLAStateProjectionDiagnostic.missingValue(path: \(key))
+                throw TLAStateProjectionDiagnostic.missingRequiredValue(path: \(key), expected: "\(type)")
             }
             guard \(pattern) else {
-                throw TLAStateProjectionDiagnostic.invalidValue(path: \(key))
+                throw TLAStateProjectionDiagnostic.typeMismatch(path: \(key), expected: "\(type)", actual: rawValue)
             }
             self.\(variable.name) = value
             """
@@ -639,7 +750,8 @@ extension MacroExpander {
         variables: [(name: String, initial: TLAValue, initialSet: StateExpr?, swiftTypeName: String?)],
         enumInfos: [ParsedEnumInfo]
     ) -> (methods: [FunctionDeclSyntax], nativeActionNames: Set<String>) {
-        let methods = actions.map { action -> FunctionDeclSyntax in
+        let identifiers = generatedActionIdentifiers(actions: actions)
+        let methods = zip(actions, identifiers).map { action, identifier -> FunctionDeclSyntax in
             if action.bindings.isEmpty,
                let collectionAction = collectionActions.first(where: { $0.name == action.name }),
                let collection = symmetricCollections.first(where: { $0.name == collectionAction.collectionName }) {
@@ -663,7 +775,7 @@ extension MacroExpander {
                             throw GeneratedMachineError.unexpected(error)
                         }
                         return TransitionResult(
-                            action: .\(action.name),
+                            action: .\(identifier),
                             before: evidence.before,
                             after: evidence.after
                         )
@@ -671,7 +783,7 @@ extension MacroExpander {
                     } ?? """
                     let evidence = try _machine.apply(.init(name: \"\(action.name)\"), from: _stateWithLiveCollections()) { _ in true }
                     return TransitionResult(
-                        action: .\(action.name),
+                        action: .\(identifier),
                         before: evidence.before,
                         after: evidence.after
                     )
@@ -689,7 +801,7 @@ extension MacroExpander {
                     : ""
                 let source = """
                 @discardableResult
-                \(isActor ? "fileprivate" : "public mutating") func \(action.name)(id: \(collection.elementType).ID) throws -> TransitionResult {
+                \(isActor ? "fileprivate" : "public mutating") func \(identifier)(id: \(collection.elementType).ID) throws -> TransitionResult {
                     let projection = \(collection.name).projection()
                     let targetKey: TLAValue
                     do {
@@ -715,11 +827,11 @@ extension MacroExpander {
                 "\(binding.name): \(swiftType(for: action, binding: binding))"
             }.joined(separator: ", ")
             let labels = bindings.map { "\($0.name): \($0.name)" }.joined(separator: ", ")
-            let methodName = isActor ? "_\(action.name)" : "apply\(action.name)"
+            let methodName = isActor ? "_\(identifier)" : "apply\(identifier)"
             if bindings.isEmpty {
                 let source = """
                 \(isActor ? "fileprivate" : "public mutating") func \(methodName)() throws -> TransitionResult {
-                    try apply(.\(action.name))
+                    try apply(.\(identifier))
                 }
                 """
                 return DeclSyntax(stringLiteral: source).as(FunctionDeclSyntax.self)!
@@ -727,7 +839,7 @@ extension MacroExpander {
             let modifier = isActor ? "fileprivate" : "public mutating"
             let source = """
             \(modifier) func \(methodName)(\(parameters)) throws -> TransitionResult {
-                try apply(.\(action.name)\(labels.isEmpty ? "" : "(\(labels))"))
+                try apply(.\(identifier)\(labels.isEmpty ? "" : "(\(labels))"))
             }
             """
             return DeclSyntax(stringLiteral: source).as(FunctionDeclSyntax.self)!

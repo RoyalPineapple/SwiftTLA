@@ -6,26 +6,36 @@ domains, records for structured state, and generated machines for execution.
 One authored model becomes a checked formal AST, a TLA+ module, and a typed
 Swift state machine.
 
-## One model, several faithful products
+## Two authoring languages, one formal foundation
 
-SwiftTLA constructs the same formal model along two independent paths, then
-compares them before generated code uses it:
+SwiftTLA has two intentional authoring languages. They meet at the TLA+ AST;
+they are not competing spellings of one public DSL.
 
 ```
-source syntax → parser → StateExpr/ActionExpr AST
-                         ├── compile-time checker
-                         ├── .tlaModule
-                         └── generated Swift machine surface
-
-constrained builders → runtime TLASpec → SpecRuntime
-
-parser AST ↔ runtime TLASpec semantic alpha-equivalence gate
+Swift-shaped PlusCal                         Direct TLA+
+#spec { Algorithm { … } }                    TLASpec { Variable / Action / … }
+          │                                           │
+          ▼                                           │
+     Algorithm IR                                     │
+          │                                           │
+          └──────────── lower once ───────────────────┘
+                               ▼
+                          TLA+ AST / TLASpec
+                    ┌──────────┼───────────┐
+                    ▼          ▼           ▼
+                 checker   generated Swift  .tla / .cfg
 ```
 
-The parser reads the authored Swift syntax. The constrained builders construct
-the executable `TLASpec`. Semantic alpha-equivalence confirms that they mean
-the same thing, with a diagnostic that identifies the first differing
-declaration, action, invariant, or bound expression.
+Swift-shaped PlusCal is the normal application path. Its parser and constrained
+builder independently produce equivalent `Algorithm` IR, then the fidelity gate
+compares that IR before either path lowers it. A second alpha-equivalence gate
+compares the resulting TLA+ specifications. Diagnostics identify the first
+semantic node, expected value, actual value, preserved state, and next safe
+action.
+
+Direct TLA+ is the formal-engine path for faithful upstream ports, imported
+standard/community modules, and exact parity fixtures. It builds the TLA+ AST
+directly and deliberately has no reverse conversion into Algorithm IR.
 
 `#spec` is the authoring boundary. It makes Swift declaration sugar such as
 `let count = SharedVar(initial: 0)` available to the scoped builder while the
@@ -117,13 +127,16 @@ The two paths carry the authored model through the following phases:
 2. The `#spec` macro performs syntax-only desugaring. For example, it makes a
    `let count = SharedVar(initial: 0)` declaration visible to the runtime
    builder.
-3. The model macro parses the original source independently into the formal
-   AST. The checker, TLA+ emitter, and generated machine start from this AST.
-4. At runtime, the constrained builder closure runs and independently creates
-   a `TLASpec`.
-5. SwiftTLA normalizes both models and compares them with semantic
+3. For an `Algorithm`, the model macro parses the original source into
+   Algorithm IR. The constrained builder independently creates Algorithm IR.
+4. SwiftTLA compares those two IR values, then lowers each through the one
+   Algorithm lowerer into a TLA+ specification.
+5. SwiftTLA compares the resulting specifications with semantic
    alpha-equivalence.
-6. The generated machine executes the validated transition runtime.
+6. For direct TLA+ authoring, the macro and builder create only the TLA+ AST;
+   no Algorithm IR is invented.
+7. The checker, TLA+ emitter, and generated machine consume the validated
+   TLA+ specification.
 
 After construction and comparison, the generated machine holds its canonical
 state machine and applies enabled transitions.
@@ -158,12 +171,33 @@ struct Counter {
 The `#spec` expansion registers `count` with the constrained runtime builder,
 while the model macro parses the original declaration into the formal AST.
 
-## Authoring two source forms
+## Algorithm rendering
 
-PlusCal-shaped authoring expresses algorithms through `Algorithm`, `Each`, and
-`Do`; SwiftTLA lowers it into the core AST and emits ordinary TLA+ for TLC.
-The typed `#spec` vocabulary also expresses direct TLA+ specifications. Both
-forms share the AST, checker, emitter, generated machine, and fidelity gate.
+Algorithm IR has one semantic lowerer: `Algorithm IR → TLA+ AST`. It owns
+atomic `Do` blocks, old-state simultaneous assignment, process state, `With`
+and `Choose` bindings, procedures, and fairness.
+
+`AlgorithmPlusCalRenderer` is not another lowerer. It consumes Algorithm IR
+and prints retained, readable PlusCal source inside a valid TLA+ module; it
+must not invent semantics or reimplement lowering.
+
+## Capability claims use five levels
+
+SwiftTLA does not call a feature “supported” merely because an AST case or an
+evaluator branch exists. Every capability has five independent levels:
+
+| Level | Meaning |
+|---|---|
+| Implemented | The engine can represent, evaluate, lower, or emit the concept. |
+| Canonically authorable | A developer can express it through `#spec` and `Algorithm` without escaping to direct TLA+. |
+| Fidelity-checked | The macro parser and constrained builder demonstrably retain the same formal model. |
+| Generated cleanly | The model produces typed public state, actions, results, and generated tests. |
+| Externally admitted | A declared finite model/configuration has retained TLC comparison evidence. |
+
+An implementation-level result never implies the next level. For example,
+formal operator application can exist in the evaluator while its canonical
+Algorithm spelling, generated machine, or imported-module TLC witness remains
+in progress. Reports state the achieved level and the next missing boundary.
 
 For selected finite core models, the core-conformance command compares the
 complete labeled transition relation from SwiftTLA with a pinned TLC run. This
@@ -211,15 +245,40 @@ Every public generated value is `Sendable`. See
 [Generated machines](GeneratedMachines.md) and the SwiftTLA DocC catalog for
 the supported surface.
 
+## Ownership boundaries
+
+The repository may keep its current files while the language work is moving,
+but its ownership boundaries are fixed:
+
+| Area | Owns | Must not own |
+|---|---|---|
+| `SwiftTLA` formal core | TLA+ AST, finite evaluation, module rendering, Algorithm IR, lowering, and PlusCal rendering | SwiftUI, application adapters, or macro-only semantics |
+| `SwiftTLAPlugin` | syntax recovery, source spans, fidelity diagnostics, and typed generated surfaces | Algorithm lowering or TLA+ evaluation semantics |
+| direct-TLA parity corpus | faithful direct-TLA modules, imports, and direct-TLA graph comparisons | application-shaped Algorithm fixtures |
+| algorithm conformance corpus | canonical `#spec`/`Algorithm` fixtures, including upstream PlusCal ports and their retained authored PlusCal source | duplicate direct-TLA implementations of the same algorithm |
+| `Examples/` consumers | demos and Apple integration shims that import the public package | a second state machine, availability policy, or formal evaluator |
+
+`AlgorithmConformance` is the dedicated home for PlusCal-shaped fixtures.
+It depends on SwiftTLA and the macro library. K6 moves existing upstream
+PlusCal ports out of `UpstreamParity` without changing their model or
+provenance. This keeps core semantic tests independent of the upstream corpus
+and keeps direct parity evidence distinct from algorithm evidence.
+
 ## DSL philosophy
 
-- **Builders everywhere.** Every nested scope has a result builder: `Action { }`,
-  `Invariant { }`, `Variable(computed:) { }`, `DefineRecursive { }`,
-  `forAll(set) { _ in }`, `filterSet(set) { _ in }`, `exists(name, from:) { _ in }`.
+- **One authoring path.** Application models use `#spec` plus `Algorithm`,
+  `SharedVar`, `LocalVar`, `Each`, `Procedure`, and `Do`. The algorithm builder
+  creates formal IR; it does not execute ordinary Swift behavior.
+- **Builders everywhere.** Every nested formal scope has a result builder:
+  `Algorithm { }`, `Do { }`, `Action { }`, `Invariant { }`,
+  `DefineRecursive { }`, `forAll(set) { _ in }`, and `filterSet(set) { _ in }`.
 - **1:1 structural match.** DSL structure mirrors upstream TLA+ exactly.
   Same action names, same variable decomposition, same invariant names.
-- **No manual `ActionDecl`/`InvDecl`.** All Decl structs have internal inits.
-  Only builder functions create spec components.
+- **Direct TLA is an engine boundary.** `Var`, `Variable`, and `Action` remain
+  available for imported TLA+ modules and upstream parity fixtures. They are
+  not documented as a parallel application-model style.
+- **No manual declarations.** All declaration structs have internal inits.
+  Only builders create formal components.
 
 ## Language coverage
 
@@ -250,7 +309,9 @@ the supported surface.
 | **Sequences — Head/Tail** | ✓ | `.head`, `.tail` |
 | **Sequences — Append** | ✓ | `.appending(e)` |
 | **Sequences — Len** | ✓ | `.count` |
-| **Sequences — element** | ✓ | `.at(i)` |
+| **Sequences — element** | ✓ | `sequence[index]` or `.at(i)` |
+| **Bounded sequence domain** | ✓ | `Sequences(of: values, lengths: 0...n)` |
+| **Bounded sorted integer sequence domain** | ✓ | `SortedSequences(of: values, lengths: 0...n)` |
 | **Sequences — concatenate** | ✓ | `.concatenating(other)` |
 | **Sets — union/intersection/diff** | ✓ | `.union`, `.intersection`, `.subtracting` |
 | **Sets — subset** | ✓ | `.isSubset(of:)` |
@@ -280,12 +341,14 @@ the supported surface.
 
 ## Port inventory
 
-**25/25 TLC parity** — `scripts/validate_upstream_parity.sh` vs [tlaplus/Examples](https://github.com/tlaplus/Examples)
+**Selected TLC parity ports** — `scripts/validate_upstream_parity.sh` checks these ports against [tlaplus/Examples](https://github.com/tlaplus/Examples).
 
 | Spec | States | Key features |
 |------|--------|-------------|
 | AsynchInterface | 6 | Records, sequences |
 | Barrier_N6 | 64 | CHOOSE per-value, counters |
+| BinarySearch | 27,963 | PlusCal `while`, scoped `with`, bounded sorted sequences |
+| Consensus | 4 | PlusCal parameterless `macro`, `when`, scoped `with`, weak fairness |
 | CatOddBoxes / CatEvenBoxes | 30 / 48 | Nondet init |
 | Chameneos M=4,N=4 | 34,534 | RECURSIVE Sum, tuples, @ self-ref, existsAction |
 | ChangRoberts N=3 | 137 | CHOOSE per-value, per-node actions |
@@ -302,6 +365,7 @@ the supported surface.
 | SimpleAllocator | 400 | Functions, invariants |
 | SingleLaneBridge | 3,605 | forAll/filterSet builders, ifElse, RECURSIVE SeqFromSet |
 | TCommit | 34 | State machine, invariants |
+| 2PCwithBTM | 1,245 | PlusCal macros, three fair process families, typed function state |
 | TeachingConcurrency N=2,N=3 | 13 / 23 | PlusCal translation, per-node actions |
 | TwoPhase | 288 | Records, invariants |
 

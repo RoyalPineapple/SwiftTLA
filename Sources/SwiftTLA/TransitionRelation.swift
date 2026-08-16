@@ -20,22 +20,18 @@ public struct TransitionRelation: Sendable {
 
     private let spec: TLASpec
     private let variableNames: [String]
-    private let actionEvaluator: ActionEvaluator
+    private let actionEvaluator: ActionEvaluator?
 
     public init(
         spec: TLASpec,
-        actionEvaluator: @escaping ActionEvaluator = { action, state, variableNames in
-            try ActionEnumerator.enumerate(action, from: state, varNames: variableNames)
-        }
+        actionEvaluator: ActionEvaluator? = nil
     ) {
         self.init(resolvedSpec: substituteConstants(spec), actionEvaluator: actionEvaluator)
     }
 
     init(
         resolvedSpec: TLASpec,
-        actionEvaluator: @escaping ActionEvaluator = { action, state, variableNames in
-            try ActionEnumerator.enumerate(action, from: state, varNames: variableNames)
-        }
+        actionEvaluator: ActionEvaluator? = nil
     ) {
         self.spec = resolvedSpec
         self.variableNames = resolvedSpec.variables.map(\.name)
@@ -43,9 +39,16 @@ public struct TransitionRelation: Sendable {
     }
 
     public func successors(from state: State) throws -> [Successor] {
+        try successors(from: state, evaluationContext: StateExprEvaluationContext())
+    }
+
+    func successors(
+        from state: State,
+        evaluationContext: StateExprEvaluationContext
+    ) throws -> [Successor] {
         try spec.actions.flatMap { action in
             try actionInvocations(action).flatMap { variant in
-                try successors(for: variant, from: state)
+                try successors(for: variant, from: state, evaluationContext: evaluationContext)
             }
         }
     }
@@ -54,28 +57,47 @@ public struct TransitionRelation: Sendable {
         for invocation: TLAActionInvocation,
         from state: State
     ) throws -> [Successor] {
+        try successors(
+            for: invocation,
+            from: state,
+            evaluationContext: StateExprEvaluationContext()
+        )
+    }
+
+    func successors(
+        for invocation: TLAActionInvocation,
+        from state: State,
+        evaluationContext: StateExprEvaluationContext
+    ) throws -> [Successor] {
         guard let action = spec.actions.first(where: { $0.name == invocation.name }) else {
             throw Error.actionNotFound(invocation)
         }
         guard let variant = actionInvocations(action).first(where: { $0.invocation == invocation }) else {
             throw Error.invalidActionArguments(invocation)
         }
-        return try successors(for: variant, from: state)
+        return try successors(for: variant, from: state, evaluationContext: evaluationContext)
     }
 
     private func successors(
         for variant: (invocation: TLAActionInvocation, body: ActionExpr, indices: [Int]),
-        from state: State
+        from state: State,
+        evaluationContext: StateExprEvaluationContext
     ) throws -> [Successor] {
         let states: [State]
         do {
-            states = try actionEvaluator(variant.body, state, variableNames)
+            states = try enumerate(
+                variant.body,
+                from: state,
+                evaluationContext: evaluationContext
+            )
             if let constraint = spec.constraint {
                 return try states.compactMap { successor in
                     try constraint.evaluateBool(
                         in: successor,
                         runtimeFuncs: spec.runtimeFuncs,
-                        recursiveFuncs: spec.recursiveFuncs
+                        recursiveFuncs: spec.resolvedRecursiveFuncs,
+                        formalOperatorDefinitions: spec.resolvedFormalOperatorDefinitions,
+                        evaluationContext: evaluationContext
                     ) ? Successor(invocation: variant.invocation, state: successor) : nil
                 }
             }
@@ -83,5 +105,23 @@ public struct TransitionRelation: Sendable {
             throw Error.enumerationFailed(invocation: variant.invocation, underlying: error)
         }
         return states.map { Successor(invocation: variant.invocation, state: $0) }
+    }
+
+    private func enumerate(
+        _ action: ActionExpr,
+        from state: State,
+        evaluationContext: StateExprEvaluationContext
+    ) throws -> [State] {
+        if let actionEvaluator {
+            return try actionEvaluator(action, state, variableNames)
+        } else {
+            return try ActionEnumerator.enumerate(
+                action,
+                from: state,
+                varNames: variableNames,
+                formalOperatorDefinitions: spec.resolvedFormalOperatorDefinitions,
+                evaluationContext: evaluationContext
+            )
+        }
     }
 }

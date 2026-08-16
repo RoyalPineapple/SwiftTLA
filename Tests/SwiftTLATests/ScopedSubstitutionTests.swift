@@ -43,4 +43,90 @@ struct ScopedSubstitutionTests {
 
     #expect(substituteVar("id", with: .int(7), in: action) == expected)
   }
+
+  @Test("Substitution renames a quantifier binder before a free replacement can capture it")
+  func substitutionAvoidsQuantifierCapture() {
+    let expression: StateExpr = .forAll(
+      .setLiteral([.value(.int(1))]),
+      "member",
+      .equal(.variable("target"), .variable("member"))
+    )
+
+    let result = StateExpr.substituteVariable("target", with: .variable("member"), in: expression)
+
+    #expect(result == .forAll(
+      .setLiteral([.value(.int(1))]),
+      "member_1",
+      .equal(.variable("member"), .variable("member_1"))
+    ))
+  }
+
+  @Test("Substitution respects the binding side of a set comprehension")
+  func substitutionRespectsSetMapScope() {
+    let expression: StateExpr = .setMap(
+      .add(.variable("item"), .variable("offset")),
+      "item",
+      .setLiteral([.value(.int(1))])
+    )
+
+    let result = StateExpr.substituteVariable("item", with: .int(99), in: expression)
+
+    #expect(result == expression)
+  }
+
+  @Test("Formal lambda parameters are renamed before substitution")
+  func substitutionAvoidsFormalLambdaCapture() {
+    let expression: StateExpr = .foldFunction(
+      FormalLambda(
+        parameters: ["element", "accumulator"],
+        body: .add(.variable("target"), .variable("element"))
+      ),
+      initial: .int(0),
+      sequence: .tupleLiteral([.int(1)])
+    )
+
+    let result = StateExpr.substituteVariable("target", with: .variable("element"), in: expression)
+
+    #expect(result == .foldFunction(
+      FormalLambda(
+        parameters: ["element_1", "accumulator"],
+        body: .add(.variable("element"), .variable("element_1"))
+      ),
+      initial: .int(0),
+      sequence: .tupleLiteral([.int(1)])
+    ))
+  }
+
+  @Test("Local operator parameters are scoped independently")
+  func substitutionAvoidsLocalOperatorCapture() {
+    let expression: StateExpr = .letIn(
+      [LocalOperator("keep", parameters: ["item"], body: .variable("target"))],
+      .recursiveCall("keep", [.value(.int(0))])
+    )
+
+    let result = StateExpr.substituteVariable("target", with: .variable("item"), in: expression)
+
+    #expect(result == .letIn(
+      [LocalOperator("keep", parameters: ["item_1"], body: .variable("item"))],
+      .recursiveCall("keep", [.value(.int(0))])
+    ))
+  }
+
+  @Test("two-value quantifiers lower to independently scoped binders")
+  func evaluatesMultiBindingQuantifiers() throws {
+    let values = SetExpr<Int>.literal(1, 2)
+    let exists = Exists(in: values, and: values) { left, right in
+      left.expr + right.expr == 3
+    }
+    let all = ForAll(in: values, and: values) { left, right in
+      left.expr <= 2 && right.expr <= 2
+    }
+    let condition = All(in: values, and: values) { left, right in
+      left.expr + right.expr <= 4
+    }
+
+    #expect(try exists.raw.evaluateBool(in: [:]))
+    #expect(try all.raw.evaluateBool(in: [:]))
+    #expect(try condition.evaluateBool(in: [:]))
+  }
 }

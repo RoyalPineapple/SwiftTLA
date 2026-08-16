@@ -9,6 +9,12 @@ public enum AlgorithmDiagnosticCode: String, Sendable, Hashable {
     case missingStop
     case propertyBoundary
     case invalidAlgorithmComponent
+    case duplicateProcedure
+    case duplicateProcedureVariable
+    case invalidProcedureTarget
+    case invalidProcedureArity
+    case invalidProcedureReturn
+    case invalidProcedureControlFlow
 }
 
 public enum AlgorithmDiagnosticAnchor: Sendable, Hashable {

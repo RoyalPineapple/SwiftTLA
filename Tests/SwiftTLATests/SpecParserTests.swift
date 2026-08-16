@@ -60,7 +60,11 @@ private func parseExpression(_ source: String) -> ExprSyntax {
 
         #expect(parsed.variables.isEmpty)
         #expect(parsed.actions.isEmpty)
-        #expect(parsed.diagnostics.first?.message == "Unsupported Algorithm declaration 'UnsupportedAlgorithmConstruct()'. Supported declarations are SharedVar and Each.")
+        #expect(
+            parsed.diagnostics.first?.message
+                == "Unsupported Algorithm declaration 'UnsupportedAlgorithmConstruct()'. "
+                    + "Supported declarations are SharedVar, Macro, Procedure, Each, Do, While, and properties."
+        )
     }
 
     @Test("parser lowers the mechanical PlusCal statements through the shared IR")
@@ -93,6 +97,423 @@ private func parseExpression(_ source: String) -> ExprSyntax {
             .strongFairnessInvocation(.init(name: "increment", arguments: [.string("left")])),
             .strongFairnessInvocation(.init(name: "increment", arguments: [.string("right")]))
         ])
+    }
+
+    @Test("Algorithm parser preserves a process-bound formal lambda application")
+    func parsesProcessScopedFormalLambdaApplication() {
+        let source = """
+        {
+            Algorithm("ScopedFormalLambda") {
+                let counters = SharedVar(initial: Function<Worker, Int>.literal(
+                    (.left, 0),
+                    (.right, 0)
+                ))
+                Each(Worker.all) { worker in
+                    Do("advance") {
+                        Assign(counters, to: counters.updating(worker, to: Expr<Int>(
+                            StateExpr.operatorApplication(
+                                .lambda(FormalLambda(
+                                    parameters: ["value"],
+                                    body: StateExpr.variable("value") + 1
+                                )),
+                                [.value(counters[worker].raw)]
+                            )
+                        )))
+                    }
+                }
+            }
+        }
+        """
+        let closure = Parser.parse(source: source).statements.first!.item.as(ClosureExprSyntax.self)!
+        let parsed = SpecParser.parseSpecClosure(
+            closure,
+            enumDomains: ["Worker": [.string("left"), .string("right")]]
+        )
+
+        #expect(parsed.diagnostics.isEmpty)
+        #expect(parsed.actions.map(\.name) == ["advance", "Terminating"])
+        #expect(parsed.actions.first?.body.description.contains("LAMBDA value : (value + 1)") == true)
+    }
+
+    @Test("formal operator parsing failure retains all six diagnostic fields")
+    func malformedFormalLambdaRetainsSixFieldDiagnostic() {
+        let source = """
+        {
+            Algorithm("MalformedFormalLambda") {
+                let counter = SharedVar(initial: 0)
+                Do("advance") {
+                    Assign(counter, to: Expr<Int>(StateExpr.operatorApplication(
+                        .lambda(FormalLambda(parameters: [], body: .int(1))),
+                        [.value(counter.expr.raw)]
+                    )))
+                }
+            }
+        }
+        """
+        let closure = Parser.parse(source: source).statements.first!.item.as(ClosureExprSyntax.self)!
+        let parsed = SpecParser.parseSpecClosure(closure)
+        guard let diagnostic = parsed.diagnostics.first else {
+            Issue.record("Expected a malformed formal-lambda diagnostic")
+            return
+        }
+
+        #expect(diagnostic.description.contains("What failed:") == true)
+        #expect(diagnostic.description.contains("Where:") == true)
+        #expect(diagnostic.description.contains("Expected:") == true)
+        #expect(diagnostic.description.contains("Actual:") == true)
+        #expect(diagnostic.description.contains("Change status:") == true)
+        #expect(diagnostic.description.contains("Next safe action:") == true)
+    }
+
+    @Test("parser lowers ordered multi-source With bindings")
+    func parsesThreeIndependentWithBindings() {
+        let source = """
+        {
+            Algorithm("ThreeWith") {
+                let selected = SharedVar(initial: 0)
+                Do("choose") {
+                    With(
+                        SetExpr<Int>.literal(1, 2),
+                        SetExpr<Int>.literal(10),
+                        SetExpr<Int>.literal(100, 200)
+                    ) { first, second, third in
+                        Assign(selected, to: first.expr + second.expr + third.expr)
+                    }
+                }
+            }
+        }
+        """
+        let closure = Parser.parse(source: source).statements.first!.item.as(ClosureExprSyntax.self)!
+        let parsed = SpecParser.parseSpecClosure(closure)
+
+        #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
+        #expect(parsed.actions.first?.body.description.contains("__pcal_with_0") == true)
+        #expect(parsed.actions.first?.body.description.contains("__pcal_with_2") == true)
+    }
+
+    @Test("parser expands a bounded statement macro in its caller's atomic step")
+    func parsesStatementMacro() {
+        let source = """
+        {
+            Algorithm("MacroLock") {
+                let lock = SharedVar(initial: 1)
+                let acquire = Macro { (value: MacroParameter<Int>) in
+                    Await(value == 1)
+                    Assign(value, to: 0)
+                }
+                Each(Node.all) { _ in
+                    Do("acquire") { acquire(lock) }
+                }
+            }
+        }
+        """
+        let closure = Parser.parse(source: source).statements.first!.item.as(ClosureExprSyntax.self)!
+        let parsed = SpecParser.parseSpecClosure(
+            closure,
+            enumDomains: ["Node": [.string("left"), .string("right")]]
+        )
+
+        #expect(parsed.diagnostics.isEmpty)
+        #expect(parsed.actions.map(\.name) == ["acquire", "Terminating"])
+        #expect(parsed.actions.first?.body.description.contains("lock") == true)
+    }
+
+    @Test("parser expands every statement macro parameter in caller scope")
+    func parsesTwoParameterStatementMacro() {
+        let source = """
+        {
+            Algorithm("CopyValue") {
+                let destination = SharedVar(initial: 0)
+                let source = SharedVar(initial: 7)
+                let copy = Macro { (target: MacroParameter<Int>, value: MacroParameter<Int>) in
+                    Assign(target, to: value.expr)
+                }
+                Do("copy") { copy(destination, source) }
+            }
+        }
+        """
+        let closure = Parser.parse(source: source).statements.first!.item.as(ClosureExprSyntax.self)!
+        let parsed = SpecParser.parseSpecClosure(closure)
+
+        #expect(parsed.diagnostics.isEmpty)
+        #expect(parsed.actions.first?.body.description.contains("destination' = source") == true)
+        #expect(parsed.actions.first?.body.description.contains("__pcal_macro_parameter") == false)
+    }
+
+    @Test("parser retains formal expression macro arguments")
+    func parsesExpressionStatementMacroArguments() {
+        let source = """
+        {
+            Algorithm("OffsetValue") {
+                let destination = SharedVar(initial: 0)
+                let source = SharedVar(initial: 7)
+                let copy = Macro { (target: MacroParameter<Int>, value: MacroParameter<Int>) in
+                    Assign(target, to: value.expr)
+                }
+                Do("copy") { copy(destination, source.expr + 1) }
+            }
+        }
+        """
+        let closure = Parser.parse(source: source).statements.first!.item.as(ClosureExprSyntax.self)!
+        let parsed = SpecParser.parseSpecClosure(closure)
+
+        #expect(parsed.diagnostics.isEmpty)
+        #expect(parsed.actions.first?.body.description.contains("destination' = (source + 1)") == true)
+    }
+
+    @Test("parser rejects an expression used for a macro assignment target")
+    func diagnosesExpressionMacroAssignmentTarget() {
+        let source = """
+        {
+            Algorithm("InvalidMacroTarget") {
+                let destination = SharedVar(initial: 0)
+                let write = Macro { (target: MacroParameter<Int>) in
+                    Assign(target, to: 1)
+                }
+                Do("write") { write(destination.expr + 1) }
+            }
+        }
+        """
+        let closure = Parser.parse(source: source).statements.first!.item.as(ClosureExprSyntax.self)!
+        let parsed = SpecParser.parseSpecClosure(closure)
+
+        #expect(parsed.actions.isEmpty)
+        let diagnostic = parsed.diagnostics.first?.message ?? ""
+        #expect(diagnostic.contains("What failed: statement macro 'write' assigns through parameter"))
+        #expect(diagnostic.contains("Expected a formal variable assignment target"))
+        #expect(diagnostic.contains("What changed: no model was changed"))
+        #expect(diagnostic.contains("Next safe action"))
+    }
+
+    @Test("parser lowers readable procedure bindings to deterministic formal slots")
+    func parsesTypedProcedureBindings() {
+        let source = """
+        {
+            Algorithm("ProcedureSource") {
+                let output = SharedVar(initial: 0)
+                Procedure("work", parameters: Int.self) { value in
+                    let offset = LocalVar(initial: 1)
+                    Do("enter") {
+                        Await(value.expr >= 0)
+                        Assign(output, to: value.expr + offset.expr)
+                        Return()
+                    }
+                }
+                Do("start") { Call("work", with: 7) }
+                Do("finished") { Stop() }
+            }
+        }
+        """
+        let closure = Parser.parse(source: source).statements.first!.item.as(ClosureExprSyntax.self)!
+        let parsed = SpecParser.parseSpecClosure(closure)
+
+        #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
+        #expect(parsed.variables.contains { $0.name == "parameter0" })
+        #expect(parsed.actions.contains { $0.name == "procedure.work.enter" })
+    }
+
+    @Test("statement macro arity diagnostics identify the declaration and safe repair")
+    func diagnosesStatementMacroArity() {
+        let source = """
+        {
+            Algorithm("BadMacroCall") {
+                let destination = SharedVar(initial: 0)
+                let source = SharedVar(initial: 7)
+                let copy = Macro { (target: MacroParameter<Int>, value: MacroParameter<Int>) in
+                    Assign(target, to: value.expr)
+                }
+                Do("copy") { copy(destination) }
+            }
+        }
+        """
+        let closure = Parser.parse(source: source).statements.first!.item.as(ClosureExprSyntax.self)!
+        let parsed = SpecParser.parseSpecClosure(closure)
+
+        #expect(parsed.actions.isEmpty)
+        #expect(parsed.diagnostics.first?.message.contains("Statement macro 'copy' expects 2 arguments but received 1.") == true)
+    }
+
+    @Test("parser expands a parameterless statement macro")
+    func parsesParameterlessStatementMacro() {
+        let source = """
+        {
+            Algorithm("ParameterlessMacro") {
+                let count = SharedVar(initial: 0)
+                let increment = Macro {
+                    Assign(count, to: count + 1)
+                }
+                Do("increment") { increment() }
+            }
+        }
+        """
+        let closure = Parser.parse(source: source).statements.first!.item.as(ClosureExprSyntax.self)!
+        let parsed = SpecParser.parseSpecClosure(closure)
+
+        #expect(parsed.diagnostics.isEmpty)
+        #expect(parsed.actions.first?.body.description.contains("count' = (count + 1)") == true)
+    }
+
+    @Test("parser retains a filtered formal function initial domain")
+    func parsesFilteredFunctionInitialDomain() {
+        let source = """
+        {
+            Algorithm("FunctionDomain") {
+                let successors = SharedVar(in: Where(
+                    Functions(from: Node.all, to: Subsets(of: SetExpr<Node>.literal(.first, .second)))
+                ) { successor in
+                    All(Node.all) { node in
+                        successor[node].cardinality == 1
+                    }
+                })
+                Do("done") { Stop() }
+            }
+        }
+        """
+        let closure = Parser.parse(source: source).statements.first!.item.as(ClosureExprSyntax.self)!
+        let parsed = SpecParser.parseSpecClosure(
+            closure,
+            enumPhases: ["Node": ["first": .string("first"), "second": .string("second")]],
+            enumDomains: ["Node": [.string("first"), .string("second")]]
+        )
+
+        #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
+        #expect(parsed.variables.first?.swiftTypeName == "Function<Node, SetExpr<Node>>")
+        #expect(parsed.variables.first?.initialSet?.description.contains("Cardinality") == true)
+    }
+
+    @Test("parser retains a typed record-valued function comprehension")
+    func parsesRecordFunctionComprehension() {
+        let source = """
+        {
+            Algorithm("RecordFunction") {
+                let cars = SharedVar(initial: Function<Car, Record<Model.CarRecord>>.mapping { _ in
+                    Record.literal(
+                        .init(Model.CarRecord.floor, 4),
+                        .init(Model.CarRecord.door, .closed)
+                    )
+                })
+                Do("hold") { Assign(cars, to: cars.expr) }
+            }
+        }
+        """
+        let closure = Parser.parse(source: source).statements.first!.item.as(ClosureExprSyntax.self)!
+        let parsed = SpecParser.parseSpecClosure(
+            closure,
+            enumPhases: ["Door": ["closed": .string("closed")]],
+            enumDomains: ["Car": [.string("north"), .string("south")]]
+        )
+
+        #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
+        #expect(parsed.variables.first?.name == "cars")
+        guard case .function(let cars) = parsed.variables.first?.initial else {
+            Issue.record("Expected cars to retain a formal finite function")
+            return
+        }
+        #expect(cars.count == 2)
+        #expect(cars.values.allSatisfy { value in
+            guard case .record(let fields) = value else { return false }
+            return fields["floor"] == .int(4) && fields["door"] == .string("closed")
+        })
+    }
+
+    @Test("parser retains a typed finite function literal with its bound key")
+    func parsesTypedFunctionLiteral() {
+        let source = """
+        {
+            Algorithm("FiniteFunction") {
+                Each(Node.all) { node in
+                    Do("hold") {
+                        let successor = Function<Node, Node>.literal(
+                            (Node.one, Node.two),
+                            (Node.two, Node.one)
+                        )
+                        When(successor[node] == Node.two)
+                    }
+                }
+            }
+        }
+        """
+        let closure = Parser.parse(source: source).statements.first!.item.as(ClosureExprSyntax.self)!
+        let parsed = SpecParser.parseSpecClosure(
+            closure,
+            enumPhases: ["Node": ["one": .int(1), "two": .int(2)]],
+            enumDomains: ["Node": [.int(1), .int(2)]]
+        )
+
+        #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
+        #expect(parsed.actions.first?.body.description.contains("CASE") == true)
+        #expect(parsed.actions.first?.body.description.contains("_typedFunctionEntry") == true)
+    }
+
+    @Test("parser resolves a static formal selection before algorithm lowering")
+    func parsesStaticFormalSelection() {
+        let source = """
+        {
+            Algorithm("StaticChoice") {
+                let selected = Select(
+                    from: SetExpr<Int>.literal(1, 2, 3),
+                    matching: { value in value.expr % 2 == 0 }
+                )
+                let current = SharedVar(initial: selected)
+                Do("done") { Stop() }
+            }
+        }
+        """
+        let closure = Parser.parse(source: source).statements.first!.item.as(ClosureExprSyntax.self)!
+        let parsed = SpecParser.parseSpecClosure(closure)
+
+        #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
+        #expect(parsed.variables.first?.initial == .int(2))
+    }
+
+    @Test("parser expands a statement macro with the current process identifier")
+    func parsesStatementMacroWithProcessIdentifier() {
+        let source = """
+        {
+            Algorithm("MacroProcess") {
+                let marked = SharedVar(initial: Function<Node, Bool>.literal((Node.left, false), (Node.right, false)))
+                let mark = Macro { (node: MacroParameter<Node>) in
+                    Assign(marked, to: marked.updating(node, to: true))
+                }
+                Each(Node.all) { node in
+                    Do("mark") { mark(node) }
+                }
+            }
+        }
+        """
+        let closure = Parser.parse(source: source).statements.first!.item.as(ClosureExprSyntax.self)!
+        let parsed = SpecParser.parseSpecClosure(
+            closure,
+            enumPhases: ["Node": ["left": .string("left"), "right": .string("right")]],
+            enumDomains: ["Node": [.string("left"), .string("right")]]
+        )
+
+        #expect(parsed.diagnostics.isEmpty)
+        let body = try? #require(parsed.actions.first?.body)
+        #expect(body?.description.contains("process") == true)
+        #expect(body?.description.contains("__pcal_macro_parameter") == false)
+    }
+
+    @Test("parser uses a PlusCal label enum's declared raw value")
+    func parsesDeclaredRawAlgorithmLabel() {
+        let source = """
+        {
+            Algorithm("RawLabel") {
+                Each(Node.all) { _ in
+                    Do(Step.resourceManager) { Stop() }
+                }
+            }
+        }
+        """
+        let closure = Parser.parse(source: source).statements.first!.item.as(ClosureExprSyntax.self)!
+        let parsed = SpecParser.parseSpecClosure(
+            closure,
+            enumPhases: ["Step": ["resourceManager": .string("RS")]],
+            enumDomains: ["Node": [.string("left"), .string("right")]]
+        )
+
+        #expect(parsed.diagnostics.isEmpty)
+        #expect(parsed.actions.map(\.name) == ["RS", "Terminating"])
     }
 
     @Test("parsed Algorithm actions match runtime-builder normalization")
@@ -246,6 +667,261 @@ private enum ParserNode: String, FiniteDomainKey {
         #expect(_tlaAlphaEquivalent(parsed, built))
     }
 
+    @Test func fidelityDifferenceRetainsTheFirstFormalNodeAndRecoveryAction() {
+        let parserTree = ParsedSpecModel(
+            variables: [(
+                name: "counter",
+                initial: .int(0),
+                initialSet: nil
+            )],
+            actions: [("advance", .assign("counter", .int(1)), [])],
+            invariants: []
+        )
+        let builderTree = ParsedSpecModel(
+            variables: [(
+                name: "counter",
+                initial: .int(0),
+                initialSet: nil
+            )],
+            actions: [("advance", .assign("counter", .int(2)), [])],
+            invariants: []
+        )
+
+        let evidence = _tlaFidelityEvidence(parserTree, builderTree)
+
+        #expect(evidence?.whatFailed == "action body differs after alpha normalization")
+        #expect(evidence?.location == .semanticPath("actions[0].body (advance)"))
+        #expect(evidence?.expected.contains("assign(counter,value(1))") == true)
+        #expect(evidence?.actual.contains("assign(counter,value(2))") == true)
+        #expect(evidence?.changeStatus == .noSpecificationWasCommitted)
+        #expect(evidence?.nextSafeAction.contains("#spec body") == true)
+        #expect(evidence?.description.contains("What failed:") == true)
+        #expect(evidence?.description.contains("Next safe action:") == true)
+    }
+
+    @Test func formalOperatorDefinitionsArePartOfParserBuilderFidelity() {
+        let parserTree = ParsedSpecModel(
+            variables: [],
+            actions: [],
+            invariants: [],
+            formalOperatorDefinitions: [
+                FormalOperatorDefinition(
+                    name: "increment",
+                    parameters: [.value("value")],
+                    body: .add(.variable("value"), .int(1))
+                )
+            ]
+        )
+        let builderTree = ParsedSpecModel(
+            variables: [],
+            actions: [],
+            invariants: [],
+            formalOperatorDefinitions: [
+                FormalOperatorDefinition(
+                    name: "increment",
+                    parameters: [.value("value")],
+                    body: .add(.variable("value"), .int(2))
+                )
+            ]
+        )
+
+        let evidence = _tlaFidelityEvidence(parserTree, builderTree)
+
+        #expect(!_tlaAlphaEquivalent(parserTree, builderTree))
+        #expect(evidence?.location == .semanticPath("formalOperatorDefinitions[0] (increment)"))
+        #expect(evidence?.expected.contains("value(1)") == true)
+        #expect(evidence?.actual.contains("value(2)") == true)
+        #expect(evidence?.changeStatus == .noSpecificationWasCommitted)
+        #expect(evidence?.sourceSpan.description == "source span unavailable")
+        #expect(evidence?.nextSafeAction.contains("FormalDefinition") == true)
+    }
+
+    @Test func formalDefinitionParameterNamesAreAlphaEquivalent() {
+        let parserTree = ParsedSpecModel(
+            variables: [],
+            actions: [],
+            invariants: [],
+            formalOperatorDefinitions: [
+                FormalOperatorDefinition(
+                    name: "apply",
+                    parameters: [.operator("transform", arity: 1), .value("input")],
+                    body: .operatorApplication(
+                        .reference("transform", arity: 1),
+                        [.value(.variable("input"))]
+                    )
+                )
+            ]
+        )
+        let builderTree = ParsedSpecModel(
+            variables: [],
+            actions: [],
+            invariants: [],
+            formalOperatorDefinitions: [
+                FormalOperatorDefinition(
+                    name: "apply",
+                    parameters: [.operator("operation", arity: 1), .value("value")],
+                    body: .operatorApplication(
+                        .reference("operation", arity: 1),
+                        [.value(.variable("value"))]
+                    )
+                )
+            ]
+        )
+
+        #expect(_tlaAlphaEquivalent(parserTree, builderTree))
+        #expect(_tlaFidelityEvidence(parserTree, builderTree) == nil)
+    }
+
+    @Test func formalDefinitionIsParsedIntoTheCanonicalFormalModel() {
+        let source = """
+        {
+            FormalDefinition(
+                "increment",
+                parameters: [.value("value")],
+                body: value + 1
+            )
+        }
+        """
+        let closure = Parser.parse(source: source).statements.first!.item.as(ClosureExprSyntax.self)!
+        let parsed = SpecParser.parseSpecClosure(closure)
+
+        #expect(parsed.diagnostics.isEmpty)
+        #expect(parsed.formalOperatorDefinitions == [
+            FormalOperatorDefinition(
+                name: "increment",
+                parameters: [.value("value")],
+                body: .add(.variable("value"), .int(1))
+            )
+        ])
+    }
+
+    @Test func higherOrderFormalDefinitionRoundTripsThroughTheCanonicalParser() {
+        let source = """
+        {
+            FormalDefinition(
+                "applyTwice",
+                parameters: [.operator("operation", arity: 1), .value("initial")],
+                body: StateExpr.operatorApplication(
+                    .reference("operation", arity: 1),
+                    [
+                        .value(StateExpr.operatorApplication(
+                            .reference("operation", arity: 1),
+                            [.value(StateExpr.variable("initial"))]
+                        ))
+                    ]
+                )
+            )
+        }
+        """
+        let closure = Parser.parse(source: source).statements.first!.item.as(ClosureExprSyntax.self)!
+        let parsed = SpecParser.parseSpecClosure(closure)
+
+        #expect(parsed.diagnostics.isEmpty)
+        #expect(parsed.formalOperatorDefinitions == [
+            FormalOperatorDefinition(
+                name: "applyTwice",
+                parameters: [.operator("operation", arity: 1), .value("initial")],
+                body: .operatorApplication(
+                    .reference("operation", arity: 1),
+                    [.value(.operatorApplication(
+                        .reference("operation", arity: 1),
+                        [.value(.variable("initial"))]
+                    ))]
+                )
+            )
+        ])
+    }
+
+    @Test func formalOperatorLambdaAndArgumentKindsRoundTripThroughTheParser() {
+        let expression = parseExpression("""
+        StateExpr.operatorApplication(
+            .reference("apply", arity: 2),
+            [
+                .operator(.lambda(FormalLambda(
+                    parameters: ["value"],
+                    body: StateExpr.variable("value")
+                ))),
+                .value(3)
+            ]
+        )
+        """)
+
+        #expect(SpecParser.decodeStateExpr(expression) == .operatorApplication(
+            .reference("apply", arity: 2),
+            [
+                .operator(.lambda(FormalLambda(
+                    parameters: ["value"],
+                    body: .variable("value")
+                ))),
+                .value(.int(3))
+            ]
+        ))
+    }
+
+    @Test func localOperatorParameterNamesAreAlphaEquivalent() {
+        let parserTree = ParsedSpecModel(
+            variables: [],
+            actions: [(
+                "advance",
+                .guard_(.letIn([
+                    LocalOperator(
+                        "Twice",
+                        parameters: ["input"],
+                        body: .add(.variable("input"), .variable("input"))
+                    )
+                ], .operatorApplication(
+                    .reference("Twice", arity: 1),
+                    [.value(.variable("counter"))]
+                ))),
+                []
+            )],
+            invariants: []
+        )
+        let builderTree = ParsedSpecModel(
+            variables: [],
+            actions: [(
+                "advance",
+                .guard_(.letIn([
+                    LocalOperator(
+                        "Twice",
+                        parameters: ["value"],
+                        body: .add(.variable("value"), .variable("value"))
+                    )
+                ], .operatorApplication(
+                    .reference("Twice", arity: 1),
+                    [.value(.variable("counter"))]
+                ))),
+                []
+            )],
+            invariants: []
+        )
+
+        #expect(_tlaAlphaEquivalent(parserTree, builderTree))
+        #expect(_tlaFidelityEvidence(parserTree, builderTree) == nil)
+    }
+
+    @Test func parserDiagnosticRetainsSourceSpanAndNoCommitStatus() {
+        let source = """
+        {
+            Variable(missing)
+        }
+        """
+        let closure = Parser.parse(source: source).statements.first!.item.as(ClosureExprSyntax.self)!
+        let parsed = SpecParser.parseSpecClosure(closure)
+
+        guard let diagnostic = parsed.diagnostics.first else {
+            Issue.record("Expected a diagnostic for the unbound variable declaration")
+            return
+        }
+        #expect(diagnostic.source == "Variable(missing)")
+        #expect(diagnostic.expected == "a supported SwiftTLA declaration or expression")
+        #expect(diagnostic.actual == "Variable(missing)")
+        #expect(diagnostic.changeStatus == .noFormalModelWasBuilt)
+        #expect(diagnostic.sourceSpan.utf8Length == "Variable(missing)".utf8.count)
+        #expect(diagnostic.description.contains("Where:") == true)
+        #expect(diagnostic.description.contains("Next safe action:") == true)
+    }
+
     @Test func oneArgumentVariableRejectsUnboundReference() {
         let source = """
         {
@@ -314,6 +990,16 @@ private enum ParserNode: String, FiniteDomainKey {
         let x: StateExpr = .variable("x")
         #expect(SpecParser.decodeStateExpr(parseExpression("!x")) == StateExpr.not(x))
         #expect(SpecParser.decodeStateExpr(parseExpression("-x")) == StateExpr.negate(x))
+        #expect(SpecParser.decodeStateExpr(parseExpression("-1")) == StateExpr.value(.int(-1)))
+    }
+
+    @Test func preservesSwiftInfixPrecedence() {
+        let index: StateExpr = .variable("index")
+        let count: StateExpr = .variable("count")
+        #expect(
+            SpecParser.decodeStateExpr(parseExpression("index <= count + 1"))
+                == StateExpr.lessOrEqual(index, .add(count, .value(.int(1))))
+        )
     }
 
     @Test func parseParenthesized() {
@@ -379,7 +1065,10 @@ private enum ParserNode: String, FiniteDomainKey {
     }
 
     @Test func parseAt() {
-        #expect(SpecParser.decodeStateExpr(parseExpression("t.at(3)")) == StateExpr.tupleAccess(.variable("t"), 3))
+        #expect(
+            SpecParser.decodeStateExpr(parseExpression("t.at(3)"))
+                == StateExpr.tupleAccess(.variable("t"), 3)
+        )
     }
 }
 
@@ -475,7 +1164,7 @@ private enum ParserNode: String, FiniteDomainKey {
             parseExpression("StateExpr.firstMatch((when: x < 0, then: -1))")
         )
         #expect(result == StateExpr.caseExpr(
-            [StateExpr.lessThan(.variable("x"), .value(.int(0))), StateExpr.negate(.value(.int(1)))],
+            [StateExpr.lessThan(.variable("x"), .value(.int(0))), StateExpr.value(.int(-1))],
             nil
         ))
     }
@@ -639,6 +1328,13 @@ private func parseClosure(_ source: String) -> ClosureExprSyntax {
         #expect(
             SpecParser.decodeFairness(parseExpression("x.strongFairness(\"Tick\")").as(FunctionCallExprSyntax.self)!)
                 == FairnessCondition.strongFairness("Tick")
+        )
+    }
+
+    @Test func parseAlgorithmFairnessDeclaration() {
+        #expect(
+            SpecParser.decodeFairness(parseExpression("WeakFairness(\"Next\")").as(FunctionCallExprSyntax.self)!)
+                == FairnessCondition.weakFairness("Next")
         )
     }
 
@@ -897,10 +1593,10 @@ private let cameraModePhases: [String: [String: TLAValue]] = [
         #expect(parsed.invariants[0].body == .notEqual(.variable("mode"), .value(.string("error"))))
     }
 
-    @Test func parseEnumStateVarInit() {
+    @Test func parseInitializedEnumVar() {
         let source = """
         {
-            let mode = StateVar<CameraMode>(CameraMode.idle)
+            let mode = Var<CameraMode>(CameraMode.idle)
         }
         """
         let closure = Parser.parse(source: source).statements.first!.item.as(ClosureExprSyntax.self)!

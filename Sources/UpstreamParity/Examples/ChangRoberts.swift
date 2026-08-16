@@ -44,7 +44,7 @@ public struct ChangRobertsModel {
                     Function<Node, Bool>.literal((.one, true), (.two, true), (.three, true))
                 ))
                 let processState = SharedVar(initial: Function<Node, ProcessState>.mapping { node in
-                    Expr<ProcessState>.ifThenElse(
+                    If(
                         initiator[node] == true,
                         then: .candidate,
                         else: .lost

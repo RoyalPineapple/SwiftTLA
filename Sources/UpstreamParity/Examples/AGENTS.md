@@ -41,8 +41,13 @@ them as templates for new work.
 | `x := e` | `Assign(x, to: e)` |
 | `if` / `either` | `If` / `Either` |
 | `with` / choice | `With` / `Choose` |
+| `Seq(S)` in a finite TLC model | `Sequences(of: S, lengths: 0...n)` |
+| sorted `Seq(S)` in a finite TLC model | `SortedSequences(of: S, lengths: 0...n)` |
+| `s[i]` / `Len(s)` | `sequence[index]` / `sequence.count` |
+| `macro M(x) { ... }` / `M(v)` | `let m = Macro { (x: MacroParameter<Value>) in ... }` / `m(v)` inside `Do` |
 | `goto` / `skip` / termination | `Goto` / `Skip` / `Stop` |
 | process fairness | `Each(S, fairness: .weak)` or `.strong` |
+| TLC `CONSTRAINT` bound | `StateConstraint(condition)` inside `Algorithm` |
 
 `Do` is atomic. Every accepted `DoBuilder` statement becomes part of one
 formal transition. Do not put an ordinary Swift side effect in a `Do` block.
@@ -58,7 +63,7 @@ After a port:
 
 1. Add or preserve the `Example.Entry` metadata and expected finite outcome.
 2. Run the focused `UpstreamParityTests` case. It must check the declared
-   state count and the parser–builder fidelity gate.
+   state count through the parser–builder fidelity gate.
 3. Run the relevant TLC parity command when the upstream module and bounded
    configuration are available.
 4. For a supported core case, refresh only the declared evidence through the

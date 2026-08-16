@@ -97,7 +97,9 @@ extension StateExpr {
     case .multiply(let a, let b): return "\(a.swiftSource) * \(b.swiftSource)"
     case .divide(let a, let b): return "\(a.swiftSource) / \(b.swiftSource)"
     case .modulo(let a, let b): return "\(a.swiftSource) % \(b.swiftSource)"
-    case .negate(let a): return "-(\(a.swiftSource))"
+    // Preserve a negation node instead of letting Swift parse a literal such
+    // as `-1`; the distinction matters to the parser/builder fidelity gate.
+    case .negate(let a): return "StateExpr.negate(\(a.swiftSource))"
     case .equal(let a, let b): return "\(a.swiftSource) == \(b.swiftSource)"
     case .notEqual(let a, let b): return "\(a.swiftSource) != \(b.swiftSource)"
     case .lessThan(let a, let b): return "\(a.swiftSource) < \(b.swiftSource)"
@@ -128,6 +130,7 @@ extension StateExpr {
     case .tupleLiteral(let es):
       return "StateExpr.tuple([\(es.map(\.swiftSource).joined(separator: ", "))])"
     case .tupleAccess(let t, let i): return "\(t.swiftSource).at(\(i))"
+    case .tupleDynamicAccess(let tuple, let index): return "\(tuple.swiftSource).at(\(index.swiftSource))"
     case .tupleLength(let t): return "\(t.swiftSource).count"
     case .tupleHead(let t): return "\(t.swiftSource).head"
     case .tupleTail(let t): return "\(t.swiftSource).tail"
@@ -138,13 +141,22 @@ extension StateExpr {
       let args = sorted.map { "\($0.key): \($0.value.swiftSource)" }.joined(separator: ", ")
       return "StateExpr.record(\(args))"
     case .recordAccess(let r, let f): return "\(r.swiftSource).\(f)"
-    case .setFilter(let s, _, let p): return "\(s.swiftSource).filtering(\(p.swiftSource))"
-    case .setMap(let e, _, let s): return "\(s.swiftSource).mapping(\(e.swiftSource))"
-    case .forAll(let s, _, let p): return "StateExpr.for(\(s.swiftSource), \(p.swiftSource))"
-    case .exists(let s, _, let p): return "StateExpr.exists(\(s.swiftSource), \(p.swiftSource))"
-    case .choose(let s, _, let p): return "StateExpr.choose(\(s.swiftSource), \(p.swiftSource))"
-    case .functionLiteral(let d, _, let b):
-      return "StateExpr.functionLiteral(\(d.swiftSource), \(b.swiftSource))"
+    // Preserve binder identity in the formal source codec. The ergonomic
+    // closure helpers deliberately create fresh binders, so serializing
+    // through them would turn a bound name into an accidental free variable.
+    case .setFilter(let s, let binder, let p):
+      return "StateExpr.setFilter(\(s.swiftSource), \(String(reflecting: binder)), \(p.swiftSource))"
+    case .setMap(let e, let binder, let s):
+      return "StateExpr.setMap(\(e.swiftSource), \(String(reflecting: binder)), \(s.swiftSource))"
+    case .integerRange(let lower, let upper): return "IntRange(\(lower.swiftSource), through: \(upper.swiftSource))"
+    case .forAll(let s, let binder, let p):
+      return "StateExpr.forAll(\(s.swiftSource), \(String(reflecting: binder)), \(p.swiftSource))"
+    case .exists(let s, let binder, let p):
+      return "StateExpr.exists(\(s.swiftSource), \(String(reflecting: binder)), \(p.swiftSource))"
+    case .choose(let s, let binder, let p):
+      return "StateExpr.choose(\(s.swiftSource), \(String(reflecting: binder)), \(p.swiftSource))"
+    case .functionLiteral(let d, let binder, let b):
+      return "StateExpr.functionLiteral(\(d.swiftSource), \(String(reflecting: binder)), \(b.swiftSource))"
     case .caseExpr(let pairs, let fallback):
       var parts: [String] = []
       for i in stride(from: 0, to: pairs.count, by: 2) {
@@ -157,9 +169,46 @@ extension StateExpr {
     case .setSum(let f, let s): return "StateExpr.setSum(\(f.swiftSource), \(s.swiftSource))"
     case .functionSet(let d, let r):
       return "StateExpr.functionSet(\(d.swiftSource), \(r.swiftSource))"
+    case .foldFunction(let operation, let initial, let sequence):
+      let parameters = operation.parameters.map { "\"\($0)\"" }.joined(separator: ", ")
+      return "StateExpr.foldFunction(FormalLambda(parameters: [\(parameters)], body: \(operation.body.swiftSource)), initial: \(initial.swiftSource), sequence: \(sequence.swiftSource))"
+    case .operatorApplication(let operation, let arguments):
+      let operatorSource: String
+      switch operation {
+      case .lambda(let lambda):
+        let parameters = lambda.parameters.map { "\"\($0)\"" }.joined(separator: ", ")
+        operatorSource = ".lambda(FormalLambda(parameters: [\(parameters)], body: \(lambda.body.swiftSource)))"
+      case .reference(let name, let arity):
+        operatorSource = ".reference(\"\(name)\", arity: \(arity))"
+      }
+      return "StateExpr.operatorApplication(\(operatorSource), [\(arguments.map(\.swiftSource).joined(separator: ", "))])"
     case .recursiveCall(let name, let args):
       let argsStr = args.map(\.swiftSource).joined(separator: ", ")
       return "StateExpr.recursiveCall(\"\(name)\", [\(argsStr)])"
+    case .letValue(let name, let value, let body):
+      return "StateExpr.letValue(\"\(name)\", \(value.swiftSource), \(body.swiftSource))"
+    case .letIn(let operators, let body):
+      let definitions = operators.map { operation in
+        let parameters = operation.parameters.map { "\"\($0)\"" }.joined(separator: ", ")
+        return "LocalOperator(\"\(operation.name)\", parameters: [\(parameters)], body: \(operation.body.swiftSource))"
+      }.joined(separator: ", ")
+      return "StateExpr.letIn([\(definitions)], \(body.swiftSource))"
+    }
+  }
+}
+
+private extension FormalCallArgument {
+  var swiftSource: String {
+    switch self {
+    case .value(let expression): return ".value(\(expression.swiftSource))"
+    case .operator(let operation):
+      switch operation {
+      case .lambda(let lambda):
+        let parameters = lambda.parameters.map { "\"\($0)\"" }.joined(separator: ", ")
+        return ".operator(.lambda(FormalLambda(parameters: [\(parameters)], body: \(lambda.body.swiftSource))))"
+      case .reference(let name, let arity):
+        return ".operator(.reference(\"\(name)\", arity: \(arity)))"
+      }
     }
   }
 }

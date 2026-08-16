@@ -248,7 +248,21 @@ func swiftSpec(_ identifier: String) throws -> TLASpec {
     case "hour-clock": return Example.hourClock.spec
     case "die-hard-type-ok": return Example.dieHardTypeOK.spec
     case "multicar-elevator", "multicar-elevator-edge-mismatch": return MultiCarElevatorModel.spec
+    case "simultaneous-swap": return simultaneousSwapConformanceSpec()
     default: throw CoreConformanceCLIError.unsupportedSwiftSpec(identifier)
+    }
+}
+
+private func simultaneousSwapConformanceSpec() -> TLASpec {
+    let left = Var<Int>("left")
+    let right = Var<Int>("right")
+    return TLASpec("SimultaneousSwap") {
+        Variable(left, 1)
+        Variable(right, 2)
+        Action("Swap") {
+            left.becomes(right)
+            right.becomes(left)
+        }
     }
 }
 
@@ -536,7 +550,7 @@ func symmetricOracleSpec(scope: Int) -> TLASpec {
     }
 }
 
-func quotedStringSymmetryControl(scope: Int) -> (tla: String, cfg: String) {
+func quotedStringSymmetryControl(scope: Int) -> TLAModuleBundle {
     let bundle = symmetricOracleSpec(scope: scope).tlaBundle
     let members = (0..<scope).map { "DevicesMember\($0)" }
     var tla = bundle.tla.replacingOccurrences(
@@ -550,11 +564,13 @@ func quotedStringSymmetryControl(scope: Int) -> (tla: String, cfg: String) {
         .split(separator: "\n")
         .filter { !$0.hasPrefix("CONSTANT ") }
         .joined(separator: "\n") + "\n"
-    return (tla, cfg)
+    return TLAModuleBundle(
+        root: TLAModuleFile(name: "SymmetricOracle2", tla: tla, cfg: cfg)
+    )
 }
 
 func executeTLC(
-    bundle: (tla: String, cfg: String),
+    bundle: TLAModuleBundle,
     moduleName: String,
     jarPath: String
 ) throws -> TLCExecution {
@@ -563,10 +579,16 @@ func executeTLC(
     try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
     defer { try? FileManager.default.removeItem(at: directory) }
 
+    for file in bundle.files {
+        let tlaURL = directory.appendingPathComponent("\(file.name).tla")
+        try file.tla.write(to: tlaURL, atomically: true, encoding: .utf8)
+        if let cfg = file.cfg {
+            let cfgURL = directory.appendingPathComponent("\(file.name).cfg")
+            try cfg.write(to: cfgURL, atomically: true, encoding: .utf8)
+        }
+    }
     let tlaURL = directory.appendingPathComponent("\(moduleName).tla")
     let cfgURL = directory.appendingPathComponent("\(moduleName).cfg")
-    try bundle.tla.write(to: tlaURL, atomically: true, encoding: .utf8)
-    try bundle.cfg.write(to: cfgURL, atomically: true, encoding: .utf8)
 
     let process = Process()
     process.executableURL = URL(fileURLWithPath: try resolveTLCJava())

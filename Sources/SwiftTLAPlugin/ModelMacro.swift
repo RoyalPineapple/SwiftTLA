@@ -12,9 +12,15 @@ import SwiftTLA
 struct ParsedEnumInfo {
     let typeName: String
     let cases: [(name: String, value: TLAValue)]
-    init(typeName: String, cases: [(String, TLAValue)]) {
+    /// The values that belong to the formal domain. This is intentionally
+    /// separate from all Swift cases: a useful formal type can include a
+    /// sentinel such as `.none` without making it a process or map key.
+    let formalDomain: [TLAValue]
+
+    init(typeName: String, cases: [(String, TLAValue)], formalDomain: [TLAValue]? = nil) {
         self.typeName = typeName
         self.cases = cases
+        self.formalDomain = formalDomain ?? cases.map(\.1)
     }
     var domain: Set<TLAValue> { Set(cases.map(\.value)) }
 }
@@ -30,6 +36,13 @@ struct ParsedMacroModel {
     let invariants: [(String, StateExpr)]
     let temporal: [(String, TemporalExpr)]
     let fairness: [FairnessCondition]
+    let constraint: StateExpr?
+    let imports: [String]
+    let importConfigurations: [FormalModuleConfiguration]
+    let moduleInstances: [FormalModuleInstance]
+    let formalParameters: [FormalModuleParameter]
+    let formalOperatorDefinitions: [FormalOperatorDefinition]
+    let algorithmFidelityTokens: [AlgorithmFidelityToken]
 }
 
 enum NestedAdapterModelRegistry {
@@ -71,17 +84,22 @@ enum TLASpecVerifier {
         }
 
         let rewritten = rewriteVarNames(in: closure)
-        let enumInfos = Self.collectEnumStateVars(from: memberList)
-        let (enumPhases, caseToType) = collectEnumPhaseMap(from: memberList)
+        let enumInfos = Self.collectEnumVariables(from: memberList)
+        let (enumPhases, caseToType) = collectEnumMetadata(from: memberList)
         let enumDomains = Dictionary(
-            uniqueKeysWithValues: enumInfos.map { ($0.typeName, $0.cases.map(\.value)) }
+            uniqueKeysWithValues: enumInfos.map { ($0.typeName, $0.formalDomain) }
         )
         let rewriter = EnumDotRewriter(caseToType: caseToType)
         let dotRewrittenSyntax = rewriter.rewrite(rewritten)
         let dotRewritten = dotRewrittenSyntax.as(ClosureExprSyntax.self) ?? rewritten
         if let unknown = rewriter.unknownDots.first, !caseToType.isEmpty {
-            let allCases = caseToType.keys.sorted().joined(separator: ", ")
-            throw SimpleError("Unknown enum case '.\(unknown)'. Available cases: [\(allCases)]")
+            throw SpecParser.SymmetricCollectionParseDiagnostic(
+                message: "Unknown enum case '.\(unknown)'.",
+                source: dotRewritten.description,
+                expected: "a declared enum case or a recognized formal operator spelling",
+                actual: ".\(unknown); available cases: [\(caseToType.keys.sorted().joined(separator: ", "))]",
+                nextSafeAction: "Qualify the intended enum case, or use FormalOperator and FormalCallArgument spellings for formal operator syntax."
+            )
         }
         var parsed = SpecParser.parseSpecClosure(
             dotRewritten,
@@ -115,15 +133,28 @@ enum TLASpecVerifier {
             }
         }
 
+        let imports = try parsed.imports.map { name -> TLASpec in
+            guard let module = FormalModuleRegistry.lookup(name) else {
+                throw SimpleError("Unknown formal module '\(name)'.")
+            }
+            return module
+        }
         let spec = TLASpec(
             name: typeName,
             variables: parsed.variables.map { NamedVar(name: $0.name, initial: $0.initial, initialSet: $0.initialSet) },
             constants: parsed.constants,
+            formalParameters: parsed.formalParameters,
             actions: parsed.actions.map { NamedAction(name: $0.name, body: $0.body, bindings: $0.bindings) },
             invariants: allInvariants,
             temporalProperties: parsed.temporal.map { NamedTemporal(name: $0.name, expr: $0.expr) },
             fairness: parsed.fairness,
-            symmetricCollections: parsed.symmetricCollections.map(\.declaration)
+            constraint: parsed.constraint,
+            formalOperatorDefinitions: parsed.formalOperatorDefinitions,
+            imports: imports,
+            importConfigurations: parsed.importConfigurations,
+            moduleInstances: parsed.moduleInstances,
+            symmetricCollections: parsed.symmetricCollections.map(\.declaration),
+            algorithmFidelityTokens: parsed.algorithmFidelityTokens
         )
 
         let hasComplexType = parsed.symmetricCollections.isEmpty && parsed.variables.contains { v in
@@ -158,7 +189,12 @@ enum TLASpecVerifier {
             typeName: typeName, variables: parsed.variables, actions: parsed.actions,
             symmetricCollections: parsed.symmetricCollections, collectionActions: parsed.collectionActions,
             enumInfos: enumInfos, hasInvariants: hasInvs, invariants: parsed.invariants,
-            temporal: parsed.temporal, fairness: parsed.fairness
+            temporal: parsed.temporal, fairness: parsed.fairness, constraint: parsed.constraint,
+            imports: parsed.imports, importConfigurations: parsed.importConfigurations,
+            moduleInstances: parsed.moduleInstances,
+            formalParameters: parsed.formalParameters,
+            formalOperatorDefinitions: parsed.formalOperatorDefinitions,
+            algorithmFidelityTokens: parsed.algorithmFidelityTokens
         )
     }
 
@@ -249,9 +285,7 @@ enum TLASpecVerifier {
                 ?? callee.as(GenericSpecializationExprSyntax.self)?.expression.as(DeclReferenceExprSyntax.self)?.baseName.text
             let isVar = baseName == "Var"
             let isValue = baseName == "Value"
-            let isStateVar = baseName == "StateVar"
-
-            if isStateVar || isVar {
+            if isVar {
                 if let firstArg = fc.arguments.first,
                    let label = firstArg.label?.text,
                    label == "in" || label == "values" {
@@ -417,34 +451,7 @@ enum TLASpecVerifier {
         return nil
     }
 
-    static func collectEnumPhases(from members: MemberBlockItemListSyntax) -> [String: Int] {
-        var result: [String: Int] = [:]
-        for member in members {
-            guard let enumDecl = member.decl.as(EnumDeclSyntax.self) else { continue }
-            guard let inheritance = enumDecl.inheritanceClause,
-                  inheritance.inheritedTypes.count == 1,
-                  inheritance.inheritedTypes.first?.type.as(IdentifierTypeSyntax.self)?.name.text == "Int"
-            else { continue }
-
-            var idx = 0
-            for caseMember in enumDecl.memberBlock.members {
-                guard let caseDecl = caseMember.decl.as(EnumCaseDeclSyntax.self) else { continue }
-                for element in caseDecl.elements {
-                    if let raw = element.rawValue?.value.as(IntegerLiteralExprSyntax.self),
-                       let val = Int(raw.literal.text) {
-                        result[element.name.text] = val
-                        idx = val + 1
-                    } else {
-                        result[element.name.text] = idx
-                        idx += 1
-                    }
-                }
-            }
-        }
-        return result
-    }
-
-    static func collectEnumStateVars(from members: MemberBlockItemListSyntax) -> [ParsedEnumInfo] {
+    static func collectEnumVariables(from members: MemberBlockItemListSyntax) -> [ParsedEnumInfo] {
         var result: [ParsedEnumInfo] = []
         for member in members {
             guard let enumDecl = member.decl.as(EnumDeclSyntax.self) else { continue }
@@ -487,26 +494,48 @@ enum TLASpecVerifier {
 
             result.append(ParsedEnumInfo(
                 typeName: enumDecl.name.text,
-                cases: cases
+                cases: cases,
+                formalDomain: formalDomain(in: enumDecl, cases: cases)
             ))
         }
         return result
     }
 
-    static func collectEnumPhaseMap(from members: MemberBlockItemListSyntax) -> (phases: EnumPhaseMap, caseToType: [String: String]) {
-        let infos = collectEnumStateVars(from: members)
-        var phases: EnumPhaseMap = [:]
-        var caseToType: [String: String] = [:]
-        for info in infos {
-            var caseMap: [String: TLAValue] = [:]
-            for (caseName, value) in info.cases {
-                caseMap[caseName] = value
-                caseToType[caseName] = info.typeName
+    /// Reads the finite domain declaration from source so macro parsing has
+    /// the same process/key members as the runtime builder. The Swift enum
+    /// may have additional values for optional fields or sentinels.
+    private static func formalDomain(
+        in enumDecl: EnumDeclSyntax,
+        cases: [(name: String, value: TLAValue)]
+    ) -> [TLAValue] {
+        guard let binding = enumDecl.memberBlock.members.lazy.compactMap({ member -> PatternBindingSyntax? in
+            guard let declaration = member.decl.as(VariableDeclSyntax.self),
+                  declaration.modifiers.contains(where: { $0.name.text == "static" })
+            else { return nil }
+            return declaration.bindings.first { binding in
+                binding.pattern.as(IdentifierPatternSyntax.self)?.identifier.text == "formalDomain"
             }
-            phases[info.typeName] = caseMap
+        }).first,
+        let initializer = binding.initializer?.value
+        else { return cases.map(\.value) }
+
+        if initializer.as(DeclReferenceExprSyntax.self)?.baseName.text == "allCases"
+            || initializer.description.trimmingCharacters(in: .whitespacesAndNewlines)
+                .hasSuffix(".allCases") {
+            return cases.map(\.value)
         }
-        return (phases, caseToType)
+
+        guard let array = initializer.as(ArrayExprSyntax.self) else {
+            return cases.map(\.value)
+        }
+        let values = array.elements.compactMap { element -> TLAValue? in
+            let name = element.expression.as(MemberAccessExprSyntax.self)?.declName.baseName.text
+                ?? element.expression.as(DeclReferenceExprSyntax.self)?.baseName.text
+            return cases.first { $0.name == name }?.value
+        }
+        return values.isEmpty ? cases.map(\.value) : values
     }
+
 }
 
 private final class EnumDotRewriter: SyntaxRewriter {
@@ -544,6 +573,24 @@ private final class EnumDotRewriter: SyntaxRewriter {
         "head", "tail", "stays", "zero", "max", "min", "default", "init", "value",
         "variable",
         "int", "bool", "string", "set", "tuple", "record", "function", "constant",
+        // Formal operator syntax is expression data, not an application enum
+        // case. Keep these members unqualified so SpecParser's existing
+        // formal-expression decoder can preserve their AST structure.
+        "lambda", "reference", "operator",
+        // A FormalLambda body is authored with StateExpr cases. The enum-dot
+        // pass runs before source parsing, so it must not mistake any of
+        // those formal AST members for an application enum case.
+        "add", "subtract", "multiply", "divide", "modulo", "negate", "integerDivide",
+        "equal", "notEqual", "lessThan", "lessOrEqual", "greaterThan", "greaterOrEqual",
+        "and", "or", "not", "ifThenElse",
+        "setLiteral", "in", "subset", "union", "intersection", "setDifference",
+        "setFilter", "setMap", "powerSet", "unionAll", "integerRange",
+        "tupleLiteral", "tupleAccess", "tupleDynamicAccess", "tupleLength", "tupleAppend",
+        "tupleHead", "tupleTail", "tupleConcatenate",
+        "recordLiteral", "recordAccess", "functionLiteral", "functionApply", "except",
+        "caseExpr", "forAll", "exists", "choose", "enabledAction", "sequenceFromSet",
+        "setSum", "functionSet", "foldFunction", "operatorApplication", "recursiveCall",
+        "letValue", "letIn",
         // These are DSL enum cases, not user-state enum cases. They remain
         // unqualified so Algorithm's parser can recognize its public syntax.
         "none", "weak", "strong"
@@ -587,6 +634,9 @@ public struct ModelMacro: MemberMacro, ExtensionMacro {
             parsed = try TLASpecVerifier.parseAndVerify(declaration)
         } catch let diagnostic as SpecParser.SymmetricCollectionParseDiagnostic {
             context.diagnose(parserDiagnostic(diagnostic, in: declaration))
+            return []
+        } catch {
+            context.diagnose(modelCompilationDiagnostic(error, in: declaration))
             return []
         }
         NestedAdapterModelRegistry.record(parsed)
@@ -767,13 +817,33 @@ private struct ParserDiagnosticMessage: DiagnosticMessage {
     let severity: DiagnosticSeverity = .error
 }
 
+/// SwiftDiagnostics only transports a rendered message, while the parser
+/// retains the structured diagnostic separately. Keep this rendering explicit
+/// so an error at the compiler boundary still answers the next useful question.
+private struct ModelCompilationDiagnosticMessage: DiagnosticMessage {
+    let whatFailed: String
+    let expected: String
+    let actual: String
+    let nextSafeAction: String
+
+    let diagnosticID = MessageID(domain: "SwiftTLA", id: "model-compilation-failure")
+    let severity: DiagnosticSeverity = .error
+
+    var message: String {
+        "What failed: \(whatFailed). Where: this @TLAModel declaration. "
+            + "Expected: \(expected). Actual: \(actual). "
+            + "Change status: no generated model was emitted. "
+            + "Next safe action: \(nextSafeAction)"
+    }
+}
+
 private func parserDiagnostic(
     _ diagnostic: SpecParser.SymmetricCollectionParseDiagnostic,
     in declaration: some DeclGroupSyntax
 ) -> Diagnostic {
     let finder = ParserDiagnosticNodeFinder(
         source: diagnostic.source,
-        offset: diagnostic.sourceOffset
+        location: diagnostic.sourceSpan.location
     )
     finder.walk(Syntax(declaration))
     return Diagnostic(
@@ -782,23 +852,45 @@ private func parserDiagnostic(
     )
 }
 
+private func modelCompilationDiagnostic(
+    _ error: Error,
+    in declaration: some DeclGroupSyntax
+) -> Diagnostic {
+    Diagnostic(
+        node: Syntax(declaration),
+        message: ModelCompilationDiagnosticMessage(
+            whatFailed: "the formal model could not be parsed or verified",
+            expected: "a bounded @TLAModel specification whose declarations, imports, and properties are valid",
+            actual: String(describing: error),
+            nextSafeAction: "Inspect the reported formal construct, correct the model, and compile again; no generated state machine is available until this succeeds."
+        )
+    )
+}
+
 private final class ParserDiagnosticNodeFinder: SyntaxAnyVisitor {
     let source: String
-    let offset: Int?
+    let location: SpecParser.SymmetricCollectionParseDiagnostic.SourceSpan.Location
     var node: Syntax?
     private var sourceMatch: Syntax?
 
-    init(source: String, offset: Int?) {
+    init(
+        source: String,
+        location: SpecParser.SymmetricCollectionParseDiagnostic.SourceSpan.Location
+    ) {
         self.source = source.trimmingCharacters(in: .whitespacesAndNewlines)
-        self.offset = offset
+        self.location = location
         super.init(viewMode: .sourceAccurate)
     }
 
     override func visitAny(_ candidate: Syntax) -> SyntaxVisitorContinueKind {
         guard node == nil else { return .skipChildren }
-        let matchesOffset = offset.map {
-            candidate.positionAfterSkippingLeadingTrivia.utf8Offset == $0
-        } ?? false
+        let matchesOffset: Bool
+        switch location {
+        case .utf8Offset(let offset):
+            matchesOffset = candidate.positionAfterSkippingLeadingTrivia.utf8Offset == offset
+        case .unavailable:
+            matchesOffset = false
+        }
         let matchesSource = candidate.description.trimmingCharacters(in: .whitespacesAndNewlines) == source
         if matchesSource, sourceMatch == nil {
             sourceMatch = candidate

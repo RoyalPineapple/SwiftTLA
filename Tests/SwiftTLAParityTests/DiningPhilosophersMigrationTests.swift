@@ -1,0 +1,19 @@
+import Testing
+import SwiftTLA
+@testable import UpstreamParity
+
+@Suite(.serialized)
+struct DiningPhilosophersMigrationTests {
+    @Test("PlusCal-shaped Dining Philosophers preserves the TLC N=5 state count")
+    func generatedAlgorithmMatchesUpstreamStateCount() throws {
+        DiningPhilosophersModel._checkParserTree()
+
+        let entry = Example.diningPhilosophersNP5
+        let graph = try ModelChecker(
+            spec: entry.spec,
+            maxStates: entry.verificationStateLimit
+        ).exploreGraph()
+
+        #expect(graph.states.count == entry.expectedDistinct)
+    }
+}

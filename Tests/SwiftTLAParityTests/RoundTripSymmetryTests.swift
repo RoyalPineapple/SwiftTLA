@@ -96,9 +96,9 @@ struct SymmetryReductionTests { @Test("Symmetry reduces ChangRoberts state count
     #expect(spec.tlaCfg.contains("SYMMETRY Symmx"))
   }
 }
-// MARK: - StateVar parity: same behavior as Var + Variable
-@Suite(.serialized) struct StateVarParityTests { @Test("StateVar spec produces same StateGraph as Var + Variable spec")
-  func stateVarVsVar() throws {
+// MARK: - Initialized-variable parity
+@Suite(.serialized) struct InitializedVariableParityTests { @Test("initialized and explicitly declared variables produce the same StateGraph")
+  func initializedVarVsExplicitVariable() throws {
     let x = Var<Int>("x")
     let spec1 = TLASpec("Test") {
       Variable(x, 0)
@@ -146,8 +146,8 @@ enum Status: String, TLAValueType, StateExprConvertible {
     #expect(graph.states.count == 2)
   }
 
-  @Test("Int-backed enum StateVar model-checks correctly")
-  func intEnumStateVar() throws {
+  @Test("Int-backed initialized enum variable model-checks correctly")
+  func intEnumInitializedVar() throws {
     let mode = Var("mode", Mode.idle)
     let spec = TLASpec("IntEnumSV") {
       Variable(mode)
@@ -174,8 +174,8 @@ enum Status: String, TLAValueType, StateExprConvertible {
     #expect(graph.states.count == 2)
   }
 
-  @Test("String-backed enum StateVar model-checks correctly")
-  func stringEnumStateVar() throws {
+  @Test("String-backed initialized enum variable model-checks correctly")
+  func stringEnumInitializedVar() throws {
     let state = Var("state", Status.on)
     let spec = TLASpec("StringEnumSV") {
       Variable(state)
@@ -402,12 +402,30 @@ extension StateExpr {
       ),
       ("recordLiteral", StateExpr.recordLiteral(["k": .int(1)])),
       ("recordAccess", StateExpr.recordAccess(.recordLiteral(["k": .int(1)]), "k")),
-      ("setFilter", StateExpr.setFilter(.setLiteral([.int(1)]), "x0", .bool(true))),
-      ("setMap", StateExpr.setMap(.variable("y"), "x0", .setLiteral([.int(1)]))),
-      ("forAll", StateExpr.forAll(.setLiteral([.int(1)]), "x0", .bool(true))),
-      ("exists", StateExpr.exists(.setLiteral([.int(1)]), "x0", .bool(true))),
-      ("choose", StateExpr.choose(.setLiteral([.int(1)]), "x0", .bool(true))),
-      ("functionLiteral", StateExpr.functionLiteral(.setLiteral([.int(1)]), "x0", .variable("z"))),
+      (
+        "setFilter",
+        StateExpr.setFilter(.setLiteral([.int(1)]), "x0", .equal(.variable("x0"), .int(1)))
+      ),
+      (
+        "setMap",
+        StateExpr.setMap(.add(.variable("x0"), .int(1)), "x0", .setLiteral([.int(1)]))
+      ),
+      (
+        "forAll",
+        StateExpr.forAll(.setLiteral([.int(1)]), "x0", .equal(.variable("x0"), .int(1)))
+      ),
+      (
+        "exists",
+        StateExpr.exists(.setLiteral([.int(1)]), "x0", .equal(.variable("x0"), .int(1)))
+      ),
+      (
+        "choose",
+        StateExpr.choose(.setLiteral([.int(1)]), "x0", .equal(.variable("x0"), .int(1)))
+      ),
+      (
+        "functionLiteral",
+        StateExpr.functionLiteral(.setLiteral([.int(1)]), "x0", .add(.variable("x0"), .int(1)))
+      ),
       ("caseExpr", StateExpr.caseExpr([.bool(true), .int(1), .bool(false), .int(2)], .int(0))),
       ("enabledAction", StateExpr.enabledAction("Tick"))
     ] as [(String, StateExpr)])
