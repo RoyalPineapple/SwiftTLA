@@ -649,7 +649,8 @@ public struct FormalOperatorDecl: SpecComponent, Equatable {
         return "\(name)(\(Array(repeating: "_", count: arity).joined(separator: ", ")))"
       }
     }.joined(separator: ", ")
-    return "\(definition.name)(\(parameters)) == \(definition.body)"
+    let declaration = parameters.isEmpty ? definition.name : "\(definition.name)(\(parameters))"
+    return "\(declaration) == \(definition.body)"
   }
 }
 
