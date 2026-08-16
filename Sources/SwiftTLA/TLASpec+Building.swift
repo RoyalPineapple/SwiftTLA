@@ -186,7 +186,8 @@ extension TLASpec {
         importConfigurations: importConfigurations,
         moduleInstances: moduleInstances,
         formalParameters: formalParameters,
-        formalOperatorDefinitions: formalOperatorDefinitions
+        formalOperatorDefinitions: formalOperatorDefinitions,
+        symmetrySets: symmetrySets
       )
       guard _tlaAlphaEquivalent(built, tree) else {
         fatalError(
@@ -237,7 +238,69 @@ public extension TLASpec {
   /// PlusCal module. Direct TLA+ specifications have no Algorithm source and
   /// therefore return an empty array instead of inventing a reverse lowering.
   func renderAuthoredPlusCalModules() throws -> [String] {
-    try sourceAlgorithms.map { try $0.renderPlusCalModule() }
+    try sourceAlgorithms.map { algorithm in
+      let renderer = AlgorithmPlusCalRenderer(model: algorithm.model)
+      let sourceProperties = try renderer.sourcePropertyDefinitions()
+      let sourcePropertyNames = sourceProperties.map(\.name)
+      let loweredPropertyNames = invariants.map(\.name) + temporalProperties.map(\.name)
+      guard Set(sourcePropertyNames).count == sourcePropertyNames.count,
+            Set(loweredPropertyNames).count == loweredPropertyNames.count,
+            Set(sourcePropertyNames) == Set(loweredPropertyNames)
+      else {
+        throw AlgorithmPlusCalRenderDiagnostic(
+          failedConcept: "authored PlusCal property export",
+          path: "TLASpec.properties",
+          expected: "one retained Algorithm source property for every lowered property",
+          actual: "source properties \(sourcePropertyNames); lowered properties \(loweredPropertyNames)",
+          nextSafeAction: "Declare properties inside Algorithm, or add a source-level renderer for the top-level declaration before exporting PlusCal."
+        )
+      }
+      return try renderer.render(
+        moduleName: name.replacingOccurrences(of: " ", with: ""),
+        extendsModules: authoredPlusCalExtends,
+        prelude: authoredPlusCalPrelude,
+        postlude: sourceProperties.map(\.definition) + authoredPlusCalSymmetry
+      )
+    }
+  }
+
+  private var authoredPlusCalExtends: [String] {
+    let requested = extendsModules.split(separator: ",").map {
+      $0.trimmingCharacters(in: .whitespaces)
+    }
+    let symmetryModule = symmetrySets.isEmpty ? [] : ["TLC"]
+    return (requested + ["Naturals", "Integers", "Sequences", "FiniteSets"] + symmetryModule + imports.map(\.name))
+      .reduce(into: [String]()) { modules, module in
+        if !modules.contains(module) { modules.append(module) }
+      }
+  }
+
+  private var authoredPlusCalPrelude: [String] {
+    var lines: [String] = []
+    let constantNames = (constants.keys + formalParameters.filter { $0.kind == .constant }.map(\.name)).sorted()
+    if !constantNames.isEmpty {
+      lines.append("CONSTANTS \(constantNames.joined(separator: ", "))")
+    }
+    for instance in moduleInstances {
+      let arguments = instance.arguments.map { argument in
+        "\(argument.parameter) <- \(argument.value)"
+      }.joined(separator: ", ")
+      let withClause = arguments.isEmpty ? "" : " WITH \(arguments)"
+      lines.append("\(instance.name) == INSTANCE \(instance.module.name)\(withClause)")
+    }
+    lines += definitions
+    lines += recursiveDefs
+    lines += runtimeFuncBodies
+    return lines
+  }
+
+  private var authoredPlusCalSymmetry: [String] {
+    symmetrySets.map { symmetry in
+      let values = symmetry.values.sorted { $0.description < $1.description }
+        .map(\.description)
+        .joined(separator: ", ")
+      return "Symm\(symmetry.variableName) == Permutations({\(values)})"
+    }
   }
 }
 

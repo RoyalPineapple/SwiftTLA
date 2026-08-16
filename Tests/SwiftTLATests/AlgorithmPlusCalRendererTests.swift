@@ -235,4 +235,29 @@ struct AlgorithmPlusCalRendererTests {
         #expect(!modules[0].contains("\\* StateConstraint"))
         #expect(spec.actions.contains(where: { $0.name == "stop" }))
     }
+
+    @Test("renders authored module context around the Algorithm comment")
+    func rendersAuthoredModuleContext() throws {
+        let spec = TLASpec("Context") {
+            Extends("Integers")
+            Constant("N", 2)
+            Definition("Seed == N")
+            Symmetry("member", [1, 2] as Set<Int>)
+            Algorithm("Context") {
+                let count = SharedVar("count", initial: 0)
+                count
+                Do("stop") { Stop() }
+                Invariant("Bounded") { count.expr <= 2 }
+            }
+        }
+
+        let module = try #require(spec.renderAuthoredPlusCalModules().first)
+
+        #expect(module.contains("CONSTANTS N"))
+        #expect(module.contains("TLC"))
+        #expect(module.contains("Seed == N"))
+        #expect(module.contains("(*--algorithm Context {"))
+        #expect(module.contains("Bounded == (count <= 2)"))
+        #expect(module.contains("Symmmember == Permutations({1, 2})"))
+    }
 }

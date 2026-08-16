@@ -47,18 +47,38 @@ public struct AlgorithmPlusCalRenderDiagnostic: Error, Sendable, Hashable, Custo
 /// generated program-counter semantics.
 public extension Algorithm {
     func renderPlusCalModule() throws -> String {
-        try AlgorithmPlusCalRenderer(model: model).render()
+        let renderer = AlgorithmPlusCalRenderer(model: model)
+        return try renderer.render(postlude: renderer.sourcePropertyDefinitions().map(\.definition))
     }
 }
 
 internal struct AlgorithmPlusCalRenderer {
     let model: AlgorithmModel
 
-    func render() throws -> String {
+    /// Source-level properties are kept outside the PlusCal comment, where
+    /// the official translator leaves TLA+ operators intact.  They come from
+    /// the retained Algorithm model rather than the lowered specification.
+    func sourcePropertyDefinitions() throws -> [(name: String, definition: String)] {
+        try properties(in: model.components, path: "components")
+    }
+
+    func render(
+        moduleName: String? = nil,
+        extendsModules: [String]? = nil,
+        prelude: [String] = [],
+        postlude: [String] = []
+    ) throws -> String {
         // TLA+ spells negative values through the unary `-.` operator from
         // `Integers`.  PlusCal's translator preserves that operator in the
         // generated module, so every rendered source must make it available.
-        var lines = ["---- MODULE \(moduleName(model.name)) ----", "EXTENDS Naturals, Integers, Sequences, FiniteSets", "", "(*--algorithm \(model.name) {"]
+        let renderedModuleName = moduleName ?? self.moduleName(model.name)
+        let renderedExtends = extendsModules ?? ["Naturals", "Integers", "Sequences", "FiniteSets"]
+        var lines = ["---- MODULE \(renderedModuleName) ----", "EXTENDS \(renderedExtends.joined(separator: ", "))", ""]
+        if !prelude.isEmpty {
+            lines += prelude
+            lines.append("")
+        }
+        lines.append("(*--algorithm \(model.name) {")
 
         let shared = model.components.compactMap { component -> AlgorithmStateModel? in
             guard case .shared(let declaration) = component else { return nil }
@@ -87,10 +107,9 @@ internal struct AlgorithmPlusCalRenderer {
             case .step:
                 // Sequential steps share the algorithm's C-syntax brace body.
                 continue
-            case .invariant(let invariant):
-                lines.append("\\* Invariant \(invariant.name) == \(try expression(invariant.body, path: "components[\(index)].invariant"))")
-            case .temporal(let temporal):
-                lines.append("\\* Temporal \(temporal.name) == \(temporal.expr)")
+            case .invariant, .temporal:
+                // Properties are emitted once after the PlusCal comment.
+                continue
             case .stateConstraint:
                 // The operator is emitted after the PlusCal comment, where
                 // the official translator preserves it for TLC's CONSTRAINT.
@@ -128,6 +147,7 @@ internal struct AlgorithmPlusCalRenderer {
         if !constraints.isEmpty {
             lines.append("StateConstraint == \(constraints.map { "(\($0))" }.joined(separator: " /\\ "))")
         }
+        lines += postlude
         lines.append("====")
         return lines.joined(separator: "\n") + "\n"
     }
@@ -177,10 +197,9 @@ internal struct AlgorithmPlusCalRenderer {
                 continue
             case .step(let step):
                 lines += try render(step: step, indent: "  ", path: "\(path).components[\(index)]")
-            case .invariant(let invariant):
-                lines.append("  \\* Invariant \(invariant.name) == \(try expression(invariant.body, path: "\(path).components[\(index)].invariant"))")
-            case .temporal:
-                throw unsupported(path: "\(path).components[\(index)]", expected: "a process statement or local declaration", actual: "process temporal property")
+            case .invariant, .temporal:
+                // Properties are emitted once after the PlusCal comment.
+                continue
             case .fairness:
                 throw unsupported(path: "\(path).components[\(index)]", expected: "the process fairness modifier (`fair` or `fair+`)", actual: "nested process fairness declaration")
             case .stateConstraint:
@@ -305,9 +324,12 @@ internal struct AlgorithmPlusCalRenderer {
         }
     }
 
-    private func expression(_ value: StateExpr, path: String) throws -> String {
+    func expression(_ value: StateExpr, path: String) throws -> String {
+        let sourceValue = localFamilyRoots.reduce(value) { expression, root in
+            renameVar("__pcal_local_family:\(root)", to: root, in: expression)
+        }
         let rendered = StateExpr.renamingRecursiveCalls(
-            in: renameVar("__pcal_self", to: "self", in: value),
+            in: renameVar("__pcal_self", to: "self", in: sourceValue),
             using: { $0 },
             lowerAnonymousLambdaApplications: true
         ).description
@@ -319,6 +341,48 @@ internal struct AlgorithmPlusCalRenderer {
             )
         }
         return rendered
+    }
+
+    private var localFamilyRoots: [String] {
+        model.processes.flatMap { process in
+            process.components.compactMap { component in
+                guard case .local(let declaration) = component else { return nil }
+                return declaration.root
+            }
+        }
+    }
+
+    private func properties(
+        in components: [AlgorithmComponentModel],
+        path: String
+    ) throws -> [(name: String, definition: String)] {
+        try components.enumerated().flatMap { index, component in
+            let componentPath = "\(path)[\(index)]"
+            switch component {
+            case .invariant(let invariant):
+                return [(
+                    invariant.name,
+                    "\(invariant.name) == \(try expression(invariant.body, path: "\(componentPath).invariant"))"
+                )]
+            case .temporal(let temporal):
+                return [(temporal.name, "\(temporal.name) == \(try self.temporal(temporal.expr, path: "\(componentPath).temporal"))")]
+            case .process(let process):
+                return try properties(in: process.components, path: "\(componentPath).components")
+            case .shared, .procedure, .fairness, .stateConstraint, .local, .step, .propertyBoundary:
+                return []
+            }
+        }
+    }
+
+    private func temporal(_ value: TemporalExpr, path: String) throws -> String {
+        switch value {
+        case .always(let predicate): return "[](\(try expression(predicate, path: "\(path).always")))"
+        case .eventually(let predicate): return "<>(\(try expression(predicate, path: "\(path).eventually")))"
+        case .alwaysEventually(let predicate): return "[]<>(\(try expression(predicate, path: "\(path).alwaysEventually")))"
+        case .eventuallyAlways(let predicate): return "<>[](\(try expression(predicate, path: "\(path).eventuallyAlways")))"
+        case .leadsTo(let lhs, let rhs):
+            return "(\(try expression(lhs, path: "\(path).from")) ~> \(try expression(rhs, path: "\(path).to")))"
+        }
     }
 
     private func renderedProcessNames() -> [String] {
