@@ -195,7 +195,7 @@ public enum ClientCentric {
                   ])
                 ),
                 "nextState": call("effects", .recordAccess(.variable("acc"), "nextState"), .variable("t"))
-                ]))),
+                ])))),
                 .value(.variable("ordering")), .value(.variable("accummulator"))
               ]
             ),
