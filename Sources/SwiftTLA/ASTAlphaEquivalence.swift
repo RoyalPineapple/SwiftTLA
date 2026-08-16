@@ -14,6 +14,7 @@ public func _tlaAlphaEquivalent(_ lhs: ParsedSpecModel, _ rhs: ParsedSpecModel) 
           lhs.importConfigurations == rhs.importConfigurations,
           lhs.moduleInstances == rhs.moduleInstances,
           lhs.formalParameters == rhs.formalParameters,
+          lhs.symmetrySets == rhs.symmetrySets,
           formalOperatorDefinitionsEquivalent(lhs.formalOperatorDefinitions, rhs.formalOperatorDefinitions),
           optionalStateEquivalent(lhs.constraint, rhs.constraint)
     else { return false }
@@ -139,6 +140,9 @@ public func _tlaFidelityEvidence(
     }
     guard expected.formalParameters == actual.formalParameters else {
         return difference("formal module parameter differs", at: "formalParameters", expected: "\(expected.formalParameters)", actual: "\(actual.formalParameters)")
+    }
+    guard expected.symmetrySets == actual.symmetrySets else {
+        return difference("symmetry set differs", at: "symmetrySets", expected: "\(expected.symmetrySets)", actual: "\(actual.symmetrySets)")
     }
     guard formalOperatorDefinitionsEquivalent(
         expected.formalOperatorDefinitions,

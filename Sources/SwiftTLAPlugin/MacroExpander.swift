@@ -207,6 +207,9 @@ enum MacroExpander {
             }.joined(separator: ", ")
             return "FormalOperatorDefinition(name: \"\(definition.name)\", parameters: [\(parameters)], body: \(codegenStateExpr(definition.body)))"
         }.joined(separator: ", ")
+        let treeSymmetrySets = model.symmetrySets.map { symmetry in
+            "SymmetrySet(variableName: \"\(symmetry.variableName)\", values: [\(symmetry.values.sorted { $0.description < $1.description }.map(codegenTLAValue).joined(separator: ", "))])"
+        }.joined(separator: ", ")
         let treeAlgorithmTokens = model.algorithmFidelityTokens.map { token in
             "AlgorithmFidelityToken(encodedCanonicalForm: \"\(token.encodedCanonicalForm.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\""))\")"
         }.joined(separator: ", ")
@@ -223,7 +226,8 @@ enum MacroExpander {
             importConfigurations: [\(treeImportConfigurations)],
             moduleInstances: [\(treeModuleInstances)],
             formalParameters: [\(treeFormalParameters)],
-            formalOperatorDefinitions: [\(treeFormalOperatorDefinitions)]
+            formalOperatorDefinitions: [\(treeFormalOperatorDefinitions)],
+            symmetrySets: [\(treeSymmetrySets)]
         )
         static let _parserAlgorithmTokens: [AlgorithmFidelityToken] = [\(treeAlgorithmTokens)]
         """
@@ -250,7 +254,8 @@ enum MacroExpander {
                 importConfigurations: builtSpec.importConfigurations,
                 moduleInstances: builtSpec.moduleInstances,
                 formalParameters: builtSpec.formalParameters,
-                formalOperatorDefinitions: builtSpec.formalOperatorDefinitions
+                formalOperatorDefinitions: builtSpec.formalOperatorDefinitions,
+                symmetrySets: builtSpec.symmetrySets
             )
             if !_tlaAlphaEquivalent(built, _parserTree) {
                 preconditionFailure(

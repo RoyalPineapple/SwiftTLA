@@ -146,6 +146,7 @@ public struct ParsedSpecModel: Equatable, Sendable {
   /// parser tree makes a missing definition visible at the parser/builder
   /// boundary instead of failing later during evaluation.
   public let formalOperatorDefinitions: [FormalOperatorDefinition]
+  public let symmetrySets: [SymmetrySet]
   public init(
     variables: [(String, TLAValue, StateExpr?)], actions: [(String, ActionExpr, [ActionBinding])],
     invariants: [(String, StateExpr)],
@@ -156,7 +157,8 @@ public struct ParsedSpecModel: Equatable, Sendable {
     importConfigurations: [FormalModuleConfiguration] = [],
     moduleInstances: [FormalModuleInstance] = [],
     formalParameters: [FormalModuleParameter] = [],
-    formalOperatorDefinitions: [FormalOperatorDefinition] = []
+    formalOperatorDefinitions: [FormalOperatorDefinition] = [],
+    symmetrySets: [SymmetrySet] = []
   ) {
     self.variables = variables
     self.actions = actions
@@ -169,6 +171,7 @@ public struct ParsedSpecModel: Equatable, Sendable {
     self.moduleInstances = moduleInstances
     self.formalParameters = formalParameters
     self.formalOperatorDefinitions = formalOperatorDefinitions
+    self.symmetrySets = symmetrySets
   }
   public static func == (lhs: ParsedSpecModel, rhs: ParsedSpecModel) -> Bool {
     guard lhs.variables.count == rhs.variables.count,
@@ -181,7 +184,8 @@ public struct ParsedSpecModel: Equatable, Sendable {
       lhs.importConfigurations == rhs.importConfigurations,
       lhs.moduleInstances == rhs.moduleInstances,
       lhs.formalParameters == rhs.formalParameters,
-      lhs.formalOperatorDefinitions == rhs.formalOperatorDefinitions
+      lhs.formalOperatorDefinitions == rhs.formalOperatorDefinitions,
+      lhs.symmetrySets == rhs.symmetrySets
     else { return false }
     for (a, b) in zip(lhs.variables, rhs.variables) {
       if a.name != b.name || a.initial != b.initial || a.initialSet != b.initialSet { return false }

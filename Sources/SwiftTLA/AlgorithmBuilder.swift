@@ -32,6 +32,12 @@ public struct FiniteDomain<Value: FiniteDomainKey>: Sendable {
     }
 }
 
+extension FiniteDomain: Sequence {
+    public func makeIterator() -> Array<Value>.Iterator {
+        values.makeIterator()
+    }
+}
+
 extension FiniteDomainKey {
     public static var all: FiniteDomain<Self> {
         FiniteDomain()

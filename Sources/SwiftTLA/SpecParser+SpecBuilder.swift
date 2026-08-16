@@ -20,6 +20,7 @@ extension SpecParser {
         public var moduleInstances: [FormalModuleInstance] = []
         public var formalParameters: [FormalModuleParameter] = []
         public var formalOperatorDefinitions: [FormalOperatorDefinition] = []
+        public var symmetrySets: [SymmetrySet] = []
         /// Opaque, pre-lowering Algorithm evidence retained independently of
         /// the ordinary parsed specification tree.
         public var algorithmFidelityTokens: [AlgorithmFidelityToken] = []
@@ -603,9 +604,38 @@ extension SpecParser {
             }
         case "Instance":
             parseFormalModuleInstance(call, into: &result)
+        case "Symmetry":
+            parseSymmetry(call, into: &result)
         default:
             break
         }
+    }
+
+    private static func parseSymmetry(
+        _ call: FunctionCallExprSyntax,
+        into result: inout ParsedSpecComponents
+    ) {
+        guard let variableName = extractStringArg(call, index: 0), !variableName.isEmpty,
+              let valuesSyntax = call.arguments.dropFirst().first?.expression,
+              let values = parseSymmetryValues(valuesSyntax)
+        else {
+            result.diagnostics.append(.init(
+                message: "Symmetry requires a name and a finite domain.",
+                source: call,
+                expected: "Symmetry(\"TxId\", Set(Transaction.all))"
+            ))
+            return
+        }
+        result.symmetrySets.append(SymmetrySet(variableName: variableName, values: Set(values)))
+    }
+
+    private static func parseSymmetryValues(_ expression: ExprSyntax) -> [TLAValue]? {
+        guard let call = expression.as(FunctionCallExprSyntax.self),
+              call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "Set",
+              let domainSyntax = call.arguments.first?.expression,
+              let domain = finiteAlgorithmDomain(domainSyntax)
+        else { return nil }
+        return domain.values
     }
 
     private static func parseFormalDefinition(
