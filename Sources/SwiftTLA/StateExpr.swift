@@ -122,6 +122,7 @@ public struct FormalOperatorDefinition: Hashable, Sendable {
     }
 }
 
+@StateExprStructural
 public indirect enum StateExpr: Hashable, Sendable, CustomStringConvertible {
     case value(TLAValue)
     case variable(String)

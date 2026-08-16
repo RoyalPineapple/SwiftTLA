@@ -23,6 +23,7 @@ let package = Package(
     ],
     targets: [
         .target(name: "SwiftTLA", dependencies: [
+            "SwiftTLAStructurePlugin",
             .product(name: "SwiftParser", package: "swift-syntax"),
             .product(name: "SwiftBasicFormat", package: "swift-syntax"),
             .product(name: "SwiftSyntaxBuilder", package: "swift-syntax"),
@@ -37,6 +38,13 @@ let package = Package(
             .product(name: "SwiftSyntaxMacros", package: "swift-syntax"),
             .product(name: "SwiftDiagnostics", package: "swift-syntax"),
             .product(name: "SwiftParser", package: "swift-syntax")
+        ]),
+        .macro(name: "SwiftTLAStructurePlugin", dependencies: [
+            .product(name: "SwiftCompilerPlugin", package: "swift-syntax"),
+            .product(name: "SwiftSyntax", package: "swift-syntax"),
+            .product(name: "SwiftSyntaxBuilder", package: "swift-syntax"),
+            .product(name: "SwiftSyntaxMacros", package: "swift-syntax"),
+            .product(name: "SwiftDiagnostics", package: "swift-syntax")
         ]),
         .target(name: "SwiftTLAModels", dependencies: ["SwiftTLA", "SwiftTLAMacros"], swiftSettings: settings),
         .target(name: "AlgorithmConformance", dependencies: ["SwiftTLA", "SwiftTLAMacros"], swiftSettings: settings),
