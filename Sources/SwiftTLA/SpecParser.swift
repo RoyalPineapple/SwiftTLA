@@ -686,6 +686,19 @@ public enum SpecParser {
             default: break
             }
         }
+        // A `SetExpr` initializer is a closed typed value, unlike
+        // `SetExpr.literal`, which is an expression form.  Constants need the
+        // former so the builder and macro both retain a concrete TLA+ set.
+        if let call = expression.as(FunctionCallExprSyntax.self),
+           let type = typedLiteralType(call.calledExpression),
+           type.name == "SetExpr" {
+            return decodeTypedSetLiteral(
+                call,
+                elementType: type.arguments.first,
+                substitutions: substitutions
+            )
+        }
+
         guard let call = expression.as(FunctionCallExprSyntax.self),
               let access = call.calledExpression.as(MemberAccessExprSyntax.self)
         else { return nil }

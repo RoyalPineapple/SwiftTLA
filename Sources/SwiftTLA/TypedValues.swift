@@ -255,6 +255,12 @@ public struct SetExpr<Element: TLAValueType>: TLAValueType, Hashable, Sendable {
     values = []
   }
 
+  /// A closed, typed finite set value. Use this at a value boundary such as
+  /// `Constant("Value", SetExpr<Value>(.one, .two))`.
+  public init(_ elements: Element...) {
+    values = Set(elements.map(\.tlaValue))
+  }
+
   public init?(formalValue: TLAValue) {
     guard case .set(let values) = formalValue,
           values.allSatisfy({ Element(formalValue: $0) != nil })
