@@ -339,27 +339,36 @@ public enum ActionEnumerator {
     }
 
     public static func extractAssignments(_ action: ActionExpr) throws -> (assignments: [String: StateExpr], guards: [StateExpr]) {
-        switch action {
-        case .assign(let name, let expr):
-            return ([name: expr], [])
-        case .unchanged(let name):
-            return ([name: .variable(name)], [])
-        case .guard_(let expr):
-            return ([:], [expr])
-        case .chooseAction, .existsAction, .ifElse, .define:
-            return ([:], [])
-        case .and(let a, let b):
-            let (lhsAssign, lhsGuards) = try extractAssignments(a)
-            let (rhsAssign, rhsGuards) = try extractAssignments(b)
-            for (key, rhsValue) in rhsAssign {
-                if let lhsValue = lhsAssign[key], lhsValue != rhsValue {
-                    throw ActionError.multipleAssignment(key)
+        var pending = [action]
+        var assignments: [String: StateExpr] = [:]
+        var guards: [StateExpr] = []
+
+        while let current = pending.popLast() {
+            switch current {
+            case .assign(let name, let expr):
+                if let existing = assignments[name], existing != expr {
+                    throw ActionError.multipleAssignment(name)
                 }
+                assignments[name] = expr
+            case .unchanged(let name):
+                let expr = StateExpr.variable(name)
+                if let existing = assignments[name], existing != expr {
+                    throw ActionError.multipleAssignment(name)
+                }
+                assignments[name] = expr
+            case .guard_(let expr):
+                guards.append(expr)
+            case .and(let lhs, let rhs):
+                // Preserve source order while avoiding recursion for lowered
+                // algorithms with deeply nested simultaneous updates.
+                pending.append(rhs)
+                pending.append(lhs)
+            case .chooseAction, .existsAction, .ifElse, .define, .or:
+                break
             }
-            return (lhsAssign.merging(rhsAssign) { lhs, _ in lhs }, lhsGuards + rhsGuards)
-        case .or:
-            return ([:], [])
         }
+
+        return (assignments, guards)
     }
 
     private static func substituteVarInAction(_ name: String, _ value: TLAValue, _ action: ActionExpr) -> ActionExpr {

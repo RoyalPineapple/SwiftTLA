@@ -82,6 +82,21 @@ import UpstreamParity
     #expect(r.count == expected)
   }
 
+  @Test("Action assignment extraction accepts wide lowered simultaneous updates")
+  func wideAssignmentsPreserveOneCommitment() throws {
+    // This is deliberately large enough to exercise a lowered atomic block,
+    // while keeping the recursive value-type teardown itself bounded.
+    let depth = 256
+    let assignment = ActionExpr.assign("x", .value(.int(1)))
+    let action = (0..<depth).reduce(assignment) { partial, _ in
+      .and(partial, assignment)
+    }
+
+    let result = try ActionEnumerator.extractAssignments(action)
+    #expect(result.assignments == ["x": .value(.int(1))])
+    #expect(result.guards.isEmpty)
+  }
+
   @Test(
     "StateExpr cases",
     arguments: [
