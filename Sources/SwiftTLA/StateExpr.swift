@@ -239,7 +239,14 @@ public indirect enum StateExpr: Hashable, Sendable, CustomStringConvertible {
         case .tupleTail(let t): return "Tail(\(t))"
         case .tupleConcatenate(let a, let b): return "(\(a) \\o \(b))"
         case .recordLiteral(let fields):
-            let entries = fields.sorted(by: { $0.key < $1.key }).map { "\($0.key) |-> \($0.value)" }
+            let orderedKeys: [String]
+            if fields["procedure"] != nil, fields["pc"] != nil {
+                orderedKeys = ["procedure", "pc"]
+                    + fields.keys.filter { $0 != "procedure" && $0 != "pc" }.sorted()
+            } else {
+                orderedKeys = fields.keys.sorted()
+            }
+            let entries = orderedKeys.map { "\($0) |-> \(fields[$0]!)" }
             return "[\(entries.joined(separator: ", "))]"
         case .recordAccess(let r, let f): return "(\(r)).\(f)"
         case .domain(let f): return "DOMAIN \(f)"
