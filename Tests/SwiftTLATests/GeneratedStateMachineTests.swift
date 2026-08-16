@@ -636,9 +636,9 @@ struct EndToEndThreeParameterActionMachine {
     static var spec: TLASpec {
         TLASpec("EndToEndThreeParameterActionMachine") {
             let floor = Var<Int>("floor")
-            let person = Var<Int>("person")
-            let elevator = Var<Int>("elevator")
-            let direction = Var<Int>("direction")
+            let person = Expr<Int>(.variable("person"))
+            let elevator = Expr<Int>(.variable("elevator"))
+            let direction = Expr<Int>(.variable("direction"))
             Variable(floor, 0)
             Action("board", parameters: [
                 ActionParameter("person", values: [1, 2]),
@@ -762,9 +762,9 @@ struct GeneratedStateMachineTests {
         let closure = try #require(Parser.parse(source: source).statements.first?.item.as(ClosureExprSyntax.self))
         let parsed = SpecParser.parseSpecClosure(closure)
         let floor = Var<Int>("floor")
-        let person = Var<Int>("person")
-        let elevator = Var<Int>("elevator")
-        let direction = Var<Int>("direction")
+        let person = Expr<Int>(.variable("person"))
+        let elevator = Expr<Int>(.variable("elevator"))
+        let direction = Expr<Int>(.variable("direction"))
         let builder = TLASpec("EndToEndThreeParameterActionMachine") {
             Variable(floor, 0)
             Action("board", parameters: [
