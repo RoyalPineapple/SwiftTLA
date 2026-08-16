@@ -185,6 +185,22 @@ private final class StateExprWorkStack {
     }
 }
 
+final class StateExprEvaluationContext {
+    struct FunctionSetKey: Hashable { let domain: Set<TLAValue>; let range: Set<TLAValue> }
+    var functionSets: [FunctionSetKey: TLAValue] = [:]
+    private(set) var functionSetCacheHits = 0
+
+    func cachedFunctionSet(for key: FunctionSetKey) -> TLAValue? {
+        guard let result = functionSets[key] else { return nil }
+        functionSetCacheHits += 1
+        return result
+    }
+
+    func storeFunctionSet(_ result: TLAValue, for key: FunctionSetKey) {
+        functionSets[key] = result
+    }
+}
+
 extension StateExpr {
     public typealias RuntimeFunc = @Sendable ([TLAValue]) -> TLAValue
 
@@ -200,6 +216,22 @@ extension StateExpr {
                          valueBindings: [String: TLAValue] = [:],
                          operatorBindings: [String: FormalOperator] = [:],
                          maxDepth: Int = 1000) throws -> TLAValue {
+        try evaluate(
+            in: state, runtimeFuncs: runtimeFuncs, recursiveFuncs: recursiveFuncs,
+            formalOperatorDefinitions: formalOperatorDefinitions, valueBindings: valueBindings,
+            operatorBindings: operatorBindings, maxDepth: maxDepth,
+            evaluationContext: StateExprEvaluationContext()
+        )
+    }
+
+    func evaluate(in state: [String: TLAValue],
+                  runtimeFuncs: [String: RuntimeFunc] = [:],
+                  recursiveFuncs: [RecursiveFunc] = [],
+                  formalOperatorDefinitions: [FormalOperatorDefinition] = [],
+                  valueBindings: [String: TLAValue] = [:],
+                  operatorBindings: [String: FormalOperator] = [:],
+                  maxDepth: Int = 1000,
+                  evaluationContext: StateExprEvaluationContext) throws -> TLAValue {
         let evaluator = StateExprWorkStack(
             state: state,
             runtimeFuncs: runtimeFuncs,
@@ -219,7 +251,8 @@ extension StateExpr {
                 formalOperatorDefinitions: formalOperatorDefinitions,
                 valueBindings: valueBindings,
                 operatorBindings: operatorBindings,
-                maxDepth: maxDepth
+                maxDepth: maxDepth,
+                evaluationContext: evaluationContext
             )
         }
     }
@@ -231,7 +264,8 @@ extension StateExpr {
                                      formalOperatorDefinitions: [FormalOperatorDefinition] = [],
                                      valueBindings: [String: TLAValue] = [:],
                                      operatorBindings: [String: FormalOperator] = [:],
-                                     maxDepth: Int = 1000) throws -> TLAValue {
+                                     maxDepth: Int = 1000,
+                                     evaluationContext: StateExprEvaluationContext) throws -> TLAValue {
         func tm(_ op: String, got: TLAValue...) -> EvalError {
             .typeMismatch("\(op): expected matching types, got \(got.map(\.description).joined(separator: ", "))")
         }
@@ -252,7 +286,7 @@ extension StateExpr {
                 formalOperatorDefinitions: formalOperatorDefinitions,
                 valueBindings: valueBindings,
                 operatorBindings: operatorBindings,
-                maxDepth: maxDepth
+                maxDepth: maxDepth, evaluationContext: evaluationContext
             )
         }
         func evDepth(_ expr: StateExpr, _ depth: Int) throws -> TLAValue {
@@ -263,7 +297,7 @@ extension StateExpr {
                 formalOperatorDefinitions: formalOperatorDefinitions,
                 valueBindings: valueBindings,
                 operatorBindings: operatorBindings,
-                maxDepth: depth
+                maxDepth: depth, evaluationContext: evaluationContext
             )
         }
 
@@ -589,20 +623,28 @@ extension StateExpr {
         case .functionSet(let domain, let range):
             guard case .set(let domainSet) = try ev(domain) else { throw tm("functionSet domain", got: try ev(domain)) }
             guard case .set(let rangeSet) = try ev(range) else { throw tm("functionSet range", got: try ev(range)) }
+            let functionSetKey = StateExprEvaluationContext.FunctionSetKey(domain: domainSet, range: rangeSet)
+            if let cached = evaluationContext.cachedFunctionSet(for: functionSetKey) { return cached }
             let domainArr = domainSet.sorted()
             let rangeArr = rangeSet.sorted()
-            var result = Set<TLAValue>()
-            func build(_ idx: Int, _ cur: [(TLAValue, TLAValue)]) {
-                if idx == domainArr.count {
-                    result.insert(.function(Dictionary(uniqueKeysWithValues: cur)))
-                    return
+            var partialFunctions: [[TLAValue: TLAValue]] = [[:]]
+            for key in domainArr {
+                var next: [[TLAValue: TLAValue]] = []
+                next.reserveCapacity(partialFunctions.count * rangeArr.count)
+                for partial in partialFunctions {
+                    for value in rangeArr {
+                        var extended = partial
+                        extended[key] = value
+                        next.append(extended)
+                    }
                 }
-                for r in rangeArr {
-                    build(idx + 1, cur + [(domainArr[idx], r)])
-                }
+                partialFunctions = next
             }
-            if !domainArr.isEmpty { build(0, []) } else { result.insert(.function([:])) }
-            return .set(result)
+            let result = TLAValue.set(Set(partialFunctions.map(TLAValue.function)))
+            // Store only the completed result. A failed construction must be
+            // evaluated again rather than being represented in this cache.
+            evaluationContext.storeFunctionSet(result, for: functionSetKey)
+            return result
 
         case .foldFunction(let operation, let initial, let sequence):
             guard operation.parameters.count == 2 else {
@@ -702,7 +744,7 @@ extension StateExpr {
                         formalOperatorDefinitions: formalOperatorDefinitions,
                         valueBindings: nextValues,
                         operatorBindings: nextOperators,
-                        maxDepth: maxDepth - 1
+                        maxDepth: maxDepth - 1, evaluationContext: evaluationContext
                     )
                 }
                 let values = try arguments.map { argument -> TLAValue in
@@ -738,7 +780,7 @@ extension StateExpr {
                 formalOperatorDefinitions: formalOperatorDefinitions,
                 valueBindings: nextValues,
                 operatorBindings: operatorBindings,
-                maxDepth: maxDepth
+                maxDepth: maxDepth, evaluationContext: evaluationContext
             )
 
         case .letIn(let operators, let body):
@@ -758,7 +800,7 @@ extension StateExpr {
                 formalOperatorDefinitions: formalOperatorDefinitions,
                 valueBindings: valueBindings,
                 operatorBindings: operatorBindings,
-                maxDepth: maxDepth
+                maxDepth: maxDepth, evaluationContext: evaluationContext
             )
 
         case .recursiveCall(let name, let args):
@@ -818,6 +860,30 @@ extension StateExpr {
             formalOperatorDefinitions: formalOperatorDefinitions,
             valueBindings: valueBindings,
             operatorBindings: operatorBindings
+        )
+        guard case .bool(let b) = result else {
+            throw EvalError.typeMismatch(
+                "Expected boolean expression, got \(result)"
+            )
+        }
+        return b
+    }
+
+    func evaluateBool(in state: [String: TLAValue],
+                      runtimeFuncs: [String: RuntimeFunc] = [:],
+                      recursiveFuncs: [RecursiveFunc] = [],
+                      formalOperatorDefinitions: [FormalOperatorDefinition] = [],
+                      valueBindings: [String: TLAValue] = [:],
+                      operatorBindings: [String: FormalOperator] = [:],
+                      evaluationContext: StateExprEvaluationContext) throws -> Bool {
+        let result = try evaluate(
+            in: state,
+            runtimeFuncs: runtimeFuncs,
+            recursiveFuncs: recursiveFuncs,
+            formalOperatorDefinitions: formalOperatorDefinitions,
+            valueBindings: valueBindings,
+            operatorBindings: operatorBindings,
+            evaluationContext: evaluationContext
         )
         guard case .bool(let b) = result else {
             throw EvalError.typeMismatch(

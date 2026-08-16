@@ -1,4 +1,4 @@
-import SwiftTLA
+@testable import SwiftTLA
 import Testing
 
 @Suite(.serialized) struct EvaluatorCoverage {
@@ -99,5 +99,19 @@ import Testing
         #expect(sum == .int(3))
         let fset = try StateExpr.functionSet(.setLiteral([.int(1)]), .setLiteral([.int(2)])).evaluate(in: [:])
         #expect(fset == .set([.function([.int(1): .int(2)])]))
+    }
+
+    @Test("function set cache reuses evaluated domain and range")
+    func functionSetCache() throws {
+        let evaluationContext = StateExprEvaluationContext()
+        let range = StateExpr.setLiteral([.int(10), .int(20)])
+        let fromRange = StateExpr.functionSet(.integerRange(.int(1), .int(2)), range)
+        let fromLiteral = StateExpr.functionSet(.setLiteral([.int(1), .int(2)]), range)
+
+        let first = try fromRange.evaluate(in: [:], evaluationContext: evaluationContext)
+        let second = try fromLiteral.evaluate(in: [:], evaluationContext: evaluationContext)
+
+        #expect(first == second)
+        #expect(evaluationContext.functionSetCacheHits == 1)
     }
 }

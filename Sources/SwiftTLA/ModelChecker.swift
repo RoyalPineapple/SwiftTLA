@@ -82,12 +82,16 @@ public struct ModelChecker {
         }
         let substituted = substituteConstants(self.spec)
         let transitionRelation = TransitionRelation(resolvedSpec: substituted)
+        let evaluationContext = StateExprEvaluationContext()
         let variableNames = substituted.variables.map(\.name)
         let actions = substituted.actions.isEmpty
             ? [NamedAction(name: "", body: .guard_(.value(.bool(false))))]
             : substituted.actions
 
-        let initialStates = computeInitialStates(substituted)
+        let initialStates = computeInitialStates(
+            substituted,
+            evaluationContext: evaluationContext
+        )
         guard !initialStates.isEmpty else {
             return emptyExploration(
                 substituted,
@@ -96,7 +100,11 @@ public struct ModelChecker {
             )
         }
 
-        guard try checkAssume(substituted, initial: initialStates[0]) else {
+        guard try checkAssume(
+            substituted,
+            initial: initialStates[0],
+            evaluationContext: evaluationContext
+        ) else {
             return emptyExploration(
                 substituted,
                 variableNames: variableNames,
@@ -108,14 +116,16 @@ public struct ModelChecker {
         let exploration = try bfs(
             seeds: seeds,
             variableNames: variableNames,
-            expand: buildExpander(transitionRelation),
+            expand: buildExpander(transitionRelation, evaluationContext: evaluationContext),
             evaluate: buildEvaluator(
                 runtimeFuncs: substituted.runtimeFuncs,
                 recursiveFuncs: substituted.resolvedRecursiveFuncs,
-                formalOperatorDefinitions: substituted.resolvedFormalOperatorDefinitions
+                formalOperatorDefinitions: substituted.resolvedFormalOperatorDefinitions,
+                evaluationContext: evaluationContext
             ),
             actions: actions,
             formalOperatorDefinitions: substituted.resolvedFormalOperatorDefinitions,
+            evaluationContext: evaluationContext,
             invariants: substituted.invariants,
             checkDeadlock: substituted.checkDeadlock,
             specificationName: substituted.name,
@@ -132,10 +142,11 @@ public struct ModelChecker {
     }
 
     private func buildExpander(
-        _ transitionRelation: TransitionRelation
+        _ transitionRelation: TransitionRelation,
+        evaluationContext: StateExprEvaluationContext
     ) -> (State) throws -> [(StateGraph.TransitionLabel, State)] {
         { state in
-            try transitionRelation.successors(from: state).map {
+            try transitionRelation.successors(from: state, evaluationContext: evaluationContext).map {
                 (StateGraph.TransitionLabel($0.invocation), $0.state)
             }
         }
@@ -144,25 +155,32 @@ public struct ModelChecker {
     private func buildEvaluator(
         runtimeFuncs: [String: StateExpr.RuntimeFunc] = [:],
         recursiveFuncs: [RecursiveFunc] = [],
-        formalOperatorDefinitions: [FormalOperatorDefinition] = []
+        formalOperatorDefinitions: [FormalOperatorDefinition] = [],
+        evaluationContext: StateExprEvaluationContext
     ) -> (StateExpr, State) throws -> Bool {
         { expression, state in
             try expression.evaluateBool(
                 in: state,
                 runtimeFuncs: runtimeFuncs,
                 recursiveFuncs: recursiveFuncs,
-                formalOperatorDefinitions: formalOperatorDefinitions
+                formalOperatorDefinitions: formalOperatorDefinitions,
+                evaluationContext: evaluationContext
             )
         }
     }
 
-    private func checkAssume(_ specification: TLASpec, initial: State) throws -> Bool {
+    private func checkAssume(
+        _ specification: TLASpec,
+        initial: State,
+        evaluationContext: StateExprEvaluationContext
+    ) throws -> Bool {
         guard let assume = specification.assume else { return true }
         return try assume.evaluateBool(
             in: initial,
             runtimeFuncs: specification.runtimeFuncs,
             recursiveFuncs: specification.resolvedRecursiveFuncs,
-            formalOperatorDefinitions: specification.resolvedFormalOperatorDefinitions
+            formalOperatorDefinitions: specification.resolvedFormalOperatorDefinitions,
+            evaluationContext: evaluationContext
         )
     }
 
@@ -222,6 +240,7 @@ private func bfs(
     evaluate: (StateExpr, State) throws -> Bool,
     actions: [NamedAction],
     formalOperatorDefinitions: [FormalOperatorDefinition],
+    evaluationContext: StateExprEvaluationContext,
     invariants: [NamedInvariant],
     checkDeadlock: Bool,
     specificationName: String,
@@ -299,7 +318,8 @@ private func bfs(
                 current,
                 actions: actions,
                 variableNames: variableNames,
-                formalOperatorDefinitions: formalOperatorDefinitions
+                formalOperatorDefinitions: formalOperatorDefinitions,
+                evaluationContext: evaluationContext
             )
         } catch {
             return ModelExplorationResult(
@@ -388,7 +408,8 @@ private func enabledState(
     _ state: State,
     actions: [NamedAction],
     variableNames: [String],
-    formalOperatorDefinitions: [FormalOperatorDefinition]
+    formalOperatorDefinitions: [FormalOperatorDefinition],
+    evaluationContext: StateExprEvaluationContext
 ) throws -> State {
     var result = state
     for action in actions where !action.name.isEmpty {
@@ -398,7 +419,8 @@ private func enabledState(
                     variant.body,
                     from: state,
                     varNames: variableNames,
-                    formalOperatorDefinitions: formalOperatorDefinitions
+                    formalOperatorDefinitions: formalOperatorDefinitions,
+                    evaluationContext: evaluationContext
                 ).isEmpty {
                     return true
                 }

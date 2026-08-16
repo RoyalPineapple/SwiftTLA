@@ -16,41 +16,83 @@ public struct SpecRuntime: Sendable {
     }
 
     public func initialStates() -> [[String: TLAValue]] {
-        computeInitialStates(spec)
+        computeInitialStates(spec, evaluationContext: StateExprEvaluationContext())
     }
 
     public func apply(_ invocation: TLAActionInvocation, to state: [String: TLAValue]) throws -> [String: TLAValue] {
-        let successors = try successors(invocation, from: state)
+        let evaluationContext = StateExprEvaluationContext()
+        let successors = try successors(invocation, from: state, evaluationContext: evaluationContext)
         guard let next = successors.first else {
-            throw RuntimeError.actionNotEnabled(invocation, available: try availableInvocations(in: state, requested: invocation))
+            throw RuntimeError.actionNotEnabled(
+                invocation,
+                available: try availableInvocations(
+                    in: state,
+                    requested: invocation,
+                    evaluationContext: evaluationContext
+                )
+            )
         }
         return next
     }
 
     public func successors(_ invocation: TLAActionInvocation, from state: [String: TLAValue]) throws -> [[String: TLAValue]] {
+        try successors(
+            invocation,
+            from: state,
+            evaluationContext: StateExprEvaluationContext()
+        )
+    }
+
+    private func successors(
+        _ invocation: TLAActionInvocation,
+        from state: [String: TLAValue],
+        evaluationContext: StateExprEvaluationContext
+    ) throws -> [[String: TLAValue]] {
         do {
-            return try transitionRelation.successors(for: invocation, from: state).map(\.state)
+            return try transitionRelation.successors(
+                for: invocation,
+                from: state,
+                evaluationContext: evaluationContext
+            ).map(\.state)
         } catch {
-            throw try runtimeError(for: error, requested: invocation, state: state)
+            throw try runtimeError(
+                for: error,
+                requested: invocation,
+                state: state,
+                evaluationContext: evaluationContext
+            )
         }
     }
 
     public func availableInvocations(in state: [String: TLAValue]) throws -> [TLAActionInvocation] {
-        try availableInvocations(in: state, requested: nil)
+        try availableInvocations(
+            in: state,
+            requested: nil,
+            evaluationContext: StateExprEvaluationContext()
+        )
     }
 
     private func availableInvocations(
         in state: [String: TLAValue],
-        requested: TLAActionInvocation?
+        requested: TLAActionInvocation?,
+        evaluationContext: StateExprEvaluationContext
     ) throws -> [TLAActionInvocation] {
         do {
-            return try transitionRelation.successors(from: state).reduce(into: []) { available, successor in
+            return try transitionRelation.successors(
+                from: state,
+                evaluationContext: evaluationContext
+            ).reduce(into: []) { available, successor in
                 if available.last != successor.invocation {
                     available.append(successor.invocation)
                 }
             }
         } catch {
-            throw try runtimeError(for: error, requested: requested, state: state)
+            throw try runtimeError(
+                for: error,
+                requested: requested,
+                state: state,
+                evaluationContext: evaluationContext
+            )
         }
     }
 
@@ -60,12 +102,28 @@ public struct SpecRuntime: Sendable {
     }
 
     public func actionOutcome(named actionName: String, in state: [String: TLAValue]) -> RuntimeActionOutcome {
+        actionOutcome(
+            named: actionName,
+            in: state,
+            evaluationContext: StateExprEvaluationContext()
+        )
+    }
+
+    private func actionOutcome(
+        named actionName: String,
+        in state: [String: TLAValue],
+        evaluationContext: StateExprEvaluationContext
+    ) -> RuntimeActionOutcome {
         guard let action = spec.actions.first(where: { $0.name == actionName }) else {
             return .actionNotFound(actionName: actionName)
         }
         do {
             let successors = try actionInvocations(action).flatMap {
-                try transitionRelation.successors(for: $0.invocation, from: state).map(\.state)
+                try transitionRelation.successors(
+                    for: $0.invocation,
+                    from: state,
+                    evaluationContext: evaluationContext
+                ).map(\.state)
             }
             return successors.isEmpty ? .disabled(actionName: actionName) : .enabled(actionName: actionName, successors: successors)
         } catch let error as TransitionRelation.Error {
@@ -87,6 +145,7 @@ public struct SpecRuntime: Sendable {
     /// requested formal action, the safely projected pre-state, available
     /// alternatives, whether anything changed, and a safe next action.
     public func actionReport(named actionName: String, in state: [String: TLAValue]) -> RuntimeActionReport {
+        let evaluationContext = StateExprEvaluationContext()
         let requested = TLAActionInvocation(name: actionName)
         let projection: TLAStateProjectionResult
         do {
@@ -100,10 +159,18 @@ public struct SpecRuntime: Sendable {
             ))
         }
 
-        let outcome = actionOutcome(named: actionName, in: state)
+        let outcome = actionOutcome(
+            named: actionName,
+            in: state,
+            evaluationContext: evaluationContext
+        )
         let availability: RuntimeActionReport.Availability
         do {
-            availability = .known(try availableInvocations(in: state))
+            availability = .known(try availableInvocations(
+                in: state,
+                requested: nil,
+                evaluationContext: evaluationContext
+            ))
         } catch let error as RuntimeError {
             availability = .unavailable(.init(error: error))
         } catch {
@@ -157,17 +224,22 @@ public struct SpecRuntime: Sendable {
     }
 
     public func actionOutcomes(in state: [String: TLAValue]) -> [RuntimeActionOutcome] {
-        spec.actions.map { actionOutcome(named: $0.name, in: state) }
+        let evaluationContext = StateExprEvaluationContext()
+        return spec.actions.map {
+            actionOutcome(named: $0.name, in: state, evaluationContext: evaluationContext)
+        }
     }
 
     public func propertyOutcomes(in state: [String: TLAValue]) -> [RuntimePropertyOutcome] {
+        let evaluationContext = StateExprEvaluationContext()
         var outcomes = invariants.map { invariant -> RuntimePropertyOutcome in
             do {
                 return try invariant.body.evaluateBool(
                     in: state,
                     runtimeFuncs: spec.runtimeFuncs,
                     recursiveFuncs: spec.resolvedRecursiveFuncs,
-                    formalOperatorDefinitions: spec.resolvedFormalOperatorDefinitions
+                    formalOperatorDefinitions: spec.resolvedFormalOperatorDefinitions,
+                    evaluationContext: evaluationContext
                 )
                     ? .satisfied(name: invariant.name) : .violated(name: invariant.name)
             } catch {
@@ -194,23 +266,36 @@ public struct SpecRuntime: Sendable {
             in: state,
             runtimeFuncs: spec.runtimeFuncs,
             recursiveFuncs: spec.resolvedRecursiveFuncs,
-            formalOperatorDefinitions: spec.resolvedFormalOperatorDefinitions
+            formalOperatorDefinitions: spec.resolvedFormalOperatorDefinitions,
+            evaluationContext: StateExprEvaluationContext()
         )
     }
 
     public func step(_ invocation: TLAActionInvocation, from state: [String: TLAValue]) throws -> StepResult {
-        let available = try availableInvocations(in: state, requested: invocation)
+        let evaluationContext = StateExprEvaluationContext()
+        let available = try availableInvocations(
+            in: state,
+            requested: invocation,
+            evaluationContext: evaluationContext
+        )
         guard available.contains(invocation) else {
             return .actionNotEnabled(invocation, available: available)
         }
-        let next = try apply(invocation, to: state)
+        guard let next = try successors(
+            invocation,
+            from: state,
+            evaluationContext: evaluationContext
+        ).first else {
+            return .actionNotEnabled(invocation, available: available)
+        }
         var violations: [String] = []
         for inv in invariants {
             if !(try inv.body.evaluateBool(
                 in: next,
                 runtimeFuncs: spec.runtimeFuncs,
                 recursiveFuncs: spec.resolvedRecursiveFuncs,
-                formalOperatorDefinitions: spec.resolvedFormalOperatorDefinitions
+                formalOperatorDefinitions: spec.resolvedFormalOperatorDefinitions,
+                evaluationContext: evaluationContext
             )) {
                 violations.append(inv.name)
             }
@@ -243,7 +328,8 @@ public struct SpecRuntime: Sendable {
     private func runtimeError(
         for error: Swift.Error,
         requested: TLAActionInvocation?,
-        state: [String: TLAValue]
+        state: [String: TLAValue],
+        evaluationContext: StateExprEvaluationContext
     ) throws -> RuntimeError {
         guard let relationError = error as? TransitionRelation.Error else {
             return .enumerationFailed(
@@ -254,9 +340,17 @@ public struct SpecRuntime: Sendable {
         }
         switch relationError {
         case .actionNotFound(let invocation):
-            return .actionNotFound(invocation, available: try availableInvocations(in: state, requested: requested))
+            return .actionNotFound(invocation, available: try availableInvocations(
+                in: state,
+                requested: requested,
+                evaluationContext: evaluationContext
+            ))
         case .invalidActionArguments(let invocation):
-            return .invalidActionArguments(invocation, available: try availableInvocations(in: state, requested: requested))
+            return .invalidActionArguments(invocation, available: try availableInvocations(
+                in: state,
+                requested: requested,
+                evaluationContext: evaluationContext
+            ))
         case .enumerationFailed(let invocation, let underlying):
             return .enumerationFailed(requested: requested, evaluated: invocation, underlying: underlying)
         }

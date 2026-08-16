@@ -820,6 +820,13 @@ public func Variable(from name: String, _ range: StateExpr) -> VarDecl {
 }
 // MARK: - Shared initial state computation
 public func computeInitialStates(_ spec: TLASpec) -> [[String: TLAValue]] {
+  computeInitialStates(spec, evaluationContext: StateExprEvaluationContext())
+}
+
+func computeInitialStates(
+  _ spec: TLASpec,
+  evaluationContext: StateExprEvaluationContext
+) -> [[String: TLAValue]] {
   let substituted = substituteConstants(spec)
   let base = Dictionary(uniqueKeysWithValues: substituted.variables.map { ($0.name, $0.initial) })
   let nondeterministic = substituted.variables.filter { $0.initialSet != nil || $0.lazySet != nil }
@@ -830,7 +837,8 @@ public func computeInitialStates(_ spec: TLASpec) -> [[String: TLAValue]] {
         case .set(let values) = try? expression.evaluate(
           in: state,
           runtimeFuncs: substituted.runtimeFuncs,
-          recursiveFuncs: substituted.resolvedRecursiveFuncs
+          recursiveFuncs: substituted.resolvedRecursiveFuncs,
+          evaluationContext: evaluationContext
         )
       else { return [] }
       return TLAValue.sorted(values).map {
@@ -843,7 +851,8 @@ public func computeInitialStates(_ spec: TLASpec) -> [[String: TLAValue]] {
       guard let val = try? variable.initExpr!.evaluate(
         in: state,
         runtimeFuncs: substituted.runtimeFuncs,
-        recursiveFuncs: substituted.resolvedRecursiveFuncs
+        recursiveFuncs: substituted.resolvedRecursiveFuncs,
+        evaluationContext: evaluationContext
       ) else { return nil }
       var s = state
       s[variable.name] = val
