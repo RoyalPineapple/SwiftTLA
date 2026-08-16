@@ -6,26 +6,36 @@ domains, records for structured state, and generated machines for execution.
 One authored model becomes a checked formal AST, a TLA+ module, and a typed
 Swift state machine.
 
-## One model, several faithful products
+## Two authoring languages, one formal foundation
 
-SwiftTLA constructs the same formal model along two independent paths, then
-compares them before generated code uses it:
+SwiftTLA has two intentional authoring languages. They meet at the TLA+ AST;
+they are not competing spellings of one public DSL.
 
 ```
-source syntax → parser → StateExpr/ActionExpr AST
-                         ├── compile-time checker
-                         ├── .tlaModule
-                         └── generated Swift machine surface
-
-constrained builders → runtime TLASpec → SpecRuntime
-
-parser AST ↔ runtime TLASpec semantic alpha-equivalence gate
+Swift-shaped PlusCal                         Direct TLA+
+#spec { Algorithm { … } }                    TLASpec { Variable / Action / … }
+          │                                           │
+          ▼                                           │
+     Algorithm IR                                     │
+          │                                           │
+          └──────────── lower once ───────────────────┘
+                               ▼
+                          TLA+ AST / TLASpec
+                    ┌──────────┼───────────┐
+                    ▼          ▼           ▼
+                 checker   generated Swift  .tla / .cfg
 ```
 
-The parser reads the authored Swift syntax. The constrained builders construct
-the executable `TLASpec`. Semantic alpha-equivalence confirms that they mean
-the same thing, with a diagnostic that identifies the first differing
-declaration, action, invariant, or bound expression.
+Swift-shaped PlusCal is the normal application path. Its parser and constrained
+builder independently produce equivalent `Algorithm` IR, then the fidelity gate
+compares that IR before either path lowers it. A second alpha-equivalence gate
+compares the resulting TLA+ specifications. Diagnostics identify the first
+semantic node, expected value, actual value, preserved state, and next safe
+action.
+
+Direct TLA+ is the formal-engine path for faithful upstream ports, imported
+standard/community modules, and exact parity fixtures. It builds the TLA+ AST
+directly and deliberately has no reverse conversion into Algorithm IR.
 
 `#spec` is the authoring boundary. It makes Swift declaration sugar such as
 `let count = SharedVar(initial: 0)` available to the scoped builder while the
@@ -117,13 +127,16 @@ The two paths carry the authored model through the following phases:
 2. The `#spec` macro performs syntax-only desugaring. For example, it makes a
    `let count = SharedVar(initial: 0)` declaration visible to the runtime
    builder.
-3. The model macro parses the original source independently into the formal
-   AST. The checker, TLA+ emitter, and generated machine start from this AST.
-4. At runtime, the constrained builder closure runs and independently creates
-   a `TLASpec`.
-5. SwiftTLA normalizes both models and compares them with semantic
+3. For an `Algorithm`, the model macro parses the original source into
+   Algorithm IR. The constrained builder independently creates Algorithm IR.
+4. SwiftTLA compares those two IR values, then lowers each through the one
+   Algorithm lowerer into a TLA+ specification.
+5. SwiftTLA compares the resulting specifications with semantic
    alpha-equivalence.
-6. The generated machine executes the validated transition runtime.
+6. For direct TLA+ authoring, the macro and builder create only the TLA+ AST;
+   no Algorithm IR is invented.
+7. The checker, TLA+ emitter, and generated machine consume the validated
+   TLA+ specification.
 
 After construction and comparison, the generated machine holds its canonical
 state machine and applies enabled transitions.
@@ -158,12 +171,25 @@ struct Counter {
 The `#spec` expansion registers `count` with the constrained runtime builder,
 while the model macro parses the original declaration into the formal AST.
 
-## Authoring two source forms
+## Algorithm rendering and independent lowering
 
-PlusCal-shaped authoring expresses algorithms through `Algorithm`, `Each`, and
-`Do`; SwiftTLA lowers it into the core AST and emits ordinary TLA+ for TLC.
-The typed `#spec` vocabulary also expresses direct TLA+ specifications. Both
-forms share the AST, checker, emitter, generated machine, and fidelity gate.
+Algorithm IR has one semantic lowerer: `Algorithm IR → TLA+ AST`. It owns
+atomic `Do` blocks, old-state simultaneous assignment, process state, `With`
+and `Choose` bindings, procedures, and fairness.
+
+The planned PlusCal renderer is not another lowerer. It consumes Algorithm IR
+and prints a readable PlusCal block inside a valid TLA+ module. The external
+PlusCal translator then provides an independent lowering:
+
+```
+Algorithm IR ── SwiftTLA lowerer ──► TLA+ ──► TLC graph A
+      │
+      └── PlusCal renderer ──► PlusCal module ──► translator ──► TLA+ ──► TLC graph B
+```
+
+For a declared finite case, canonical equivalence of graphs A and B is the
+admission evidence for that algorithm-lowering surface. The renderer must not
+invent semantics or reimplement lowering.
 
 For selected finite core models, the core-conformance command compares the
 complete labeled transition relation from SwiftTLA with a pinned TLC run. This
@@ -210,6 +236,26 @@ main-actor isolated and invokes a typed callback after a transition commits.
 Every public generated value is `Sendable`. See
 [Generated machines](GeneratedMachines.md) and the SwiftTLA DocC catalog for
 the supported surface.
+
+## Ownership boundaries
+
+The repository may keep its current files while the language work is moving,
+but its ownership boundaries are fixed:
+
+| Area | Owns | Must not own |
+|---|---|---|
+| `SwiftTLA` formal core | TLA+ AST, finite evaluation, module rendering, Algorithm IR, lowering, and PlusCal rendering | SwiftUI, application adapters, or macro-only semantics |
+| `SwiftTLAPlugin` | syntax recovery, source spans, fidelity diagnostics, and typed generated surfaces | Algorithm lowering or TLA+ evaluation semantics |
+| direct-TLA parity corpus | faithful upstream modules, imports, and direct-TLA graph comparisons | application-shaped Algorithm fixtures |
+| algorithm conformance corpus | canonical `#spec`/`Algorithm` fixtures and Swift-lowered versus PlusCal-translated graph comparisons | duplicate direct-TLA implementations of the same algorithm |
+| `Examples/` consumers | demos and Apple integration shims that import the public package | a second state machine, availability policy, or formal evaluator |
+
+The next target split creates a dedicated algorithm-conformance target rather
+than adding PlusCal-shaped fixtures to `UpstreamParity`. It can depend on
+SwiftTLA and the macro library, while the TLC validation executable consumes
+its declared bundle. This keeps the core semantic tests independent of the
+upstream corpus and keeps direct parity evidence distinct from algorithm
+evidence.
 
 ## DSL philosophy
 
