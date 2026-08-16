@@ -50,6 +50,7 @@ struct AlgorithmPlusCalRendererTests {
 
         #expect(rendered.contains("---- MODULE RenderedProcess ----"))
         #expect(rendered.contains("count = 0"))
+        #expect(rendered.contains("(*--algorithm Rendered Process {"))
         #expect(rendered.contains("fair+ process (self \\in {\"left\", \"right\"})"))
         #expect(rendered.contains("local = 0"))
         #expect(rendered.contains("repeat: while ((count < 2)) {"))
@@ -60,8 +61,8 @@ struct AlgorithmPlusCalRendererTests {
         #expect(rendered.contains("flags := [flags EXCEPT ![self] = TRUE];"))
         #expect(rendered.contains("either {"))
         #expect(rendered.contains("goto repeat;"))
-        #expect(rendered.contains("stop;"))
-        #expect(rendered.contains("end algorithm;*)"))
+        #expect(rendered.contains("goto Done;"))
+        #expect(rendered.contains("} *)"))
     }
 
     @Test("renders the PlusCal brace control grammar literally")
@@ -130,7 +131,7 @@ struct AlgorithmPlusCalRendererTests {
         #expect(rendered.contains("enter:"))
         #expect(rendered.contains("output := (parameter0 + offset);"))
         #expect(rendered.contains("call work(7);"))
-        #expect(rendered.contains("begin\n  start:"))
+        #expect(rendered.contains("{\n  start:"))
     }
 
     @Test("reports source nodes that have no direct PlusCal spelling")
@@ -165,7 +166,7 @@ struct AlgorithmPlusCalRendererTests {
         let modules = try spec.renderAuthoredPlusCalModules()
 
         #expect(modules.count == 1)
-        #expect(modules[0].contains("(*--algorithm Retained"))
+        #expect(modules[0].contains("(*--algorithm Retained {"))
         #expect(spec.actions.contains(where: { $0.name == "stop" }))
     }
 }

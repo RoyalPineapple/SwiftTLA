@@ -55,7 +55,7 @@ internal struct AlgorithmPlusCalRenderer {
     let model: AlgorithmModel
 
     func render() throws -> String {
-        var lines = ["---- MODULE \(moduleName(model.name)) ----", "EXTENDS Naturals, Sequences, FiniteSets", "", "(*--algorithm \(model.name)"]
+        var lines = ["---- MODULE \(moduleName(model.name)) ----", "EXTENDS Naturals, Sequences, FiniteSets", "", "(*--algorithm \(model.name) {"]
 
         let shared = model.components.compactMap { component -> AlgorithmStateModel? in
             guard case .shared(let declaration) = component else { return nil }
@@ -75,7 +75,7 @@ internal struct AlgorithmPlusCalRenderer {
             case .process(let process):
                 lines += try render(process: process, path: "components[\(index)]")
             case .step:
-                // Sequential steps share one `begin ... end algorithm` body.
+                // Sequential steps share the algorithm's C-syntax brace body.
                 continue
             case .invariant(let invariant):
                 lines.append("\\* Invariant \(invariant.name) == \(expression(invariant.body))")
@@ -102,14 +102,13 @@ internal struct AlgorithmPlusCalRenderer {
 
         let sequential = model.sequentialSteps
         if !sequential.isEmpty {
-            lines.append("begin")
+            lines.append("{")
             for (index, step) in sequential.enumerated() {
                 lines += try render(step: step, indent: "  ", path: "sequentialSteps[\(index)]")
             }
-            lines.append("end algorithm;*)")
-        } else {
-            lines.append("end algorithm;*)")
+            lines.append("}")
         }
+        lines.append("} *)")
         lines.append("====")
         return lines.joined(separator: "\n") + "\n"
     }
@@ -120,11 +119,11 @@ internal struct AlgorithmPlusCalRenderer {
             lines.append("variables")
             lines += declarations(procedure.locals, indent: "  ", terminator: ";")
         }
-        lines.append("begin")
+        lines.append("{")
         for (index, step) in procedure.steps.enumerated() {
             lines += try render(step: step, indent: "  ", path: "\(path).steps[\(index)]")
         }
-        lines.append("end procedure;")
+        lines.append("}")
         return lines
     }
 
@@ -144,7 +143,7 @@ internal struct AlgorithmPlusCalRenderer {
             lines.append("variables")
             lines += declarations(locals, indent: "  ", terminator: ";")
         }
-        lines.append("begin")
+        lines.append("{")
         for (index, component) in process.components.enumerated() {
             switch component {
             case .local:
@@ -165,7 +164,7 @@ internal struct AlgorithmPlusCalRenderer {
                 throw unsupported(path: "\(path).components[\(index)]", expected: "a process statement or local declaration", actual: "nested algorithm component")
             }
         }
-        lines.append("end process;")
+        lines.append("}")
         return lines
     }
 
@@ -237,7 +236,7 @@ internal struct AlgorithmPlusCalRenderer {
         case .goto(let label): return ["\(indent)goto \(label.name);"]
         case .call(let target, let arguments): return ["\(indent)call \(target)(\(arguments.map(expression).joined(separator: ", ")));"]
         case .return: return ["\(indent)return;"]
-        case .stop: return ["\(indent)stop;"]
+        case .stop: return ["\(indent)goto Done;"]
         case .skip: return ["\(indent)skip;"]
         }
     }
