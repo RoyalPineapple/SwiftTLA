@@ -17,7 +17,7 @@ struct K5ProcedureCallReturnWitnessTests {
 
     @Test("K5 fixture exposes one authored PlusCal procedure module")
     func exposesProcedureOracleFixture() throws {
-        let fixture = AlgorithmConformanceRegistry.k5ProcedureCallReturn
+        let fixture = AlgorithmConformanceRegistry.procedureCallReturn
         let source = try fixture.plusCalModule()
 
         #expect(source.contains("procedure addOffset"))

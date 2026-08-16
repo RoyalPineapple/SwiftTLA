@@ -16,7 +16,7 @@ struct K1ScopeBindingSubstitutionTLCWitnessTests {
 
     @Test("K1 fixture exposes authored PlusCal bindings after macro substitution")
     func exposesScopeBindingSubstitutionPlusCalSource() throws {
-        let fixture = try #require(AlgorithmConformanceRegistry.fixture(id: "k1-scope-binding-substitution"))
+        let fixture = try #require(AlgorithmConformanceRegistry.fixture(id: "scope-binding-substitution"))
         let source = try fixture.plusCalModule()
 
         #expect(source.contains("(*--algorithm K1ScopeBindingSubstitutionTLCWitness"))

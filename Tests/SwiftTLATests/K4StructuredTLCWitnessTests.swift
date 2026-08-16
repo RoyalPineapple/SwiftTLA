@@ -17,7 +17,7 @@ struct K4StructuredTLCWitnessTests {
 
     @Test("K4 fixture exposes one independently renderable PlusCal source")
     func exposesSinglePlusCalOracleSource() throws {
-        let fixture = try #require(AlgorithmConformanceRegistry.fixture(id: "k4-structured-doors"))
+        let fixture = try #require(AlgorithmConformanceRegistry.fixture(id: "structured-record-functions"))
         let source = try fixture.plusCalModule()
 
         #expect(source.contains("(*--algorithm K4StructuredTLCWitness"))

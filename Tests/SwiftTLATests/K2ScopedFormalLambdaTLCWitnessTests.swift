@@ -16,7 +16,7 @@ struct K2ScopedFormalLambdaTLCWitnessTests {
 
     @Test("K2 fixture exposes one PlusCal source with the formal application")
     func exposesScopedFormalLambdaPlusCalSource() throws {
-        let fixture = AlgorithmConformanceRegistry.k2ScopedFormalLambda
+        let fixture = AlgorithmConformanceRegistry.formalOperatorValues
         let source = try fixture.plusCalModule()
 
         #expect(source.contains("process (self \\in {\"left\", \"right\"})"))

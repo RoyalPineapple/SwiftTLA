@@ -8,7 +8,7 @@ struct K6BoulangerMCWitnessTests {
         let fidelityEvidence = parserFidelityEvidence()
         #expect(fidelityEvidence == nil, Comment(rawValue: fidelityEvidence?.description ?? "No parser/builder difference."))
 
-        let source = try AlgorithmConformanceRegistry.k6BoulangerMC.plusCalModule()
+        let source = try AlgorithmConformanceRegistry.boulangerUpstreamPort.plusCalModule()
         #expect(source.contains("flag = [i \\in (1..3) |-> FALSE]"))
         #expect(source.contains("num[self] := 0;\n      goto ncs;"))
         #expect(K6BoulangerMCWitness.spec.algorithmFidelityTokens.count == 1)
@@ -37,7 +37,7 @@ struct K6BoulangerMCWitnessTests {
 
     @Test("K6 fixture carries the bounded constraint that its source actually uses")
     func retainsBoundedConfiguration() {
-        let fixture = AlgorithmConformanceRegistry.k6BoulangerMC
+        let fixture = AlgorithmConformanceRegistry.boulangerUpstreamPort
 
         #expect(!fixture.configuration.contains("NatOverride"))
         #expect(fixture.configuration.contains("CONSTRAINT StateConstraint"))

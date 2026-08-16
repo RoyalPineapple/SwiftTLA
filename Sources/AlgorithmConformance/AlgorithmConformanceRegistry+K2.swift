@@ -1,9 +1,9 @@
 import SwiftTLA
 
 extension AlgorithmConformanceRegistry {
-    /// K2 admits only process/formal-lambda binding evidence.
-    public static let k2ScopedFormalLambda = AlgorithmConformanceFixture(
-        id: "k2-scoped-formal-lambda",
+    /// Process/formal-lambda binding evidence.
+    public static let formalOperatorValues = AlgorithmConformanceFixture(
+        id: "formal-operator-values",
         configuration: "SPECIFICATION Spec\nCHECK_DEADLOCK FALSE\n",
         specification: { K2ScopedFormalLambdaTLCWitness.spec }
     )

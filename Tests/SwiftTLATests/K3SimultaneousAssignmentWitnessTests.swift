@@ -18,7 +18,7 @@ struct K3SimultaneousAssignmentWitnessTests {
 
     @Test("K3 fixture exposes one authored PlusCal simultaneous assignment module")
     func exposesSimultaneousAssignmentOracleFixture() throws {
-        let fixture = AlgorithmConformanceRegistry.k3SimultaneousAssignment
+        let fixture = AlgorithmConformanceRegistry.simultaneousAssignment
         let source = try fixture.plusCalModule()
 
         #expect(source.contains("left := right || right := left;"))

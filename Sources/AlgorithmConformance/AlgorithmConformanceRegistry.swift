@@ -63,19 +63,19 @@ public struct AlgorithmConformanceFixtureDiagnostic: Error, Sendable, Hashable, 
 
 /// The intentionally small initial corpus for the independent PlusCal oracle.
 public enum AlgorithmConformanceRegistry {
-    public static let k4StructuredDoors = AlgorithmConformanceFixture(
-        id: "k4-structured-doors",
+    public static let structuredRecordFunctions = AlgorithmConformanceFixture(
+        id: "structured-record-functions",
         configuration: "SPECIFICATION Spec\nCHECK_DEADLOCK FALSE\n",
         specification: { K4StructuredTLCWitness.spec }
     )
 
     public static let fixtures = [
-        k1ScopeBindingSubstitution,
-        k2ScopedFormalLambda,
-        k3SimultaneousAssignment,
-        k4StructuredDoors,
-        k5ProcedureCallReturn,
-        k6BoulangerMC
+        scopeBindingSubstitution,
+        formalOperatorValues,
+        simultaneousAssignment,
+        structuredRecordFunctions,
+        procedureCallReturn,
+        boulangerUpstreamPort
     ]
 
     public static func fixture(id: String) -> AlgorithmConformanceFixture? {
