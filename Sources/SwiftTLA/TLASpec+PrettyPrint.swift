@@ -6,7 +6,8 @@ extension TLASpec {
     public var tlaModule: String {
         validateSymmetricCollectionExport()
         let varNames = variables.map(\.name)
-        let emittedActionNames = tlaActionNames(actions)
+        let algorithmSymbols = algorithmExportSymbols(sourceAlgorithms, actions: actions)
+        let emittedActionNames = tlaActionNames(actions, preferredNames: algorithmSymbols.actionNames)
         let varsTuple = varNames.count == 1 ? varNames[0] : "<<\(varNames.joined(separator: ", "))>>"
         let isLibraryModule = variables.isEmpty && actions.isEmpty
         var lines: [String] = []
@@ -196,7 +197,7 @@ extension TLASpec {
         }
 
         lines.append("====")
-        return lines.joined(separator: "\n") + "\n"
+        return algorithmSymbols.rewrite(lines.joined(separator: "\n") + "\n")
     }
 
     private func fairnessForm(
@@ -295,11 +296,14 @@ extension TLASpec {
 /// Runtime labels retain authored names. TLA+ operator identifiers cannot
 /// contain every character the generated Swift surface may expose, so module
 /// export owns a deterministic, collision-free symbol table.
-private func tlaActionNames(_ actions: [NamedAction]) -> [String: String] {
+private func tlaActionNames(
+    _ actions: [NamedAction],
+    preferredNames: [String: String] = [:]
+) -> [String: String] {
     var emitted: [String: String] = [:]
     var used: Set<String> = []
     for action in actions where emitted[action.name] == nil {
-        let raw = action.name.unicodeScalars.map { scalar -> String in
+        let raw = (preferredNames[action.name] ?? action.name).unicodeScalars.map { scalar -> String in
             switch scalar.value {
             case 48...57, 65...90, 97...122, 95: String(scalar)
             default: "_"
@@ -316,6 +320,60 @@ private func tlaActionNames(_ actions: [NamedAction]) -> [String: String] {
         used.insert(candidate)
     }
     return emitted
+}
+
+/// The generated Swift machine deliberately keeps qualified procedure action
+/// names so application code never loses its source-level context.  PlusCal's
+/// translator, however, emits the procedure label itself as the TLA+ operator
+/// and stores that same label in `pc`.  Keep that distinction at the export
+/// boundary: the executable Swift model remains stable while the independently
+/// translated TLA+ modules expose the same administrative state.
+private struct AlgorithmExportSymbols {
+    let actionNames: [String: String]
+    let stringLiterals: [String: String]
+
+    func rewrite(_ source: String) -> String {
+        var result = source
+        // `__pcal_stack` is a SwiftTLA implementation identifier.  The
+        // official translator calls the corresponding PlusCal variable
+        // `stack`; its name is part of the TLC state graph.
+        result = result.replacingOccurrences(of: "__pcal_stack", with: "stack")
+        for (from, to) in stringLiterals {
+            result = result.replacingOccurrences(of: "\"\(from)\"", with: "\"\(to)\"")
+        }
+        return result
+    }
+}
+
+private func algorithmExportSymbols(
+    _ algorithms: [Algorithm],
+    actions: [NamedAction]
+) -> AlgorithmExportSymbols {
+    let actionNames = Set(actions.map(\.name))
+    var candidates: [(qualified: String, label: String)] = []
+    for algorithm in algorithms {
+        for procedure in algorithm.model.procedures {
+            for step in procedure.steps {
+                candidates.append((
+                    qualified: "procedure.\(procedure.name).\(step.label.name)",
+                    label: step.label.name
+                ))
+            }
+        }
+    }
+
+    // A PlusCal label is global.  Do not silently merge two SwiftTLA actions
+    // if an unsupported source program reuses a label across scopes; the
+    // normal renderer/translator path will then report the source problem.
+    let labelCounts = Dictionary(grouping: candidates, by: { $0.label }).mapValues { $0.count }
+    let unqualifiedActions = Set(actions.map(\.name)).subtracting(Set(candidates.map { $0.qualified }))
+    let usable = candidates.filter {
+        actionNames.contains($0.qualified)
+            && labelCounts[$0.label] == 1
+            && !unqualifiedActions.contains($0.label)
+    }
+    let names = Dictionary(uniqueKeysWithValues: usable.map { ($0.qualified, $0.label) })
+    return AlgorithmExportSymbols(actionNames: names, stringLiterals: names)
 }
 
 /// Push UNCHANGED into every OR branch after distributing AND over OR.

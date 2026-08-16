@@ -1291,6 +1291,10 @@ public struct Algorithm: Sendable, SpecComponent {
         model = AlgorithmModel(name: name, components: body().map(\.model))
     }
 
+    internal init(model: AlgorithmModel) {
+        self.model = model
+    }
+
     public func validate() -> [AlgorithmDiagnostic] {
         AlgorithmValidator.validate(model)
     }

@@ -9,7 +9,12 @@ extension Algorithm {
 enum AlgorithmLowerer {
     private static let controlVariable = "pc"
     private static let stackVariable = "__pcal_stack"
-    private static let returnPCField = "returnPC"
+    // These frame keys are the names emitted by the official PlusCal
+    // translator.  The runtime stack remains an implementation detail, but
+    // its formal representation must be comparable to the independent
+    // translation rather than merely equivalent by convention.
+    private static let procedureField = "procedure"
+    private static let returnPCField = "pc"
     private static let processBinding = "process"
     private static let builderProcessIdentifier = "__pcal_self"
     private static let doneLabel = "Done"
@@ -239,7 +244,8 @@ enum AlgorithmLowerer {
             invariants: declaredInvariants + processInvariants + generatedAssertionInvariants,
             temporalProperties: declaredTemporal,
             fairness: declaredFairness + fairness,
-            constraint: declaredConstraint)
+            constraint: declaredConstraint,
+            sourceAlgorithms: [Algorithm(model: algorithm)])
     }
 
     private static func constantFunction(domain: [TLAValue], value: StateExpr) -> StateExpr {
@@ -319,7 +325,8 @@ enum AlgorithmLowerer {
                 invariants: declaredInvariants,
                 temporalProperties: declaredTemporal,
                 fairness: declaredFairness,
-                constraint: declaredConstraint
+                constraint: declaredConstraint,
+                sourceAlgorithms: [Algorithm(model: algorithm)]
             )
         }
         variables.append(NamedVar(name: controlVariable, initial: .string(first.label.name)))
@@ -385,7 +392,8 @@ enum AlgorithmLowerer {
             invariants: declaredInvariants + generatedAssertionInvariants,
             temporalProperties: declaredTemporal,
             fairness: declaredFairness,
-            constraint: declaredConstraint
+            constraint: declaredConstraint,
+            sourceAlgorithms: [Algorithm(model: algorithm)]
         )
     }
 
@@ -482,7 +490,10 @@ enum AlgorithmLowerer {
         // A frame captures every procedure-owned slot, not only the callee's.
         // That makes a tail call safe: it reuses the caller's continuation and
         // return restores the entire pre-call procedural environment at once.
-        let frameFields = [(returnPCField, StateExpr.value(.string(returnTo)))]
+        let frameFields = [
+            (procedureField, StateExpr.value(.string(procedure.name))),
+            (returnPCField, StateExpr.value(.string(returnTo)))
+        ]
             + procedureSlots(procedures).map { ($0.root, StateExpr.variable($0.root)) }
         let push = ActionExpr.assign(
             stackVariable,
@@ -543,7 +554,10 @@ enum AlgorithmLowerer {
         }
         let process = StateExpr.variable(processBinding)
         let stack = StateExpr.functionApply(.variable(stackVariable), process)
-        let frameFields = [(returnPCField, StateExpr.value(.string(returnTo)))]
+        let frameFields = [
+            (procedureField, StateExpr.value(.string(procedure.name))),
+            (returnPCField, StateExpr.value(.string(returnTo)))
+        ]
             + procedureSlots(procedures).map {
                 ($0.root, StateExpr.functionApply(.variable($0.root), process))
             }

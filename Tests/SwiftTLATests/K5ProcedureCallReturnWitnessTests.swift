@@ -28,11 +28,20 @@ struct K5ProcedureCallReturnWitnessTests {
         #expect(fixture.plusCalConfiguration.contains("CONSTANT defaultInitValue = 0"))
     }
 
-    @Test("K5 TLA export gives procedure actions legal operator names")
-    func tlaModuleSanitizesProcedureActionOperator() {
+    @Test("K5 TLA export matches official PlusCal procedure administration")
+    func tlaModuleUsesOfficialProcedureAdministration() {
         let source = K5ProcedureCallReturnWitness.spec.tlaModule
 
-        #expect(source.contains("procedure_addOffset_apply =="))
-        #expect(!source.contains("procedure.addOffset.apply =="))
+        // The generated Swift surface keeps its qualified action label, while
+        // the exported TLA+ matches the official translator's global label
+        // and procedure-frame representation for differential TLC evidence.
+        #expect(source.contains("VARIABLES output, parameter0, offset, pc, stack"))
+        #expect(source.contains("apply =="))
+        #expect(source.contains("pc = \"apply\""))
+        #expect(source.contains("procedure |-> \"addOffset\""))
+        #expect(source.contains("pc |-> \"done\""))
+        #expect(!source.contains("__pcal_stack"))
+        #expect(!source.contains("procedure.addOffset.apply"))
+        #expect(!source.contains("returnPC"))
     }
 }
