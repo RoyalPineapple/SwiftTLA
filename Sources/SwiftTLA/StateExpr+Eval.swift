@@ -120,8 +120,18 @@ private final class StateExprWorkStack {
                     tasks.append(.functionDomain(binder, body, bindings)); tasks.append(.expression(domain, bindings))
                 case .functionApply(let function, let argument):
                     tasks.append(.binary {
-                        guard case .function(let mapping) = $0, let value = mapping[$1] else { throw Error.unsupportedExpression }
-                        return value
+                        switch $0 {
+                        case .function(let mapping):
+                            guard let value = mapping[$1] else { throw Error.unsupportedExpression }
+                            return value
+                        case .tuple(let values):
+                            guard case .int(let index) = $1, index >= 1, index <= values.count else {
+                                throw Error.unsupportedExpression
+                            }
+                            return values[index - 1]
+                        default:
+                            throw Error.unsupportedExpression
+                        }
                     }); tasks.append(.expression(argument, bindings)); tasks.append(.expression(function, bindings))
                 case .setLiteral(let members):
                     tasks.append(.collectSet(members, [], bindings, false))
@@ -463,6 +473,11 @@ extension StateExpr {
             switch value {
             case .function(let mapping): return .set(Set(mapping.keys))
             case .record(let record): return .set(Set(record.keys.map { .string($0) }))
+            // A TLA+ sequence is a function whose domain is 1..Len(sequence).
+            // `TLAValue` stores sequences as tuples, so preserve that formal
+            // meaning instead of treating the tuple as an invalid function.
+            case .tuple(let values):
+                return .set(Set((1...values.count).map(TLAValue.int)))
             default: throw tm("DOMAIN", got: value)
             }
 
@@ -486,6 +501,14 @@ extension StateExpr {
                     throw tm("function apply: key \(key) not found in domain")
                 }
                 return result
+            case .tuple(let values):
+                guard case .int(let index) = key else {
+                    throw tm("sequence apply: expected an integer index", got: key)
+                }
+                guard index >= 1, index <= values.count else {
+                    throw EvalError.indexOutOfBounds(index, values.count)
+                }
+                return values[index - 1]
             case .record(let record):
                 guard let result = record[str(key)] else {
                     throw tm("record field not found")
