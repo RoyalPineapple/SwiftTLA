@@ -798,6 +798,7 @@ public enum InvariantBuilder {
     return components.dropFirst().reduce(components[0]) { .and($0, $1) }
   }
   public static func buildExpression(_ expr: StateExpr) -> StateExpr { expr }
+  public static func buildExpression(_ expr: Expr<Bool>) -> StateExpr { expr.raw }
   public static func buildOptional(_ component: StateExpr?) -> StateExpr {
     component ?? .value(.bool(true))
   }

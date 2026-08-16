@@ -295,13 +295,13 @@ extension SpecParser {
             else { return nil }
             expression = .leadsTo(from, to)
         case "Eventually":
-            expression = arguments.count == 2 ? decodeStateExpr(arguments[1]).map(TemporalExpr.eventually) : nil
+            expression = arguments.count == 2 ? formalAlgorithmProperty(arguments[1]).map(TemporalExpr.eventually) : nil
         case "Always":
-            expression = arguments.count == 2 ? decodeStateExpr(arguments[1]).map(TemporalExpr.always) : nil
+            expression = arguments.count == 2 ? formalAlgorithmProperty(arguments[1]).map(TemporalExpr.always) : nil
         case "AlwaysEventually":
-            expression = arguments.count == 2 ? decodeStateExpr(arguments[1]).map(TemporalExpr.alwaysEventually) : nil
+            expression = arguments.count == 2 ? formalAlgorithmProperty(arguments[1]).map(TemporalExpr.alwaysEventually) : nil
         case "EventuallyAlways":
-            expression = arguments.count == 2 ? decodeStateExpr(arguments[1]).map(TemporalExpr.eventuallyAlways) : nil
+            expression = arguments.count == 2 ? formalAlgorithmProperty(arguments[1]).map(TemporalExpr.eventuallyAlways) : nil
         default:
             expression = nil
         }
@@ -321,7 +321,7 @@ extension SpecParser {
                 algorithmParseFailure = "Invariant '\(name)' statement \(index + 1) is not a formal expression."
                 return nil
             }
-            guard let decoded = decodeStateExpr(expression) else {
+            guard let decoded = formalAlgorithmProperty(expression) else {
                 algorithmParseFailure = "Invariant '\(name)' statement \(index + 1) could not be decoded: "
                     + "'\(expression.description.trimmingCharacters(in: .whitespacesAndNewlines))'."
                 return nil
@@ -331,6 +331,10 @@ extension SpecParser {
         guard !expressions.isEmpty else { return nil }
         let body = expressions.dropFirst().reduce(expressions[0], StateExpr.and)
         return .init(name: name, body: body)
+    }
+
+    private static func formalAlgorithmProperty(_ expression: ExprSyntax) -> StateExpr? {
+        decodeTypedFacadeValue(expression, substitutions: [:]) ?? decodeStateExpr(expression)
     }
 
     private static func parseEach(
