@@ -95,6 +95,11 @@ extension SpecParser {
             return
         }
 
+        // Keep the source-level IR before the one and only parser lowering.
+        // The ordinary ParsedSpecModel cannot represent every Algorithm
+        // distinction after lowering.
+        result.algorithmFidelityTokens.append(AlgorithmFidelityToken(model: model))
+
         let lowered = AlgorithmLowerer.lower(model)
         let stateTypes = Dictionary(uniqueKeysWithValues: algorithmStateDeclarations(in: model).compactMap { state in
             state.swiftTypeName.map { (state.root, $0) }

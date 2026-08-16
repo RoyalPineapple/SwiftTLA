@@ -30,6 +30,7 @@ extension TLASpec {
     var symmetrySets: [SymmetrySet] = []
     var symmetryGroups: [SymmetryVariableGroup] = []
     var symmetricCollections: [SymmetricCollectionDecl] = []
+    var algorithmFidelityTokens: [AlgorithmFidelityToken] = []
     var operators: [String: OpDecl] = [:]
 
     // Pass 1: collect operators
@@ -53,6 +54,9 @@ extension TLASpec {
       } else if let a = comp as? ActionDecl {
         actions.append(NamedAction(name: a.name, body: a.body, bindings: a.bindings))
       } else if let algorithm = comp as? Algorithm {
+        // Retain source-level evidence directly from the builder model; do
+        // not lower a second time merely to form a fidelity token.
+        algorithmFidelityTokens.append(AlgorithmFidelityToken(model: algorithm.model))
         do {
           let lowered = try algorithm.lower()
           variables += lowered.variables
@@ -216,6 +220,7 @@ extension TLASpec {
     self.symmetrySets = symmetrySets
     self.symmetryGroups = symmetryGroups
     self.symmetricCollections = symmetricCollections
+    self.algorithmFidelityTokens = algorithmFidelityTokens
   }
 }
 
@@ -263,7 +268,8 @@ public func substituteConstants(_ spec: TLASpec) -> TLASpec {
     moduleInstances: spec.moduleInstances,
     symmetrySets: spec.symmetrySets,
     symmetryGroups: spec.symmetryGroups,
-    symmetricCollections: spec.symmetricCollections
+    symmetricCollections: spec.symmetricCollections,
+    algorithmFidelityTokens: spec.algorithmFidelityTokens
   )
   resolved.runtimeFuncs = spec.runtimeFuncs
   resolved.runtimeFuncBodies = spec.runtimeFuncBodies

@@ -352,7 +352,7 @@ private func semanticStateBranches(_ expression: StateExpr) -> [StateExpr] {
     }
 }
 
-private func alphaKey(_ expression: StateExpr) -> String {
+func alphaKey(_ expression: StateExpr) -> String {
     var next = 0
     return stateKey(expression, environment: [:], next: &next)
 }
@@ -367,7 +367,7 @@ private func alphaKey(_ expression: TemporalExpr) -> String {
     }
 }
 
-private func fresh(_ name: String, environment: [String: String], next: inout Int) -> (String, [String: String]) {
+func fresh(_ name: String, environment: [String: String], next: inout Int) -> (String, [String: String]) {
     let canonical = "@\(next)"
     next += 1
     var extended = environment
@@ -416,7 +416,7 @@ private func actionKey(_ action: ActionExpr, environment: [String: String], next
     }
 }
 
-private func stateKey(_ expression: StateExpr, environment: [String: String], next: inout Int) -> String {
+func stateKey(_ expression: StateExpr, environment: [String: String], next: inout Int) -> String {
     func key(_ expression: StateExpr, environment: [String: String] = environment) -> String {
         stateKey(expression, environment: environment, next: &next)
     }

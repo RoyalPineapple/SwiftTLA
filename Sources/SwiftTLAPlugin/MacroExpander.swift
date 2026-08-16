@@ -207,6 +207,9 @@ enum MacroExpander {
             }.joined(separator: ", ")
             return "FormalOperatorDefinition(name: \"\(definition.name)\", parameters: [\(parameters)], body: \(codegenStateExpr(definition.body)))"
         }.joined(separator: ", ")
+        let treeAlgorithmTokens = model.algorithmFidelityTokens.map { token in
+            "AlgorithmFidelityToken(encodedCanonicalForm: \"\(token.encodedCanonicalForm.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\""))\")"
+        }.joined(separator: ", ")
 
         let parserTreeSource = """
         static let _parserTree: ParsedSpecModel = ParsedSpecModel(
@@ -222,10 +225,20 @@ enum MacroExpander {
             formalParameters: [\(treeFormalParameters)],
             formalOperatorDefinitions: [\(treeFormalOperatorDefinitions)]
         )
+        static let _parserAlgorithmTokens: [AlgorithmFidelityToken] = [\(treeAlgorithmTokens)]
         """
         let checkerSource = """
         static func _checkParserTree() {
             let builtSpec = Self.spec
+            if let evidence = _tlaAlgorithmFidelityEvidence(
+                _parserAlgorithmTokens,
+                builtSpec.algorithmFidelityTokens
+            ) {
+                preconditionFailure(
+                    "SwiftTLA Algorithm parser tree mismatch for " + String(reflecting: Self.self) + ". " +
+                    evidence.description
+                )
+            }
             let built = ParsedSpecModel(
                 variables: builtSpec.variables.map { ($0.name, $0.initial, $0.initialSet) },
                 actions: builtSpec.actions.map { ($0.name, $0.body, $0.bindings) },

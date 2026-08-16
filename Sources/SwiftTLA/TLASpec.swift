@@ -230,6 +230,9 @@ public struct TLASpec: Sendable {
   public let symmetrySets: [SymmetrySet]
   public let symmetryGroups: [SymmetryVariableGroup]
   public let symmetricCollections: [SymmetricCollectionDecl]
+  /// Opaque source-level Algorithm evidence. This is distinct from the
+  /// lowered variables/actions and never exposes the Algorithm IR.
+  public let algorithmFidelityTokens: [AlgorithmFidelityToken]
   public init(
     name: String, variables: [NamedVar], constants: [String: TLAValue] = [:],
     formalParameters: [FormalModuleParameter] = [],
@@ -242,7 +245,8 @@ public struct TLASpec: Sendable {
     importConfigurations: [FormalModuleConfiguration] = [],
     moduleInstances: [FormalModuleInstance] = [], symmetrySets: [SymmetrySet] = [],
     symmetryGroups: [SymmetryVariableGroup] = [],
-    symmetricCollections: [SymmetricCollectionDecl] = []
+    symmetricCollections: [SymmetricCollectionDecl] = [],
+    algorithmFidelityTokens: [AlgorithmFidelityToken] = []
   ) {
     self.name = name
     self.variables = variables
@@ -267,6 +271,7 @@ public struct TLASpec: Sendable {
     self.symmetrySets = symmetrySets
     self.symmetryGroups = symmetryGroups
     self.symmetricCollections = symmetricCollections
+    self.algorithmFidelityTokens = algorithmFidelityTokens
   }
 
   /// Recursive definitions visible after resolving the module import graph.

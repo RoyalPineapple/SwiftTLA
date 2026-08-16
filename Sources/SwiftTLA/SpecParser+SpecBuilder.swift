@@ -20,6 +20,9 @@ extension SpecParser {
         public var moduleInstances: [FormalModuleInstance] = []
         public var formalParameters: [FormalModuleParameter] = []
         public var formalOperatorDefinitions: [FormalOperatorDefinition] = []
+        /// Opaque, pre-lowering Algorithm evidence retained independently of
+        /// the ordinary parsed specification tree.
+        public var algorithmFidelityTokens: [AlgorithmFidelityToken] = []
         public var constants: [String: TLAValue] = [:]
         /// Local named values (from NamedValue declarations, resolved in expressions)
         public var localConstants: [String: TLAValue] = [:]

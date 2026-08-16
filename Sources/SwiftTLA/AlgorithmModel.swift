@@ -27,6 +27,173 @@ internal struct AlgorithmModel: Sendable {
     }
 }
 
+/// Opaque pre-lowering evidence for an authored `Algorithm`.
+///
+/// The token deliberately exposes neither the Algorithm IR nor a lowered
+/// `TLASpec`. It is retained solely to make parser/builder fidelity checks
+/// observe source-level distinctions that lowering can erase.
+public struct AlgorithmFidelityToken: Sendable, Hashable {
+    private let canonicalForm: String
+
+    internal init(model: AlgorithmModel) {
+        canonicalForm = algorithmCanonicalEncoding(model)
+    }
+
+    /// Used by macro-generated declarations to retain parser evidence without
+    /// exposing the underlying Algorithm IR as public API.
+    public init(encodedCanonicalForm: String) {
+        canonicalForm = encodedCanonicalForm
+    }
+
+    /// Canonical transport used only to embed parser evidence in generated
+    /// source. The Algorithm IR itself remains private to SwiftTLA.
+    public var encodedCanonicalForm: String { canonicalForm }
+}
+
+/// Returns semantic-path evidence for the first pre-lowering Algorithm
+/// difference. The token is intentionally opaque; callers cannot inspect or
+/// reconstruct the Algorithm IR from it.
+public func _tlaAlgorithmFidelityEvidence(
+    _ expected: [AlgorithmFidelityToken],
+    _ actual: [AlgorithmFidelityToken]
+) -> TLAParserFidelityDiagnostic? {
+    guard expected.count == actual.count else {
+        return TLAParserFidelityDiagnostic(
+            whatFailed: "algorithm count differs",
+            location: .semanticPath("algorithms"),
+            expected: "\(expected.count) algorithm(s)",
+            actual: "\(actual.count) algorithm(s)",
+            nextSafeAction: "Retain every Algorithm declaration in the #spec builder."
+        )
+    }
+    for index in expected.indices where expected[index] != actual[index] {
+        let expectedNodes = algorithmCanonicalNodes(expected[index].canonicalForm)
+        let actualNodes = algorithmCanonicalNodes(actual[index].canonicalForm)
+        let actualValues = Dictionary(uniqueKeysWithValues: actualNodes.map { ($0.path, $0.value) })
+        let firstDifference = expectedNodes.first { node in
+            actualValues[node.path] != node.value
+        } ?? actualNodes.first.map { (path: $0.path, value: "<missing>") }
+        let path = firstDifference.map { "algorithms[\(index)].\($0.path)" } ?? "algorithms[\(index)]"
+        let expectedValue = firstDifference.map(\.value) ?? "<missing canonical node>"
+        let actualValue = firstDifference.flatMap { actualValues[$0.path] } ?? "<missing canonical node>"
+        return TLAParserFidelityDiagnostic(
+            whatFailed: "Algorithm IR differs before lowering",
+            location: .semanticPath(path),
+            expected: expectedValue,
+            actual: actualValue,
+            nextSafeAction: "Inspect this Algorithm's declarations, labels, and scoped statements so parser and builder retain the same formal program."
+        )
+    }
+    return nil
+}
+
+private func algorithmCanonicalNodes(_ encoding: String) -> [(path: String, value: String)] {
+    encoding.split(separator: "\u{1E}", omittingEmptySubsequences: true).compactMap { record in
+        guard let separator = record.firstIndex(of: "\u{1F}") else { return nil }
+        return (
+            path: String(record[..<separator]),
+            value: String(record[record.index(after: separator)...])
+        )
+    }
+}
+
+private func algorithmCanonicalEncoding(_ model: AlgorithmModel) -> String {
+    var next = 0
+    var nodes: [(path: String, value: String)] = []
+    func record(_ path: String, _ value: String) -> String {
+        nodes.append((path, value))
+        return value
+    }
+    func state(_ expression: StateExpr, _ environment: [String: String]) -> String {
+        stateKey(expression, environment: environment, next: &next)
+    }
+    func lvalue(_ value: AlgorithmLValueModel, _ environment: [String: String]) -> String {
+        switch value {
+        case .root(let name): return "root(\(environment[name] ?? name))"
+        case .function(let root, let key):
+            return "function(\(environment[root] ?? root),\(state(key, environment)))"
+        }
+    }
+    func statements(_ values: [AlgorithmStatementModel], _ environment: [String: String], path: String) -> String {
+        values.enumerated().map { index, value in
+            statement(value, environment, path: "\(path)[\(index)]")
+        }.joined(separator: ",")
+    }
+    func statement(_ value: AlgorithmStatementModel, _ environment: [String: String], path: String) -> String {
+        let result: String
+        switch value {
+        case .await(let expression): result = "await(\(state(expression, environment)))"
+        case .assert(let expression): result = "assert(\(state(expression, environment)))"
+        case .set(let target, let expression): result = "set(\(lvalue(target, environment)),\(state(expression, environment)))"
+        case .letBinding(let variable, let expression, let body):
+            let value = state(expression, environment)
+            let (name, extended) = fresh(variable, environment: environment, next: &next)
+            result = "let(\(name),\(value),[\(statements(body, extended, path: "\(path).statements"))])"
+        case .with(let variable, let source, let body):
+            let sourceKey = state(source, environment)
+            let (name, extended) = fresh(variable, environment: environment, next: &next)
+            result = "with(\(name),\(sourceKey),[\(statements(body, extended, path: "\(path).statements"))])"
+        case .ifElse(let condition, let then, let otherwise):
+            result = "if(\(state(condition, environment)),[\(statements(then, environment, path: "\(path).then") )],[\(statements(otherwise, environment, path: "\(path).else") )])"
+        case .either(let first, let second):
+            result = "either([\(statements(first, environment, path: "\(path).first") )],[\(statements(second, environment, path: "\(path).second") )])"
+        case .choose(let variable, let domain, let body):
+            let (name, extended) = fresh(variable, environment: environment, next: &next)
+            result = "choose(\(name),[\(domain.map(\.description).joined(separator: ","))],[\(statements(body, extended, path: "\(path).statements"))])"
+        case .goto(let label): result = "goto(\(label.name))"
+        case .call(let target, let arguments): result = "call(\(target),[\(arguments.map { state($0, environment) }.joined(separator: ","))])"
+        case .return: result = "return"
+        case .stop: result = "stop"
+        case .skip: result = "skip"
+        }
+        return record(path, result)
+    }
+    func component(_ value: AlgorithmComponentModel, _ environment: [String: String], path: String) -> String {
+        let result: String
+        switch value {
+        case .shared(let declaration):
+            result = "shared(\(declaration.root),\(state(declaration.initial, environment)),\(declaration.initialSet.map { state($0, environment) } ?? "nil"))"
+        case .local(let declaration):
+            result = "local(\(declaration.root),\(state(declaration.initial, environment)),\(declaration.initialSet.map { state($0, environment) } ?? "nil"))"
+        case .step(let step):
+            result = "step(\(step.label.name),\(step.loopCondition.map { state($0, environment) } ?? "nil"),[\(statements(step.statements, environment, path: "\(path).statements"))])"
+        case .process(let process):
+            var processEnvironment = environment
+            processEnvironment["__pcal_self"] = "@process"
+            let components = process.components.enumerated().map { index, component in
+                component(component, processEnvironment, path: "\(path).components[\(index)]")
+            }.joined(separator: ",")
+            result = "process(\(process.typeName),[\(process.domain.map(\.description).joined(separator: ","))],\(process.fairness),[\(components)])"
+        case .procedure(let procedure):
+            var procedureEnvironment = environment
+            let parameters = procedure.parameters.map { parameter -> String in
+                let initial = state(parameter.initial, procedureEnvironment)
+                let (name, extended) = fresh(parameter.root, environment: procedureEnvironment, next: &next)
+                procedureEnvironment = extended
+                return "parameter(\(name),\(initial))"
+            }
+            let locals = procedure.locals.enumerated().map { index, local in
+                component(.local(local), procedureEnvironment, path: "\(path).locals[\(index)]")
+            }.joined(separator: ",")
+            let steps = procedure.steps.enumerated().map { index, step in
+                component(.step(step), procedureEnvironment, path: "\(path).steps[\(index)]")
+            }.joined(separator: ",")
+            result = "procedure(\(procedure.name),[\(parameters.joined(separator: ","))],[\(locals)],[\(steps)])"
+        case .invariant(let invariant): result = "invariant(\(invariant.name),\(state(invariant.body, environment)))"
+        case .temporal(let temporal): result = "temporal(\(temporal.name),\(temporal.expr))"
+        case .fairness(let fairness): result = "fairness(\(fairness))"
+        case .stateConstraint(let expression): result = "constraint(\(state(expression, environment)))"
+        case .propertyBoundary: result = "propertyBoundary"
+        }
+        return record(path, result)
+    }
+    let components = model.components.enumerated().map { index, component in
+        component(component, [:], path: "components[\(index)]")
+    }.joined(separator: ",")
+    _ = record("algorithm", "algorithm(\(model.name),[\(components)])")
+    return nodes.map { "\($0.path)\u{1F}\($0.value)" }.joined(separator: "\u{1E}")
+}
+
 internal indirect enum AlgorithmComponentModel: Sendable {
     case shared(AlgorithmStateModel)
     case process(AlgorithmProcessModel)

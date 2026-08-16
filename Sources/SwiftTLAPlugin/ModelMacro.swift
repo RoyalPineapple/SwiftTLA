@@ -42,6 +42,7 @@ struct ParsedMacroModel {
     let moduleInstances: [FormalModuleInstance]
     let formalParameters: [FormalModuleParameter]
     let formalOperatorDefinitions: [FormalOperatorDefinition]
+    let algorithmFidelityTokens: [AlgorithmFidelityToken]
 }
 
 enum NestedAdapterModelRegistry {
@@ -147,7 +148,8 @@ enum TLASpecVerifier {
             imports: imports,
             importConfigurations: parsed.importConfigurations,
             moduleInstances: parsed.moduleInstances,
-            symmetricCollections: parsed.symmetricCollections.map(\.declaration)
+            symmetricCollections: parsed.symmetricCollections.map(\.declaration),
+            algorithmFidelityTokens: parsed.algorithmFidelityTokens
         )
 
         let hasComplexType = parsed.symmetricCollections.isEmpty && parsed.variables.contains { v in
@@ -186,7 +188,8 @@ enum TLASpecVerifier {
             imports: parsed.imports, importConfigurations: parsed.importConfigurations,
             moduleInstances: parsed.moduleInstances,
             formalParameters: parsed.formalParameters,
-            formalOperatorDefinitions: parsed.formalOperatorDefinitions
+            formalOperatorDefinitions: parsed.formalOperatorDefinitions,
+            algorithmFidelityTokens: parsed.algorithmFidelityTokens
         )
     }
 

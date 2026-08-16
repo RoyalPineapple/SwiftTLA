@@ -3,6 +3,49 @@ import Testing
 
 @Suite("Procedure Lowering")
 struct ProcedureLoweringTests {
+    @Test("pre-lowering Algorithm fidelity alpha-normalizes local statement binders")
+    func algorithmFidelityAlphaNormalizesScopedBinders() {
+        func model(letName: String, withName: String, chooseName: String) -> AlgorithmModel {
+            AlgorithmModel(
+                name: "ScopedFidelity",
+                components: [
+                    .shared(.init(root: "output", initial: .int(0))),
+                    .step(.init(label: .init(name: "start"), statements: [
+                        .letBinding(variable: letName, value: .int(1), [
+                            .with(variable: withName, source: .setLiteral([.value(.int(1))]), [
+                                .choose(variable: chooseName, domain: [.int(1)], [
+                                    .set(target: .root("output"), value: .add(.variable(letName), .add(.variable(withName), .variable(chooseName))))
+                                ])
+                            ])
+                        ])
+                    ]))
+                ]
+            )
+        }
+
+        let parsed = AlgorithmFidelityToken(model: model(letName: "first", withName: "second", chooseName: "third"))
+        let built = AlgorithmFidelityToken(model: model(letName: "x", withName: "y", chooseName: "z"))
+        #expect(_tlaAlgorithmFidelityEvidence([parsed], [built]) == nil)
+    }
+
+    @Test("pre-lowering Algorithm fidelity reports a semantic path")
+    func algorithmFidelityReportsSemanticDifference() {
+        let expected = AlgorithmFidelityToken(model: AlgorithmModel(
+            name: "FidelityDifference",
+            components: [.step(.init(label: .init(name: "start"), statements: [.skip]))]
+        ))
+        let actual = AlgorithmFidelityToken(model: AlgorithmModel(
+            name: "FidelityDifference",
+            components: [.step(.init(label: .init(name: "start"), statements: [.stop]))]
+        ))
+
+        let evidence = _tlaAlgorithmFidelityEvidence([expected], [actual])
+        #expect(evidence?.whatFailed == "Algorithm IR differs before lowering")
+        #expect(evidence?.location == .semanticPath("algorithms[0].components[0].statements[0]"))
+        #expect(evidence?.expected == "skip")
+        #expect(evidence?.actual == "stop")
+    }
+
     @Test("call and return restore the caller environment after one atomic procedure step")
     func callReturnRestoresFrame() throws {
         let model = AlgorithmModel(
