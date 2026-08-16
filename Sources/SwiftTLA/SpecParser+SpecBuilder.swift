@@ -621,7 +621,7 @@ extension SpecParser {
         else {
             result.diagnostics.append(.init(
                 message: "Symmetry requires a name and a finite domain.",
-                source: call,
+                source: call.description,
                 expected: "Symmetry(\"TxId\", Set(Transaction.all))"
             ))
             return
