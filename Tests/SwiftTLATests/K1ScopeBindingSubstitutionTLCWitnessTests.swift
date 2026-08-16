@@ -24,6 +24,6 @@ struct K1ScopeBindingSubstitutionTLCWitnessTests {
         #expect(source.contains("\\in {2}"))
         #expect(source.contains("\\in {3}"))
         #expect(!source.contains("__pcal_macro_parameter"))
-        #expect(fixture.configuration.contains("SPECIFICATION Spec"))
+        #expect(fixture.swiftConfiguration.contains("SPECIFICATION Spec"))
     }
 }

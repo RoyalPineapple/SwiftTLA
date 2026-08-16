@@ -23,6 +23,9 @@ struct K5ProcedureCallReturnWitnessTests {
         #expect(source.contains("procedure addOffset"))
         #expect(source.contains("return;"))
         #expect(source.contains("call addOffset(5);"))
+        #expect(fixture.swiftConfiguration.contains("SPECIFICATION Spec"))
+        #expect(!fixture.swiftConfiguration.contains("defaultInitValue"))
+        #expect(fixture.plusCalConfiguration.contains("CONSTANT defaultInitValue = 0"))
     }
 
     @Test("K5 TLA export gives procedure actions legal operator names")

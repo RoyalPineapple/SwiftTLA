@@ -21,8 +21,8 @@ struct K4StructuredTLCWitnessTests {
         let source = try fixture.plusCalModule()
 
         #expect(source.contains("(*--algorithm K4StructuredTLCWitness"))
-        #expect(source.contains("process (pcalSelf \\in {\"left\", \"right\"})"))
-        #expect(source.contains("![pcalSelf]"))
-        #expect(fixture.configuration.contains("SPECIFICATION Spec"))
+        #expect(source.contains("process (pcalProcess1 \\in {\"left\", \"right\"})"))
+        #expect(source.contains("![self]"))
+        #expect(fixture.swiftConfiguration.contains("SPECIFICATION Spec"))
     }
 }

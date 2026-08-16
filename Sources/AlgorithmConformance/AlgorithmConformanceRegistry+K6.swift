@@ -5,7 +5,7 @@ extension AlgorithmConformanceRegistry {
     /// two-process, `MaxNat = 3` small-model-checking instance.
     public static let boulangerUpstreamPort = AlgorithmConformanceFixture(
         id: "boulanger-upstream-port",
-        configuration: "SPECIFICATION Spec\nCONSTRAINT StateConstraint\n",
+        swiftConfiguration: "SPECIFICATION Spec\nCONSTRAINT StateConstraint\n",
         specification: { K6BoulangerMCWitness.spec }
     )
 }

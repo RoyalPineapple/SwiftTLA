@@ -66,6 +66,8 @@ internal struct AlgorithmPlusCalRenderer {
             lines += try declarations(shared, indent: "  ", terminator: ";", path: "shared")
         }
 
+        let processNames = renderedProcessNames()
+        var processIndex = 0
         for (index, component) in model.components.enumerated() {
             switch component {
             case .shared:
@@ -73,7 +75,12 @@ internal struct AlgorithmPlusCalRenderer {
             case .procedure(let procedure):
                 lines += try render(procedure: procedure, path: "components[\(index)]")
             case .process(let process):
-                lines += try render(process: process, path: "components[\(index)]")
+                lines += try render(
+                    process: process,
+                    processName: processNames[processIndex],
+                    path: "components[\(index)]"
+                )
+                processIndex += 1
             case .step:
                 // Sequential steps share the algorithm's C-syntax brace body.
                 continue
@@ -127,18 +134,22 @@ internal struct AlgorithmPlusCalRenderer {
         return lines
     }
 
-    private func render(process: AlgorithmProcessModel, path: String) throws -> [String] {
+    private func render(
+        process: AlgorithmProcessModel,
+        processName: String,
+        path: String
+    ) throws -> [String] {
         let fairness: String
         switch process.fairness {
         case .none: fairness = ""
         case .weak: fairness = "fair "
         case .strong: fairness = "fair+ "
         }
-        // `self` is a PlusCal implementation name.  The Algorithm IR uses
-        // `__pcal_self` internally, but spelling either one in the rendered
-        // source lets the official translator capture it as an operator.
-        // Give every rendered process a regular, hygienic binding instead.
-        var lines = ["", "\(fairness)process (pcalSelf \\in \(set(process.domain)))"]
+        // The header identifier names the process set. `self` is the
+        // language-defined identifier for its current member inside the body.
+        // Keep the IR-only name out of the source and avoid collisions with
+        // declarations authored in this algorithm.
+        var lines = ["", "\(fairness)process (\(processName) \\in \(set(process.domain)))"]
         let locals = process.components.compactMap { component -> AlgorithmStateModel? in
             guard case .local(let declaration) = component else { return nil }
             return declaration
@@ -284,7 +295,7 @@ internal struct AlgorithmPlusCalRenderer {
 
     private func expression(_ value: StateExpr, path: String) throws -> String {
         let rendered = StateExpr.renamingRecursiveCalls(
-            in: renameVar("__pcal_self", to: "pcalSelf", in: value),
+            in: renameVar("__pcal_self", to: "self", in: value),
             using: { $0 },
             lowerAnonymousLambdaApplications: true
         ).description
@@ -296,6 +307,51 @@ internal struct AlgorithmPlusCalRenderer {
             )
         }
         return rendered
+    }
+
+    private func renderedProcessNames() -> [String] {
+        var used = authoredIdentifiers()
+        return model.processes.indices.map { index in
+            let stem = "pcalProcess\(index + 1)"
+            var candidate = stem
+            var suffix = 2
+            while used.contains(candidate) {
+                candidate = "\(stem)_\(suffix)"
+                suffix += 1
+            }
+            used.insert(candidate)
+            return candidate
+        }
+    }
+
+    private func authoredIdentifiers() -> Set<String> {
+        func collect(_ components: [AlgorithmComponentModel], into names: inout Set<String>) {
+            for component in components {
+                switch component {
+                case .shared(let declaration), .local(let declaration):
+                    names.insert(declaration.root)
+                case .step(let step):
+                    names.insert(step.label.name)
+                case .process(let process):
+                    collect(process.components, into: &names)
+                case .procedure(let procedure):
+                    names.insert(procedure.name)
+                    procedure.parameters.forEach { names.insert($0.root) }
+                    procedure.locals.forEach { names.insert($0.root) }
+                    procedure.steps.forEach { names.insert($0.label.name) }
+                case .invariant(let invariant):
+                    names.insert(invariant.name)
+                case .temporal(let temporal):
+                    names.insert(temporal.name)
+                case .fairness, .stateConstraint, .propertyBoundary:
+                    continue
+                }
+            }
+        }
+
+        var names: Set<String> = ["self"]
+        collect(model.components, into: &names)
+        return names
     }
 
     private func set(_ values: [TLAValue]) -> String {

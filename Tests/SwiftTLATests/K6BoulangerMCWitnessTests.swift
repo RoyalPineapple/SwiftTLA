@@ -10,7 +10,7 @@ struct K6BoulangerMCWitnessTests {
 
         let source = try AlgorithmConformanceRegistry.boulangerUpstreamPort.plusCalModule()
         #expect(source.contains("flag = [i \\in (1..2) |-> FALSE]"))
-        #expect(source.contains("num[pcalSelf] := 0;\n      goto ncs;"))
+        #expect(source.contains("num[self] := 0;\n      goto ncs;"))
         #expect(K6BoulangerMCWitness.spec.algorithmFidelityTokens.count == 1)
     }
 
@@ -39,7 +39,7 @@ struct K6BoulangerMCWitnessTests {
     func retainsBoundedConfiguration() {
         let fixture = AlgorithmConformanceRegistry.boulangerUpstreamPort
 
-        #expect(!fixture.configuration.contains("NatOverride"))
-        #expect(fixture.configuration.contains("CONSTRAINT StateConstraint"))
+        #expect(!fixture.swiftConfiguration.contains("NatOverride"))
+        #expect(fixture.swiftConfiguration.contains("CONSTRAINT StateConstraint"))
     }
 }

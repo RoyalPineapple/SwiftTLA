@@ -5,7 +5,7 @@ extension AlgorithmConformanceRegistry {
     /// together.
     public static let simultaneousAssignment = AlgorithmConformanceFixture(
         id: "simultaneous-assignment",
-        configuration: "SPECIFICATION Spec\nCHECK_DEADLOCK FALSE\n",
+        swiftConfiguration: "SPECIFICATION Spec\nCHECK_DEADLOCK FALSE\n",
         specification: { K3SimultaneousAssignmentWitness.spec }
     )
 }

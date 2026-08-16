@@ -19,10 +19,10 @@ struct K2ScopedFormalLambdaTLCWitnessTests {
         let fixture = AlgorithmConformanceRegistry.formalOperatorValues
         let source = try fixture.plusCalModule()
 
-        #expect(source.contains("process (pcalSelf \\in {\"left\", \"right\"})"))
+        #expect(source.contains("process (pcalProcess1 \\in {\"left\", \"right\"})"))
         #expect(!source.contains("LAMBDA"))
-        #expect(source.contains("(counters[pcalSelf] + 1)"))
-        #expect(fixture.configuration.contains("SPECIFICATION Spec"))
+        #expect(source.contains("(counters[self] + 1)"))
+        #expect(fixture.swiftConfiguration.contains("SPECIFICATION Spec"))
     }
 
     @Test("K2 TLA export beta-reduces anonymous formal-lambda application")

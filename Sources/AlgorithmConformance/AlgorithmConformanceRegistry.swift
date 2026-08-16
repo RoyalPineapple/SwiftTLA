@@ -5,16 +5,23 @@ import SwiftTLA
 /// establishes a narrow translation relationship, not project-wide support.
 public struct AlgorithmConformanceFixture: Sendable {
     public let id: String
-    public let configuration: String
+    /// The configuration for SwiftTLA's direct TLA+ lowering.
+    public let swiftConfiguration: String
+    /// The configuration for the module that the official PlusCal translator
+    /// produces. It can require translator-introduced constants that do not
+    /// exist in the direct lowering.
+    public let plusCalConfiguration: String
     private let makeSpecification: @Sendable () -> TLASpec
 
     public init(
         id: String,
-        configuration: String,
+        swiftConfiguration: String,
+        plusCalConfiguration: String? = nil,
         specification: @escaping @Sendable () -> TLASpec
     ) {
         self.id = id
-        self.configuration = configuration
+        self.swiftConfiguration = swiftConfiguration
+        self.plusCalConfiguration = plusCalConfiguration ?? swiftConfiguration
         makeSpecification = specification
     }
 
@@ -65,7 +72,7 @@ public struct AlgorithmConformanceFixtureDiagnostic: Error, Sendable, Hashable, 
 public enum AlgorithmConformanceRegistry {
     public static let structuredRecordFunctions = AlgorithmConformanceFixture(
         id: "structured-record-functions",
-        configuration: "SPECIFICATION Spec\nCHECK_DEADLOCK FALSE\n",
+        swiftConfiguration: "SPECIFICATION Spec\nCHECK_DEADLOCK FALSE\n",
         specification: { K4StructuredTLCWitness.spec }
     )
 

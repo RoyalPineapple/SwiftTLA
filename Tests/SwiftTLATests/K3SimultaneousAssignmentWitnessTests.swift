@@ -22,6 +22,6 @@ struct K3SimultaneousAssignmentWitnessTests {
         let source = try fixture.plusCalModule()
 
         #expect(source.contains("left := right || right := left;"))
-        #expect(fixture.configuration.contains("SPECIFICATION Spec"))
+        #expect(fixture.swiftConfiguration.contains("SPECIFICATION Spec"))
     }
 }
