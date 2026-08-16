@@ -194,8 +194,9 @@ public struct KVsnapModel {
 
                     Invariant("SnapshotIsolation") {
                         ModuleCall(
+                            as: Bool.self,
                             "CC", "SnapshotIsolation",
-                            FormalCall("InitialState"),
+                            FormalCall(as: Function<Key, Value>.self, "InitialState"),
                             Range(ops.family(for: Transaction.self))
                         )
                     }

@@ -334,7 +334,9 @@ extension SpecParser {
     }
 
     private static func formalAlgorithmProperty(_ expression: ExprSyntax) -> StateExpr? {
-        decodeTypedFacadeValue(expression, substitutions: [:]) ?? decodeStateExpr(expression)
+        decodeAlgorithmDomainQuantifier(expression)
+            ?? decodeTypedFacadeValue(expression, substitutions: [:])
+            ?? decodeStateExpr(expression)
     }
 
     private static func parseEach(

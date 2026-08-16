@@ -161,6 +161,17 @@ public func FormalCall<Result: TLAValueType>(
   Expr(.operatorApplication(.reference(name, arity: 0), []))
 }
 
+/// Applies a nullary formal operator with an explicit result-type witness.
+///
+/// This form is for a formal value nested in an otherwise uncontextualized
+/// expression, such as an imported predicate argument.
+public func FormalCall<Result: TLAValueType>(
+  as _: Result.Type,
+  _ name: String
+) -> Expr<Result> {
+  FormalCall(name)
+}
+
 public func FormalCall<Result: TLAValueType, Value: StateExprConvertible>(
   _ name: String,
   _ value: Value
@@ -213,6 +224,24 @@ public func ModuleCall<
   _ second: Second
 ) -> Expr<Result> {
   FormalCall("\(instance)!\(operatorName)", first, second)
+}
+
+/// Applies a binary imported operator with an explicit result-type witness.
+///
+/// The witness is compile-time only; the emitted formal operator remains the
+/// same namespaced TLA+ application.
+public func ModuleCall<
+  Result: TLAValueType,
+  First: StateExprConvertible,
+  Second: StateExprConvertible
+>(
+  as _: Result.Type,
+  _ instance: String,
+  _ operatorName: String,
+  _ first: First,
+  _ second: Second
+) -> Expr<Result> {
+  ModuleCall(instance, operatorName, first, second)
 }
 
 public struct ImportDecl: SpecComponent {

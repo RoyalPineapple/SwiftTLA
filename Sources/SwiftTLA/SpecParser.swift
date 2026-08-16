@@ -386,7 +386,7 @@ public enum SpecParser {
         )
     }
 
-    private static func decodeAlgorithmDomainQuantifier(_ expression: ExprSyntax) -> StateExpr? {
+    static func decodeAlgorithmDomainQuantifier(_ expression: ExprSyntax) -> StateExpr? {
         guard let call = expression.as(FunctionCallExprSyntax.self),
               let name = call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text,
               name == "All",
@@ -449,12 +449,13 @@ public enum SpecParser {
         if let call = expression.as(FunctionCallExprSyntax.self),
            (typedLiteralType(call.calledExpression)?.name == "FormalCall"
              || call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "FormalCall"),
-           let name = call.arguments.first?.expression.as(StringLiteralExprSyntax.self)?
+           let argumentsSyntax = Array(call.arguments).filter { $0.label?.text != "as" },
+           let name = argumentsSyntax.first?.expression.as(StringLiteralExprSyntax.self)?
             .segments.compactMap({ $0.as(StringSegmentSyntax.self)?.content.text }).joined() {
-            let arguments = call.arguments.dropFirst().compactMap {
+            let arguments = argumentsSyntax.dropFirst().compactMap {
                 decodeTypedFacadeValue($0.expression, substitutions: substitutions)
             }
-            guard arguments.count == call.arguments.count - 1 else { return nil }
+            guard arguments.count == argumentsSyntax.count - 1 else { return nil }
             return .operatorApplication(
                 .reference(name, arity: arguments.count), arguments.map(FormalCallArgument.value)
             )
@@ -479,7 +480,8 @@ public enum SpecParser {
            (typedLiteralType(call.calledExpression)?.name == "ModuleCall"
              || call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "ModuleCall"),
            call.arguments.count >= 2 {
-            let argumentsSyntax = Array(call.arguments)
+            let argumentsSyntax = Array(call.arguments).filter { $0.label?.text != "as" }
+            guard argumentsSyntax.count >= 2 else { return nil }
             guard let instance = argumentsSyntax[0].expression.as(StringLiteralExprSyntax.self)?
             .segments.compactMap({ $0.as(StringSegmentSyntax.self)?.content.text }).joined(),
                   let operation = argumentsSyntax[1].expression.as(StringLiteralExprSyntax.self)?
