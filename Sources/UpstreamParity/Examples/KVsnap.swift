@@ -104,6 +104,16 @@ public struct KVsnapModel {
             Extends("Integers, Sequences, FiniteSets")
             Import(KeyValueStoreUtil.module)
 
+            // These are the upstream model values. Declaring them explicitly
+            // preserves their TLA+ identity and lets TLC bind them through the
+            // emitted configuration rather than turning them into strings.
+            Constant("k1", Key.k1)
+            Constant("k2", Key.k2)
+            Constant("t1", Transaction.t1)
+            Constant("t2", Transaction.t2)
+            Constant("t3", Transaction.t3)
+            Constant("NoVal", NoValue.noVal)
+
             Instance("CC", of: ClientCentric.module, with: [
                 ModuleArgument("Keys", value: SetExpr<Key>.literal(.k1, .k2)),
                 ModuleArgument("Values", value: SetExpr<Value>.literal(

@@ -28,9 +28,6 @@ public enum ClientCentric {
     Definition("TransactionTimes == [t \\in Transaction |-> [start: TimeStamp, commit: TimeStamp]]")
     Definition("ExecutionElem == [parentState: State, transaction: Transaction]")
     Definition("Execution == Seq(ExecutionElem)")
-    // TLC's Print is intentionally source-only: diagnostics are not state
-    // semantics and are outside the executable formal evaluator boundary.
-    Definition("SerializabilityDebug(initialState, transactions) == ~ Serializability(initialState, transactions) => Print(<<\"Executions not Serializable:\", executions(initialState, transactions)>>, FALSE)")
     Definition("TypeOKT(transactions) == transactions \\subseteq Transaction")
     Definition("TypeOK(transactions, execution) == /\\ TypeOKT(transactions) /\\ execution \\in Execution")
 
@@ -279,5 +276,10 @@ public enum ClientCentric {
         .value(.variable("initialState")), .value(.variable("transactions")), .operator(op("CT_RU", arity: 2))
       ]
     ))
+    // TLC's Print is intentionally source-only: diagnostics are not state
+    // semantics and are outside the executable formal evaluator boundary.
+    // It follows the formal definitions it names because TLA+ declarations
+    // are resolved in source order.
+    Definition("SerializabilityDebug(initialState, transactions) == ~ Serializability(initialState, transactions) => Print(<<\"Executions not Serializable:\", executions(initialState, transactions)>>, FALSE)")
   }
 }

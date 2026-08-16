@@ -639,13 +639,10 @@ extension SpecParser {
         guard args.count >= 2,
               let name = extractStringArg(call, index: 0)
         else { return }
-        if let intVal = args[1].expression.as(IntegerLiteralExprSyntax.self) {
-            result.constants[name] = .int(Int(intVal.literal.text) ?? 0)
-        } else if let boolVal = args[1].expression.as(BooleanLiteralExprSyntax.self) {
-            result.constants[name] = .bool(boolVal.literal.text == "true")
-        } else if args[1].expression.as(StringLiteralExprSyntax.self) != nil {
-            result.constants[name] = .string(extractStringArg(call, index: 1) ?? "")
-        }
+        guard let expression = decodeTypedFacadeValue(args[1].expression, substitutions: [:]),
+              case .value(let value) = expression
+        else { return }
+        result.constants[name] = value
     }
 
     /// Parse `NamedValue("poweredOn", 5)` → register in localConstants
