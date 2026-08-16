@@ -223,6 +223,7 @@ struct AlgorithmPlusCalRendererTests {
                 let count = SharedVar("count", initial: 0)
                 count
                 Do("stop") { Stop() }
+                StateConstraint(count < 2)
             }
         }
 
@@ -230,6 +231,8 @@ struct AlgorithmPlusCalRendererTests {
 
         #expect(modules.count == 1)
         #expect(modules[0].contains("(*--algorithm Retained {"))
+        #expect(modules[0].contains("} *)\nStateConstraint == (count < 2)\n===="))
+        #expect(!modules[0].contains("\\* StateConstraint"))
         #expect(spec.actions.contains(where: { $0.name == "stop" }))
     }
 }

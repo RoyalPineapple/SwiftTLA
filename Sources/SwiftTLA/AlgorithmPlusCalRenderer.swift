@@ -91,8 +91,10 @@ internal struct AlgorithmPlusCalRenderer {
                 lines.append("\\* Invariant \(invariant.name) == \(try expression(invariant.body, path: "components[\(index)].invariant"))")
             case .temporal(let temporal):
                 lines.append("\\* Temporal \(temporal.name) == \(temporal.expr)")
-            case .stateConstraint(let constraint):
-                lines.append("\\* StateConstraint == \(try expression(constraint, path: "components[\(index)].stateConstraint"))")
+            case .stateConstraint:
+                // The operator is emitted after the PlusCal comment, where
+                // the official translator preserves it for TLC's CONSTRAINT.
+                continue
             case .fairness:
                 // Only AlgorithmFairness belongs to a PlusCal process header.
                 // A generic TLA+ fairness condition has no direct source-level
@@ -119,6 +121,13 @@ internal struct AlgorithmPlusCalRenderer {
             lines.append("}")
         }
         lines.append("} *)")
+        let constraints = try model.components.enumerated().compactMap { index, component -> String? in
+            guard case .stateConstraint(let constraint) = component else { return nil }
+            return try expression(constraint, path: "components[\(index)].stateConstraint")
+        }
+        if !constraints.isEmpty {
+            lines.append("StateConstraint == \(constraints.map { "(\($0))" }.joined(separator: " /\\ "))")
+        }
         lines.append("====")
         return lines.joined(separator: "\n") + "\n"
     }
