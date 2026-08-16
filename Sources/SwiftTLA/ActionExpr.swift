@@ -30,6 +30,7 @@ public indirect enum ActionExpr: Hashable, Sendable, CustomStringConvertible {
         case .or(let a, let b):
             return "(\(a) \\/ \(b))"
         }
+    }
 }
 
 extension StateExpr {
@@ -69,7 +70,6 @@ extension ActionExpr {
             "(\(lhs.tlaModuleSource) \\/ \(rhs.tlaModuleSource))"
         }
     }
-}
 }
 
 /// Substitute a free variable reference with a concrete value in an ActionExpr.
