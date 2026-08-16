@@ -140,7 +140,7 @@ public struct KVsnapModel {
                     }
 
                     Do(Step.read) {
-                        let reads = readKeys.expr.mapping { key in
+                        let reads: Expr<SetExpr<Record<OperationSchema>>> = readKeys.expr.mapping { key in
                             ModuleCall("CC", "r", key.expr, snapshotStore[key.expr])
                         }
                         Assign(
@@ -179,7 +179,7 @@ public struct KVsnapModel {
                                         else: store[key.expr]
                                     )
                                 })
-                                let writes = writeKeys.expr.mapping { key in
+                                let writes: Expr<SetExpr<Record<OperationSchema>>> = writeKeys.expr.mapping { key in
                                     ModuleCall("CC", "w", key.expr, Value.first(selfID.expr))
                                 }
                                 Assign(
@@ -193,13 +193,11 @@ public struct KVsnapModel {
                     }
 
                     Invariant("SnapshotIsolation") {
-                        let initial: Expr<Function<Key, Value>> = FormalCall("InitialState")
-                        let snapshotIsolation: Expr<Bool> = ModuleCall(
+                        ModuleCall<Bool>(
                             "CC", "SnapshotIsolation",
-                            initial,
+                            FormalCall<Function<Key, Value>>("InitialState"),
                             Range(ops.family(for: Transaction.self))
-                        )
-                        snapshotIsolation.raw
+                        ).raw
                     }
                 }
 
