@@ -616,7 +616,8 @@ extension SpecParser {
               let parametersSyntax = call.arguments.first(where: { $0.label?.text == "parameters" })?.expression,
               let bodySyntax = call.arguments.first(where: { $0.label?.text == "body" })?.expression,
               let parameters = parseFormalParameters(parametersSyntax),
-              let body = decodeStateExpr(bodySyntax)
+              let body = decodeTypedFacadeValue(bodySyntax, substitutions: [:])
+                ?? decodeStateExpr(bodySyntax)
         else {
             result.diagnostics.append(.init(
                 message: "FormalDefinition requires a name, supported formal parameters, and a formal body expression.",

@@ -795,6 +795,36 @@ private enum ParserNode: String, FiniteDomainKey {
         ])
     }
 
+    @Test func formalDefinitionRetainsTypedFiniteFunctionBodies() {
+        let source = """
+        {
+            FormalDefinition(
+                "InitialState",
+                parameters: [],
+                body: Function<Key, Int>.mapping { _ in 0 }
+            )
+        }
+        """
+        let closure = Parser.parse(source: source).statements.first!.item.as(ClosureExprSyntax.self)!
+        let parsed = SpecParser.parseSpecClosure(
+            closure,
+            enumDomains: ["Key": [.string("k1"), .string("k2")]]
+        )
+
+        #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
+        #expect(parsed.formalOperatorDefinitions == [
+            FormalOperatorDefinition(
+                name: "InitialState",
+                parameters: [],
+                body: .functionLiteral(
+                    .setLiteral([.value(.string("k1")), .value(.string("k2"))]),
+                    "__pcal_function_key",
+                    .int(0)
+                )
+            )
+        ])
+    }
+
     @Test func higherOrderFormalDefinitionRoundTripsThroughTheCanonicalParser() {
         let source = """
         {
