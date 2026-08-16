@@ -92,12 +92,20 @@ public struct K6BoulangerMCWitness {
                         }
                     }
 
-                    While(Label.w1, !unchecked.isEmpty) {
-                        With(unchecked) { process in
-                            Assign(nxt, to: process.expr)
-                            When(!flag[process])
-                            Assign(previous, to: -1)
-                            Goto(Label.w2)
+                    // The upstream PlusCal `w2` label is nested in `w1`'s
+                    // loop.  Our flat labeled IR spells the same control
+                    // flow explicitly: an empty work set enters `cs`, while
+                    // a chosen peer performs the `w2` comparison.
+                    Do(Label.w1) {
+                        If(!unchecked.isEmpty) {
+                            With(unchecked) { process in
+                                Assign(nxt, to: process.expr)
+                                When(!flag[process])
+                                Assign(previous, to: -1)
+                                Goto(Label.w2)
+                            }
+                        } else: {
+                            Goto(Label.cs)
                         }
                     }
 
@@ -110,7 +118,11 @@ public struct K6BoulangerMCWitness {
                                 || (previous != -1 && num[nxt] != previous)
                         ) {
                             Assign(unchecked, to: unchecked.removing(nxt.expr))
-                            If(unchecked.isEmpty) {
+                            // A `Do` reads its pre-state.  The published
+                            // PlusCal code tests `unchecked` after removing
+                            // `nxt`, so write that derived post-state
+                            // explicitly for the formal relation.
+                            If(unchecked.removing(nxt.expr).isEmpty) {
                                 Goto(Label.cs)
                             } else: {
                                 Goto(Label.w1)
