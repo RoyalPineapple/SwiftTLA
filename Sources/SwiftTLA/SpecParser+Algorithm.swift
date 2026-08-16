@@ -73,6 +73,10 @@ extension SpecParser {
                 ))
                 return
             }
+            if let definition = parseAlgorithmFormalDefinition(expression) {
+                components.append(.formalOperator(definition))
+                continue
+            }
             guard let component = parseAlgorithmComponent(expression, macros: macros) else {
                 let detail = algorithmParseFailure.map { " \($0)" } ?? ""
                 result.diagnostics.append(.init(
@@ -158,9 +162,46 @@ extension SpecParser {
         result.invariants += lowered.invariants.map { ($0.name, $0.body) }
         result.temporal += lowered.temporalProperties.map { ($0.name, $0.expr) }
         result.fairness += lowered.fairness
+        result.formalOperatorDefinitions += model.formalOperatorDefinitions
         if let constraint = lowered.constraint {
             result.constraint = result.constraint.map { .and($0, constraint) } ?? constraint
         }
+    }
+
+    private static func parseAlgorithmFormalDefinition(
+        _ expression: ExprSyntax
+    ) -> FormalOperatorDefinition? {
+        guard let call = expression.as(FunctionCallExprSyntax.self),
+              call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "FormalDefinition",
+              let name = extractStringArg(call, index: 0), !name.isEmpty,
+              let closure = call.trailingClosure,
+              closure.statements.count == 1,
+              case .expr(let bodySyntax) = closure.statements.first?.item
+        else { return nil }
+
+        let parameters = closureParameterNames(in: closure)
+        let typeWitnesses = Array(call.arguments.dropFirst())
+        guard parameters.count == typeWitnesses.count,
+              parameters.count <= 2,
+              (typeWitnesses.isEmpty || typeWitnesses[0].label?.text == "taking"),
+              typeWitnesses.dropFirst().allSatisfy({ $0.label == nil }),
+              typeWitnesses.allSatisfy({ isAlgorithmMetatype($0.expression) })
+        else { return nil }
+        let substitutions = Dictionary(uniqueKeysWithValues: parameters.map { ($0, StateExpr.variable($0)) })
+        guard let body = decodeTypedFacadeValue(bodySyntax, substitutions: substitutions) else { return nil }
+        return FormalOperatorDefinition(
+            name: name,
+            parameters: parameters.map(FormalParameter.value),
+            body: body
+        )
+    }
+
+    private static func isAlgorithmMetatype(_ expression: ExprSyntax) -> Bool {
+        guard let member = expression.as(MemberAccessExprSyntax.self),
+              member.declName.baseName.text == "self",
+              member.base != nil
+        else { return false }
+        return true
     }
 
     private static func algorithmStateDeclarations(in model: AlgorithmModel) -> [AlgorithmStateModel] {

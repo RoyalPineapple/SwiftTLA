@@ -40,11 +40,12 @@ enum AlgorithmLowerer {
         _ algorithm: AlgorithmModel,
         formalOperatorDefinitions: [FormalOperatorDefinition] = []
     ) throws -> TLASpec {
+        let resolvedFormalOperators = formalOperatorDefinitions + algorithm.formalOperatorDefinitions
         let processes = algorithm.processes
         if processes.isEmpty, !algorithm.sequentialSteps.isEmpty {
             return try lowerSequential(
                 algorithm,
-                formalOperatorDefinitions: formalOperatorDefinitions
+                formalOperatorDefinitions: resolvedFormalOperators
             )
         }
         let shared = algorithm.components.compactMap { component -> AlgorithmStateModel? in
@@ -98,7 +99,7 @@ enum AlgorithmLowerer {
         var variables = shared.map { state in
             if let initial = try? state.initial.evaluate(
                 in: [:],
-                formalOperatorDefinitions: formalOperatorDefinitions
+                formalOperatorDefinitions: resolvedFormalOperators
             ) {
                 NamedVar(name: state.root, initial: initial, initialSet: state.initialSet)
             } else {
@@ -114,7 +115,7 @@ enum AlgorithmLowerer {
                         initial: try staticInitialValue(
                             constantFunction(domain: process.domain, value: state.initial),
                             named: state.root,
-                            formalOperatorDefinitions: formalOperatorDefinitions
+                            formalOperatorDefinitions: resolvedFormalOperators
                         )
                     ))
             }
@@ -156,7 +157,7 @@ enum AlgorithmLowerer {
                     initial: try staticInitialValue(
                         constantFunction(domain: controlDomainValues(processes), value: slot.initial),
                         named: slot.root,
-                        formalOperatorDefinitions: formalOperatorDefinitions
+                        formalOperatorDefinitions: resolvedFormalOperators
                     )
                 ))
             }
@@ -165,7 +166,7 @@ enum AlgorithmLowerer {
                 initial: try staticInitialValue(
                         constantFunction(domain: controlDomainValues(processes), value: .tupleLiteral([])),
                         named: stackVariable,
-                        formalOperatorDefinitions: formalOperatorDefinitions
+                        formalOperatorDefinitions: resolvedFormalOperators
                 )
             ))
         }
@@ -273,6 +274,8 @@ enum AlgorithmLowerer {
             temporalProperties: declaredTemporal,
             fairness: declaredFairness + fairness,
             constraint: declaredConstraint,
+            formalOperatorDefinitions: resolvedFormalOperators,
+            definitions: algorithm.formalOperatorDefinitions.map { FormalOperatorDecl($0).tlaText },
             sourceAlgorithms: [Algorithm(model: algorithm)])
     }
 
@@ -369,6 +372,8 @@ enum AlgorithmLowerer {
                 temporalProperties: declaredTemporal,
                 fairness: declaredFairness,
                 constraint: declaredConstraint,
+                formalOperatorDefinitions: formalOperatorDefinitions,
+                definitions: algorithm.formalOperatorDefinitions.map { FormalOperatorDecl($0).tlaText },
                 sourceAlgorithms: [Algorithm(model: algorithm)]
             )
         }
@@ -440,6 +445,8 @@ enum AlgorithmLowerer {
             temporalProperties: declaredTemporal,
             fairness: declaredFairness,
             constraint: declaredConstraint,
+            formalOperatorDefinitions: formalOperatorDefinitions,
+            definitions: algorithm.formalOperatorDefinitions.map { FormalOperatorDecl($0).tlaText },
             sourceAlgorithms: [Algorithm(model: algorithm)]
         )
     }

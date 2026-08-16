@@ -899,6 +899,39 @@ private enum ParserNode: String, FiniteDomainKey {
         ])
     }
 
+    @Test func algorithmTypedFormalDefinitionParsesWithClosureBinders() {
+        let source = """
+        {
+            Algorithm("Formal") {
+                FormalDefinition("same", taking: Int.self, Int.self) { ballot, value in
+                    ballot == value
+                }
+                let count = SharedVar("count", initial: 0)
+                count
+                Do("stop") { Stop() }
+            }
+        }
+        """
+        let closure = Parser.parse(source: source).statements.first!.item.as(ClosureExprSyntax.self)!
+        let parsed = SpecParser.parseSpecClosure(closure)
+
+        #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
+        #expect(parsed.formalOperatorDefinitions == [
+            FormalOperatorDefinition(
+                name: "same",
+                parameters: [.value("ballot"), .value("value")],
+                body: .equal(.variable("ballot"), .variable("value"))
+            )
+        ])
+        let built = Algorithm("Formal") {
+            FormalDefinition("same", taking: Int.self, Int.self) { left, right in left == right }
+            let count = SharedVar("count", initial: 0)
+            count
+            Do("stop") { Stop() }
+        }
+        #expect(_tlaAlgorithmFidelityEvidence(parsed.algorithmFidelityTokens, [AlgorithmFidelityToken(model: built.model)]) == nil)
+    }
+
     @Test func formalOperatorLambdaAndArgumentKindsRoundTripThroughTheParser() {
         let expression = parseExpression("""
         StateExpr.operatorApplication(

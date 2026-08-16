@@ -670,6 +670,44 @@ public func FormalDefinition(
 ) -> FormalOperatorDecl {
   FormalOperatorDecl(FormalOperatorDefinition(name: name, parameters: parameters, body: body.stateExpr))
 }
+
+/// Declares a nullary executable formal operator from a typed formal body.
+public func FormalDefinition(
+  _ name: String,
+  body: some StateExprConvertible
+) -> FormalOperatorDecl {
+  FormalOperatorDecl(FormalOperatorDefinition(name: name, parameters: [], body: body.stateExpr))
+}
+
+/// Declares a unary executable formal operator without exposing raw AST values.
+public func FormalDefinition<Input: TLAValueType>(
+  _ name: String,
+  taking: Input.Type,
+  body: (Expr<Input>) -> some StateExprConvertible
+) -> FormalOperatorDecl {
+  let parameter = "value0"
+  return FormalOperatorDecl(FormalOperatorDefinition(
+    name: name,
+    parameters: [.value(parameter)],
+    body: body(Expr<Input>(.variable(parameter))).stateExpr
+  ))
+}
+
+/// Declares a binary executable formal operator without exposing raw AST values.
+public func FormalDefinition<First: TLAValueType, Second: TLAValueType>(
+  _ name: String,
+  taking: First.Type,
+  _ second: Second.Type,
+  body: (Expr<First>, Expr<Second>) -> some StateExprConvertible
+) -> FormalOperatorDecl {
+  let first = "value0"
+  let second = "value1"
+  return FormalOperatorDecl(FormalOperatorDefinition(
+    name: name,
+    parameters: [.value(first), .value(second)],
+    body: body(Expr<First>(.variable(first)), Expr<Second>(.variable(second))).stateExpr
+  ))
+}
 public struct TheoremDecl: SpecComponent, Equatable {
   public let tlaText: String
   public let name: String?

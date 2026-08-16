@@ -72,6 +72,8 @@ extension TLASpec {
           invariants += lowered.invariants
           temporalProperties += lowered.temporalProperties
           fairness += lowered.fairness
+          formalOperatorDefinitions += algorithm.model.formalOperatorDefinitions
+          definitions += algorithm.model.formalOperatorDefinitions.map { FormalOperatorDecl($0).tlaText }
           if let loweredConstraint = lowered.constraint {
             constraint = constraint.map { .and($0, loweredConstraint) } ?? loweredConstraint
           }

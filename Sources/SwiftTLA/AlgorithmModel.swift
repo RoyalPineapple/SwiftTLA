@@ -32,6 +32,13 @@ internal struct AlgorithmModel: Sendable {
             return procedure
         }
     }
+
+    var formalOperatorDefinitions: [FormalOperatorDefinition] {
+        components.compactMap {
+            guard case .formalOperator(let definition) = $0 else { return nil }
+            return definition
+        }
+    }
 }
 
 /// Opaque pre-lowering evidence for an authored `Algorithm`.
@@ -196,6 +203,17 @@ private func algorithmCanonicalEncoding(_ model: AlgorithmModel) -> String {
         case .invariant(let invariant): result = "invariant(\(invariant.name),\(state(invariant.body, environment)))"
         case .temporal(let temporal): result = "temporal(\(temporal.name),\(temporal.expr))"
         case .fairness(let fairness): result = "fairness(\(fairness))"
+        case .formalOperator(let definition):
+            var definitionEnvironment = environment
+            let parameters = definition.parameters.map { parameter -> String in
+                let (name, extended) = fresh(parameter.name, environment: definitionEnvironment, next: &next)
+                definitionEnvironment = extended
+                switch parameter {
+                case .value: return "value(\(name))"
+                case .operator(_, let arity): return "operator(\(name),\(arity))"
+                }
+            }
+            result = "formalOperator(\(definition.name),[\(parameters.joined(separator: ","))],\(state(definition.body, definitionEnvironment)))"
         case .stateConstraint(let expression): result = "constraint(\(state(expression, environment)))"
         case .propertyBoundary: result = "propertyBoundary"
         }
@@ -215,6 +233,7 @@ internal indirect enum AlgorithmComponentModel: Sendable {
     case invariant(NamedInvariant)
     case temporal(NamedTemporal)
     case fairness(FairnessCondition)
+    case formalOperator(FormalOperatorDefinition)
     /// A TLC state-space bound declared beside the algorithm that it bounds.
     /// It is not a correctness property: excluded states are not explored.
     case stateConstraint(StateExpr)

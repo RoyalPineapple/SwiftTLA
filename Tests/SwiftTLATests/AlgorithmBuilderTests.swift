@@ -660,6 +660,34 @@ struct AlgorithmBuilderTests {
         #expect(spec.invariants.map(\.name) == ["nonNegative"])
     }
 
+    @Test("algorithm formal definitions lower and export exactly once")
+    func algorithmFormalDefinitionsRemainTopLevelFormalOperators() throws {
+        let algorithm = Algorithm("Formal Operators") {
+            FormalDefinition("same", taking: Int.self, Int.self) { left, right in
+                left == right
+            }
+            let value = SharedVar("value", initial: 0)
+            value
+            Do("stop") { Stop() }
+        }
+
+        let lowered = try algorithm.lower()
+        #expect(lowered.formalOperatorDefinitions == [
+            FormalOperatorDefinition(
+                name: "same",
+                parameters: [.value("value0"), .value("value1")],
+                body: .equal(.variable("value0"), .variable("value1"))
+            )
+        ])
+        #expect(lowered.definitions == ["same(value0, value1) == (value0 = value1)"])
+        #expect(try algorithm.renderPlusCalModule().contains("same(value0, value1) == (value0 = value1)"))
+
+        let spec = TLASpec("Formal Operators") { algorithm }
+        #expect(spec.formalOperatorDefinitions == lowered.formalOperatorDefinitions)
+        #expect(spec.definitions.filter { $0.hasPrefix("same(") }.count == 1)
+        #expect(spec.tlaModule.components(separatedBy: "same(value0, value1)").count == 2)
+    }
+
     @Test("When, Assert, With, and process fairness lower as formal semantics")
     func lowersMechanicalPlusCalStatements() throws {
         let algorithm = Algorithm("Mechanical") {
