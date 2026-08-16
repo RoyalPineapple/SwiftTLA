@@ -6,6 +6,11 @@ struct AlgorithmPlusCalRendererTests {
     private enum Node: String, FiniteDomainKey {
         case left
         case right
+
+        static let formalDomain: [Node] = [.left, .right]
+        static let formalTypeIdentity = FormalTypeIdentity(rawValue: "test.pluscal-renderer.node")
+
+        var tlaValue: TLAValue { .string(rawValue) }
     }
 
     @Test("renders process declarations, source labels, and structured statements without lowering")
@@ -28,7 +33,7 @@ struct AlgorithmPlusCalRendererTests {
                         Assign(count, to: chosen)
                     }
                     If(node == .left) {
-                        Assign(flags[node], to: true)
+                        Assign(flags, to: flags.updating(node, to: true))
                     } else: {
                         Either {
                             Goto(ProgramLabel(rawValue: "repeat"))
@@ -52,7 +57,7 @@ struct AlgorithmPlusCalRendererTests {
         #expect(rendered.contains("assert (count < 3);"))
         #expect(rendered.contains("with (x1 \\in {1, 2})"))
         #expect(rendered.contains("with (x2 \\in {3, 4})"))
-        #expect(rendered.contains("flags[self] := TRUE;"))
+        #expect(rendered.contains("flags := [flags EXCEPT ![self] = TRUE];"))
         #expect(rendered.contains("either {"))
         #expect(rendered.contains("goto repeat;"))
         #expect(rendered.contains("stop;"))
@@ -133,7 +138,7 @@ struct AlgorithmPlusCalRendererTests {
         let model = AlgorithmModel(name: "Unsupported", components: [.propertyBoundary])
 
         do {
-            try AlgorithmPlusCalRenderer(model: model).render()
+            _ = try AlgorithmPlusCalRenderer(model: model).render()
             Issue.record("Expected an unsupported-source diagnostic")
         } catch let diagnostic as AlgorithmPlusCalRenderDiagnostic {
             #expect(diagnostic.failedConcept == "semantic-free PlusCal source rendering")
