@@ -246,16 +246,16 @@ but its ownership boundaries are fixed:
 |---|---|---|
 | `SwiftTLA` formal core | TLA+ AST, finite evaluation, module rendering, Algorithm IR, lowering, and PlusCal rendering | SwiftUI, application adapters, or macro-only semantics |
 | `SwiftTLAPlugin` | syntax recovery, source spans, fidelity diagnostics, and typed generated surfaces | Algorithm lowering or TLA+ evaluation semantics |
-| direct-TLA parity corpus | faithful upstream modules, imports, and direct-TLA graph comparisons | application-shaped Algorithm fixtures |
-| algorithm conformance corpus | canonical `#spec`/`Algorithm` fixtures and Swift-lowered versus PlusCal-translated graph comparisons | duplicate direct-TLA implementations of the same algorithm |
+| direct-TLA parity corpus | faithful direct-TLA modules, imports, and direct-TLA graph comparisons | application-shaped Algorithm fixtures |
+| algorithm conformance corpus | canonical `#spec`/`Algorithm` fixtures, including upstream PlusCal ports, and Swift-lowered versus PlusCal-translated graph comparisons | duplicate direct-TLA implementations of the same algorithm |
 | `Examples/` consumers | demos and Apple integration shims that import the public package | a second state machine, availability policy, or formal evaluator |
 
-The next target split creates a dedicated algorithm-conformance target rather
-than adding PlusCal-shaped fixtures to `UpstreamParity`. It can depend on
-SwiftTLA and the macro library, while the TLC validation executable consumes
-its declared bundle. This keeps the core semantic tests independent of the
-upstream corpus and keeps direct parity evidence distinct from algorithm
-evidence.
+`AlgorithmConformance` is the dedicated home for PlusCal-shaped fixtures.
+It depends on SwiftTLA and the macro library, while the TLC validation
+executable consumes its declared bundle. K6 moves existing upstream PlusCal
+ports out of `UpstreamParity` without changing their model or provenance. This
+keeps core semantic tests independent of the upstream corpus and keeps direct
+parity evidence distinct from algorithm evidence.
 
 ## DSL philosophy
 
