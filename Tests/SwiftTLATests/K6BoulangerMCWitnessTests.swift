@@ -35,13 +35,11 @@ struct K6BoulangerMCWitnessTests {
         ) ?? _tlaFidelityEvidence(K6BoulangerMCWitness._parserTree, built)
     }
 
-    @Test("K6 fixture retains its published bounded configuration")
-    func retainsMCBoulangerConfiguration() {
+    @Test("K6 fixture carries the bounded constraint that its source actually uses")
+    func retainsBoundedConfiguration() {
         let fixture = AlgorithmConformanceRegistry.k6BoulangerMC
 
-        #expect(fixture.configuration.contains("CONSTANT N = 3"))
-        #expect(fixture.configuration.contains("CONSTANT MaxNat = 3"))
-        #expect(fixture.configuration.contains("CONSTANT Nat <- NatOverride"))
+        #expect(!fixture.configuration.contains("NatOverride"))
         #expect(fixture.configuration.contains("CONSTRAINT StateConstraint"))
     }
 }

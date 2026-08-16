@@ -6,7 +6,7 @@ import SwiftTLAMacros
 /// This is a direct PlusCal-shaped port of the published model: each label
 /// is one atomic region, and the `Either`, `With`, `Choose`, and `Goto`
 /// blocks preserve the source control flow. The ticket choice is bounded by
-/// the upstream TLC override `Nat = 0...3`.
+/// the upstream finite choice and state-constraint bounds.
 @TLAModel
 public struct K6BoulangerMCWitness {
     public enum Process: Int, FiniteDomainKey {
@@ -143,9 +143,10 @@ public struct K6BoulangerMCWitness {
                     }
                 }
 
-                // The published TLC configuration retains only tickets below 3.
-                // This bound makes the formal choice finite; it is not a
-                // mutual-exclusion correctness claim.
+                // The upstream TLC configuration retains only tickets below 3.
+                // The concrete `Choose(0...3)` is already finite here, so the
+                // fixture carries the equivalent state constraint directly
+                // instead of a non-existent `NatOverride` helper module.
                 StateConstraint(All(Process.all) { process in num[process] < 3 })
 
                 Invariant("MutualExclusion") {

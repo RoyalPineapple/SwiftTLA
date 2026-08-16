@@ -1,11 +1,11 @@
 import SwiftTLA
 
 extension AlgorithmConformanceRegistry {
-    /// K6 preserves the published three-process Boulangerie source and its
-    /// MCBoulanger bounds in the dedicated Algorithm conformance corpus.
+    /// K6 preserves the published three-process Boulangerie control flow and
+    /// its bounded state constraint in the dedicated Algorithm corpus.
     public static let k6BoulangerMC = AlgorithmConformanceFixture(
         id: "k6-boulanger-mc",
-        configuration: "CONSTANT N = 3\nCONSTANT MaxNat = 3\nCONSTANT Nat <- NatOverride\nSPECIFICATION Spec\nCONSTRAINT StateConstraint\n",
+        configuration: "SPECIFICATION Spec\nCONSTRAINT StateConstraint\n",
         specification: { K6BoulangerMCWitness.spec }
     )
 }
