@@ -1,5 +1,11 @@
 # SwiftTLA Repository Rules
 
+## Host Safety
+
+- Do not run local `swift test`, `xcodebuild test`, `make ci*`, TLC, or broad compiler/test commands in this worktree.
+- Use GitHub Actions / SwiftTLA-ValidationEvidence for execution. Local work is limited to parsing, diffs, linting, and static inspection.
+- Any exception requires explicit user authorization for the exact command.
+
 ## Typed Boundaries
 
 Treat string-keyed and otherwise untyped data as a guarded boundary.
