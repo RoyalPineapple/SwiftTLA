@@ -134,7 +134,11 @@ internal struct AlgorithmPlusCalRenderer {
         case .weak: fairness = "fair "
         case .strong: fairness = "fair+ "
         }
-        var lines = ["", "\(fairness)process (self \\in \(set(process.domain)))"]
+        // `self` is a PlusCal implementation name.  The Algorithm IR uses
+        // `__pcal_self` internally, but spelling either one in the rendered
+        // source lets the official translator capture it as an operator.
+        // Give every rendered process a regular, hygienic binding instead.
+        var lines = ["", "\(fairness)process (pcalSelf \\in \(set(process.domain)))"]
         let locals = process.components.compactMap { component -> AlgorithmStateModel? in
             guard case .local(let declaration) = component else { return nil }
             return declaration
@@ -189,9 +193,35 @@ internal struct AlgorithmPlusCalRenderer {
     }
 
     private func render(statements: [AlgorithmStatementModel], indent: String, path: String) throws -> [String] {
-        try statements.enumerated().flatMap { index, statement in
-            try render(statement: statement, indent: indent, path: "\(path)[\(index)]")
+        var lines: [String] = []
+        var index = statements.startIndex
+
+        while index < statements.endIndex {
+            // A `Do` body captures every assignment right-hand side from the
+            // pre-state.  PlusCal spells that relation with `||`; rendering
+            // ordinary sequential `:=` statements changes an authored swap
+            // into two sequential writes.
+            if case .set = statements[index] {
+                var assignments: [(target: AlgorithmLValueModel, value: StateExpr)] = []
+                repeat {
+                    guard case .set(let target, let value) = statements[index] else { break }
+                    assignments.append((target, value))
+                    index = statements.index(after: index)
+                } while index < statements.endIndex && {
+                    if case .set = statements[index] { return true }
+                    return false
+                }()
+
+                let rendered = assignments.map { "\(lvalue($0.target)) := \(expression($0.value))" }
+                    .joined(separator: " || ")
+                lines.append("\(indent)\(rendered);")
+                continue
+            }
+
+            lines += try render(statement: statements[index], indent: indent, path: "\(path)[\(index)]")
+            index = statements.index(after: index)
         }
+        return lines
     }
 
     private func render(statement: AlgorithmStatementModel, indent: String, path: String) throws -> [String] {
@@ -249,7 +279,7 @@ internal struct AlgorithmPlusCalRenderer {
     }
 
     private func expression(_ value: StateExpr) -> String {
-        value.description.replacingOccurrences(of: "__pcal_self", with: "self")
+        value.description.replacingOccurrences(of: "__pcal_self", with: "pcalSelf")
     }
 
     private func set(_ values: [TLAValue]) -> String {

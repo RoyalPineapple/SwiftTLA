@@ -51,14 +51,14 @@ struct AlgorithmPlusCalRendererTests {
         #expect(rendered.contains("---- MODULE RenderedProcess ----"))
         #expect(rendered.contains("count = 0"))
         #expect(rendered.contains("(*--algorithm Rendered Process {"))
-        #expect(rendered.contains("fair+ process (self \\in {\"left\", \"right\"})"))
+        #expect(rendered.contains("fair+ process (pcalSelf \\in {\"left\", \"right\"})"))
         #expect(rendered.contains("local = 0"))
         #expect(rendered.contains("repeat: while ((count < 2)) {"))
         #expect(rendered.contains("await (count >= 0);"))
         #expect(rendered.contains("assert (count < 3);"))
         #expect(rendered.contains("with (x1 \\in {1, 2})"))
         #expect(rendered.contains("with (x2 \\in {3, 4})"))
-        #expect(rendered.contains("flags := [flags EXCEPT ![self] = TRUE];"))
+        #expect(rendered.contains("flags := [flags EXCEPT ![pcalSelf] = TRUE];"))
         #expect(rendered.contains("either {"))
         #expect(rendered.contains("goto repeat;"))
         #expect(rendered.contains("goto Done;"))
@@ -105,7 +105,7 @@ struct AlgorithmPlusCalRendererTests {
 
         let rendered = try AlgorithmPlusCalRenderer(model: model).render()
 
-        #expect(rendered.contains("fair process (self \\in {1})"))
+        #expect(rendered.contains("fair process (pcalSelf \\in {1})"))
     }
 
     @Test("renders a sequential body and procedures directly from Algorithm IR")
