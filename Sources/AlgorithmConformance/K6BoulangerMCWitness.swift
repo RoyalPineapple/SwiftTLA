@@ -117,15 +117,16 @@ public struct K6BoulangerMCWitness {
                                     && Process.all.members(before: nxt).contains(selfID))
                                 || (previous != -1 && num[nxt] != previous)
                         ) {
-                            Assign(unchecked, to: unchecked.removing(nxt.expr))
-                            // A `Do` reads its pre-state.  The published
-                            // PlusCal code tests `unchecked` after removing
-                            // `nxt`, so write that derived post-state
-                            // explicitly for the formal relation.
-                            If(unchecked.removing(nxt.expr).isEmpty) {
-                                Goto(Label.cs)
-                            } else: {
-                                Goto(Label.w1)
+                            // Bind the pre-state value that the original
+                            // PlusCal block assigns to `unchecked`, then use
+                            // it for both the update and the following test.
+                            Let(unchecked.removing(nxt.expr)) { remaining in
+                                Assign(unchecked, to: remaining.expr)
+                                If(remaining.expr.isEmpty) {
+                                    Goto(Label.cs)
+                                } else: {
+                                    Goto(Label.w1)
+                                }
                             }
                         } else: {
                             Assign(previous, to: num[nxt])
