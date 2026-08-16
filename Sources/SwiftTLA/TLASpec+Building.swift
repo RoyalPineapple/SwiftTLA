@@ -31,6 +31,7 @@ extension TLASpec {
     var symmetryGroups: [SymmetryVariableGroup] = []
     var symmetricCollections: [SymmetricCollectionDecl] = []
     var algorithmFidelityTokens: [AlgorithmFidelityToken] = []
+    var sourceAlgorithms: [Algorithm] = []
     var operators: [String: OpDecl] = [:]
 
     // Pass 1: collect operators
@@ -57,6 +58,7 @@ extension TLASpec {
         // Retain source-level evidence directly from the builder model; do
         // not lower a second time merely to form a fidelity token.
         algorithmFidelityTokens.append(AlgorithmFidelityToken(model: algorithm.model))
+        sourceAlgorithms.append(algorithm)
         do {
           let lowered = try algorithm.lower()
           variables += lowered.variables
@@ -221,6 +223,16 @@ extension TLASpec {
     self.symmetryGroups = symmetryGroups
     self.symmetricCollections = symmetricCollections
     self.algorithmFidelityTokens = algorithmFidelityTokens
+    self.sourceAlgorithms = sourceAlgorithms
+  }
+}
+
+public extension TLASpec {
+  /// Renders each Algorithm authored in this builder as an independent
+  /// PlusCal module. Direct TLA+ specifications have no Algorithm source and
+  /// therefore return an empty array instead of inventing a reverse lowering.
+  func renderAuthoredPlusCalModules() throws -> [String] {
+    try sourceAlgorithms.map { try $0.renderPlusCalModule() }
   }
 }
 
@@ -269,7 +281,8 @@ public func substituteConstants(_ spec: TLASpec) -> TLASpec {
     symmetrySets: spec.symmetrySets,
     symmetryGroups: spec.symmetryGroups,
     symmetricCollections: spec.symmetricCollections,
-    algorithmFidelityTokens: spec.algorithmFidelityTokens
+    algorithmFidelityTokens: spec.algorithmFidelityTokens,
+    sourceAlgorithms: spec.sourceAlgorithms
   )
   resolved.runtimeFuncs = spec.runtimeFuncs
   resolved.runtimeFuncBodies = spec.runtimeFuncBodies

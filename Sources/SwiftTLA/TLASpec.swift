@@ -233,6 +233,12 @@ public struct TLASpec: Sendable {
   /// Opaque source-level Algorithm evidence. This is distinct from the
   /// lowered variables/actions and never exposes the Algorithm IR.
   public let algorithmFidelityTokens: [AlgorithmFidelityToken]
+  /// Canonical Algorithm declarations retained solely for source rendering.
+  ///
+  /// The formal runtime still uses the one lowered `TLASpec` representation.
+  /// Keeping these declarations lets a tooling boundary render the exact
+  /// authored Algorithm as PlusCal without reconstructing it from TLA+ AST.
+  let sourceAlgorithms: [Algorithm]
   public init(
     name: String, variables: [NamedVar], constants: [String: TLAValue] = [:],
     formalParameters: [FormalModuleParameter] = [],
@@ -246,7 +252,8 @@ public struct TLASpec: Sendable {
     moduleInstances: [FormalModuleInstance] = [], symmetrySets: [SymmetrySet] = [],
     symmetryGroups: [SymmetryVariableGroup] = [],
     symmetricCollections: [SymmetricCollectionDecl] = [],
-    algorithmFidelityTokens: [AlgorithmFidelityToken] = []
+    algorithmFidelityTokens: [AlgorithmFidelityToken] = [],
+    sourceAlgorithms: [Algorithm] = []
   ) {
     self.name = name
     self.variables = variables
@@ -272,6 +279,7 @@ public struct TLASpec: Sendable {
     self.symmetryGroups = symmetryGroups
     self.symmetricCollections = symmetricCollections
     self.algorithmFidelityTokens = algorithmFidelityTokens
+    self.sourceAlgorithms = sourceAlgorithms
   }
 
   /// Recursive definitions visible after resolving the module import graph.

@@ -146,4 +146,21 @@ struct AlgorithmPlusCalRendererTests {
             Issue.record("Expected AlgorithmPlusCalRenderDiagnostic, got \(error)")
         }
     }
+
+    @Test("retains authored Algorithm source for independent PlusCal rendering")
+    func retainsAuthoredAlgorithmOnTheLoweredSpec() throws {
+        let spec = TLASpec("Retained") {
+            Algorithm("Retained") {
+                let count = SharedVar("count", initial: 0)
+                count
+                Do("stop") { Stop() }
+            }
+        }
+
+        let modules = try spec.renderAuthoredPlusCalModules()
+
+        #expect(modules.count == 1)
+        #expect(modules[0].contains("(*--algorithm Retained"))
+        #expect(spec.actions.contains(where: { $0.name == "stop" }))
+    }
 }
