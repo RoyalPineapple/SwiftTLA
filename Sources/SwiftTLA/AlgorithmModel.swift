@@ -1,3 +1,5 @@
+import Foundation
+
 internal struct AlgorithmModel: Sendable {
     let name: String
     let components: [AlgorithmComponentModel]
@@ -33,7 +35,7 @@ internal struct AlgorithmModel: Sendable {
 /// `TLASpec`. It is retained solely to make parser/builder fidelity checks
 /// observe source-level distinctions that lowering can erase.
 public struct AlgorithmFidelityToken: Sendable, Hashable {
-    private let canonicalForm: String
+    fileprivate let canonicalForm: String
 
     internal init(model: AlgorithmModel) {
         canonicalForm = algorithmCanonicalEncoding(model)
@@ -42,12 +44,21 @@ public struct AlgorithmFidelityToken: Sendable, Hashable {
     /// Used by macro-generated declarations to retain parser evidence without
     /// exposing the underlying Algorithm IR as public API.
     public init(encodedCanonicalForm: String) {
-        canonicalForm = encodedCanonicalForm
+        guard let data = Data(base64Encoded: encodedCanonicalForm),
+              let decoded = String(data: data, encoding: .utf8)
+        else {
+            preconditionFailure(
+                "AlgorithmFidelityToken transport is invalid. Expected Base64-encoded canonical Algorithm evidence."
+            )
+        }
+        canonicalForm = decoded
     }
 
     /// Canonical transport used only to embed parser evidence in generated
     /// source. The Algorithm IR itself remains private to SwiftTLA.
-    public var encodedCanonicalForm: String { canonicalForm }
+    public var encodedCanonicalForm: String {
+        Data(canonicalForm.utf8).base64EncodedString()
+    }
 }
 
 /// Returns semantic-path evidence for the first pre-lowering Algorithm
@@ -89,11 +100,9 @@ public func _tlaAlgorithmFidelityEvidence(
 
 private func algorithmCanonicalNodes(_ encoding: String) -> [(path: String, value: String)] {
     encoding.split(separator: "\u{1E}", omittingEmptySubsequences: true).compactMap { record in
-        guard let separator = record.firstIndex(of: "\u{1F}") else { return nil }
-        return (
-            path: String(record[..<separator]),
-            value: String(record[record.index(after: separator)...])
-        )
+        let fields = record.split(separator: "\u{1F}", maxSplits: 1, omittingEmptySubsequences: false)
+        guard fields.count == 2 else { return nil }
+        return (path: String(fields[0]), value: String(fields[1]))
     }
 }
 
@@ -160,8 +169,8 @@ private func algorithmCanonicalEncoding(_ model: AlgorithmModel) -> String {
         case .process(let process):
             var processEnvironment = environment
             processEnvironment["__pcal_self"] = "@process"
-            let components = process.components.enumerated().map { index, component in
-                component(component, processEnvironment, path: "\(path).components[\(index)]")
+            let components = process.components.enumerated().map { index, child in
+                component(child, processEnvironment, path: "\(path).components[\(index)]")
             }.joined(separator: ",")
             result = "process(\(process.typeName),[\(process.domain.map(\.description).joined(separator: ","))],\(process.fairness),[\(components)])"
         case .procedure(let procedure):
@@ -187,8 +196,8 @@ private func algorithmCanonicalEncoding(_ model: AlgorithmModel) -> String {
         }
         return record(path, result)
     }
-    let components = model.components.enumerated().map { index, component in
-        component(component, [:], path: "components[\(index)]")
+    let components = model.components.enumerated().map { index, child in
+        component(child, [:], path: "components[\(index)]")
     }.joined(separator: ",")
     _ = record("algorithm", "algorithm(\(model.name),[\(components)])")
     return nodes.map { "\($0.path)\u{1F}\($0.value)" }.joined(separator: "\u{1E}")
