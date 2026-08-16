@@ -696,7 +696,7 @@ extension SpecParser {
                       argumentCall.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "ModuleArgument",
                       let parameter = extractStringArg(argumentCall, index: 0),
                       let valueSyntax = argumentCall.arguments.first(where: { $0.label?.text == "value" })?.expression,
-                      let value = decodeStateExpr(valueSyntax)
+                      let value = decodeTypedFacadeValue(valueSyntax) ?? decodeStateExpr(valueSyntax)
                 else {
                     result.diagnostics.append(.init(
                         message: "Each Instance argument must be ModuleArgument(\"parameter\", value: expression).",
