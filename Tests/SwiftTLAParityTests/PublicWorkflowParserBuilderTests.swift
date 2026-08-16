@@ -99,6 +99,11 @@ struct PublicWorkflowParserBuilderTests {
       root = FileManager.default.temporaryDirectory.appendingPathComponent("PublicWorkflowParserBuilderTests-\(UUID())")
       manifest = root.appendingPathComponent(relativeManifest)
       try stage("Tests/Fixtures/PublicWorkflowConformance/ParserBuilder")
+      // The mismatch manifest deliberately shares the parent fixture's
+      // non-applicable toolchain evidence, so stage that referenced file too.
+      if relativeManifest.contains("/Mismatch/") {
+        try stage("Tests/Fixtures/PublicWorkflowConformance/ParserBuilder/not-applicable.json")
+      }
       try stage("Package.swift")
       try stage("Package.resolved")
       try stage("Sources/UpstreamParity/Conformance/PublicWorkflowParserBuilderAdapter.swift")
