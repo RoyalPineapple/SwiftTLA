@@ -59,6 +59,49 @@ struct AlgorithmPlusCalRendererTests {
         #expect(rendered.contains("end algorithm;*)"))
     }
 
+    @Test("renders the PlusCal brace control grammar literally")
+    func rendersBraceControlGrammar() throws {
+        let loop = AlgorithmLabelModel(name: "loop")
+        let model = AlgorithmModel(name: "Grammar", components: [
+            .shared(.init(root: "count", initial: .value(.int(0)))),
+            .step(.init(label: loop, statements: [
+                .letBinding(variable: "bound", value: .value(.int(1)), [
+                    .with(variable: "member", source: .setLiteral([.value(.int(1)), .value(.int(2))]), [
+                        .ifElse(.value(.bool(true)), [
+                            .either([.skip], [.goto(loop)])
+                        ], [])
+                    ])
+                ])
+            ], loopCondition: .value(.bool(true))))
+        ])
+
+        let rendered = try AlgorithmPlusCalRenderer(model: model).render()
+
+        #expect(rendered.contains("loop: while (TRUE) {"))
+        #expect(rendered.contains("with (bound = 1) {"))
+        #expect(rendered.contains("with (member \\in {1, 2}) {"))
+        #expect(rendered.contains("if (TRUE) {"))
+        #expect(rendered.contains("either {"))
+        #expect(rendered.contains("} or {"))
+        #expect(rendered.contains("goto loop;"))
+    }
+
+    @Test("renders supported process fairness in the PlusCal header")
+    func rendersProcessFairness() throws {
+        let model = AlgorithmModel(name: "Fair", components: [
+            .process(.init(
+                typeName: "Process",
+                domain: [.int(1)],
+                fairness: .weak,
+                components: [.step(.init(label: .init(name: "done"), statements: [.stop]))]
+            ))
+        ])
+
+        let rendered = try AlgorithmPlusCalRenderer(model: model).render()
+
+        #expect(rendered.contains("fair process (self \\in {1})"))
+    }
+
     @Test("renders a sequential body and procedures directly from Algorithm IR")
     func rendersSequentialProcedureAlgorithm() throws {
         let algorithm = Algorithm("Procedures") {
@@ -89,8 +132,18 @@ struct AlgorithmPlusCalRendererTests {
     func reportsUnsupportedSourceNode() {
         let model = AlgorithmModel(name: "Unsupported", components: [.propertyBoundary])
 
-        #expect(throws: AlgorithmPlusCalRenderDiagnostic.self) {
+        do {
             try AlgorithmPlusCalRenderer(model: model).render()
+            Issue.record("Expected an unsupported-source diagnostic")
+        } catch let diagnostic as AlgorithmPlusCalRenderDiagnostic {
+            #expect(diagnostic.failedConcept == "semantic-free PlusCal source rendering")
+            #expect(diagnostic.path == "components[0]")
+            #expect(diagnostic.expected == "a directly renderable PlusCal declaration")
+            #expect(diagnostic.actual == "property boundary")
+            #expect(diagnostic.stateChange == .none)
+            #expect(!diagnostic.nextSafeAction.isEmpty)
+        } catch {
+            Issue.record("Expected AlgorithmPlusCalRenderDiagnostic, got \(error)")
         }
     }
 }

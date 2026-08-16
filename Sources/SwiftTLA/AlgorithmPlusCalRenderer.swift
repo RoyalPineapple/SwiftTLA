@@ -3,16 +3,41 @@
 /// state, so a component without a direct PlusCal spelling is reported rather
 /// than approximated.
 public struct AlgorithmPlusCalRenderDiagnostic: Error, Sendable, Hashable, CustomStringConvertible {
+    /// The rendering capability that could not be satisfied.
+    public let failedConcept: String
+    /// Canonical Algorithm IR path of the unsupported node.
     public let path: String
-    public let node: String
+    /// The direct PlusCal spelling or renderer capability that was required.
+    public let expected: String
+    /// The actual Algorithm IR node encountered by the renderer.
+    public let actual: String
+    /// Rendering is pure: a diagnostic never creates semantics or changes state.
+    public let stateChange: StateChange
+    public let nextSafeAction: String
 
-    public init(path: String, node: String) {
+    public enum StateChange: String, Sendable, Hashable {
+        case none
+    }
+
+    public init(
+        failedConcept: String,
+        path: String,
+        expected: String,
+        actual: String,
+        nextSafeAction: String,
+        stateChange: StateChange = .none
+    ) {
+        self.failedConcept = failedConcept
         self.path = path
-        self.node = node
+        self.expected = expected
+        self.actual = actual
+        self.nextSafeAction = nextSafeAction
+        self.stateChange = stateChange
     }
 
     public var description: String {
-        "Cannot render Algorithm source node '\(node)' at \(path) as PlusCal."
+        "PlusCal rendering failed: \(failedConcept). Path: \(path). Expected: \(expected). "
+            + "Actual: \(actual). State change: \(stateChange.rawValue). Next safe action: \(nextSafeAction)"
     }
 }
 
@@ -59,11 +84,19 @@ internal struct AlgorithmPlusCalRenderer {
             case .stateConstraint(let constraint):
                 lines.append("\\* StateConstraint == \(expression(constraint))")
             case .fairness:
-                throw AlgorithmPlusCalRenderDiagnostic(path: "components[\(index)]", node: "fairness declaration")
+                // Only AlgorithmFairness belongs to a PlusCal process header.
+                // A generic TLA+ fairness condition has no direct source-level
+                // PlusCal spelling in this IR, so preserve the no-semantics
+                // boundary with a complete diagnostic.
+                throw unsupported(
+                    path: "components[\(index)]",
+                    expected: "a process fairness modifier (`fair process` or `fair+ process`)",
+                    actual: "top-level fairness declaration"
+                )
             case .local:
-                throw AlgorithmPlusCalRenderDiagnostic(path: "components[\(index)]", node: "top-level local declaration")
+                throw unsupported(path: "components[\(index)]", expected: "a process or procedure local declaration", actual: "top-level local declaration")
             case .propertyBoundary:
-                throw AlgorithmPlusCalRenderDiagnostic(path: "components[\(index)]", node: "property boundary")
+                throw unsupported(path: "components[\(index)]", expected: "a directly renderable PlusCal declaration", actual: "property boundary")
             }
         }
 
@@ -121,15 +154,15 @@ internal struct AlgorithmPlusCalRenderer {
             case .invariant(let invariant):
                 lines.append("  \\* Invariant \(invariant.name) == \(expression(invariant.body))")
             case .temporal:
-                throw AlgorithmPlusCalRenderDiagnostic(path: "\(path).components[\(index)]", node: "process temporal property")
+                throw unsupported(path: "\(path).components[\(index)]", expected: "a process statement or local declaration", actual: "process temporal property")
             case .fairness:
-                throw AlgorithmPlusCalRenderDiagnostic(path: "\(path).components[\(index)]", node: "process fairness declaration")
+                throw unsupported(path: "\(path).components[\(index)]", expected: "the process fairness modifier (`fair` or `fair+`)", actual: "nested process fairness declaration")
             case .stateConstraint:
-                throw AlgorithmPlusCalRenderDiagnostic(path: "\(path).components[\(index)]", node: "process state constraint")
+                throw unsupported(path: "\(path).components[\(index)]", expected: "a process statement or local declaration", actual: "process state constraint")
             case .propertyBoundary:
-                throw AlgorithmPlusCalRenderDiagnostic(path: "\(path).components[\(index)]", node: "property boundary")
+                throw unsupported(path: "\(path).components[\(index)]", expected: "a process statement or local declaration", actual: "property boundary")
             case .shared, .process, .procedure:
-                throw AlgorithmPlusCalRenderDiagnostic(path: "\(path).components[\(index)]", node: "nested algorithm component")
+                throw unsupported(path: "\(path).components[\(index)]", expected: "a process statement or local declaration", actual: "nested algorithm component")
             }
         }
         lines.append("end process;")
@@ -222,6 +255,16 @@ internal struct AlgorithmPlusCalRenderer {
 
     private func set(_ values: [TLAValue]) -> String {
         "{\(values.map(\.description).joined(separator: ", "))}"
+    }
+
+    private func unsupported(path: String, expected: String, actual: String) -> AlgorithmPlusCalRenderDiagnostic {
+        AlgorithmPlusCalRenderDiagnostic(
+            failedConcept: "semantic-free PlusCal source rendering",
+            path: path,
+            expected: expected,
+            actual: actual,
+            nextSafeAction: "Use the supported direct PlusCal form, or extend the renderer with a syntax-only spelling before retrying."
+        )
     }
 
     private func moduleName(_ name: String) -> String {
