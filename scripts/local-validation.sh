@@ -132,12 +132,14 @@ watchdog() {
 
 run_guarded() {
     local status=0
+    if [[ "$mode" == "static" ]]; then
+        git diff --check
+        return
+    fi
+
     scratch_dir="$(mktemp -d "${TMPDIR:-/tmp}/swifttla-local-validation.XXXXXX")"
     set -m
     case "$mode" in
-        static)
-            git diff --check &
-            ;;
         swiftpm-test)
             swift test --filter "$selector" -j 1 --scratch-path "$scratch_dir/.build" &
             ;;
