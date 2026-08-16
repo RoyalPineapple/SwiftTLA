@@ -661,9 +661,9 @@ public struct FormalOperatorDecl: SpecComponent, Equatable {
 public func FormalDefinition(
   _ name: String,
   parameters: [FormalParameter],
-  body: StateExpr
+  body: some StateExprConvertible
 ) -> FormalOperatorDecl {
-  FormalOperatorDecl(FormalOperatorDefinition(name: name, parameters: parameters, body: body))
+  FormalOperatorDecl(FormalOperatorDefinition(name: name, parameters: parameters, body: body.stateExpr))
 }
 public struct TheoremDecl: SpecComponent, Equatable {
   public let tlaText: String

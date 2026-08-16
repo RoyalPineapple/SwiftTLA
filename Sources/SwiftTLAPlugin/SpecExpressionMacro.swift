@@ -58,7 +58,7 @@ private final class DeclarationRegistrationRewriter: SyntaxRewriter {
               let name = binding.pattern.as(IdentifierPatternSyntax.self)?.identifier.text,
               let initializer = binding.initializer?.value.as(FunctionCallExprSyntax.self),
               let called = initializer.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text,
-              called == "SharedVar" || called == "LocalVar"
+              called == "SharedVar" || called == "LocalVar" || called == "LetRec"
         else { return (item, nil) }
 
         let hasExplicitName = initializer.arguments.contains {

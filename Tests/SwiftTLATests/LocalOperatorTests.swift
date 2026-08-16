@@ -2,9 +2,106 @@ import Testing
 import SwiftParser
 import SwiftSyntax
 @testable import SwiftTLA
+import SwiftTLAMacros
+
+@TLAModel
+private struct GeneratedTypedLocalRecursionModel {
+  static var spec: TLASpec {
+    #spec("GeneratedTypedLocalRecursionModel") {
+      FormalDefinition(
+        "CountDown",
+        parameters: [.value("limit")],
+        body: LetRec("Count", taking: Int.self, { (recursion: LocalRecursion<Int, Int>, number: WithValue<Int>) in
+          If(number == 0, then: 0, else: recursion(number.expr - 1))
+        }, in: { recursion in recursion(limit) })
+      )
+      Algorithm("GeneratedTypedLocalRecursionModel") {
+        let counter = SharedVar(initial: 0)
+        Do("advance") {
+          Assign(counter, to: counter.expr + 1)
+        }
+      }
+    }
+  }
+}
 
 @Suite("Local TLA+ operators")
 struct LocalOperatorTests {
+  @Test("typed unary LET recursion captures state and retains quantifier scope")
+  func typedLocalRecursionUsesExistingLetInSemantics() throws {
+    let limit = Var<Int>("limit")
+    let expression: Expr<Int> = LetRec("SumTo", taking: Int.self, { (recursion: LocalRecursion<Int, Int>, number: WithValue<Int>) in
+      If(
+        number == limit,
+        then: 0,
+        else: recursion(number.expr + 1)
+      )
+    }, in: { recursion in
+      recursion(0)
+    })
+
+    #expect(try expression.stateExpr.evaluate(in: ["limit": .int(4)]) == .int(0))
+    #expect(expression.stateExpr.description.contains("LET RECURSIVE SumTo(_)"))
+  }
+
+  @Test("#spec preserves typed local recursion through generated model parsing")
+  func generatedModelRetainsTypedLocalRecursion() throws {
+    GeneratedTypedLocalRecursionModel._checkParserTree()
+    let body = try #require(GeneratedTypedLocalRecursionModel.spec.formalOperatorDefinitions.first?.body)
+    #expect(body.description.contains("LET RECURSIVE Count(_)"))
+
+    var model = GeneratedTypedLocalRecursionModel()
+    #expect(try model.apply(.advance).after.counter == 1)
+  }
+
+  @Test("typed local recursion is parser-fidelitous and preserves ForAll and Exists")
+  func parserRetainsTypedLocalRecursion() {
+    let source = """
+    {
+      FormalDefinition(
+        "Bounded",
+        parameters: [.value("limit")],
+        body: LetRec("AtMost", taking: Int.self, { (recursion: LocalRecursion<Int, Bool>, number: WithValue<Int>) in
+          If(number == 0, then: true, else: Exists(in: IntRange(0, through: number.expr - 1)) { prior in
+            recursion(prior.expr) && ForAll(in: IntRange(0, through: number.expr)) { candidate in
+              candidate <= number.expr
+            }
+          })
+        }, in: { recursion in recursion(limit) })
+      )
+    }
+    """
+    let closure = Parser.parse(source: source).statements.first!.item.as(ClosureExprSyntax.self)!
+    let parsed = SpecParser.parseSpecClosure(closure)
+
+    #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
+    #expect(parsed.formalOperatorDefinitions.count == 1)
+    let body = parsed.formalOperatorDefinitions[0].body
+    guard case .letIn(let operators, let call) = body else {
+      Issue.record("Expected a local LET expression")
+      return
+    }
+    #expect(operators.count == 1)
+    #expect(operators[0].name == "AtMost")
+    #expect(operators[0].parameters == ["number"])
+    #expect(operators[0].body.description.contains("\\E"))
+    #expect(operators[0].body.description.contains("\\A"))
+    #expect(call.description == "AtMost(limit)")
+  }
+
+  @Test("malformed typed local recursion is rejected structurally")
+  func parserRejectsMalformedTypedLocalRecursion() {
+    let source = """
+    {
+      FormalDefinition("Bad", parameters: [], body: LetRec("Loop", taking: Int.self, { recursion in recursion(0) }, in: { recursion in recursion(0) }))
+    }
+    """
+    let closure = Parser.parse(source: source).statements.first!.item.as(ClosureExprSyntax.self)!
+    let parsed = SpecParser.parseSpecClosure(closure)
+
+    #expect(parsed.diagnostics.contains { $0.message.contains("FormalDefinition requires") })
+  }
+
   @Test("LET operators evaluate recursively and shadow outer operators")
   func evaluatesLocalRecursiveOperator() throws {
     let sumTo = LocalOperator(
