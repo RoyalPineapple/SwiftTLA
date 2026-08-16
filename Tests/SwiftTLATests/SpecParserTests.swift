@@ -801,7 +801,7 @@ private enum ParserNode: String, FiniteDomainKey {
             FormalDefinition(
                 "InitialState",
                 parameters: [],
-                body: Function<Key, Int>.mapping { _ in 0 }
+                body: Function<Key, Int>.mapping { _ in 0 }.raw
             )
         }
         """

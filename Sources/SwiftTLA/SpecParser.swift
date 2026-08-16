@@ -593,6 +593,7 @@ public enum SpecParser {
            let baseSyntax = member.base,
            let base = decodeTypedFacadeValue(baseSyntax, substitutions: substitutions) {
             switch member.declName.baseName.text {
+            case "raw": return base
             case "cardinality": return .cardinality(base)
             case "range":
                 return .operatorApplication(.reference("Range", arity: 1), [.value(base)])
