@@ -10,7 +10,8 @@ struct VoteProofMigrationTests {
         #expect(bundle.root.tla.contains("C == INSTANCE Consensus"))
         #expect(bundle.imports.map(\.name).contains("Consensus"))
         #expect(bundle.root.tla.contains("SafeAt(value0, value1) =="))
-        #expect(bundle.root.tla.contains("LET RECURSIVE SA("))
+        #expect(bundle.root.tla.contains("LET SA["))
+        #expect(bundle.root.tla.contains("IN SA[value0]"))
         #expect(bundle.root.tla.contains("ChosenIn(b, v) =="))
         #expect(bundle.root.tla.contains("Refines == C!Spec"))
 
