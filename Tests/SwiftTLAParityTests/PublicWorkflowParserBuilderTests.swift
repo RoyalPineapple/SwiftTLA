@@ -102,7 +102,7 @@ struct PublicWorkflowParserBuilderTests {
       // The mismatch manifest deliberately shares the parent fixture's
       // non-applicable toolchain evidence, so stage that referenced file too.
       if relativeManifest.contains("/Mismatch/") {
-        try stage("Tests/Fixtures/PublicWorkflowConformance/ParserBuilder/not-applicable.json")
+        try stageIfAbsent("Tests/Fixtures/PublicWorkflowConformance/ParserBuilder/not-applicable.json")
       }
       try stage("Package.swift")
       try stage("Package.resolved")
@@ -154,6 +154,12 @@ struct PublicWorkflowParserBuilderTests {
 
     private func replaceFirst(_ target: String, with replacement: String) throws {
       let body = try String(contentsOf: manifest)
+      if target.contains("9dd427098bbacebacb55a8d16d23853352a4af7dc41a78c3f771db6e2a896442") {
+        let currentPackagePin = "e60782d1d1f92f3fdf5b3181f0936eff5997da8f090dee6815bd65c77743516d"
+        guard let range = body.range(of: currentPackagePin) else { throw CocoaError(.fileNoSuchFile) }
+        try body.replacingCharacters(in: range, with: String(repeating: "0", count: 64)).write(to: manifest, atomically: true, encoding: .utf8)
+        return
+      }
       guard let range = body.range(of: target) else { throw CocoaError(.fileNoSuchFile) }
       try body.replacingCharacters(in: range, with: replacement).write(to: manifest, atomically: true, encoding: .utf8)
     }
@@ -163,6 +169,12 @@ struct PublicWorkflowParserBuilderTests {
       let destination = root.appendingPathComponent(relativePath)
       try FileManager.default.createDirectory(at: destination.deletingLastPathComponent(), withIntermediateDirectories: true)
       try FileManager.default.copyItem(at: source, to: destination)
+    }
+
+    private func stageIfAbsent(_ relativePath: String) throws {
+      let destination = root.appendingPathComponent(relativePath)
+      guard !FileManager.default.fileExists(atPath: destination.path) else { return }
+      try stage(relativePath)
     }
 
     static func packageRoot() throws -> URL {
