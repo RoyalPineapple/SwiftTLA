@@ -448,10 +448,11 @@ public enum SpecParser {
         }
         if let call = expression.as(FunctionCallExprSyntax.self),
            (typedLiteralType(call.calledExpression)?.name == "FormalCall"
-             || call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "FormalCall"),
-           let argumentsSyntax = Array(call.arguments).filter { $0.label?.text != "as" },
-           let name = argumentsSyntax.first?.expression.as(StringLiteralExprSyntax.self)?
-            .segments.compactMap({ $0.as(StringSegmentSyntax.self)?.content.text }).joined() {
+             || call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "FormalCall") {
+            let argumentsSyntax = Array(call.arguments).filter { $0.label?.text != "as" }
+            guard let name = argumentsSyntax.first?.expression.as(StringLiteralExprSyntax.self)?
+                .segments.compactMap({ $0.as(StringSegmentSyntax.self)?.content.text }).joined()
+            else { return nil }
             let arguments = argumentsSyntax.dropFirst().compactMap {
                 decodeTypedFacadeValue($0.expression, substitutions: substitutions)
             }
