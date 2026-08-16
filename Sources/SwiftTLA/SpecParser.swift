@@ -798,11 +798,24 @@ public enum SpecParser {
                   entry.arguments.count == 2,
                   let field = entry.arguments.first.flatMap({ typedFieldName($0.expression) }),
                   fields[field] == nil,
-                  let value = entry.arguments.dropFirst().first.flatMap({ decodeTypedFacadeValue($0.expression, substitutions: substitutions) })
+                  let value = entry.arguments.dropFirst().first.flatMap({
+                      decodeTypedFacadeValue($0.expression, substitutions: substitutions)
+                          ?? decodeUniqueUnqualifiedEnumCase($0.expression)
+                  })
             else { return nil }
             fields[field] = value
         }
         return .recordLiteral(fields)
+    }
+
+    /// A record literal can omit an enum type when the field's Swift context
+    /// supplies it. The syntax parser has no type checker, so accept that
+    /// spelling only when its formal enum value is globally unambiguous.
+    static func decodeUniqueUnqualifiedEnumCase(_ expression: ExprSyntax) -> StateExpr? {
+        guard let member = expression.as(MemberAccessExprSyntax.self), member.base == nil else { return nil }
+        let matches = _enumPhases.values.compactMap { $0[member.declName.baseName.text] }
+        guard matches.count == 1, let value = matches.first else { return nil }
+        return .value(value)
     }
 
     static func decodeTypedSetLiteral(

@@ -146,12 +146,13 @@ extension SpecParser {
         }
 
         public init<Node: SyntaxProtocol>(message: String, source: Node) {
+            let fragment = source.description.trimmingCharacters(in: .whitespacesAndNewlines)
             self.init(
                 message: message,
-                source: source.description,
+                source: fragment,
                 sourceSpan: SourceSpan(
                     location: .utf8Offset(source.positionAfterSkippingLeadingTrivia.utf8Offset),
-                    utf8Length: source.description.utf8.count
+                    utf8Length: fragment.utf8.count
                 )
             )
         }
@@ -239,12 +240,11 @@ extension SpecParser {
 
             let args = Array(fc.arguments)
 
-            if callName == "Var" && args.count < 2 {
-                guard let varTypeName,
-                      ["Function<", "Record<", "SetExpr<"].contains(where: varTypeName.contains),
-                      let name = args.first?.expression.as(StringLiteralExprSyntax.self)?.segments.description
-                        .replacingOccurrences(of: "\"", with: "")
-                else { continue }
+            if callName == "Var" && args.count < 2,
+               let varTypeName,
+               ["Function<", "Record<", "SetExpr<"].contains(where: varTypeName.contains),
+               let name = args.first?.expression.as(StringLiteralExprSyntax.self)?.segments.description
+                .replacingOccurrences(of: "\"", with: "") {
                 result.variables.append((name, .int(0), nil, varTypeName))
                 continue
             }

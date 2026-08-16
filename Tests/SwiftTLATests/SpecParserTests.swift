@@ -339,9 +339,15 @@ private func parseExpression(_ source: String) -> ExprSyntax {
 
         #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
         #expect(parsed.variables.first?.name == "cars")
-        #expect(parsed.variables.first?.initial.description.contains("[__pcal_function_key") == true)
-        #expect(parsed.variables.first?.initial.description.contains("floor") == true)
-        #expect(parsed.variables.first?.initial.description.contains("door") == true)
+        guard case .function(let cars) = parsed.variables.first?.initial else {
+            Issue.record("Expected cars to retain a formal finite function")
+            return
+        }
+        #expect(cars.count == 2)
+        #expect(cars.values.allSatisfy { value in
+            guard case .record(let fields) = value else { return false }
+            return fields["floor"] == .int(4) && fields["door"] == .string("closed")
+        })
     }
 
     @Test("parser retains a typed finite function literal with its bound key")
@@ -995,7 +1001,7 @@ private enum ParserNode: String, FiniteDomainKey {
     @Test func parseAt() {
         #expect(
             SpecParser.decodeStateExpr(parseExpression("t.at(3)"))
-                == StateExpr.tupleDynamicAccess(.variable("t"), .int(3))
+                == StateExpr.tupleAccess(.variable("t"), 3)
         )
     }
 }

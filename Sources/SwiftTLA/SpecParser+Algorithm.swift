@@ -49,19 +49,19 @@ extension SpecParser {
             }
             if case .decl(let declaration) = statement.item,
                let variable = declaration.as(VariableDeclSyntax.self),
-               let value = parseAlgorithmLexicalValue(variable) {
-                lexicalValues[value.name] = value.value
-                _constants[value.name] = value.value
-                continue
-            }
-            if case .decl(let declaration) = statement.item,
-               let variable = declaration.as(VariableDeclSyntax.self),
                let component = parseAlgorithmVariableDeclaration(variable, expectedKind: "SharedVar") {
                 components.append(component)
                 if case .shared(let state) = component,
                    state.swiftTypeName?.hasPrefix("TupleExpr<") == true {
                     _algorithmTupleVariables.insert(state.root)
                 }
+                continue
+            }
+            if case .decl(let declaration) = statement.item,
+               let variable = declaration.as(VariableDeclSyntax.self),
+               let value = parseAlgorithmLexicalValue(variable) {
+                lexicalValues[value.name] = value.value
+                _constants[value.name] = value.value
                 continue
             }
             guard case .expr(let expression) = statement.item else {
