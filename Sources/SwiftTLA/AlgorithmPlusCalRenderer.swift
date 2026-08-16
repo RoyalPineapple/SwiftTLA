@@ -398,9 +398,9 @@ internal struct AlgorithmPlusCalRenderer {
     private func temporals(in components: [AlgorithmComponentModel]) -> [NamedTemporal] {
         components.flatMap { component in
             switch component {
-            case .temporal(let temporal): [temporal]
-            case .process(let process): temporals(in: process.components)
-            case .shared, .procedure, .invariant, .fairness, .stateConstraint, .local, .step, .propertyBoundary: []
+            case .temporal(let temporal): return [temporal]
+            case .process(let process): return temporals(in: process.components)
+            case .shared, .procedure, .invariant, .fairness, .stateConstraint, .local, .step, .propertyBoundary: return []
             }
         }
     }
