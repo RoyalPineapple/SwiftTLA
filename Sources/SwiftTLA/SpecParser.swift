@@ -466,6 +466,16 @@ public enum SpecParser {
             return .operatorApplication(.reference("Range", arity: 1), [.value(value)])
         }
         if let call = expression.as(FunctionCallExprSyntax.self),
+           call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "InjectiveSequence",
+           let valuesSyntax = call.arguments.first(where: { $0.label?.text == "from" })?.expression,
+           let values = decodeTypedFacadeValue(valuesSyntax, substitutions: substitutions) {
+            return .choose(
+                .functionSet(.integerRange(.int(1), .cardinality(values)), values),
+                "f",
+                .operatorApplication(.reference("IsInjective", arity: 1), [.value(.variable("f"))])
+            )
+        }
+        if let call = expression.as(FunctionCallExprSyntax.self),
            (typedLiteralType(call.calledExpression)?.name == "ModuleCall"
              || call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "ModuleCall"),
            call.arguments.count >= 2 {

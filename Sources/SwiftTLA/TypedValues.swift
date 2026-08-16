@@ -168,6 +168,21 @@ public func Range<Domain: FiniteTLAValueDomain, Value: TLAValueType>(
   FormalCall("Range", function)
 }
 
+/// Chooses an injective sequence containing exactly the members of a formal set.
+///
+/// This is the standard TLA+ `CHOOSE f \in [1..Cardinality(S) -> S] :
+/// IsInjective(f)` expression. The choice remains symbolic in the formal
+/// specification; Swift does not evaluate it while the model is authored.
+public func InjectiveSequence<Element: TLAValueType>(
+  from values: Expr<SetExpr<Element>>
+) -> Expr<TupleExpr<Element>> {
+  Expr(.choose(
+    .functionSet(.integerRange(.int(1), .cardinality(values.raw)), values.raw),
+    "f",
+    .operatorApplication(.reference("IsInjective", arity: 1), [.value(.variable("f"))])
+  ))
+}
+
 /// The bounded formal function space from one finite domain to a finite set
 /// of values. `Functions(from:to:)` is a TLA+ function set, not a Swift
 /// dictionary or closure evaluated by the application.

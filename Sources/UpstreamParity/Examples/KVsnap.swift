@@ -115,22 +115,6 @@ public struct KVsnapModel {
                 parameters: [],
                 body: Function<Key, Value>.mapping { _ in Value.second(Expr<NoValue>(.noVal)) }.raw
             )
-            FormalDefinition(
-                "SetToSeq",
-                parameters: [.value("S")],
-                body: .choose(
-                    .functionSet(
-                        .integerRange(.int(1), .cardinality(.variable("S"))),
-                        .variable("S")
-                    ),
-                    "f",
-                    .operatorApplication(
-                        .reference("IsInjective", arity: 1),
-                        [.value(.variable("f"))]
-                    )
-                )
-            )
-
             Algorithm("KVsnap") {
                 let store: SharedVariable<Function<Key, Value>> = SharedVar(initial: FormalCall("InitialState"))
                 let tx = SharedVar(initial: SetExpr<Transaction>())
@@ -156,15 +140,16 @@ public struct KVsnapModel {
                     }
 
                     Do(Step.read) {
-                        let reads = readKeys.expr.mapping { key in
-                            ModuleCall<Record<OperationSchema>>(
-                                "CC", "r", key.expr, snapshotStore[key]
+                        let reads: Expr<SetExpr<Record<OperationSchema>>> = readKeys.expr.mapping { key in
+                            let read: Expr<Record<OperationSchema>> = ModuleCall(
+                                "CC", "r", key.expr, snapshotStore[key.expr]
                             )
+                            return read
                         }
                         Assign(
                             ops,
                             to: ops.expr.concatenating(
-                                FormalCall<TupleExpr<Record<OperationSchema>>>("SetToSeq", reads)
+                                InjectiveSequence(from: reads)
                             )
                         )
                     }
@@ -197,15 +182,16 @@ public struct KVsnapModel {
                                         else: store[key]
                                     )
                                 })
-                                let writes = writeKeys.expr.mapping { key in
-                                    ModuleCall<Record<OperationSchema>>(
+                                let writes: Expr<SetExpr<Record<OperationSchema>>> = writeKeys.expr.mapping { key in
+                                    let write: Expr<Record<OperationSchema>> = ModuleCall(
                                         "CC", "w", key.expr, Value.first(selfID.expr)
                                     )
+                                    return write
                                 }
                                 Assign(
                                     ops,
                                     to: ops.expr.concatenating(
-                                        FormalCall<TupleExpr<Record<OperationSchema>>>("SetToSeq", writes)
+                                        InjectiveSequence(from: writes)
                                     )
                                 )
                             }
@@ -213,11 +199,13 @@ public struct KVsnapModel {
                     }
 
                     Invariant("SnapshotIsolation") {
-                        ModuleCall<Bool>(
+                        let initial: Expr<Function<Key, Value>> = FormalCall("InitialState")
+                        let snapshotIsolation: Expr<Bool> = ModuleCall(
                             "CC", "SnapshotIsolation",
-                            FormalCall<Function<Key, Value>>("InitialState"),
+                            initial,
                             Range(ops.family(for: Transaction.self))
-                        ).raw
+                        )
+                        snapshotIsolation.raw
                     }
                 }
 
