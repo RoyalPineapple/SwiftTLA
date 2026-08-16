@@ -70,6 +70,7 @@ public enum AlgorithmConformanceRegistry {
     )
 
     public static let fixtures = [
+        k1ScopeBindingSubstitution,
         k2ScopedFormalLambda,
         k3SimultaneousAssignment,
         k4StructuredDoors,
