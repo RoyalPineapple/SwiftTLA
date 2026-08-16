@@ -191,6 +191,24 @@ For a declared finite case, canonical equivalence of graphs A and B is the
 admission evidence for that algorithm-lowering surface. The renderer must not
 invent semantics or reimplement lowering.
 
+## Capability claims use five levels
+
+SwiftTLA does not call a feature “supported” merely because an AST case or an
+evaluator branch exists. Every capability has five independent levels:
+
+| Level | Meaning |
+|---|---|
+| Implemented | The engine can represent, evaluate, lower, or emit the concept. |
+| Canonically authorable | A developer can express it through `#spec` and `Algorithm` without escaping to direct TLA+. |
+| Fidelity-checked | The macro parser and constrained builder demonstrably retain the same formal model. |
+| Generated cleanly | The model produces typed public state, actions, results, and generated tests. |
+| Externally admitted | A declared finite model/configuration has retained TLC comparison evidence. |
+
+An implementation-level result never implies the next level. For example,
+formal operator application can exist in the evaluator while its canonical
+Algorithm spelling, generated machine, or imported-module TLC witness remains
+in progress. Reports state the achieved level and the next missing boundary.
+
 For selected finite core models, the core-conformance command compares the
 complete labeled transition relation from SwiftTLA with a pinned TLC run. This
 includes initial states, state bindings, action labels, edges, and outcomes.
