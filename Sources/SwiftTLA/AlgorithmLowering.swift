@@ -95,7 +95,7 @@ enum AlgorithmLowerer {
             partial.map { .and($0, constraint) } ?? constraint
         }
 
-        var variables = try shared.map { state in
+        var variables = shared.map { state in
             if let initial = try? state.initial.evaluate(
                 in: [:],
                 formalOperatorDefinitions: formalOperatorDefinitions
@@ -327,7 +327,7 @@ enum AlgorithmLowerer {
             partial.map { .and($0, constraint) } ?? constraint
         }
 
-        let sharedVariables = try shared.map { state in
+        let sharedVariables = shared.map { state in
             if let initial = try? state.initial.evaluate(
                 in: [:],
                 formalOperatorDefinitions: formalOperatorDefinitions
