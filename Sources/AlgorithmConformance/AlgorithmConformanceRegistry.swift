@@ -69,7 +69,7 @@ public enum AlgorithmConformanceRegistry {
         specification: { K4StructuredTLCWitness.spec }
     )
 
-    public static let fixtures = [k4StructuredDoors]
+    public static let fixtures = [k4StructuredDoors, k5ProcedureCallReturn]
 
     public static func fixture(id: String) -> AlgorithmConformanceFixture? {
         fixtures.first { $0.id == id }

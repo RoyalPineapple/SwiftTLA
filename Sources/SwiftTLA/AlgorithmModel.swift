@@ -35,7 +35,7 @@ internal struct AlgorithmModel: Sendable {
 /// `TLASpec`. It is retained solely to make parser/builder fidelity checks
 /// observe source-level distinctions that lowering can erase.
 public struct AlgorithmFidelityToken: Sendable, Hashable {
-    fileprivate let canonicalForm: String
+    let canonicalForm: String
 
     internal init(model: AlgorithmModel) {
         canonicalForm = algorithmCanonicalEncoding(model)
