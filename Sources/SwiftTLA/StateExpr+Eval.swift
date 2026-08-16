@@ -1114,6 +1114,13 @@ extension StateExpr {
         lowerLocalFunctionApplications: [String: String] = [:]
     ) -> StateExpr {
         var activeLocalFunctionApplications = lowerLocalFunctionApplications
+        func visitUnderBindings(_ names: Set<String>, _ expression: StateExpr) -> StateExpr {
+            let outerApplications = activeLocalFunctionApplications
+            activeLocalFunctionApplications = outerApplications.filter { !names.contains($0.key) }
+            let result = visit(expression)
+            activeLocalFunctionApplications = outerApplications
+            return result
+        }
         func visit(_ expression: StateExpr) -> StateExpr {
             switch expression {
             case .value, .variable, .enabledAction: return expression
@@ -1141,8 +1148,8 @@ extension StateExpr {
             case .intersection(let a, let b): return .intersection(visit(a), visit(b))
             case .setDifference(let a, let b): return .setDifference(visit(a), visit(b))
             case .cardinality(let value): return .cardinality(visit(value))
-            case .setFilter(let set, let name, let body): return .setFilter(visit(set), name, visit(body))
-            case .setMap(let value, let name, let set): return .setMap(visit(value), name, visit(set))
+            case .setFilter(let set, let name, let body): return .setFilter(visit(set), name, visitUnderBindings([name], body))
+            case .setMap(let value, let name, let set): return .setMap(visitUnderBindings([name], value), name, visit(set))
             case .powerSet(let value): return .powerSet(visit(value))
             case .unionAll(let value): return .unionAll(visit(value))
             case .integerRange(let lower, let upper): return .integerRange(visit(lower), visit(upper))
@@ -1157,7 +1164,7 @@ extension StateExpr {
             case .recordLiteral(let fields): return .recordLiteral(fields.mapValues(visit))
             case .recordAccess(let value, let field): return .recordAccess(visit(value), field)
             case .domain(let value): return .domain(visit(value))
-            case .functionLiteral(let domain, let name, let body): return .functionLiteral(visit(domain), name, visit(body))
+            case .functionLiteral(let domain, let name, let body): return .functionLiteral(visit(domain), name, visitUnderBindings([name], body))
             case .functionApply(.variable(let name), let value):
                 if let localName = activeLocalFunctionApplications[name] {
                     return .recursiveCall(localName, [visit(value)])
@@ -1166,15 +1173,15 @@ extension StateExpr {
             case .functionApply(let function, let value): return .functionApply(visit(function), visit(value))
             case .except(let function, let value, let update): return .except(visit(function), visit(value), visit(update))
             case .caseExpr(let pairs, let fallback): return .caseExpr(pairs.map(visit), fallback.map(visit))
-            case .forAll(let set, let name, let body): return .forAll(visit(set), name, visit(body))
-            case .exists(let set, let name, let body): return .exists(visit(set), name, visit(body))
-            case .choose(let set, let name, let body): return .choose(visit(set), name, visit(body))
+            case .forAll(let set, let name, let body): return .forAll(visit(set), name, visitUnderBindings([name], body))
+            case .exists(let set, let name, let body): return .exists(visit(set), name, visitUnderBindings([name], body))
+            case .choose(let set, let name, let body): return .choose(visit(set), name, visitUnderBindings([name], body))
             case .sequenceFromSet(let value): return .sequenceFromSet(visit(value))
             case .setSum(let function, let set): return .setSum(visit(function), visit(set))
             case .functionSet(let domain, let range): return .functionSet(visit(domain), visit(range))
             case .foldFunction(let operation, let initial, let sequence):
                 return .foldFunction(
-                    FormalLambda(parameters: operation.parameters, body: visit(operation.body)),
+                    FormalLambda(parameters: operation.parameters, body: visitUnderBindings(Set(operation.parameters), operation.body)),
                     initial: visit(initial),
                     sequence: visit(sequence)
                 )
@@ -1183,7 +1190,7 @@ extension StateExpr {
                 switch operation {
                 case .lambda(let lambda):
                     renamedOperator = .lambda(
-                        FormalLambda(parameters: lambda.parameters, body: visit(lambda.body))
+                        FormalLambda(parameters: lambda.parameters, body: visitUnderBindings(Set(lambda.parameters), lambda.body))
                     )
                 case .reference(let name, let arity):
                     renamedOperator = .reference(rename(name), arity: arity)
@@ -1196,7 +1203,7 @@ extension StateExpr {
                     case .operator(.lambda(let lambda)):
                         return FormalCallArgument.operator(.lambda(FormalLambda(
                             parameters: lambda.parameters,
-                            body: visit(lambda.body)
+                            body: visitUnderBindings(Set(lambda.parameters), lambda.body)
                         )))
                     }
                 }
@@ -1218,7 +1225,7 @@ extension StateExpr {
                 return .operatorApplication(renamedOperator, renamedArguments)
             case .recursiveCall(let name, let arguments): return .recursiveCall(rename(name), arguments.map(visit))
             case .letValue(let name, let value, let body):
-                return .letValue(name, visit(value), visit(body))
+                return .letValue(name, visit(value), visitUnderBindings([name], body))
             case .letIn(let operators, let body):
                 let shadowed = Set(operators.map(\.name))
                 let nestedApplications = activeLocalFunctionApplications.filter { !shadowed.contains($0.key) }
@@ -1234,7 +1241,7 @@ extension StateExpr {
                     operation.domain.map(visit)
                 }
                 activeLocalFunctionApplications = localApplications
-                let bodies = operators.map { visit($0.body) }
+                let bodies = operators.map { visitUnderBindings(Set($0.parameters), $0.body) }
                 let loweredBody = visit(body)
                 activeLocalFunctionApplications = outerApplications
                 return .letIn(

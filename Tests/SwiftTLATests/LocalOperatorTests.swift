@@ -88,8 +88,8 @@ struct LocalOperatorTests {
     #expect(operators[0].domain == .integerRange(.int(0), .variable("limit")))
     #expect(operators[0].body.description.contains("\\E"))
     #expect(operators[0].body.description.contains("\\A"))
-    #expect(operators[0].body.description.contains("AtMost("))
-    #expect(call.description == "AtMost(limit)")
+    #expect(operators[0].body.description.contains("AtMost["))
+    #expect(call.description == "AtMost[limit]")
   }
 
   @Test("bounded LET rejects arguments outside its declared domain")
@@ -112,6 +112,19 @@ struct LocalOperatorTests {
     ], .functionApply(.variable("Loop"), .int(0))))
 
     #expect(try expression.evaluate(in: [:]) == .int(10))
+  }
+
+  @Test("bounded LET lowering respects a shadowing value binding")
+  func boundedLocalRecursionLoweringRespectsValueShadow() throws {
+    let expression: StateExpr = .letIn([
+      LocalOperator("Loop", parameters: ["value"], domain: .setLiteral([.int(0)]), body: .int(0))
+    ], .letValue(
+      "Loop",
+      .functionLiteral(.setLiteral([.int(0)]), "value", .add(.variable("value"), .int(20))),
+      .functionApply(.variable("Loop"), .int(0))
+    ))
+
+    #expect(try expression.evaluate(in: [:]) == .int(20))
   }
 
   @Test("malformed typed local recursion is rejected structurally")

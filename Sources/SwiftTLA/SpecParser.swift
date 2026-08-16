@@ -70,16 +70,8 @@ public enum SpecParser {
             name,
             parameters: [inputName],
             domain: domain,
-            body: StateExpr.renamingRecursiveCalls(
-                in: decodedDefinition,
-                using: { $0 },
-                lowerLocalFunctionApplications: [definitionParameters[0]: name]
-            )
-        )], StateExpr.renamingRecursiveCalls(
-            in: decodedBody,
-            using: { $0 },
-            lowerLocalFunctionApplications: [bodyParameters[0]: name]
-        ))
+            body: renameVar(definitionParameters[0], to: name, in: decodedDefinition)
+        )], renameVar(bodyParameters[0], to: name, in: decodedBody))
     }
 
     private static func isMetatype(_ expression: ExprSyntax) -> Bool {
