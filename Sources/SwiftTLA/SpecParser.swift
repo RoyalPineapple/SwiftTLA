@@ -8,8 +8,6 @@ import Foundation
 /// Tests live in SpecParserTests.
 public enum SpecParser {
 
-    private static let localRecursionMarker = "__swiftTLA_localRecursion_"
-
     /// Local constants collected during parsing (for `Value` / `let` bindings).
     nonisolated(unsafe) static var _constants: [String: TLAValue] = [:]
 
@@ -52,7 +50,11 @@ public enum SpecParser {
         guard definitionParameters.count == 2, bodyParameters.count == 1 else { return nil }
 
         let inputName = definitionParameters[1]
-        let recursiveReference = StateExpr.variable(localRecursionMarker + name)
+        // Keep the closure parameter as an ordinary scoped binding while the
+        // typed façade is decoded.  It is lowered to the local operator below
+        // using this lexical mapping; no synthetic identifier can leak into
+        // the formal tree or collide with author input.
+        let recursiveReference = StateExpr.variable(definitionParameters[0])
         let definitionSubstitutions = substitutions.merging([
             definitionParameters[0]: recursiveReference,
             inputName: .variable(inputName)
@@ -64,7 +66,20 @@ public enum SpecParser {
             definitionExpression, substitutions: definitionSubstitutions
         ), let decodedBody = decodeTypedFacadeValue(bodyExpression, substitutions: bodySubstitutions)
         else { return nil }
-        return .letIn([LocalOperator(name, parameters: [inputName], domain: domain, body: decodedDefinition)], decodedBody)
+        return .letIn([LocalOperator(
+            name,
+            parameters: [inputName],
+            domain: domain,
+            body: StateExpr.renamingRecursiveCalls(
+                in: decodedDefinition,
+                using: { $0 },
+                lowerLocalFunctionApplications: [definitionParameters[0]: name]
+            )
+        )], StateExpr.renamingRecursiveCalls(
+            in: decodedBody,
+            using: { $0 },
+            lowerLocalFunctionApplications: [bodyParameters[0]: name]
+        ))
     }
 
     private static func isMetatype(_ expression: ExprSyntax) -> Bool {
@@ -474,11 +489,12 @@ public enum SpecParser {
     ) -> StateExpr? {
         if let call = expression.as(FunctionCallExprSyntax.self),
            let reference = call.calledExpression.as(DeclReferenceExprSyntax.self),
-           case .variable(let name)? = substitutions[reference.baseName.text],
-           name.hasPrefix(localRecursionMarker),
+           let function = substitutions[reference.baseName.text],
            call.arguments.count == 1,
-           let input = call.arguments.first.flatMap({ decodeTypedFacadeValue($0.expression, substitutions: substitutions) }) {
-            return .functionApply(.variable(String(name.dropFirst(localRecursionMarker.count))), input)
+           let argument = call.arguments.first.flatMap({
+               decodeTypedFacadeValue($0.expression, substitutions: substitutions)
+           }) {
+            return .functionApply(function, argument)
         }
         if let reference = expression.as(DeclReferenceExprSyntax.self),
            let substitution = substitutions[reference.baseName.text] {
@@ -1226,10 +1242,12 @@ public enum SpecParser {
         } else {
             parameters = []
         }
+        let domain = call.arguments.first(where: { $0.label?.text == "domain" })
+            .flatMap { decodeStateExpr($0.expression) }
         guard let bodySyntax = call.arguments.first(where: { $0.label?.text == "body" })?.expression,
               let body = decodeStateExpr(bodySyntax)
         else { return nil }
-        return LocalOperator(name, parameters: parameters, body: body)
+        return LocalOperator(name, parameters: parameters, domain: domain, body: body)
     }
 
     /// Decodes formal operators as syntax, rather than Swift closures. This is

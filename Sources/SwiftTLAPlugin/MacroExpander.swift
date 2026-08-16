@@ -405,7 +405,8 @@ enum MacroExpander {
         case .letIn(let operators, let body):
             let definitions = operators.map { operation in
                 let parameters = operation.parameters.map { "\"\($0)\"" }.joined(separator: ", ")
-                return "LocalOperator(\"\(operation.name)\", parameters: [\(parameters)], body: \(cg(operation.body)))"
+                let domain = operation.domain.map { ", domain: \(cg($0))" } ?? ""
+                return "LocalOperator(\"\(operation.name)\", parameters: [\(parameters)]\(domain), body: \(cg(operation.body)))"
             }.joined(separator: ", ")
             return "StateExpr.letIn([\(definitions)], \(cg(body)))"
         }

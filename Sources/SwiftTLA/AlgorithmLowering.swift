@@ -1200,6 +1200,7 @@ enum AlgorithmLowerer {
                         LocalOperator(
                             operation.name,
                             parameters: operation.parameters,
+                            domain: operation.domain.map { rewritten($0, localRoots: localRoots) },
                             body: rewritten(
                                 operation.body,
                                 localRoots: localRoots.subtracting(operation.parameters)

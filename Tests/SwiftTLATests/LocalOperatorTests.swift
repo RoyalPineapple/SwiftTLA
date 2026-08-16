@@ -88,7 +88,30 @@ struct LocalOperatorTests {
     #expect(operators[0].domain == .integerRange(.int(0), .variable("limit")))
     #expect(operators[0].body.description.contains("\\E"))
     #expect(operators[0].body.description.contains("\\A"))
+    #expect(operators[0].body.description.contains("AtMost("))
     #expect(call.description == "AtMost(limit)")
+  }
+
+  @Test("bounded LET rejects arguments outside its declared domain")
+  func boundedLocalRecursionRejectsOutOfDomainArgument() {
+    let expression: StateExpr = .letIn([
+      LocalOperator("OnlyZero", parameters: ["value"], domain: .setLiteral([.int(0)]), body: .variable("value"))
+    ], .recursiveCall("OnlyZero", [.int(1)]))
+
+    #expect(throws: EvalError.self) {
+      try expression.evaluate(in: [:])
+    }
+  }
+
+  @Test("bounded LET lowering respects an inner operator shadow")
+  func boundedLocalRecursionLoweringRespectsInnerShadow() throws {
+    let expression: StateExpr = .letIn([
+      LocalOperator("Loop", parameters: ["value"], domain: .setLiteral([.int(0)]), body: .int(0))
+    ], .letIn([
+      LocalOperator("Loop", parameters: ["value"], domain: .setLiteral([.int(0)]), body: .add(.variable("value"), .int(10)))
+    ], .functionApply(.variable("Loop"), .int(0))))
+
+    #expect(try expression.evaluate(in: [:]) == .int(10))
   }
 
   @Test("malformed typed local recursion is rejected structurally")
@@ -140,11 +163,16 @@ struct LocalOperatorTests {
 
   @Test("the macro parser retains LET operator definitions")
   func parserRetainsLocalOperators() {
-    let source = "StateExpr.letIn([LocalOperator(\"Truth\", body: true)], true)"
+    let source = "StateExpr.letIn([LocalOperator(\"Truth\", parameters: [\"value\"], domain: StateExpr.integerRange(0, 1), body: true)], true)"
     let syntax = Parser.parse(source: source).statements.first!.item.as(ExprSyntax.self)!
     let parsed = SpecParser.decodeStateExpr(syntax)
     let expected: StateExpr = .letIn(
-      [LocalOperator("Truth", body: .bool(true))],
+      [LocalOperator(
+        "Truth",
+        parameters: ["value"],
+        domain: .integerRange(.int(0), .int(1)),
+        body: .bool(true)
+      )],
       .bool(true)
     )
 

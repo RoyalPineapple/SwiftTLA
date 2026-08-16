@@ -555,12 +555,13 @@ func stateKey(_ expression: StateExpr, environment: [String: String], next: inou
     case .letIn(let operators, let body):
         let declarations = operators.map { operation in
             var operatorEnvironment = environment
+            let domainKey = operation.domain.map { key($0, environment: operatorEnvironment) } ?? "unbounded"
             let parameterNames = operation.parameters.map { parameter -> String in
                 let (canonical, extended) = fresh(parameter, environment: operatorEnvironment, next: &next)
                 operatorEnvironment = extended
                 return canonical
             }
-            return "local(\(operation.name),[\(parameterNames.joined(separator: ","))],\(key(operation.body, environment: operatorEnvironment)))"
+            return "local(\(operation.name),[\(parameterNames.joined(separator: ","))],\(domainKey),\(key(operation.body, environment: operatorEnvironment)))"
         }.joined(separator: ",")
         return "letIn([\(declarations)],\(key(body)))"
     }

@@ -530,7 +530,10 @@ extension MacroExpander {
             walkStateExpr(value, visitor: visitor)
             walkStateExpr(body, visitor: visitor)
         case .letIn(let operators, let body):
-            operators.forEach { walkStateExpr($0.body, visitor: visitor) }
+            operators.forEach {
+                $0.domain.map { walkStateExpr($0, visitor: visitor) }
+                walkStateExpr($0.body, visitor: visitor)
+            }
             walkStateExpr(body, visitor: visitor)
         }
     }
@@ -787,6 +790,7 @@ extension MacroExpander {
                     LocalOperator(
                         operation.name,
                         parameters: operation.parameters,
+                        domain: operation.domain.map(sub),
                         body: operation.parameters.contains(name) ? operation.body : sub(operation.body)
                     )
                 },

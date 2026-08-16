@@ -800,7 +800,11 @@ extension StateExpr {
             guard Set(names).count == names.count else {
                 throw EvalError.typeMismatch("LET contains duplicate local operator names")
             }
-            let boundedNames = Set(operators.compactMap { $0.domain == nil ? nil : $0.name })
+            let boundedNames = Dictionary(
+                uniqueKeysWithValues: operators.compactMap { operation in
+                    operation.domain == nil ? nil : (operation.name, operation.name)
+                }
+            )
             let localFunctions = operators.map { operation in
                 let loweredBody = Self.renamingRecursiveCalls(
                     in: operation.body,
@@ -1107,8 +1111,9 @@ extension StateExpr {
         in expression: StateExpr,
         using rename: (String) -> String,
         lowerAnonymousLambdaApplications: Bool = false,
-        lowerLocalFunctionApplications: Set<String> = []
+        lowerLocalFunctionApplications: [String: String] = [:]
     ) -> StateExpr {
+        var activeLocalFunctionApplications = lowerLocalFunctionApplications
         func visit(_ expression: StateExpr) -> StateExpr {
             switch expression {
             case .value, .variable, .enabledAction: return expression
@@ -1153,8 +1158,11 @@ extension StateExpr {
             case .recordAccess(let value, let field): return .recordAccess(visit(value), field)
             case .domain(let value): return .domain(visit(value))
             case .functionLiteral(let domain, let name, let body): return .functionLiteral(visit(domain), name, visit(body))
-            case .functionApply(.variable(let name), let value) where lowerLocalFunctionApplications.contains(name):
-                return .recursiveCall(name, [visit(value)])
+            case .functionApply(.variable(let name), let value):
+                if let localName = activeLocalFunctionApplications[name] {
+                    return .recursiveCall(localName, [visit(value)])
+                }
+                return .functionApply(.variable(name), visit(value))
             case .functionApply(let function, let value): return .functionApply(visit(function), visit(value))
             case .except(let function, let value, let update): return .except(visit(function), visit(value), visit(update))
             case .caseExpr(let pairs, let fallback): return .caseExpr(pairs.map(visit), fallback.map(visit))
@@ -1212,16 +1220,33 @@ extension StateExpr {
             case .letValue(let name, let value, let body):
                 return .letValue(name, visit(value), visit(body))
             case .letIn(let operators, let body):
+                let shadowed = Set(operators.map(\.name))
+                let nestedApplications = activeLocalFunctionApplications.filter { !shadowed.contains($0.key) }
+                let boundedOperators = Dictionary(
+                    uniqueKeysWithValues: operators.compactMap { operation in
+                        operation.domain == nil ? nil : (operation.name, operation.name)
+                    }
+                )
+                let localApplications = nestedApplications.merging(boundedOperators) { _, inner in inner }
+                let outerApplications = activeLocalFunctionApplications
+                activeLocalFunctionApplications = nestedApplications
+                let domains = operators.map { operation in
+                    operation.domain.map(visit)
+                }
+                activeLocalFunctionApplications = localApplications
+                let bodies = operators.map { visit($0.body) }
+                let loweredBody = visit(body)
+                activeLocalFunctionApplications = outerApplications
                 return .letIn(
-                    operators.map { operation in
+                    zip(operators, zip(domains, bodies)).map { operation, lowered in
                         LocalOperator(
                             rename(operation.name),
                             parameters: operation.parameters,
-                            domain: operation.domain.map(visit),
-                            body: visit(operation.body)
+                            domain: lowered.0,
+                            body: lowered.1
                         )
                     },
-                    visit(body)
+                    loweredBody
                 )
             }
         }
