@@ -1325,7 +1325,7 @@ private func process<Value: FiniteDomainKey>(
     return AlgorithmElement(
         model: .process(
             AlgorithmProcessModel(
-                typeName: String(reflecting: Value.self),
+                typeName: String(describing: Value.self),
                 domain: domain.values.map(\.tlaValue),
                 fairness: fairness,
                 components: body(identifier).map(\.model)
