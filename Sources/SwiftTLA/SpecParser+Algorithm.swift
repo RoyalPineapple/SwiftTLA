@@ -185,7 +185,7 @@ extension SpecParser {
               parameters.count <= 2,
               (typeWitnesses.isEmpty || typeWitnesses[0].label?.text == "taking"),
               typeWitnesses.dropFirst().allSatisfy({ $0.label == nil }),
-              typeWitnesses.allSatisfy({ isAlgorithmMetatype($0.expression) })
+              typeWitnesses.allSatisfy({ isMetatype($0.expression) })
         else { return nil }
         let substitutions = Dictionary(uniqueKeysWithValues: parameters.map { ($0, StateExpr.variable($0)) })
         guard let body = decodeTypedFacadeValue(bodySyntax, substitutions: substitutions) else { return nil }
@@ -194,14 +194,6 @@ extension SpecParser {
             parameters: parameters.map(FormalParameter.value),
             body: body
         )
-    }
-
-    private static func isAlgorithmMetatype(_ expression: ExprSyntax) -> Bool {
-        guard let member = expression.as(MemberAccessExprSyntax.self),
-              member.declName.baseName.text == "self",
-              member.base != nil
-        else { return false }
-        return true
     }
 
     private static func algorithmStateDeclarations(in model: AlgorithmModel) -> [AlgorithmStateModel] {

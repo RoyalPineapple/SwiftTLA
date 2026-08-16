@@ -645,21 +645,19 @@ extension SpecParser {
         _ call: FunctionCallExprSyntax,
         into result: inout ParsedSpecComponents
     ) {
-        guard let name = extractStringArg(call, index: 0), !name.isEmpty,
-              let parametersSyntax = call.arguments.first(where: { $0.label?.text == "parameters" })?.expression,
-              let bodySyntax = call.arguments.first(where: { $0.label?.text == "body" })?.expression,
-              let parameters = parseFormalParameters(parametersSyntax),
-              let body = decodeTypedFacadeValue(bodySyntax, substitutions: [:])
-                ?? decodeStateExpr(bodySyntax)
+        guard let definition = decodedFormalDefinition(call)
         else {
             result.diagnostics.append(.init(
                 message: "FormalDefinition requires a name, supported formal parameters, and a formal body expression.",
                 source: call.description,
-                expected: "FormalDefinition(\"name\", parameters: [.value(\"value\")], body: expression)",
-                nextSafeAction: "Use FormalDefinition with .value or .operator parameters and a supported StateExpr body."
+                expected: "FormalDefinition(\"name\", parameters: [.value(\"value\")], body: expression) or FormalDefinition(\"name\", taking: Int.self) { value in expression }",
+                nextSafeAction: "Use the formal-parameter form or a unary/binary typed closure with supported formal expressions."
             ))
             return
         }
+        let name = definition.name
+        let parameters = definition.parameters
+        let body = definition.body
         guard !result.formalOperatorDefinitions.contains(where: { $0.name == name }) else {
             result.diagnostics.append(.init(
                 message: "FormalDefinition '\(name)' is declared more than once.",
@@ -676,6 +674,41 @@ extension SpecParser {
         }
         result.formalOperatorDefinitions.append(
             FormalOperatorDefinition(name: name, parameters: parameters, body: body)
+        )
+    }
+
+    private static func decodedFormalDefinition(
+        _ call: FunctionCallExprSyntax
+    ) -> FormalOperatorDefinition? {
+        guard let name = extractStringArg(call, index: 0), !name.isEmpty else { return nil }
+
+        if let parametersSyntax = call.arguments.first(where: { $0.label?.text == "parameters" })?.expression,
+           let bodySyntax = call.arguments.first(where: { $0.label?.text == "body" })?.expression,
+           let parameters = parseFormalParameters(parametersSyntax),
+           let body = decodeTypedFacadeValue(bodySyntax, substitutions: [:]) ?? decodeStateExpr(bodySyntax) {
+            return FormalOperatorDefinition(name: name, parameters: parameters, body: body)
+        }
+
+        guard let closure = call.trailingClosure,
+              closure.statements.count == 1,
+              case .expr(let bodySyntax) = closure.statements.first?.item
+        else { return nil }
+        let parameters = closureParameterNames(in: closure)
+        let typeWitnesses = Array(call.arguments.dropFirst())
+        guard (1...2).contains(parameters.count),
+              parameters.count == typeWitnesses.count,
+              typeWitnesses.first?.label?.text == "taking",
+              typeWitnesses.dropFirst().allSatisfy({ $0.label == nil }),
+              typeWitnesses.allSatisfy({ isMetatype($0.expression) })
+        else { return nil }
+        let substitutions = Dictionary(uniqueKeysWithValues: parameters.map {
+            ($0, StateExpr.variable($0))
+        })
+        guard let body = decodeTypedFacadeValue(bodySyntax, substitutions: substitutions) else { return nil }
+        return FormalOperatorDefinition(
+            name: name,
+            parameters: parameters.map(FormalParameter.value),
+            body: body
         )
     }
 

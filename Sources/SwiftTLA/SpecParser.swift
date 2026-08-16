@@ -74,7 +74,7 @@ public enum SpecParser {
         )], renameVar(bodyParameters[0], to: name, in: decodedBody))
     }
 
-    private static func isMetatype(_ expression: ExprSyntax) -> Bool {
+    static func isMetatype(_ expression: ExprSyntax) -> Bool {
         guard let member = expression.as(MemberAccessExprSyntax.self),
               member.declName.baseName.text == "self",
               member.base != nil

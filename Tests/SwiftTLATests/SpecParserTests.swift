@@ -932,6 +932,35 @@ private enum ParserNode: String, FiniteDomainKey {
         #expect(_tlaAlgorithmFidelityEvidence(parsed.algorithmFidelityTokens, [AlgorithmFidelityToken(model: built.model)]) == nil)
     }
 
+    @Test func typedFormalDefinitionParsesClosureBindersAndLocalRecursion() {
+        let source = """
+        {
+            FormalDefinition("SafeAt", taking: Int.self, Int.self) { ballot, limit in
+                LetRec("SA", over: IntRange(0, through: limit), taking: Int.self, { recursion, current in
+                    If(current == 0, then: true, else: recursion(current.expr - 1))
+                }, in: { recursion in recursion(ballot.expr) })
+            }
+        }
+        """
+        let closure = Parser.parse(source: source).statements.first!.item.as(ClosureExprSyntax.self)!
+        let parsed = SpecParser.parseSpecClosure(closure)
+
+        #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
+        guard let definition = parsed.formalOperatorDefinitions.first else {
+            Issue.record("Expected one typed formal definition.")
+            return
+        }
+        #expect(definition.parameters == [.value("ballot"), .value("limit")])
+        guard case .letIn(let operators, let result) = definition.body else {
+            Issue.record("Expected the typed formal body to retain its local recursive LET.")
+            return
+        }
+        #expect(operators.map(\.name) == ["SA"])
+        #expect(operators[0].parameters == ["current"])
+        #expect(operators[0].body.description.contains("SA["))
+        #expect(result.description == "SA[ballot]")
+    }
+
     @Test func formalOperatorLambdaAndArgumentKindsRoundTripThroughTheParser() {
         let expression = parseExpression("""
         StateExpr.operatorApplication(
