@@ -556,6 +556,7 @@ private func substituteInState(_ expr: StateExpr, constants: [String: TLAValue])
         return LocalOperator(
           operation.name,
           parameters: operation.parameters,
+          domain: operation.domain.map { substituteInState($0, constants: constants) },
           body: substituteInState(operation.body, constants: bodyConstants)
         )
       },

@@ -190,7 +190,8 @@ extension StateExpr {
     case .letIn(let operators, let body):
       let definitions = operators.map { operation in
         let parameters = operation.parameters.map { "\"\($0)\"" }.joined(separator: ", ")
-        return "LocalOperator(\"\(operation.name)\", parameters: [\(parameters)], body: \(operation.body.swiftSource))"
+        let domain = operation.domain.map { ", domain: \($0.swiftSource)" } ?? ""
+        return "LocalOperator(\"\(operation.name)\", parameters: [\(parameters)]\(domain), body: \(operation.body.swiftSource))"
       }.joined(separator: ", ")
       return "StateExpr.letIn([\(definitions)], \(body.swiftSource))"
     }

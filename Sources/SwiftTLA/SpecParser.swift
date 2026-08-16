@@ -37,6 +37,8 @@ public enum SpecParser {
               let name = extractStringArg(call, index: 0), !name.isEmpty,
               let inputType = call.arguments.first(where: { $0.label?.text == "taking" })?.expression,
               isMetatype(inputType),
+              let domainSyntax = call.arguments.first(where: { $0.label?.text == "over" })?.expression,
+              let domain = decodeTypedFacadeValue(domainSyntax, substitutions: substitutions),
               let definition = call.arguments.dropFirst().first(where: { $0.label == nil })?.expression.as(ClosureExprSyntax.self),
               let body = call.arguments.first(where: { $0.label?.text == "in" })?.expression.as(ClosureExprSyntax.self),
               definition.statements.count == 1,
@@ -62,7 +64,7 @@ public enum SpecParser {
             definitionExpression, substitutions: definitionSubstitutions
         ), let decodedBody = decodeTypedFacadeValue(bodyExpression, substitutions: bodySubstitutions)
         else { return nil }
-        return .letIn([LocalOperator(name, parameters: [inputName], body: decodedDefinition)], decodedBody)
+        return .letIn([LocalOperator(name, parameters: [inputName], domain: domain, body: decodedDefinition)], decodedBody)
     }
 
     private static func isMetatype(_ expression: ExprSyntax) -> Bool {
@@ -476,7 +478,7 @@ public enum SpecParser {
            name.hasPrefix(localRecursionMarker),
            call.arguments.count == 1,
            let input = call.arguments.first.flatMap({ decodeTypedFacadeValue($0.expression, substitutions: substitutions) }) {
-            return .recursiveCall(String(name.dropFirst(localRecursionMarker.count)), [input])
+            return .functionApply(.variable(String(name.dropFirst(localRecursionMarker.count))), input)
         }
         if let reference = expression.as(DeclReferenceExprSyntax.self),
            let substitution = substitutions[reference.baseName.text] {

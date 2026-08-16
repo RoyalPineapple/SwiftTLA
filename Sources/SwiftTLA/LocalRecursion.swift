@@ -6,7 +6,7 @@ public struct LocalRecursion<Input: TLAValueType, Output: TLAValueType>: Sendabl
     fileprivate let name: String
 
     public func callAsFunction(_ input: some StateExprConvertible) -> Expr<Output> {
-        Expr(.recursiveCall(name, [input.stateExpr]))
+        Expr(.functionApply(.variable(name), input.stateExpr))
     }
 }
 
@@ -19,6 +19,7 @@ public func LetRec<
     Result: StateExprConvertible
 >(
     _ name: String,
+    over domain: Expr<SetExpr<Input>>,
     taking _: Input.Type,
     _ definition: (LocalRecursion<Input, Output>, WithValue<Input>) -> Definition,
     in body: (LocalRecursion<Input, Output>) -> Result
@@ -30,6 +31,7 @@ public func LetRec<
         [LocalOperator(
             name,
             parameters: [inputName],
+            domain: domain.raw,
             body: definition(recursion, WithValue(expression: .variable(inputName))).stateExpr
         )],
         body(recursion).stateExpr

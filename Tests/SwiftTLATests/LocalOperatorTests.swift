@@ -10,10 +10,10 @@ private struct GeneratedTypedLocalRecursionModel {
     #spec("GeneratedTypedLocalRecursionModel") {
       FormalDefinition(
         "CountDown",
-        parameters: [.value("limit")],
-        body: LetRec("Count", taking: Int.self, { (recursion: LocalRecursion<Int, Int>, number: WithValue<Int>) in
+        parameters: [],
+        body: LetRec("Count", over: IntRange(0, through: 4), taking: Int.self, { (recursion: LocalRecursion<Int, Int>, number: WithValue<Int>) in
           If(number == 0, then: 0, else: recursion(number.expr - 1))
-        }, in: { recursion in recursion(limit) })
+        }, in: { recursion in recursion(4) })
       )
       Algorithm("GeneratedTypedLocalRecursionModel") {
         let counter = SharedVar(initial: 0)
@@ -30,7 +30,7 @@ struct LocalOperatorTests {
   @Test("typed unary LET recursion captures state and retains quantifier scope")
   func typedLocalRecursionUsesExistingLetInSemantics() throws {
     let limit = Var<Int>("limit")
-    let expression: Expr<Int> = LetRec("SumTo", taking: Int.self, { (recursion: LocalRecursion<Int, Int>, number: WithValue<Int>) in
+    let expression: Expr<Int> = LetRec("SumTo", over: IntRange(0, through: limit), taking: Int.self, { (recursion: LocalRecursion<Int, Int>, number: WithValue<Int>) in
       If(
         number == limit,
         then: 0,
@@ -41,14 +41,15 @@ struct LocalOperatorTests {
     })
 
     #expect(try expression.stateExpr.evaluate(in: ["limit": .int(4)]) == .int(0))
-    #expect(expression.stateExpr.description.contains("LET RECURSIVE SumTo(_)"))
+    #expect(expression.stateExpr.description.contains("SumTo["))
   }
 
   @Test("#spec preserves typed local recursion through generated model parsing")
   func generatedModelRetainsTypedLocalRecursion() throws {
     GeneratedTypedLocalRecursionModel._checkParserTree()
     let body = try #require(GeneratedTypedLocalRecursionModel.spec.formalOperatorDefinitions.first?.body)
-    #expect(body.description.contains("LET RECURSIVE Count(_)"))
+    #expect(body.description.contains("Count[number \\in 0..4]"))
+    #expect(body.description.contains("IN Count[4]"))
 
     var model = GeneratedTypedLocalRecursionModel()
     #expect(try model.apply(.advance).after.counter == 1)
@@ -61,7 +62,7 @@ struct LocalOperatorTests {
       FormalDefinition(
         "Bounded",
         parameters: [.value("limit")],
-        body: LetRec("AtMost", taking: Int.self, { (recursion: LocalRecursion<Int, Bool>, number: WithValue<Int>) in
+        body: LetRec("AtMost", over: IntRange(0, through: limit), taking: Int.self, { (recursion: LocalRecursion<Int, Bool>, number: WithValue<Int>) in
           If(number == 0, then: true, else: Exists(in: IntRange(0, through: number.expr - 1)) { prior in
             recursion(prior.expr) && ForAll(in: IntRange(0, through: number.expr)) { candidate in
               candidate <= number.expr
@@ -84,6 +85,7 @@ struct LocalOperatorTests {
     #expect(operators.count == 1)
     #expect(operators[0].name == "AtMost")
     #expect(operators[0].parameters == ["number"])
+    #expect(operators[0].domain == .integerRange(.int(0), .variable("limit")))
     #expect(operators[0].body.description.contains("\\E"))
     #expect(operators[0].body.description.contains("\\A"))
     #expect(call.description == "AtMost(limit)")
@@ -93,7 +95,7 @@ struct LocalOperatorTests {
   func parserRejectsMalformedTypedLocalRecursion() {
     let source = """
     {
-      FormalDefinition("Bad", parameters: [], body: LetRec("Loop", taking: Int.self, { recursion in recursion(0) }, in: { recursion in recursion(0) }))
+      FormalDefinition("Bad", parameters: [], body: LetRec("Loop", over: IntRange(0, through: 1), taking: Int.self, { recursion in recursion(0) }, in: { recursion in recursion(0) }))
     }
     """
     let closure = Parser.parse(source: source).statements.first!.item.as(ClosureExprSyntax.self)!

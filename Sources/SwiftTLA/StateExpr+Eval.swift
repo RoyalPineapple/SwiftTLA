@@ -800,12 +800,28 @@ extension StateExpr {
             guard Set(names).count == names.count else {
                 throw EvalError.typeMismatch("LET contains duplicate local operator names")
             }
-            let localFunctions = operators.map {
-                RecursiveFunc(name: $0.name, params: $0.parameters, body: $0.body)
+            let boundedNames = Set(operators.compactMap { $0.domain == nil ? nil : $0.name })
+            let localFunctions = operators.map { operation in
+                let loweredBody = Self.renamingRecursiveCalls(
+                    in: operation.body,
+                    using: { $0 },
+                    lowerLocalFunctionApplications: boundedNames
+                )
+                RecursiveFunc(
+                    name: operation.name,
+                    params: operation.parameters,
+                    body: operation.domain.map { domain in
+                        .caseExpr([.in(.variable(operation.parameters[0]), domain), loweredBody], nil)
+                    } ?? loweredBody
+                )
             }
             // The local definitions come first, exactly as a TLA+ LET scope
             // shadows an outer operator with the same name.
-            return try body.evaluate(
+            return try Self.renamingRecursiveCalls(
+                in: body,
+                using: { $0 },
+                lowerLocalFunctionApplications: boundedNames
+            ).evaluate(
                 in: state,
                 runtimeFuncs: runtimeFuncs,
                 recursiveFuncs: localFunctions + recursiveFuncs,
@@ -1071,6 +1087,7 @@ extension StateExpr {
                     return LocalOperator(
                         operation.name,
                         parameters: scoped.parameters,
+                        domain: operation.domain.map(sub),
                         body: scoped.body
                     )
                 },
@@ -1089,7 +1106,8 @@ extension StateExpr {
     static func renamingRecursiveCalls(
         in expression: StateExpr,
         using rename: (String) -> String,
-        lowerAnonymousLambdaApplications: Bool = false
+        lowerAnonymousLambdaApplications: Bool = false,
+        lowerLocalFunctionApplications: Set<String> = []
     ) -> StateExpr {
         func visit(_ expression: StateExpr) -> StateExpr {
             switch expression {
@@ -1135,6 +1153,8 @@ extension StateExpr {
             case .recordAccess(let value, let field): return .recordAccess(visit(value), field)
             case .domain(let value): return .domain(visit(value))
             case .functionLiteral(let domain, let name, let body): return .functionLiteral(visit(domain), name, visit(body))
+            case .functionApply(.variable(let name), let value) where lowerLocalFunctionApplications.contains(name):
+                return .recursiveCall(name, [visit(value)])
             case .functionApply(let function, let value): return .functionApply(visit(function), visit(value))
             case .except(let function, let value, let update): return .except(visit(function), visit(value), visit(update))
             case .caseExpr(let pairs, let fallback): return .caseExpr(pairs.map(visit), fallback.map(visit))
@@ -1197,6 +1217,7 @@ extension StateExpr {
                         LocalOperator(
                             rename(operation.name),
                             parameters: operation.parameters,
+                            domain: operation.domain.map(visit),
                             body: visit(operation.body)
                         )
                     },
