@@ -14,13 +14,14 @@ struct K2ScopedFormalLambdaTLCWitnessTests {
         #expect(result.after.counters[.right] == 0)
     }
 
-    @Test("K2 fixture exposes one PlusCal source with the formal application")
-    func exposesScopedFormalLambdaPlusCalSource() throws {
+    @Test("K2 fixture beta-reduces a direct formal-lambda application for PlusCal")
+    func exposesLegalScopedFormalLambdaPlusCalSource() throws {
         let fixture = AlgorithmConformanceRegistry.formalOperatorValues
         let source = try fixture.plusCalModule()
 
-        #expect(source.contains("process (self \\in {\"left\", \"right\"})"))
-        #expect(source.contains("LAMBDA value : (value + 1)"))
+        #expect(source.contains("process (pcalSelf \\in {\"left\", \"right\"})"))
+        #expect(!source.contains("LAMBDA"))
+        #expect(source.contains("(counters[pcalSelf] + 1)"))
         #expect(fixture.configuration.contains("SPECIFICATION Spec"))
     }
 

@@ -156,6 +156,31 @@ struct AlgorithmPlusCalRendererTests {
         }
     }
 
+    @Test("rejects higher-order anonymous lambdas instead of printing invalid PlusCal")
+    func rejectsResidualAnonymousFormalLambda() {
+        let model = AlgorithmModel(name: "HigherOrder", components: [
+            .shared(.init(
+                root: "output",
+                initial: .operatorApplication(
+                    .reference("Apply", arity: 1),
+                    [.operator(.lambda(.init(parameters: ["value"], body: .variable("value")))]
+                )
+            ))
+        ])
+
+        do {
+            _ = try AlgorithmPlusCalRenderer(model: model).render()
+            Issue.record("Expected an unsupported higher-order lambda diagnostic")
+        } catch let diagnostic as AlgorithmPlusCalRenderDiagnostic {
+            #expect(diagnostic.path == "shared[0].initial")
+            #expect(diagnostic.expected.contains("named operator reference"))
+            #expect(diagnostic.actual.contains("residual anonymous formal lambda"))
+            #expect(diagnostic.stateChange == .none)
+        } catch {
+            Issue.record("Expected AlgorithmPlusCalRenderDiagnostic, got \(error)")
+        }
+    }
+
     @Test("retains authored Algorithm source for independent PlusCal rendering")
     func retainsAuthoredAlgorithmOnTheLoweredSpec() throws {
         let spec = TLASpec("Retained") {
