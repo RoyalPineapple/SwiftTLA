@@ -107,13 +107,13 @@ public struct KVsnapModel {
             Instance("CC", of: ClientCentric.module, with: [
                 ModuleArgument("Keys", value: SetExpr<Key>.literal(.k1, .k2)),
                 ModuleArgument("Values", value: SetExpr<Value>.literal(
-                    .first(.t1), .first(.t2), .first(.t3), .second(.noVal)
+                    Value.first(.t1), Value.first(.t2), Value.first(.t3), Value.second(.noVal)
                 )),
             ])
             FormalDefinition(
                 "InitialState",
                 parameters: [],
-                body: Function<Key, Value>.mapping { _ in Value.second(.noVal) }.raw
+                body: Function<Key, Value>.mapping { _ in Value.second(Expr<NoValue>(.noVal)) }.raw
             )
             FormalDefinition(
                 "SetToSeq",
@@ -223,7 +223,7 @@ public struct KVsnapModel {
 
                 Invariant("TypeOK") {
                     Functions(from: Key.all, to: SetExpr<Value>.literal(
-                        .first(.t1), .first(.t2), .first(.t3), .second(.noVal)
+                        Value.first(.t1), Value.first(.t2), Value.first(.t3), Value.second(.noVal)
                     )).contains(store.expr)
                         && tx.isSubset(of: SetExpr<Transaction>.literal(.t1, .t2, .t3))
                         && Functions(
