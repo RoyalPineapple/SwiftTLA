@@ -15,6 +15,7 @@ let package = Package(
         .library(name: "SwiftTLA", targets: ["SwiftTLA"]),
         .library(name: "SwiftTLAMacros", targets: ["SwiftTLAMacros"]),
         .library(name: "SwiftTLAModels", targets: ["SwiftTLAModels"]),
+        .library(name: "AlgorithmConformance", targets: ["AlgorithmConformance"]),
         .library(name: "UpstreamParity", targets: ["UpstreamParity"])
     ],
     dependencies: [
@@ -38,6 +39,7 @@ let package = Package(
             .product(name: "SwiftParser", package: "swift-syntax")
         ]),
         .target(name: "SwiftTLAModels", dependencies: ["SwiftTLA", "SwiftTLAMacros"], swiftSettings: settings),
+        .target(name: "AlgorithmConformance", dependencies: ["SwiftTLA", "SwiftTLAMacros"], swiftSettings: settings),
         .target(
             name: "UpstreamParity",
             dependencies: [
@@ -67,7 +69,8 @@ let package = Package(
         .testTarget(name: "SwiftTLATests", dependencies: [
             "SwiftTLA",
             "SwiftTLAModels",
-            "SwiftTLAMacros"
+            "SwiftTLAMacros",
+            "AlgorithmConformance"
         ], swiftSettings: settings),
         // Slower corpus, oracle, governance, and public-workflow tests.
         .testTarget(name: "SwiftTLAParityTests", dependencies: [
