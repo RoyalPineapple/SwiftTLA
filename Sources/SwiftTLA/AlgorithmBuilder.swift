@@ -174,6 +174,13 @@ extension Expr {
 }
 
 extension Function where Domain: FiniteDomainKey {
+    /// Builds a total finite formal function from a concrete typed value.
+    public static func mapping(
+        _ body: (WithValue<Domain>) -> Range
+    ) -> Expr<Self> {
+        mapping { key in Expr(body(key)) }
+    }
+
     /// Builds a total finite formal function from an expression over each key.
     ///
     /// This is useful for dependent initial state: the body may read an

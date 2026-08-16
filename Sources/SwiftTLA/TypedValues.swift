@@ -281,6 +281,12 @@ public protocol FormalSetValue: TLAValueType {}
 extension SetExpr: FormalSetValue {}
 
 extension Expr where T: FormalSetValue {
+  public func intersection<Element: TLAValueType>(
+    _ other: some StateExprConvertible
+  ) -> Expr<SetExpr<Element>> where T == SetExpr<Element> {
+    Expr(.intersection(raw, other.stateExpr))
+  }
+
   public var isEmpty: StateExpr {
     .equal(.cardinality(raw), .value(.int(0)))
   }
