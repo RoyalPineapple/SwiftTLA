@@ -258,11 +258,10 @@ but its ownership boundaries are fixed:
 | algorithm conformance corpus | canonical `#spec`/`Algorithm` fixtures, including upstream PlusCal ports and their retained authored PlusCal source | duplicate direct-TLA implementations of the same algorithm |
 | `Examples/` consumers | demos and Apple integration shims that import the public package | a second state machine, availability policy, or formal evaluator |
 
-`AlgorithmConformance` is the dedicated home for PlusCal-shaped fixtures.
-It depends on SwiftTLA and the macro library. K6 moves existing upstream
-PlusCal ports out of `UpstreamParity` without changing their model or
-provenance. This keeps core semantic tests independent of the upstream corpus
-and keeps direct parity evidence distinct from algorithm evidence.
+The separate ValidationEvidence repository owns PlusCal-shaped fixtures and
+their retained external evidence. This keeps core semantic tests independent
+of the upstream corpus and keeps direct parity evidence distinct from
+algorithm evidence.
 
 ## DSL philosophy
 

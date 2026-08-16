@@ -32,6 +32,12 @@ public struct FiniteDomain<Value: FiniteDomainKey>: Sendable {
     }
 }
 
+extension FiniteDomain: Sequence {
+    public func makeIterator() -> Array<Value>.Iterator {
+        values.makeIterator()
+    }
+}
+
 extension FiniteDomainKey {
     public static var all: FiniteDomain<Self> {
         FiniteDomain()
@@ -174,6 +180,13 @@ extension Expr {
 }
 
 extension Function where Domain: FiniteDomainKey {
+    /// Builds a total finite formal function from a concrete typed value.
+    public static func mapping(
+        _ body: (WithValue<Domain>) -> Range
+    ) -> Expr<Self> {
+        mapping { key in Expr(body(key)) }
+    }
+
     /// Builds a total finite formal function from an expression over each key.
     ///
     /// This is useful for dependent initial state: the body may read an
@@ -549,6 +562,17 @@ public struct LocalVariable<Value: TLAValueType>: StateExprConvertible, Sendable
 
     /// The typed expression for the current process-local formal value.
     public var expr: Expr<Value> { Expr(stateExpr) }
+
+    /// Views this process-local declaration as the total function that PlusCal
+    /// lowers over its process family. Use it for an algorithm property about
+    /// all local values, such as `Range(ops)`, not for a current-process read.
+    /// The marker is consumed by `AlgorithmLowerer`; it never becomes an
+    /// application-facing raw state map.
+    public func family<Process: FiniteDomainKey>(
+        for _: Process.Type
+    ) -> Expr<Function<Process, Value>> {
+        Expr(.variable("\(algorithmLocalFamilyPrefix)\(name)"))
+    }
 
     public var algorithmLValue: AlgorithmLValue<Value> {
         AlgorithmLValue(model: .root(name))

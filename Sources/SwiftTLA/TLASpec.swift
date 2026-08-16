@@ -146,6 +146,7 @@ public struct ParsedSpecModel: Equatable, Sendable {
   /// parser tree makes a missing definition visible at the parser/builder
   /// boundary instead of failing later during evaluation.
   public let formalOperatorDefinitions: [FormalOperatorDefinition]
+  public let symmetrySets: [SymmetrySet]
   public init(
     variables: [(String, TLAValue, StateExpr?)], actions: [(String, ActionExpr, [ActionBinding])],
     invariants: [(String, StateExpr)],
@@ -156,7 +157,8 @@ public struct ParsedSpecModel: Equatable, Sendable {
     importConfigurations: [FormalModuleConfiguration] = [],
     moduleInstances: [FormalModuleInstance] = [],
     formalParameters: [FormalModuleParameter] = [],
-    formalOperatorDefinitions: [FormalOperatorDefinition] = []
+    formalOperatorDefinitions: [FormalOperatorDefinition] = [],
+    symmetrySets: [SymmetrySet] = []
   ) {
     self.variables = variables
     self.actions = actions
@@ -169,6 +171,7 @@ public struct ParsedSpecModel: Equatable, Sendable {
     self.moduleInstances = moduleInstances
     self.formalParameters = formalParameters
     self.formalOperatorDefinitions = formalOperatorDefinitions
+    self.symmetrySets = symmetrySets
   }
   public static func == (lhs: ParsedSpecModel, rhs: ParsedSpecModel) -> Bool {
     guard lhs.variables.count == rhs.variables.count,
@@ -181,7 +184,8 @@ public struct ParsedSpecModel: Equatable, Sendable {
       lhs.importConfigurations == rhs.importConfigurations,
       lhs.moduleInstances == rhs.moduleInstances,
       lhs.formalParameters == rhs.formalParameters,
-      lhs.formalOperatorDefinitions == rhs.formalOperatorDefinitions
+      lhs.formalOperatorDefinitions == rhs.formalOperatorDefinitions,
+      lhs.symmetrySets == rhs.symmetrySets
     else { return false }
     for (a, b) in zip(lhs.variables, rhs.variables) {
       if a.name != b.name || a.initial != b.initial || a.initialSet != b.initialSet { return false }
@@ -351,6 +355,28 @@ public struct TLASpec: Sendable {
           "Duplicate imported formal operator: \(definition.name)"
         )
         result.append(definition)
+      }
+      for instance in module.moduleInstances {
+        let localDefinitions = instance.module.formalOperatorDefinitions
+        let localNames = Set(localDefinitions.map(\.name))
+        for definition in localDefinitions {
+          let appliedArguments = instance.arguments.reduce(definition.body) { body, argument in
+            StateExpr.substituteVariable(argument.parameter, with: argument.value, in: body)
+          }
+          let qualifiedBody = StateExpr.renamingRecursiveCalls(in: appliedArguments) { name in
+            localNames.contains(name) ? "\(instance.name)!\(name)" : name
+          }
+          let qualifiedName = "\(instance.name)!\(definition.name)"
+          precondition(
+            seen.insert(qualifiedName).inserted,
+            "Duplicate formal module instance operator: \(qualifiedName)"
+          )
+          result.append(FormalOperatorDefinition(
+            name: qualifiedName,
+            parameters: definition.parameters,
+            body: qualifiedBody
+          ))
+        }
       }
       path.remove(module.name)
     }
@@ -627,7 +653,8 @@ public struct FormalOperatorDecl: SpecComponent, Equatable {
         return "\(name)(\(Array(repeating: "_", count: arity).joined(separator: ", ")))"
       }
     }.joined(separator: ", ")
-    return "\(definition.name)(\(parameters)) == \(definition.body)"
+    let declaration = parameters.isEmpty ? definition.name : "\(definition.name)(\(parameters))"
+    return "\(declaration) == \(definition.body)"
   }
 }
 
@@ -776,6 +803,7 @@ public enum InvariantBuilder {
     return components.dropFirst().reduce(components[0]) { .and($0, $1) }
   }
   public static func buildExpression(_ expr: StateExpr) -> StateExpr { expr }
+  public static func buildExpression(_ expr: Expr<Bool>) -> StateExpr { expr.raw }
   public static func buildOptional(_ component: StateExpr?) -> StateExpr {
     component ?? .value(.bool(true))
   }

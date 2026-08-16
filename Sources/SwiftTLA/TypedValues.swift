@@ -160,6 +160,29 @@ public struct Function<Domain: FiniteTLAValueDomain, Range: TLAValueType>: TLAVa
 
 }
 
+/// The formal range of a finite function, using the upstream `Functions.Range`
+/// operator when that module is imported by the surrounding specification.
+public func Range<Domain: FiniteTLAValueDomain, Value: TLAValueType>(
+  _ function: Expr<Function<Domain, Value>>
+) -> Expr<SetExpr<Value>> {
+  FormalCall("Range", function)
+}
+
+/// Chooses an injective sequence containing exactly the members of a formal set.
+///
+/// This is the standard TLA+ `CHOOSE f \in [1..Cardinality(S) -> S] :
+/// IsInjective(f)` expression. The choice remains symbolic in the formal
+/// specification; Swift does not evaluate it while the model is authored.
+public func InjectiveSequence<Element: TLAValueType>(
+  from values: Expr<SetExpr<Element>>
+) -> Expr<TupleExpr<Element>> {
+  Expr(.choose(
+    .functionSet(.integerRange(.int(1), .cardinality(values.raw)), values.raw),
+    "f",
+    .operatorApplication(.reference("IsInjective", arity: 1), [.value(.variable("f"))])
+  ))
+}
+
 /// The bounded formal function space from one finite domain to a finite set
 /// of values. `Functions(from:to:)` is a TLA+ function set, not a Swift
 /// dictionary or closure evaluated by the application.
@@ -258,6 +281,12 @@ public protocol FormalSetValue: TLAValueType {}
 extension SetExpr: FormalSetValue {}
 
 extension Expr where T: FormalSetValue {
+  public func intersection<Element: TLAValueType>(
+    _ other: some StateExprConvertible
+  ) -> Expr<SetExpr<Element>> where T == SetExpr<Element> {
+    Expr(.intersection(raw, other.stateExpr))
+  }
+
   public var isEmpty: StateExpr {
     .equal(.cardinality(raw), .value(.int(0)))
   }
@@ -617,6 +646,16 @@ extension Expr {
   public func appending<Element: TLAValueType>(_ element: Expr<Element>) -> Expr<TupleExpr<Element>>
   where T == TupleExpr<Element> {
     Expr<TupleExpr<Element>>(.tupleAppend(raw, element.raw))
+  }
+
+  /// Concatenates two formal one-based sequences.
+  ///
+  /// The right side may be a finite function selected by `CHOOSE`; TLA+
+  /// defines that function as a sequence when its domain is `1..n`.
+  public func concatenating<Element: TLAValueType>(
+    _ other: Expr<TupleExpr<Element>>
+  ) -> Expr<TupleExpr<Element>> where T == TupleExpr<Element> {
+    Expr<TupleExpr<Element>>(.tupleConcatenate(raw, other.raw))
   }
 
   public func at<Element: TLAValueType>(_ index: Int) -> Expr<Element> where T == TupleExpr<Element> {

@@ -1,8 +1,24 @@
 extension Algorithm {
     /// Lowers a validated bounded algorithm into the ordinary executable TLA+ model.
-    public func lower() throws -> TLASpec {
+    public func lower(
+        formalOperatorDefinitions: [FormalOperatorDefinition] = []
+    ) throws -> TLASpec {
         try requireValid()
-        return AlgorithmLowerer.lower(model)
+        return try AlgorithmLowerer.lower(
+            model,
+            formalOperatorDefinitions: formalOperatorDefinitions
+        )
+    }
+}
+
+enum AlgorithmLoweringError: Error, CustomStringConvertible {
+    case nonStaticInitialValue(name: String, underlying: Error)
+
+    var description: String {
+        switch self {
+        case .nonStaticInitialValue(let name, let underlying):
+            return "Algorithm variable '\(name)' needs a closed formal initial expression: \(underlying)"
+        }
     }
 }
 
@@ -20,10 +36,16 @@ enum AlgorithmLowerer {
     private static let doneLabel = "Done"
     private static let terminatingAction = "Terminating"
 
-    static func lower(_ algorithm: AlgorithmModel) -> TLASpec {
+    static func lower(
+        _ algorithm: AlgorithmModel,
+        formalOperatorDefinitions: [FormalOperatorDefinition] = []
+    ) throws -> TLASpec {
         let processes = algorithm.processes
         if processes.isEmpty, !algorithm.sequentialSteps.isEmpty {
-            return lowerSequential(algorithm)
+            return try lowerSequential(
+                algorithm,
+                formalOperatorDefinitions: formalOperatorDefinitions
+            )
         }
         let shared = algorithm.components.compactMap { component -> AlgorithmStateModel? in
             guard case .shared(let state) = component else { return nil }
@@ -74,7 +96,10 @@ enum AlgorithmLowerer {
         }
 
         var variables = shared.map { state in
-            if let initial = try? state.initial.evaluate(in: [:]) {
+            if let initial = try? state.initial.evaluate(
+                in: [:],
+                formalOperatorDefinitions: formalOperatorDefinitions
+            ) {
                 NamedVar(name: state.root, initial: initial, initialSet: state.initialSet)
             } else {
                 NamedVar(name: state.root, initial: .int(0), initExpr: state.initial)
@@ -86,9 +111,10 @@ enum AlgorithmLowerer {
                 variables.append(
                     NamedVar(
                         name: state.root,
-                        initial: staticInitialValue(
+                        initial: try staticInitialValue(
                             constantFunction(domain: process.domain, value: state.initial),
-                            named: state.root
+                            named: state.root,
+                            formalOperatorDefinitions: formalOperatorDefinitions
                         )
                     ))
             }
@@ -118,26 +144,28 @@ enum AlgorithmLowerer {
             controlBinding,
             .caseExpr(controlCases, nil)
         )
-        variables.append(NamedVar(
+        variables.insert(NamedVar(
             name: controlVariable,
             initial: .function([:]),
             initExpr: controlInitial
-        ))
+        ), at: 0)
         if !procedures.isEmpty {
             for slot in procedureSlots(procedures) {
                 variables.append(NamedVar(
                     name: slot.root,
-                    initial: staticInitialValue(
+                    initial: try staticInitialValue(
                         constantFunction(domain: controlDomainValues(processes), value: slot.initial),
-                        named: slot.root
+                        named: slot.root,
+                        formalOperatorDefinitions: formalOperatorDefinitions
                     )
                 ))
             }
             variables.append(NamedVar(
                 name: stackVariable,
-                initial: staticInitialValue(
-                    constantFunction(domain: controlDomainValues(processes), value: .tupleLiteral([])),
-                    named: stackVariable
+                initial: try staticInitialValue(
+                        constantFunction(domain: controlDomainValues(processes), value: .tupleLiteral([])),
+                        named: stackVariable,
+                        formalOperatorDefinitions: formalOperatorDefinitions
                 )
             ))
         }
@@ -270,7 +298,10 @@ enum AlgorithmLowerer {
     /// Lowers a PlusCal `begin ... end algorithm` body. This is deliberately
     /// not a one-element process: PlusCal gives this form a scalar `pc` and
     /// unparameterized action labels.
-    private static func lowerSequential(_ algorithm: AlgorithmModel) -> TLASpec {
+    private static func lowerSequential(
+        _ algorithm: AlgorithmModel,
+        formalOperatorDefinitions: [FormalOperatorDefinition]
+    ) throws -> TLASpec {
         let steps = algorithm.sequentialSteps
         let procedures = algorithm.procedures
         let shared = algorithm.components.compactMap { component -> AlgorithmStateModel? in
@@ -297,7 +328,10 @@ enum AlgorithmLowerer {
         }
 
         let sharedVariables = shared.map { state in
-            if let initial = try? state.initial.evaluate(in: [:]) {
+            if let initial = try? state.initial.evaluate(
+                in: [:],
+                formalOperatorDefinitions: formalOperatorDefinitions
+            ) {
                 NamedVar(name: state.root, initial: initial, initialSet: state.initialSet)
             } else {
                 NamedVar(name: state.root, initial: .int(0), initExpr: state.initial)
@@ -308,13 +342,21 @@ enum AlgorithmLowerer {
             for parameter in procedure.parameters {
                 procedureVariables.append(NamedVar(
                     name: parameter.root,
-                    initial: staticInitialValue(parameter.initial, named: parameter.root)
+                    initial: try staticInitialValue(
+                        parameter.initial,
+                        named: parameter.root,
+                        formalOperatorDefinitions: formalOperatorDefinitions
+                    )
                 ))
             }
             for local in procedure.locals {
                 procedureVariables.append(NamedVar(
                     name: local.root,
-                    initial: staticInitialValue(local.initial, named: local.root)
+                    initial: try staticInitialValue(
+                        local.initial,
+                        named: local.root,
+                        formalOperatorDefinitions: formalOperatorDefinitions
+                    )
                 ))
             }
         }
@@ -680,11 +722,19 @@ enum AlgorithmLowerer {
 
     /// Algorithm declarations are finite initial values. Keep the initial
     /// state concrete so the checker, parser tree, and generated State agree.
-    private static func staticInitialValue(_ expression: StateExpr, named name: String) -> TLAValue {
-        guard let value = try? expression.evaluate(in: [:]) else {
-            preconditionFailure("Algorithm variable '\(name)' needs a closed formal initial expression.")
+    private static func staticInitialValue(
+        _ expression: StateExpr,
+        named name: String,
+        formalOperatorDefinitions: [FormalOperatorDefinition]
+    ) throws -> TLAValue {
+        do {
+            return try expression.evaluate(
+                in: [:],
+                formalOperatorDefinitions: formalOperatorDefinitions
+            )
+        } catch {
+            throw AlgorithmLoweringError.nonStaticInitialValue(name: name, underlying: error)
         }
-        return value
     }
 
     private static func lower(
@@ -1024,6 +1074,10 @@ enum AlgorithmLowerer {
                 return expression
             case .variable(let name):
                 if name == builderProcessIdentifier { return .variable(processBinding) }
+                if name.hasPrefix(algorithmLocalFamilyPrefix) {
+                    let root = String(name.dropFirst(algorithmLocalFamilyPrefix.count))
+                    return localRoots.contains(root) ? .variable(root) : expression
+                }
                 if localRoots.contains(name) {
                     return .functionApply(.variable(name), .variable(processBinding))
                 }

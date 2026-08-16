@@ -150,6 +150,100 @@ public struct FormalModuleInstance: SpecComponent, Sendable, Equatable {
   }
 }
 
+/// Applies a formal value operator by its TLA+ name while retaining its result type.
+///
+/// This is the typed boundary for imported community-module definitions.  It is
+/// deliberately not a Swift closure: the operator name and every argument remain
+/// in `StateExpr` for parser fidelity, evaluation, and TLA+ emission.
+public func FormalCall<Result: TLAValueType>(
+  _ name: String
+) -> Expr<Result> {
+  Expr(.operatorApplication(.reference(name, arity: 0), []))
+}
+
+/// Applies a nullary formal operator with an explicit result-type witness.
+///
+/// This form is for a formal value nested in an otherwise uncontextualized
+/// expression, such as an imported predicate argument.
+public func FormalCall<Result: TLAValueType>(
+  as _: Result.Type,
+  _ name: String
+) -> Expr<Result> {
+  FormalCall(name)
+}
+
+public func FormalCall<Result: TLAValueType, Value: StateExprConvertible>(
+  _ name: String,
+  _ value: Value
+) -> Expr<Result> {
+  Expr(.operatorApplication(.reference(name, arity: 1), [.value(value.stateExpr)]))
+}
+
+public func FormalCall<
+  Result: TLAValueType,
+  First: StateExprConvertible,
+  Second: StateExprConvertible
+>(
+  _ name: String,
+  _ first: First,
+  _ second: Second
+) -> Expr<Result> {
+  Expr(.operatorApplication(.reference(name, arity: 2), [
+    .value(first.stateExpr), .value(second.stateExpr)
+  ]))
+}
+
+/// Applies an executable formal operator exported by a named `INSTANCE`.
+///
+/// Module instances are an explicit source-level namespace in TLA+.  Keeping
+/// the namespace here avoids treating an imported definition as a host closure
+/// or leaking raw `StateExpr` construction into an application model.
+public func ModuleCall<Result: TLAValueType>(
+  _ instance: String,
+  _ operatorName: String
+) -> Expr<Result> {
+  FormalCall("\(instance)!\(operatorName)")
+}
+
+public func ModuleCall<Result: TLAValueType, Value: StateExprConvertible>(
+  _ instance: String,
+  _ operatorName: String,
+  _ value: Value
+) -> Expr<Result> {
+  FormalCall("\(instance)!\(operatorName)", value)
+}
+
+public func ModuleCall<
+  Result: TLAValueType,
+  First: StateExprConvertible,
+  Second: StateExprConvertible
+>(
+  _ instance: String,
+  _ operatorName: String,
+  _ first: First,
+  _ second: Second
+) -> Expr<Result> {
+  FormalCall("\(instance)!\(operatorName)", first, second)
+}
+
+/// Applies a binary imported operator with an explicit result-type witness.
+///
+/// The witness is compile-time only; the emitted formal operator remains the
+/// same namespaced TLA+ application.
+public func ModuleCall<
+  Result: TLAValueType,
+  First: StateExprConvertible,
+  Second: StateExprConvertible
+>(
+  as _: Result.Type,
+  _ instance: String,
+  _ operatorName: String,
+  _ first: First,
+  _ second: Second
+) -> Expr<Result> {
+  ModuleCall(instance, operatorName, first, second)
+}
+
 public struct ImportDecl: SpecComponent {
   public let module: TLASpec
   public let configuration: FormalModuleConfiguration?
@@ -194,6 +288,7 @@ public enum FormalModuleRegistry {
     case "Folds": Folds.module
     case "Functions", "FunctionsModule": FunctionsModule.module
     case "Util", "KeyValueStoreUtil": KeyValueStoreUtil.module
+    case "ClientCentric": ClientCentric.module
     case "ZSequences": ZSequences.module
     default: nil
     }

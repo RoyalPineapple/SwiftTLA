@@ -2,7 +2,7 @@ import Testing
 import SwiftTLA
 import SwiftTLAMacros
 
-/// K4's smallest end-to-end witness: a finite map holds typed records, an
+/// The smallest end-to-end witness: a finite map holds typed records, an
 /// atomic action updates one nested field, and generated state stays typed.
 @TLAModel
 private struct StructuredCarModel {

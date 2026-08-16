@@ -42,6 +42,7 @@ struct ParsedMacroModel {
     let moduleInstances: [FormalModuleInstance]
     let formalParameters: [FormalModuleParameter]
     let formalOperatorDefinitions: [FormalOperatorDefinition]
+    let symmetrySets: [SymmetrySet]
     let algorithmFidelityTokens: [AlgorithmFidelityToken]
 }
 
@@ -153,6 +154,7 @@ enum TLASpecVerifier {
             imports: imports,
             importConfigurations: parsed.importConfigurations,
             moduleInstances: parsed.moduleInstances,
+            symmetrySets: parsed.symmetrySets,
             symmetricCollections: parsed.symmetricCollections.map(\.declaration),
             algorithmFidelityTokens: parsed.algorithmFidelityTokens
         )
@@ -194,6 +196,7 @@ enum TLASpecVerifier {
             moduleInstances: parsed.moduleInstances,
             formalParameters: parsed.formalParameters,
             formalOperatorDefinitions: parsed.formalOperatorDefinitions,
+            symmetrySets: parsed.symmetrySets,
             algorithmFidelityTokens: parsed.algorithmFidelityTokens
         )
     }

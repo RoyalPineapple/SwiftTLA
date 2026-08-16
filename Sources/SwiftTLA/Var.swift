@@ -102,6 +102,7 @@ public enum VarConstraint: Hashable, Sendable {
 public struct Expr<T: TLAValueType>: StateExprConvertible, Sendable {
   public let raw: StateExpr
   public init(_ raw: StateExpr) { self.raw = raw }
+  public init(_ value: T) { raw = .value(value.tlaValue) }
   public var stateExpr: StateExpr { raw }
 
   /// Typed equality keeps enum literals contextual in formal expressions:

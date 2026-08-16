@@ -29,6 +29,28 @@ private struct GeneratedHigherOrderFormalModel {
 
 @Suite("Formal operators")
 struct FormalOperatorTests {
+  @Test("a nullary formal operator uses standard TLA+ syntax")
+  func rendersNullaryFormalOperatorWithoutParentheses() {
+    let initialState = FormalOperatorDefinition(
+      name: "InitialState",
+      parameters: [],
+      body: .int(0)
+    )
+    let spec = TLASpec(
+      name: "NullaryFormal",
+      variables: [],
+      actions: [],
+      invariants: [],
+      formalOperatorDefinitions: [initialState]
+    )
+
+    #expect(spec.tlaModule.contains("InitialState == 0"))
+    #expect(
+      StateExpr.operatorApplication(.reference("InitialState", arity: 0), []).description
+        == "InitialState"
+    )
+  }
+
   @Test("a #spec higher-order formal definition preserves parser and builder trees")
   func generatedHigherOrderFormalDefinitionPreservesParserFidelity() throws {
     GeneratedHigherOrderFormalModel._checkParserTree()

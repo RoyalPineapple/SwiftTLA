@@ -487,8 +487,20 @@ extension StateExpr {
             guard !tv.isEmpty else { throw tm("Tail of empty sequence") }
             return .tuple(Array(tv.dropFirst()))
         case .tupleConcatenate(let a, let b):
-            guard case .tuple(let ta) = try ev(a), case .tuple(let tb) = try ev(b) else {
-                throw tm("tuple concat", got: try ev(a), try ev(b))
+            func sequenceValues(_ value: TLAValue) -> [TLAValue]? {
+                if case .tuple(let values) = value { return values }
+                guard case .function(let mapping) = value else { return nil }
+                let ordered = mapping.keys.compactMap { key -> (Int, TLAValue)? in
+                    guard case .int(let index) = key, let value = mapping[key] else { return nil }
+                    return (index, value)
+                }.sorted { $0.0 < $1.0 }
+                guard ordered.map(\.0) == Array(1...ordered.count) else { return nil }
+                return ordered.map(\.1)
+            }
+            let left = try ev(a)
+            let right = try ev(b)
+            guard let ta = sequenceValues(left), let tb = sequenceValues(right) else {
+                throw tm("tuple concat", got: left, right)
             }
             return .tuple(ta + tb)
 

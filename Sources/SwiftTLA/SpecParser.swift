@@ -386,7 +386,7 @@ public enum SpecParser {
         )
     }
 
-    private static func decodeAlgorithmDomainQuantifier(_ expression: ExprSyntax) -> StateExpr? {
+    static func decodeAlgorithmDomainQuantifier(_ expression: ExprSyntax) -> StateExpr? {
         guard let call = expression.as(FunctionCallExprSyntax.self),
               let name = call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text,
               name == "All",
@@ -394,10 +394,12 @@ public enum SpecParser {
               let domain = finiteAlgorithmDomain(domainSyntax),
               let closure = call.trailingClosure,
               closure.statements.count == 1,
-              case .expr(let bodySyntax) = closure.statements.first?.item,
-              let parameter = closureParameterNames(in: closure).first,
-              closureParameterNames(in: closure).count == 1
+              case .expr(let bodySyntax) = closure.statements.first?.item
         else { return nil }
+
+        let parameters = closureParameterNames(in: closure)
+        guard parameters.count <= 1 else { return nil }
+        let parameter = parameters.first ?? "$0"
 
         let binding = StateExpr.variable(parameter)
         let predicate: StateExpr?
@@ -435,6 +437,67 @@ public enum SpecParser {
            call.arguments.count == 1,
            let value = call.arguments.first?.expression {
             return decodeTypedFacadeValue(value, substitutions: substitutions)
+        }
+        // `OneOf` is a type-level union: its alternatives retain their
+        // underlying TLA+ value and therefore need no runtime wrapper.
+        if let call = expression.as(FunctionCallExprSyntax.self),
+           let access = call.calledExpression.as(MemberAccessExprSyntax.self),
+           access.base?.as(DeclReferenceExprSyntax.self) != nil,
+           ["first", "second"].contains(access.declName.baseName.text),
+           call.arguments.count == 1,
+           let value = call.arguments.first?.expression {
+            return decodeTypedFacadeValue(value, substitutions: substitutions)
+        }
+        if let call = expression.as(FunctionCallExprSyntax.self),
+           (typedLiteralType(call.calledExpression)?.name == "FormalCall"
+             || call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "FormalCall") {
+            let argumentsSyntax = Array(call.arguments).filter { $0.label?.text != "as" }
+            guard let name = argumentsSyntax.first?.expression.as(StringLiteralExprSyntax.self)?
+                .segments.compactMap({ $0.as(StringSegmentSyntax.self)?.content.text }).joined()
+            else { return nil }
+            let arguments = argumentsSyntax.dropFirst().compactMap {
+                decodeTypedFacadeValue($0.expression, substitutions: substitutions)
+            }
+            guard arguments.count == argumentsSyntax.count - 1 else { return nil }
+            return .operatorApplication(
+                .reference(name, arity: arguments.count), arguments.map(FormalCallArgument.value)
+            )
+        }
+        if let call = expression.as(FunctionCallExprSyntax.self),
+           call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "Range",
+           call.arguments.count == 1,
+           let value = decodeTypedFacadeValue(call.arguments[call.arguments.startIndex].expression, substitutions: substitutions) {
+            return .operatorApplication(.reference("Range", arity: 1), [.value(value)])
+        }
+        if let call = expression.as(FunctionCallExprSyntax.self),
+           call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "InjectiveSequence",
+           let valuesSyntax = call.arguments.first(where: { $0.label?.text == "from" })?.expression,
+           let values = decodeTypedFacadeValue(valuesSyntax, substitutions: substitutions) {
+            return .choose(
+                .functionSet(.integerRange(.int(1), .cardinality(values)), values),
+                "f",
+                .operatorApplication(.reference("IsInjective", arity: 1), [.value(.variable("f"))])
+            )
+        }
+        if let call = expression.as(FunctionCallExprSyntax.self),
+           (typedLiteralType(call.calledExpression)?.name == "ModuleCall"
+             || call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "ModuleCall"),
+           call.arguments.count >= 2 {
+            let argumentsSyntax = Array(call.arguments).filter { $0.label?.text != "as" }
+            guard argumentsSyntax.count >= 2 else { return nil }
+            guard let instance = argumentsSyntax[0].expression.as(StringLiteralExprSyntax.self)?
+            .segments.compactMap({ $0.as(StringSegmentSyntax.self)?.content.text }).joined(),
+                  let operation = argumentsSyntax[1].expression.as(StringLiteralExprSyntax.self)?
+                    .segments.compactMap({ $0.as(StringSegmentSyntax.self)?.content.text }).joined()
+            else { return nil }
+            let arguments = argumentsSyntax.dropFirst(2).compactMap {
+                decodeTypedFacadeValue($0.expression, substitutions: substitutions)
+            }
+            guard arguments.count == argumentsSyntax.count - 2 else { return nil }
+            return .operatorApplication(
+                .reference("\(instance)!\(operation)", arity: arguments.count),
+                arguments.map(FormalCallArgument.value)
+            )
         }
         // `Pair(first:second:)` is normally inferred from an enclosing
         // `SetExpr<Pair<...>>`, so SwiftSyntax sees the constructor without
@@ -530,7 +593,10 @@ public enum SpecParser {
            let baseSyntax = member.base,
            let base = decodeTypedFacadeValue(baseSyntax, substitutions: substitutions) {
             switch member.declName.baseName.text {
+            case "raw": return base
             case "cardinality": return .cardinality(base)
+            case "range":
+                return .operatorApplication(.reference("Range", arity: 1), [.value(base)])
             case "isEmpty": return .equal(.cardinality(base), .value(.int(0)))
             case "subsets": return .powerSet(base)
             default: break
@@ -876,6 +942,12 @@ public enum SpecParser {
         let methodName = memberAccess.declName.baseName.text
         let args = Array(call.arguments)
         let base = memberAccess.base
+        if methodName == "family",
+           args.count == 1,
+           args[0].label?.text == "for",
+           let local = base?.as(DeclReferenceExprSyntax.self)?.baseName.text {
+            return .variable("\(algorithmLocalFamilyPrefix)\(local)")
+        }
         if base?.as(DeclReferenceExprSyntax.self)?.baseName.text == "ZSequences" {
             switch methodName {
             case "indices":

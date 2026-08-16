@@ -69,7 +69,7 @@ struct ProcedureLoweringTests {
         )
 
         #expect(AlgorithmValidator.validate(model).isEmpty)
-        let spec = AlgorithmLowerer.lower(model)
+        let spec = try AlgorithmLowerer.lower(model)
         let initial = try #require(computeInitialStates(spec).first)
         let afterCall = try apply("start", in: spec, to: initial)
         #expect(afterCall["pc"] == .string("procedure.work.enter"))
@@ -117,7 +117,7 @@ struct ProcedureLoweringTests {
         )
 
         #expect(AlgorithmValidator.validate(model).isEmpty)
-        let spec = AlgorithmLowerer.lower(model)
+        let spec = try AlgorithmLowerer.lower(model)
         let initial = try #require(computeInitialStates(spec).first)
         let inOuter = try apply("start", in: spec, to: initial)
         let inInner = try apply("procedure.outer.enter", in: spec, to: inOuter)
@@ -177,7 +177,7 @@ struct ProcedureLoweringTests {
         )
 
         #expect(AlgorithmValidator.validate(model).isEmpty)
-        let spec = AlgorithmLowerer.lower(model)
+        let spec = try AlgorithmLowerer.lower(model)
         let initial = try #require(computeInitialStates(spec).first)
         let oneInOuter = try apply("start", process: .int(1), in: spec, to: initial)
         let bothInOuter = try apply("start", process: .int(2), in: spec, to: oneInOuter)

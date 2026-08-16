@@ -273,9 +273,8 @@ public indirect enum StateExpr: Hashable, Sendable, CustomStringConvertible {
             return "FoldFunction(LAMBDA \(operation.parameters.joined(separator: ", ")) : \(operation.body), \(initial), \(sequence))"
         case .operatorApplication(let operation, let arguments):
             let arguments = arguments.map(\.tlaSource).joined(separator: ", ")
-            return operation.isLambda
-                ? "(\(operation.tlaSource))(\(arguments))"
-                : "\(operation.tlaSource)(\(arguments))"
+            if operation.isLambda { return "(\(operation.tlaSource))(\(arguments))" }
+            return arguments.isEmpty ? operation.tlaSource : "\(operation.tlaSource)(\(arguments))"
         case .recursiveCall(let n, let a):
             return a.isEmpty ? n : "\(n)(\(a.map(\.description).joined(separator: ", ")))"
         case .letValue(let name, let value, let body):
