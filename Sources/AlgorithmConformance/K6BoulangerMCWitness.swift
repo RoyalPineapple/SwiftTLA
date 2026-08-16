@@ -1,14 +1,14 @@
 import SwiftTLA
 import SwiftTLAMacros
 
-/// The bounded three-process Boulangerie mutual-exclusion algorithm.
+/// K6 bounded Boulangerie witness from Boulanger.tla and MCBoulanger.cfg.
 ///
 /// This is a direct PlusCal-shaped port of the published model: each label
 /// is one atomic region, and the `Either`, `With`, `Choose`, and `Goto`
 /// blocks preserve the source control flow. The ticket choice is bounded by
 /// the upstream TLC override `Nat = 0...3`.
 @TLAModel
-public struct BoulangerModel {
+public struct K6BoulangerMCWitness {
     public enum Process: Int, FiniteDomainKey {
         case one = 1
         case two = 2
@@ -30,7 +30,7 @@ public struct BoulangerModel {
                     (.one, 0), (.two, 0), (.three, 0)
                 ))
                 let flag = SharedVar(initial: Function<Process, Bool>.literal(
-                    (.one, true), (.two, true), (.three, true)
+                    (.one, false), (.two, false), (.three, false)
                 ))
                 Each(Process.all, fairness: .weak) { selfID in
                     let unchecked = LocalVar(initial: SetExpr<Process>())
@@ -130,6 +130,7 @@ public struct BoulangerModel {
                             }
                         } or: {
                             Assign(num, to: num.updating(selfID, to: 0))
+                            Goto(Label.ncs)
                         }
                     }
 

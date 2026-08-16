@@ -74,7 +74,8 @@ public enum AlgorithmConformanceRegistry {
         k2ScopedFormalLambda,
         k3SimultaneousAssignment,
         k4StructuredDoors,
-        k5ProcedureCallReturn
+        k5ProcedureCallReturn,
+        k6BoulangerMC
     ]
 
     public static func fixture(id: String) -> AlgorithmConformanceFixture? {
