@@ -1,8 +1,8 @@
 import SwiftTLA
 
 extension AlgorithmConformanceRegistry {
-    /// Published three-process Boulangerie control flow with its bounded
-    /// state constraint.
+    /// Published Boulangerie control flow in the upstream source's recorded
+    /// two-process, `MaxNat = 3` small-model-checking instance.
     public static let boulangerUpstreamPort = AlgorithmConformanceFixture(
         id: "boulanger-upstream-port",
         configuration: "SPECIFICATION Spec\nCONSTRAINT StateConstraint\n",

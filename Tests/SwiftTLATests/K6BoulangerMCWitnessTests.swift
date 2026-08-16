@@ -3,14 +3,14 @@ import SwiftTLA
 import Testing
 
 struct K6BoulangerMCWitnessTests {
-    @Test("K6 Boulanger witness preserves the MCBoulanger initial flags and ncs back edge")
+    @Test("Boulanger witness preserves the upstream initial flags and ncs back edge")
     func preservesSourceFidelity() throws {
         let fidelityEvidence = parserFidelityEvidence()
         #expect(fidelityEvidence == nil, Comment(rawValue: fidelityEvidence?.description ?? "No parser/builder difference."))
 
         let source = try AlgorithmConformanceRegistry.boulangerUpstreamPort.plusCalModule()
-        #expect(source.contains("flag = [i \\in (1..3) |-> FALSE]"))
-        #expect(source.contains("num[self] := 0;\n      goto ncs;"))
+        #expect(source.contains("flag = [i \\in (1..2) |-> FALSE]"))
+        #expect(source.contains("num[pcalSelf] := 0;\n      goto ncs;"))
         #expect(K6BoulangerMCWitness.spec.algorithmFidelityTokens.count == 1)
     }
 
@@ -35,7 +35,7 @@ struct K6BoulangerMCWitnessTests {
         ) ?? _tlaFidelityEvidence(K6BoulangerMCWitness._parserTree, built)
     }
 
-    @Test("K6 fixture carries the bounded constraint that its source actually uses")
+    @Test("Boulanger fixture carries the upstream bounded constraint")
     func retainsBoundedConfiguration() {
         let fixture = AlgorithmConformanceRegistry.boulangerUpstreamPort
 

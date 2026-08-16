@@ -1,20 +1,21 @@
 import SwiftTLA
 import SwiftTLAMacros
 
-/// K6 bounded Boulangerie witness from Boulanger.tla and MCBoulanger.cfg.
+/// Bounded Boulangerie witness from Boulanger.tla and MCBoulanger.cfg.
 ///
 /// This is a direct PlusCal-shaped port of the published model: each label
 /// is one atomic region, and the `Either`, `With`, `Choose`, and `Goto`
-/// blocks preserve the source control flow. The ticket choice is bounded by
-/// the upstream finite choice and state-constraint bounds.
+/// blocks preserve the source control flow. Boulanger.tla explicitly records
+/// that its small-model check used two processes with chosen numbers bounded
+/// by 3. This is that smallest non-vacuous mutual-exclusion instance; the
+/// upstream MCBoulanger configuration supplies the same `MaxNat = 3` bound.
 @TLAModel
 public struct K6BoulangerMCWitness {
     public enum Process: Int, FiniteDomainKey {
         case one = 1
         case two = 2
-        case three = 3
 
-        public static let formalDomain: [Self] = [.one, .two, .three]
+        public static let formalDomain: [Self] = [.one, .two]
         public static let formalTypeIdentity = FormalTypeIdentity(rawValue: "upstream.boulanger.process")
     }
 
@@ -27,10 +28,10 @@ public struct K6BoulangerMCWitness {
             Extends("Integers")
             Algorithm("Boulanger") {
                 let num = SharedVar(initial: Function<Process, Int>.literal(
-                    (.one, 0), (.two, 0), (.three, 0)
+                    (.one, 0), (.two, 0)
                 ))
                 let flag = SharedVar(initial: Function<Process, Bool>.literal(
-                    (.one, false), (.two, false), (.three, false)
+                    (.one, false), (.two, false)
                 ))
                 Each(Process.all, fairness: .weak) { selfID in
                     let unchecked = LocalVar(initial: SetExpr<Process>())
@@ -49,7 +50,7 @@ public struct K6BoulangerMCWitness {
                             Goto(Label.e1)
                         } or: {
                             Assign(flag, to: flag.updating(selfID, to: true))
-                            Assign(unchecked, to: SetExpr<Process>.literal(.one, .two, .three).removing(selfID))
+                            Assign(unchecked, to: SetExpr<Process>.literal(.one, .two).removing(selfID))
                             Assign(max, to: 0)
                         }
                     }
@@ -86,7 +87,7 @@ public struct K6BoulangerMCWitness {
                             Assign(unchecked, to: If(
                                 num[selfID] == 1,
                                 then: Process.all.members(before: selfID),
-                                else: SetExpr<Process>.literal(.one, .two, .three).removing(selfID)
+                                else: SetExpr<Process>.literal(.one, .two).removing(selfID)
                             ))
                         }
                     }
