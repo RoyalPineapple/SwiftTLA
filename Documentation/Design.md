@@ -171,25 +171,15 @@ struct Counter {
 The `#spec` expansion registers `count` with the constrained runtime builder,
 while the model macro parses the original declaration into the formal AST.
 
-## Algorithm rendering and independent lowering
+## Algorithm rendering
 
 Algorithm IR has one semantic lowerer: `Algorithm IR → TLA+ AST`. It owns
 atomic `Do` blocks, old-state simultaneous assignment, process state, `With`
 and `Choose` bindings, procedures, and fairness.
 
-The planned PlusCal renderer is not another lowerer. It consumes Algorithm IR
-and prints a readable PlusCal block inside a valid TLA+ module. The external
-PlusCal translator then provides an independent lowering:
-
-```
-Algorithm IR ── SwiftTLA lowerer ──► TLA+ ──► TLC graph A
-      │
-      └── PlusCal renderer ──► PlusCal module ──► translator ──► TLA+ ──► TLC graph B
-```
-
-For a declared finite case, canonical equivalence of graphs A and B is the
-admission evidence for that algorithm-lowering surface. The renderer must not
-invent semantics or reimplement lowering.
+`AlgorithmPlusCalRenderer` is not another lowerer. It consumes Algorithm IR
+and prints retained, readable PlusCal source inside a valid TLA+ module; it
+must not invent semantics or reimplement lowering.
 
 ## Capability claims use five levels
 
@@ -265,15 +255,14 @@ but its ownership boundaries are fixed:
 | `SwiftTLA` formal core | TLA+ AST, finite evaluation, module rendering, Algorithm IR, lowering, and PlusCal rendering | SwiftUI, application adapters, or macro-only semantics |
 | `SwiftTLAPlugin` | syntax recovery, source spans, fidelity diagnostics, and typed generated surfaces | Algorithm lowering or TLA+ evaluation semantics |
 | direct-TLA parity corpus | faithful direct-TLA modules, imports, and direct-TLA graph comparisons | application-shaped Algorithm fixtures |
-| algorithm conformance corpus | canonical `#spec`/`Algorithm` fixtures, including upstream PlusCal ports, and Swift-lowered versus PlusCal-translated graph comparisons | duplicate direct-TLA implementations of the same algorithm |
+| algorithm conformance corpus | canonical `#spec`/`Algorithm` fixtures, including upstream PlusCal ports and their retained authored PlusCal source | duplicate direct-TLA implementations of the same algorithm |
 | `Examples/` consumers | demos and Apple integration shims that import the public package | a second state machine, availability policy, or formal evaluator |
 
 `AlgorithmConformance` is the dedicated home for PlusCal-shaped fixtures.
-It depends on SwiftTLA and the macro library, while the TLC validation
-executable consumes its declared bundle. K6 moves existing upstream PlusCal
-ports out of `UpstreamParity` without changing their model or provenance. This
-keeps core semantic tests independent of the upstream corpus and keeps direct
-parity evidence distinct from algorithm evidence.
+It depends on SwiftTLA and the macro library. K6 moves existing upstream
+PlusCal ports out of `UpstreamParity` without changing their model or
+provenance. This keeps core semantic tests independent of the upstream corpus
+and keeps direct parity evidence distinct from algorithm evidence.
 
 ## DSL philosophy
 

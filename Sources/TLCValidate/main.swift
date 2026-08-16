@@ -12,16 +12,12 @@ if args.first == "temporal-symmetry" {
 if args.first == "public-workflow" {
     runPublicWorkflow(arguments: Array(args.dropFirst()))
 }
-if args.first == "pluscal-oracle" {
-    runPlusCalOracle(arguments: Array(args.dropFirst()))
-}
 guard let name = args.first else {
     fputs("""
     Usage: tlc-validate <name>
       operators: arithmetic comparison logic sets tuples records functions casexpr choose forall
       parity:    list | <ParityCatalog id>
       oracle:    symmetric-collections (alias: symmetric-oracle)
-      pluscal:   pluscal-oracle run --case <id> --output <fresh-directory>
     """, stderr)
     exit(1)
 }
