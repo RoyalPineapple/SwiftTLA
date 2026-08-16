@@ -34,9 +34,13 @@ extension TLASpec {
     var sourceAlgorithms: [Algorithm] = []
     var operators: [String: OpDecl] = [:]
 
-    // Pass 1: collect operators
+    // Pass 1: collect operators and the definitions needed to materialize
+    // closed Algorithm initial values.
     for comp in components {
       if let op = comp as? OpDecl { operators[op.name] = op }
+      if let definition = comp as? FormalOperatorDecl {
+        formalOperatorDefinitions.append(definition.definition)
+      }
     }
 
     for comp in components {
@@ -60,7 +64,9 @@ extension TLASpec {
         algorithmFidelityTokens.append(AlgorithmFidelityToken(model: algorithm.model))
         sourceAlgorithms.append(algorithm)
         do {
-          let lowered = try algorithm.lower()
+          let lowered = try algorithm.lower(
+            formalOperatorDefinitions: formalOperatorDefinitions
+          )
           variables += lowered.variables
           actions += lowered.actions
           invariants += lowered.invariants
@@ -89,7 +95,6 @@ extension TLASpec {
           definitions.append(d.tlaText)
         }
       } else if let definition = comp as? FormalOperatorDecl {
-        formalOperatorDefinitions.append(definition.definition)
         definitions.append(definition.tlaText)
       } else if let th = comp as? TheoremDecl {
         if !th.tlaText.isEmpty {

@@ -100,7 +100,19 @@ extension SpecParser {
         // distinction after lowering.
         result.algorithmFidelityTokens.append(AlgorithmFidelityToken(model: model))
 
-        let lowered = AlgorithmLowerer.lower(model)
+        let lowered: TLASpec
+        do {
+            lowered = try AlgorithmLowerer.lower(
+                model,
+                formalOperatorDefinitions: result.formalOperatorDefinitions
+            )
+        } catch {
+            result.diagnostics.append(.init(
+                message: "Unable to lower Algorithm '\(name)': \(error)",
+                source: call
+            ))
+            return
+        }
         let stateTypes = Dictionary(uniqueKeysWithValues: algorithmStateDeclarations(in: model).compactMap { state in
             state.swiftTypeName.map { (state.root, $0) }
         })
