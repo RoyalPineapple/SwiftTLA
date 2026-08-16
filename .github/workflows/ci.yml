@@ -58,7 +58,7 @@ jobs:
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
-      - run: swift build
+      - run: swift build -j 1
 
   macro:
     runs-on: macos-15
