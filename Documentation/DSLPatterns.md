@@ -70,11 +70,46 @@ evidence for larger or arbitrary populations, and it makes no `N → infinity`
 claim. Locality-checked parametric verification is future work; it requires a
 separate proof rather than extrapolation from bounded runs.
 
+## Model authoring rule: use the PlusCal-shaped builders
+
+New application models, demos, and user-facing examples start with one
+canonical shape:
+
+```swift
+@TLAModel
+struct Counter {
+    static var spec: TLASpec {
+        #spec("Counter") {
+            Algorithm("Counter") {
+                let value = SharedVar(initial: 0)
+                Do("advance") {
+                    When(value < 1)
+                    Assign(value, to: value + 1)
+                }
+            }
+        }
+    }
+}
+```
+
+`SharedVar`, `LocalVar`, `Each`, `Procedure`, `Do`, and the nested statement
+builders describe formal behavior. Their closures do not run application
+logic. The parser and runtime builder are required to produce equivalent
+algorithm models before the one lowerer creates the TLA+ spec used by
+checking, generation, and export.
+
+`Var`, `Variable`, and `Action` remain formal-engine and direct-TLA tools for
+imported modules and parity fixtures. They are not a second application
+authoring style.
+
 ## Builder rule: every nested scope gets a builder
 
 | Construct | Builder | Result |
 |-----------|---------|--------|
 | `TLASpec("Name") { ... }` | `@SpecBuilder` | `SpecComponent[]` |
+| `Algorithm("Name") { ... }` | `@AlgorithmBuilder` | `AlgorithmElement[]` |
+| `Do("Name") { ... }` | `@DoBuilder` | `StepStatement[]` |
+| `Procedure("Name") { ... }` | `@AlgorithmBuilder` | `AlgorithmElement` |
 | `Action("Name") { ... }` | `@ActionBuilder` | `ActionExpr` |
 | `Invariant("Name") { ... }` | `@InvariantBuilder` | `StateExpr` |
 | `Variable(computed: x) { ... }` | `@InvariantBuilder` | `StateExpr` (initExpr) |
@@ -107,14 +142,14 @@ and `TransitionResult` values. `TLAStateProjection` is the guarded bridge for
 formal tooling that must inspect a formal state. See
 [Generated machines](GeneratedMachines.md) for the public contract.
 
-## Construct rule: one way to build
+## Formal-engine construct rule: one way to build
 
 There is exactly one builder function per construct type. Internal `*Decl` structs have
 internal initializers — only the builder function can create them.
 
 | Builder function | Creates | Internal type |
 |-----------------|---------|---------------|
-| `Variable(x, 0)` | `VarDecl` | `VarDecl` |
+| `Variable(x, 0)` | `VarDecl` | `VarDecl` (formal engine / direct TLA+) |
 | `Variable(x, in: set)` | `VarDecl` | `VarDecl` |
 | `Variable(computed: x) { ... }` | `VarDecl` | `VarDecl` |
 | `Action("Name") { ... }` | `ActionDecl` | `ActionDecl` |

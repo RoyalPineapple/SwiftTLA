@@ -213,13 +213,19 @@ the supported surface.
 
 ## DSL philosophy
 
-- **Builders everywhere.** Every nested scope has a result builder: `Action { }`,
-  `Invariant { }`, `Variable(computed:) { }`, `DefineRecursive { }`,
-  `forAll(set) { _ in }`, `filterSet(set) { _ in }`, `exists(name, from:) { _ in }`.
+- **One authoring path.** Application models use `#spec` plus `Algorithm`,
+  `SharedVar`, `LocalVar`, `Each`, `Procedure`, and `Do`. The algorithm builder
+  creates formal IR; it does not execute ordinary Swift behavior.
+- **Builders everywhere.** Every nested formal scope has a result builder:
+  `Algorithm { }`, `Do { }`, `Action { }`, `Invariant { }`,
+  `DefineRecursive { }`, `forAll(set) { _ in }`, and `filterSet(set) { _ in }`.
 - **1:1 structural match.** DSL structure mirrors upstream TLA+ exactly.
   Same action names, same variable decomposition, same invariant names.
-- **No manual `ActionDecl`/`InvDecl`.** All Decl structs have internal inits.
-  Only builder functions create spec components.
+- **Direct TLA is an engine boundary.** `Var`, `Variable`, and `Action` remain
+  available for imported TLA+ modules and upstream parity fixtures. They are
+  not documented as a parallel application-model style.
+- **No manual declarations.** All declaration structs have internal inits.
+  Only builders create formal components.
 
 ## Language coverage
 
