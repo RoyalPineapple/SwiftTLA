@@ -63,7 +63,11 @@ let package = Package(
             ],
             swiftSettings: settings
         ),
-        .executableTarget(name: "tlc-validate", dependencies: ["SwiftTLA", "UpstreamParity"], path: "Sources/TLCValidate"),
+        .executableTarget(
+            name: "tlc-validate",
+            dependencies: ["SwiftTLA", "UpstreamParity", "AlgorithmConformance"],
+            path: "Sources/TLCValidate"
+        ),
         // Fast semantic-core tests. Keep this target free of UpstreamParity so
         // K1–K4 witnesses can compile and run without the parity corpus.
         .testTarget(name: "SwiftTLATests", dependencies: [
