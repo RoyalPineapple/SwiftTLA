@@ -296,22 +296,23 @@ enum AlgorithmLowerer {
             partial.map { .and($0, constraint) } ?? constraint
         }
 
-        var variables = shared.map { state in
+        let sharedVariables = shared.map { state in
             if let initial = try? state.initial.evaluate(in: [:]) {
                 NamedVar(name: state.root, initial: initial, initialSet: state.initialSet)
             } else {
                 NamedVar(name: state.root, initial: .int(0), initExpr: state.initial)
             }
         }
+        var procedureVariables: [NamedVar] = []
         for procedure in procedures {
             for parameter in procedure.parameters {
-                variables.append(NamedVar(
+                procedureVariables.append(NamedVar(
                     name: parameter.root,
                     initial: staticInitialValue(parameter.initial, named: parameter.root)
                 ))
             }
             for local in procedure.locals {
-                variables.append(NamedVar(
+                procedureVariables.append(NamedVar(
                     name: local.root,
                     initial: staticInitialValue(local.initial, named: local.root)
                 ))
@@ -320,7 +321,7 @@ enum AlgorithmLowerer {
         guard let first = steps.first else {
             return TLASpec(
                 name: algorithm.name,
-                variables: variables,
+                variables: sharedVariables + procedureVariables,
                 actions: [],
                 invariants: declaredInvariants,
                 temporalProperties: declaredTemporal,
@@ -329,10 +330,14 @@ enum AlgorithmLowerer {
                 sourceAlgorithms: [Algorithm(model: algorithm)]
             )
         }
-        variables.append(NamedVar(name: controlVariable, initial: .string(first.label.name)))
+        // Match PlusCal's declaration order so TLC emits comparable frame
+        // records in its retained DOT graph.
+        var variables = [NamedVar(name: controlVariable, initial: .string(first.label.name))]
+            + sharedVariables
         if !procedures.isEmpty {
             variables.append(NamedVar(name: stackVariable, initial: .tuple([])))
         }
+        variables += procedureVariables
         let variableNames = variables.map(\.name)
 
         var actions: [NamedAction] = []
