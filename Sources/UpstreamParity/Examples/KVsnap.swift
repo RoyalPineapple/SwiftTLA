@@ -113,7 +113,7 @@ public struct KVsnapModel {
             FormalDefinition(
                 "InitialState",
                 parameters: [],
-                body: Function<Key, Value>.mapping { _ in .second(.noVal) }.raw
+                body: Function<Key, Value>.mapping { _ in Value.second(.noVal) }.raw
             )
             FormalDefinition(
                 "SetToSeq",
