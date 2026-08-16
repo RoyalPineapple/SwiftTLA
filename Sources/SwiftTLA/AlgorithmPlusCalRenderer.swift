@@ -55,7 +55,10 @@ internal struct AlgorithmPlusCalRenderer {
     let model: AlgorithmModel
 
     func render() throws -> String {
-        var lines = ["---- MODULE \(moduleName(model.name)) ----", "EXTENDS Naturals, Sequences, FiniteSets", "", "(*--algorithm \(model.name) {"]
+        // TLA+ spells negative values through the unary `-.` operator from
+        // `Integers`.  PlusCal's translator preserves that operator in the
+        // generated module, so every rendered source must make it available.
+        var lines = ["---- MODULE \(moduleName(model.name)) ----", "EXTENDS Naturals, Integers, Sequences, FiniteSets", "", "(*--algorithm \(model.name) {"]
 
         let shared = model.components.compactMap { component -> AlgorithmStateModel? in
             guard case .shared(let declaration) = component else { return nil }

@@ -68,6 +68,20 @@ struct AlgorithmPlusCalRendererTests {
         #expect(rendered.contains("} *)"))
     }
 
+    @Test("imports Integers when rendering a negative formal value")
+    func rendersNegativeFormalValue() throws {
+        let algorithm = Algorithm("Negative") {
+            let previous = SharedVar("previous", initial: -1)
+            previous
+            Do("stop") { Stop() }
+        }
+
+        let rendered = try algorithm.renderPlusCalModule()
+
+        #expect(rendered.contains("EXTENDS Naturals, Integers, Sequences, FiniteSets"))
+        #expect(rendered.contains("previous = -1"))
+    }
+
     @Test("renders the PlusCal brace control grammar literally")
     func rendersBraceControlGrammar() throws {
         let loop = AlgorithmLabelModel(name: "loop")
