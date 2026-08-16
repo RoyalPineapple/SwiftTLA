@@ -14,6 +14,167 @@ public enum EvalError: Error, CustomStringConvertible {
     }
 }
 
+/// The common finite-state expression subset is evaluated with an explicit
+/// work stack. This prevents a syntactically ordinary function constructor
+/// from consuming one Swift stack frame per formal expression node.
+private final class StateExprWorkStack {
+    enum Error: Swift.Error { case unsupportedExpression }
+
+    private enum Task {
+        case expression(StateExpr, [String: TLAValue])
+        case binary((TLAValue, TLAValue) throws -> TLAValue)
+        case unary((TLAValue) throws -> TLAValue)
+        case and(StateExpr, [String: TLAValue])
+        case or(StateExpr, [String: TLAValue])
+        case conditional(StateExpr, StateExpr, [String: TLAValue])
+        case collectSet([StateExpr], [TLAValue], [String: TLAValue], Bool)
+        case functionDomain(String, StateExpr, [String: TLAValue])
+        case functionElement([TLAValue], TLAValue?, String, StateExpr, [String: TLAValue], [TLAValue: TLAValue])
+    }
+
+    private let state: [String: TLAValue]
+    private let runtimeFuncs: [String: StateExpr.RuntimeFunc]
+    private let recursiveFuncs: [RecursiveFunc]
+    private let formalOperatorDefinitions: [FormalOperatorDefinition]
+    private let valueBindings: [String: TLAValue]
+    private let operatorBindings: [String: FormalOperator]
+    private let maxDepth: Int
+
+    init(state: [String: TLAValue], runtimeFuncs: [String: StateExpr.RuntimeFunc], recursiveFuncs: [RecursiveFunc], formalOperatorDefinitions: [FormalOperatorDefinition], valueBindings: [String: TLAValue], operatorBindings: [String: FormalOperator], maxDepth: Int) {
+        self.state = state
+        self.runtimeFuncs = runtimeFuncs
+        self.recursiveFuncs = recursiveFuncs
+        self.formalOperatorDefinitions = formalOperatorDefinitions
+        self.valueBindings = valueBindings
+        self.operatorBindings = operatorBindings
+        self.maxDepth = maxDepth
+    }
+
+    func evaluate(_ expression: StateExpr) throws -> TLAValue {
+        var tasks: [Task] = [.expression(expression, valueBindings)]
+        var values: [TLAValue] = []
+        func pop() throws -> TLAValue {
+            guard let value = values.popLast() else { throw Error.unsupportedExpression }
+            return value
+        }
+        func integer(_ value: TLAValue) throws -> Int {
+            guard case .int(let integer) = value else { throw Error.unsupportedExpression }
+            return integer
+        }
+        func boolean(_ value: TLAValue) throws -> Bool {
+            guard case .bool(let boolean) = value else { throw Error.unsupportedExpression }
+            return boolean
+        }
+
+        while let task = tasks.popLast() {
+            switch task {
+            case .expression(let expr, let bindings):
+                switch expr {
+                case .value(let value): values.append(value)
+                case .variable(let name):
+                    guard let value = bindings[name] ?? state[name] else { throw Error.unsupportedExpression }
+                    values.append(value)
+                case .add(let lhs, let rhs):
+                    tasks.append(.binary { .int(try integer($0) + integer($1)) })
+                    tasks.append(.expression(rhs, bindings)); tasks.append(.expression(lhs, bindings))
+                case .subtract(let lhs, let rhs):
+                    tasks.append(.binary { .int(try integer($0) - integer($1)) })
+                    tasks.append(.expression(rhs, bindings)); tasks.append(.expression(lhs, bindings))
+                case .multiply(let lhs, let rhs):
+                    tasks.append(.binary { .int(try integer($0) * integer($1)) })
+                    tasks.append(.expression(rhs, bindings)); tasks.append(.expression(lhs, bindings))
+                case .equal(let lhs, let rhs):
+                    tasks.append(.binary { .bool($0 == $1) })
+                    tasks.append(.expression(rhs, bindings)); tasks.append(.expression(lhs, bindings))
+                case .lessThan(let lhs, let rhs):
+                    tasks.append(.binary { .bool(try integer($0) < integer($1)) })
+                    tasks.append(.expression(rhs, bindings)); tasks.append(.expression(lhs, bindings))
+                case .lessOrEqual(let lhs, let rhs):
+                    tasks.append(.binary { .bool(try integer($0) <= integer($1)) })
+                    tasks.append(.expression(rhs, bindings)); tasks.append(.expression(lhs, bindings))
+                case .greaterThan(let lhs, let rhs):
+                    tasks.append(.binary { .bool(try integer($0) > integer($1)) })
+                    tasks.append(.expression(rhs, bindings)); tasks.append(.expression(lhs, bindings))
+                case .greaterOrEqual(let lhs, let rhs):
+                    tasks.append(.binary { .bool(try integer($0) >= integer($1)) })
+                    tasks.append(.expression(rhs, bindings)); tasks.append(.expression(lhs, bindings))
+                case .and(let lhs, let rhs):
+                    tasks.append(.and(rhs, bindings)); tasks.append(.expression(lhs, bindings))
+                case .or(let lhs, let rhs):
+                    tasks.append(.or(rhs, bindings)); tasks.append(.expression(lhs, bindings))
+                case .not(let value):
+                    tasks.append(.unary { .bool(!(try boolean($0))) }); tasks.append(.expression(value, bindings))
+                case .ifThenElse(let condition, let then, let otherwise):
+                    tasks.append(.conditional(then, otherwise, bindings)); tasks.append(.expression(condition, bindings))
+                case .tupleLiteral(let elements):
+                    // Game of Life uses only fixed two-element positions.
+                    guard elements.count == 2 else { throw Error.unsupportedExpression }
+                    tasks.append(.binary { .tuple([$0, $1]) })
+                    tasks.append(.expression(elements[1], bindings)); tasks.append(.expression(elements[0], bindings))
+                case .tupleAccess(let tuple, let index):
+                    tasks.append(.unary {
+                        guard case .tuple(let values) = $0, index >= 1, index <= values.count else { throw Error.unsupportedExpression }
+                        return values[index - 1]
+                    }); tasks.append(.expression(tuple, bindings))
+                case .functionLiteral(let domain, let binder, let body):
+                    tasks.append(.functionDomain(binder, body, bindings)); tasks.append(.expression(domain, bindings))
+                case .functionApply(let function, let argument):
+                    tasks.append(.binary {
+                        guard case .function(let mapping) = $0, let value = mapping[$1] else { throw Error.unsupportedExpression }
+                        return value
+                    }); tasks.append(.expression(argument, bindings)); tasks.append(.expression(function, bindings))
+                case .setLiteral(let members):
+                    tasks.append(.collectSet(members, [], bindings, false))
+                case .in(let member, let set):
+                    tasks.append(.binary {
+                        guard case .set(let members) = $1 else { throw Error.unsupportedExpression }
+                        return .bool(members.contains($0))
+                    }); tasks.append(.expression(set, bindings)); tasks.append(.expression(member, bindings))
+                default: throw Error.unsupportedExpression
+                }
+            case .binary(let operation):
+                let rhs = try pop(); let lhs = try pop(); values.append(try operation(lhs, rhs))
+            case .unary(let operation): values.append(try operation(try pop()))
+            case .and(let rhs, let bindings):
+                values.append(.bool(try boolean(pop())))
+                if case .bool(true) = values.removeLast() {
+                    tasks.append(.expression(rhs, bindings))
+                } else {
+                    values.append(.bool(false))
+                }
+            case .or(let rhs, let bindings):
+                values.append(.bool(try boolean(pop())))
+                if case .bool(false) = values.removeLast() {
+                    tasks.append(.expression(rhs, bindings))
+                } else {
+                    values.append(.bool(true))
+                }
+            case .conditional(let then, let otherwise, let bindings):
+                tasks.append(.expression(try boolean(pop()) ? then : otherwise, bindings))
+            case .collectSet(var remaining, var collected, let bindings, let awaiting):
+                if awaiting { collected.append(try pop()) }
+                guard let next = remaining.first else { values.append(.set(Set(collected))); continue }
+                remaining.removeFirst()
+                tasks.append(.collectSet(remaining, collected, bindings, true))
+                tasks.append(.expression(next, bindings))
+            case .functionDomain(let binder, let body, let bindings):
+                guard case .set(let domain) = try pop() else { throw Error.unsupportedExpression }
+                tasks.append(.functionElement(domain.sorted(), nil, binder, body, bindings, [:]))
+            case .functionElement(var remaining, let awaiting, let binder, let body, let bindings, var mapping):
+                if let awaiting { mapping[awaiting] = try pop() }
+                guard let element = remaining.first else { values.append(.function(mapping)); continue }
+                remaining.removeFirst()
+                var nextBindings = bindings
+                nextBindings[binder] = element
+                tasks.append(.functionElement(remaining, element, binder, body, bindings, mapping))
+                tasks.append(.expression(body, nextBindings))
+            }
+        }
+        guard values.count == 1, let result = values.last else { throw Error.unsupportedExpression }
+        return result
+    }
+}
+
 extension StateExpr {
     public typealias RuntimeFunc = @Sendable ([TLAValue]) -> TLAValue
 
@@ -22,7 +183,6 @@ extension StateExpr {
         case seqFromSet = "SeqFromSet"
     }
 
-    // swiftlint:disable function_body_length
     public func evaluate(in state: [String: TLAValue],
                          runtimeFuncs: [String: RuntimeFunc] = [:],
                          recursiveFuncs: [RecursiveFunc] = [],
@@ -30,6 +190,38 @@ extension StateExpr {
                          valueBindings: [String: TLAValue] = [:],
                          operatorBindings: [String: FormalOperator] = [:],
                          maxDepth: Int = 1000) throws -> TLAValue {
+        let evaluator = StateExprWorkStack(
+            state: state,
+            runtimeFuncs: runtimeFuncs,
+            recursiveFuncs: recursiveFuncs,
+            formalOperatorDefinitions: formalOperatorDefinitions,
+            valueBindings: valueBindings,
+            operatorBindings: operatorBindings,
+            maxDepth: maxDepth
+        )
+        do {
+            return try evaluator.evaluate(self)
+        } catch StateExprWorkStack.Error.unsupportedExpression {
+            return try evaluateRecursively(
+                in: state,
+                runtimeFuncs: runtimeFuncs,
+                recursiveFuncs: recursiveFuncs,
+                formalOperatorDefinitions: formalOperatorDefinitions,
+                valueBindings: valueBindings,
+                operatorBindings: operatorBindings,
+                maxDepth: maxDepth
+            )
+        }
+    }
+
+    // swiftlint:disable function_body_length
+    private func evaluateRecursively(in state: [String: TLAValue],
+                                     runtimeFuncs: [String: RuntimeFunc] = [:],
+                                     recursiveFuncs: [RecursiveFunc] = [],
+                                     formalOperatorDefinitions: [FormalOperatorDefinition] = [],
+                                     valueBindings: [String: TLAValue] = [:],
+                                     operatorBindings: [String: FormalOperator] = [:],
+                                     maxDepth: Int = 1000) throws -> TLAValue {
         func tm(_ op: String, got: TLAValue...) -> EvalError {
             .typeMismatch("\(op): expected matching types, got \(got.map(\.description).joined(separator: ", "))")
         }
