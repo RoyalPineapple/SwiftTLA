@@ -394,10 +394,12 @@ public enum SpecParser {
               let domain = finiteAlgorithmDomain(domainSyntax),
               let closure = call.trailingClosure,
               closure.statements.count == 1,
-              case .expr(let bodySyntax) = closure.statements.first?.item,
-              let parameter = closureParameterNames(in: closure).first,
-              closureParameterNames(in: closure).count == 1
+              case .expr(let bodySyntax) = closure.statements.first?.item
         else { return nil }
+
+        let parameters = closureParameterNames(in: closure)
+        guard parameters.count <= 1 else { return nil }
+        let parameter = parameters.first ?? "$0"
 
         let binding = StateExpr.variable(parameter)
         let predicate: StateExpr?
