@@ -93,8 +93,13 @@ enum TLASpecVerifier {
         let dotRewrittenSyntax = rewriter.rewrite(rewritten)
         let dotRewritten = dotRewrittenSyntax.as(ClosureExprSyntax.self) ?? rewritten
         if let unknown = rewriter.unknownDots.first, !caseToType.isEmpty {
-            let allCases = caseToType.keys.sorted().joined(separator: ", ")
-            throw SimpleError("Unknown enum case '.\(unknown)'. Available cases: [\(allCases)]")
+            throw SpecParser.SymmetricCollectionParseDiagnostic(
+                message: "Unknown enum case '.\(unknown)'.",
+                source: dotRewritten.description,
+                expected: "a declared enum case or a recognized formal operator spelling",
+                actual: ".\(unknown); available cases: [\(caseToType.keys.sorted().joined(separator: ", "))]",
+                nextSafeAction: "Qualify the intended enum case, or use FormalOperator and FormalCallArgument spellings for formal operator syntax."
+            )
         }
         var parsed = SpecParser.parseSpecClosure(
             dotRewritten,
@@ -568,6 +573,24 @@ private final class EnumDotRewriter: SyntaxRewriter {
         "head", "tail", "stays", "zero", "max", "min", "default", "init", "value",
         "variable",
         "int", "bool", "string", "set", "tuple", "record", "function", "constant",
+        // Formal operator syntax is expression data, not an application enum
+        // case. Keep these members unqualified so SpecParser's existing
+        // formal-expression decoder can preserve their AST structure.
+        "lambda", "reference", "operator",
+        // A FormalLambda body is authored with StateExpr cases. The enum-dot
+        // pass runs before source parsing, so it must not mistake any of
+        // those formal AST members for an application enum case.
+        "add", "subtract", "multiply", "divide", "modulo", "negate", "integerDivide",
+        "equal", "notEqual", "lessThan", "lessOrEqual", "greaterThan", "greaterOrEqual",
+        "and", "or", "not", "ifThenElse",
+        "setLiteral", "in", "subset", "union", "intersection", "setDifference",
+        "setFilter", "setMap", "powerSet", "unionAll", "integerRange",
+        "tupleLiteral", "tupleAccess", "tupleDynamicAccess", "tupleLength", "tupleAppend",
+        "tupleHead", "tupleTail", "tupleConcatenate",
+        "recordLiteral", "recordAccess", "functionLiteral", "functionApply", "except",
+        "caseExpr", "forAll", "exists", "choose", "enabledAction", "sequenceFromSet",
+        "setSum", "functionSet", "foldFunction", "operatorApplication", "recursiveCall",
+        "letValue", "letIn",
         // These are DSL enum cases, not user-state enum cases. They remain
         // unqualified so Algorithm's parser can recognize its public syntax.
         "none", "weak", "strong"

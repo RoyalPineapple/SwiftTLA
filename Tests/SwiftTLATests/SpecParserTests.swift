@@ -99,6 +99,72 @@ private func parseExpression(_ source: String) -> ExprSyntax {
         ])
     }
 
+    @Test("Algorithm parser preserves a process-bound formal lambda application")
+    func parsesProcessScopedFormalLambdaApplication() {
+        let source = """
+        {
+            Algorithm("ScopedFormalLambda") {
+                let counters = SharedVar(initial: Function<Worker, Int>.literal(
+                    (.left, 0),
+                    (.right, 0)
+                ))
+                Each(Worker.all) { worker in
+                    Do("advance") {
+                        Assign(counters, to: counters.updating(worker, to: Expr<Int>(
+                            StateExpr.operatorApplication(
+                                .lambda(FormalLambda(
+                                    parameters: ["value"],
+                                    body: StateExpr.variable("value") + 1
+                                )),
+                                [.value(counters[worker].raw)]
+                            )
+                        )))
+                    }
+                }
+            }
+        }
+        """
+        let closure = Parser.parse(source: source).statements.first!.item.as(ClosureExprSyntax.self)!
+        let parsed = SpecParser.parseSpecClosure(
+            closure,
+            enumDomains: ["Worker": [.string("left"), .string("right")]]
+        )
+
+        #expect(parsed.diagnostics.isEmpty)
+        #expect(parsed.actions.map(\.name) == ["advance", "Terminating"])
+        #expect(parsed.actions.first?.body.description.contains("LAMBDA value : (value + 1)") == true)
+    }
+
+    @Test("formal operator parsing failure retains all six diagnostic fields")
+    func malformedFormalLambdaRetainsSixFieldDiagnostic() {
+        let source = """
+        {
+            Algorithm("MalformedFormalLambda") {
+                let counter = SharedVar(initial: 0)
+                Do("advance") {
+                    Assign(counter, to: Expr<Int>(StateExpr.operatorApplication(
+                        .lambda(FormalLambda(parameters: [], body: .int(1))),
+                        [.value(counter.expr.raw)]
+                    )))
+                }
+            }
+        }
+        """
+        let closure = Parser.parse(source: source).statements.first!.item.as(ClosureExprSyntax.self)!
+        let parsed = SpecParser.parseSpecClosure(closure)
+        guard let diagnostic = parsed.diagnostics.first else {
+            Issue.record("Expected a malformed formal-lambda diagnostic")
+            return
+        }
+
+        #expect(diagnostic.description.contains("What failed:") == true)
+        #expect(diagnostic.description.contains("Where:") == true)
+        #expect(diagnostic.description.contains("Expected:") == true)
+        #expect(diagnostic.description.contains("Actual:") == true)
+        #expect(diagnostic.description.contains("Change status:") == true)
+        #expect(diagnostic.description.contains("Next safe action:") == true)
+    }
+
     @Test("parser lowers ordered multi-source With bindings")
     func parsesThreeIndependentWithBindings() {
         let source = """

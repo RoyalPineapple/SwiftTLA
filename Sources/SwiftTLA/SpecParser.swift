@@ -425,6 +425,17 @@ public enum SpecParser {
            let substitution = substitutions[reference.baseName.text] {
             return substitution
         }
+        // `Expr<T>` is a phantom type wrapper. Its one value argument is
+        // already a formal expression, including the canonical formal
+        // operator application spelling, so preserve that parser path rather
+        // than attempting to infer it as a typed collection operation.
+        if let call = expression.as(FunctionCallExprSyntax.self),
+           let type = typedLiteralType(call.calledExpression),
+           type.name == "Expr",
+           call.arguments.count == 1,
+           let value = call.arguments.first?.expression {
+            return decodeTypedFacadeValue(value, substitutions: substitutions)
+        }
         // `Pair(first:second:)` is normally inferred from an enclosing
         // `SetExpr<Pair<...>>`, so SwiftSyntax sees the constructor without
         // its generic arguments. Its two labeled formal values still retain
