@@ -144,11 +144,11 @@ enum AlgorithmLowerer {
             controlBinding,
             .caseExpr(controlCases, nil)
         )
-        variables.append(NamedVar(
+        variables.insert(NamedVar(
             name: controlVariable,
             initial: .function([:]),
             initExpr: controlInitial
-        ))
+        ), at: 0)
         if !procedures.isEmpty {
             for slot in procedureSlots(procedures) {
                 variables.append(NamedVar(
