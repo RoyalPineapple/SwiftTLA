@@ -38,12 +38,20 @@ public enum ActionEnumerator {
         // selected branch. Check guards that are outside a `LET` or `WITH`
         // binding before evaluating that binding. A false loop guard must not
         // evaluate a body-local expression such as `sequence[mid]`.
-        guard try outerGuardsAreEnabled(
-            in: action,
-            oldState: oldState,
-            formalOperatorDefinitions: formalOperatorDefinitions
-        ) else {
-            return []
+        // A CHOOSE action binds its selected value for every sibling guard in
+        // the action. Do not evaluate those guards against the old state: a
+        // stale process value can be outside a function's domain even though
+        // every selected value is valid. The chosen branches evaluate their
+        // guards below with the binding installed.
+        let initialChooseAssignments = try extractChooseActions(action)
+        if initialChooseAssignments.isEmpty {
+            guard try outerGuardsAreEnabled(
+                in: action,
+                oldState: oldState,
+                formalOperatorDefinitions: formalOperatorDefinitions
+            ) else {
+                return []
+            }
         }
 
         // Handle LET bindings: evaluate value, substitute into body
@@ -94,7 +102,7 @@ public enum ActionEnumerator {
             }
         }
 
-        let chooseAssignments = try extractChooseActions(action)
+        let chooseAssignments = initialChooseAssignments
         if !chooseAssignments.isEmpty {
             var partials: [[String: TLAValue]] = [[:]]
             for (varName, setExpr) in chooseAssignments {

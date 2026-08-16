@@ -680,6 +680,9 @@ public enum SpecParser {
             guard let indexSyntax = call.arguments.first?.expression,
                   let index = decodeTypedFacadeValue(indexSyntax, substitutions: substitutions)
             else { return nil }
+            if case .value(.int(let position)) = index {
+                return .tupleAccess(base, position)
+            }
             return .tupleDynamicAccess(base, index)
         default:
             return nil
