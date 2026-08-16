@@ -1,6 +1,5 @@
 import SwiftTLA
 import UpstreamParity
-import AlgorithmConformance
 import Foundation
 let args = Array(CommandLine.arguments.dropFirst())
 if args.first == "core-conformance" {
