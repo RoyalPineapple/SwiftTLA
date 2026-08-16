@@ -85,11 +85,11 @@ internal struct AlgorithmPlusCalRenderer {
                 // Sequential steps share the algorithm's C-syntax brace body.
                 continue
             case .invariant(let invariant):
-                lines.append("\\* Invariant \(invariant.name) == \(try expression(invariant.body, path: \"components[\(index)].invariant\"))")
+                lines.append("\\* Invariant \(invariant.name) == \(try expression(invariant.body, path: "components[\(index)].invariant"))")
             case .temporal(let temporal):
                 lines.append("\\* Temporal \(temporal.name) == \(temporal.expr)")
             case .stateConstraint(let constraint):
-                lines.append("\\* StateConstraint == \(try expression(constraint, path: \"components[\(index)].stateConstraint\"))")
+                lines.append("\\* StateConstraint == \(try expression(constraint, path: "components[\(index)].stateConstraint"))")
             case .fairness:
                 // Only AlgorithmFairness belongs to a PlusCal process header.
                 // A generic TLA+ fairness condition has no direct source-level
@@ -166,7 +166,7 @@ internal struct AlgorithmPlusCalRenderer {
             case .step(let step):
                 lines += try render(step: step, indent: "  ", path: "\(path).components[\(index)]")
             case .invariant(let invariant):
-                lines.append("  \\* Invariant \(invariant.name) == \(try expression(invariant.body, path: \"\(path).components[\(index)].invariant\"))")
+                lines.append("  \\* Invariant \(invariant.name) == \(try expression(invariant.body, path: "\(path).components[\(index)].invariant"))")
             case .temporal:
                 throw unsupported(path: "\(path).components[\(index)]", expected: "a process statement or local declaration", actual: "process temporal property")
             case .fairness:
@@ -186,15 +186,15 @@ internal struct AlgorithmPlusCalRenderer {
     private func declarations(_ declarations: [AlgorithmStateModel], indent: String, terminator: String, path: String) throws -> [String] {
         try declarations.enumerated().map { index, declaration in
             let suffix = index == declarations.index(before: declarations.endIndex) ? terminator : ","
-            let initializer = try declaration.initialSet.map { "\\in \(try expression($0, path: \"\(path)[\(index)].initialSet\"))" }
-                ?? "= \(try expression(declaration.initial, path: \"\(path)[\(index)].initial\"))"
+            let initializer = try declaration.initialSet.map { "\\in \(try expression($0, path: "\(path)[\(index)].initialSet"))" }
+                ?? "= \(try expression(declaration.initial, path: "\(path)[\(index)].initial"))"
             return "\(indent)\(declaration.root) \(initializer)\(suffix)"
         }
     }
 
     private func render(step: AlgorithmStepModel, indent: String, path: String) throws -> [String] {
         if let condition = step.loopCondition {
-            var lines = ["\(indent)\(step.label.name): while (\(try expression(condition, path: \"\(path).loopCondition\"))) {"]
+            var lines = ["\(indent)\(step.label.name): while (\(try expression(condition, path: "\(path).loopCondition"))) {"]
             lines += try render(statements: step.statements, indent: indent + "  ", path: "\(path).statements")
             lines.append("\(indent)};")
             return lines
@@ -225,7 +225,7 @@ internal struct AlgorithmPlusCalRenderer {
                 }()
 
                 let rendered = try assignments.enumerated().map { assignmentIndex, assignment in
-                    "\(try lvalue(assignment.target, path: \"\(path)[\(assignmentIndex)].target\")) := \(try expression(assignment.value, path: \"\(path)[\(assignmentIndex)].value\"))"
+                    "\(try lvalue(assignment.target, path: "\(path)[\(assignmentIndex)].target")) := \(try expression(assignment.value, path: "\(path)[\(assignmentIndex)].value"))"
                 }
                     .joined(separator: " || ")
                 lines.append("\(indent)\(rendered);")
@@ -240,21 +240,21 @@ internal struct AlgorithmPlusCalRenderer {
 
     private func render(statement: AlgorithmStatementModel, indent: String, path: String) throws -> [String] {
         switch statement {
-        case .await(let condition): return ["\(indent)await \(try expression(condition, path: \"\(path).condition\"));"]
-        case .assert(let condition): return ["\(indent)assert \(try expression(condition, path: \"\(path).condition\"));"]
-        case .set(let target, let value): return ["\(indent)\(try lvalue(target, path: \"\(path).target\")) := \(try expression(value, path: \"\(path).value\"));"]
+        case .await(let condition): return ["\(indent)await \(try expression(condition, path: "\(path).condition"));"]
+        case .assert(let condition): return ["\(indent)assert \(try expression(condition, path: "\(path).condition"));"]
+        case .set(let target, let value): return ["\(indent)\(try lvalue(target, path: "\(path).target")) := \(try expression(value, path: "\(path).value"));"]
         case .letBinding(let variable, let value, let body):
-            var lines = ["\(indent)with (\(variable) = \(try expression(value, path: \"\(path).value\"))) {"]
+            var lines = ["\(indent)with (\(variable) = \(try expression(value, path: "\(path).value"))) {"]
             lines += try render(statements: body, indent: indent + "  ", path: "\(path).body")
             lines.append("\(indent)};")
             return lines
         case .with(let variable, let source, let body):
-            var lines = ["\(indent)with (\(variable) \\in \(try expression(source, path: \"\(path).source\"))) {"]
+            var lines = ["\(indent)with (\(variable) \\in \(try expression(source, path: "\(path).source"))) {"]
             lines += try render(statements: body, indent: indent + "  ", path: "\(path).body")
             lines.append("\(indent)};")
             return lines
         case .ifElse(let condition, let then, let otherwise):
-            var lines = ["\(indent)if (\(try expression(condition, path: \"\(path).condition\"))) {"]
+            var lines = ["\(indent)if (\(try expression(condition, path: "\(path).condition"))) {"]
             lines += try render(statements: then, indent: indent + "  ", path: "\(path).then")
             if otherwise.isEmpty {
                 lines.append("\(indent)};")
@@ -279,7 +279,7 @@ internal struct AlgorithmPlusCalRenderer {
             return lines
         case .goto(let label): return ["\(indent)goto \(label.name);"]
         case .call(let target, let arguments):
-            return ["\(indent)call \(target)(\(try arguments.enumerated().map { try expression($0.element, path: \"\(path).arguments[\($0.offset)]\") }.joined(separator: ", ")));"]
+            return ["\(indent)call \(target)(\(try arguments.enumerated().map { try expression($0.element, path: "\(path).arguments[\($0.offset)]") }.joined(separator: ", ")));"]
         case .return: return ["\(indent)return;"]
         case .stop: return ["\(indent)goto Done;"]
         case .skip: return ["\(indent)skip;"]
@@ -289,7 +289,7 @@ internal struct AlgorithmPlusCalRenderer {
     private func lvalue(_ value: AlgorithmLValueModel, path: String) throws -> String {
         switch value {
         case .root(let name): return name
-        case .function(let root, let key): return "\(root)[\(try expression(key, path: \"\(path).key\"))]"
+        case .function(let root, let key): return "\(root)[\(try expression(key, path: "\(path).key"))]"
         }
     }
 
