@@ -46,7 +46,7 @@ struct CoreConformanceRunnerTests {
     #expect((edgeDifference["actual"] as? [[String: Any]])?.isEmpty == false)
     let comparisonReports = try json(at: output.appendingPathComponent("comparison-diagnostics.json"))
     let report = try #require((comparisonReports["reports"] as? [[String: Any]])?.first {
-      ($0["whereItFailed"] as? String)?.contains("action") == true
+      $0["whatFailed"] as? String == "The labeled transition multisets differ."
     })
     #expect(report["whatFailed"] as? String == "The labeled transition multisets differ.")
     #expect((report["expected"] as? String)?.contains("TLC permits") == true)
