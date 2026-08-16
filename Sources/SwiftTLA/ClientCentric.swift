@@ -132,7 +132,7 @@ public enum ClientCentric {
         ),
         .in(
           .variable("state"),
-          call("INTERSECTION", .union(.variable("setOfAllReadStatesOfOperation"), .setLiteral([.variable("readStatesForEmptyTransaction")]))
+          call("INTERSECTION", .union(.variable("setOfAllReadStatesOfOperation"), .setLiteral([.variable("readStatesForEmptyTransaction")])))
         )
       )
     ))
