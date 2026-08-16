@@ -16,6 +16,7 @@ public func _tlaAlphaEquivalent(_ lhs: ParsedSpecModel, _ rhs: ParsedSpecModel) 
           lhs.formalParameters == rhs.formalParameters,
           lhs.symmetrySets == rhs.symmetrySets,
           formalOperatorDefinitionsEquivalent(lhs.formalOperatorDefinitions, rhs.formalOperatorDefinitions),
+          lhs.definitions == rhs.definitions,
           optionalStateEquivalent(lhs.constraint, rhs.constraint)
     else { return false }
 
@@ -171,6 +172,15 @@ public func _tlaFidelityEvidence(
             expected: "\(expected.formalOperatorDefinitions.count) definitions",
             actual: "\(actual.formalOperatorDefinitions.count) definitions",
             next: "Inspect FormalDefinition declarations in the #spec body and retain every formal operator in the builder tree."
+        )
+    }
+    guard expected.definitions == actual.definitions else {
+        return difference(
+            "source-only definition differs",
+            at: "definitions",
+            expected: "\(expected.definitions)",
+            actual: "\(actual.definitions)",
+            next: "Inspect Definition declarations in the #spec body and retain each literal declaration."
         )
     }
     guard expected.variables.elementsEqual(actual.variables, by: variablesEquivalent) else {

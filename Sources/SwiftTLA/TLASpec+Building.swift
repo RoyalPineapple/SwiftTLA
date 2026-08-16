@@ -187,6 +187,7 @@ extension TLASpec {
         moduleInstances: moduleInstances,
         formalParameters: formalParameters,
         formalOperatorDefinitions: formalOperatorDefinitions,
+        definitions: definitions,
         symmetrySets: symmetrySets
       )
       guard _tlaAlphaEquivalent(built, tree) else {

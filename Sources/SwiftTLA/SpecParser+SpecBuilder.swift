@@ -20,6 +20,7 @@ extension SpecParser {
         public var moduleInstances: [FormalModuleInstance] = []
         public var formalParameters: [FormalModuleParameter] = []
         public var formalOperatorDefinitions: [FormalOperatorDefinition] = []
+        public var definitions: [String] = []
         public var symmetrySets: [SymmetrySet] = []
         /// Opaque, pre-lowering Algorithm evidence retained independently of
         /// the ordinary parsed specification tree.
@@ -566,6 +567,8 @@ extension SpecParser {
             result.formalParameters.append(FormalModuleParameter(name, kind: kind))
         case "FormalDefinition":
             parseFormalDefinition(call, into: &result)
+        case "Definition":
+            parseDefinition(call, into: &result)
         case "LeadsTo", "Eventually", "Always", "AlwaysEventually", "EventuallyAlways":
             if let expr = decodeTemporal(call) {
                 result.temporal.append((name, expr))
@@ -674,6 +677,28 @@ extension SpecParser {
         result.formalOperatorDefinitions.append(
             FormalOperatorDefinition(name: name, parameters: parameters, body: body)
         )
+    }
+
+    private static func parseDefinition(
+        _ call: FunctionCallExprSyntax,
+        into result: inout ParsedSpecComponents
+    ) {
+        let arguments = Array(call.arguments)
+        guard arguments.count == 1,
+              call.trailingClosure == nil,
+              let literal = arguments[0].expression.as(StringLiteralExprSyntax.self),
+              literal.segments.allSatisfy({ $0.is(StringSegmentSyntax.self) }),
+              let definition = extractStringArg(call, index: 0)
+        else {
+            result.diagnostics.append(.init(
+                message: "Definition requires a literal TLA+ declaration.",
+                source: call,
+                expected: "Definition(\"Name == expression\")",
+                nextSafeAction: "Pass the complete source-only TLA+ declaration as a string literal."
+            ))
+            return
+        }
+        result.definitions.append(definition)
     }
 
     private static func parseFormalParameters(_ expression: ExprSyntax) -> [FormalParameter]? {
