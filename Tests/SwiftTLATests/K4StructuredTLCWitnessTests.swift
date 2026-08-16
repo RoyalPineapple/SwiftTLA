@@ -1,4 +1,4 @@
-import AlgorithmConformance
+@testable import AlgorithmConformance
 import Testing
 
 struct K4StructuredTLCWitnessTests {
