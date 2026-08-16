@@ -352,6 +352,28 @@ public struct TLASpec: Sendable {
         )
         result.append(definition)
       }
+      for instance in module.moduleInstances {
+        let localDefinitions = instance.module.formalOperatorDefinitions
+        let localNames = Set(localDefinitions.map(\.name))
+        for definition in localDefinitions {
+          let appliedArguments = instance.arguments.reduce(definition.body) { body, argument in
+            StateExpr.substituteVariable(argument.parameter, with: argument.value, in: body)
+          }
+          let qualifiedBody = StateExpr.renamingRecursiveCalls(in: appliedArguments) { name in
+            localNames.contains(name) ? "\(instance.name)!\(name)" : name
+          }
+          let qualifiedName = "\(instance.name)!\(definition.name)"
+          precondition(
+            seen.insert(qualifiedName).inserted,
+            "Duplicate formal module instance operator: \(qualifiedName)"
+          )
+          result.append(FormalOperatorDefinition(
+            name: qualifiedName,
+            parameters: definition.parameters,
+            body: qualifiedBody
+          ))
+        }
+      }
       path.remove(module.name)
     }
     var path = Set<String>()

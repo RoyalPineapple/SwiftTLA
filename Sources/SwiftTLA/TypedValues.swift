@@ -160,6 +160,15 @@ public struct Function<Domain: FiniteTLAValueDomain, Range: TLAValueType>: TLAVa
 
 }
 
+extension Expr {
+  /// The formal range of a finite function, using the upstream `Functions.Range`
+  /// operator when that module is imported by the surrounding specification.
+  public var range<Domain: FiniteTLAValueDomain, Value: TLAValueType>: Expr<SetExpr<Value>>
+  where T == Function<Domain, Value> {
+    FormalCall("Range", self)
+  }
+}
+
 /// The bounded formal function space from one finite domain to a finite set
 /// of values. `Functions(from:to:)` is a TLA+ function set, not a Swift
 /// dictionary or closure evaluated by the application.
@@ -617,6 +626,16 @@ extension Expr {
   public func appending<Element: TLAValueType>(_ element: Expr<Element>) -> Expr<TupleExpr<Element>>
   where T == TupleExpr<Element> {
     Expr<TupleExpr<Element>>(.tupleAppend(raw, element.raw))
+  }
+
+  /// Concatenates two formal one-based sequences.
+  ///
+  /// The right side may be a finite function selected by `CHOOSE`; TLA+
+  /// defines that function as a sequence when its domain is `1..n`.
+  public func concatenating<Element: TLAValueType>(
+    _ other: Expr<TupleExpr<Element>>
+  ) -> Expr<TupleExpr<Element>> where T == TupleExpr<Element> {
+    Expr<TupleExpr<Element>>(.tupleConcatenate(raw, other.raw))
   }
 
   public func at<Element: TLAValueType>(_ index: Int) -> Expr<Element> where T == TupleExpr<Element> {

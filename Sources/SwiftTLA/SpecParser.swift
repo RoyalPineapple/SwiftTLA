@@ -436,6 +436,38 @@ public enum SpecParser {
            let value = call.arguments.first?.expression {
             return decodeTypedFacadeValue(value, substitutions: substitutions)
         }
+        if let call = expression.as(FunctionCallExprSyntax.self),
+           (typedLiteralType(call.calledExpression)?.name == "FormalCall"
+             || call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "FormalCall"),
+           let name = call.arguments.first?.expression.as(StringLiteralExprSyntax.self)?
+            .segments.compactMap({ $0.as(StringSegmentSyntax.self)?.content.text }).joined() {
+            let arguments = call.arguments.dropFirst().compactMap {
+                decodeTypedFacadeValue($0.expression, substitutions: substitutions)
+            }
+            guard arguments.count == call.arguments.count - 1 else { return nil }
+            return .operatorApplication(
+                .reference(name, arity: arguments.count), arguments.map(FormalCallArgument.value)
+            )
+        }
+        if let call = expression.as(FunctionCallExprSyntax.self),
+           (typedLiteralType(call.calledExpression)?.name == "ModuleCall"
+             || call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "ModuleCall"),
+           call.arguments.count >= 2 {
+            let argumentsSyntax = Array(call.arguments)
+            guard let instance = argumentsSyntax[0].expression.as(StringLiteralExprSyntax.self)?
+            .segments.compactMap({ $0.as(StringSegmentSyntax.self)?.content.text }).joined(),
+                  let operation = argumentsSyntax[1].expression.as(StringLiteralExprSyntax.self)?
+                    .segments.compactMap({ $0.as(StringSegmentSyntax.self)?.content.text }).joined()
+            else { return nil }
+            let arguments = argumentsSyntax.dropFirst(2).compactMap {
+                decodeTypedFacadeValue($0.expression, substitutions: substitutions)
+            }
+            guard arguments.count == argumentsSyntax.count - 2 else { return nil }
+            return .operatorApplication(
+                .reference("\(instance)!\(operation)", arity: arguments.count),
+                arguments.map(FormalCallArgument.value)
+            )
+        }
         // `Pair(first:second:)` is normally inferred from an enclosing
         // `SetExpr<Pair<...>>`, so SwiftSyntax sees the constructor without
         // its generic arguments. Its two labeled formal values still retain
@@ -531,6 +563,8 @@ public enum SpecParser {
            let base = decodeTypedFacadeValue(baseSyntax, substitutions: substitutions) {
             switch member.declName.baseName.text {
             case "cardinality": return .cardinality(base)
+            case "range":
+                return .operatorApplication(.reference("Range", arity: 1), [.value(base)])
             case "isEmpty": return .equal(.cardinality(base), .value(.int(0)))
             case "subsets": return .powerSet(base)
             default: break
@@ -876,6 +910,12 @@ public enum SpecParser {
         let methodName = memberAccess.declName.baseName.text
         let args = Array(call.arguments)
         let base = memberAccess.base
+        if methodName == "family",
+           args.count == 1,
+           args[0].label?.text == "for",
+           let local = base?.as(DeclReferenceExprSyntax.self)?.baseName.text {
+            return .variable("\(algorithmLocalFamilyPrefix)\(local)")
+        }
         if base?.as(DeclReferenceExprSyntax.self)?.baseName.text == "ZSequences" {
             switch methodName {
             case "indices":

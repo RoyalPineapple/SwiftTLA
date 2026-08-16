@@ -1024,6 +1024,10 @@ enum AlgorithmLowerer {
                 return expression
             case .variable(let name):
                 if name == builderProcessIdentifier { return .variable(processBinding) }
+                if name.hasPrefix(algorithmLocalFamilyPrefix) {
+                    let root = String(name.dropFirst(algorithmLocalFamilyPrefix.count))
+                    return localRoots.contains(root) ? .variable(root) : expression
+                }
                 if localRoots.contains(name) {
                     return .functionApply(.variable(name), .variable(processBinding))
                 }

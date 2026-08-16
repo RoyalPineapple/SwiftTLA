@@ -550,6 +550,17 @@ public struct LocalVariable<Value: TLAValueType>: StateExprConvertible, Sendable
     /// The typed expression for the current process-local formal value.
     public var expr: Expr<Value> { Expr(stateExpr) }
 
+    /// Views this process-local declaration as the total function that PlusCal
+    /// lowers over its process family. Use it for an algorithm property about
+    /// all local values, such as `Range(ops)`, not for a current-process read.
+    /// The marker is consumed by `AlgorithmLowerer`; it never becomes an
+    /// application-facing raw state map.
+    public func family<Process: FiniteDomainKey>(
+        for _: Process.Type
+    ) -> Expr<Function<Process, Value>> {
+        Expr(.variable("\(algorithmLocalFamilyPrefix)\(name)"))
+    }
+
     public var algorithmLValue: AlgorithmLValue<Value> {
         AlgorithmLValue(model: .root(name))
     }

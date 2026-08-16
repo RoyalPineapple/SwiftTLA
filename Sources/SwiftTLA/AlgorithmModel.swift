@@ -1,5 +1,10 @@
 import Foundation
 
+/// Internal marker for a process-local variable viewed as its lowered
+/// per-process function.  It is introduced only by `LocalVariable.family` and
+/// removed by the algorithm lowerer before the formal specification escapes.
+let algorithmLocalFamilyPrefix = "__pcal_local_family:"
+
 internal struct AlgorithmModel: Sendable {
     let name: String
     let components: [AlgorithmComponentModel]
