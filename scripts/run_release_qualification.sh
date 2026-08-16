@@ -15,11 +15,14 @@ if [ "$lint_status" -ne 0 ]; then
   echo "warning: SwiftLint violations found; continuing because lint is advisory" >&2
 fi
 
-echo "Run tests"
-swift test --parallel --num-workers 1
+echo "Run tests serially"
+# Model-checking tests can traverse large, bounded formal action trees. Keep
+# the release qualification serial so independent test targets do not compete
+# for the cooperative worker stack.
+swift test --no-parallel
 
-echo "Run coverage"
-swift test --enable-code-coverage --parallel --num-workers 1
+echo "Run coverage serially"
+swift test --enable-code-coverage --no-parallel
 
 echo "Build package"
 swift build
