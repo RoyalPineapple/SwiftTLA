@@ -44,6 +44,24 @@ private struct GeneratedTypedFormalDefinitionAlgorithm {
   }
 }
 
+@TLAModel
+private struct GeneratedTopLevelTypedFormalDefinitionModel {
+  static var spec: TLASpec {
+    #spec("GeneratedTopLevelTypedFormalDefinitionModel") {
+      let bound = SharedVar(initial: 2)
+      let counter = SharedVar(initial: 0)
+      FormalDefinition("SafeAt", taking: Int.self) { ballot in
+        LetRec("SA", over: IntRange(0, through: bound.expr), taking: Int.self, { recursion, current in
+          If(current == 0, then: true, else: recursion(current.expr - 1))
+        }, in: { recursion in recursion(ballot.expr) })
+      }
+      Action("advance") {
+        counter.becomes(counter.expr + 1)
+      }
+    }
+  }
+}
+
 @Suite("Local TLA+ operators")
 struct LocalOperatorTests {
   @Test("typed unary LET recursion captures state and retains quantifier scope")
@@ -84,6 +102,20 @@ struct LocalOperatorTests {
     #expect(definition.body.description.contains("LET RECURSIVE SA"))
 
     var model = GeneratedTypedFormalDefinitionAlgorithm()
+    #expect(try model.apply(.advance).after.counter == 1)
+  }
+
+  @Test("top-level typed formal definitions retain runtime and parser equality")
+  func generatedTopLevelTypedFormalDefinitionRetainsCapture() throws {
+    GeneratedTopLevelTypedFormalDefinitionModel._checkParserTree()
+    let definition = try #require(
+      GeneratedTopLevelTypedFormalDefinitionModel.spec.formalOperatorDefinitions.first
+    )
+    #expect(definition.parameters == [.value("value0")])
+    #expect(definition.body.description.contains("0..bound"))
+    #expect(definition.body.description.contains("SA[value0]"))
+
+    var model = GeneratedTopLevelTypedFormalDefinitionModel()
     #expect(try model.apply(.advance).after.counter == 1)
   }
 

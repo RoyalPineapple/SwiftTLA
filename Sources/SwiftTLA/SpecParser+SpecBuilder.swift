@@ -645,7 +645,7 @@ extension SpecParser {
         _ call: FunctionCallExprSyntax,
         into result: inout ParsedSpecComponents
     ) {
-        guard let definition = decodedFormalDefinition(call)
+        guard let definition = decodeFormalDefinition(call)
         else {
             result.diagnostics.append(.init(
                 message: "FormalDefinition requires a name, supported formal parameters, and a formal body expression.",
@@ -677,7 +677,7 @@ extension SpecParser {
         )
     }
 
-    private static func decodedFormalDefinition(
+    static func decodeFormalDefinition(
         _ call: FunctionCallExprSyntax
     ) -> FormalOperatorDefinition? {
         guard let name = extractStringArg(call, index: 0), !name.isEmpty else { return nil }
@@ -701,13 +701,16 @@ extension SpecParser {
               typeWitnesses.dropFirst().allSatisfy({ $0.label == nil }),
               typeWitnesses.allSatisfy({ isMetatype($0.expression) })
         else { return nil }
-        let substitutions = Dictionary(uniqueKeysWithValues: parameters.map {
-            ($0, StateExpr.variable($0))
+        let formalParameters = parameters.enumerated().map { index, _ in
+            FormalParameter.value("value\(index)")
+        }
+        let substitutions = Dictionary(uniqueKeysWithValues: zip(parameters, formalParameters).map {
+            ($0, StateExpr.variable($1.name))
         })
         guard let body = decodeTypedFacadeValue(bodySyntax, substitutions: substitutions) else { return nil }
         return FormalOperatorDefinition(
             name: name,
-            parameters: parameters.map(FormalParameter.value),
+            parameters: formalParameters,
             body: body
         )
     }

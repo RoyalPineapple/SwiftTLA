@@ -919,8 +919,8 @@ private enum ParserNode: String, FiniteDomainKey {
         #expect(parsed.formalOperatorDefinitions == [
             FormalOperatorDefinition(
                 name: "same",
-                parameters: [.value("ballot"), .value("value")],
-                body: .equal(.variable("ballot"), .variable("value"))
+                parameters: [.value("value0"), .value("value1")],
+                body: .equal(.variable("value0"), .variable("value1"))
             )
         ])
         let built = Algorithm("Formal") {
@@ -950,7 +950,7 @@ private enum ParserNode: String, FiniteDomainKey {
             Issue.record("Expected one typed formal definition.")
             return
         }
-        #expect(definition.parameters == [.value("ballot"), .value("limit")])
+        #expect(definition.parameters == [.value("value0"), .value("value1")])
         guard case .letIn(let operators, let result) = definition.body else {
             Issue.record("Expected the typed formal body to retain its local recursive LET.")
             return
@@ -958,7 +958,7 @@ private enum ParserNode: String, FiniteDomainKey {
         #expect(operators.map(\.name) == ["SA"])
         #expect(operators[0].parameters == ["current"])
         #expect(operators[0].body.description.contains("SA["))
-        #expect(result.description == "SA[ballot]")
+        #expect(result.description == "SA[value0]")
     }
 
     @Test func formalOperatorLambdaAndArgumentKindsRoundTripThroughTheParser() {

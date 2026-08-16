@@ -173,27 +173,9 @@ extension SpecParser {
     ) -> FormalOperatorDefinition? {
         guard let call = expression.as(FunctionCallExprSyntax.self),
               call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "FormalDefinition",
-              let name = extractStringArg(call, index: 0), !name.isEmpty,
-              let closure = call.trailingClosure,
-              closure.statements.count == 1,
-              case .expr(let bodySyntax) = closure.statements.first?.item
+              call.trailingClosure != nil
         else { return nil }
-
-        let parameters = closureParameterNames(in: closure)
-        let typeWitnesses = Array(call.arguments.dropFirst())
-        guard parameters.count == typeWitnesses.count,
-              parameters.count <= 2,
-              (typeWitnesses.isEmpty || typeWitnesses[0].label?.text == "taking"),
-              typeWitnesses.dropFirst().allSatisfy({ $0.label == nil }),
-              typeWitnesses.allSatisfy({ isMetatype($0.expression) })
-        else { return nil }
-        let substitutions = Dictionary(uniqueKeysWithValues: parameters.map { ($0, StateExpr.variable($0)) })
-        guard let body = decodeTypedFacadeValue(bodySyntax, substitutions: substitutions) else { return nil }
-        return FormalOperatorDefinition(
-            name: name,
-            parameters: parameters.map(FormalParameter.value),
-            body: body
-        )
+        return decodeFormalDefinition(call)
     }
 
     private static func algorithmStateDeclarations(in model: AlgorithmModel) -> [AlgorithmStateModel] {
