@@ -279,7 +279,7 @@ internal struct AlgorithmPlusCalRenderer {
     }
 
     private func expression(_ value: StateExpr) -> String {
-        value.description.replacingOccurrences(of: "__pcal_self", with: "pcalSelf")
+        renameVar("__pcal_self", to: "pcalSelf", in: value).description
     }
 
     private func set(_ values: [TLAValue]) -> String {
