@@ -450,6 +450,12 @@ public enum SpecParser {
             )
         }
         if let call = expression.as(FunctionCallExprSyntax.self),
+           call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "Range",
+           call.arguments.count == 1,
+           let value = decodeTypedFacadeValue(call.arguments[call.arguments.startIndex].expression, substitutions: substitutions) {
+            return .operatorApplication(.reference("Range", arity: 1), [.value(value)])
+        }
+        if let call = expression.as(FunctionCallExprSyntax.self),
            (typedLiteralType(call.calledExpression)?.name == "ModuleCall"
              || call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "ModuleCall"),
            call.arguments.count >= 2 {

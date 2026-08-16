@@ -160,13 +160,12 @@ public struct Function<Domain: FiniteTLAValueDomain, Range: TLAValueType>: TLAVa
 
 }
 
-extension Expr {
-  /// The formal range of a finite function, using the upstream `Functions.Range`
-  /// operator when that module is imported by the surrounding specification.
-  public var range<Domain: FiniteTLAValueDomain, Value: TLAValueType>: Expr<SetExpr<Value>>
-  where T == Function<Domain, Value> {
-    FormalCall("Range", self)
-  }
+/// The formal range of a finite function, using the upstream `Functions.Range`
+/// operator when that module is imported by the surrounding specification.
+public func Range<Domain: FiniteTLAValueDomain, Value: TLAValueType>(
+  _ function: Expr<Function<Domain, Value>>
+) -> Expr<SetExpr<Value>> {
+  FormalCall("Range", function)
 }
 
 /// The bounded formal function space from one finite domain to a finite set

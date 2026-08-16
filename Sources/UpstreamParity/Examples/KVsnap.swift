@@ -216,7 +216,7 @@ public struct KVsnapModel {
                         ModuleCall<Bool>(
                             "CC", "SnapshotIsolation",
                             FormalCall<Function<Key, Value>>("InitialState"),
-                            ops.family(for: Transaction.self).range
+                            Range(ops.family(for: Transaction.self))
                         ).raw
                     }
                 }
