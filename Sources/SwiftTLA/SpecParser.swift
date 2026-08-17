@@ -514,6 +514,17 @@ public enum SpecParser {
         if let localRecursion = decodeLocalRecursion(expression, substitutions: substitutions) {
             return localRecursion
         }
+        // `IntRange` occurs inside scoped typed expressions as well as at the
+        // top level.  Decode both bounds here so closure bindings such as a
+        // local-recursion argument remain available to the upper bound.
+        if let call = expression.as(FunctionCallExprSyntax.self),
+           call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "IntRange",
+           let lowerSyntax = call.arguments.first?.expression,
+           let upperSyntax = call.arguments.first(where: { $0.label?.text == "through" })?.expression,
+           let lower = decodeTypedFacadeValue(lowerSyntax, substitutions: substitutions),
+           let upper = decodeTypedFacadeValue(upperSyntax, substitutions: substitutions) {
+            return .integerRange(lower, upper)
+        }
         if let call = expression.as(FunctionCallExprSyntax.self),
            let name = call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text,
            name == "Exists" || name == "ForAll" || name == "All",
