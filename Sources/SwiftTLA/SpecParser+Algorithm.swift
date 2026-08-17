@@ -684,18 +684,18 @@ extension SpecParser {
         switch name {
         case "Await", "When":
             guard let expression = call.arguments.first?.expression,
-                  let condition = decodeStateExpr(expression)
+                  let condition = decodeAlgorithmStateExpression(expression)
             else { return nil }
             return .await(replacingProcessParameter(in: condition, named: processParameter))
         case "Assert":
             guard let expression = call.arguments.first?.expression,
-                  let condition = decodeStateExpr(expression)
+                  let condition = decodeAlgorithmStateExpression(expression)
             else { return nil }
             return .assert(replacingProcessParameter(in: condition, named: processParameter))
         case "Assign":
             guard let target = algorithmTarget(call.arguments.first?.expression),
                   let valueSyntax = call.arguments.first(where: { $0.label?.text == "to" })?.expression,
-                  let value = decodeStateExpr(valueSyntax)
+                  let value = decodeAlgorithmStateExpression(valueSyntax)
             else { return nil }
             return .set(target: target, value: replacingProcessParameter(in: value, named: processParameter))
         case "Goto":
@@ -707,7 +707,7 @@ extension SpecParser {
                 return nil
             }
             let arguments = call.arguments.dropFirst().compactMap { argument in
-                decodeStateExpr(argument.expression).map {
+                decodeAlgorithmStateExpression(argument.expression).map {
                     replacingProcessParameter(in: $0, named: processParameter)
                 }
             }
@@ -728,7 +728,7 @@ extension SpecParser {
             return .skip
         case "If":
             guard let conditionSyntax = call.arguments.first?.expression,
-                  let condition = decodeStateExpr(conditionSyntax),
+                  let condition = decodeAlgorithmStateExpression(conditionSyntax),
                   let thenClosure = call.trailingClosure,
                   let then = parseAlgorithmStatements(
                       thenClosure.statements,
@@ -841,7 +841,7 @@ extension SpecParser {
             }
         case "Let":
             guard let valueSyntax = call.arguments.first?.expression,
-                  let value = decodeStateExpr(valueSyntax),
+                  let value = decodeAlgorithmStateExpression(valueSyntax),
                   let closure = call.trailingClosure,
                   let bound = closureParameterNames(in: closure).first,
                   let body = parseAlgorithmStatements(closure.statements, processParameter: processParameter, macros: macros)
@@ -860,7 +860,11 @@ extension SpecParser {
     private static func algorithmWithSource(_ syntax: ExprSyntax) -> StateExpr? {
         finiteAlgorithmDomain(syntax).map { domain in
             StateExpr.setLiteral(domain.values.map(StateExpr.value))
-        } ?? decodeStateExpr(syntax)
+        } ?? decodeAlgorithmStateExpression(syntax)
+    }
+
+    private static func decodeAlgorithmStateExpression(_ syntax: ExprSyntax) -> StateExpr? {
+        decodeTypedFacadeValue(syntax, substitutions: [:]) ?? decodeStateExpr(syntax)
     }
 
     /// Expands a bounded statement macro into the surrounding atomic block.
@@ -881,7 +885,7 @@ extension SpecParser {
         }
         var arguments: [StateExpr] = []
         for (index, argumentSyntax) in call.arguments.enumerated() {
-            guard let argument = decodeStateExpr(argumentSyntax.expression) else {
+            guard let argument = decodeAlgorithmStateExpression(argumentSyntax.expression) else {
                 algorithmParseFailure = "Statement macro '\(name)' argument \(index + 1) is not a formal expression; no state was changed. Use an expression understood by the SwiftTLA DSL."
                 return nil
             }

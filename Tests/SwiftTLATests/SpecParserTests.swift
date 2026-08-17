@@ -261,6 +261,31 @@ private func parseExpression(_ source: String) -> ExprSyntax {
         #expect(parsed.actions.first?.body.description.contains("destination' = (source + 1)") == true)
     }
 
+    @Test("parser retains typed pair projections and formal calls in a statement macro")
+    func parsesTypedPairStatementMacro() {
+        let source = """
+        {
+            Algorithm("PairVote") {
+                FormalDefinition("SafeAt", taking: Int.self, Int.self) { ballot, value in
+                    ballot >= 0 && value >= 0
+                }
+                let vote = Macro { (pair: MacroParameter<Pair<Int, Int>>) in
+                    When(
+                        pair.expr.first() >= 0
+                            && FormalCall(as: Bool.self, "SafeAt", pair.expr.first(), pair.expr.second())
+                    )
+                }
+                Do("vote") { vote(Pair.literal(1, 2)) }
+            }
+        }
+        """
+        let closure = Parser.parse(source: source).statements.first!.item.as(ClosureExprSyntax.self)!
+        let parsed = SpecParser.parseSpecClosure(closure)
+
+        #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
+        #expect(parsed.actions.first?.body.description.contains("SafeAt(1, 2)") == true)
+    }
+
     @Test("parser rejects an expression used for a macro assignment target")
     func diagnosesExpressionMacroAssignmentTarget() {
         let source = """

@@ -504,6 +504,17 @@ public enum SpecParser {
            }) {
             return .functionApply(function, argument)
         }
+        if let call = expression.as(FunctionCallExprSyntax.self),
+           call.arguments.isEmpty,
+           let access = call.calledExpression.as(MemberAccessExprSyntax.self),
+           let baseSyntax = access.base,
+           let base = decodeTypedFacadeValue(baseSyntax, substitutions: substitutions) {
+            switch access.declName.baseName.text {
+            case "first": return .tupleAccess(base, 1)
+            case "second": return .tupleAccess(base, 2)
+            default: break
+            }
+        }
         if let reference = expression.as(DeclReferenceExprSyntax.self),
            let substitution = substitutions[reference.baseName.text] {
             return substitution
