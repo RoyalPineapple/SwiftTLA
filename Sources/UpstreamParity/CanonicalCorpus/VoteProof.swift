@@ -64,7 +64,7 @@ public struct VoteProofModel {
                 let ballots = SetExpr<Int>.literal(0, 1, 2)
 
                 FormalDefinition("SafeAt", taking: Int.self, Value.self) { ballot, value in
-                    LetRec("SA", over: ballots, taking: Int.self, { recursion, currentBallot in
+                    LetRec("SA", over: ballots, taking: Int.self, { (recursion: LocalRecursion<Int, Bool>, currentBallot) in
                         currentBallot == 0 || Exists(in: quorums) { quorum in
                             ForAll(in: quorum.expr) { acceptor in
                                 maxBal[acceptor] >= currentBallot.expr

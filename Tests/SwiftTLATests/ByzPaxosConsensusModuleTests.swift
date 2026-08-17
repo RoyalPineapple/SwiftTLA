@@ -13,6 +13,7 @@ struct ByzPaxosConsensusModuleTests {
     }
 
     #expect(FormalModuleRegistry.lookup("Consensus") == ByzPaxosConsensus.module)
+    #expect(FormalModuleRegistry.lookup("ByzPaxosConsensus") == ByzPaxosConsensus.module)
     let consumerModule = consumer.tlaModule
     #expect(consumerModule.contains("C == INSTANCE Consensus"))
     let chosenRange = try #require(consumerModule.range(of: "chosen == {}"))
