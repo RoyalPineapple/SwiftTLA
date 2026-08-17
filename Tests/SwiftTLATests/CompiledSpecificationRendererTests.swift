@@ -45,6 +45,32 @@ struct CompiledSpecificationRendererTests {
         ])
     }
 
+    @Test("externally supplied imports complete validation without claiming compiler ownership")
+    func renderingValidatesAdditionalImportsAsUntrusted() throws {
+        let support = TLASpec(
+            name: "Support",
+            variables: [],
+            actions: [],
+            invariants: [],
+            extendsModules: "External"
+        )
+        let root = TLASpec(name: "Root", variables: [], actions: [], invariants: [], imports: [support])
+        let compilation = try root.compile()
+
+        #expect(throws: TLAModuleBundleIntegrityError.self) {
+            try compilation.renderedTLAModuleBundle()
+        }
+
+        let bundle = try compilation.renderedTLAModuleBundle(
+            additionalImports: [.init(name: "External", tla: "---- MODULE External ----\n====")]
+        )
+        #expect(bundle.files.map(\.name) == ["Support", "External", "Root"])
+        guard case .untrusted = bundle.provenance else {
+            Issue.record("An augmented bundle claimed compiler ownership.")
+            return
+        }
+    }
+
     @Test("rendering rejects a bundle whose identity no longer matches its source")
     func renderingRejectsSourceFidelityMismatch() throws {
         let compilation = try compiledBundle()

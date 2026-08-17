@@ -153,29 +153,27 @@ do {
     let cases = try corpus.map { item -> Manifest.Case in
         let specification = item.specification()
         let compilation = try specification.compile()
-        let bundle = try compilation.renderedTLAModuleBundle()
-        let plusCalModules = try compilation.renderedAuthoredPlusCalModules()
-        guard plusCalModules.count == 1 else {
-            throw ExportError.invalidAlgorithmCount(id: item.id, actual: plusCalModules.count)
-        }
-
         let externalInputs = try CanonicalCorpusModuleClosure.inputs(for: item.id).map { input in
             (input, try fetchPinnedModule(input))
         }
-        let linkedImports = bundle.imports + externalInputs.map { input, data in
+        let externalImports = externalInputs.map { input, data in
             TLAModuleFile(name: input.name, tla: String(decoding: data, as: UTF8.self))
         }
-        try TLAModuleBundle.untrusted(root: bundle.root, imports: linkedImports)
-            .validateRenderedBundleIntegrity()
+        let bundle = try compilation.renderedTLAModuleBundle(additionalImports: externalImports)
+        let plusCalModules = try compilation.renderedAuthoredPlusCalModules(additionalImports: externalImports)
+        guard plusCalModules.count == 1 else {
+            throw ExportError.invalidAlgorithmCount(id: item.id, actual: plusCalModules.count)
+        }
         try TLAModuleBundle.untrusted(
             root: TLAModuleFile(name: bundle.root.name, tla: plusCalModules[0]),
-            imports: linkedImports
+            imports: bundle.imports
         ).validateRenderedBundleIntegrity()
 
         var files = [Manifest.Case.File]()
         files.append(try write(bundle.root.tla, relativePath: "\(item.id)/swift/\(bundle.root.name).tla", under: options.output))
         files.append(try write(item.swiftConfiguration, relativePath: "\(item.id)/swift/\(bundle.root.name).cfg", under: options.output))
-        for imported in bundle.imports {
+        let externalNames = Set(externalImports.map(\.name))
+        for imported in bundle.imports where !externalNames.contains(imported.name) {
             files.append(try write(imported.tla, relativePath: "\(item.id)/imports/\(imported.name).tla", under: options.output))
         }
         files.append(try write(plusCalModules[0], relativePath: "\(item.id)/pluscal/\(bundle.root.name).tla", under: options.output))

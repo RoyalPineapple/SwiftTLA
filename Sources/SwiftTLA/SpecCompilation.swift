@@ -33,8 +33,12 @@ public struct CompiledSpecification: Sendable {
     /// Renders a complete TLA+/CFG bundle from the already-linked closure.
     ///
     /// This is the rendering boundary for compiled models. It neither reparses
-    /// source nor discovers module dependencies from rendered text.
-    public func renderedTLAModuleBundle() throws -> TLAModuleBundle {
+    /// source nor discovers module dependencies from rendered text. Additional
+    /// externally staged inputs participate in that final validation but make
+    /// the resulting bundle untrusted because the compiler cannot own them.
+    public func renderedTLAModuleBundle(
+        additionalImports: [TLAModuleFile] = []
+    ) throws -> TLAModuleBundle {
         let expectedIdentity = spec.compilationFingerprint
         guard identity.value == expectedIdentity,
               formalModuleClosure.root.module.compilationFingerprint == expectedIdentity else {
@@ -67,20 +71,27 @@ public struct CompiledSpecification: Sendable {
                 cfg: entry.module.name == spec.name ? entry.module.tlaCfg : nil
             )
         }
-        let bundle = TLAModuleBundle(
-            root: files[files.count - 1],
-            imports: Array(files.dropLast()),
-            provenance: .compiled(
-                identity: identity,
-                ownership: entries.map {
-                    .init(
-                        moduleName: $0.module.name,
-                        owningRoot: $0.owningRoot,
-                        structuralPath: $0.structuralPath
-                    )
-                }
+        let root = files[files.count - 1]
+        let imports = Array(files.dropLast()) + additionalImports
+        let bundle: TLAModuleBundle
+        if additionalImports.isEmpty {
+            bundle = TLAModuleBundle(
+                root: root,
+                imports: imports,
+                provenance: .compiled(
+                    identity: identity,
+                    ownership: entries.map {
+                        .init(
+                            moduleName: $0.module.name,
+                            owningRoot: $0.owningRoot,
+                            structuralPath: $0.structuralPath
+                        )
+                    }
+                )
             )
-        )
+        } else {
+            bundle = .untrusted(root: root, imports: imports)
+        }
         try bundle.validateRenderedBundleIntegrity()
         return bundle
     }
@@ -168,8 +179,10 @@ public struct CompiledSpecification: Sendable {
     }
 
     /// The authored PlusCal presentation of this validated compilation.
-    public func renderedAuthoredPlusCalModules() throws -> [String] {
-        _ = try renderedTLAModuleBundle()
+    public func renderedAuthoredPlusCalModules(
+        additionalImports: [TLAModuleFile] = []
+    ) throws -> [String] {
+        _ = try renderedTLAModuleBundle(additionalImports: additionalImports)
         return try spec.renderAuthoredPlusCalModules()
     }
 }
