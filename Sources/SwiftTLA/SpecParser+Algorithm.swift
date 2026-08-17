@@ -176,7 +176,8 @@ extension SpecParser {
         else { return nil }
         guard call.trailingClosure != nil else { return nil }
         guard let definition = decodeFormalDefinition(call) else {
-            algorithmParseFailure = "FormalDefinition could not decode its typed parameters or formal body."
+            algorithmParseFailure = algorithmParseFailure
+                ?? "FormalDefinition could not decode its typed parameters or formal body."
             return nil
         }
         return definition
