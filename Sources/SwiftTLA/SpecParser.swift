@@ -769,11 +769,11 @@ public enum SpecParser {
            let closure = call.trailingClosure,
            let parameter = closureParameterNames(in: closure).first,
            closure.statements.count == 1,
-           case .expr(let bodySyntax) = closure.statements.first?.item,
-           let body = decodeTypedFacadeValue(
-                bodySyntax,
-                substitutions: [parameter: .variable("__pcal_function_key")]
-           ) {
+           case .expr(let bodySyntax) = closure.statements.first?.item {
+            let substitutions = [parameter: StateExpr.variable("__pcal_function_key")]
+            let body = decodeTypedFacadeValue(bodySyntax, substitutions: substitutions)
+                ?? decodeTypedDefaultValue(bodySyntax, expectedType: literalType.arguments.dropFirst().first)
+            guard let body else { return nil }
             return .functionLiteral(
                 .setLiteral(domain.map(StateExpr.value)),
                 "__pcal_function_key",
@@ -958,6 +958,18 @@ public enum SpecParser {
                 $0.argument.description.trimmingCharacters(in: .whitespacesAndNewlines)
             }
         )
+    }
+
+    /// Decodes a typed value whose Swift spelling omits its generic arguments
+    /// because the surrounding expression already supplies them.
+    static func decodeTypedDefaultValue(_ expression: ExprSyntax, expectedType: String?) -> StateExpr? {
+        guard expectedType?.hasPrefix("SetExpr<") == true,
+              let call = expression.as(FunctionCallExprSyntax.self),
+              call.arguments.isEmpty,
+              call.trailingClosure == nil,
+              call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "SetExpr"
+        else { return nil }
+        return .setLiteral([])
     }
 
     static func decodeTypedRecordLiteral(

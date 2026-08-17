@@ -416,6 +416,30 @@ private func parseExpression(_ source: String) -> ExprSyntax {
         })
     }
 
+    @Test("parser retains an empty typed set in a function comprehension")
+    func parsesEmptySetFunctionComprehension() {
+        let source = """
+        {
+            Algorithm("Votes") {
+                let votes = SharedVar(initial: Function<Acceptor, SetExpr<Int>>.mapping { _ in SetExpr() })
+                Do("hold") { Assign(votes, to: votes.expr) }
+            }
+        }
+        """
+        let closure = Parser.parse(source: source).statements.first!.item.as(ClosureExprSyntax.self)!
+        let parsed = SpecParser.parseSpecClosure(
+            closure,
+            enumDomains: ["Acceptor": [.string("a1"), .string("a2")]]
+        )
+
+        #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
+        guard case .function(let votes) = parsed.variables.first?.initial else {
+            Issue.record("Expected votes to retain a formal finite function")
+            return
+        }
+        #expect(votes == [.string("a1"): .set([]), .string("a2"): .set([])])
+    }
+
     @Test("parser retains a typed finite function literal with its bound key")
     func parsesTypedFunctionLiteral() {
         let source = """
