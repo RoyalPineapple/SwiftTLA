@@ -105,20 +105,25 @@ public struct TLAModuleBundle: Sendable, Equatable {
   }
 
   private static func dependencies(in source: String) -> [Dependency] {
-    source.split(separator: "\n", omittingEmptySubsequences: false).enumerated().flatMap { offset, rawLine in
+    var dependencies: [Dependency] = []
+    for (offset, rawLine) in source.split(separator: "\n", omittingEmptySubsequences: false).enumerated() {
       let line = rawLine.trimmingCharacters(in: .whitespaces)
       if line.hasPrefix("EXTENDS ") {
-        return line.dropFirst("EXTENDS ".count).split(separator: ",").flatMap { token -> [Dependency] in
+        for token in line.dropFirst("EXTENDS ".count).split(separator: ",") {
           let name = token.trimmingCharacters(in: .whitespaces)
-          guard isModuleIdentifier(name) else { return [] }
-          return [Dependency(name: name, line: offset + 1)]
+          if isModuleIdentifier(name) {
+            dependencies.append(Dependency(name: name, line: offset + 1))
+          }
         }
+        continue
       }
-      guard let range = line.range(of: "INSTANCE ") else { return [] }
+      guard let range = line.range(of: "INSTANCE ") else { continue }
       let name = line[range.upperBound...].prefix { $0.isLetter || $0.isNumber || $0 == "_" }
-      guard isModuleIdentifier(name) else { return [] }
-      return [Dependency(name: name, line: offset + 1)]
+      if isModuleIdentifier(name) {
+        dependencies.append(Dependency(name: name, line: offset + 1))
+      }
     }
+    return dependencies
   }
 
   private static func isModuleIdentifier(_ value: some StringProtocol) -> Bool {
