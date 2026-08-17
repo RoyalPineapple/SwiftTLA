@@ -62,10 +62,7 @@ jobs:
       - run: swift build --target SwiftTLA -j 1
 
   canonical-corpus-export:
-    # This job only compiles the source-owned corpus and writes its portable
-    # TLA+ input artifact.  Keep it off the constrained macOS pool used by
-    # the hosted diagnostic jobs.
-    runs-on: ubuntu-latest
+    runs-on: macos-15
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v5
