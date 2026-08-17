@@ -64,7 +64,7 @@ jobs:
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v5
-      - run: swift build --target SwiftTLAMacros
+      - run: swift build --target SwiftTLAMacros -j 1
 
   canonical-corpus-export:
     needs: macro
