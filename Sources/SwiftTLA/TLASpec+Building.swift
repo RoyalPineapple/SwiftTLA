@@ -262,7 +262,7 @@ public extension TLASpec {
         moduleName: name.replacingOccurrences(of: " ", with: ""),
         extendsModules: authoredPlusCalExtends,
         prelude: authoredPlusCalPrelude,
-        postlude: sourceProperties.map(\.definition) + authoredPlusCalSymmetry
+        postlude: authoredPlusCalPostlude + sourceProperties.map(\.definition) + authoredPlusCalSymmetry
       )
     }
   }
@@ -284,6 +284,16 @@ public extension TLASpec {
     if !constantNames.isEmpty {
       lines.append("CONSTANTS \(constantNames.joined(separator: ", "))")
     }
+    return lines
+  }
+
+  private var authoredPlusCalPostlude: [String] {
+    let instanceDependentDefinitions = definitions.filter { definition in
+      moduleInstances.contains { definition.contains("\($0.name)!") }
+    }
+    var lines = definitions.filter { !instanceDependentDefinitions.contains($0) }
+    lines += recursiveDefs
+    lines += runtimeFuncBodies
     for instance in moduleInstances {
       let arguments = instance.arguments.map { argument in
         "\(argument.parameter) <- \(argument.value)"
@@ -291,9 +301,7 @@ public extension TLASpec {
       let withClause = arguments.isEmpty ? "" : " WITH \(arguments)"
       lines.append("\(instance.name) == INSTANCE \(instance.module.name)\(withClause)")
     }
-    lines += definitions
-    lines += recursiveDefs
-    lines += runtimeFuncBodies
+    lines += instanceDependentDefinitions
     return lines
   }
 
