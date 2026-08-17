@@ -376,19 +376,23 @@ private struct CanonicalSpecificationEncoder {
     private mutating func specification(_ spec: TLASpec) {
         field("spec.name", spec.name)
         list("variables", spec.variables, canonicalVariable)
-        list("constants", spec.constants.keys.sorted()) { key in
+        let constants = spec.constants.keys.sorted().map { key in
             node("constant", [key, canonicalValue(spec.constants[key]!)])
         }
-        list("formalParameters", spec.formalParameters) {
+        list("constants", constants) { $0 }
+        let formalParameters = spec.formalParameters.map {
             node("formal-parameter", [$0.name, $0.kind.rawValue])
         }
+        list("formalParameters", formalParameters) { $0 }
         list("actions", spec.actions, canonicalAction)
-        list("invariants", spec.invariants) {
+        let invariants = spec.invariants.map {
             node("invariant", [$0.name, canonicalExpression($0.body)])
         }
-        list("temporal", spec.temporalProperties) {
+        list("invariants", invariants) { $0 }
+        let temporalProperties = spec.temporalProperties.map {
             node("temporal", [$0.name, canonicalTemporal($0.expr)])
         }
+        list("temporal", temporalProperties) { $0 }
         list("fairness", spec.fairness, canonicalFairness)
         field("assume", canonicalOptional(spec.assume.map(canonicalExpression)))
         field("checkDeadlock", node("bool", [String(spec.checkDeadlock)]))
@@ -397,17 +401,19 @@ private struct CanonicalSpecificationEncoder {
         field("extendsModules", spec.extendsModules)
         field("constraint", canonicalOptional(spec.constraint.map(canonicalExpression)))
         list("recursiveDefs", spec.recursiveDefs) { $0 }
-        list("recursiveFuncs", spec.recursiveFuncs) {
+        let recursiveFunctions = spec.recursiveFuncs.map {
             node("recursive-function", [$0.name, canonicalList($0.params), canonicalExpression($0.body)])
         }
-        list("formalOperators", spec.formalOperatorDefinitions) {
+        list("recursiveFuncs", recursiveFunctions) { $0 }
+        let formalOperators = spec.formalOperatorDefinitions.map {
             node("operator-definition", [$0.name, canonicalList($0.parameters.map(canonicalFormalParameter)), canonicalExpression($0.body)])
         }
+        list("formalOperators", formalOperators) { $0 }
         list("imports", spec.imports) { imported in
             var nested = CanonicalSpecificationEncoder()
             return nested.encode(imported)
         }
-        list("importConfigurations", spec.importConfigurations) { configuration in
+        let importConfigurations = spec.importConfigurations.map { configuration in
             node("import-configuration", [
                 configuration.moduleName,
                 canonicalList(configuration.replacements.map {
@@ -415,7 +421,8 @@ private struct CanonicalSpecificationEncoder {
                 })
             ])
         }
-        list("moduleInstances", spec.moduleInstances) { instance in
+        list("importConfigurations", importConfigurations) { $0 }
+        let moduleInstances = spec.moduleInstances.map { instance in
             var nested = CanonicalSpecificationEncoder()
             return node("module-instance", [
                 instance.name,
@@ -425,16 +432,20 @@ private struct CanonicalSpecificationEncoder {
                 })
             ])
         }
+        list("moduleInstances", moduleInstances) { $0 }
         list("runtimeFuncBodies", spec.runtimeFuncBodies) { $0 }
-        list("symmetrySets", spec.symmetrySets) { set in
+        let symmetrySets = spec.symmetrySets.map { set in
             node("symmetry-set", [set.variableName, canonicalList(set.values.map(canonicalValue).sorted())])
         }
-        list("symmetryGroups", spec.symmetryGroups) {
+        list("symmetrySets", symmetrySets) { $0 }
+        let symmetryGroups = spec.symmetryGroups.map {
             node("symmetry-group", [canonicalList($0.names)])
         }
-        list("symmetricCollections", spec.symmetricCollections) {
+        list("symmetryGroups", symmetryGroups) { $0 }
+        let symmetricCollections = spec.symmetricCollections.map {
             node("symmetric-collection", [$0.name, String($0.verificationScope), canonicalValue($0.initial)])
         }
+        list("symmetricCollections", symmetricCollections) { $0 }
         list("algorithmTokens", spec.algorithmFidelityTokens) { $0.encodedCanonicalForm }
     }
 
