@@ -23,6 +23,7 @@ public struct TLAModuleFile: Sendable, Equatable {
 public enum TLAModuleBundleLinkError: Error, Equatable, Sendable, CustomStringConvertible {
   case duplicateModule(String)
   case missingModule(module: String, importedBy: String, line: Int)
+  case cyclicModule(module: String, path: [String])
 
   public var description: String {
     switch self {
@@ -30,6 +31,8 @@ public enum TLAModuleBundleLinkError: Error, Equatable, Sendable, CustomStringCo
       return "The module bundle contains more than one \(name).tla source file."
     case .missingModule(let module, let importedBy, let line):
       return "\(importedBy).tla line \(line) requires \(module).tla, but the bundle does not contain it."
+    case .cyclicModule(let module, let path):
+      return "The module bundle has a cycle through \(module): \(path.joined(separator: " -> "))."
     }
   }
 }
@@ -74,6 +77,26 @@ public struct TLAModuleBundle: Sendable, Equatable {
         }
       }
     }
+
+    var visited: Set<String> = []
+    var active: [String] = []
+    func visit(_ name: String) throws {
+      if let cycleStart = active.firstIndex(of: name) {
+        throw TLAModuleBundleLinkError.cyclicModule(
+          module: name,
+          path: Array(active[cycleStart...]) + [name]
+        )
+      }
+      guard visited.insert(name).inserted else { return }
+      active.append(name)
+      defer { active.removeLast() }
+      guard let file = sources[name] else { return }
+      for dependency in Self.dependencies(in: file.tla) where !standardModules.contains(dependency.name) {
+        try visit(dependency.name)
+      }
+    }
+
+    try visit(root.name)
   }
 
   /// Writes every module source file and the root TLC configuration into one
@@ -169,13 +192,252 @@ public struct FormalModuleConfiguration: Sendable, Equatable {
   }
 }
 
+/// A validated, source-owned formal module graph for one compiled root.
+///
+/// Entries are dependency-first and include the root exactly once. Every
+/// retained edge records its declared relationship instead of flattening
+/// imports and named instances into a name-only module list.
+public struct FormalModuleClosure: Sendable {
+  public struct Entry: Sendable {
+    public let module: TLASpec
+    public let owningRoot: String
+    public let structuralPath: [String]
+  }
+
+  public enum EdgeKind: Sendable, Equatable {
+    case importModule(configuration: FormalModuleConfiguration?)
+    case namedInstance(namespace: String, arguments: [ModuleArgument])
+  }
+
+  public struct Edge: Sendable, Equatable {
+    public let owningRoot: String
+    public let fromModule: String
+    public let toModule: String
+    public let structuralPath: [String]
+    public let kind: EdgeKind
+  }
+
+  public let root: Entry
+  public let entries: [Entry]
+  public let edges: [Edge]
+
+  public static func resolve(root: TLASpec) throws -> FormalModuleClosure {
+    var entries: [Entry] = []
+    var edges: [Edge] = []
+    var sourceByName: [String: String] = [:]
+    var active: [String] = []
+
+    func diagnostic(
+      _ code: CompilationDiagnostic.Code,
+      path: [String],
+      expected: String,
+      actual: String,
+      nextSafeAction: String
+    ) -> CompilationDiagnostic {
+      CompilationDiagnostic(
+        code: code,
+        stage: .linking,
+        path: path.joined(separator: "."),
+        expected: expected,
+        actual: actual,
+        nextSafeAction: nextSafeAction
+      )
+    }
+
+    func validateDeclaredRelationships(_ module: TLASpec, path: [String]) throws {
+      let importNames = module.imports.map(\.name)
+      if let duplicate = Self.firstDuplicate(in: importNames) {
+        throw diagnostic(
+          .duplicateFormalModuleImport,
+          path: path + ["imports", duplicate],
+          expected: "one import relationship for '\(duplicate)'",
+          actual: "multiple import relationships",
+          nextSafeAction: "Keep one import relationship for the module, then compile again."
+        )
+      }
+
+      let configurationNames = module.importConfigurations.map(\.moduleName)
+      if let duplicate = Self.firstDuplicate(in: configurationNames) {
+        throw diagnostic(
+          .duplicateFormalModuleConfiguration,
+          path: path + ["configurations", duplicate],
+          expected: "one configuration for imported module '\(duplicate)'",
+          actual: "multiple configurations",
+          nextSafeAction: "Merge the replacement bindings into one configuration, then compile again."
+        )
+      }
+      for configuration in module.importConfigurations {
+        guard importNames.contains(configuration.moduleName) else {
+          throw diagnostic(
+            .missingFormalModuleConfigurationTarget,
+            path: path + ["configurations", configuration.moduleName],
+            expected: "a declared import named '\(configuration.moduleName)'",
+            actual: "no matching import",
+            nextSafeAction: "Import the configured module or remove the configuration, then compile again."
+          )
+        }
+        if let duplicate = Self.firstDuplicate(in: configuration.replacements.map(\.operatorName)) {
+          throw diagnostic(
+            .duplicateFormalModuleReplacement,
+            path: path + ["configurations", configuration.moduleName, duplicate],
+            expected: "one replacement binding for '\(duplicate)'",
+            actual: "multiple replacement bindings",
+            nextSafeAction: "Keep one replacement binding for the operator, then compile again."
+          )
+        }
+      }
+
+      if let instance = module.moduleInstances.first(where: {
+        $0.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+      }) {
+        throw diagnostic(
+          .invalidFormalModuleInstanceNamespace,
+          path: path + ["instances"],
+          expected: "a non-empty instance namespace",
+          actual: "an empty namespace for module '\(instance.module.name)'",
+          nextSafeAction: "Give the instance a namespace, then compile again."
+        )
+      }
+      if let duplicate = Self.firstDuplicate(in: module.moduleInstances.map(\.name)) {
+        throw diagnostic(
+          .duplicateFormalModuleInstanceNamespace,
+          path: path + ["instances", duplicate],
+          expected: "one named instance namespace '\(duplicate)'",
+          actual: "multiple instances share that namespace",
+          nextSafeAction: "Rename or remove the duplicate instance, then compile again."
+        )
+      }
+      for instance in module.moduleInstances {
+        let arguments = instance.arguments.map(\.parameter)
+        if let duplicate = Self.firstDuplicate(in: arguments) {
+          throw diagnostic(
+            .duplicateFormalModuleArgument,
+            path: path + ["instances", instance.name, duplicate],
+            expected: "one binding for parameter '\(duplicate)'",
+            actual: "multiple bindings",
+            nextSafeAction: "Keep one argument for the parameter, then compile again."
+          )
+        }
+        let declared = Set(instance.module.formalParameters.map(\.name))
+        if let invalid = arguments.first(where: { $0.isEmpty || !declared.contains($0) }) {
+          throw diagnostic(
+            .invalidFormalModuleArgument,
+            path: path + ["instances", instance.name, invalid],
+            expected: "a declared non-empty parameter of '\(instance.module.name)'",
+            actual: invalid.isEmpty ? "an empty parameter name" : "an undeclared parameter",
+            nextSafeAction: "Bind only declared module parameters, then compile again."
+          )
+        }
+      }
+    }
+
+    func visit(_ module: TLASpec, path: [String]) throws {
+      try validateDeclaredRelationships(module, path: path)
+      let source = module.compilationFingerprint
+      if let previousSource = sourceByName[module.name] {
+        guard previousSource == source else {
+          throw diagnostic(
+            .conflictingFormalModuleSource,
+            path: path,
+            expected: "one canonical source for module '\(module.name)'",
+            actual: "a second source with the same module name",
+            nextSafeAction: "Rename one module or import the same canonical source, then compile again."
+          )
+        }
+        if let cycleStart = active.firstIndex(of: module.name) {
+          throw diagnostic(
+            .cyclicFormalModule,
+            path: path,
+            expected: "an acyclic formal module graph",
+            actual: Array(active[cycleStart...]).joined(separator: " -> ") + " -> \(module.name)",
+            nextSafeAction: "Break the import or instance cycle, then compile again."
+          )
+        }
+        return
+      }
+
+      sourceByName[module.name] = source
+      active.append(module.name)
+      defer { active.removeLast() }
+
+      for imported in module.imports {
+        let configuration = module.importConfigurations.first { $0.moduleName == imported.name }
+        let edgePath = path + [imported.name]
+        edges.append(Edge(
+          owningRoot: root.name,
+          fromModule: module.name,
+          toModule: imported.name,
+          structuralPath: edgePath,
+          kind: .importModule(configuration: configuration)
+        ))
+        try visit(imported, path: edgePath)
+      }
+      for instance in module.moduleInstances {
+        let edgePath = path + [instance.name, instance.module.name]
+        edges.append(Edge(
+          owningRoot: root.name,
+          fromModule: module.name,
+          toModule: instance.module.name,
+          structuralPath: edgePath,
+          kind: .namedInstance(namespace: instance.name, arguments: instance.arguments)
+        ))
+        try visit(instance.module, path: edgePath)
+      }
+
+      entries.append(Entry(module: module, owningRoot: root.name, structuralPath: path))
+    }
+
+    try visit(root, path: [root.name])
+    try Self.validateImportedSymbols(entries: entries, edges: edges, diagnostic: diagnostic)
+    guard let rootEntry = entries.last else {
+      fatalError("Formal module closure resolution produced no root entry.")
+    }
+    return FormalModuleClosure(root: rootEntry, entries: entries, edges: edges)
+  }
+
+  private static func firstDuplicate(in names: [String]) -> String? {
+    var seen: Set<String> = []
+    return names.first { !seen.insert($0).inserted }
+  }
+
+  private static func validateImportedSymbols(
+    entries: [Entry],
+    edges: [Edge],
+    diagnostic: (
+      CompilationDiagnostic.Code, [String], String, String, String
+    ) -> CompilationDiagnostic
+  ) throws {
+    let importsByModule = Dictionary(grouping: edges) { $0.fromModule }
+    var exportedSymbols: [String: Set<String>] = [:]
+
+    for entry in entries {
+      var symbols = Set(entry.module.recursiveFuncs.map(\.name))
+      symbols.formUnion(entry.module.formalOperatorDefinitions.map(\.name))
+      for edge in importsByModule[entry.module.name, default: []] {
+        guard case .importModule = edge.kind else { continue }
+        guard let imported = exportedSymbols[edge.toModule] else { continue }
+        if let duplicate = imported.first(where: { symbols.contains($0) }) {
+          throw diagnostic(
+            .duplicateFormalModuleSymbol,
+            edge.structuralPath,
+            "one visible imported symbol named '\(duplicate)'",
+            "multiple imports expose that symbol",
+            "Qualify one relationship with an instance or remove the ambiguous import, then compile again."
+          )
+        }
+        symbols.formUnion(imported)
+      }
+      exportedSymbols[entry.module.name] = symbols
+    }
+  }
+}
+
 /// An actual expression supplied to a parameter of a named module instance.
 public struct ModuleArgument: Sendable, Equatable {
   public let parameter: String
   public let value: StateExpr
 
   public init(_ parameter: String, value: some StateExprConvertible) {
-    precondition(!parameter.isEmpty, "A module argument needs a parameter name.")
     self.parameter = parameter
     self.value = value.stateExpr
   }
@@ -185,7 +447,6 @@ public struct ModuleArgument: Sendable, Equatable {
   /// This is primarily used by the macro parser. Public callers normally use
   /// `value:` so Swift supplies the expression conversion.
   public init(_ parameter: String, expression: StateExpr) {
-    precondition(!parameter.isEmpty, "A module argument needs a parameter name.")
     self.parameter = parameter
     self.value = expression
   }
@@ -203,16 +464,6 @@ public struct FormalModuleInstance: SpecComponent, Sendable, Equatable {
   public let arguments: [ModuleArgument]
 
   public init(_ name: String, of module: TLASpec, with arguments: [ModuleArgument] = []) {
-    precondition(!name.isEmpty, "A formal module instance needs a name.")
-    let declared = Set(module.formalParameters.map(\.name))
-    precondition(
-      Set(arguments.map(\.parameter)).count == arguments.count,
-      "A formal module instance cannot bind the same parameter twice."
-    )
-    precondition(
-      Set(arguments.map(\.parameter)).isSubset(of: declared),
-      "A formal module instance can bind only parameters declared by its module."
-    )
     self.name = name
     self.module = module
     self.arguments = arguments
@@ -344,10 +595,6 @@ public struct ImportDecl: SpecComponent {
   public let configuration: FormalModuleConfiguration?
 
   init(_ module: TLASpec, configuring configuration: FormalModuleConfiguration? = nil) {
-    precondition(
-      configuration == nil || configuration?.moduleName == module.name,
-      "Formal module configuration must name the imported module."
-    )
     self.module = module
     self.configuration = configuration
   }

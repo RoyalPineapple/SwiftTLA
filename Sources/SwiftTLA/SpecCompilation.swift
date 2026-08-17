@@ -21,10 +21,12 @@ public struct CompilationIdentity: Sendable, Hashable, CustomStringConvertible {
 /// without reparsing or rebuilding that payload.
 public struct CompiledSpecification: Sendable {
     public let spec: TLASpec
+    public let formalModuleClosure: FormalModuleClosure
     public let identity: CompilationIdentity
 
-    init(spec: TLASpec, identity: CompilationIdentity) {
+    init(spec: TLASpec, formalModuleClosure: FormalModuleClosure, identity: CompilationIdentity) {
         self.spec = spec
+        self.formalModuleClosure = formalModuleClosure
         self.identity = identity
     }
 }
@@ -37,6 +39,7 @@ public struct CompilationDiagnostic: Error, Sendable, Hashable, CustomStringConv
         case runtime
         case checking
         case rendering
+        case linking
     }
 
     public enum Code: String, Sendable, Hashable {
@@ -46,6 +49,17 @@ public struct CompilationDiagnostic: Error, Sendable, Hashable, CustomStringConv
         case duplicateInvariant
         case unresolvedImport
         case compilationIdentityMismatch
+        case cyclicFormalModule
+        case conflictingFormalModuleSource
+        case duplicateFormalModuleImport
+        case invalidFormalModuleInstanceNamespace
+        case duplicateFormalModuleInstanceNamespace
+        case missingFormalModuleConfigurationTarget
+        case duplicateFormalModuleConfiguration
+        case duplicateFormalModuleReplacement
+        case invalidFormalModuleArgument
+        case duplicateFormalModuleArgument
+        case duplicateFormalModuleSymbol
     }
 
     public enum ChangeStatus: String, Sendable, Hashable {
@@ -150,8 +164,10 @@ public extension TLASpec {
         try validateUnique(variables.map(\.name), code: .duplicateVariable, path: "variables")
         try validateUnique(actions.map(\.name), code: .duplicateAction, path: "actions")
         try validateUnique(invariants.map(\.name), code: .duplicateInvariant, path: "invariants")
+        let closure = try FormalModuleClosure.resolve(root: self)
         return CompiledSpecification(
             spec: self,
+            formalModuleClosure: closure,
             identity: .init(value: compilationFingerprint)
         )
     }

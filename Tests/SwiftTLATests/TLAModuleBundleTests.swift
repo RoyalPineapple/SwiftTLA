@@ -79,6 +79,22 @@ struct TLAModuleBundleTests {
     try bundle.validateLink()
   }
 
+  @Test("a bundle rejects cyclic nonstandard module dependencies")
+  func rejectsCyclicLinkDependency() {
+    let bundle = TLAModuleBundle(
+      root: .init(name: "Root", tla: "---- MODULE Root ----\nEXTENDS Support\n====\n"),
+      imports: [
+        .init(name: "Support", tla: "---- MODULE Support ----\nEXTENDS Root\n====\n")
+      ]
+    )
+
+    #expect(throws: TLAModuleBundleLinkError.cyclicModule(
+      module: "Root", path: ["Root", "Support", "Root"]
+    )) {
+      try bundle.validateLink()
+    }
+  }
+
   @Test("a generated model preserves its imported module")
   func generatedModelRetainsImportedModule() {
     ImportedFormalModuleGeneratedModel._checkParserTree()
