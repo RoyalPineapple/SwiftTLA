@@ -19,6 +19,8 @@ forbid() {
 }
 
 require "release-code-check:"
+require "Validate local validation lock contract"
+require "Tests/Fixtures/LocalValidation/assert_lock.sh"
 require "run_hosted_diagnostics:"
 require "Run SwiftLint (advisory)"
 require "./scripts/lint-zero-new.sh"

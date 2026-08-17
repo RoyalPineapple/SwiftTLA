@@ -19,6 +19,9 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      - name: Validate local validation lock contract
+        run: bash Tests/Fixtures/LocalValidation/assert_lock.sh
+
       - name: Validate release code-check contract
         run: bash Tests/Fixtures/ReleaseCodeCheck/assert_workflow.sh
 

@@ -6,6 +6,10 @@ set -euo pipefail
 readonly max_rss_mib=6144
 readonly min_available_mib=1024
 readonly poll_seconds=2
+# A contested lock waits briefly rather than failing at the first collision.
+# The environment overrides keep the shell-level contention regression fast.
+readonly lock_wait_seconds="${SWIFTTLA_LOCAL_VALIDATION_LOCK_WAIT_SECONDS:-30}"
+readonly lock_poll_seconds="${SWIFTTLA_LOCAL_VALIDATION_LOCK_POLL_SECONDS:-2}"
 
 usage() {
     cat >&2 <<'EOF'
@@ -19,6 +23,12 @@ EOF
 fail() {
     echo "local-validation: $*" >&2
     exit 64
+}
+
+require_positive_integer() {
+    local name="$1"
+    local value="$2"
+    [[ "$value" =~ ^[1-9][0-9]*$ ]] || fail "$name must be a positive integer"
 }
 
 [[ "$(uname -s)" == "Darwin" ]] || fail "macOS is required"
@@ -39,6 +49,8 @@ esac
 
 readonly common_git_dir="$(git rev-parse --git-common-dir)"
 readonly lock_dir="$common_git_dir/swifttla-local-validation.lock"
+require_positive_integer "SWIFTTLA_LOCAL_VALIDATION_LOCK_WAIT_SECONDS" "$lock_wait_seconds"
+require_positive_integer "SWIFTTLA_LOCAL_VALIDATION_LOCK_POLL_SECONDS" "$lock_poll_seconds"
 scratch_dir=""
 command_pid=""
 command_group=""
@@ -65,9 +77,46 @@ cleanup() {
 trap 'status=$?; cleanup; exit "$status"' EXIT
 trap 'exit 130' HUP INT TERM
 
-if ! mkdir "$lock_dir" 2>/dev/null; then
-    fail "another local validation is active (lock: $lock_dir)"
-fi
+lock_owner_diagnostics() {
+    local owner_pid="" owner_command=""
+    if [[ ! -r "$lock_dir/pid" ]]; then
+        printf '%s' 'lock owner data is unavailable (pid file is missing or unreadable)'
+        return
+    fi
+    IFS= read -r owner_pid < "$lock_dir/pid" || true
+    if [[ ! "$owner_pid" =~ ^[1-9][0-9]*$ ]]; then
+        printf '%s' 'lock owner data is unavailable (pid is missing or invalid)'
+        return
+    fi
+    if ! kill -0 "$owner_pid" 2>/dev/null; then
+        printf 'lock owner is likely stale (pid %s has no running process)' "$owner_pid"
+        return
+    fi
+    owner_command="$(ps -p "$owner_pid" -o command= 2>/dev/null | tr '\n' ' ' | sed 's/[[:space:]]\\+/ /g; s/^ //; s/ $//')"
+    if [[ -n "$owner_command" ]]; then
+        printf 'lock owner appears active (pid %s, process %s)' "$owner_pid" "$owner_command"
+    else
+        printf 'lock owner appears active (pid %s, process identity unavailable)' "$owner_pid"
+    fi
+}
+
+acquire_lock() {
+    local started elapsed remaining pause owner
+    started=$SECONDS
+    while ! mkdir "$lock_dir" 2>/dev/null; do
+        elapsed=$((SECONDS - started))
+        if (( elapsed >= lock_wait_seconds )); then
+            owner="$(lock_owner_diagnostics)"
+            fail "timed out after ${lock_wait_seconds}s waiting for validation lock ($lock_dir); ${owner}; lock was not changed"
+        fi
+        remaining=$((lock_wait_seconds - elapsed))
+        pause=$lock_poll_seconds
+        (( pause <= remaining )) || pause=$remaining
+        sleep "$pause"
+    done
+}
+
+acquire_lock
 lock_held=true
 printf '%s\n' "$$" > "$lock_dir/pid"
 
