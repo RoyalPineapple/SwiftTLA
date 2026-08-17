@@ -14,8 +14,15 @@ private struct Manifest: Codable {
         let files: [File]
 
         struct File: Codable {
+        let path: String
+        let sha256: String
+        let source: Source?
+
+        struct Source: Codable {
+            let repository: String
+            let commit: String
             let path: String
-            let sha256: String
+        }
         }
     }
 }
@@ -23,12 +30,16 @@ private struct Manifest: Codable {
 private struct CorpusCase {
     let id: String
     let specification: () -> TLASpec
+    let swiftConfiguration: String
+    let plusCalConfiguration: String
 }
 
 private enum ExportError: Error, CustomStringConvertible {
     case usage
     case outputExists(String)
     case invalidAlgorithmCount(id: String, actual: Int)
+    case moduleFetch(name: String, url: String)
+    case moduleDigest(name: String, expected: String, actual: String)
 
     var description: String {
         switch self {
@@ -38,29 +49,76 @@ private enum ExportError: Error, CustomStringConvertible {
             return "Output directory already exists: \(path)"
         case .invalidAlgorithmCount(let id, let actual):
             return "Canonical corpus case \(id) has \(actual) authored Algorithms; expected exactly one."
+        case .moduleFetch(let name, let url):
+            return "Canonical corpus module \(name) could not be fetched from \(url)."
+        case .moduleDigest(let name, let expected, let actual):
+            return "Canonical corpus module \(name) digest differs: expected \(expected); got \(actual)."
         }
     }
 }
 
 private let corpus = [
-    CorpusCase(id: "boulanger-upstream-port", specification: { BoulangerModel.spec }),
-    CorpusCase(id: "kvsnap-upstream-port", specification: { KVsnapModel.spec }),
-    CorpusCase(id: "voteproof-upstream-port", specification: { VoteProofModel.spec }),
+    CorpusCase(
+        id: "boulanger-upstream-port",
+        specification: { BoulangerModel.spec },
+        swiftConfiguration: "SPECIFICATION Spec\nCONSTRAINT StateConstraint\n",
+        plusCalConfiguration: "SPECIFICATION Spec\nCONSTRAINT StateConstraint\n"
+    ),
+    CorpusCase(
+        id: "kvsnap-upstream-port",
+        specification: { KVsnapModel.spec },
+        swiftConfiguration: "SPECIFICATION Spec\nINVARIANTS TypeOK SnapshotIsolation\nPROPERTIES Termination\nCONSTANT k1 = k1\nCONSTANT k2 = k2\nCONSTANT t1 = t1\nCONSTANT t2 = t2\nCONSTANT t3 = t3\nCONSTANT NoVal = NoVal\n",
+        plusCalConfiguration: "SPECIFICATION Spec\nINVARIANTS TypeOK SnapshotIsolation\nPROPERTIES Termination\nCONSTANT k1 = k1\nCONSTANT k2 = k2\nCONSTANT t1 = t1\nCONSTANT t2 = t2\nCONSTANT t3 = t3\nCONSTANT NoVal = NoVal\n"
+    ),
+    CorpusCase(
+        id: "voteproof-upstream-port",
+        specification: { VoteProofModel.spec },
+        swiftConfiguration: "SPECIFICATION Spec\nINVARIANTS TypeOK VInv1 VInv2 VInv3 VInv4\nPROPERTIES Refines\nCONSTANT Value = {\"v1\", \"v2\"}\nCONSTANT Acceptor = {\"a1\", \"a2\", \"a3\"}\nCONSTANT Quorum = {{\"a1\", \"a2\"}, {\"a1\", \"a3\"}, {\"a2\", \"a3\"}, {\"a1\", \"a2\", \"a3\"}}\nCONSTANT Ballot = {0, 1, 2}\nCHECK_DEADLOCK FALSE\n",
+        plusCalConfiguration: "SPECIFICATION Spec\nINVARIANTS TypeOK VInv1 VInv2 VInv3 VInv4\nPROPERTIES Refines\nCONSTANT Value = {\"v1\", \"v2\"}\nCONSTANT Acceptor = {\"a1\", \"a2\", \"a3\"}\nCONSTANT Quorum = {{\"a1\", \"a2\"}, {\"a1\", \"a3\"}, {\"a1\", \"a2\", \"a3\"}}\nCONSTANT Ballot = {0, 1, 2}\nCHECK_DEADLOCK FALSE\n"
+    ),
 ]
 
 private func sha256(_ data: Data) -> String {
     SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
 }
 
-private func write(_ text: String, relativePath: String, under root: URL) throws -> Manifest.Case.File {
+private func write(
+    _ data: Data,
+    relativePath: String,
+    source: Manifest.Case.File.Source? = nil,
+    under root: URL
+) throws -> Manifest.Case.File {
     let destination = root.appendingPathComponent(relativePath)
     try FileManager.default.createDirectory(
         at: destination.deletingLastPathComponent(),
         withIntermediateDirectories: true
     )
-    let data = Data(text.utf8)
     try data.write(to: destination, options: .atomic)
-    return .init(path: relativePath, sha256: sha256(data))
+    return .init(path: relativePath, sha256: sha256(data), source: source)
+}
+
+private func write(_ text: String, relativePath: String, under root: URL) throws -> Manifest.Case.File {
+    try write(Data(text.utf8), relativePath: relativePath, under: root)
+}
+
+private func fetchPinnedModule(_ input: CanonicalCorpusModuleInput) throws -> Data {
+    let urlString = "https://raw.githubusercontent.com/\(input.source.repository)/\(input.source.commit)/\(input.source.path)"
+    guard let url = URL(string: urlString) else {
+        throw ExportError.moduleFetch(name: input.name, url: urlString)
+    }
+    var lastDigest: String?
+    for attempt in 0..<3 {
+        if let data = try? Data(contentsOf: url) {
+            let actual = sha256(data)
+            if actual == input.sha256 { return data }
+            lastDigest = actual
+        }
+        if attempt < 2 { Thread.sleep(forTimeInterval: 1) }
+    }
+    if let lastDigest {
+        throw ExportError.moduleDigest(name: input.name, expected: input.sha256, actual: lastDigest)
+    }
+    throw ExportError.moduleFetch(name: input.name, url: urlString)
 }
 
 private func parseArguments(_ arguments: [String]) throws -> (output: URL, sha: String) {
@@ -102,11 +160,26 @@ do {
 
         var files = [Manifest.Case.File]()
         files.append(try write(bundle.root.tla, relativePath: "\(item.id)/swift/\(bundle.root.name).tla", under: options.output))
-        files.append(try write(bundle.root.cfg ?? "", relativePath: "\(item.id)/swift/\(bundle.root.name).cfg", under: options.output))
+        files.append(try write(item.swiftConfiguration, relativePath: "\(item.id)/swift/\(bundle.root.name).cfg", under: options.output))
         for imported in bundle.imports {
             files.append(try write(imported.tla, relativePath: "\(item.id)/imports/\(imported.name).tla", under: options.output))
         }
         files.append(try write(plusCalModules[0], relativePath: "\(item.id)/pluscal/\(bundle.root.name).tla", under: options.output))
+        files.append(try write(item.plusCalConfiguration, relativePath: "\(item.id)/pluscal/\(bundle.root.name).cfg", under: options.output))
+        for input in CanonicalCorpusModuleClosure.inputs(for: item.id) {
+            let data = try fetchPinnedModule(input)
+            let source = Manifest.Case.File.Source(
+                repository: input.source.repository,
+                commit: input.source.commit,
+                path: input.source.path
+            )
+            files.append(try write(
+                data,
+                relativePath: "\(item.id)/imports/\(input.name).tla",
+                source: source,
+                under: options.output
+            ))
+        }
         return .init(id: item.id, module: bundle.root.name, files: files.sorted { $0.path < $1.path })
     }
 

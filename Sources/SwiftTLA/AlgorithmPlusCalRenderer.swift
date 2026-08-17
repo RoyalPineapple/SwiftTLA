@@ -51,12 +51,13 @@ public extension Algorithm {
     }
 }
 
-/// Ordered authored-module input to the final PlusCal renderer.
+/// Ordered module-link layout for the final PlusCal renderer.
 ///
 /// Literal source definitions remain a deliberate formal-source boundary, but
 /// imports and their order are structural: constants and support definitions
 /// precede instances, which precede the Algorithm; properties follow the
-/// translator-owned section.
+/// translator-owned section. This carries no machine semantics: `AlgorithmModel`
+/// remains the authored-machine IR.
 internal struct AuthoredPlusCalModule: Sendable {
     let name: String
     let extendsModules: [String]
