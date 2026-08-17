@@ -3,13 +3,14 @@
 SwiftTLA lets an engineer write a bounded formal algorithm in a shape that
 feels native to Swift: typed values, scoped result builders, enums for finite
 domains, records for structured state, and generated machines for execution.
-One authored model becomes a checked formal AST, a TLA+ module, and a typed
-Swift state machine.
+One authored application model becomes a compiled formal AST, a linked TLA+
+bundle, and a typed Swift state machine.
 
-## Two authoring languages, one formal foundation
+## One public authoring form and a formal core
 
-SwiftTLA has two intentional authoring languages. They meet at the TLA+ AST;
-they are not competing spellings of one public DSL.
+New application models use the Swift-shaped PlusCal form. The direct TLA+
+builders remain formal-core tools for imported modules and parity fixtures.
+They are not a competing public authoring form.
 
 ```
 Swift-shaped PlusCal                         Direct TLA+
@@ -20,10 +21,10 @@ Swift-shaped PlusCal                         Direct TLA+
           │                                           │
           └──────────── lower once ───────────────────┘
                                ▼
-                          TLA+ AST / TLASpec
+                          TLASpec
                     ┌──────────┼───────────┐
                     ▼          ▼           ▼
-                 checker   generated Swift  .tla / .cfg
+                 checker   generated Swift  compiled TLA+ bundle
 ```
 
 Swift-shaped PlusCal is the normal application path. Its parser and constrained
@@ -320,14 +321,14 @@ algorithm evidence.
 | **Arithmetic** | ✓ | +, −, *, /, %, >=, <=, >, <, =, != |
 | **SAFETY — invariants** | ✓ | `Invariant("name") { expr }`; `InvariantBuilder` with `for` loop support |
 | **SAFETY — deadlock** | ✓ | `DeadlockCheck()` |
-| **Constraint** | ✓ | `Constraint(expr)` filters BFS successors; renders `StateConstraint` in `.tlaModule` |
+| **Constraint** | ✓ | `Constraint(expr)` filters BFS successors; compiled bundle output includes `StateConstraint` |
 | **CONSTANTS / ASSUME** | ✓ | `Constant(name, value)` emits `CONSTANTS`+`ASSUME`; parity script copies to `.cfg` |
 | **Definitions** | ✓ | `Definition(tlaText)` raw TLA+ passthrough |
 | **Theorems** | ✓ | `Theorem(tlaText)` raw TLA+ passthrough |
 | **RECURSIVE — raw** | ✓ | `Recursive(tlaText)` raw TLA+ passthrough |
 | **RECURSIVE — structured** | ✓ | `DefineRecursive(name, params:) { body }` with `@InvariantBuilder` |
 | **RECURSIVE — evaluation** | ~ | Builtin `Sum(f,S)` and `SeqFromSet(S)` iterative evaluation; generic recursion not yet |
-| **Fairness (WF/SF)** | ~ | Renders correctly in `.tlaModule`; not checked by ModelChecker |
+| **Fairness (WF/SF)** | ~ | Compiled bundle output contains the fairness condition; ModelChecker does not check it |
 | **Liveness** | — | Not in v1 scope |
 | **Temporal properties** | ✓ | `TemporalDecl`, `LeadsTo`, `Eventually`, `AlwaysEventually` — TLA+ output only |
 | **INSTANCE / EXTENDS custom** | — | External module dependencies; most TLC configs |
@@ -336,7 +337,7 @@ algorithm evidence.
 | **Symmetry reduction** | ~ | `SymmetryDecl` exists; not active |
 | **LET in actions** | ✓ | Swift `let` in `Action { }` builder for StateExpr; no ActionExpr-level LET needed |
 | **Record field shorthand** | ✓ | `@dynamicMemberLookup` on `Var` — `msg.type` works in builders |
-| **Export** | ✓ | `.tlaModule` SANY/TLC-runnable |
+| **Export** | ✓ | `try spec.compile().tlaBundle` produces linked SANY/TLC input |
 
 ## Port inventory
 
@@ -426,15 +427,20 @@ graph TD
         SR --> EVAL2["Evaluator.evaluateBool()"]
     end
 
-    subgraph Export["Export"]
-        TLA["tlaModule<br/>→ TLA+ source<br/>1. MODULE 2. EXTENDS 3. CONSTANTS/ASSUME<br/>4. VARIABLES 5. definitions/recursive<br/>6. invariants 7. constraint 8. Init<br/>9. actions 10. Next 11. Spec 12. temporal 13. THEOREM"]
-        TLASPEC["TLASpec"] --> TLA
+    subgraph Export["Compiled bundle export"]
+        TLASPEC["TLASpec"] --> COMPILE["compile()<br/>→ CompiledSpecification"]
+        COMPILE --> BUNDLE["validated linked TLAModuleBundle<br/>root + transitive imports + CFG"]
+        BUNDLE --> MATERIALIZE["materializeModuleBundle(to:)<br/>atomic sibling-directory publication"]
     end
 
-    subgraph Parity["Upstream Parity"]
-        EX["Example.all: 27 entries<br/>id, upstreamModule, expectedDistinct, spec"]
-        RUN["ModelChecker.exploreGraph().states.count == expectedDistinct<br/>+ make parity: TLC via tlaModule"]
-        EX --> RUN
+    subgraph Parity["Evidence corpora"]
+        DIRECT["Broad direct-TLA example catalogue<br/>semantic regression coverage<br/>not the external canonical corpus"]
+        CORPUS["Canonical PlusCal corpus<br/>source-owned models and bundle manifests"]
+        EXPORTER["Canonical corpus export<br/>writes the source-owned tlaBundle artifact"]
+        EVIDENCE["ValidationEvidence hosted workflow<br/>official PlusCal translation + pinned TLC<br/>exact canonical graph comparison"]
+        CORPUS --> EXPORTER
+        BUNDLE --> EXPORTER
+        EXPORTER --> EVIDENCE
     end
 
     subgraph Self["Self-Proof"]
@@ -482,10 +488,10 @@ SwiftTLA (library)
 │   └── BFSChecker (@TLAModel), BFSExplorer
 │
 ├── UpstreamParity (library)
-│   └── Example.all + 27 port files
+│   └── direct-TLA examples and canonical upstream corpus
 │
 ├── tlc-validate (executable)
-│   └── emits .tlaModule for parity validation
+│   └── emits compiled TLA+ bundles for parity validation
 │
 └── SwiftTLATests (tests)
     └── 133 tests in 30 suites
@@ -509,5 +515,4 @@ SwiftTLA (library)
 - **25/25** TLC parity
 - **133** tests in **30** suites
 - **51** StateExpr cases, **8** ActionExpr cases, **8** TLAValue cases
-- **27** upstream parity ports
 - **14** SpecComponent types handled by builder init

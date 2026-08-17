@@ -17,6 +17,17 @@ Each model with declared variables generates these value types:
 All generated value types are `Sendable`. A model state is value data. It does
 not store an arbitrary reference type.
 
+## One machine plan
+
+The macro first compiles the model. It then creates one `MachineSurfacePlan`
+from that compilation and Swift-only type facts. The plan supplies the typed
+`State`, `Variables`, `ActionLabel`, action descriptors, and
+`GeneratedMachineMetadata`.
+
+The plan does not contain a second action or invariant tree. The canonical
+`TLASpec` remains the only formal meaning. This prevents a generated label or
+state field from silently describing a different machine.
+
 ## Execute an action
 
 Use `apply(_:)` on a canonical generated model. Use `state` and the typed
@@ -72,3 +83,40 @@ is outside the declared bounds or outside the supported SwiftTLA surface.
 
 For a narrative guide, compiled examples, and evidence limits, read
 `Documentation/GeneratedMachines.md` in the repository.
+
+## Verify the generated contract
+
+Generated models provide `verifyGeneratedMachineContract()`. The method checks
+the plan identity, metadata, action-label round trips, state projections, and
+the bounded initial states and transitions.
+
+```swift
+let report = Counter.verifyGeneratedMachineContract()
+
+switch report.status {
+case .exact:
+    break
+case .difference:
+    print(report.diagnostic ?? "Generated-machine contract differs.")
+case .unavailable:
+    print(report.diagnostic ?? "Generated-machine evaluation is unavailable.")
+}
+```
+
+`difference` means that the generated surface disagreed with the compiled
+formal machine. Read the diagnostic and correct the model or generator before
+you use the result. `unavailable` means that bounded evaluation did not finish
+safely. Increase no bound until you first inspect the diagnostic and its
+configured limit.
+
+The verifier checks only the declared finite graph up to
+`verificationStateLimit`. An `exact` result is not a proof of larger state
+spaces, other generated models, or unsupported language constructs.
+
+## Evidence status
+
+The compiler-pipeline case record for this contract is always
+`diagnosticOnly`. The aggregate Public Workflow report can record
+`candidateEvidence` when the checked-in GitHub workflow runs its exact fixture.
+That aggregate status does not change the case record or admit general
+generated-machine support. See `Documentation/PublicWorkflowConformance.md`.

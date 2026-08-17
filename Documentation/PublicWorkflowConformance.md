@@ -12,28 +12,22 @@ TLC and Java are explicitly not applicable to the parser-builder, generated,
 annotation, and platform cases in this P4 runner; their placeholder identities
 do not turn those checks into TLC conformance claims.
 
-## Run the command
+## Run validation
 
-Run the local diagnostic from the repository root:
+Use the checked-in
+[GitHub workflow](../.github/workflows/public-workflow-conformance.yml) for the
+aggregate validation. It provisions the pinned tools and retains the correlated
+evidence artifact.
 
-```sh
-make public-workflow-release-check
-```
+The aggregate public-workflow gate is a broad validation command. Do not run it
+locally unless the user gives explicit authorization for the exact command.
+Repository-safe local diagnostics remain limited to the focused modes in
+`scripts/local-validation.sh`.
 
-The target name is retained for release automation, but exit `0` is a matching
-diagnostic result, not a public support admission. The equivalent direct
-command is:
-
-```sh
-scripts/run_public_workflow_support_gate.sh \
-  --output .build/public-workflow-support-gate
-```
-
-Only the checked-in [GitHub workflow](../.github/workflows/public-workflow-conformance.yml)
-passes `--hosted-ci`. That explicit option changes the report authority from
-`diagnostic` to `candidate`; it does not claim independent attestation or
-broader admission. Setting GitHub-looking environment variables on a local run
-does not select hosted-candidate mode.
+Only the GitHub workflow selects hosted-candidate mode. That mode changes the
+aggregate report from `diagnosticOnly` to `candidateEvidence`; it does not claim
+independent attestation or broader admission. Setting GitHub-looking environment
+variables on a local run does not select hosted-candidate mode.
 
 The command uses `xcodebuild` for the root public library, annotation, and
 declared macOS-platform
@@ -57,6 +51,32 @@ The mismatch and failure cases prove that the runner detects those declared
 conditions. They are not supported behaviors and do not enlarge the positive
 scope.
 
+### Compiler-pipeline diagnostic cases
+
+The compiler-pipeline register is
+`Verification/PublicWorkflowConformance/compiler-pipeline.json`. Each case
+pins the source fixture, configuration, toolchain inputs, finite bound, and
+expected outcome.
+
+| Case | Bound | Expected outcome | Meaning |
+|---|---:|---|---|
+| `compiler-pipeline-counter` | `maxStates: 4` | `exact` | The declared counter compilation, bundle, and generated contract agree. |
+| `compiler-pipeline-structural-invalid` | `maxStates: 1` | `difference` | A duplicate variable blocks compilation before rendering. |
+| `compiler-pipeline-metadata-mismatch` | `maxStates: 4` | `difference` | An intentionally changed metadata assertion remains visible. |
+| `compiler-pipeline-unavailable` | `maxStates: 1` | `unavailable` | A missing required evaluation remains unavailable. |
+
+The last three cases are permanent controls. They show that the runner can
+detect the named failure. They do not show supported behavior.
+
+Each retained compiler-pipeline record is
+`CompilerPipelineDiagnosticEvidenceV1`. It records the compilation diagnostic,
+when there is one, and the source, bundle, configuration, toolchain, bound,
+correlation ID, artifacts, and result. Read `outcome`, `status`, and
+`authority` together. Every individual compiler-pipeline record remains
+`diagnosticOnly`, including when the hosted aggregate report is
+`candidateEvidence`. A missing tool, stale artifact, foreign output, or digest
+mismatch is `unavailable`, never a success.
+
 Generated behavior uses the application-facing typed surface. A fixture reads
 generated `State` and `TransitionResult` values. It does not read an unguarded
 formal state map. The formal engine can use its internal map representation
@@ -78,7 +98,7 @@ but must not convert `diagnosticOnly` or `candidateEvidence` into â€œsupported.â
 
 ## Reports and retained evidence
 
-A local run writes the current report to:
+An explicitly authorized local run writes the current report to:
 
 ```text
 .build/public-workflow-support-gate/support-admission.json

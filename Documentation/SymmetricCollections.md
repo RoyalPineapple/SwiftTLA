@@ -19,10 +19,10 @@ DSL, check the model's global behavior during compilation, and generate an
 executable state-machine or actor surface only after that check succeeds.
 
 ```text
-Typed Swift DSL -> TLASpec -> macro-time model checking -> generated runtime
+Typed Swift DSL -> TLASpec -> CompiledSpecification -> generated runtime
        |                |                  |                       |
        |                |                  +-- failure: diagnostic  +-- state machine or actor
-       |                +-- .tlaModule + .tlaCfg -> TLC oracle
+       |                +-- linked TLA+ bundle -> TLC oracle
        +-- types constrain variables, values, and collection operations
 ```
 
@@ -146,23 +146,23 @@ does not silently disable symmetry reduction.
 
 ## TLA+ and TLC oracle
 
-For a symmetric collection, the exported `.tlaModule` declares opaque member
+For a symmetric collection, the compiled TLA+ bundle declares opaque member
 constants, a generated domain such as `DevicesKeys`, and a symmetry operator
-such as `SymmDevices == Permutations(DevicesKeys)`. The `.tlaCfg` assigns the
-member constants to TLC model values and includes `SYMMETRY SymmDevices`.
-Ordinary collections without a symmetric declaration emit none of these
-artifacts.
+such as `SymmDevices == Permutations(DevicesKeys)`. Its root configuration
+assigns the member constants to TLC model values and includes
+`SYMMETRY SymmDevices`. Ordinary collections without a symmetric declaration
+emit none of these artifacts.
 
-TLC is the external oracle for this lowering. After setting up the repository's
-TLC tools, run:
+TLC is the external oracle for this lowering. Use the checked-in
+[temporal and symmetry conformance workflow](../.github/workflows/temporal-symmetry-conformance.yml)
+for hosted evidence. The workflow provisions the pinned tools and retains the
+bounded comparison artifacts for the selected scopes.
 
-```bash
-./scripts/setup-tlc.sh
-swift run tlc-validate symmetric-collections
-```
-
-The oracle checks the exported finite model against TLC. It provides bounded
-evidence for the selected scopes; it does not extend the proof boundary.
+The symmetry gate and its TLC setup are broad validation commands. Do not run
+them locally unless the user gives explicit authorization for the exact
+command. Repository-safe local diagnostics remain limited to the focused modes
+in `scripts/local-validation.sh`. The oracle evidence does not extend the proof
+boundary.
 
 ## Reviewer checklist
 
