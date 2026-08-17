@@ -7,6 +7,19 @@ struct VoteProofMigrationTests {
         VoteProofModel._checkParserTree()
 
         let bundle = VoteProofModel.spec.tlaBundle
+        #expect(VoteProofModel.spec.constants == [
+            "Value": .set([.string("v1"), .string("v2")]),
+            "Acceptor": .set([.string("a1"), .string("a2"), .string("a3")]),
+            "Quorum": .set([
+                .set([.string("a1"), .string("a2")]),
+                .set([.string("a1"), .string("a3")]),
+                .set([.string("a2"), .string("a3")]),
+                .set([.string("a1"), .string("a2"), .string("a3")])
+            ]),
+            "Ballot": .set([.int(0), .int(1), .int(2)])
+        ])
+        #expect(bundle.root.tla.contains("ASSUME Value = {\"v1\", \"v2\"}"))
+        #expect(bundle.root.tla.contains("ASSUME Acceptor = {\"a1\", \"a2\", \"a3\"}"))
         #expect(bundle.root.tla.contains("C == INSTANCE Consensus"))
         #expect(bundle.imports.map(\.name).contains("Consensus"))
         #expect(bundle.root.tla.contains("SafeAt(value0, value1) =="))

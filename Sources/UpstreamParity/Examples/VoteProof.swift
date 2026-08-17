@@ -9,11 +9,11 @@ public struct VoteProofModel {
 
         public static let formalDomain: [Self] = [.v1, .v2]
         public static let formalTypeIdentity = FormalTypeIdentity(rawValue: "upstream.byzpaxos.vote-proof.value")
-        public var tlaValue: TLAValue { .constant(rawValue) }
+        public var tlaValue: TLAValue { .string(rawValue) }
         public static var defaultValue: Self { .v1 }
 
         public init?(formalValue: TLAValue) {
-            guard case .constant(let rawValue) = formalValue else { return nil }
+            guard case .string(let rawValue) = formalValue else { return nil }
             self.init(rawValue: rawValue)
         }
     }
@@ -23,11 +23,11 @@ public struct VoteProofModel {
 
         public static let formalDomain: [Self] = [.a1, .a2, .a3]
         public static let formalTypeIdentity = FormalTypeIdentity(rawValue: "upstream.byzpaxos.vote-proof.acceptor")
-        public var tlaValue: TLAValue { .constant(rawValue) }
+        public var tlaValue: TLAValue { .string(rawValue) }
         public static var defaultValue: Self { .a1 }
 
         public init?(formalValue: TLAValue) {
-            guard case .constant(let rawValue) = formalValue else { return nil }
+            guard case .string(let rawValue) = formalValue else { return nil }
             self.init(rawValue: rawValue)
         }
     }
