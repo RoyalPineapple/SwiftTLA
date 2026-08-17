@@ -61,15 +61,7 @@ jobs:
       - uses: actions/checkout@v5
       - run: swift build --target SwiftTLA -j 1
 
-  macro:
-    runs-on: macos-15
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@v5
-      - run: swift build --target SwiftTLAMacros -j 1
-
   canonical-corpus-export:
-    needs: macro
     runs-on: macos-15
     timeout-minutes: 15
     steps:
