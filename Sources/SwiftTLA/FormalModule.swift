@@ -108,9 +108,10 @@ public struct TLAModuleBundle: Sendable, Equatable {
     source.split(separator: "\n", omittingEmptySubsequences: false).enumerated().flatMap { offset, rawLine in
       let line = rawLine.trimmingCharacters(in: .whitespaces)
       if line.hasPrefix("EXTENDS ") {
-        return line.dropFirst("EXTENDS ".count).split(separator: ",").compactMap { token in
+        return line.dropFirst("EXTENDS ".count).split(separator: ",").flatMap { token -> [Dependency] in
           let name = token.trimmingCharacters(in: .whitespaces)
-          return isModuleIdentifier(name) ? Dependency(name: name, line: offset + 1) : nil
+          guard isModuleIdentifier(name) else { return [] }
+          return [Dependency(name: name, line: offset + 1)]
         }
       }
       guard let range = line.range(of: "INSTANCE ") else { return [] }

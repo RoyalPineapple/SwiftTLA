@@ -47,6 +47,25 @@ struct TLAModuleBundleTests {
     }
   }
 
+  @Test("a bundle checks every module on an EXTENDS line")
+  func rejectsLaterMissingExtendDependency() {
+    let bundle = TLAModuleBundle(
+      root: .init(
+        name: "Consumer",
+        tla: "---- MODULE Consumer ----\nEXTENDS Integers, Present, MissingModule\n====\n"
+      ),
+      imports: [
+        .init(name: "Present", tla: "---- MODULE Present ----\n====\n")
+      ]
+    )
+
+    #expect(throws: TLAModuleBundleLinkError.missingModule(
+      module: "MissingModule", importedBy: "Consumer", line: 2
+    )) {
+      try bundle.validateLink()
+    }
+  }
+
   @Test("a bundle accepts transitive source dependencies when all are present")
   func acceptsCompleteLinkDependencyClosure() throws {
     let bundle = TLAModuleBundle(
