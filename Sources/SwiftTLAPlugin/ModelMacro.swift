@@ -26,46 +26,16 @@ struct ParsedEnumInfo {
 }
 
 struct MacroCompilation {
-    struct SymmetricCollectionFact {
-        let elementType: String
-        let valueType: String
-    }
-
-    struct CollectionActionFact {
-        let collectionName: String
-    }
-
     let typeName: String
     let compilation: CompiledSpecification
+    let machineSurface: MachineSurfacePlan
     let swiftFacts: MacroSwiftFacts
-    let collectionActions: [String: CollectionActionFact]
     let enumInfos: [ParsedEnumInfo]
-
-    var variables: [NamedVar] { compilation.spec.variables }
-    var actions: [NamedAction] { compilation.spec.actions }
-    var symmetricCollections: [SymmetricCollectionDecl] { compilation.spec.symmetricCollections }
-    var symmetricCollectionsByName: [String: SymmetricCollectionDecl] {
-        Dictionary(uniqueKeysWithValues: symmetricCollections.map { ($0.name, $0) })
-    }
 
     var hasInvariants: Bool { !compilation.spec.invariants.isEmpty }
 }
 
-struct MacroSwiftFacts {
-    let variableTypes: [String: String]
-    let actionBindingTypes: [String: [String: String]]
-    let symmetricCollections: [String: MacroCompilation.SymmetricCollectionFact]
-
-    init(
-        variableTypes: [String: String] = [:],
-        actionBindingTypes: [String: [String: String]] = [:],
-        symmetricCollections: [String: MacroCompilation.SymmetricCollectionFact] = [:]
-    ) {
-        self.variableTypes = variableTypes
-        self.actionBindingTypes = actionBindingTypes
-        self.symmetricCollections = symmetricCollections
-    }
-}
+typealias MacroSwiftFacts = MachineSurfaceSwiftFacts
 
 enum NestedAdapterModelRegistry {
     private static let lock = NSLock()
@@ -187,29 +157,29 @@ enum TLASpecVerifier {
             }
         }
 
-        return MacroCompilation(
-            typeName: typeName,
-            compilation: compilation,
-            swiftFacts: .init(
-                variableTypes: Dictionary(
+        let swiftFacts = MacroSwiftFacts(
+            variableTypes: Dictionary(
                 uniqueKeysWithValues: parsed.variables.compactMap { variable in
                     variable.swiftTypeName.map { (variable.name, $0) }
                 }
             ),
-                actionBindingTypes: Dictionary(
+            actionBindingTypes: Dictionary(
                 uniqueKeysWithValues: parsed.actions.map { ($0.name, $0.bindingSwiftTypes) }
             ),
-                symmetricCollections: Dictionary(
-                    uniqueKeysWithValues: parsed.symmetricCollections.map {
-                        ($0.name, .init(elementType: $0.elementType, valueType: $0.valueType))
-                    }
-                )
-            ),
-            collectionActions: Dictionary(
-                uniqueKeysWithValues: parsed.collectionActions.map {
-                    ($0.name, .init(collectionName: $0.collectionName))
+            symmetricCollections: Dictionary(
+                uniqueKeysWithValues: parsed.symmetricCollections.map {
+                    ($0.name, .init(elementType: $0.elementType, valueType: $0.valueType))
                 }
             ),
+            collectionActions: Dictionary(
+                uniqueKeysWithValues: parsed.collectionActions.map { ($0.name, $0.collectionName) }
+            )
+        )
+        return MacroCompilation(
+            typeName: typeName,
+            compilation: compilation,
+            machineSurface: try MachineSurfacePlan(compilation: compilation, swiftFacts: swiftFacts),
+            swiftFacts: swiftFacts,
             enumInfos: enumInfos
         )
     }

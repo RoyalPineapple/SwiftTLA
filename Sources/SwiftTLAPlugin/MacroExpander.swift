@@ -67,9 +67,7 @@ enum MacroExpander {
         case .observable:
             return generateObservableMembers(
                 typeName: model.typeName,
-                variables: model.variables,
-                actions: model.actions,
-                facts: model.swiftFacts,
+                plan: model.machineSurface,
                 enumInfos: model.enumInfos
             )
         }
@@ -83,6 +81,7 @@ enum MacroExpander {
         needsPublicInitializer: Bool
     ) -> [DeclSyntax] {
         var decls: [DeclSyntax] = []
+        let plan = model.machineSurface
 
         // A generated machine is a public value surface. Swift only
         // synthesizes an internal memberwise initializer for a public type,
@@ -100,34 +99,29 @@ enum MacroExpander {
         )
         """))
 
-        decls.append(DeclSyntax(generateVariablesEnum(variables: model.variables)))
-        if !model.actions.isEmpty {
-            decls.append(DeclSyntax(generateActionsEnum(actions: model.actions)))
-            decls.append(DeclSyntax(generateActionLabel(actions: model.actions, facts: model.swiftFacts)))
+        decls.append(DeclSyntax(generateVariablesEnum(variables: plan.variables)))
+        if !plan.actions.isEmpty {
+            decls.append(DeclSyntax(generateActionsEnum(actions: plan.actions)))
+            decls.append(DeclSyntax(generateActionLabel(actions: plan.actions)))
         }
-        decls.append(DeclSyntax(generateStateStruct(variables: model.variables, facts: model.swiftFacts, enumInfos: model.enumInfos)))
+        decls.append(DeclSyntax(generateStateStruct(variables: plan.variables, enumInfos: model.enumInfos)))
         decls.append(contentsOf: generateCanonicalMachineMembers(
             isActor: isActor,
-            hasActions: !model.actions.isEmpty,
-            symmetricCollections: model.symmetricCollections
+            hasActions: !plan.actions.isEmpty,
+            symmetricCollections: plan.symmetricCollections
         ))
-        decls.append(contentsOf: generateCollectionRuntimeMembers(
-            model.symmetricCollections,
-            facts: model.swiftFacts
-        ))
-        let symmetricCollectionNames = Set(model.symmetricCollections.map(\.name))
-        let ordinaryVariables = model.variables.filter { !symmetricCollectionNames.contains($0.name) }
+        decls.append(contentsOf: generateCollectionRuntimeMembers(plan.symmetricCollections))
+        let symmetricCollectionNames = Set(plan.symmetricCollections.map(\.formalName))
+        let ordinaryVariables = plan.variables.filter { !symmetricCollectionNames.contains($0.formalName) }
         decls.append(contentsOf: generateVariableProperties(
             variables: ordinaryVariables,
-            facts: model.swiftFacts,
             enumInfos: model.enumInfos
         ).map(DeclSyntax.init))
         decls.append(contentsOf: generateActionMethods(
             isActor: isActor,
-            actions: model.actions,
-            collectionActions: model.collectionActions,
-            symmetricCollections: model.symmetricCollectionsByName,
-            facts: model.swiftFacts
+            actions: plan.actions,
+            collectionActions: plan.collectionActions,
+            symmetricCollections: Dictionary(uniqueKeysWithValues: plan.symmetricCollections.map { ($0.formalName, $0) })
         ).map(DeclSyntax.init))
         decls.append(contentsOf: generateCompilationIdentityCheck(model: model))
         decls.append(DeclSyntax(
@@ -162,11 +156,11 @@ enum MacroExpander {
             }
             """))
         }
-        if !model.actions.isEmpty {
+        if !plan.actions.isEmpty {
             decls.append(contentsOf: generateTransitionMatrix())
         }
-        decls.append(contentsOf: generateTransitionsTest(model.actions))
-        if model.hasInvariants && !model.actions.isEmpty {
+        decls.append(contentsOf: generateTransitionsTest(hasActions: !plan.actions.isEmpty))
+        if model.hasInvariants && !plan.actions.isEmpty {
             decls.append(contentsOf: generateInvariantsTest())
         }
 
@@ -175,8 +169,79 @@ enum MacroExpander {
 
     static func generateCompilationIdentityCheck(model: MacroCompilation) -> [DeclSyntax] {
         let expectedIdentity = model.compilation.identity.value
+        let expectedSchema = model.machineSurface.schemaIdentifier
+        let facts = machineSurfaceSwiftFactsSource(model.swiftFacts)
+        let projectionSource = """
+        private static func _generatedProjection(_ formalState: [String: TLAValue]) throws -> TLAStateProjection {
+            try TLAStateProjection(validating: formalState.map { key, value in
+                guard let token = TLAStateProjection.Token(validating: key) else {
+                    throw TLAStateProjectionDiagnostic.invalidKey(path: key)
+                }
+                return .init(token: token, value: value)
+            })
+        }
+        """
+        let behaviorSource: String
+        if model.machineSurface.actions.isEmpty {
+            behaviorSource = """
+            private static let _generatedMachineBehavior = GeneratedMachineBehavior(
+                initialStates: {
+                    try Self.runtime.initialStates().map { formalState in
+                        let projection = try Self._generatedProjection(formalState)
+                        _ = try State(projection: projection)
+                        return projection
+                    }
+                },
+                successors: { _, _ in [] }
+            )
+            """
+        } else {
+            behaviorSource = """
+            private static let _generatedMachineBehavior = GeneratedMachineBehavior(
+                initialStates: {
+                    try Self.runtime.initialStates().map { formalState in
+                        let projection = try Self._generatedProjection(formalState)
+                        _ = try State(projection: projection)
+                        return projection
+                    }
+                },
+                successors: { projection, invocation in
+                    guard let label = ActionLabel(invocation: invocation),
+                          label.toInvocation() == invocation else {
+                        throw GeneratedMachineContractDiagnostic(
+                            code: .actionLabelRoundTripMismatch,
+                            path: "generatedBehavior.actionLabel",
+                            expected: invocation.description,
+                            actual: "an unrepresentable generated action label",
+                            nextSafeAction: "Regenerate the generated action labels from the current #spec source."
+                        )
+                    }
+                    _ = try State(projection: projection)
+                    let formalState = Dictionary(
+                        uniqueKeysWithValues: projection.entries.map { ($0.token.description, $0.value) }
+                    )
+                    return try Self.runtime.successors(label.toInvocation(), from: formalState).map { formalTarget in
+                        let target = try Self._generatedProjection(formalTarget)
+                        _ = try State(projection: target)
+                        return target
+                    }
+                }
+            )
+            """
+        }
         let compilationSource = """
         static let _expectedCompilationIdentity = \"\(expectedIdentity)\"
+        static let _expectedMachineSchemaIdentifier = \"\(expectedSchema)\"
+        private static let _machineSurfacePlan: MachineSurfacePlan = {
+            do {
+                return try MachineSurfacePlan(compilation: Self.spec.compile(), swiftFacts: \(facts))
+            } catch {
+                fatalError(String(describing: error))
+            }
+        }()
+        public static let generatedMachineMetadata = _machineSurfacePlan.metadata
+        \(projectionSource)
+        \(behaviorSource)
         public static func compiledSpecification() throws -> CompiledSpecification {
             let compilation = try Self.spec.compile()
             guard compilation.identity.value == _expectedCompilationIdentity else {
@@ -189,10 +254,67 @@ enum MacroExpander {
                     nextSafeAction: \"Update the authored #spec declaration so every consumer compiles the same formal model.\"
                 )
             }
+            guard compilation.identity == _machineSurfacePlan.compilationIdentity,
+                  _machineSurfacePlan.schemaIdentifier == _expectedMachineSchemaIdentifier,
+                  generatedMachineMetadata.compilationIdentity.value == _expectedCompilationIdentity,
+                  generatedMachineMetadata.schemaIdentifier == _expectedMachineSchemaIdentifier else {
+                throw GeneratedMachineContractDiagnostic(
+                    code: .schemaMismatch,
+                    path: \"generatedMachineMetadata\",
+                    expected: _expectedMachineSchemaIdentifier,
+                    actual: _machineSurfacePlan.schemaIdentifier,
+                    nextSafeAction: \"Regenerate the generated machine surface from the current #spec source.\"
+                )
+            }
             return compilation
+        }
+        public static func verifyGeneratedMachineContract() -> GeneratedMachineContractReport {
+            do {
+                return GeneratedMachineContractVerifier.verify(
+                    compilation: try compiledSpecification(),
+                    plan: _machineSurfacePlan,
+                    metadata: generatedMachineMetadata,
+                    expectedSchemaIdentifier: _expectedMachineSchemaIdentifier,
+                    verificationStateLimit: verificationStateLimit,
+                    decodeState: { projection in
+                        _ = try State(projection: projection)
+                    },
+                    behavior: _generatedMachineBehavior
+                )
+            } catch let diagnostic as GeneratedMachineContractDiagnostic {
+                return .init(status: .difference, initialStateCount: 0, transitionCount: 0, diagnostic: diagnostic)
+            } catch {
+                return .init(
+                    status: .unavailable,
+                    initialStateCount: 0,
+                    transitionCount: 0,
+                    diagnostic: .init(
+                        code: .evaluationUnavailable,
+                        path: \"compiledSpecification\",
+                        expected: \"a compiled specification\",
+                        actual: String(describing: error),
+                        nextSafeAction: \"Correct the compilation failure, then rerun generated contract verification.\"
+                    )
+                )
+            }
         }
         """
         return [DeclSyntax(stringLiteral: compilationSource)]
+    }
+
+    static func machineSurfaceSwiftFactsSource(_ facts: MacroSwiftFacts) -> String {
+        func quoted(_ value: String) -> String { String(reflecting: value) }
+        func dictionary(_ values: [String: String]) -> String {
+            "[" + values.keys.sorted().map { "\(quoted($0)): \(quoted(values[$0]!))" }.joined(separator: ", ") + "]"
+        }
+        let actionBindings = "[" + facts.actionBindingTypes.keys.sorted().map { action in
+            "\(quoted(action)): \(dictionary(facts.actionBindingTypes[action]!))"
+        }.joined(separator: ", ") + "]"
+        let collections = "[" + facts.symmetricCollections.keys.sorted().map { name in
+            let fact = facts.symmetricCollections[name]!
+            return "\(quoted(name)): .init(elementType: \(quoted(fact.elementType)), valueType: \(quoted(fact.valueType)))"
+        }.joined(separator: ", ") + "]"
+        return "MachineSurfaceSwiftFacts(variableTypes: \(dictionary(facts.variableTypes)), actionBindingTypes: \(actionBindings), symmetricCollections: \(collections), collectionActions: \(dictionary(facts.collectionActions)))"
     }
 
     static func codegenTemporalExpr(_ expression: TemporalExpr) -> String {
@@ -355,7 +477,7 @@ enum MacroExpander {
         }
     }
 
-    static func generateVariablesEnum(variables: [NamedVar]) -> EnumDeclSyntax {
+    static func generateVariablesEnum(variables: [MachineSurfacePlan.Variable]) -> EnumDeclSyntax {
         EnumDeclSyntax(
             modifiers: [DeclModifierSyntax(name: .keyword(.public))],
             name: "Variables",
@@ -368,13 +490,13 @@ enum MacroExpander {
             },
             memberBlock: MemberBlockSyntax {
                 for v in variables {
-                    EnumCaseDeclSyntax { EnumCaseElementSyntax(name: .identifier(v.name)) }
+                    EnumCaseDeclSyntax { EnumCaseElementSyntax(name: .identifier(v.formalName)) }
                 }
             }
         )
     }
 
-    static func generateActionsEnum(actions: [NamedAction]) -> EnumDeclSyntax {
+    static func generateActionsEnum(actions: [MachineSurfacePlan.Action]) -> EnumDeclSyntax {
         EnumDeclSyntax(
             modifiers: [DeclModifierSyntax(name: .keyword(.public))],
             name: "Actions",
@@ -385,11 +507,11 @@ enum MacroExpander {
                 }
             },
             memberBlock: MemberBlockSyntax {
-                for (a, identifier) in zip(actions, generatedActionIdentifiers(actions: actions)) {
+                for action in actions {
                     EnumCaseDeclSyntax {
                         EnumCaseElementSyntax(
-                            name: .identifier(identifier),
-                            rawValue: InitializerClauseSyntax(value: StringLiteralExprSyntax(content: a.name))
+                            name: .identifier(action.swiftIdentifier),
+                            rawValue: InitializerClauseSyntax(value: StringLiteralExprSyntax(content: action.formalName))
                         )
                     }
                 }
@@ -397,72 +519,67 @@ enum MacroExpander {
         )
     }
 
-    static func generateActionLabel(actions: [NamedAction], facts: MacroSwiftFacts) -> DeclSyntax {
-        let identifiers = generatedActionIdentifiers(actions: actions)
-        func swiftType(for action: NamedAction, binding: ActionBinding) -> String {
-            Self.swiftType(for: action, binding: binding, facts: facts)
-        }
-
-        func argumentConstructor(for action: NamedAction, binding: ActionBinding) -> String {
-            switch swiftType(for: action, binding: binding) {
-            case "Int": return ".int(\(binding.name))"
-            case "Bool": return ".bool(\(binding.name))"
-            case "String": return ".string(\(binding.name))"
-            case "TLAValue": return binding.name
-            default: return "\(binding.name).tlaValue"
+    static func generateActionLabel(actions: [MachineSurfacePlan.Action]) -> DeclSyntax {
+        func argumentConstructor(for binding: MachineSurfacePlan.Binding) -> String {
+            switch binding.swiftType {
+            case "Int": return ".int(\(binding.formalName))"
+            case "Bool": return ".bool(\(binding.formalName))"
+            case "String": return ".string(\(binding.formalName))"
+            case "TLAValue": return binding.formalName
+            default: return "\(binding.formalName).tlaValue"
             }
         }
 
-        func fixedArgument(_ binding: ActionBinding) -> String {
-            codegenTLAValue(binding.values[0])
+        func fixedArgument(_ binding: MachineSurfacePlan.Binding) -> String {
+            codegenTLAValue(binding.domain[0])
         }
 
-        func invocationPattern(for action: NamedAction, binding: ActionBinding, index: Int) -> String {
+        func invocationPattern(for binding: MachineSurfacePlan.Binding, index: Int) -> String {
             let argument = "invocation.arguments[\(index)]"
-            switch swiftType(for: action, binding: binding) {
-            case "Int": return "case .int(let \(binding.name)) = \(argument)"
-            case "Bool": return "case .bool(let \(binding.name)) = \(argument)"
-            case "String": return "case .string(let \(binding.name)) = \(argument)"
-            case "TLAValue": return "let \(binding.name) = \(argument)"
+            switch binding.swiftType {
+            case "Int": return "case .int(let \(binding.formalName)) = \(argument)"
+            case "Bool": return "case .bool(let \(binding.formalName)) = \(argument)"
+            case "String": return "case .string(let \(binding.formalName)) = \(argument)"
+            case "TLAValue": return "let \(binding.formalName) = \(argument)"
             default:
-                return "let \(binding.name) = \(swiftType(for: action, binding: binding))(formalValue: \(argument))"
+                return "let \(binding.formalName) = \(binding.swiftType)(formalValue: \(argument))"
             }
         }
 
-        let cases = zip(actions, identifiers).map { action, identifier in
-            let bindings = publicBindings(for: action)
-            guard !bindings.isEmpty else { return "case \(identifier)" }
-            let parameters = bindings.map { "\($0.name): \(swiftType(for: action, binding: $0))" }.joined(separator: ", ")
-            return "case \(identifier)(\(parameters))"
+        let cases = actions.map { action in
+            let bindings = action.bindings.filter(\.isPublic)
+            guard !bindings.isEmpty else { return "case \(action.swiftIdentifier)" }
+            let parameters = bindings.map { "\($0.formalName): \($0.swiftType)" }.joined(separator: ", ")
+            return "case \(action.swiftIdentifier)(\(parameters))"
         }.joined(separator: "\n    ")
 
-        let toInvocationCases = zip(actions, identifiers).map { action, identifier in
-            let publicBindings = publicBindings(for: action)
+        let toInvocationCases = actions.map { action in
+            let publicBindings = action.bindings.filter(\.isPublic)
             let arguments = action.bindings.map { binding in
-                publicBindings.contains(where: { $0.name == binding.name })
-                    ? argumentConstructor(for: action, binding: binding)
+                binding.isPublic
+                    ? argumentConstructor(for: binding)
                     : fixedArgument(binding)
             }.joined(separator: ", ")
             let pattern = publicBindings.isEmpty
-                ? ".\(identifier)"
-                : ".\(identifier)(\(publicBindings.map { "let \($0.name)" }.joined(separator: ", ")))"
-            return "case \(pattern): return .init(name: \"\(action.name)\", arguments: [\(arguments)])"
+                ? ".\(action.swiftIdentifier)"
+                : ".\(action.swiftIdentifier)(\(publicBindings.map { "let \($0.formalName)" }.joined(separator: ", ")))"
+            return "case \(pattern): return .init(name: \"\(action.formalName)\", arguments: [\(arguments)])"
         }.joined(separator: "\n        ")
 
-        let fromInvocationCases = zip(actions, identifiers).map { action, identifier in
-            let publicBindings = publicBindings(for: action)
+        let fromInvocationCases = actions.map { action in
+            let publicBindings = action.bindings.filter(\.isPublic)
             if action.bindings.isEmpty {
-                return "case \"\(action.name)\" where invocation.arguments.isEmpty: self = .\(identifier)"
+                return "case \"\(action.formalName)\" where invocation.arguments.isEmpty: self = .\(action.swiftIdentifier)"
             }
             let patterns = action.bindings.enumerated().map { index, binding -> String in
-                if publicBindings.contains(where: { $0.name == binding.name }) {
-                    return invocationPattern(for: action, binding: binding, index: index)
+                if binding.isPublic {
+                    return invocationPattern(for: binding, index: index)
                 }
-                return "\(codegenTLAValue(binding.values[0])) == invocation.arguments[\(index)]"
+                return "\(codegenTLAValue(binding.domain[0])) == invocation.arguments[\(index)]"
             }.joined(separator: ", ")
-            let arguments = publicBindings.map { "\($0.name): \($0.name)" }.joined(separator: ", ")
-            return "case \"\(action.name)\" where invocation.arguments.count == \(action.bindings.count): "
-                + "guard \(patterns) else { return nil }; self = .\(identifier)\(arguments.isEmpty ? "" : "(\(arguments))")"
+            let arguments = publicBindings.map { "\($0.formalName): \($0.formalName)" }.joined(separator: ", ")
+            return "case \"\(action.formalName)\" where invocation.arguments.count == \(action.bindings.count): "
+                + "guard \(patterns) else { return nil }; self = .\(action.swiftIdentifier)\(arguments.isEmpty ? "" : "(\(arguments))")"
         }.joined(separator: "\n        ")
 
         return DeclSyntax(stringLiteral: """
@@ -489,8 +606,7 @@ enum MacroExpander {
 
 extension MacroExpander {
     static func generateStateStruct(
-        variables: [NamedVar],
-        facts: MacroSwiftFacts,
+        variables: [MachineSurfacePlan.Variable],
         enumInfos: [ParsedEnumInfo] = []
     ) -> StructDeclSyntax {
         StructDeclSyntax(
@@ -506,9 +622,9 @@ extension MacroExpander {
                         modifiers: [DeclModifierSyntax(name: .keyword(.public))],
                         bindingSpecifier: .keyword(.var),
                         bindings: [PatternBindingSyntax(
-                            pattern: IdentifierPatternSyntax(identifier: .identifier(v.name)),
+                            pattern: IdentifierPatternSyntax(identifier: .identifier(v.formalName)),
                             typeAnnotation: TypeAnnotationSyntax(
-                                type: TypeSyntax(stringLiteral: stateType(for: v, facts: facts, enumInfos: enumInfos))
+                                type: TypeSyntax(stringLiteral: stateType(for: v, enumInfos: enumInfos))
                             )
                         )]
                     )
@@ -519,15 +635,15 @@ extension MacroExpander {
                         parameterClause: FunctionParameterClauseSyntax {
                             for v in variables {
                                 FunctionParameterSyntax(
-                                    firstName: .identifier(v.name),
-                                    type: TypeSyntax(stringLiteral: stateType(for: v, facts: facts, enumInfos: enumInfos))
+                                    firstName: .identifier(v.formalName),
+                                    type: TypeSyntax(stringLiteral: stateType(for: v, enumInfos: enumInfos))
                                 )
                             }
                         }
                     ),
                     body: CodeBlockSyntax {
                         for v in variables {
-                            ExprSyntax(stringLiteral: "self.\(v.name) = \(v.name)")
+                            ExprSyntax(stringLiteral: "self.\(v.formalName) = \(v.formalName)")
                         }
                     }
                 )
@@ -545,7 +661,24 @@ extension MacroExpander {
                         )
                     ),
                     body: CodeBlockSyntax {
-                        ExprSyntax(stringLiteral: stateDecodingStatements(variables: variables, facts: facts, enumInfos: enumInfos))
+                        ExprSyntax(stringLiteral: stateDecodingStatements(variables: variables, enumInfos: enumInfos, source: "dict"))
+                    }
+                )
+                InitializerDeclSyntax(
+                    modifiers: [DeclModifierSyntax(name: .keyword(.fileprivate))],
+                    signature: FunctionSignatureSyntax(
+                        parameterClause: FunctionParameterClauseSyntax {
+                            FunctionParameterSyntax(
+                                firstName: "projection",
+                                type: TypeSyntax(stringLiteral: "TLAStateProjection")
+                            )
+                        },
+                        effectSpecifiers: FunctionEffectSpecifiersSyntax(
+                            throwsClause: ThrowsClauseSyntax(throwsSpecifier: .keyword(.throws))
+                        )
+                    ),
+                    body: CodeBlockSyntax {
+                        ExprSyntax(stringLiteral: stateDecodingStatements(variables: variables, enumInfos: enumInfos, source: "projection"))
                     }
                 )
                 VariableDeclSyntax(
@@ -558,18 +691,17 @@ extension MacroExpander {
                             CodeBlockItemListSyntax {
                                 DeclSyntax(stringLiteral: "var d: [String: TLAValue] = [:]")
                                 for v in variables {
-                                    let st = stateType(for: v, facts: facts, enumInfos: enumInfos)
-                                    if let swiftTypeName = facts.variableTypes[v.name],
-                                       enumInfos.contains(where: { $0.typeName == swiftTypeName }) {
-                                        ExprSyntax(stringLiteral: "d[Variables.\(v.name).rawValue] = .string(String(describing: \(v.name)))")
+                                    let st = stateType(for: v, enumInfos: enumInfos)
+                                    if enumInfos.contains(where: { $0.typeName == st }) {
+                                        ExprSyntax(stringLiteral: "d[Variables.\(v.formalName).rawValue] = .string(String(describing: \(v.formalName)))")
                                     } else if st == "TLAValue" {
-                                        ExprSyntax(stringLiteral: "d[Variables.\(v.name).rawValue] = \(v.name)")
+                                        ExprSyntax(stringLiteral: "d[Variables.\(v.formalName).rawValue] = \(v.formalName)")
                                     } else if ["Int", "Bool", "String"].contains(st) {
-                                        ExprSyntax(stringLiteral: "d[Variables.\(v.name).rawValue] = \(constructor(forSwiftType: st, value: v.name))")
-                                    } else if facts.variableTypes[v.name] != nil {
-                                        ExprSyntax(stringLiteral: "d[Variables.\(v.name).rawValue] = \(v.name).tlaValue")
+                                        ExprSyntax(stringLiteral: "d[Variables.\(v.formalName).rawValue] = \(constructor(forSwiftType: st, value: v.formalName))")
+                                    } else if v.swiftType != "TLAValue" {
+                                        ExprSyntax(stringLiteral: "d[Variables.\(v.formalName).rawValue] = \(v.formalName).tlaValue")
                                     } else {
-                                        ExprSyntax(stringLiteral: "d[Variables.\(v.name).rawValue] = \(constructor(for: v.initial, value: v.name))")
+                                        ExprSyntax(stringLiteral: "d[Variables.\(v.formalName).rawValue] = \(v.formalName)")
                                     }
                                 }
                                 StmtSyntax(stringLiteral: "return d")
@@ -582,51 +714,41 @@ extension MacroExpander {
     }
 
     static func generateVariableProperties(
-        variables: [NamedVar],
-        facts: MacroSwiftFacts,
+        variables: [MachineSurfacePlan.Variable],
         enumInfos: [ParsedEnumInfo] = []
     ) -> [VariableDeclSyntax] {
         variables.map { v in
-            let propType = stateType(for: v, facts: facts, enumInfos: enumInfos)
+            let propType = stateType(for: v, enumInfos: enumInfos)
             return VariableDeclSyntax(
                 modifiers: [DeclModifierSyntax(name: .keyword(.public))],
                 bindingSpecifier: .keyword(.var),
                 bindings: [PatternBindingSyntax(
-                    pattern: IdentifierPatternSyntax(identifier: .identifier(v.name)),
+                    pattern: IdentifierPatternSyntax(identifier: .identifier(v.formalName)),
                     typeAnnotation: TypeAnnotationSyntax(type: TypeSyntax(stringLiteral: propType)),
                     accessorBlock: AccessorBlockSyntax(accessors: .getter(
-                        CodeBlockItemListSyntax { ExprSyntax(stringLiteral: "_machine.snapshot.\(v.name)") }
+                        CodeBlockItemListSyntax { ExprSyntax(stringLiteral: "_machine.snapshot.\(v.formalName)") }
                     ))
                 )]
             )
         }
     }
 
-    static func tlaValuePattern(for initial: TLAValue, binding: String) -> String {
-        switch initial {
-        case .int: "case .int(let \(binding)) = rawValue"
-        case .bool: "case .bool(let \(binding)) = rawValue"
-        case .string, .constant: "case .string(let \(binding)) = rawValue"
-        case .set: "case .set(let \(binding)) = rawValue"
-        case .tuple: "case .tuple(let \(binding)) = rawValue"
-        case .record: "case .record(let \(binding)) = rawValue"
-        case .function: "case .function(let \(binding)) = rawValue"
-        }
-    }
-
     static func stateDecodingStatements(
-        variables: [NamedVar],
-        facts: MacroSwiftFacts,
-        enumInfos: [ParsedEnumInfo]
+        variables: [MachineSurfacePlan.Variable],
+        enumInfos: [ParsedEnumInfo],
+        source: String
     ) -> String {
         variables.map { variable in
-            let key = "Variables.\(variable.name).rawValue"
-            if let typeName = facts.variableTypes[variable.name],
-               let info = enumInfos.first(where: { $0.typeName == typeName }) {
-                let cases = info.cases.map { "case \"\($0.name)\": self.\(variable.name) = \(typeName).\($0.name)" }
+            let key = "Variables.\(variable.formalName).rawValue"
+            let rawValue = source == "dict"
+                ? "dict[\(key)]"
+                : "projection.value(for: TLAStateProjection.Token(validating: \(key))!)"
+            let typeName = stateType(for: variable, enumInfos: enumInfos)
+            if let info = enumInfos.first(where: { $0.typeName == typeName }) {
+                let cases = info.cases.map { "case \"\($0.name)\": self.\(variable.formalName) = \(typeName).\($0.name)" }
                     .joined(separator: "\n")
                 return """
-                guard let rawValue = dict[\(key)] else {
+                guard let rawValue = \(rawValue) else {
                     throw TLAStateProjectionDiagnostic.missingRequiredValue(path: \(key), expected: "\(typeName)")
                 }
                 guard case .string(let value) = rawValue else {
@@ -639,36 +761,35 @@ extension MacroExpander {
                 }
                 """
             }
-            let type = stateType(for: variable, facts: facts, enumInfos: enumInfos)
+            let type = typeName
             if type == "TLAValue" {
                 return """
-                guard let value = dict[\(key)] else {
+                guard let value = \(rawValue) else {
                     throw TLAStateProjectionDiagnostic.missingRequiredValue(path: \(key), expected: "\(type)")
                 }
-                self.\(variable.name) = value
+                self.\(variable.formalName) = value
                 """
             }
-            if let typeName = facts.variableTypes[variable.name],
-               !["Int", "Bool", "String", "TLAValue"].contains(typeName) {
+            if !["Int", "Bool", "String", "TLAValue"].contains(typeName) {
                 return """
-                guard let rawValue = dict[\(key)] else {
+                guard let rawValue = \(rawValue) else {
                     throw TLAStateProjectionDiagnostic.missingRequiredValue(path: \(key), expected: "\(typeName)")
                 }
                 guard let value = \(typeName)(formalValue: rawValue) else {
                     throw TLAStateProjectionDiagnostic.typeMismatch(path: \(key), expected: "\(typeName)", actual: rawValue)
                 }
-                self.\(variable.name) = value
+                self.\(variable.formalName) = value
                 """
             }
             let pattern = tlaValuePattern(forSwiftType: type, binding: "value")
             return """
-            guard let rawValue = dict[\(key)] else {
+            guard let rawValue = \(rawValue) else {
                 throw TLAStateProjectionDiagnostic.missingRequiredValue(path: \(key), expected: "\(type)")
             }
             guard \(pattern) else {
                 throw TLAStateProjectionDiagnostic.typeMismatch(path: \(key), expected: "\(type)", actual: rawValue)
             }
-            self.\(variable.name) = value
+            self.\(variable.formalName) = value
             """
         }.joined(separator: "\n")
     }
@@ -684,58 +805,55 @@ extension MacroExpander {
 
     static func generateActionMethods(
         isActor: Bool = false,
-        actions: [NamedAction],
-        collectionActions: [String: MacroCompilation.CollectionActionFact],
-        symmetricCollections: [String: SymmetricCollectionDecl],
-        facts: MacroSwiftFacts
+        actions: [MachineSurfacePlan.Action],
+        collectionActions: [String: String],
+        symmetricCollections: [String: MachineSurfacePlan.SymmetricCollection]
     ) -> [FunctionDeclSyntax] {
-        let identifiers = generatedActionIdentifiers(actions: actions)
-        let methods = zip(actions, identifiers).map { action, identifier -> FunctionDeclSyntax in
+        let methods = actions.map { action -> FunctionDeclSyntax in
             if action.bindings.isEmpty,
-               let collectionAction = collectionActions[action.name],
-               let collection = symmetricCollections[collectionAction.collectionName],
-               let collectionFact = facts.symmetricCollections[collection.name] {
+               let collectionName = collectionActions[action.formalName],
+               let collection = symmetricCollections[collectionName] {
                 let source = """
                 @discardableResult
-                \(isActor ? "fileprivate" : "public mutating") func \(identifier)(id: \(collectionFact.elementType).ID) throws -> TransitionResult {
-                    let projection = \(collection.name).projection()
+                \(isActor ? "fileprivate" : "public mutating") func \(action.swiftIdentifier)(id: \(collection.elementType).ID) throws -> TransitionResult {
+                    let projection = \(collection.formalName).projection()
                     let targetKey: TLAValue
                     do {
-                        targetKey = try projection.key(for: id, collection: "\(collection.name)", action: "\(action.name)")
+                        targetKey = try projection.key(for: id, collection: "\(collection.formalName)", action: "\(action.formalName)")
                     } catch {
                         throw GeneratedMachineError.unexpected(error)
                     }
                     let formalState = try _stateWithLiveCollections()
-                    guard let token = TLAStateProjection.Token(validating: Variables.\(collection.name).rawValue),
+                    guard let token = TLAStateProjection.Token(validating: Variables.\(collection.formalName).rawValue),
                           case .function(let originalValues) = formalState.value(for: token) else {
                         throw GeneratedMachineError.stateDecodingFailed(.missingRequiredValue(
-                            path: Variables.\(collection.name).rawValue,
+                            path: Variables.\(collection.formalName).rawValue,
                             expected: "a formal collection function"
                         ))
                     }
-                    let evidence = try _machine.apply(.init(name: "\(action.name)"), from: formalState) { candidate in
+                    let evidence = try _machine.apply(.init(name: "\(action.formalName)"), from: formalState) { candidate in
                         guard case .function(let candidateValues) = candidate.value(for: token),
                               candidateValues[targetKey] != nil else { return false }
                         return candidateValues.allSatisfy { key, value in
                             key == targetKey || originalValues[key] == value
                         }
                     }
-                    guard case .function(let nextValues) = evidence.after.\(collection.name),
+                    guard case .function(let nextValues) = evidence.after.\(collection.formalName),
                           let nextFormalValue = nextValues[targetKey],
-                          let nextValue = \(collectionFact.valueType)(formalValue: nextFormalValue) else {
+                          let nextValue = \(collection.valueType)(formalValue: nextFormalValue) else {
                         throw GeneratedMachineError.stateDecodingFailed(.typeMismatch(
-                            path: Variables.\(collection.name).rawValue,
-                            expected: "\(collectionFact.valueType)",
-                            actual: evidence.after.\(collection.name)
+                            path: Variables.\(collection.formalName).rawValue,
+                            expected: "\(collection.valueType)",
+                            actual: evidence.after.\(collection.formalName)
                         ))
                     }
                     do {
-                        try \(collection.name).update(id: id, to: nextValue, action: "\(action.name)")
+                        try \(collection.formalName).update(id: id, to: nextValue, action: "\(action.formalName)")
                     } catch {
                         throw GeneratedMachineError.unexpected(error)
                     }
                     return TransitionResult(
-                        action: .\(identifier),
+                        action: .\(action.swiftIdentifier),
                         before: evidence.before,
                         after: evidence.after
                     )
@@ -743,16 +861,16 @@ extension MacroExpander {
                 """
                 return DeclSyntax(stringLiteral: source).as(FunctionDeclSyntax.self)!
             }
-            let bindings = publicBindings(for: action)
+            let bindings = action.bindings.filter(\.isPublic)
             let parameters = bindings.map { binding in
-                "\(binding.name): \(swiftType(for: action, binding: binding, facts: facts))"
+                "\(binding.formalName): \(binding.swiftType)"
             }.joined(separator: ", ")
-            let labels = bindings.map { "\($0.name): \($0.name)" }.joined(separator: ", ")
-            let methodName = isActor ? "_\(identifier)" : "apply\(identifier)"
+            let labels = bindings.map { "\($0.formalName): \($0.formalName)" }.joined(separator: ", ")
+            let methodName = isActor ? "_\(action.swiftIdentifier)" : "apply\(action.swiftIdentifier)"
             if bindings.isEmpty {
                 let source = """
                 \(isActor ? "fileprivate" : "public mutating") func \(methodName)() throws -> TransitionResult {
-                    try apply(.\(identifier))
+                    try apply(.\(action.swiftIdentifier))
                 }
                 """
                 return DeclSyntax(stringLiteral: source).as(FunctionDeclSyntax.self)!
@@ -760,7 +878,7 @@ extension MacroExpander {
             let modifier = isActor ? "fileprivate" : "public mutating"
             let source = """
             \(modifier) func \(methodName)(\(parameters)) throws -> TransitionResult {
-                try apply(.\(identifier)\(labels.isEmpty ? "" : "(\(labels))"))
+                try apply(.\(action.swiftIdentifier)\(labels.isEmpty ? "" : "(\(labels))"))
             }
             """
             return DeclSyntax(stringLiteral: source).as(FunctionDeclSyntax.self)!
@@ -769,14 +887,12 @@ extension MacroExpander {
     }
 
     static func generateCollectionRuntimeMembers(
-        _ collections: [SymmetricCollectionDecl],
-        facts: MacroSwiftFacts
+        _ collections: [MachineSurfacePlan.SymmetricCollection]
     ) -> [DeclSyntax] {
-        var declarations = collections.compactMap { collection -> DeclSyntax? in
-            guard let fact = facts.symmetricCollections[collection.name] else { return nil }
+        var declarations = collections.map { collection -> DeclSyntax in
             DeclSyntax(stringLiteral: """
-            public var \(collection.name) = IdentifiedModelCollection<\(fact.elementType), \(fact.valueType)>(
-                name: \"\(collection.name)\",
+            public var \(collection.formalName) = IdentifiedModelCollection<\(collection.elementType), \(collection.valueType)>(
+                name: \"\(collection.formalName)\",
                 verificationScope: \(collection.verificationScope),
                 initial: \(literalExpr(for: collection.initial))
             )
@@ -784,7 +900,7 @@ extension MacroExpander {
         }
         guard !collections.isEmpty else { return declarations }
         let scopes = collections.map {
-            "SymmetricCollectionScope(collectionName: \"\($0.name)\", verificationScope: \($0.verificationScope))"
+            "SymmetricCollectionScope(collectionName: \"\($0.formalName)\", verificationScope: \($0.verificationScope))"
         }.joined(separator: ", ")
         declarations.append(DeclSyntax(stringLiteral: """
         public static let symmetricCollectionScopes: [SymmetricCollectionScope] = [\(scopes)]

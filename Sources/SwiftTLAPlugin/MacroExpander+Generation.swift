@@ -58,8 +58,8 @@ extension MacroExpander {
         }
         """)]
     }
-    static func generateTransitionsTest(_ actions: [NamedAction]) -> [DeclSyntax] {
-        if actions.isEmpty { return [] }
+    static func generateTransitionsTest(hasActions: Bool) -> [DeclSyntax] {
+        if !hasActions { return [] }
         return [DeclSyntax(stringLiteral: """
         public static func verifyTransitions() throws {
             let matrix = try Self._formalTransitionMatrix()
@@ -109,18 +109,16 @@ extension MacroExpander {
     // MARK: - Observable code generation
     static func generateObservableMembers(
         typeName: String,
-        variables: [NamedVar],
-        actions: [NamedAction],
-        facts: MacroSwiftFacts,
+        plan: MachineSurfacePlan,
         enumInfos: [ParsedEnumInfo] = []
     ) -> [DeclSyntax] {
         var decls: [DeclSyntax] = []
-        let actionIdentifiers = generatedActionIdentifiers(actions: actions)
-        for (a, identifier) in zip(actions, actionIdentifiers) {
-            let callbackName = "on" + identifier.prefix(1).capitalized + identifier.dropFirst()
+        for action in plan.actions {
+            let callbackName = "on" + action.swiftIdentifier.prefix(1).capitalized + action.swiftIdentifier.dropFirst()
             let callbackType: String
-            if !a.bindings.isEmpty {
-                let parameterTypes = a.bindings.map { swiftType(for: a, binding: $0, facts: facts) }.joined(separator: ", ")
+            let bindings = action.bindings.filter(\.isPublic)
+            if !bindings.isEmpty {
+                let parameterTypes = bindings.map(\.swiftType).joined(separator: ", ")
                 callbackType = "(@Sendable (\(parameterTypes), State, State) -> Void)?"
             } else {
                 callbackType = "(@Sendable (State, State) async -> Void)?"
@@ -133,10 +131,10 @@ extension MacroExpander {
             }
             """))
         }
-        decls.append(DeclSyntax(generateVariablesEnum(variables: variables)))
-        decls.append(DeclSyntax(generateActionsEnum(actions: actions)))
-        decls.append(DeclSyntax(generateActionLabel(actions: actions, facts: facts)))
-        decls.append(DeclSyntax(generateStateStruct(variables: variables, facts: facts, enumInfos: enumInfos)))
+        decls.append(DeclSyntax(generateVariablesEnum(variables: plan.variables)))
+        decls.append(DeclSyntax(generateActionsEnum(actions: plan.actions)))
+        decls.append(DeclSyntax(generateActionLabel(actions: plan.actions)))
+        decls.append(DeclSyntax(generateStateStruct(variables: plan.variables, enumInfos: enumInfos)))
         decls.append(DeclSyntax(stringLiteral: """
         private let _machine = CanonicalMachineStorage(CanonicalMachine(
             runtime: \(typeName).runtime,
@@ -147,10 +145,10 @@ extension MacroExpander {
         """))
         decls.append(contentsOf: generateCanonicalMachineMembers(
             isActor: true,
-            hasActions: !actions.isEmpty
+            hasActions: !plan.actions.isEmpty
         ))
-        decls.append(contentsOf: generateVariableProperties(variables: variables, facts: facts, enumInfos: enumInfos).map(DeclSyntax.init))
-        decls.append(contentsOf: generateObservableActionMethods(variables: variables, actions: actions, facts: facts).map(DeclSyntax.init))
+        decls.append(contentsOf: generateVariableProperties(variables: plan.variables, enumInfos: enumInfos).map(DeclSyntax.init))
+        decls.append(contentsOf: generateObservableActionMethods(actions: plan.actions).map(DeclSyntax.init))
         decls.append(DeclSyntax(
             VariableDeclSyntax(
                 modifiers: [DeclModifierSyntax(name: .keyword(.public)), DeclModifierSyntax(name: .keyword(.static))],
@@ -167,21 +165,20 @@ extension MacroExpander {
         return decls
     }
     static func generateObservableActionMethods(
-        variables: [NamedVar],
-        actions: [NamedAction],
-        facts: MacroSwiftFacts
+        actions: [MachineSurfacePlan.Action]
     ) -> [FunctionDeclSyntax] {
-        let identifiers = generatedActionIdentifiers(actions: actions)
-        return zip(actions, identifiers).map { a, identifier in
+        return actions.map { action in
+            let identifier = action.swiftIdentifier
             let callbackName = "on" + identifier.prefix(1).capitalized + identifier.dropFirst()
-            if !a.bindings.isEmpty {
-                let parameters = a.bindings.map { binding in
-                    "\(binding.name): \(swiftType(for: a, binding: binding, facts: facts))"
+            let bindings = action.bindings.filter(\.isPublic)
+            if !bindings.isEmpty {
+                let parameters = bindings.map { binding in
+                    "\(binding.formalName): \(binding.swiftType)"
                 }.joined(separator: ", ")
-                let callbackArguments = a.bindings.map(\.name).joined(separator: ", ")
+                let callbackArguments = bindings.map(\.formalName).joined(separator: ", ")
                 let source = """
                 public func _\(identifier)(\(parameters)) throws -> TransitionResult {
-                    let evidence = try apply(.\(identifier)(\(a.bindings.map { "\($0.name): \($0.name)" }.joined(separator: ", "))))
+                    let evidence = try apply(.\(identifier)(\(bindings.map { "\($0.formalName): \($0.formalName)" }.joined(separator: ", "))))
                     if let h = \(callbackName) { h(\(callbackArguments), evidence.before, evidence.after) }
                     return evidence
                 }
@@ -265,6 +262,16 @@ extension MacroExpander {
         if enumInfos.contains(where: { $0.typeName == inferred }) { return inferred }
         if inferred.hasPrefix("Record<") || inferred.hasPrefix("Function<") || inferred.hasPrefix("SetExpr<") {
             return inferred
+        }
+        return "TLAValue"
+    }
+
+    static func stateType(for variable: MachineSurfacePlan.Variable, enumInfos: [ParsedEnumInfo]) -> String {
+        let type = variable.swiftType
+        if ["Int", "Bool", "String", "TLAValue"].contains(type) { return type }
+        if enumInfos.contains(where: { $0.typeName == type }) { return type }
+        if type.hasPrefix("Record<") || type.hasPrefix("Function<") || type.hasPrefix("SetExpr<") {
+            return type
         }
         return "TLAValue"
     }

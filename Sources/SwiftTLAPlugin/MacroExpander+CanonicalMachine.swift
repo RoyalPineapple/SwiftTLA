@@ -5,7 +5,7 @@ extension MacroExpander {
     static func generateCanonicalMachineMembers(
         isActor: Bool,
         hasActions: Bool,
-        symmetricCollections: [SymmetricCollectionDecl] = []
+        symmetricCollections: [MachineSurfacePlan.SymmetricCollection] = []
     ) -> [DeclSyntax] {
         let modifier = isActor ? "" : "mutating "
         let labelField = hasActions ? "public let label: ActionLabel" : ""
@@ -35,7 +35,7 @@ extension MacroExpander {
             }
             """
         let liveProjection = symmetricCollections.map {
-            "state = try state.replacing(\($0.name).projection().modelValue, for: .init(validating: Variables.\($0.name).rawValue)!)"
+            "state = try state.replacing(\($0.formalName).projection().modelValue, for: .init(validating: Variables.\($0.formalName).rawValue)!)"
         }.joined(separator: "\n                ")
         let stateWithLiveCollections = symmetricCollections.isEmpty
             ? "try _machine.stateProjection().requireProjection()"
