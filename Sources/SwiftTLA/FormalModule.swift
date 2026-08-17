@@ -52,8 +52,9 @@ public struct TLAModuleBundle: Sendable, Equatable {
   /// passed to a formal tool. TLC's bundled standard modules are excluded;
   /// every other `EXTENDS` or `INSTANCE` target must be present in `imports`.
   public func validateLink(
-    standardModules: Set<String> = Self.tlcStandardModules
+    standardModules: Set<String>? = nil
   ) throws {
+    let standardModules = standardModules ?? Self.tlcStandardModules
     var sources: [String: TLAModuleFile] = [:]
     for file in files {
       guard sources[file.name] == nil else {
