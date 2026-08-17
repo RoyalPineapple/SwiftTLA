@@ -167,6 +167,28 @@ struct LocalOperatorTests {
     }
   }
 
+  @Test("bounded LET exports a short-circuit guard before an out-of-domain recursive call")
+  func boundedLocalRecursionExportsShortCircuitGuard() throws {
+    let expression: StateExpr = .letIn([
+      LocalOperator(
+        "SA",
+        parameters: ["ballot"],
+        domain: .integerRange(.int(0), .int(2)),
+        body: .exists(
+          .integerRange(.int(-1), .int(0)),
+          "prior",
+          .or(
+            .equal(.variable("prior"), .int(-1)),
+            .functionApply(.variable("SA"), .variable("prior"))
+          )
+        )
+      )
+    ], .functionApply(.variable("SA"), .int(0)))
+
+    #expect(try expression.evaluate(in: [:]) == .bool(true))
+    #expect(expression.description.contains("IF (prior = -1) THEN TRUE ELSE SA[prior]"))
+  }
+
   @Test("bounded LET lowering respects an inner operator shadow")
   func boundedLocalRecursionLoweringRespectsInnerShadow() throws {
     let expression: StateExpr = .letIn([
