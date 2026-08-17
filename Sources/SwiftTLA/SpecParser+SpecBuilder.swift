@@ -728,7 +728,7 @@ extension SpecParser {
         else {
             result.diagnostics.append(.init(
                 message: "Definition requires a literal TLA+ declaration.",
-                source: call,
+                source: call.description,
                 expected: "Definition(\"Name == expression\")",
                 nextSafeAction: "Pass the complete source-only TLA+ declaration as a string literal."
             ))

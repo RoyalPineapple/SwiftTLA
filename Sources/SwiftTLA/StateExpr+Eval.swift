@@ -811,7 +811,7 @@ extension StateExpr {
                     using: { $0 },
                     lowerLocalFunctionApplications: boundedNames
                 )
-                RecursiveFunc(
+                return RecursiveFunc(
                     name: operation.name,
                     params: operation.parameters,
                     body: operation.domain.map { domain in
