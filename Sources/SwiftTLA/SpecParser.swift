@@ -583,15 +583,18 @@ public enum SpecParser {
                 arguments.map(FormalCallArgument.value)
             )
         }
-        // `Pair(first:second:)` is normally inferred from an enclosing
-        // `SetExpr<Pair<...>>`, so SwiftSyntax sees the constructor without
-        // its generic arguments. Its two labeled formal values still retain
-        // the complete tuple shape.
+        // `Pair(first:second:)` and `Pair.literal(_, _)` are normally
+        // inferred from an enclosing `SetExpr<Pair<...>>`, so SwiftSyntax
+        // sees neither spelling with its generic arguments.
         if let call = expression.as(FunctionCallExprSyntax.self),
-           call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "Pair",
+           let pairCall = pairCallKind(call),
            call.arguments.count == 2,
-           let firstSyntax = call.arguments.first(where: { $0.label?.text == "first" })?.expression,
-           let secondSyntax = call.arguments.first(where: { $0.label?.text == "second" })?.expression,
+           let firstSyntax = pairCall == .initializer
+                ? call.arguments.first(where: { $0.label?.text == "first" })?.expression
+                : call.arguments.first?.expression,
+           let secondSyntax = pairCall == .initializer
+                ? call.arguments.first(where: { $0.label?.text == "second" })?.expression
+                : call.arguments.dropFirst().first?.expression,
            let first = decodeTypedFacadeValue(firstSyntax, substitutions: substitutions),
            let second = decodeTypedFacadeValue(secondSyntax, substitutions: substitutions) {
             if case .value(let firstValue) = first,
@@ -958,6 +961,22 @@ public enum SpecParser {
                 $0.argument.description.trimmingCharacters(in: .whitespacesAndNewlines)
             }
         )
+    }
+
+    private enum PairCallKind: Equatable {
+        case initializer
+        case literal
+    }
+
+    private static func pairCallKind(_ call: FunctionCallExprSyntax) -> PairCallKind? {
+        if call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "Pair" {
+            return .initializer
+        }
+        guard let access = call.calledExpression.as(MemberAccessExprSyntax.self),
+              access.declName.baseName.text == "literal",
+              access.base?.as(DeclReferenceExprSyntax.self)?.baseName.text == "Pair"
+        else { return nil }
+        return .literal
     }
 
     /// Decodes a typed value whose Swift spelling omits its generic arguments

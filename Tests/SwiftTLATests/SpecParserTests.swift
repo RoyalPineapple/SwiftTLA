@@ -985,6 +985,21 @@ private enum ParserNode: String, FiniteDomainKey {
         #expect(result.description == "SA[value0]")
     }
 
+    @Test func typedFormalDefinitionParsesPairLiterals() {
+        let source = """
+        {
+            FormalDefinition("PairAt", taking: Int.self, Int.self) { ballot, value in
+                Pair.literal(ballot.expr, value.expr) == Pair.literal(0, 1)
+            }
+        }
+        """
+        let closure = Parser.parse(source: source).statements.first!.item.as(ClosureExprSyntax.self)!
+        let parsed = SpecParser.parseSpecClosure(closure)
+
+        #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
+        #expect(parsed.formalOperatorDefinitions.first?.body.description == "<<value0, value1>> = <<0, 1>>")
+    }
+
     @Test func formalOperatorLambdaAndArgumentKindsRoundTripThroughTheParser() {
         let expression = parseExpression("""
         StateExpr.operatorApplication(
