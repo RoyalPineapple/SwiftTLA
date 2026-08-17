@@ -261,8 +261,8 @@ public extension TLASpec {
       return try renderer.render(
         moduleName: name.replacingOccurrences(of: " ", with: ""),
         extendsModules: authoredPlusCalExtends,
-        prelude: authoredPlusCalPrelude,
-        postlude: authoredPlusCalPostlude + sourceProperties.map(\.definition) + authoredPlusCalSymmetry
+        prelude: authoredPlusCalPrelude + authoredPlusCalAlgorithmSupport,
+        postlude: sourceProperties.map(\.definition) + authoredPlusCalSymmetry
       )
     }
   }
@@ -287,7 +287,10 @@ public extension TLASpec {
     return lines
   }
 
-  private var authoredPlusCalPostlude: [String] {
+  /// Definitions and module instances used by an authored Algorithm must be
+  /// visible before the PlusCal comment.  `pcal.trans` resolves algorithm
+  /// initializers and expressions before it appends the translated TLA+ code.
+  private var authoredPlusCalAlgorithmSupport: [String] {
     let instanceDependentDefinitions = definitions.filter { definition in
       moduleInstances.contains { definition.contains("\($0.name)!") }
     }
