@@ -27,9 +27,9 @@ public enum TLAModuleBundleLinkError: Error, Equatable, Sendable, CustomStringCo
   public var description: String {
     switch self {
     case .duplicateModule(let name):
-      "The module bundle contains more than one \(name).tla source file."
+      return "The module bundle contains more than one \(name).tla source file."
     case .missingModule(let module, let importedBy, let line):
-      "\(importedBy).tla line \(line) requires \(module).tla, but the bundle does not contain it."
+      return "\(importedBy).tla line \(line) requires \(module).tla, but the bundle does not contain it."
     }
   }
 }
