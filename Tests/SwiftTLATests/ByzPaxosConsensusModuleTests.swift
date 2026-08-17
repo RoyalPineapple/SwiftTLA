@@ -9,6 +9,7 @@ struct ByzPaxosConsensusModuleTests {
       Parameter("Value")
       Definition("chosen == {}")
       Instance("C", of: ByzPaxosConsensus.module)
+      Definition("Refines == C!Spec")
     }
 
     #expect(FormalModuleRegistry.lookup("Consensus") == ByzPaxosConsensus.module)
@@ -16,7 +17,9 @@ struct ByzPaxosConsensusModuleTests {
     #expect(consumerModule.contains("C == INSTANCE Consensus"))
     let chosenRange = try #require(consumerModule.range(of: "chosen == {}"))
     let instanceRange = try #require(consumerModule.range(of: "C == INSTANCE Consensus"))
+    let refinesRange = try #require(consumerModule.range(of: "Refines == C!Spec"))
     #expect(chosenRange.lowerBound < instanceRange.lowerBound)
+    #expect(instanceRange.lowerBound < refinesRange.lowerBound)
     #expect(consumer.tlaBundle.imports.map(\.name) == ["Consensus"])
     #expect(ByzPaxosConsensus.module.tlaModule.contains("CONSTANTS Value"))
     #expect(ByzPaxosConsensus.module.tlaModule.contains("VARIABLES chosen"))

@@ -76,7 +76,10 @@ extension TLASpec {
             }
         }
 
-        for def in definitions {
+        let instanceDependentDefinitions = definitions.filter { definition in
+            moduleInstances.contains { definition.contains("\($0.name)!") }
+        }
+        for def in definitions where !instanceDependentDefinitions.contains(def) {
             lines.append(def)
             lines.append("")
         }
@@ -108,6 +111,11 @@ extension TLASpec {
             }.joined(separator: ", ")
             let withClause = arguments.isEmpty ? "" : " WITH \(arguments)"
             lines.append("\(instance.name) == INSTANCE \(instance.module.name)\(withClause)")
+            lines.append("")
+        }
+
+        for def in instanceDependentDefinitions {
+            lines.append(def)
             lines.append("")
         }
 
