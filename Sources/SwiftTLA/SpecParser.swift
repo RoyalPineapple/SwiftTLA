@@ -487,6 +487,14 @@ public enum SpecParser {
         _ expression: ExprSyntax,
         substitutions: [String: StateExpr]
     ) -> StateExpr? {
+        // SwiftSyntax represents a parenthesized expression as a one-element
+        // tuple. Keep decoding through the typed path so scoped facade values
+        // such as `current.expr` retain their lexical substitutions.
+        if let tuple = expression.as(TupleExprSyntax.self),
+           tuple.elements.count == 1,
+           let value = tuple.elements.first?.expression {
+            return decodeTypedFacadeValue(value, substitutions: substitutions)
+        }
         if let call = expression.as(FunctionCallExprSyntax.self),
            let reference = call.calledExpression.as(DeclReferenceExprSyntax.self),
            let function = substitutions[reference.baseName.text],

@@ -163,9 +163,9 @@ struct LocalOperatorTests {
       FormalDefinition("SafeAt", taking: Int.self, Int.self) { ballot, value in
         LetRec("SA", over: IntRange(0, through: value), taking: Int.self, { (recursion: LocalRecursion<Int, Bool>, current) in
           current == 0 || Exists(in: IntRange(-1, through: current.expr - 1)) { prior in
-            recursion(prior.expr) && ForAll(in: IntRange(0, through: current.expr)) { candidate in
+            (recursion(prior.expr) && ForAll(in: IntRange(0, through: current.expr)) { candidate in
               Pair.literal(prior.expr, candidate.expr) == Pair.literal(ballot.expr, value.expr)
-            }
+            })
           }
         }, in: { recursion in recursion(ballot.expr) })
       }
