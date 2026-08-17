@@ -86,6 +86,7 @@ extension StateExpr {
         case .letIn(let operators, let body):
             {
                 let operatorVariables = operators.reduce(into: Set<String>()) { names, operation in
+                    names.formUnion(operation.domain?.freeVariableNames ?? [])
                     names.formUnion(operation.body.freeVariableNames.subtracting(Set(operation.parameters)))
                 }
                 return operatorVariables.union(body.freeVariableNames)

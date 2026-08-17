@@ -26,6 +26,62 @@ public enum SpecParser {
     /// parse's enum context.
     static let parseContextLock = NSLock()
 
+    private static func decodeLocalRecursion(
+        _ expression: ExprSyntax,
+        substitutions: [String: StateExpr]
+    ) -> StateExpr? {
+        guard let call = expression.as(FunctionCallExprSyntax.self),
+              call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "LetRec",
+              let name = extractStringArg(call, index: 0), !name.isEmpty,
+              let inputType = call.arguments.first(where: { $0.label?.text == "taking" })?.expression,
+              isMetatype(inputType),
+              let domainSyntax = call.arguments.first(where: { $0.label?.text == "over" })?.expression,
+              let domain = decodeTypedFacadeValue(domainSyntax, substitutions: substitutions),
+              let definition = call.arguments.dropFirst().first(where: { $0.label == nil })?.expression.as(ClosureExprSyntax.self),
+              let body = call.arguments.first(where: { $0.label?.text == "in" })?.expression.as(ClosureExprSyntax.self),
+              definition.statements.count == 1,
+              body.statements.count == 1,
+              case .expr(let definitionExpression) = definition.statements.first?.item,
+              case .expr(let bodyExpression) = body.statements.first?.item
+        else { return nil }
+
+        let definitionParameters = closureParameterNames(in: definition)
+        let bodyParameters = closureParameterNames(in: body)
+        guard definitionParameters.count == 2, bodyParameters.count == 1 else { return nil }
+
+        let inputName = definitionParameters[1]
+        // Keep the closure parameter as an ordinary scoped binding while the
+        // typed façade is decoded.  It is lowered to the local operator below
+        // using this lexical mapping; no synthetic identifier can leak into
+        // the formal tree or collide with author input.
+        let recursiveReference = StateExpr.variable(definitionParameters[0])
+        let definitionSubstitutions = substitutions.merging([
+            definitionParameters[0]: recursiveReference,
+            inputName: .variable(inputName)
+        ]) { _, replacement in replacement }
+        let bodySubstitutions = substitutions.merging([
+            bodyParameters[0]: recursiveReference
+        ]) { _, replacement in replacement }
+        guard let decodedDefinition = decodeTypedFacadeValue(
+            definitionExpression, substitutions: definitionSubstitutions
+        ), let decodedBody = decodeTypedFacadeValue(bodyExpression, substitutions: bodySubstitutions)
+        else { return nil }
+        return .letIn([LocalOperator(
+            name,
+            parameters: [inputName],
+            domain: domain,
+            body: renameVar(definitionParameters[0], to: name, in: decodedDefinition)
+        )], renameVar(bodyParameters[0], to: name, in: decodedBody))
+    }
+
+    static func isMetatype(_ expression: ExprSyntax) -> Bool {
+        guard let member = expression.as(MemberAccessExprSyntax.self),
+              member.declName.baseName.text == "self",
+              member.base != nil
+        else { return false }
+        return true
+    }
+
     // MARK: - Compact expression decoder
 
     public static func decodeStateExpr(_ expression: ExprSyntax) -> StateExpr? {
@@ -423,6 +479,15 @@ public enum SpecParser {
         _ expression: ExprSyntax,
         substitutions: [String: StateExpr]
     ) -> StateExpr? {
+        if let call = expression.as(FunctionCallExprSyntax.self),
+           let reference = call.calledExpression.as(DeclReferenceExprSyntax.self),
+           let function = substitutions[reference.baseName.text],
+           call.arguments.count == 1,
+           let argument = call.arguments.first.flatMap({
+               decodeTypedFacadeValue($0.expression, substitutions: substitutions)
+           }) {
+            return .functionApply(function, argument)
+        }
         if let reference = expression.as(DeclReferenceExprSyntax.self),
            let substitution = substitutions[reference.baseName.text] {
             return substitution
@@ -437,6 +502,25 @@ public enum SpecParser {
            call.arguments.count == 1,
            let value = call.arguments.first?.expression {
             return decodeTypedFacadeValue(value, substitutions: substitutions)
+        }
+        if let localRecursion = decodeLocalRecursion(expression, substitutions: substitutions) {
+            return localRecursion
+        }
+        if let call = expression.as(FunctionCallExprSyntax.self),
+           let name = call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text,
+           name == "Exists" || name == "ForAll" || name == "All",
+           let domainSyntax = call.arguments.first(where: { $0.label?.text == "in" })?.expression,
+           let domain = decodeTypedFacadeValue(domainSyntax, substitutions: substitutions),
+           let closure = call.trailingClosure,
+           closure.statements.count == 1,
+           case .expr(let predicateSyntax) = closure.statements.first?.item,
+           let parameter = closureParameterNames(in: closure).first,
+           closureParameterNames(in: closure).count == 1,
+           let predicate = decodeTypedFacadeValue(
+            predicateSyntax,
+            substitutions: substitutions.merging([parameter: .variable(parameter)]) { _, replacement in replacement }
+           ) {
+            return name == "Exists" ? .exists(domain, parameter, predicate) : .forAll(domain, parameter, predicate)
         }
         // `OneOf` is a type-level union: its alternatives retain their
         // underlying TLA+ value and therefore need no runtime wrapper.
@@ -602,6 +686,19 @@ public enum SpecParser {
             default: break
             }
         }
+        // A `SetExpr` initializer is a closed typed value, unlike
+        // `SetExpr.literal`, which is an expression form.  Constants need the
+        // former so the builder and macro both retain a concrete TLA+ set.
+        if let call = expression.as(FunctionCallExprSyntax.self),
+           let type = typedLiteralType(call.calledExpression),
+           type.name == "SetExpr" {
+            return decodeTypedSetLiteral(
+                call,
+                elementType: type.arguments.first,
+                substitutions: substitutions
+            )
+        }
+
         guard let call = expression.as(FunctionCallExprSyntax.self),
               let access = call.calledExpression.as(MemberAccessExprSyntax.self)
         else { return nil }
@@ -1150,10 +1247,12 @@ public enum SpecParser {
         } else {
             parameters = []
         }
+        let domain = call.arguments.first(where: { $0.label?.text == "domain" })
+            .flatMap { decodeStateExpr($0.expression) }
         guard let bodySyntax = call.arguments.first(where: { $0.label?.text == "body" })?.expression,
               let body = decodeStateExpr(bodySyntax)
         else { return nil }
-        return LocalOperator(name, parameters: parameters, body: body)
+        return LocalOperator(name, parameters: parameters, domain: domain, body: body)
     }
 
     /// Decodes formal operators as syntax, rather than Swift closures. This is

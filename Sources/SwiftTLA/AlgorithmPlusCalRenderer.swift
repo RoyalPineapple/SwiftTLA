@@ -48,7 +48,7 @@ public struct AlgorithmPlusCalRenderDiagnostic: Error, Sendable, Hashable, Custo
 public extension Algorithm {
     func renderPlusCalModule() throws -> String {
         let renderer = AlgorithmPlusCalRenderer(model: model)
-        return try renderer.render(postlude: renderer.sourcePropertyDefinitions().map(\.definition))
+        return try renderer.render(postlude: renderer.sourceFormalOperatorDefinitions() + renderer.sourcePropertyDefinitions().map(\.definition))
     }
 }
 
@@ -60,6 +60,10 @@ internal struct AlgorithmPlusCalRenderer {
     /// the retained Algorithm model rather than the lowered specification.
     func sourcePropertyDefinitions() throws -> [(name: String, definition: String)] {
         try properties(in: model.components, path: "components")
+    }
+
+    func sourceFormalOperatorDefinitions() -> [String] {
+        model.formalOperatorDefinitions.map { FormalOperatorDecl($0).tlaText }
     }
 
     /// PlusCal's translator defines this temporal operator for a single
@@ -116,7 +120,7 @@ internal struct AlgorithmPlusCalRenderer {
             case .step:
                 // Sequential steps share the algorithm's C-syntax brace body.
                 continue
-            case .invariant, .temporal:
+            case .invariant, .temporal, .formalOperator:
                 // Properties are emitted once after the PlusCal comment.
                 continue
             case .stateConstraint:
@@ -206,7 +210,7 @@ internal struct AlgorithmPlusCalRenderer {
                 continue
             case .step(let step):
                 lines += try render(step: step, indent: "  ", path: "\(path).components[\(index)]")
-            case .invariant, .temporal:
+            case .invariant, .temporal, .formalOperator:
                 // Properties are emitted once after the PlusCal comment.
                 continue
             case .fairness:
@@ -389,7 +393,7 @@ internal struct AlgorithmPlusCalRenderer {
                 return [(temporal.name, "\(temporal.name) == \(try self.temporal(temporal.expr, path: "\(componentPath).temporal"))")]
             case .process(let process):
                 return try properties(in: process.components, path: "\(componentPath).components")
-            case .shared, .procedure, .fairness, .stateConstraint, .local, .step, .propertyBoundary:
+            case .shared, .procedure, .fairness, .formalOperator, .stateConstraint, .local, .step, .propertyBoundary:
                 return []
             }
         }
@@ -400,7 +404,7 @@ internal struct AlgorithmPlusCalRenderer {
             switch component {
             case .temporal(let temporal): return [temporal]
             case .process(let process): return temporals(in: process.components)
-            case .shared, .procedure, .invariant, .fairness, .stateConstraint, .local, .step, .propertyBoundary: return []
+            case .shared, .procedure, .invariant, .fairness, .formalOperator, .stateConstraint, .local, .step, .propertyBoundary: return []
             }
         }
     }
@@ -465,7 +469,7 @@ internal struct AlgorithmPlusCalRenderer {
                     names.insert(invariant.name)
                 case .temporal(let temporal):
                     names.insert(temporal.name)
-                case .fairness, .stateConstraint, .propertyBoundary:
+                case .fairness, .formalOperator, .stateConstraint, .propertyBoundary:
                     continue
                 }
             }

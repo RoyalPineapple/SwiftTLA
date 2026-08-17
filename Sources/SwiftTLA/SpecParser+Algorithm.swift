@@ -73,6 +73,10 @@ extension SpecParser {
                 ))
                 return
             }
+            if let definition = parseAlgorithmFormalDefinition(expression) {
+                components.append(.formalOperator(definition))
+                continue
+            }
             guard let component = parseAlgorithmComponent(expression, macros: macros) else {
                 let detail = algorithmParseFailure.map { " \($0)" } ?? ""
                 result.diagnostics.append(.init(
@@ -158,9 +162,20 @@ extension SpecParser {
         result.invariants += lowered.invariants.map { ($0.name, $0.body) }
         result.temporal += lowered.temporalProperties.map { ($0.name, $0.expr) }
         result.fairness += lowered.fairness
+        result.formalOperatorDefinitions += model.formalOperatorDefinitions
         if let constraint = lowered.constraint {
             result.constraint = result.constraint.map { .and($0, constraint) } ?? constraint
         }
+    }
+
+    private static func parseAlgorithmFormalDefinition(
+        _ expression: ExprSyntax
+    ) -> FormalOperatorDefinition? {
+        guard let call = expression.as(FunctionCallExprSyntax.self),
+              call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "FormalDefinition",
+              call.trailingClosure != nil
+        else { return nil }
+        return decodeFormalDefinition(call)
     }
 
     private static func algorithmStateDeclarations(in model: AlgorithmModel) -> [AlgorithmStateModel] {

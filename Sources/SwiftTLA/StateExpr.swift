@@ -21,11 +21,15 @@ public enum FreshVarName {
 public struct LocalOperator: Hashable, Sendable {
     public let name: String
     public let parameters: [String]
+    /// A bounded local recursive function parameter (`name[param \in domain]`).
+    public let domain: StateExpr?
     public let body: StateExpr
 
-    public init(_ name: String, parameters: [String] = [], body: StateExpr) {
+    public init(_ name: String, parameters: [String] = [], domain: StateExpr? = nil, body: StateExpr) {
+        precondition(domain == nil || parameters.count == 1, "A bounded local function needs exactly one parameter.")
         self.name = name
         self.parameters = parameters
+        self.domain = domain
         self.body = body
     }
 }
@@ -282,6 +286,7 @@ public indirect enum StateExpr: Hashable, Sendable, CustomStringConvertible {
         case .letIn(let operators, let body):
             let names = Set(operators.map(\.name))
             let recursiveNames = operators
+                .filter { $0.domain == nil }
                 .flatMap { localOperatorCalls(in: $0.body) }
                 .filter(names.contains)
             let recursiveDeclaration: String
@@ -297,13 +302,19 @@ public indirect enum StateExpr: Hashable, Sendable, CustomStringConvertible {
                     .joined(separator: ", ") + "\n    "
             }
             let declarations = operators.map { operation in
-                let parameters = operation.parameters.isEmpty ? "" : "(\(operation.parameters.joined(separator: ", ")))"
+                let parameters: String
+                if let domain = operation.domain {
+                    parameters = "[\(operation.parameters[0]) \\in \(domain)]"
+                } else {
+                    parameters = operation.parameters.isEmpty ? "" : "(\(operation.parameters.joined(separator: ", ")))"
+                }
                 return "\(operation.name)\(parameters) == \(operation.body)"
             }.joined(separator: "\n    ")
             return "LET \(recursiveDeclaration)\(declarations)\nIN \(body)"
         }
     }
 }
+
 
 private extension FormalOperator {
     var isLambda: Bool {

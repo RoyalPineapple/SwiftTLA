@@ -736,6 +736,43 @@ private enum ParserNode: String, FiniteDomainKey {
         #expect(evidence?.nextSafeAction.contains("FormalDefinition") == true)
     }
 
+    @Test func literalDefinitionsAreRetainedForParserBuilderFidelity() {
+        let source = """
+        {
+            Definition("Refines == C!Spec")
+        }
+        """
+        let closure = Parser.parse(source: source).statements.first!.item.as(ClosureExprSyntax.self)!
+        let parsed = SpecParser.parseSpecClosure(closure)
+        let parserTree = ParsedSpecModel(
+            variables: [], actions: [], invariants: [], definitions: parsed.definitions
+        )
+        let builderTree = ParsedSpecModel(
+            variables: [], actions: [], invariants: [], definitions: ["Refines == C!Spec"]
+        )
+
+        #expect(parsed.diagnostics.isEmpty)
+        #expect(parsed.definitions == ["Refines == C!Spec"])
+        #expect(_tlaAlphaEquivalent(parserTree, builderTree))
+        #expect(_tlaFidelityEvidence(parserTree, builderTree) == nil)
+    }
+
+    @Test func dynamicDefinitionProducesStructuredDiagnostic() {
+        let source = """
+        {
+            let body = "Refines == C!Spec"
+            Definition(body)
+        }
+        """
+        let closure = Parser.parse(source: source).statements.first!.item.as(ClosureExprSyntax.self)!
+        let parsed = SpecParser.parseSpecClosure(closure)
+
+        #expect(parsed.definitions.isEmpty)
+        #expect(parsed.diagnostics.count == 1)
+        #expect(parsed.diagnostics.first?.message == "Definition requires a literal TLA+ declaration.")
+        #expect(parsed.diagnostics.first?.expected == "Definition(\"Name == expression\")")
+    }
+
     @Test func formalDefinitionParameterNamesAreAlphaEquivalent() {
         let parserTree = ParsedSpecModel(
             variables: [],
@@ -860,6 +897,68 @@ private enum ParserNode: String, FiniteDomainKey {
                 )
             )
         ])
+    }
+
+    @Test func algorithmTypedFormalDefinitionParsesWithClosureBinders() {
+        let source = """
+        {
+            Algorithm("Formal") {
+                FormalDefinition("same", taking: Int.self, Int.self) { ballot, value in
+                    ballot == value
+                }
+                let count = SharedVar("count", initial: 0)
+                count
+                Do("stop") { Stop() }
+            }
+        }
+        """
+        let closure = Parser.parse(source: source).statements.first!.item.as(ClosureExprSyntax.self)!
+        let parsed = SpecParser.parseSpecClosure(closure)
+
+        #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
+        #expect(parsed.formalOperatorDefinitions == [
+            FormalOperatorDefinition(
+                name: "same",
+                parameters: [.value("value0"), .value("value1")],
+                body: .equal(.variable("value0"), .variable("value1"))
+            )
+        ])
+        let built = Algorithm("Formal") {
+            FormalDefinition("same", taking: Int.self, Int.self) { left, right in left == right }
+            let count = SharedVar("count", initial: 0)
+            count
+            Do("stop") { Stop() }
+        }
+        #expect(_tlaAlgorithmFidelityEvidence(parsed.algorithmFidelityTokens, [AlgorithmFidelityToken(model: built.model)]) == nil)
+    }
+
+    @Test func typedFormalDefinitionParsesClosureBindersAndLocalRecursion() {
+        let source = """
+        {
+            FormalDefinition("SafeAt", taking: Int.self, Int.self) { ballot, limit in
+                LetRec("SA", over: IntRange(0, through: limit), taking: Int.self, { recursion, current in
+                    If(current == 0, then: true, else: recursion(current.expr - 1))
+                }, in: { recursion in recursion(ballot.expr) })
+            }
+        }
+        """
+        let closure = Parser.parse(source: source).statements.first!.item.as(ClosureExprSyntax.self)!
+        let parsed = SpecParser.parseSpecClosure(closure)
+
+        #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
+        guard let definition = parsed.formalOperatorDefinitions.first else {
+            Issue.record("Expected one typed formal definition.")
+            return
+        }
+        #expect(definition.parameters == [.value("value0"), .value("value1")])
+        guard case .letIn(let operators, let result) = definition.body else {
+            Issue.record("Expected the typed formal body to retain its local recursive LET.")
+            return
+        }
+        #expect(operators.map(\.name) == ["SA"])
+        #expect(operators[0].parameters == ["current"])
+        #expect(operators[0].body.description.contains("SA["))
+        #expect(result.description == "SA[value0]")
     }
 
     @Test func formalOperatorLambdaAndArgumentKindsRoundTripThroughTheParser() {
@@ -1641,6 +1740,25 @@ private let cameraModePhases: [String: [String: TLAValue]] = [
 private enum TestPersonID: String, FiniteTLAValueDomain {
     case alice, bob
     static let finiteValues = [Self.alice, .bob]
+}
+
+@TLAModel
+private struct DefinitionFidelityMacro {
+    static var spec: TLASpec {
+        TLASpec("DefinitionFidelityMacro") {
+            let value = Var<Int>("value")
+            Variable(value, 0)
+            Definition("Refines == TRUE")
+            Action("stay") { value.stays }
+        }
+    }
+}
+
+@Suite(.serialized) struct DefinitionFidelityMacroTests {
+    @Test func generatedModelRetainsLiteralDefinition() {
+        #expect(DefinitionFidelityMacro.spec.definitions == ["Refines == TRUE"])
+        _ = DefinitionFidelityMacro.runtime
+    }
 }
 
 @TLAModel

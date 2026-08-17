@@ -638,11 +638,40 @@ extension SpecParser {
         let args = Array(call.arguments)
         guard args.count >= 2,
               let name = extractStringArg(call, index: 0)
-        else { return }
+        else {
+            result.diagnostics.append(.init(
+                message: "Constant requires a literal name and a static TLA+ value.",
+                source: call.description,
+                expected: "Constant(\"Name\", value)",
+                nextSafeAction: "Use a literal constant name and a static typed value."
+            ))
+            return
+        }
         guard let expression = decodeTypedFacadeValue(args[1].expression, substitutions: [:]),
-              case .value(let value) = expression
-        else { return }
+              let value = staticConstantValue(expression)
+        else {
+            result.diagnostics.append(.init(
+                message: "Constant '\(name)' must be static; dynamic formal expressions are not constant values.",
+                source: args[1].expression.description,
+                expected: "a literal value or SetExpr<Element>(...) with static members",
+                nextSafeAction: "Use a closed typed value such as SetExpr<Element>(.first, .second)."
+            ))
+            return
+        }
         result.constants[name] = value
+    }
+
+    private static func staticConstantValue(_ expression: StateExpr) -> TLAValue? {
+        switch expression {
+        case .value(let value):
+            return value
+        case .setLiteral(let elements):
+            let values = elements.compactMap(staticConstantValue)
+            guard values.count == elements.count else { return nil }
+            return .set(Set(values))
+        default:
+            return nil
+        }
     }
 
     /// Parse `NamedValue("poweredOn", 5)` → register in localConstants

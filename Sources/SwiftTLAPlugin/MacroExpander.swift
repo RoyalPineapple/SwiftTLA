@@ -207,6 +207,9 @@ enum MacroExpander {
             }.joined(separator: ", ")
             return "FormalOperatorDefinition(name: \"\(definition.name)\", parameters: [\(parameters)], body: \(codegenStateExpr(definition.body)))"
         }.joined(separator: ", ")
+        let treeDefinitions = model.definitions.map { definition in
+            "\"\(definition.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\""))\""
+        }.joined(separator: ", ")
         let treeSymmetrySets = model.symmetrySets.map { symmetry in
             "SymmetrySet(variableName: \"\(symmetry.variableName)\", values: [\(symmetry.values.sorted { $0.description < $1.description }.map(codegenTLAValue).joined(separator: ", "))])"
         }.joined(separator: ", ")
@@ -227,6 +230,7 @@ enum MacroExpander {
             moduleInstances: [\(treeModuleInstances)],
             formalParameters: [\(treeFormalParameters)],
             formalOperatorDefinitions: [\(treeFormalOperatorDefinitions)],
+            definitions: [\(treeDefinitions)],
             symmetrySets: [\(treeSymmetrySets)]
         )
         static let _parserAlgorithmTokens: [AlgorithmFidelityToken] = [\(treeAlgorithmTokens)]
@@ -255,6 +259,7 @@ enum MacroExpander {
                 moduleInstances: builtSpec.moduleInstances,
                 formalParameters: builtSpec.formalParameters,
                 formalOperatorDefinitions: builtSpec.formalOperatorDefinitions,
+                definitions: builtSpec.definitions,
                 symmetrySets: builtSpec.symmetrySets
             )
             if !_tlaAlphaEquivalent(built, _parserTree) {
@@ -405,7 +410,8 @@ enum MacroExpander {
         case .letIn(let operators, let body):
             let definitions = operators.map { operation in
                 let parameters = operation.parameters.map { "\"\($0)\"" }.joined(separator: ", ")
-                return "LocalOperator(\"\(operation.name)\", parameters: [\(parameters)], body: \(cg(operation.body)))"
+                let domain = operation.domain.map { ", domain: \(cg($0))" } ?? ""
+                return "LocalOperator(\"\(operation.name)\", parameters: [\(parameters)]\(domain), body: \(cg(operation.body)))"
             }.joined(separator: ", ")
             return "StateExpr.letIn([\(definitions)], \(cg(body)))"
         }

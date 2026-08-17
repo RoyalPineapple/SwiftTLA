@@ -20,6 +20,7 @@ extension SpecParser {
         public var moduleInstances: [FormalModuleInstance] = []
         public var formalParameters: [FormalModuleParameter] = []
         public var formalOperatorDefinitions: [FormalOperatorDefinition] = []
+        public var definitions: [String] = []
         public var symmetrySets: [SymmetrySet] = []
         /// Opaque, pre-lowering Algorithm evidence retained independently of
         /// the ordinary parsed specification tree.
@@ -566,6 +567,8 @@ extension SpecParser {
             result.formalParameters.append(FormalModuleParameter(name, kind: kind))
         case "FormalDefinition":
             parseFormalDefinition(call, into: &result)
+        case "Definition":
+            parseDefinition(call, into: &result)
         case "LeadsTo", "Eventually", "Always", "AlwaysEventually", "EventuallyAlways":
             if let expr = decodeTemporal(call) {
                 result.temporal.append((name, expr))
@@ -642,21 +645,19 @@ extension SpecParser {
         _ call: FunctionCallExprSyntax,
         into result: inout ParsedSpecComponents
     ) {
-        guard let name = extractStringArg(call, index: 0), !name.isEmpty,
-              let parametersSyntax = call.arguments.first(where: { $0.label?.text == "parameters" })?.expression,
-              let bodySyntax = call.arguments.first(where: { $0.label?.text == "body" })?.expression,
-              let parameters = parseFormalParameters(parametersSyntax),
-              let body = decodeTypedFacadeValue(bodySyntax, substitutions: [:])
-                ?? decodeStateExpr(bodySyntax)
+        guard let definition = decodeFormalDefinition(call)
         else {
             result.diagnostics.append(.init(
                 message: "FormalDefinition requires a name, supported formal parameters, and a formal body expression.",
                 source: call.description,
-                expected: "FormalDefinition(\"name\", parameters: [.value(\"value\")], body: expression)",
-                nextSafeAction: "Use FormalDefinition with .value or .operator parameters and a supported StateExpr body."
+                expected: "FormalDefinition(\"name\", parameters: [.value(\"value\")], body: expression) or FormalDefinition(\"name\", taking: Int.self) { value in expression }",
+                nextSafeAction: "Use the formal-parameter form or a unary/binary typed closure with supported formal expressions."
             ))
             return
         }
+        let name = definition.name
+        let parameters = definition.parameters
+        let body = definition.body
         guard !result.formalOperatorDefinitions.contains(where: { $0.name == name }) else {
             result.diagnostics.append(.init(
                 message: "FormalDefinition '\(name)' is declared more than once.",
@@ -674,6 +675,66 @@ extension SpecParser {
         result.formalOperatorDefinitions.append(
             FormalOperatorDefinition(name: name, parameters: parameters, body: body)
         )
+    }
+
+    static func decodeFormalDefinition(
+        _ call: FunctionCallExprSyntax
+    ) -> FormalOperatorDefinition? {
+        guard let name = extractStringArg(call, index: 0), !name.isEmpty else { return nil }
+
+        if let parametersSyntax = call.arguments.first(where: { $0.label?.text == "parameters" })?.expression,
+           let bodySyntax = call.arguments.first(where: { $0.label?.text == "body" })?.expression,
+           let parameters = parseFormalParameters(parametersSyntax),
+           let body = decodeTypedFacadeValue(bodySyntax, substitutions: [:]) ?? decodeStateExpr(bodySyntax) {
+            return FormalOperatorDefinition(name: name, parameters: parameters, body: body)
+        }
+
+        guard let closure = call.trailingClosure,
+              closure.statements.count == 1,
+              case .expr(let bodySyntax) = closure.statements.first?.item
+        else { return nil }
+        let parameters = closureParameterNames(in: closure)
+        let typeWitnesses = Array(call.arguments.dropFirst())
+        guard (1...2).contains(parameters.count),
+              parameters.count == typeWitnesses.count,
+              typeWitnesses.first?.label?.text == "taking",
+              typeWitnesses.dropFirst().allSatisfy({ $0.label == nil }),
+              typeWitnesses.allSatisfy({ isMetatype($0.expression) })
+        else { return nil }
+        let formalParameters = parameters.enumerated().map { index, _ in
+            FormalParameter.value("value\(index)")
+        }
+        let substitutions = Dictionary(uniqueKeysWithValues: zip(parameters, formalParameters).map {
+            ($0, StateExpr.variable($1.name))
+        })
+        guard let body = decodeTypedFacadeValue(bodySyntax, substitutions: substitutions) else { return nil }
+        return FormalOperatorDefinition(
+            name: name,
+            parameters: formalParameters,
+            body: body
+        )
+    }
+
+    private static func parseDefinition(
+        _ call: FunctionCallExprSyntax,
+        into result: inout ParsedSpecComponents
+    ) {
+        let arguments = Array(call.arguments)
+        guard arguments.count == 1,
+              call.trailingClosure == nil,
+              let literal = arguments[0].expression.as(StringLiteralExprSyntax.self),
+              literal.segments.allSatisfy({ $0.is(StringSegmentSyntax.self) }),
+              let definition = extractStringArg(call, index: 0)
+        else {
+            result.diagnostics.append(.init(
+                message: "Definition requires a literal TLA+ declaration.",
+                source: call.description,
+                expected: "Definition(\"Name == expression\")",
+                nextSafeAction: "Pass the complete source-only TLA+ declaration as a string literal."
+            ))
+            return
+        }
+        result.definitions.append(definition)
     }
 
     private static func parseFormalParameters(_ expression: ExprSyntax) -> [FormalParameter]? {

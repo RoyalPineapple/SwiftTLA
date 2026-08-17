@@ -72,6 +72,8 @@ extension TLASpec {
           invariants += lowered.invariants
           temporalProperties += lowered.temporalProperties
           fairness += lowered.fairness
+          formalOperatorDefinitions += algorithm.model.formalOperatorDefinitions
+          definitions += algorithm.model.formalOperatorDefinitions.map { FormalOperatorDecl($0).tlaText }
           if let loweredConstraint = lowered.constraint {
             constraint = constraint.map { .and($0, loweredConstraint) } ?? loweredConstraint
           }
@@ -187,6 +189,7 @@ extension TLASpec {
         moduleInstances: moduleInstances,
         formalParameters: formalParameters,
         formalOperatorDefinitions: formalOperatorDefinitions,
+        definitions: definitions,
         symmetrySets: symmetrySets
       )
       guard _tlaAlphaEquivalent(built, tree) else {
@@ -556,6 +559,7 @@ private func substituteInState(_ expr: StateExpr, constants: [String: TLAValue])
         return LocalOperator(
           operation.name,
           parameters: operation.parameters,
+          domain: operation.domain.map { substituteInState($0, constants: constants) },
           body: substituteInState(operation.body, constants: bodyConstants)
         )
       },

@@ -1257,6 +1257,10 @@ public enum AlgorithmBuilder {
     public static func buildExpression(_ component: ConstraintDecl) -> [AlgorithmElement] {
         [AlgorithmElement(model: .stateConstraint(component.body))]
     }
+
+    public static func buildExpression(_ component: FormalOperatorDecl) -> [AlgorithmElement] {
+        [AlgorithmElement(model: .formalOperator(component.definition))]
+    }
 }
 
 /// Bounds the states that TLC retains while it explores this algorithm.
@@ -1983,6 +1987,8 @@ internal enum AlgorithmValidator {
                 validateName(temporal.name, at: .algorithm, diagnostics: &diagnostics)
             case .fairness:
                 break
+            case .formalOperator(let definition):
+                validateName(definition.name, at: .algorithm, diagnostics: &diagnostics)
             case .stateConstraint:
                 break
             case .propertyBoundary:
@@ -2035,7 +2041,7 @@ internal enum AlgorithmValidator {
                 validate(step, process: index, labels: Set(labels), diagnostics: &diagnostics)
             case .invariant(let invariant):
                 validateName(invariant.name, at: processAnchor, diagnostics: &diagnostics)
-            case .temporal, .fairness, .stateConstraint, .propertyBoundary:
+            case .temporal, .fairness, .formalOperator, .stateConstraint, .propertyBoundary:
                 diagnostics.append(AlgorithmDiagnostic(.propertyBoundary, at: processAnchor))
             case .shared, .process, .procedure:
                 diagnostics.append(AlgorithmDiagnostic(.invalidAlgorithmComponent, at: processAnchor))
