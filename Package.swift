@@ -66,6 +66,14 @@ let package = Package(
             dependencies: ["SwiftTLA", "UpstreamParity"],
             path: "Sources/TLCValidate"
         ),
+        // Internal CI appendix: exports the canonical upstream Algorithm
+        // corpus for independent translator/TLC evidence. It is deliberately
+        // not a package product or application-facing API.
+        .executableTarget(
+            name: "canonical-corpus-export",
+            dependencies: ["SwiftTLA", "UpstreamParity"],
+            path: "Tools/CanonicalCorpusExport"
+        ),
         // Fast semantic-core tests. Keep this target free of UpstreamParity so
         // Fast semantic witnesses compile and run without the parity corpus.
         .testTarget(name: "SwiftTLATests", dependencies: [
