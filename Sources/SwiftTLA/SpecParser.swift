@@ -922,7 +922,22 @@ public enum SpecParser {
            let value = _enumPhases[type]?[member.declName.baseName.text] {
             return .value(value)
         }
-        return decodeTypedFacadeExpr(expression, substitutions: substitutions) ?? decodeStateExpr(expression)
+        if let decoded = decodeTypedFacadeExpr(expression, substitutions: substitutions) {
+            return decoded
+        }
+        // Some established formal spellings are decoded by the general AST
+        // parser rather than a typed-facade case.  Preserve the lexical typed
+        // bindings after that fallback as well; otherwise a nested scoped
+        // expression can silently lose its `WithValue`/formal parameter
+        // projection.
+        guard let decoded = decodeStateExpr(expression) else { return nil }
+        return substitutions.reduce(decoded) { expression, substitution in
+            StateExpr.substituteVariable(
+                substitution.key,
+                with: substitution.value,
+                in: expression
+            )
+        }
     }
 
     static func typedUpdateSelector(

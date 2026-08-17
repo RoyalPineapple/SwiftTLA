@@ -156,6 +156,30 @@ struct LocalOperatorTests {
     #expect(call.description == "AtMost[limit]")
   }
 
+  @Test("bounded recursion retains scoped values through the general parser fallback")
+  func parserRetainsScopedValuesInBoundedRecursion() throws {
+    let source = """
+    {
+      FormalDefinition("SafeAt", taking: Int.self, Int.self) { ballot, value in
+        LetRec("SA", over: IntRange(0, through: value), taking: Int.self, { (recursion: LocalRecursion<Int, Bool>, current) in
+          current == 0 || Exists(in: IntRange(-1, through: current.expr - 1)) { prior in
+            recursion(prior.expr) && ForAll(in: IntRange(0, through: current.expr)) { candidate in
+              Pair.literal(prior.expr, candidate.expr) == Pair.literal(ballot.expr, value.expr)
+            }
+          }
+        }, in: { recursion in recursion(ballot.expr) })
+      }
+    }
+    """
+    let closure = Parser.parse(source: source).statements.first!.item.as(ClosureExprSyntax.self)!
+    let parsed = SpecParser.parseSpecClosure(closure)
+
+    #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
+    let definition = try #require(parsed.formalOperatorDefinitions.first)
+    #expect(definition.body.description.contains("SA[value0]"))
+    #expect(definition.body.description.contains("<<prior, candidate>>"))
+  }
+
   @Test("bounded LET rejects arguments outside its declared domain")
   func boundedLocalRecursionRejectsOutOfDomainArgument() {
     let expression: StateExpr = .letIn([
