@@ -37,6 +37,7 @@ public enum Example {
         coffeeCanMax100,
         coffeeCanMax5,
         consensus,
+        voteProof,
         dieHardTypeOK,
         diningPhilosophersNP5,
         dijkstraMutex,
