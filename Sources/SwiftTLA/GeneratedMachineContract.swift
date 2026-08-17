@@ -254,7 +254,7 @@ public struct MachineSurfacePlan: Sendable, Equatable {
                 }
             )
         }
-        let symmetricCollections = swiftFacts.symmetricCollections.keys.sorted().compactMap { name in
+        let symmetricCollections: [SymmetricCollection] = swiftFacts.symmetricCollections.keys.sorted().compactMap { name in
             guard let fact = swiftFacts.symmetricCollections[name], let declaration = declaredCollections[name] else {
                 return nil
             }
@@ -336,7 +336,7 @@ public struct MachineSurfacePlan: Sendable, Equatable {
                     binding.domain.map { arguments + [$0] }
                 }
             }
-            return argumentLists.map { .init(name: action.formalName, arguments: $0) }
+            return argumentLists.map { TLAActionInvocation(name: action.formalName, arguments: $0) }
         }
     }
 

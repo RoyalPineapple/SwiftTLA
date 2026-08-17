@@ -279,7 +279,6 @@ public extension SpecParser.ParsedSpecComponents {
             temporalProperties: temporal.map { NamedTemporal(name: $0.name, expr: $0.expr) },
             fairness: fairness,
             definitions: definitions,
-            authoredPlusCalDeclarations: authoredPlusCalDeclarations,
             constraint: constraint,
             formalOperatorDefinitions: formalOperatorDefinitions,
             imports: resolvedImports,
@@ -287,7 +286,8 @@ public extension SpecParser.ParsedSpecComponents {
             moduleInstances: moduleInstances,
             symmetrySets: symmetrySets,
             symmetricCollections: symmetricCollections.map(\.declaration),
-            algorithmFidelityTokens: algorithmFidelityTokens
+            algorithmFidelityTokens: algorithmFidelityTokens,
+            authoredPlusCalDeclarations: authoredPlusCalDeclarations
         )
         return try spec.compile()
     }
@@ -338,7 +338,8 @@ public extension TLASpec {
     }
 
     var compilationFingerprint: String {
-        let source = CanonicalSpecificationEncoder().encode(self)
+        var encoder = CanonicalSpecificationEncoder()
+        let source = encoder.encode(self)
         var hash: UInt64 = 0xcbf29ce484222325
         for byte in source.utf8 {
             hash ^= UInt64(byte)

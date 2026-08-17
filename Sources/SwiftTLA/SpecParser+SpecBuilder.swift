@@ -704,7 +704,6 @@ extension SpecParser {
         }
         let name = definition.name
         let parameters = definition.parameters
-        let body = definition.body
         guard !result.formalOperatorDefinitions.contains(where: { $0.name == name }) else {
             result.diagnostics.append(.init(
                 message: "FormalDefinition '\(name)' is declared more than once.",
@@ -881,8 +880,9 @@ extension SpecParser {
     }
 
     private static func plusCalPhase(_ call: FunctionCallExprSyntax) -> AuthoredPlusCalDeclarationPhase {
-        switch call.arguments.first(where: { $0.label?.text == "plusCalPhase" })?.expression
-            .flatMap({ $0.as(MemberAccessExprSyntax.self)?.declName.baseName.text }) {
+        let phase = call.arguments.first(where: { $0.label?.text == "plusCalPhase" })?
+            .expression.as(MemberAccessExprSyntax.self)?.declName.baseName.text
+        switch phase {
         case "define": return .define
         default: return .prelude
         }

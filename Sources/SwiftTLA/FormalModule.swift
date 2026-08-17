@@ -371,7 +371,7 @@ public struct FormalModuleClosure: Sendable {
 
     func validateDeclaredRelationships(_ module: TLASpec, path: [String]) throws {
       let parameterNames = module.formalParameters.map(\.name)
-      if let invalid = parameterNames.first(where: { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }) {
+      if parameterNames.contains(where: { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }) {
         throw diagnostic(.invalidFormalModuleParameter, path: path + ["parameters"], expected: "a non-empty formal parameter", actual: "an empty parameter name", nextSafeAction: "Name the formal parameter, then compile again.")
       }
       if let duplicate = Self.firstDuplicate(in: parameterNames) {
