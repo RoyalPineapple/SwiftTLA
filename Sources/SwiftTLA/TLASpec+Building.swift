@@ -234,15 +234,18 @@ public extension TLASpec {
           nextSafeAction: "Declare properties inside Algorithm, or add a source-level renderer for the top-level declaration before exporting PlusCal."
         )
       }
+      let definitionSections = authoredPlusCalDefinitionSections(for: algorithm.model)
       let module = AuthoredPlusCalModule(
         name: name.replacingOccurrences(of: " ", with: ""),
         extendsModules: authoredPlusCalExtends,
         constants: authoredPlusCalPrelude,
-        definitionsBeforeInstances: authoredPlusCalDefinitionsBeforeInstances,
+        definitionsBeforeInstances: definitionSections.beforeInstances,
         instances: moduleInstances,
-        definitionsAfterInstances: authoredPlusCalDefinitionsAfterInstances,
+        definitionsAfterInstances: definitionSections.afterInstances,
         algorithm: algorithm.model,
-        postTranslationDeclarations: sourceProperties.map(\.definition) + authoredPlusCalSymmetry
+        postTranslationDeclarations: definitionSections.afterTranslation
+          + sourceProperties.map(\.definition)
+          + authoredPlusCalSymmetry
       )
       return try AlgorithmPlusCalRenderer(model: algorithm.model).render(module)
     }
@@ -268,22 +271,48 @@ public extension TLASpec {
     return lines
   }
 
-  /// Definitions used by authored Algorithm declarations must be visible
-  /// before the PlusCal comment. `pcal.trans` resolves initializers and
-  /// qualified operators before it appends translated TLA+ code.
-  private var authoredPlusCalDefinitionsBeforeInstances: [String] {
-    definitions.filter { definition in
-      !moduleInstances.contains { definition.contains("\($0.name)!") }
-    } + recursiveDefs + runtimeFuncBodies
-  }
+  /// PlusCal needs source helpers before its comment, but its translator
+  /// declares machine variables only after that comment. Keep the two scopes
+  /// distinct so state-dependent definitions are valid TLA+ after translation.
+  private func authoredPlusCalDefinitionSections(
+    for algorithm: AlgorithmModel
+  ) -> AuthoredPlusCalDefinitionSections {
+    let declarations = definitions + recursiveDefs + runtimeFuncBodies
+    let machineNames = algorithm.machineVariableNames
+    var postTranslationNames = Set(declarations.compactMap { declaration in
+      tlaIdentifiers(in: declaration).isDisjoint(with: machineNames)
+        ? nil
+        : tlaDefinitionName(declaration)
+    })
 
-  /// These declarations reference an imported instance and therefore follow
-  /// its structural `INSTANCE` declaration while still preceding the
-  /// Algorithm that uses them.
-  private var authoredPlusCalDefinitionsAfterInstances: [String] {
-    definitions.filter { definition in
-      moduleInstances.contains { definition.contains("\($0.name)!") }
+    var changed = true
+    while changed {
+      changed = false
+      for declaration in declarations {
+        guard let name = tlaDefinitionName(declaration),
+              !postTranslationNames.contains(name),
+              !tlaIdentifiers(in: declaration).isDisjoint(with: postTranslationNames)
+        else { continue }
+        postTranslationNames.insert(name)
+        changed = true
+      }
     }
+
+    let postTranslation = declarations.filter { declaration in
+      guard let name = tlaDefinitionName(declaration) else {
+        return !tlaIdentifiers(in: declaration).isDisjoint(with: machineNames)
+      }
+      return postTranslationNames.contains(name)
+    }
+    let preTranslation = declarations.filter { !postTranslation.contains($0) }
+    let afterInstances = preTranslation.filter { declaration in
+      moduleInstances.contains { declaration.contains("\($0.name)!") }
+    }
+    return AuthoredPlusCalDefinitionSections(
+      beforeInstances: preTranslation.filter { !afterInstances.contains($0) },
+      afterInstances: afterInstances,
+      afterTranslation: postTranslation
+    )
   }
 
   private var authoredPlusCalSymmetry: [String] {
@@ -294,6 +323,58 @@ public extension TLASpec {
       return "Symm\(symmetry.variableName) == Permutations({\(values)})"
     }
   }
+}
+
+private struct AuthoredPlusCalDefinitionSections {
+  let beforeInstances: [String]
+  let afterInstances: [String]
+  let afterTranslation: [String]
+}
+
+private extension AlgorithmModel {
+  var machineVariableNames: Set<String> {
+    var names: Set<String> = ["pc"]
+    for component in components {
+      switch component {
+      case .shared(let declaration), .local(let declaration):
+        names.insert(declaration.root)
+      case .process(let process):
+        for component in process.components {
+          if case .local(let declaration) = component { names.insert(declaration.root) }
+        }
+      case .procedure(let procedure):
+        procedure.locals.forEach { names.insert($0.root) }
+      case .invariant, .temporal, .fairness, .formalOperator, .stateConstraint, .step, .propertyBoundary:
+        continue
+      }
+    }
+    return names
+  }
+}
+
+private func tlaDefinitionName(_ declaration: String) -> String? {
+  guard let equal = declaration.range(of: "==") else { return nil }
+  let head = declaration[..<equal.lowerBound]
+  let identifier = head.prefix { $0.isLetter || $0.isNumber || $0 == "_" }
+  return identifier.isEmpty ? nil : String(identifier)
+}
+
+private func tlaIdentifiers(in source: String) -> Set<String> {
+  var identifiers: Set<String> = []
+  var identifier = ""
+  var quoted = false
+  for character in source {
+    if character == "\"" {
+      quoted.toggle()
+    } else if !quoted && (character.isLetter || character.isNumber || character == "_") {
+      identifier.append(character)
+    } else if !identifier.isEmpty {
+      identifiers.insert(identifier)
+      identifier = ""
+    }
+  }
+  if !identifier.isEmpty { identifiers.insert(identifier) }
+  return identifiers
 }
 
 public func substituteConstants(_ spec: TLASpec) -> TLASpec {
