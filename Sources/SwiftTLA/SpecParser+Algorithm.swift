@@ -172,10 +172,14 @@ extension SpecParser {
         _ expression: ExprSyntax
     ) -> FormalOperatorDefinition? {
         guard let call = expression.as(FunctionCallExprSyntax.self),
-              call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "FormalDefinition",
-              call.trailingClosure != nil
+              call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "FormalDefinition"
         else { return nil }
-        return decodeFormalDefinition(call)
+        guard call.trailingClosure != nil else { return nil }
+        guard let definition = decodeFormalDefinition(call) else {
+            algorithmParseFailure = "FormalDefinition could not decode its typed parameters or formal body."
+            return nil
+        }
+        return definition
     }
 
     private static func algorithmStateDeclarations(in model: AlgorithmModel) -> [AlgorithmStateModel] {
