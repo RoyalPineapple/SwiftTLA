@@ -65,12 +65,8 @@ public enum SpecParser {
         guard let decodedDefinition = decodeTypedFacadeValue(
             definitionExpression, substitutions: definitionSubstitutions
         ) else {
-            let detail = firstUndecodableTypedFragment(
-                in: definitionExpression,
-                substitutions: definitionSubstitutions
-            ).map { ": '\($0)'." } ?? "."
             algorithmParseFailure = algorithmParseFailure
-                ?? "LetRec '\(name)' could not decode its bounded recursive body\(detail)"
+                ?? "LetRec '\(name)' could not decode its bounded recursive body."
             return nil
         }
         guard let decodedBody = decodeTypedFacadeValue(bodyExpression, substitutions: bodySubstitutions) else {
@@ -84,52 +80,6 @@ public enum SpecParser {
             domain: domain,
             body: renameVar(definitionParameters[0], to: name, in: decodedDefinition)
         )], renameVar(bodyParameters[0], to: name, in: decodedBody))
-    }
-
-    /// Reports the smallest unsupported fragment from a nested typed formal
-    /// expression.  This only runs after normal decoding fails, so it does not
-    /// participate in parsing or alter the accepted DSL surface.
-    private static func firstUndecodableTypedFragment(
-        in expression: ExprSyntax,
-        substitutions: [String: StateExpr]
-    ) -> String? {
-        if decodeTypedFacadeValue(expression, substitutions: substitutions) != nil {
-            return nil
-        }
-        if let infix = expression.as(InfixOperatorExprSyntax.self) {
-            return firstUndecodableTypedFragment(in: infix.leftOperand, substitutions: substitutions)
-                ?? firstUndecodableTypedFragment(in: infix.rightOperand, substitutions: substitutions)
-        }
-        if let prefix = expression.as(PrefixOperatorExprSyntax.self) {
-            return firstUndecodableTypedFragment(in: prefix.expression, substitutions: substitutions)
-        }
-        if let subscriptCall = expression.as(SubscriptCallExprSyntax.self) {
-            return firstUndecodableTypedFragment(in: subscriptCall.calledExpression, substitutions: substitutions)
-                ?? subscriptCall.arguments.lazy.compactMap {
-                    firstUndecodableTypedFragment(in: $0.expression, substitutions: substitutions)
-                }.first
-        }
-        if let call = expression.as(FunctionCallExprSyntax.self) {
-            for argument in call.arguments {
-                if let fragment = firstUndecodableTypedFragment(
-                    in: argument.expression,
-                    substitutions: substitutions
-                ) {
-                    return fragment
-                }
-            }
-            if let closure = call.trailingClosure,
-               let parameter = closureParameterNames(in: closure).first,
-               closureParameterNames(in: closure).count == 1,
-               closure.statements.count == 1,
-               case .expr(let body) = closure.statements.first?.item {
-                return firstUndecodableTypedFragment(
-                    in: body,
-                    substitutions: substitutions.merging([parameter: .variable(parameter)]) { _, replacement in replacement }
-                )
-            }
-        }
-        return expression.description.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     static func isMetatype(_ expression: ExprSyntax) -> Bool {
@@ -563,6 +513,11 @@ public enum SpecParser {
         }
         if let localRecursion = decodeLocalRecursion(expression, substitutions: substitutions) {
             return localRecursion
+        }
+        if let sequence = expression.as(SequenceExprSyntax.self) {
+            return decodeInfixExpr(Array(sequence.elements)) {
+                decodeTypedFacadeValue($0, substitutions: substitutions)
+            }
         }
         // `IntRange` occurs inside scoped typed expressions as well as at the
         // top level.  Decode both bounds here so closure bindings such as a
@@ -1433,9 +1388,16 @@ public enum SpecParser {
     }
 
     static func decodeInfixExpr(_ elements: [ExprSyntax]) -> StateExpr? {
+        decodeInfixExpr(elements, decoding: decodeStateExpr)
+    }
+
+    static func decodeInfixExpr(
+        _ elements: [ExprSyntax],
+        decoding decodeOperand: (ExprSyntax) -> StateExpr?
+    ) -> StateExpr? {
         guard !elements.isEmpty else { return nil }
         if elements.count == 1 {
-            return decodeStateExpr(elements[0])
+            return decodeOperand(elements[0])
         }
         guard elements.count % 2 == 1 else { return nil }
 
@@ -1467,8 +1429,8 @@ public enum SpecParser {
               })
         else { return nil }
 
-        guard let lhs = decodeInfixExpr(Array(elements[..<split.0])),
-              let rhs = decodeInfixExpr(Array(elements[(split.0 + 1)...]))
+        guard let lhs = decodeInfixExpr(Array(elements[..<split.0]), decoding: decodeOperand),
+              let rhs = decodeInfixExpr(Array(elements[(split.0 + 1)...]), decoding: decodeOperand)
         else { return nil }
         return applyInfixOp(split.1, lhs, rhs)
     }
