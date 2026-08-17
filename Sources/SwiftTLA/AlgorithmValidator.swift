@@ -40,7 +40,7 @@ internal enum AlgorithmProcedureValidator {
                         diagnostics: &diagnostics
                     )
                 }
-            case .shared, .invariant, .temporal, .fairness, .stateConstraint, .local, .propertyBoundary:
+            case .shared, .formalOperator, .invariant, .temporal, .fairness, .stateConstraint, .local, .propertyBoundary:
                 break
             }
         }

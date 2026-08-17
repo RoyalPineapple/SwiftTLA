@@ -273,9 +273,9 @@ enum AlgorithmLowerer {
             invariants: declaredInvariants + processInvariants + generatedAssertionInvariants,
             temporalProperties: declaredTemporal,
             fairness: declaredFairness + fairness,
+            definitions: algorithm.formalOperatorDefinitions.map { FormalOperatorDecl($0).tlaText },
             constraint: declaredConstraint,
             formalOperatorDefinitions: resolvedFormalOperators,
-            definitions: algorithm.formalOperatorDefinitions.map { FormalOperatorDecl($0).tlaText },
             sourceAlgorithms: [Algorithm(model: algorithm)])
     }
 
@@ -371,9 +371,9 @@ enum AlgorithmLowerer {
                 invariants: declaredInvariants,
                 temporalProperties: declaredTemporal,
                 fairness: declaredFairness,
+                definitions: algorithm.formalOperatorDefinitions.map { FormalOperatorDecl($0).tlaText },
                 constraint: declaredConstraint,
                 formalOperatorDefinitions: formalOperatorDefinitions,
-                definitions: algorithm.formalOperatorDefinitions.map { FormalOperatorDecl($0).tlaText },
                 sourceAlgorithms: [Algorithm(model: algorithm)]
             )
         }
@@ -444,9 +444,9 @@ enum AlgorithmLowerer {
             invariants: declaredInvariants + generatedAssertionInvariants,
             temporalProperties: declaredTemporal,
             fairness: declaredFairness,
+            definitions: algorithm.formalOperatorDefinitions.map { FormalOperatorDecl($0).tlaText },
             constraint: declaredConstraint,
             formalOperatorDefinitions: formalOperatorDefinitions,
-            definitions: algorithm.formalOperatorDefinitions.map { FormalOperatorDecl($0).tlaText },
             sourceAlgorithms: [Algorithm(model: algorithm)]
         )
     }
