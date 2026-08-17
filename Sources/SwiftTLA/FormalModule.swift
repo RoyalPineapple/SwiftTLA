@@ -120,7 +120,7 @@ public struct TLAModuleBundle: Sendable, Equatable {
       guard let range = line.range(of: "INSTANCE ") else { continue }
       let name = line[range.upperBound...].prefix { $0.isLetter || $0.isNumber || $0 == "_" }
       if isModuleIdentifier(name) {
-        dependencies.append(Dependency(name: name, line: offset + 1))
+        dependencies.append(Dependency(name: String(name), line: offset + 1))
       }
     }
     return dependencies
