@@ -44,8 +44,7 @@ let package = Package(
         .target(
             name: "CanonicalUpstreamCorpus",
             dependencies: ["SwiftTLA", "SwiftTLAMacros"],
-            path: "Sources/UpstreamParity/CanonicalCorpus",
-            swiftSettings: settings
+            path: "Sources/UpstreamParity/CanonicalCorpus"
         ),
         .target(
             name: "UpstreamParity",
