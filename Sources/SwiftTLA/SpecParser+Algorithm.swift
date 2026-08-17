@@ -160,6 +160,14 @@ extension SpecParser {
         result.temporal += lowered.temporalProperties.map { ($0.name, $0.expr) }
         result.fairness += lowered.fairness
         result.formalOperatorDefinitions += model.formalOperatorDefinitions
+        result.authoredPlusCalDeclarations += model.formalOperatorDefinitions.map { definition in
+            AuthoredPlusCalDeclaration(
+                name: definition.name,
+                text: FormalOperatorDecl(definition).tlaText,
+                phase: definition.plusCalPhase,
+                dependencies: definition.plusCalDependencies
+            )
+        }
         if let constraint = lowered.constraint {
             result.constraint = result.constraint.map { .and($0, constraint) } ?? constraint
         }

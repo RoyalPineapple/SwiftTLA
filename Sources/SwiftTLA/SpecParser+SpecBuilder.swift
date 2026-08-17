@@ -24,6 +24,7 @@ extension SpecParser {
         public var formalParameters: [FormalModuleParameter] = []
         public var formalOperatorDefinitions: [FormalOperatorDefinition] = []
         public var definitions: [String] = []
+        public var authoredPlusCalDeclarations: [AuthoredPlusCalDeclaration] = []
         public var symmetrySets: [SymmetrySet] = []
         /// Opaque, pre-lowering Algorithm evidence retained independently of
         /// the ordinary parsed specification tree.
@@ -718,9 +719,13 @@ extension SpecParser {
             ))
             return
         }
-        result.formalOperatorDefinitions.append(
-            FormalOperatorDefinition(name: name, parameters: parameters, body: body)
-        )
+        result.formalOperatorDefinitions.append(definition)
+        result.authoredPlusCalDeclarations.append(AuthoredPlusCalDeclaration(
+            name: definition.name,
+            text: FormalOperatorDecl(definition).tlaText,
+            phase: definition.plusCalPhase,
+            dependencies: definition.plusCalDependencies
+        ))
     }
 
     static func decodeFormalDefinition(
@@ -732,7 +737,8 @@ extension SpecParser {
            let bodySyntax = call.arguments.first(where: { $0.label?.text == "body" })?.expression,
            let parameters = parseFormalParameters(parametersSyntax),
            let body = decodeTypedFacadeValue(bodySyntax, substitutions: [:]) ?? decodeStateExpr(bodySyntax) {
-            return FormalOperatorDefinition(name: name, parameters: parameters, body: body)
+            return FormalOperatorDefinition(name: name, parameters: parameters, body: body,
+                plusCalPhase: plusCalPhase(call), plusCalDependencies: plusCalDependencies(call))
         }
 
         guard let closure = call.trailingClosure,
@@ -740,7 +746,9 @@ extension SpecParser {
               case .expr(let bodySyntax) = closure.statements.first?.item
         else { return nil }
         let parameters = closureParameterNames(in: closure)
-        let typeWitnesses = Array(call.arguments.dropFirst())
+        let typeWitnesses = call.arguments.dropFirst().filter { argument in
+            argument.label?.text != "plusCalPhase" && argument.label?.text != "dependsOn"
+        }
         guard (1...2).contains(parameters.count),
               parameters.count == typeWitnesses.count,
               typeWitnesses.first?.label?.text == "taking",
@@ -757,7 +765,9 @@ extension SpecParser {
         return FormalOperatorDefinition(
             name: name,
             parameters: formalParameters,
-            body: body
+            body: body,
+            plusCalPhase: plusCalPhase(call),
+            plusCalDependencies: plusCalDependencies(call)
         )
     }
 
@@ -766,7 +776,7 @@ extension SpecParser {
         into result: inout ParsedSpecComponents
     ) {
         let arguments = Array(call.arguments)
-        guard arguments.count == 1,
+        guard arguments.first?.label == nil,
               call.trailingClosure == nil,
               let literal = arguments[0].expression.as(StringLiteralExprSyntax.self),
               literal.segments.allSatisfy({ $0.is(StringSegmentSyntax.self) }),
@@ -781,6 +791,13 @@ extension SpecParser {
             return
         }
         result.definitions.append(definition)
+        result.authoredPlusCalDeclarations.append(AuthoredPlusCalDeclaration(
+            name: call.arguments.first(where: { $0.label?.text == "named" })?.expression
+                .as(StringLiteralExprSyntax.self)?.representedLiteralValue,
+            text: definition,
+            phase: plusCalPhase(call),
+            dependencies: plusCalDependencies(call)
+        ))
     }
 
     private static func parseFormalParameters(_ expression: ExprSyntax) -> [FormalParameter]? {
@@ -857,7 +874,23 @@ extension SpecParser {
             result.diagnostics.append(.init(message: "Instance arguments must name parameters declared by '\(module.name)'.", source: call))
             return
         }
-        result.moduleInstances.append(FormalModuleInstance(name, of: module, with: arguments))
+        result.moduleInstances.append(FormalModuleInstance(
+            name, of: module, with: arguments,
+            plusCalPhase: plusCalPhase(call), dependsOn: plusCalDependencies(call)
+        ))
+    }
+
+    private static func plusCalPhase(_ call: FunctionCallExprSyntax) -> AuthoredPlusCalDeclarationPhase {
+        switch call.arguments.first(where: { $0.label?.text == "plusCalPhase" })?.expression
+            .flatMap({ $0.as(MemberAccessExprSyntax.self)?.declName.baseName.text }) {
+        case "define": return .define
+        default: return .prelude
+        }
+    }
+
+    private static func plusCalDependencies(_ call: FunctionCallExprSyntax) -> [String] {
+        guard let array = call.arguments.first(where: { $0.label?.text == "dependsOn" })?.expression.as(ArrayExprSyntax.self) else { return [] }
+        return array.elements.compactMap { $0.expression.as(StringLiteralExprSyntax.self)?.representedLiteralValue }
     }
 
     private static func parseFormalModuleConfiguration(

@@ -169,6 +169,7 @@ public struct TLASpec: Sendable {
   /// Keeping these declarations lets a tooling boundary render the exact
   /// authored Algorithm as PlusCal without reconstructing it from TLA+ AST.
   let sourceAlgorithms: [Algorithm]
+  let authoredPlusCalDeclarations: [AuthoredPlusCalDeclaration]
   public init(
     name: String, variables: [NamedVar], constants: [String: TLAValue] = [:],
     formalParameters: [FormalModuleParameter] = [],
@@ -183,7 +184,8 @@ public struct TLASpec: Sendable {
     symmetryGroups: [SymmetryVariableGroup] = [],
     symmetricCollections: [SymmetricCollectionDecl] = [],
     algorithmFidelityTokens: [AlgorithmFidelityToken] = [],
-    sourceAlgorithms: [Algorithm] = []
+    sourceAlgorithms: [Algorithm] = [],
+    authoredPlusCalDeclarations: [AuthoredPlusCalDeclaration] = []
   ) {
     self.name = name
     self.variables = variables
@@ -210,6 +212,7 @@ public struct TLASpec: Sendable {
     self.symmetricCollections = symmetricCollections
     self.algorithmFidelityTokens = algorithmFidelityTokens
     self.sourceAlgorithms = sourceAlgorithms
+    self.authoredPlusCalDeclarations = authoredPlusCalDeclarations
   }
 
   public var description: String {
@@ -294,6 +297,26 @@ public struct TLASpec: Sendable {
   }
 }
 public protocol SpecComponent {}
+/// The legal source section for a declaration in an authored PlusCal module.
+public enum AuthoredPlusCalDeclarationPhase: Sendable, Hashable {
+  case prelude
+  case define
+}
+
+/// Structural placement and dependency metadata retained for authored PlusCal.
+public struct AuthoredPlusCalDeclaration: Sendable, Equatable {
+  public let name: String?
+  public let text: String
+  public let phase: AuthoredPlusCalDeclarationPhase
+  public let dependencies: [String]
+
+  public init(name: String? = nil, text: String, phase: AuthoredPlusCalDeclarationPhase = .prelude, dependencies: [String] = []) {
+    self.name = name
+    self.text = text
+    self.phase = phase
+    self.dependencies = dependencies
+  }
+}
 public struct VarDecl: SpecComponent {
   public let name: String
   public let initial: TLAValue
@@ -450,15 +473,21 @@ public struct DefinitionDecl: SpecComponent, Equatable {
   public let tlaText: String
   public let name: String?
   public let body: StateExpr?
-  init(_ tlaText: String) {
+  public let plusCalPhase: AuthoredPlusCalDeclarationPhase
+  public let plusCalDependencies: [String]
+  init(_ tlaText: String, name: String? = nil, plusCalPhase: AuthoredPlusCalDeclarationPhase = .prelude, plusCalDependencies: [String] = []) {
     self.tlaText = tlaText
-    self.name = nil
+    self.name = name
     self.body = nil
+    self.plusCalPhase = plusCalPhase
+    self.plusCalDependencies = plusCalDependencies
   }
-  init(name: String, body: StateExpr) {
+  init(name: String, body: StateExpr, plusCalPhase: AuthoredPlusCalDeclarationPhase = .prelude, plusCalDependencies: [String] = []) {
     self.tlaText = ""
     self.name = name
     self.body = body
+    self.plusCalPhase = plusCalPhase
+    self.plusCalDependencies = plusCalDependencies
   }
 }
 
@@ -488,30 +517,38 @@ public struct FormalOperatorDecl: SpecComponent, Equatable {
 public func FormalDefinition(
   _ name: String,
   parameters: [FormalParameter],
-  body: StateExpr
+  body: StateExpr,
+  plusCalPhase: AuthoredPlusCalDeclarationPhase = .prelude,
+  dependsOn: [String] = []
 ) -> FormalOperatorDecl {
-  FormalOperatorDecl(FormalOperatorDefinition(name: name, parameters: parameters, body: body))
+  FormalOperatorDecl(FormalOperatorDefinition(name: name, parameters: parameters, body: body, plusCalPhase: plusCalPhase, plusCalDependencies: dependsOn))
 }
 
 public func FormalDefinition<Body: StateExprConvertible>(
   _ name: String,
   parameters: [FormalParameter],
-  body: Body
+  body: Body,
+  plusCalPhase: AuthoredPlusCalDeclarationPhase = .prelude,
+  dependsOn: [String] = []
 ) -> FormalOperatorDecl {
-  FormalOperatorDecl(FormalOperatorDefinition(name: name, parameters: parameters, body: body.stateExpr))
+  FormalOperatorDecl(FormalOperatorDefinition(name: name, parameters: parameters, body: body.stateExpr, plusCalPhase: plusCalPhase, plusCalDependencies: dependsOn))
 }
 
 /// Declares a unary executable formal operator without exposing raw AST values.
 public func FormalDefinition<Input: TLAValueType>(
   _ name: String,
   taking: Input.Type,
+  plusCalPhase: AuthoredPlusCalDeclarationPhase = .prelude,
+  dependsOn: [String] = [],
   body: (Expr<Input>) -> some StateExprConvertible
 ) -> FormalOperatorDecl {
   let parameter = "value0"
   return FormalOperatorDecl(FormalOperatorDefinition(
     name: name,
     parameters: [.value(parameter)],
-    body: body(Expr<Input>(.variable(parameter))).stateExpr
+    body: body(Expr<Input>(.variable(parameter))).stateExpr,
+    plusCalPhase: plusCalPhase,
+    plusCalDependencies: dependsOn
   ))
 }
 
@@ -520,6 +557,8 @@ public func FormalDefinition<First: TLAValueType, Second: TLAValueType>(
   _ name: String,
   taking: First.Type,
   _ second: Second.Type,
+  plusCalPhase: AuthoredPlusCalDeclarationPhase = .prelude,
+  dependsOn: [String] = [],
   body: (Expr<First>, Expr<Second>) -> some StateExprConvertible
 ) -> FormalOperatorDecl {
   let first = "value0"
@@ -527,7 +566,9 @@ public func FormalDefinition<First: TLAValueType, Second: TLAValueType>(
   return FormalOperatorDecl(FormalOperatorDefinition(
     name: name,
     parameters: [.value(first), .value(second)],
-    body: body(Expr<First>(.variable(first)), Expr<Second>(.variable(second))).stateExpr
+    body: body(Expr<First>(.variable(first)), Expr<Second>(.variable(second))).stateExpr,
+    plusCalPhase: plusCalPhase,
+    plusCalDependencies: dependsOn
   ))
 }
 public struct TheoremDecl: SpecComponent, Equatable {
@@ -853,8 +894,13 @@ public func Parameter(
 public func Value(_ name: String, _ value: some TLAValueConvertible) -> NamedValueDecl {
   NamedValueDecl(name: name, value: value.tlaValue)
 }
-public func Definition(_ tlaText: String) -> DefinitionDecl {
-  DefinitionDecl(tlaText)
+public func Definition(
+  _ tlaText: String,
+  named: String? = nil,
+  plusCalPhase: AuthoredPlusCalDeclarationPhase = .prelude,
+  dependsOn: [String] = []
+) -> DefinitionDecl {
+  DefinitionDecl(tlaText, name: named, plusCalPhase: plusCalPhase, plusCalDependencies: dependsOn)
 }
 public func Definition(_ name: String, @InvariantBuilder _ body: () -> StateExpr) -> DefinitionDecl {
   DefinitionDecl(name: name, body: body())

@@ -148,6 +148,7 @@ public extension SpecParser.ParsedSpecComponents {
             temporalProperties: temporal.map { NamedTemporal(name: $0.name, expr: $0.expr) },
             fairness: fairness,
             definitions: definitions,
+            authoredPlusCalDeclarations: authoredPlusCalDeclarations,
             constraint: constraint,
             formalOperatorDefinitions: formalOperatorDefinitions,
             imports: resolvedImports,

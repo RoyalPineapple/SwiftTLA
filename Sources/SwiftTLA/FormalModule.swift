@@ -645,15 +645,26 @@ public struct FormalModuleInstance: SpecComponent, Sendable, Equatable {
   public let name: String
   public let module: TLASpec
   public let arguments: [ModuleArgument]
+  public let plusCalPhase: AuthoredPlusCalDeclarationPhase
+  public let plusCalDependencies: [String]
 
-  public init(_ name: String, of module: TLASpec, with arguments: [ModuleArgument] = []) {
+  public init(
+    _ name: String,
+    of module: TLASpec,
+    with arguments: [ModuleArgument] = [],
+    plusCalPhase: AuthoredPlusCalDeclarationPhase = .prelude,
+    dependsOn: [String] = []
+  ) {
     self.name = name
     self.module = module
     self.arguments = arguments
+    self.plusCalPhase = plusCalPhase
+    self.plusCalDependencies = dependsOn
   }
 
   public static func == (lhs: FormalModuleInstance, rhs: FormalModuleInstance) -> Bool {
     lhs.name == rhs.name && lhs.module.name == rhs.module.name && lhs.arguments == rhs.arguments
+      && lhs.plusCalPhase == rhs.plusCalPhase && lhs.plusCalDependencies == rhs.plusCalDependencies
   }
 
   /// References one operator through this instance's TLA+ namespace.
@@ -799,9 +810,11 @@ public func Import(
 public func Instance(
   _ name: String,
   of module: TLASpec,
-  with arguments: [ModuleArgument] = []
+  with arguments: [ModuleArgument] = [],
+  plusCalPhase: AuthoredPlusCalDeclarationPhase = .prelude,
+  dependsOn: [String] = []
 ) -> FormalModuleInstance {
-  FormalModuleInstance(name, of: module, with: arguments)
+  FormalModuleInstance(name, of: module, with: arguments, plusCalPhase: plusCalPhase, dependsOn: dependsOn)
 }
 // swiftlint:enable identifier_name
 

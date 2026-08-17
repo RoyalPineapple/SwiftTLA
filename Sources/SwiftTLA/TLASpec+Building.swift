@@ -12,6 +12,7 @@ extension TLASpec {
     var constants: [String: TLAValue] = [:]
     var formalParameters: [FormalModuleParameter] = []
     var definitions: [String] = []
+    var authoredPlusCalDeclarations: [AuthoredPlusCalDeclaration] = []
     var theorems: [String] = []
     var assumes: StateExpr?
     var extendsMods = "Integers"
@@ -73,7 +74,15 @@ extension TLASpec {
           temporalProperties += lowered.temporalProperties
           fairness += lowered.fairness
           formalOperatorDefinitions += algorithm.model.formalOperatorDefinitions
-          definitions += algorithm.model.formalOperatorDefinitions.map { FormalOperatorDecl($0).tlaText }
+          for definition in algorithm.model.formalOperatorDefinitions {
+            let text = FormalOperatorDecl(definition).tlaText
+            definitions.append(text)
+            authoredPlusCalDeclarations.append(AuthoredPlusCalDeclaration(
+              name: definition.name, text: text,
+              phase: definition.plusCalPhase,
+              dependencies: definition.plusCalDependencies
+            ))
+          }
           if let loweredConstraint = lowered.constraint {
             constraint = constraint.map { .and($0, loweredConstraint) } ?? loweredConstraint
           }
@@ -91,13 +100,23 @@ extension TLASpec {
       } else if let parameter = comp as? FormalParameterDecl {
         formalParameters.append(parameter.parameter)
       } else if let d = comp as? DefinitionDecl {
+        let text: String
         if let name = d.name, let body = d.body {
-          definitions.append("\(name) == \(body)")
+          text = "\(name) == \(body)"
         } else {
-          definitions.append(d.tlaText)
+          text = d.tlaText
         }
+        definitions.append(text)
+        authoredPlusCalDeclarations.append(AuthoredPlusCalDeclaration(
+          name: d.name, text: text, phase: d.plusCalPhase, dependencies: d.plusCalDependencies
+        ))
       } else if let definition = comp as? FormalOperatorDecl {
         definitions.append(definition.tlaText)
+        authoredPlusCalDeclarations.append(AuthoredPlusCalDeclaration(
+          name: definition.definition.name, text: definition.tlaText,
+          phase: definition.definition.plusCalPhase,
+          dependencies: definition.definition.plusCalDependencies
+        ))
       } else if let th = comp as? TheoremDecl {
         if !th.tlaText.isEmpty {
           theorems.append(th.tlaText)
@@ -159,6 +178,7 @@ extension TLASpec {
       constants.merge(used.constants) { $1 }
       formalParameters += used.formalParameters
       definitions += used.definitions
+      authoredPlusCalDeclarations += used.authoredPlusCalDeclarations
       recursiveDefs += used.recursiveDefs
       recursiveFuncs += used.recursiveFuncs
       formalOperatorDefinitions += used.formalOperatorDefinitions
@@ -193,6 +213,7 @@ extension TLASpec {
     self.assume = assumes
     self.checkDeadlock = deadlockFlag
     self.definitions = definitions
+    self.authoredPlusCalDeclarations = authoredPlusCalDeclarations
     self.theorems = theorems
     self.extendsModules = extendsMods
     self.constraint = constraint
@@ -234,17 +255,17 @@ public extension TLASpec {
           nextSafeAction: "Declare properties inside Algorithm, or add a source-level renderer for the top-level declaration before exporting PlusCal."
         )
       }
-      let definitionSections = authoredPlusCalDefinitionSections(for: algorithm.model)
+      let declarationSections = try authoredPlusCalDeclarationSections()
       let module = AuthoredPlusCalModule(
         name: name.replacingOccurrences(of: " ", with: ""),
         extendsModules: authoredPlusCalExtends,
         constants: authoredPlusCalPrelude,
-        definitionsBeforeInstances: definitionSections.beforeInstances,
-        instances: moduleInstances,
-        definitionsAfterInstances: definitionSections.afterInstances,
+        definitionsBeforeInstances: declarationSections.prelude,
+        instances: [],
+        definitionsAfterInstances: [],
         algorithm: algorithm.model,
-        postTranslationDeclarations: definitionSections.afterTranslation
-          + sourceProperties.map(\.definition)
+        defineDeclarations: declarationSections.define,
+        postTranslationDeclarations: sourceProperties.map(\.definition)
           + authoredPlusCalSymmetry
       )
       return try AlgorithmPlusCalRenderer(model: algorithm.model).render(module)
@@ -271,48 +292,18 @@ public extension TLASpec {
     return lines
   }
 
-  /// PlusCal needs source helpers before its comment, but its translator
-  /// declares machine variables only after that comment. Keep the two scopes
-  /// distinct so state-dependent definitions are valid TLA+ after translation.
-  private func authoredPlusCalDefinitionSections(
-    for algorithm: AlgorithmModel
-  ) -> AuthoredPlusCalDefinitionSections {
-    let declarations = definitions + recursiveDefs + runtimeFuncBodies
-    let machineNames = algorithm.machineVariableNames
-    var postTranslationNames = Set(declarations.compactMap { declaration in
-      tlaIdentifiers(in: declaration).isDisjoint(with: machineNames)
-        ? nil
-        : tlaDefinitionName(declaration)
-    })
-
-    var changed = true
-    while changed {
-      changed = false
-      for declaration in declarations {
-        guard let name = tlaDefinitionName(declaration),
-              !postTranslationNames.contains(name),
-              !tlaIdentifiers(in: declaration).isDisjoint(with: postTranslationNames)
-        else { continue }
-        postTranslationNames.insert(name)
-        changed = true
-      }
+  private func authoredPlusCalDeclarationSections() throws -> AuthoredPlusCalDeclarationSections {
+    let instances = moduleInstances.map { instance in
+      let arguments = instance.arguments.map { "\($0.parameter) <- \($0.value)" }.joined(separator: ", ")
+      let withClause = arguments.isEmpty ? "" : " WITH \(arguments)"
+      return AuthoredPlusCalDeclaration(
+        name: instance.name,
+        text: "\(instance.name) == INSTANCE \(instance.module.name)\(withClause)",
+        phase: instance.plusCalPhase,
+        dependencies: instance.plusCalDependencies
+      )
     }
-
-    let postTranslation = declarations.filter { declaration in
-      guard let name = tlaDefinitionName(declaration) else {
-        return !tlaIdentifiers(in: declaration).isDisjoint(with: machineNames)
-      }
-      return postTranslationNames.contains(name)
-    }
-    let preTranslation = declarations.filter { !postTranslation.contains($0) }
-    let afterInstances = preTranslation.filter { declaration in
-      moduleInstances.contains { declaration.contains("\($0.name)!") }
-    }
-    return AuthoredPlusCalDefinitionSections(
-      beforeInstances: preTranslation.filter { !afterInstances.contains($0) },
-      afterInstances: afterInstances,
-      afterTranslation: postTranslation
-    )
+    return try AuthoredPlusCalDeclarationSections(authoredPlusCalDeclarations + instances)
   }
 
   private var authoredPlusCalSymmetry: [String] {
@@ -325,56 +316,34 @@ public extension TLASpec {
   }
 }
 
-private struct AuthoredPlusCalDefinitionSections {
-  let beforeInstances: [String]
-  let afterInstances: [String]
-  let afterTranslation: [String]
-}
+struct AuthoredPlusCalDeclarationSections {
+  let prelude: [String]
+  let define: [String]
 
-private extension AlgorithmModel {
-  var machineVariableNames: Set<String> {
-    var names: Set<String> = ["pc"]
-    for component in components {
-      switch component {
-      case .shared(let declaration), .local(let declaration):
-        names.insert(declaration.root)
-      case .process(let process):
-        for component in process.components {
-          if case .local(let declaration) = component { names.insert(declaration.root) }
-        }
-      case .procedure(let procedure):
-        procedure.locals.forEach { names.insert($0.root) }
-      case .invariant, .temporal, .fairness, .formalOperator, .stateConstraint, .step, .propertyBoundary:
-        continue
+  init(_ declarations: [AuthoredPlusCalDeclaration]) throws {
+    var emitted: Set<String> = []
+    func order(_ phase: AuthoredPlusCalDeclarationPhase) throws -> [String] {
+      var pending = declarations.filter { $0.phase == phase }
+      var result: [String] = []
+      let declared = Set(declarations.compactMap(\.name))
+      if let unresolved = pending.first(where: { $0.dependencies.contains(where: { !declared.contains($0) }) }) {
+        throw AlgorithmPlusCalRenderDiagnostic(failedConcept: "authored PlusCal declaration dependency", path: unresolved.name ?? "unnamed", expected: "a declared dependency", actual: unresolved.dependencies.joined(separator: ", "), nextSafeAction: "Declare the dependency or remove its placement edge.")
       }
+      while let index = pending.firstIndex(where: { declaration in
+        declaration.dependencies.allSatisfy(emitted.contains)
+      }) {
+        let declaration = pending.remove(at: index)
+        result.append(declaration.text)
+        if let name = declaration.name { emitted.insert(name) }
+      }
+      if !pending.isEmpty {
+        throw AlgorithmPlusCalRenderDiagnostic(failedConcept: "authored PlusCal declaration dependency", path: pending.compactMap(\.name).joined(separator: ","), expected: "an acyclic declaration dependency graph", actual: "cyclic dependencies", nextSafeAction: "Break the declaration cycle or move the declarations to one legal phase.")
+      }
+      return result
     }
-    return names
+    prelude = try order(.prelude)
+    define = try order(.define)
   }
-}
-
-private func tlaDefinitionName(_ declaration: String) -> String? {
-  guard let equal = declaration.range(of: "==") else { return nil }
-  let head = declaration[..<equal.lowerBound]
-  let identifier = head.prefix { $0.isLetter || $0.isNumber || $0 == "_" }
-  return identifier.isEmpty ? nil : String(identifier)
-}
-
-private func tlaIdentifiers(in source: String) -> Set<String> {
-  var identifiers: Set<String> = []
-  var identifier = ""
-  var quoted = false
-  for character in source {
-    if character == "\"" {
-      quoted.toggle()
-    } else if !quoted && (character.isLetter || character.isNumber || character == "_") {
-      identifier.append(character)
-    } else if !identifier.isEmpty {
-      identifiers.insert(identifier)
-      identifier = ""
-    }
-  }
-  if !identifier.isEmpty { identifiers.insert(identifier) }
-  return identifiers
 }
 
 public func substituteConstants(_ spec: TLASpec) -> TLASpec {

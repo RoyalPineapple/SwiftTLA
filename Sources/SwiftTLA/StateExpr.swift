@@ -113,8 +113,16 @@ public struct FormalOperatorDefinition: Hashable, Sendable {
     public let name: String
     public let parameters: [FormalParameter]
     public let body: StateExpr
+    public let plusCalPhase: AuthoredPlusCalDeclarationPhase
+    public let plusCalDependencies: [String]
 
-    public init(name: String, parameters: [FormalParameter], body: StateExpr) {
+    public init(
+        name: String,
+        parameters: [FormalParameter],
+        body: StateExpr,
+        plusCalPhase: AuthoredPlusCalDeclarationPhase = .prelude,
+        plusCalDependencies: [String] = []
+    ) {
         precondition(!name.isEmpty, "A formal operator definition needs a name.")
         precondition(
             Set(parameters.map(\.name)).count == parameters.count,
@@ -123,6 +131,8 @@ public struct FormalOperatorDefinition: Hashable, Sendable {
         self.name = name
         self.parameters = parameters
         self.body = body
+        self.plusCalPhase = plusCalPhase
+        self.plusCalDependencies = plusCalDependencies
     }
 }
 
