@@ -217,7 +217,10 @@ public indirect enum StateExpr: Hashable, Sendable, CustomStringConvertible {
         case .greaterThan(let a, let b): return "(\(a) > \(b))"
         case .greaterOrEqual(let a, let b): return "(\(a) >= \(b))"
         case .and(let a, let b): return "(\(a) /\\ \(b))"
-        case .or(let a, let b): return "(\(a) \\/ \(b))"
+        // StateExpr disjunction is left-to-right and short-circuiting in the
+        // evaluator.  Spell that guard explicitly for TLA+, where an invalid
+        // function application in the right operand must not be forced.
+        case .or(let a, let b): return "(IF \(a) THEN TRUE ELSE \(b))"
         case .not(let a): return "(~\(a))"
         case .ifThenElse(let c, let t, let f): return "(IF \(c) THEN \(t) ELSE \(f))"
         case .setLiteral(let elems):
