@@ -1820,6 +1820,35 @@ private enum TestPersonID: String, FiniteTLAValueDomain {
 }
 
 @TLAModel
+private struct DefinePhaseGeneratedModel {
+    enum Mode: String, FiniteTLAValueDomain {
+        case define
+
+        static let finiteValues = [Self.define]
+    }
+
+    static var spec: TLASpec {
+        #spec("DefinePhaseGeneratedModel") {
+            Algorithm("Phase") {
+                let mode: SharedVariable<Mode> = SharedVar(initial: .define)
+                Do("stay") { Assign(mode, to: mode) }
+            }
+            Definition("Visible == TRUE", named: "Visible", plusCalPhase: .define)
+        }
+    }
+}
+
+@Suite(.serialized) struct DefinePhaseGeneratedModelTests {
+    @Test("generated models retain definitions in the authored PlusCal define section")
+    func keepsDefinePhaseDeclaration() throws {
+        let plusCal = try #require(DefinePhaseGeneratedModel.spec.compile().renderedAuthoredPlusCalModules().first)
+        let define = try #require(plusCal.range(of: "define {"))
+        let visible = try #require(plusCal.range(of: "Visible == TRUE"))
+        #expect(define.lowerBound < visible.lowerBound)
+    }
+}
+
+@TLAModel
 private struct DefinitionFidelityMacro {
     static var spec: TLASpec {
         TLASpec("DefinitionFidelityMacro") {

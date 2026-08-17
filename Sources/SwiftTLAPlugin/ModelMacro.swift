@@ -535,6 +535,10 @@ private final class EnumDotRewriter: SyntaxRewriter {
     override func visit(_ node: MemberAccessExprSyntax) -> ExprSyntax {
         guard node.base == nil else { return super.visit(node) }
         let caseName = node.declName.baseName.text
+        if caseName == "define",
+           node.parent?.as(LabeledExprSyntax.self)?.label?.text == "plusCalPhase" {
+            return super.visit(node)
+        }
         guard let enumType = caseToType[caseName] else {
             if isEnumCaseName(caseName) {
                 unknownDots.append(caseName)

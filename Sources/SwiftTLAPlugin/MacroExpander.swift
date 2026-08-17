@@ -308,12 +308,13 @@ enum MacroExpander {
     static func machineSurfaceSwiftFactsSource(_ facts: MacroSwiftFacts) -> String {
         func quoted(_ value: String) -> String { String(reflecting: value) }
         func dictionary(_ values: [String: String]) -> String {
-            "[" + values.keys.sorted().map { "\(quoted($0)): \(quoted(values[$0]!))" }.joined(separator: ", ") + "]"
+            guard !values.isEmpty else { return "[:]" }
+            return "[" + values.keys.sorted().map { "\(quoted($0)): \(quoted(values[$0]!))" }.joined(separator: ", ") + "]"
         }
-        let actionBindings = "[" + facts.actionBindingTypes.keys.sorted().map { action in
+        let actionBindings = facts.actionBindingTypes.isEmpty ? "[:]" : "[" + facts.actionBindingTypes.keys.sorted().map { action in
             "\(quoted(action)): \(dictionary(facts.actionBindingTypes[action]!))"
         }.joined(separator: ", ") + "]"
-        let collections = "[" + facts.symmetricCollections.keys.sorted().map { name in
+        let collections = facts.symmetricCollections.isEmpty ? "[:]" : "[" + facts.symmetricCollections.keys.sorted().map { name in
             let fact = facts.symmetricCollections[name]!
             return "\(quoted(name)): .init(elementType: \(quoted(fact.elementType)), valueType: \(quoted(fact.valueType)))"
         }.joined(separator: ", ") + "]"
