@@ -1,7 +1,7 @@
 import CryptoKit
 import Foundation
+import CanonicalUpstreamCorpus
 import SwiftTLA
-import UpstreamParity
 
 private struct Manifest: Codable {
     let schema: String

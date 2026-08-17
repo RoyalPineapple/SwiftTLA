@@ -142,16 +142,3 @@ public struct VoteProofModel {
         }
     }
 }
-
-extension Example {
-    public static let voteProof = Entry(
-        id: "byzpaxos/VoteProof",
-        upstreamSpec: "byzpaxos",
-        upstreamModule: "specifications/byzpaxos/VoteProof.tla",
-        upstreamCfg: "specifications/byzpaxos/VoteProof.cfg",
-        expectedDistinct: 0,
-        verificationStateLimit: 1,
-        spec: VoteProofModel.spec,
-        notes: "Canonical VoteProof source port. External validation retains the bounded official PlusCal and TLC comparison."
-    )
-}

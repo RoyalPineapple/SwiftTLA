@@ -123,16 +123,3 @@ public struct BoulangerModel {
         }
     }
 }
-
-extension Example {
-    public static let boulanger = Entry(
-        id: "Boulanger/Boulanger",
-        upstreamSpec: "Boulanger",
-        upstreamModule: "specifications/Boulanger/Boulanger.tla",
-        upstreamCfg: "specifications/Boulanger/MCBoulanger.cfg",
-        expectedDistinct: 0,
-        verificationStateLimit: 1,
-        spec: BoulangerModel.spec,
-        notes: "Canonical Boulanger source port. External validation retains the bounded official PlusCal and TLC comparison."
-    )
-}
