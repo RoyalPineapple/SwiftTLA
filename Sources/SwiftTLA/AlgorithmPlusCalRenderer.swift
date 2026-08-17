@@ -45,7 +45,7 @@ public struct AlgorithmPlusCalRenderDiagnostic: Error, Sendable, Hashable, Custo
 /// PlusCal algorithm comment. This is deliberately a syntax renderer: it does
 /// not invoke `AlgorithmLowerer`, construct a `TLASpec`, or introduce any
 /// generated program-counter semantics.
-public extension Algorithm {
+extension Algorithm {
     func renderPlusCalModule() throws -> String {
         try AlgorithmPlusCalRenderer(model: model).render()
     }

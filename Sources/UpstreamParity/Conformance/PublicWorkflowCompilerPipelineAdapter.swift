@@ -179,11 +179,19 @@ public struct CompilerPipelineDiagnosticEvidenceAdapterV1: Sendable {
       }
       let compilationURL = output.appendingPathComponent("compilation.json")
       try writeCanonical(CompilerPipelineCompilationArtifactV1(compilationIdentity: compilation.identity.value, maxStates: maxStates), to: compilationURL)
-      let bundle = try renderedBundle(compilation.tlaBundle, mode: configuration.renderedBundleMode)
+      let bundle = try renderedBundle(try compilation.tlaBundle, mode: configuration.renderedBundleMode)
       try bundle.validateRenderedBundleIntegrity()
       let bundleDirectory = output.appendingPathComponent("bundle")
-      try bundle.write(to: bundleDirectory)
-      let bundleReferences = try bundle.files.map { try reference(for: bundleDirectory.appendingPathComponent("\($0.name).tla"), beneath: root) } + [try reference(for: bundleDirectory.appendingPathComponent("\(bundle.root.name).cfg"), beneath: root)]
+      if configuration.renderedBundleMode == .exact {
+        try compilation.materializeModuleBundle(to: bundleDirectory)
+      } else {
+        try bundle.write(to: bundleDirectory)
+      }
+      let bundleReferences = try bundle.files.map { try reference(for: bundleDirectory.appendingPathComponent("\($0.name).tla"), beneath: root) }
+        + [try reference(for: bundleDirectory.appendingPathComponent("\(bundle.root.name).cfg"), beneath: root)]
+        + (configuration.renderedBundleMode == .exact
+          ? [try reference(for: bundleDirectory.appendingPathComponent("bundle-manifest.json"), beneath: root)]
+          : [])
       let generated: GeneratedMachineContractReport
       if configuration.metadataMode == .mismatch {
         let plan = try MachineSurfacePlan(compilation: compilation)
@@ -215,7 +223,10 @@ public struct CompilerPipelineDiagnosticEvidenceAdapterV1: Sendable {
       throw PublicWorkflowGovernanceErrorV1.invalidField(record: bundle.root.name, field: "rendered semantic mismatch control")
     }
     let replacement = bundle.root.tla.replacingOccurrences(of: "Init == count = 0", with: "Init == count = 1")
-    return TLAModuleBundle(root: .init(name: bundle.root.name, tla: replacement, cfg: bundle.root.cfg), imports: bundle.imports)
+    return TLAModuleBundle.untrusted(
+      root: .init(name: bundle.root.name, tla: replacement, cfg: bundle.root.cfg),
+      imports: bundle.imports
+    )
   }
 
   private func directGraphEvidence(declaration: CompilerPipelineDiagnosticCaseV1, compilation: CompiledSpecification,

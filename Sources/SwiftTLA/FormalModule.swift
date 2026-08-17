@@ -40,12 +40,48 @@ public enum TLAModuleBundleIntegrityError: Error, Equatable, Sendable, CustomStr
 
 /// The complete source input required to run TLC for one SwiftTLA model.
 public struct TLAModuleBundle: Sendable, Equatable {
+  /// One linked module's provenance in a compiler-produced bundle.
+  public struct OwnershipEntry: Sendable, Equatable, Codable {
+    public let moduleName: String
+    public let owningRoot: String
+    public let structuralPath: [String]
+
+    public init(moduleName: String, owningRoot: String, structuralPath: [String]) {
+      self.moduleName = moduleName
+      self.owningRoot = owningRoot
+      self.structuralPath = structuralPath
+    }
+  }
+
+  /// Provenance distinguishes compiler-linked input from text reconstructed at
+  /// an external tool boundary.
+  public enum Provenance: Sendable, Equatable {
+    case compiled(identity: CompilationIdentity, ownership: [OwnershipEntry])
+    case untrusted
+  }
+
   public let root: TLAModuleFile
   public let imports: [TLAModuleFile]
+  public let provenance: Provenance
 
-  public init(root: TLAModuleFile, imports: [TLAModuleFile] = []) {
+  init(
+    root: TLAModuleFile,
+    imports: [TLAModuleFile] = [],
+    provenance: Provenance = .untrusted
+  ) {
     self.root = root
     self.imports = imports
+    self.provenance = provenance
+  }
+
+  /// Creates text reconstructed from an external tool boundary.
+  ///
+  /// This result intentionally has no compiler-link or source-ownership claim.
+  public static func untrusted(
+    root: TLAModuleFile,
+    imports: [TLAModuleFile] = []
+  ) -> Self {
+    Self(root: root, imports: imports, provenance: .untrusted)
   }
 
   public var tla: String { root.tla }
@@ -104,6 +140,10 @@ public struct TLAModuleBundle: Sendable, Equatable {
   /// Writes every module source file and the root TLC configuration into one
   /// directory. TLC resolves imports from this directory exactly as it would
   /// for an upstream multi-module specification.
+  ///
+  /// This legacy convenience method is not an atomic bundle materialization
+  /// boundary. Use `CompiledSpecification.materializeModuleBundle(to:)` when
+  /// a caller needs a validated compiler result with all-or-nothing output.
   public func write(to directory: URL) throws {
     try FileManager.default.createDirectory(
       at: directory, withIntermediateDirectories: true

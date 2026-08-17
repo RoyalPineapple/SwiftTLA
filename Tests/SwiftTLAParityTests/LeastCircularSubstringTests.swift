@@ -1,5 +1,5 @@
 import Testing
-import SwiftTLA
+@testable import SwiftTLA
 @testable import UpstreamParity
 
 @Suite("Least Circular Substring module port")

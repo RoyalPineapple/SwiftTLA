@@ -1,5 +1,5 @@
 import Testing
-import SwiftTLA
+@testable import SwiftTLA
 import SwiftTLAMacros
 
 @TLAModel

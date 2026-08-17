@@ -274,7 +274,7 @@ func replayPolicy(_ value: String) throws -> TLCReplayPolicyV1 {
     }
 }
 
-func runLegacyCommand(name: String, arguments: [String]) {
+func runLegacyCommand(name: String, arguments: [String]) throws {
     let args = arguments
 if name == "check-all" {
     var ok = 0; var fail = 0
@@ -341,7 +341,7 @@ let output: String
 switch name {
 case "arithmetic":
     let x = Var<Int>("x")
-    output = TLASpec("arithmetic") {
+    output = try TLASpec("arithmetic") {
         Variable(x, 0)
         Action("add") { x.becomes(x + 1).when(x < 2) }
         Action("sub") { x.becomes(x - 1).when(x > 0) }
@@ -349,32 +349,32 @@ case "arithmetic":
         Action("div") { x.becomes(x / 2).when(x == 2) }
         Action("mod") { x.becomes(x % 3).when(x == 0) }
         Action("neg") { x.becomes(-x).when(x == 1) }
-    }.tlaModule
+    }.compile().tlaModule
 
 case "comparison":
     let x = Var<Int>("x")
-    output = TLASpec("comparison") {
+    output = try TLASpec("comparison") {
         Variable(x, 0)
         Action("eq") { x.becomes(1).when(x == 0) }
         Action("neq") { x.becomes(2).when(x != 0) || x.becomes(0).when(x == 1) }
         Action("lt") { x.becomes(3).when(x < 2) }
         Action("gt") { x.becomes(4).when(x > 1) || x.becomes(0).when(x == 3) }
-    }.tlaModule
+    }.compile().tlaModule
 
 case "logic":
     let a = Var<Bool>("a")
     let b = Var<Bool>("b")
-    output = TLASpec("logic") {
+    output = try TLASpec("logic") {
         Variable(a, false); Variable(b, false)
         Action("toggle") {
             (a == false) && (b == false) && a.becomes(true) ||
             (a == true) && a.becomes(false) && b.becomes(true)
         }
-    }.tlaModule
+    }.compile().tlaModule
 
 case "sets":
     let s = Var<TLAValue>("s")
-    output = TLASpec("sets") {
+    output = try TLASpec("sets") {
         Variable(s, TLAValue.set([.int(0), .int(1)]))
         Action("remove") {
             s.stateExpr.cardinality > 0
@@ -383,37 +383,37 @@ case "sets":
         Action("shrink") {
             s.stateExpr.cardinality == 1 && s.becomes(Expr<TLAValue>(StateExpr.setLiteral([])))
         }
-    }.tlaModule
+    }.compile().tlaModule
 
 case "tuples":
     let val = Var<Int>("val")
-    output = TLASpec("tuples") {
+    output = try TLASpec("tuples") {
         Variable(val, 0)
         Action("set") { val.becomes(Expr<Int>(StateExpr.tuple([1, 2]).count)).when(val == 0) }
         Action("access") { val.becomes(Expr<Int>(StateExpr.tuple([5, 6]).at(1))).when(val == 2) }
-    }.tlaModule
+    }.compile().tlaModule
 
 case "records":
     let r = Var<Int>("r")
-    output = TLASpec("records") {
+    output = try TLASpec("records") {
         Variable(r, 0)
         Action("set") {
             r.becomes(Expr<Int>(StateExpr.record(["a": 3, "b": 7]).domain.cardinality)).when(r == 0)
         }
-    }.tlaModule
+    }.compile().tlaModule
 
 case "functions":
     let f = Var<Int>("f")
-    output = TLASpec("functions") {
+    output = try TLASpec("functions") {
         Variable(f, 0)
         Action("apply") {
             f.becomes(Expr<Int>(StateExpr.function(domain: StateExpr.set([1]), 42).applying(1))).when(f == 0)
         }
-    }.tlaModule
+    }.compile().tlaModule
 
 case "casexpr":
     let x = Var<Int>("x")
-    output = TLASpec("casexpr") {
+    output = try TLASpec("casexpr") {
         Variable(x, 0)
         Action("classify") {
             x.becomes(Expr<Int>(StateExpr.firstMatch(
@@ -422,12 +422,12 @@ case "casexpr":
                 fallback: 99
             ))).when(x < 2)
         }
-    }.tlaModule
+    }.compile().tlaModule
 
 case "choose":
     let picked = Var<Int>("picked")
     let q = Var<TLAValue>("q")
-    output = TLASpec("choose") {
+    output = try TLASpec("choose") {
         Variable(picked, 0)
         Variable(q, TLAValue.set([.int(0), .int(1)]))
         Action("pick") {
@@ -435,19 +435,19 @@ case "choose":
                 && choose(picked, from: q)
                 && q.becomes(Expr<TLAValue>(q.stateExpr.subtracting(StateExpr.singleton(picked))))
         }
-    }.tlaModule
+    }.compile().tlaModule
 
 case "forall":
     let ok = Var<Bool>("ok")
     let s = StateExpr.set([1, 2])
-    output = TLASpec("forall") {
+    output = try TLASpec("forall") {
         Variable(ok, false)
         Action("check") { StateExpr.for(allIn: s, 1 >= 0) && ok.becomes(true) }
-    }.tlaModule
+    }.compile().tlaModule
 
 default:
     if let entry = Example.all.first(where: { $0.id == name }) {
-        output = entry.spec.tlaModule
+        output = try entry.spec.compile().tlaModule
     } else {
         fputs("Unknown spec: \(name)\n", stderr)
         fputs("Run: tlc-validate list\n", stderr)
@@ -565,7 +565,7 @@ func quotedStringSymmetryControl(scope: Int) throws -> TLAModuleBundle {
         .split(separator: "\n")
         .filter { !$0.hasPrefix("CONSTANT ") }
         .joined(separator: "\n") + "\n"
-    return TLAModuleBundle(
+    return TLAModuleBundle.untrusted(
         root: TLAModuleFile(name: "SymmetricOracle2", tla: tla, cfg: cfg)
     )
 }

@@ -3,7 +3,7 @@ import SwiftSyntax
 import SwiftSyntaxBuilder
 
 extension TLASpec {
-    public var tlaModule: String {
+    var tlaModule: String {
         validateSymmetricCollectionExport()
         let varNames = variables.map(\.name)
         let algorithmSymbols = algorithmExportSymbols(sourceAlgorithms, actions: actions)
@@ -235,7 +235,7 @@ extension TLASpec {
     }
 
     /// Auto-generated TLC configuration matching the module.
-    public var tlaCfg: String {
+    var tlaCfg: String {
         validateSymmetricCollectionExport()
         var lines: [String] = []
         lines.append("SPECIFICATION Spec")
@@ -275,7 +275,7 @@ extension TLASpec {
     ///
     /// Rendering cannot discover or resolve imports; `compile()` owns that
     /// semantic link phase.
-    public var tlaBundle: TLAModuleBundle {
+    var tlaBundle: TLAModuleBundle {
         get throws {
             try compile().tlaBundle
         }

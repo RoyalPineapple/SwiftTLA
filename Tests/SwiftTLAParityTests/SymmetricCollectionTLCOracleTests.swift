@@ -1,6 +1,6 @@
 import SwiftParser
 import SwiftSyntax
-import SwiftTLA
+@testable import SwiftTLA
 import Testing
 import UpstreamParity
 import Foundation

@@ -1,4 +1,4 @@
-import SwiftTLA
+@testable import SwiftTLA
 import SwiftTLAMacros
 import Testing
 

@@ -30,16 +30,147 @@ public struct CompiledSpecification: Sendable {
         self.identity = identity
     }
 
-    /// Renders the source bundle from the already-linked formal module closure.
-    /// The compiler has checked ownership and dependencies before this phase.
-    public var tlaBundle: TLAModuleBundle {
-        let imports = formalModuleClosure.entries.dropLast().map { entry in
-            TLAModuleFile(name: entry.module.name, tla: entry.module.tlaModule)
+    /// Renders a complete TLA+/CFG bundle from the already-linked closure.
+    ///
+    /// This is the rendering boundary for compiled models. It neither reparses
+    /// source nor discovers module dependencies from rendered text.
+    public func renderedTLAModuleBundle() throws -> TLAModuleBundle {
+        let expectedIdentity = spec.compilationFingerprint
+        guard identity.value == expectedIdentity,
+              formalModuleClosure.root.module.compilationFingerprint == expectedIdentity else {
+            throw CompilationDiagnostic(
+                code: .compilationIdentityMismatch,
+                stage: .rendering,
+                path: "compilation.identity",
+                expected: expectedIdentity,
+                actual: identity.value,
+                nextSafeAction: "Compile the current source model again before rendering."
+            )
         }
-        return TLAModuleBundle(
-            root: TLAModuleFile(name: spec.name, tla: spec.tlaModule, cfg: spec.tlaCfg),
-            imports: imports
+
+        let entries = formalModuleClosure.entries
+        guard let root = entries.last, root.module.name == spec.name else {
+            throw CompilationDiagnostic(
+                code: .compilationIdentityMismatch,
+                stage: .rendering,
+                path: "formalModuleClosure.root",
+                expected: "the compiled root module '\(spec.name)'",
+                actual: entries.last?.module.name ?? "no rendered root module",
+                nextSafeAction: "Compile the current source model again before rendering."
+            )
+        }
+
+        let files = entries.map { entry in
+            TLAModuleFile(
+                name: entry.module.name,
+                tla: entry.module.tlaModule,
+                cfg: entry.module.name == spec.name ? entry.module.tlaCfg : nil
+            )
+        }
+        let bundle = TLAModuleBundle(
+            root: files[files.count - 1],
+            imports: Array(files.dropLast()),
+            provenance: .compiled(
+                identity: identity,
+                ownership: entries.map {
+                    .init(
+                        moduleName: $0.module.name,
+                        owningRoot: $0.owningRoot,
+                        structuralPath: $0.structuralPath
+                    )
+                }
+            )
         )
+        try bundle.validateRenderedBundleIntegrity()
+        return bundle
+    }
+
+    /// Materializes the validated bundle as a new sibling directory.
+    ///
+    /// Files are written only into an isolated staging directory. The staging
+    /// directory becomes visible at `directory` in one rename, so a failed
+    /// write or rename cannot leave a partial bundle at the destination.
+    public func materializeModuleBundle(to directory: URL) throws {
+        let bundle = try renderedTLAModuleBundle()
+        let fileManager = FileManager.default
+        let parent = directory.deletingLastPathComponent()
+        var parentIsDirectory: ObjCBool = false
+        guard fileManager.fileExists(atPath: parent.path, isDirectory: &parentIsDirectory),
+              parentIsDirectory.boolValue else {
+            throw CocoaError(.fileNoSuchFile)
+        }
+
+        let staging = parent.appendingPathComponent(
+            ".\(directory.lastPathComponent).swifttla-staging-\(UUID().uuidString)",
+            isDirectory: true
+        )
+        try fileManager.createDirectory(at: staging, withIntermediateDirectories: false)
+        do {
+            for file in bundle.files {
+                try file.tla.write(
+                    to: staging.appendingPathComponent("\(file.name).tla"),
+                    atomically: true,
+                    encoding: .utf8
+                )
+                if let cfg = file.cfg {
+                    try cfg.write(
+                        to: staging.appendingPathComponent("\(file.name).cfg"),
+                        atomically: true,
+                        encoding: .utf8
+                    )
+                }
+            }
+            try Self.writeBundleManifest(bundle, to: staging)
+            try fileManager.moveItem(at: staging, to: directory)
+        } catch {
+            try? fileManager.removeItem(at: staging)
+            throw error
+        }
+    }
+
+    private static func writeBundleManifest(_ bundle: TLAModuleBundle, to directory: URL) throws {
+        struct Manifest: Encodable {
+            let compilationIdentity: String
+            let ownership: [TLAModuleBundle.OwnershipEntry]
+        }
+        guard case let .compiled(identity, ownership) = bundle.provenance else {
+            throw CompilationDiagnostic(
+                code: .compilationIdentityMismatch,
+                stage: .rendering,
+                path: "bundle.compilationIdentity",
+                expected: "a compiler-produced bundle identity",
+                actual: "no identity",
+                nextSafeAction: "Render through a compiled specification."
+            )
+        }
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        let data = try encoder.encode(
+            Manifest(compilationIdentity: identity.value, ownership: ownership)
+        )
+        try data.write(to: directory.appendingPathComponent("bundle-manifest.json"), options: .atomic)
+    }
+
+    /// Compatibility export for callers that only need an in-memory bundle.
+    /// New compiler-boundary callers should use `renderedTLAModuleBundle()`.
+    public var tlaBundle: TLAModuleBundle {
+        get throws { try renderedTLAModuleBundle() }
+    }
+
+    /// The root TLA+ source of this validated compilation.
+    public var tlaModule: String {
+        get throws { try renderedTLAModuleBundle().tla }
+    }
+
+    /// The root TLC configuration of this validated compilation.
+    public var tlaCfg: String {
+        get throws { try renderedTLAModuleBundle().cfg }
+    }
+
+    /// The authored PlusCal presentation of this validated compilation.
+    public func renderedAuthoredPlusCalModules() throws -> [String] {
+        _ = try renderedTLAModuleBundle()
+        return try spec.renderAuthoredPlusCalModules()
     }
 }
 

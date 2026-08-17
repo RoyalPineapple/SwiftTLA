@@ -31,7 +31,7 @@ struct VoteProofMigrationTests {
         #expect(bundle.root.tla.contains("ChosenIn(b, v) =="))
         #expect(bundle.root.tla.contains("Refines == C!Spec"))
 
-        let plusCal = try #require(VoteProofModel.spec.renderAuthoredPlusCalModules().first)
+        let plusCal = try #require(VoteProofModel.spec.compile().renderedAuthoredPlusCalModules().first)
         #expect(plusCal.contains("--algorithm Voting"))
         let algorithmRange = try #require(plusCal.range(of: "(*--algorithm Voting"))
         let defineRange = try #require(plusCal.range(of: "define {"))

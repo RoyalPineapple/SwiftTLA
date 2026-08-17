@@ -233,7 +233,7 @@ extension TLASpec {
   }
 }
 
-public extension TLASpec {
+extension TLASpec {
   /// Renders each Algorithm authored in this builder as an independent
   /// PlusCal module. Direct TLA+ specifications have no Algorithm source and
   /// therefore return an empty array instead of inventing a reverse lowering.
