@@ -93,7 +93,7 @@ private func write(
         at: destination.deletingLastPathComponent(),
         withIntermediateDirectories: true
     )
-    try data.write(to: destination, options: .atomic)
+    try data.write(to: destination, options: Data.WritingOptions.atomic)
     return .init(path: relativePath, sha256: sha256(data), source: source)
 }
 
@@ -152,8 +152,9 @@ do {
 
     let cases = try corpus.map { item -> Manifest.Case in
         let specification = item.specification()
-        let bundle = specification.tlaBundle
-        let plusCalModules = try specification.renderAuthoredPlusCalModules()
+        let compilation = try specification.compile()
+        let bundle = try compilation.renderedTLAModuleBundle()
+        let plusCalModules = try compilation.renderedAuthoredPlusCalModules()
         guard plusCalModules.count == 1 else {
             throw ExportError.invalidAlgorithmCount(id: item.id, actual: plusCalModules.count)
         }
@@ -198,7 +199,10 @@ do {
     let encoder = JSONEncoder()
     encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
     let data = try encoder.encode(manifest)
-    try data.write(to: options.output.appendingPathComponent("manifest.json"), options: .atomic)
+    try data.write(
+        to: options.output.appendingPathComponent("manifest.json"),
+        options: Data.WritingOptions.atomic
+    )
 } catch {
     fputs("canonical-corpus-export: \(error)\n", stderr)
     exit(2)
