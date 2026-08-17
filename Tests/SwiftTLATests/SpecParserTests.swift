@@ -987,6 +987,19 @@ private enum ParserNode: String, FiniteDomainKey {
         ))
     }
 
+    @Test func explicitlyTypedBinaryFormalCallPreservesItsArguments() {
+        let built: Expr<Bool> = FormalCall(as: Bool.self, "SafeAt", 3, 5)
+        let parsed = SpecParser.decodeTypedFacadeValue(
+            parseExpression("FormalCall(as: Bool.self, \"SafeAt\", 3, 5)"),
+            substitutions: [:]
+        )
+
+        #expect(parsed == built.stateExpr)
+        #expect(built.stateExpr == .operatorApplication(
+            .reference("SafeAt", arity: 2), [.value(3), .value(5)]
+        ))
+    }
+
     @Test func localOperatorParameterNamesAreAlphaEquivalent() {
         let parserTree = ParsedSpecModel(
             variables: [],

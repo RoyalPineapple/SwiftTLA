@@ -193,6 +193,20 @@ public func FormalCall<
   ]))
 }
 
+/// Applies a binary formal operator with an explicit result-type witness.
+public func FormalCall<
+  Result: TLAValueType,
+  First: StateExprConvertible,
+  Second: StateExprConvertible
+>(
+  as _: Result.Type,
+  _ name: String,
+  _ first: First,
+  _ second: Second
+) -> Expr<Result> {
+  FormalCall(name, first, second)
+}
+
 /// Applies an executable formal operator exported by a named `INSTANCE`.
 ///
 /// Module instances are an explicit source-level namespace in TLA+.  Keeping
