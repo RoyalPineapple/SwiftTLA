@@ -258,18 +258,17 @@ public extension TLASpec {
           nextSafeAction: "Declare properties inside Algorithm, or add a source-level renderer for the top-level declaration before exporting PlusCal."
         )
       }
-      return try AlgorithmPlusCalRenderer(
-        module: AuthoredPlusCalModule(
-          name: name.replacingOccurrences(of: " ", with: ""),
-          extendsModules: authoredPlusCalExtends,
-          constants: authoredPlusCalPrelude,
-          definitionsBeforeInstances: authoredPlusCalDefinitionsBeforeInstances,
-          instances: moduleInstances,
-          definitionsAfterInstances: authoredPlusCalDefinitionsAfterInstances,
-          algorithm: algorithm.model,
-          postTranslationDeclarations: sourceProperties.map(\.definition) + authoredPlusCalSymmetry
-        )
-      ).render()
+      let module = AuthoredPlusCalModule(
+        name: name.replacingOccurrences(of: " ", with: ""),
+        extendsModules: authoredPlusCalExtends,
+        constants: authoredPlusCalPrelude,
+        definitionsBeforeInstances: authoredPlusCalDefinitionsBeforeInstances,
+        instances: moduleInstances,
+        definitionsAfterInstances: authoredPlusCalDefinitionsAfterInstances,
+        algorithm: algorithm.model,
+        postTranslationDeclarations: sourceProperties.map(\.definition) + authoredPlusCalSymmetry
+      )
+      return try AlgorithmPlusCalRenderer(model: algorithm.model).render(module)
     }
   }
 

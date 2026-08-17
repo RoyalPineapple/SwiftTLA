@@ -87,10 +87,6 @@ internal struct AlgorithmPlusCalRenderer {
         self.model = model
     }
 
-    init(module: AuthoredPlusCalModule) {
-        self.model = module.algorithm
-    }
-
     /// Source-level properties are kept outside the PlusCal comment, where
     /// the official translator leaves TLA+ operators intact.  They come from
     /// the retained Algorithm model rather than the lowered specification.
