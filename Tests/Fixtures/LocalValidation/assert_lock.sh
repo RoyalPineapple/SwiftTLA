@@ -5,10 +5,11 @@ root="$(cd "$(dirname "$0")/../../.." && pwd)"
 runner="$root/scripts/local-validation.sh"
 tmp="$(mktemp -d "${TMPDIR:-/tmp}/swifttla-lock-test.XXXXXX")"
 repo="$tmp/repo"
-lock_dir=""
+lock_file=""
+legacy_lock_dir=""
+holder_ready_file="$tmp/holder-ready"
 
 cleanup() {
-    [[ -z "$lock_dir" ]] || rm -rf -- "$lock_dir"
     rm -rf -- "$tmp"
 }
 trap cleanup EXIT
@@ -23,22 +24,25 @@ printf 'trailing whitespace \n' > "$repo/source.txt"
 
 common_git_dir="$(git -C "$repo" rev-parse --git-common-dir)"
 if [[ "$common_git_dir" = /* ]]; then
-    lock_dir="$common_git_dir/swifttla-local-validation.lock"
+    lock_file="$common_git_dir/swifttla-local-validation.advisory.lock"
+    legacy_lock_dir="$common_git_dir/swifttla-local-validation.lock"
 else
-    lock_dir="$repo/$common_git_dir/swifttla-local-validation.lock"
+    lock_file="$repo/$common_git_dir/swifttla-local-validation.advisory.lock"
+    legacy_lock_dir="$repo/$common_git_dir/swifttla-local-validation.lock"
 fi
 
-assert_wait_timeout() {
-    local expected_owner="$1"
-    local started status elapsed output
-    started=$SECONDS
+run_static() {
+    local started=$SECONDS
     set +e
-    output="$(cd "$repo" && SWIFTTLA_LOCAL_VALIDATION_LOCK_WAIT_SECONDS=1 \
-        SWIFTTLA_LOCAL_VALIDATION_LOCK_POLL_SECONDS=1 "$runner" static 2>&1)"
+    output="$(cd "$repo" && SWIFTTLA_LOCAL_VALIDATION_LOCK_WAIT_SECONDS=1 "$runner" static 2>&1)"
     status=$?
     set -e
     elapsed=$((SECONDS - started))
+}
 
+assert_wait_timeout() {
+    local expected_owner="$1"
+    run_static
     [[ "$status" -eq 64 ]] || { echo "expected timeout exit 64, got $status" >&2; exit 1; }
     [[ "$elapsed" -ge 1 && "$elapsed" -le 3 ]] || {
         echo "expected bounded one-second wait, observed ${elapsed}s" >&2
@@ -56,48 +60,49 @@ assert_wait_timeout() {
         echo "a concurrent validation command started: $output" >&2
         exit 1
     }
-    [[ -d "$lock_dir" ]] || { echo "waiting invocation removed lock" >&2; exit 1; }
 }
 
-mkdir "$lock_dir"
-printf '%s\n' "$$" > "$lock_dir/pid"
-assert_wait_timeout "lock owner appears active (pid $$"
-rm -rf -- "$lock_dir"
-lock_dir=""
+assert_static_started() {
+    run_static
+    [[ "$status" -eq 2 ]] || { echo "expected git diff --check exit 2, got $status" >&2; exit 1; }
+    [[ "$elapsed" -le 1 ]] || { echo "uncontended validation took ${elapsed}s" >&2; exit 1; }
+    [[ "$output" == *"trailing whitespace"* ]] || {
+        echo "validation command did not start: $output" >&2
+        exit 1
+    }
+}
 
-mkdir "$repo/.git/swifttla-local-validation.lock"
-lock_dir="$repo/.git/swifttla-local-validation.lock"
-printf '%s\n' "$$" > "$lock_dir/pid"
-(
-    sleep 1
-    rm -f -- "$lock_dir/pid"
-    rmdir "$lock_dir"
-) &
-release_pid=$!
-started=$SECONDS
-set +e
-output="$(cd "$repo" && SWIFTTLA_LOCAL_VALIDATION_LOCK_WAIT_SECONDS=3 \
-    SWIFTTLA_LOCAL_VALIDATION_LOCK_POLL_SECONDS=1 "$runner" static 2>&1)"
-status=$?
-set -e
-wait "$release_pid"
-elapsed=$((SECONDS - started))
-[[ "$status" -eq 2 ]] || { echo "expected released invocation to run git diff --check, got $status" >&2; exit 1; }
-[[ "$elapsed" -ge 1 && "$elapsed" -le 3 ]] || {
-    echo "expected acquisition after release, observed ${elapsed}s" >&2
+start_lock_holder() {
+    : > "$lock_file"
+    rm -f -- "$holder_ready_file"
+    /usr/bin/lockf -s -k -w -t 0 "$lock_file" sh -c 'touch "$1"; sleep 2' sh "$holder_ready_file" &
+    holder_pid=$!
+    for _ in {1..20}; do
+        [[ -f "$holder_ready_file" ]] && return
+        sleep 0.1
+    done
+    echo "lock holder did not acquire $lock_file" >&2
     exit 1
 }
-[[ "$output" == *"trailing whitespace"* ]] || {
-    echo "released invocation did not run its validation command: $output" >&2
-    exit 1
-}
-[[ ! -d "$lock_dir" ]] || { echo "released invocation did not clean up its own lock" >&2; exit 1; }
-lock_dir=""
 
-mkdir "$repo/.git/swifttla-local-validation.lock"
-lock_dir="$repo/.git/swifttla-local-validation.lock"
+start_lock_holder
+assert_wait_timeout "lock owner data is unavailable"
+wait "$holder_pid"
+assert_static_started
+
+start_lock_holder
+printf '%s\n' "$holder_pid" > "$lock_file"
+assert_wait_timeout "lock owner appears active (pid $holder_pid"
+wait "$holder_pid"
+
+start_lock_holder
 stale_pid=2147483647
-printf '%s\n' "$stale_pid" > "$lock_dir/pid"
+printf '%s\n' "$stale_pid" > "$lock_file"
 assert_wait_timeout "lock owner is likely stale (pid $stale_pid"
+wait "$holder_pid"
+
+mkdir "$legacy_lock_dir"
+assert_static_started
+[[ -d "$legacy_lock_dir" ]] || { echo "validation removed legacy lock directory" >&2; exit 1; }
 
 echo "local validation lock contract passed"
