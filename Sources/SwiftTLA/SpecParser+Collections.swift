@@ -641,7 +641,7 @@ extension SpecParser {
         else {
             result.diagnostics.append(.init(
                 message: "Constant requires a literal name and a static TLA+ value.",
-                source: call,
+                source: call.description,
                 expected: "Constant(\"Name\", value)",
                 nextSafeAction: "Use a literal constant name and a static typed value."
             ))
