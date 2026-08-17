@@ -32,7 +32,7 @@ struct VoteProofMigrationTests {
 
         let plusCal = try #require(VoteProofModel.spec.renderAuthoredPlusCalModules().first)
         #expect(plusCal.contains("--algorithm Voting"))
-        #expect(plusCal.contains("SafeAt(value0, value1) =="))
-        #expect(plusCal.contains("Refines == C!Spec"))
+        #expect(plusCal.contains("} *)\nSafeAt(value0, value1) =="))
+        #expect(plusCal.contains("chosen == {v \\in Value : \\E b \\in Ballot : ChosenIn(b, v)}\nC == INSTANCE Consensus\nRefines == C!Spec"))
     }
 }
