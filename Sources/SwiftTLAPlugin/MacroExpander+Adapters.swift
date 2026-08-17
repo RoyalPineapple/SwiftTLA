@@ -25,7 +25,7 @@ extension MacroExpander {
             DeclSyntax(stringLiteral: "public typealias ActionLabel = \(modelType).ActionLabel"),
             DeclSyntax(stringLiteral: "public typealias TransitionResult = \(modelType).TransitionResult"),
             DeclSyntax(stringLiteral: "public static var generatedMachineMetadata: GeneratedMachineMetadata { CanonicalModel.generatedMachineMetadata }"),
-            DeclSyntax(stringLiteral: "public static func verifyGeneratedMachineContract() -> GeneratedMachineContractReport { CanonicalModel.verifyGeneratedMachineContract() }"),
+            DeclSyntax(stringLiteral: "public static func verifyGeneratedMachineContract(metadata: GeneratedMachineMetadata? = nil, verificationStateLimit: Int? = nil) -> GeneratedMachineContractReport { CanonicalModel.verifyGeneratedMachineContract(metadata: metadata, verificationStateLimit: verificationStateLimit) }"),
             DeclSyntax(stringLiteral: canonicalStorage),
             DeclSyntax(stringLiteral: """
             \(isolation)public func withCanonicalMachine<Result: Sendable>(

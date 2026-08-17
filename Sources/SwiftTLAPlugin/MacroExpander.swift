@@ -268,14 +268,17 @@ enum MacroExpander {
             }
             return compilation
         }
-        public static func verifyGeneratedMachineContract() -> GeneratedMachineContractReport {
+        public static func verifyGeneratedMachineContract(
+            metadata: GeneratedMachineMetadata? = nil,
+            verificationStateLimit: Int? = nil
+        ) -> GeneratedMachineContractReport {
             do {
                 return GeneratedMachineContractVerifier.verify(
                     compilation: try compiledSpecification(),
                     plan: _machineSurfacePlan,
-                    metadata: generatedMachineMetadata,
+                    metadata: metadata ?? generatedMachineMetadata,
                     expectedSchemaIdentifier: _expectedMachineSchemaIdentifier,
-                    verificationStateLimit: verificationStateLimit,
+                    verificationStateLimit: verificationStateLimit ?? Self.verificationStateLimit,
                     decodeState: { projection in
                         _ = try State(projection: projection)
                     },
