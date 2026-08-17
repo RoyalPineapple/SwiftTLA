@@ -76,9 +76,15 @@ jobs:
       - name: Build macro runtime once
         run: swift build --target SwiftTLAMacros -j 1
 
+      - name: Build upstream corpus once
+        run: swift build --target UpstreamParity -j 1
+
+      - name: Build canonical corpus exporter
+        run: swift build --target canonical-corpus-export -j 1
+
       - name: Export canonical upstream corpus
         run: |
-          swift run --jobs 1 canonical-corpus-export \
+          swift run --skip-build canonical-corpus-export \
             --output .build/canonical-corpus-export \
             --swift-tla-sha "$GITHUB_SHA"
 
