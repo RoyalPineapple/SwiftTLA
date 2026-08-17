@@ -165,9 +165,10 @@ do {
         let linkedImports = bundle.imports + externalInputs.map { input, data in
             TLAModuleFile(name: input.name, tla: String(decoding: data, as: UTF8.self))
         }
-        try TLAModuleBundle(root: bundle.root, imports: linkedImports).validateRenderedBundleIntegrity()
-        try TLAModuleBundle(
-            root: .init(name: bundle.root.name, tla: plusCalModules[0]),
+        try TLAModuleBundle.untrusted(root: bundle.root, imports: linkedImports)
+            .validateRenderedBundleIntegrity()
+        try TLAModuleBundle.untrusted(
+            root: TLAModuleFile(name: bundle.root.name, tla: plusCalModules[0]),
             imports: linkedImports
         ).validateRenderedBundleIntegrity()
 
