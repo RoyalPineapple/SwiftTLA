@@ -69,7 +69,7 @@ public struct VoteProofModel {
                             ForAll(in: quorum.expr) { acceptor in
                                 maxBal[acceptor] >= currentBallot.expr
                             } && Exists(in: IntRange(-1, through: currentBallot.expr - 1)) { priorBallot in
-                                (priorBallot == -1) || (
+                                ((priorBallot == -1) || (
                                     recursion(priorBallot.expr)
                                         && ForAll(in: quorum.expr) { acceptor in
                                             ForAll(in: values) { candidate in
@@ -77,14 +77,13 @@ public struct VoteProofModel {
                                                     || candidate == value
                                             }
                                         }
-                                        && ForAll(in: IntRange(priorBallot.expr + 1, through: currentBallot.expr - 1)) { laterBallot in
-                                            ForAll(in: quorum.expr) { acceptor in
-                                                ForAll(in: values) { candidate in
-                                                    !votes[acceptor].contains(Pair.literal(laterBallot.expr, candidate.expr))
-                                                }
-                                            }
+                                )) && ForAll(in: IntRange(priorBallot.expr + 1, through: currentBallot.expr - 1)) { laterBallot in
+                                    ForAll(in: quorum.expr) { acceptor in
+                                        ForAll(in: values) { candidate in
+                                            !votes[acceptor].contains(Pair.literal(laterBallot.expr, candidate.expr))
                                         }
-                                )
+                                    }
+                                }
                             }
                         }
                     }, in: { recursion in
