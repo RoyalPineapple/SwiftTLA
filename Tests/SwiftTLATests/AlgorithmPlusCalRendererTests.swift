@@ -259,5 +259,8 @@ struct AlgorithmPlusCalRendererTests {
         #expect(module.contains("(*--algorithm Context {"))
         #expect(module.contains("Bounded == (count <= 2)"))
         #expect(module.contains("Symmmember == Permutations({1, 2})"))
+        let seed = try #require(module.range(of: "Seed == N"))
+        let algorithm = try #require(module.range(of: "(*--algorithm Context {"))
+        #expect(seed.lowerBound < algorithm.lowerBound)
     }
 }

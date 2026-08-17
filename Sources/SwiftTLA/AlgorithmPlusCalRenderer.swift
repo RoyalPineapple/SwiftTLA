@@ -47,13 +47,49 @@ public struct AlgorithmPlusCalRenderDiagnostic: Error, Sendable, Hashable, Custo
 /// generated program-counter semantics.
 public extension Algorithm {
     func renderPlusCalModule() throws -> String {
-        let renderer = AlgorithmPlusCalRenderer(model: model)
-        return try renderer.render(postlude: renderer.sourceFormalOperatorDefinitions() + renderer.sourcePropertyDefinitions().map(\.definition))
+        try AlgorithmPlusCalRenderer(model: model).render()
+    }
+}
+
+/// Ordered module-link layout for the final PlusCal renderer.
+///
+/// Literal source definitions remain a deliberate formal-source boundary, but
+/// imports and their order are structural: constants and support definitions
+/// precede instances, which precede the Algorithm; properties follow the
+/// translator-owned section. This carries no machine semantics: `AlgorithmModel`
+/// remains the authored-machine IR.
+internal struct AuthoredPlusCalModule: Sendable {
+    let name: String
+    let extendsModules: [String]
+    let constants: [String]
+    let definitionsBeforeInstances: [String]
+    let instances: [FormalModuleInstance]
+    let definitionsAfterInstances: [String]
+    let algorithm: AlgorithmModel
+    let postTranslationDeclarations: [String]
+
+    var supportDeclarations: [String] {
+        constants
+            + definitionsBeforeInstances
+            + instances.map { instance in
+                let arguments = instance.arguments.map { "\($0.parameter) <- \($0.value)" }.joined(separator: ", ")
+                let withClause = arguments.isEmpty ? "" : " WITH \(arguments)"
+                return "\(instance.name) == INSTANCE \(instance.module.name)\(withClause)"
+            }
+            + definitionsAfterInstances
     }
 }
 
 internal struct AlgorithmPlusCalRenderer {
     let model: AlgorithmModel
+
+    init(model: AlgorithmModel) {
+        self.model = model
+    }
+
+    init(module: AuthoredPlusCalModule) {
+        self.model = module.algorithm
+    }
 
     /// Source-level properties are kept outside the PlusCal comment, where
     /// the official translator leaves TLA+ operators intact.  They come from
@@ -75,20 +111,28 @@ internal struct AlgorithmPlusCalRenderer {
         })
     }
 
-    func render(
-        moduleName: String? = nil,
-        extendsModules: [String]? = nil,
-        prelude: [String] = [],
-        postlude: [String] = []
-    ) throws -> String {
+    func render() throws -> String {
+        try render(
+            AuthoredPlusCalModule(
+                name: moduleName(model.name),
+                extendsModules: ["Naturals", "Integers", "Sequences", "FiniteSets"],
+                constants: [],
+                definitionsBeforeInstances: sourceFormalOperatorDefinitions(),
+                instances: [],
+                definitionsAfterInstances: [],
+                algorithm: model,
+                postTranslationDeclarations: try sourcePropertyDefinitions().map(\.definition)
+            )
+        )
+    }
+
+    func render(_ module: AuthoredPlusCalModule) throws -> String {
         // TLA+ spells negative values through the unary `-.` operator from
         // `Integers`.  PlusCal's translator preserves that operator in the
         // generated module, so every rendered source must make it available.
-        let renderedModuleName = moduleName ?? self.moduleName(model.name)
-        let renderedExtends = extendsModules ?? ["Naturals", "Integers", "Sequences", "FiniteSets"]
-        var lines = ["---- MODULE \(renderedModuleName) ----", "EXTENDS \(renderedExtends.joined(separator: ", "))", ""]
-        if !prelude.isEmpty {
-            lines += prelude
+        var lines = ["---- MODULE \(module.name) ----", "EXTENDS \(module.extendsModules.joined(separator: ", "))", ""]
+        if !module.supportDeclarations.isEmpty {
+            lines += module.supportDeclarations
             lines.append("")
         }
         lines.append("(*--algorithm \(model.name) {")
@@ -160,7 +204,7 @@ internal struct AlgorithmPlusCalRenderer {
         if !constraints.isEmpty {
             lines.append("StateConstraint == \(constraints.map { "(\($0))" }.joined(separator: " /\\ "))")
         }
-        lines += postlude
+        lines += module.postTranslationDeclarations
         lines.append("====")
         return lines.joined(separator: "\n") + "\n"
     }

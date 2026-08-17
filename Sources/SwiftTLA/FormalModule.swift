@@ -16,6 +16,24 @@ public struct TLAModuleFile: Sendable, Equatable {
   }
 }
 
+/// A source-level linking failure in a TLA+ module bundle.
+///
+/// Linking deliberately happens before a renderer hands the bundle to TLC or
+/// PlusCal. A missing module is a bundle construction error, not a tool error.
+public enum TLAModuleBundleLinkError: Error, Equatable, Sendable, CustomStringConvertible {
+  case duplicateModule(String)
+  case missingModule(module: String, importedBy: String, line: Int)
+
+  public var description: String {
+    switch self {
+    case .duplicateModule(let name):
+      return "The module bundle contains more than one \(name).tla source file."
+    case .missingModule(let module, let importedBy, let line):
+      return "\(importedBy).tla line \(line) requires \(module).tla, but the bundle does not contain it."
+    }
+  }
+}
+
 /// The complete source input required to run TLC for one SwiftTLA model.
 public struct TLAModuleBundle: Sendable, Equatable {
   public let root: TLAModuleFile
@@ -29,6 +47,34 @@ public struct TLAModuleBundle: Sendable, Equatable {
   public var tla: String { root.tla }
   public var cfg: String { root.cfg ?? "" }
   public var files: [TLAModuleFile] { imports + [root] }
+
+  /// Checks the complete in-memory module closure before it is written or
+  /// passed to a formal tool. TLC's bundled standard modules are excluded;
+  /// every other `EXTENDS` or `INSTANCE` target must be present in `imports`.
+  public func validateLink(
+    standardModules: Set<String>? = nil
+  ) throws {
+    let standardModules = standardModules ?? Self.tlcStandardModules
+    var sources: [String: TLAModuleFile] = [:]
+    for file in files {
+      guard sources[file.name] == nil else {
+        throw TLAModuleBundleLinkError.duplicateModule(file.name)
+      }
+      sources[file.name] = file
+    }
+
+    for file in files {
+      for dependency in Self.dependencies(in: file.tla) where !standardModules.contains(dependency.name) {
+        guard sources[dependency.name] != nil else {
+          throw TLAModuleBundleLinkError.missingModule(
+            module: dependency.name,
+            importedBy: file.name,
+            line: dependency.line
+          )
+        }
+      }
+    }
+  }
 
   /// Writes every module source file and the root TLC configuration into one
   /// directory. TLC resolves imports from this directory exactly as it would
@@ -52,6 +98,41 @@ public struct TLAModuleBundle: Sendable, Equatable {
       }
     }
   }
+
+  private struct Dependency {
+    let name: String
+    let line: Int
+  }
+
+  private static func dependencies(in source: String) -> [Dependency] {
+    var dependencies: [Dependency] = []
+    for (offset, rawLine) in source.split(separator: "\n", omittingEmptySubsequences: false).enumerated() {
+      let line = rawLine.trimmingCharacters(in: .whitespaces)
+      if line.hasPrefix("EXTENDS ") {
+        for token in line.dropFirst("EXTENDS ".count).split(separator: ",") {
+          let name = token.trimmingCharacters(in: .whitespaces)
+          if isModuleIdentifier(name) {
+            dependencies.append(Dependency(name: name, line: offset + 1))
+          }
+        }
+        continue
+      }
+      guard let range = line.range(of: "INSTANCE ") else { continue }
+      let name = line[range.upperBound...].prefix { $0.isLetter || $0.isNumber || $0 == "_" }
+      if isModuleIdentifier(name) {
+        dependencies.append(Dependency(name: String(name), line: offset + 1))
+      }
+    }
+    return dependencies
+  }
+
+  private static func isModuleIdentifier(_ value: some StringProtocol) -> Bool {
+    !value.isEmpty && value.first?.isLetter == true
+  }
+
+  private static let tlcStandardModules: Set<String> = [
+    "Bags", "FiniteSets", "Integers", "Naturals", "Randomization", "RealTime", "Sequences", "TLC"
+  ]
 }
 
 /// Imports a named TLA+ module as a source dependency.

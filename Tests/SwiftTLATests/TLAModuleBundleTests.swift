@@ -33,6 +33,52 @@ private struct InstancedFormalModuleGeneratedModel {
 
 @Suite("TLA+ module bundles")
 struct TLAModuleBundleTests {
+  @Test("a bundle rejects an unresolved nonstandard import before tools run")
+  func rejectsMissingLinkDependency() {
+    let bundle = TLAModuleBundle(root: .init(
+      name: "Consumer",
+      tla: "---- MODULE Consumer ----\nEXTENDS Integers, MissingModule\n====\n"
+    ))
+
+    #expect(throws: TLAModuleBundleLinkError.missingModule(
+      module: "MissingModule", importedBy: "Consumer", line: 2
+    )) {
+      try bundle.validateLink()
+    }
+  }
+
+  @Test("a bundle checks every module on an EXTENDS line")
+  func rejectsLaterMissingExtendDependency() {
+    let bundle = TLAModuleBundle(
+      root: .init(
+        name: "Consumer",
+        tla: "---- MODULE Consumer ----\nEXTENDS Integers, Present, MissingModule\n====\n"
+      ),
+      imports: [
+        .init(name: "Present", tla: "---- MODULE Present ----\n====\n")
+      ]
+    )
+
+    #expect(throws: TLAModuleBundleLinkError.missingModule(
+      module: "MissingModule", importedBy: "Consumer", line: 2
+    )) {
+      try bundle.validateLink()
+    }
+  }
+
+  @Test("a bundle accepts transitive source dependencies when all are present")
+  func acceptsCompleteLinkDependencyClosure() throws {
+    let bundle = TLAModuleBundle(
+      root: .init(name: "Consumer", tla: "---- MODULE Consumer ----\nC == INSTANCE Support\n====\n"),
+      imports: [
+        .init(name: "Support", tla: "---- MODULE Support ----\nEXTENDS Dependency\n====\n"),
+        .init(name: "Dependency", tla: "---- MODULE Dependency ----\nEXTENDS Integers\n====\n")
+      ]
+    )
+
+    try bundle.validateLink()
+  }
+
   @Test("a generated model preserves its imported module")
   func generatedModelRetainsImportedModule() {
     ImportedFormalModuleGeneratedModel._checkParserTree()

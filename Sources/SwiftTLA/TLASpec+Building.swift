@@ -258,12 +258,18 @@ public extension TLASpec {
           nextSafeAction: "Declare properties inside Algorithm, or add a source-level renderer for the top-level declaration before exporting PlusCal."
         )
       }
-      return try renderer.render(
-        moduleName: name.replacingOccurrences(of: " ", with: ""),
-        extendsModules: authoredPlusCalExtends,
-        prelude: authoredPlusCalPrelude,
-        postlude: authoredPlusCalPostlude + sourceProperties.map(\.definition) + authoredPlusCalSymmetry
-      )
+      return try AlgorithmPlusCalRenderer(
+        module: AuthoredPlusCalModule(
+          name: name.replacingOccurrences(of: " ", with: ""),
+          extendsModules: authoredPlusCalExtends,
+          constants: authoredPlusCalPrelude,
+          definitionsBeforeInstances: authoredPlusCalDefinitionsBeforeInstances,
+          instances: moduleInstances,
+          definitionsAfterInstances: authoredPlusCalDefinitionsAfterInstances,
+          algorithm: algorithm.model,
+          postTranslationDeclarations: sourceProperties.map(\.definition) + authoredPlusCalSymmetry
+        )
+      ).render()
     }
   }
 
@@ -287,22 +293,22 @@ public extension TLASpec {
     return lines
   }
 
-  private var authoredPlusCalPostlude: [String] {
-    let instanceDependentDefinitions = definitions.filter { definition in
+  /// Definitions used by authored Algorithm declarations must be visible
+  /// before the PlusCal comment. `pcal.trans` resolves initializers and
+  /// qualified operators before it appends translated TLA+ code.
+  private var authoredPlusCalDefinitionsBeforeInstances: [String] {
+    definitions.filter { definition in
+      !moduleInstances.contains { definition.contains("\($0.name)!") }
+    } + recursiveDefs + runtimeFuncBodies
+  }
+
+  /// These declarations reference an imported instance and therefore follow
+  /// its structural `INSTANCE` declaration while still preceding the
+  /// Algorithm that uses them.
+  private var authoredPlusCalDefinitionsAfterInstances: [String] {
+    definitions.filter { definition in
       moduleInstances.contains { definition.contains("\($0.name)!") }
     }
-    var lines = definitions.filter { !instanceDependentDefinitions.contains($0) }
-    lines += recursiveDefs
-    lines += runtimeFuncBodies
-    for instance in moduleInstances {
-      let arguments = instance.arguments.map { argument in
-        "\(argument.parameter) <- \(argument.value)"
-      }.joined(separator: ", ")
-      let withClause = arguments.isEmpty ? "" : " WITH \(arguments)"
-      lines.append("\(instance.name) == INSTANCE \(instance.module.name)\(withClause)")
-    }
-    lines += instanceDependentDefinitions
-    return lines
   }
 
   private var authoredPlusCalSymmetry: [String] {
