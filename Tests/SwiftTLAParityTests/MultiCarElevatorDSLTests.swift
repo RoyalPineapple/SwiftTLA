@@ -210,7 +210,7 @@ struct MultiCarElevatorDSLTests {
 
     #expect(_tlaAlphaEquivalent(builder, macro))
 
-    let checker = ModelChecker(spec: MultiCarElevatorModel.spec, maxStates: 30_000)
+    let checker = try ModelChecker(spec: MultiCarElevatorModel.spec, maxStates: 30_000)
     guard case .ok(let stateCount) = try checker.check() else {
       Issue.record("Bounded MultiCarElevator safety model did not complete successfully")
       return

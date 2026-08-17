@@ -271,30 +271,14 @@ extension TLASpec {
         return lines.joined(separator: "\n") + "\n"
     }
 
-    /// Complete TLA+ source bundle: the root module, its configuration, and
-    /// each imported module in dependency order.
+    /// Complete TLA+ source bundle from this specification's compiled closure.
+    ///
+    /// Rendering cannot discover or resolve imports; `compile()` owns that
+    /// semantic link phase.
     public var tlaBundle: TLAModuleBundle {
-        var emitted = Set<String>()
-        var files: [TLAModuleFile] = []
-
-        func appendImports(of module: TLASpec) {
-            for imported in module.imports {
-                appendImports(of: imported)
-                guard emitted.insert(imported.name).inserted else { continue }
-                files.append(TLAModuleFile(name: imported.name, tla: imported.tlaModule))
-            }
-            for instance in module.moduleInstances {
-                appendImports(of: instance.module)
-                guard emitted.insert(instance.module.name).inserted else { continue }
-                files.append(TLAModuleFile(name: instance.module.name, tla: instance.module.tlaModule))
-            }
+        get throws {
+            try compile().tlaBundle
         }
-
-        appendImports(of: self)
-        return TLAModuleBundle(
-            root: TLAModuleFile(name: name, tla: tlaModule, cfg: tlaCfg),
-            imports: files
-        )
     }
 
     private func validateSymmetricCollectionExport() {

@@ -164,13 +164,13 @@ struct CanonicalMachineCapabilityTests {
     }
 
     @Test("Canonical machine reports availability evaluation failures without losing its snapshot")
-    func canonicalMachineObservationRetainsStateWhenAvailabilityFails() {
+    func canonicalMachineObservationRetainsStateWhenAvailabilityFails() throws {
         let count = Var<Int>("count")
         let spec = TLASpec("UnavailableAvailability") {
             Variable(count, 0)
             Action("advance") { count.becomes(count + 1) }
         }
-        let runtime = SpecRuntime(spec: spec) { _, _, _ in
+        let runtime = try SpecRuntime(spec: spec) { _, _, _ in
             throw ActionEvaluationFailure.unavailable
         }
         let machine = CanonicalMachine(
@@ -189,20 +189,20 @@ struct CanonicalMachineCapabilityTests {
     }
 
     @Test("Canonical observation rejects invalid formal state without a projection")
-    func canonicalMachineObservationReportsProjectionFailure() {
+    func canonicalMachineObservationReportsProjectionFailure() throws {
         let count = Var<Int>("count")
         let spec = TLASpec("InvalidProjection") {
             Variable(count, 0)
             Action("advance") { count.becomes(count + 1) }
         }
         let invalidKeyMachine = CanonicalMachine(
-            runtime: SpecRuntime(spec: spec),
+            runtime: try SpecRuntime(spec: spec),
             initial: 0,
             stateDictionary: { _ in ["invalid-key": .constant("valid")] },
             snapshotFromDictionary: { _ in 0 }
         )
         let invalidValueMachine = CanonicalMachine(
-            runtime: SpecRuntime(spec: spec),
+            runtime: try SpecRuntime(spec: spec),
             initial: 0,
             stateDictionary: { _ in ["count": .constant("invalid-constant")] },
             snapshotFromDictionary: { _ in 0 }

@@ -6,8 +6,8 @@ struct RuntimeActionOutcomeTests {
     private let state: [String: TLAValue] = ["x": .int(0)]
 
     @Test("enabled actions retain their successors")
-    func enabledAction() {
-        let runtime = runtime(action: .assign("x", .value(.int(1))))
+    func enabledAction() throws {
+        let runtime = try runtime(action: .assign("x", .value(.int(1))))
         let successors: [[String: TLAValue]] = [["x": .int(1)]]
 
         #expect(runtime.actionOutcome(named: "Next", in: state) == .enabled(
@@ -15,22 +15,22 @@ struct RuntimeActionOutcomeTests {
     }
 
     @Test("disabled actions are distinct from evaluation failures")
-    func disabledAction() {
-        let runtime = runtime(action: .guard_(.value(.bool(false))))
+    func disabledAction() throws {
+        let runtime = try runtime(action: .guard_(.value(.bool(false))))
 
         #expect(runtime.actionOutcome(named: "Next", in: state) == .disabled(actionName: "Next"))
     }
 
     @Test("unknown actions report action not found")
-    func actionNotFound() {
-        let runtime = runtime(action: .assign("x", .value(.int(1))))
+    func actionNotFound() throws {
+        let runtime = try runtime(action: .assign("x", .value(.int(1))))
 
         #expect(runtime.actionOutcome(named: "Missing", in: state) == .actionNotFound(actionName: "Missing"))
     }
 
     @Test("throwing action evaluation never becomes disabled")
-    func actionEvaluationFailure() {
-        let runtime = runtime(action: .and(
+    func actionEvaluationFailure() throws {
+        let runtime = try runtime(action: .and(
             .assign("x", .value(.int(1))),
             .assign("x", .value(.int(2)))))
 
@@ -40,8 +40,8 @@ struct RuntimeActionOutcomeTests {
     }
 
     @Test("unavailable action evaluation remains explicit")
-    func actionEvaluationUnavailable() {
-        let runtime = runtime(
+    func actionEvaluationUnavailable() throws {
+        let runtime = try runtime(
             action: .assign("x", .value(.int(1))),
             actionEvaluator: { _, _, _ in throw SpecRuntime.RuntimeError.evaluationUnavailable("evaluator offline") })
 
@@ -52,7 +52,7 @@ struct RuntimeActionOutcomeTests {
 
     @Test("action reports retain safe state and explain an unavailable guard")
     func actionReportExplainsUnavailableAction() throws {
-        let runtime = runtime(action: .guard_(.value(.bool(false))))
+        let runtime = try runtime(action: .guard_(.value(.bool(false))))
 
         let report = runtime.actionReport(named: "Next", in: state)
         let xToken = try #require(TLAStateProjection.Token(validating: "x"))
@@ -71,15 +71,15 @@ struct RuntimeActionOutcomeTests {
     private func runtime(
         action: ActionExpr,
         actionEvaluator: SpecRuntime.ActionEvaluator? = nil
-    ) -> SpecRuntime {
+    ) throws -> SpecRuntime {
         let x = Var<Int>("x")
         let spec = TLASpec("RuntimeActionOutcome") {
             Variable(x, 0)
             Action("Next") { action }
         }
         if let actionEvaluator {
-            return SpecRuntime(spec: spec, actionEvaluator: actionEvaluator)
+            return try SpecRuntime(spec: spec, actionEvaluator: actionEvaluator)
         }
-        return SpecRuntime(spec: spec)
+        return try SpecRuntime(spec: spec)
     }
 }

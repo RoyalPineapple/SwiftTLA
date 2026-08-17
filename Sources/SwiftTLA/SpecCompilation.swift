@@ -29,6 +29,18 @@ public struct CompiledSpecification: Sendable {
         self.formalModuleClosure = formalModuleClosure
         self.identity = identity
     }
+
+    /// Renders the source bundle from the already-linked formal module closure.
+    /// The compiler has checked ownership and dependencies before this phase.
+    public var tlaBundle: TLAModuleBundle {
+        let imports = formalModuleClosure.entries.dropLast().map { entry in
+            TLAModuleFile(name: entry.module.name, tla: entry.module.tlaModule)
+        }
+        return TLAModuleBundle(
+            root: TLAModuleFile(name: spec.name, tla: spec.tlaModule, cfg: spec.tlaCfg),
+            imports: imports
+        )
+    }
 }
 
 /// A blocking, inspection-ready compiler failure.
@@ -60,6 +72,9 @@ public struct CompilationDiagnostic: Error, Sendable, Hashable, CustomStringConv
         case invalidFormalModuleArgument
         case duplicateFormalModuleArgument
         case duplicateFormalModuleSymbol
+        case invalidFormalModuleParameter
+        case duplicateFormalModuleParameter
+        case unresolvedFormalModuleReplacement
     }
 
     public enum ChangeStatus: String, Sendable, Hashable {

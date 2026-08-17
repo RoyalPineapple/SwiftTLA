@@ -164,11 +164,11 @@ do {
         let linkedImports = bundle.imports + externalInputs.map { input, data in
             TLAModuleFile(name: input.name, tla: String(decoding: data, as: UTF8.self))
         }
-        try TLAModuleBundle(root: bundle.root, imports: linkedImports).validateLink()
+        try TLAModuleBundle(root: bundle.root, imports: linkedImports).validateRenderedBundleIntegrity()
         try TLAModuleBundle(
             root: .init(name: bundle.root.name, tla: plusCalModules[0]),
             imports: linkedImports
-        ).validateLink()
+        ).validateRenderedBundleIntegrity()
 
         var files = [Manifest.Case.File]()
         files.append(try write(bundle.root.tla, relativePath: "\(item.id)/swift/\(bundle.root.name).tla", under: options.output))

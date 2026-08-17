@@ -195,7 +195,7 @@ struct GeneratedSimultaneousSwapTests {
 
     @Test("generated swap rejects an undecodable successor without a partial commit")
     func generatedMachineKeepsItsStateWhenOneSimultaneousFieldCannotDecode() throws {
-        let runtime = SpecRuntime(spec: GeneratedSimultaneousSwap.spec) { _, _, _ in
+        let runtime = try SpecRuntime(spec: GeneratedSimultaneousSwap.spec) { _, _, _ in
             [["left": .int(2), "right": .string("wrong"), "pc": .string("swap")]]
         }
         var machine = CanonicalMachine(
@@ -283,7 +283,7 @@ struct GeneratedRangeInitializedAlgorithm {
 struct GeneratedRangeInitializedAlgorithmTests {
     @Test("#spec independently parses a finite SharedVar initial range")
     func generatedRangePreservesEveryInitialHour() {
-        let initialHours = computeInitialStates(GeneratedRangeInitializedAlgorithm.spec)
+        let initialHours = try computeInitialStates(GeneratedRangeInitializedAlgorithm.spec)
             .compactMap { $0["hour"] }
 
         #expect(Set(initialHours) == [.int(1), .int(2), .int(3)])
@@ -443,7 +443,7 @@ struct GeneratedDependentInitialAlgorithm {
 struct GeneratedDependentInitialAlgorithmTests {
     @Test("#spec independently preserves a dependent typed function initializer")
     func generatedModelPreservesDependentInitialStates() {
-        let states = computeInitialStates(GeneratedDependentInitialAlgorithm.spec)
+        let states = try computeInitialStates(GeneratedDependentInitialAlgorithm.spec)
 
         #expect(Set(states.compactMap { $0["mirrors"] }) == [
             .function([.string("left"): .string("inactive"), .string("right"): .string("inactive")]),
@@ -810,7 +810,7 @@ struct GeneratedStateMachineTests {
             "board__1_1_1 == board(2, 20, 200)"
         ])
 
-        let runtime = SpecRuntime(spec: builder)
+        let runtime = try SpecRuntime(spec: builder)
         let initial = try #require(runtime.initialStates().first)
         let invocation = TLAActionInvocation(
             name: "board", arguments: [.int(2), .int(20), .int(200)])
@@ -863,7 +863,7 @@ struct GeneratedStateMachineTests {
         ]
 
         for (malformedState, expectedDiagnostic) in malformedStates {
-            let runtime = SpecRuntime(spec: ThreeParameterActionMachine.spec) { _, _, _ in
+            let runtime = try SpecRuntime(spec: ThreeParameterActionMachine.spec) { _, _, _ in
                 [malformedState]
             }
             var machine = CanonicalMachine(

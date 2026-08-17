@@ -212,104 +212,6 @@ public struct TLASpec: Sendable {
     self.sourceAlgorithms = sourceAlgorithms
   }
 
-  /// Recursive definitions visible after resolving the module import graph.
-  /// TLA+ `EXTENDS` exports imported operator names into the consumer scope,
-  /// so duplicate names are rejected instead of being silently shadowed.
-  public var resolvedRecursiveFuncs: [RecursiveFunc] {
-    var seen = Set<String>()
-    var result: [RecursiveFunc] = []
-    func visit(
-      _ module: TLASpec,
-      replacements: [FormalModuleReplacement],
-      path: inout Set<String>
-    ) {
-      precondition(path.insert(module.name).inserted, "Cyclic formal module import: \(module.name)")
-      for imported in module.imports {
-        let configuration = module.importConfigurations.first { $0.moduleName == imported.name }
-        visit(imported, replacements: configuration?.replacements ?? [], path: &path)
-      }
-      for function in module.recursiveFuncs {
-        precondition(seen.insert(function.name).inserted, "Duplicate imported formal operator: \(function.name)")
-        let configuredBody = replacements.reduce(function.body) { body, replacement in
-          StateExpr.substituteVariable(replacement.operatorName, with: replacement.expression, in: body)
-        }
-        result.append(RecursiveFunc(name: function.name, params: function.params, body: configuredBody))
-      }
-      for instance in module.moduleInstances {
-        let instanceFunctions = instance.module.resolvedRecursiveFuncs
-        let localNames = Set(instanceFunctions.map(\.name))
-        for function in instanceFunctions {
-          let qualifiedName = "\(instance.name)!\(function.name)"
-          precondition(
-            seen.insert(qualifiedName).inserted,
-            "Duplicate formal module instance operator: \(qualifiedName)"
-          )
-          let appliedArguments = instance.arguments.reduce(function.body) { body, argument in
-            StateExpr.substituteVariable(argument.parameter, with: argument.value, in: body)
-          }
-          let qualifiedBody = StateExpr.renamingRecursiveCalls(in: appliedArguments) { name in
-            localNames.contains(name) ? "\(instance.name)!\(name)" : name
-          }
-          result.append(RecursiveFunc(
-            name: qualifiedName,
-            params: function.params,
-            body: qualifiedBody
-          ))
-        }
-      }
-      path.remove(module.name)
-    }
-    var path = Set<String>()
-    visit(self, replacements: [], path: &path)
-    return result
-  }
-
-  /// Formal operator definitions visible after resolving `EXTENDS` imports.
-  /// Like TLA+ operator names, these form one namespace; ambiguous imports are
-  /// rejected rather than silently shadowed.
-  public var resolvedFormalOperatorDefinitions: [FormalOperatorDefinition] {
-    var seen = Set<String>()
-    var result: [FormalOperatorDefinition] = []
-    func visit(_ module: TLASpec, path: inout Set<String>) {
-      precondition(path.insert(module.name).inserted, "Cyclic formal module import: \(module.name)")
-      for imported in module.imports {
-        visit(imported, path: &path)
-      }
-      for definition in module.formalOperatorDefinitions {
-        precondition(
-          seen.insert(definition.name).inserted,
-          "Duplicate imported formal operator: \(definition.name)"
-        )
-        result.append(definition)
-      }
-      for instance in module.moduleInstances {
-        let localDefinitions = instance.module.formalOperatorDefinitions
-        let localNames = Set(localDefinitions.map(\.name))
-        for definition in localDefinitions {
-          let appliedArguments = instance.arguments.reduce(definition.body) { body, argument in
-            StateExpr.substituteVariable(argument.parameter, with: argument.value, in: body)
-          }
-          let qualifiedBody = StateExpr.renamingRecursiveCalls(in: appliedArguments) { name in
-            localNames.contains(name) ? "\(instance.name)!\(name)" : name
-          }
-          let qualifiedName = "\(instance.name)!\(definition.name)"
-          precondition(
-            seen.insert(qualifiedName).inserted,
-            "Duplicate formal module instance operator: \(qualifiedName)"
-          )
-          result.append(FormalOperatorDefinition(
-            name: qualifiedName,
-            parameters: definition.parameters,
-            body: qualifiedBody
-          ))
-        }
-      }
-      path.remove(module.name)
-    }
-    var path = Set<String>()
-    visit(self, path: &path)
-    return result
-  }
   public var description: String {
     var lines = ["Spec \"\(name)\""]
     lines.append("  Variables:")
@@ -487,7 +389,6 @@ public struct FormalModuleParameter: Sendable, Equatable {
   public let kind: FormalModuleParameterKind
 
   public init(_ name: String, kind: FormalModuleParameterKind = .constant) {
-    precondition(!name.isEmpty, "A formal module parameter needs a name.")
     self.name = name
     self.kind = kind
   }
@@ -824,12 +725,21 @@ public func Variable(from name: String, _ range: StateExpr) -> VarDecl {
   VarDecl(name, lazySet: range)
 }
 // MARK: - Shared initial state computation
-public func computeInitialStates(_ spec: TLASpec) -> [[String: TLAValue]] {
-  computeInitialStates(spec, evaluationContext: StateExprEvaluationContext())
+public func computeInitialStates(_ spec: TLASpec) throws -> [[String: TLAValue]] {
+  computeInitialStates(try spec.compile())
+}
+
+public func computeInitialStates(_ compilation: CompiledSpecification) -> [[String: TLAValue]] {
+  computeInitialStates(
+    compilation.spec,
+    formalModuleClosure: compilation.formalModuleClosure,
+    evaluationContext: StateExprEvaluationContext()
+  )
 }
 
 func computeInitialStates(
   _ spec: TLASpec,
+  formalModuleClosure: FormalModuleClosure,
   evaluationContext: StateExprEvaluationContext
 ) -> [[String: TLAValue]] {
   let substituted = substituteConstants(spec)
@@ -842,7 +752,7 @@ func computeInitialStates(
         case .set(let values) = try? expression.evaluate(
           in: state,
           runtimeFuncs: substituted.runtimeFuncs,
-          recursiveFuncs: substituted.resolvedRecursiveFuncs,
+          recursiveFuncs: formalModuleClosure.resolvedRecursiveFuncs,
           evaluationContext: evaluationContext
         )
       else { return [] }
@@ -856,7 +766,7 @@ func computeInitialStates(
       guard let val = try? variable.initExpr!.evaluate(
         in: state,
         runtimeFuncs: substituted.runtimeFuncs,
-        recursiveFuncs: substituted.resolvedRecursiveFuncs,
+        recursiveFuncs: formalModuleClosure.resolvedRecursiveFuncs,
         evaluationContext: evaluationContext
       ) else { return nil }
       var s = state

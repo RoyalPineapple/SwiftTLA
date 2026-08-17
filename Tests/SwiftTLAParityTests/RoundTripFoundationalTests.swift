@@ -402,7 +402,7 @@ import UpstreamParity
           + "ActionParameter(\"direction\", values: [100, 200])]"
       ))
 
-    let runtime = SpecRuntime(spec: spec)
+    let runtime = try SpecRuntime(spec: spec)
     let initial = try #require(runtime.initialStates().first)
     let next = try runtime.apply(
       .init(name: "board", arguments: [.int(2), .int(20), .int(200)]), to: initial)
@@ -462,7 +462,7 @@ import UpstreamParity
       Variable(from: x.name, StateExpr.set([1, 2]))
       Action("inc") { x.becomes(x + 1).when(x < 3) }
     }
-    let checker = ModelChecker(spec: spec, maxStates: 100)
+    let checker = try ModelChecker(spec: spec, maxStates: 100)
 
     let exploration = try checker.explore()
     let graph = try checker.exploreGraph()
@@ -597,7 +597,7 @@ import UpstreamParity
       Invariant("TypeOK") { x >= 1 && x <= 3 }
     }
 
-    let states = computeInitialStates(spec)
+    let states = try computeInitialStates(spec)
     #expect(Set(states.compactMap { $0["x"] }) == Set([.int(1), .int(2), .int(3)]))
     #expect(try ModelChecker(spec: spec).exploreGraph().states.count == 3)
     #expect(spec.tlaModule.contains("Init == x \\in {1, 2, 3}"))

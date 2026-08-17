@@ -22,10 +22,11 @@ struct SymmetricCollectionTLCOracleTests {
       #expect(result.boundedScopes == [
         SymmetricCollectionScope(collectionName: "devices", verificationScope: scope)
       ])
-      #expect(spec.tlaBundle.tla.contains("DevicesKeys == {DevicesMember0"))
-      #expect(spec.tlaBundle.cfg.contains("CONSTANT DevicesMember\(scope - 1) = DevicesMember\(scope - 1)"))
-      #expect(spec.tlaBundle.cfg.contains("SYMMETRY SymmDevices"))
-      #expect(!spec.tlaBundle.tla.contains("\"DevicesMember0\""))
+      let bundle = try spec.tlaBundle
+      #expect(bundle.tla.contains("DevicesKeys == {DevicesMember0"))
+      #expect(bundle.cfg.contains("CONSTANT DevicesMember\(scope - 1) = DevicesMember\(scope - 1)"))
+      #expect(bundle.cfg.contains("SYMMETRY SymmDevices"))
+      #expect(!bundle.tla.contains("\"DevicesMember0\""))
 
       let unreduced = TLASpec(
         name: "Unreduced\(scope)",
@@ -103,7 +104,7 @@ struct SymmetricCollectionTLCOracleTests {
       == runtime.symmetricCollections.map(\.metadata))
     #expect(normalizedActions(parsed.actions.map { NamedAction(name: $0.name, body: $0.body) })
       == normalizedActions(runtime.actions))
-    #expect(computeInitialStates(parsedSpec) == computeInitialStates(runtime))
+    #expect(try computeInitialStates(parsedSpec) == computeInitialStates(runtime))
     #expect(try ModelChecker(spec: parsedSpec).check().description == ModelChecker(spec: runtime).check().description)
   }
 

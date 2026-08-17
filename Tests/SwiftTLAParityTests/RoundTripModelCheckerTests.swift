@@ -251,7 +251,7 @@ import UpstreamParity
       Variable(hr, 1)
       Action("Tick") { hr.becomes(hr + 1).when(hr < 12) || (hr == 12 && hr.becomes(1)) }
     }
-    let rt = SpecRuntime(spec: spec)
+    let rt = try SpecRuntime(spec: spec)
     let state = rt.initialStates().first!
     let next = try rt.apply(.init(name: "Tick"), to: state)
     #expect(next["hr"] == .int(2))
@@ -265,7 +265,7 @@ import UpstreamParity
       Action("Tick") { hr.becomes(hr + 1).when(hr < 12) || (hr == 12 && hr.becomes(1)) }
       Invariant("Positive") { hr > 0 }
     }
-    let rt = SpecRuntime(spec: spec)
+    let rt = try SpecRuntime(spec: spec)
     let state = rt.initialStates().first!
     #expect(try rt.check("Positive", in: state) == true)
   }
@@ -277,7 +277,7 @@ import UpstreamParity
       Variable(hr, 1)
       Action("Tick") { hr.becomes(hr + 1).when(hr < 12) || (hr == 12 && hr.becomes(1)) }
     }
-    let rt = SpecRuntime(spec: spec)
+    let rt = try SpecRuntime(spec: spec)
     let state = rt.initialStates().first!
     let available = try rt.availableInvocations(in: state)
     #expect(available.contains(.init(name: "Tick")))
@@ -296,7 +296,7 @@ import UpstreamParity
       Constraint(counter <= StateExpr.value(.constant("limit")))
     }
     let graph = try ModelChecker(spec: spec).exploreGraph()
-    let runtime = SpecRuntime(spec: spec)
+    let runtime = try SpecRuntime(spec: spec)
 
     for (sourceID, source) in graph.states {
       let checked = (graph.transitions[sourceID] ?? []).compactMap { transition -> (TLAActionInvocation, [String: TLAValue])? in
@@ -335,7 +335,7 @@ import UpstreamParity
       Invariant("AtMostLimit") { isAtMostLimit }
     }
     let graph = try ModelChecker(spec: spec).exploreGraph()
-    let runtime = SpecRuntime(spec: spec)
+    let runtime = try SpecRuntime(spec: spec)
 
     for (sourceID, source) in graph.states {
       let checked = (graph.transitions[sourceID] ?? []).compactMap { transition -> (TLAActionInvocation, [String: TLAValue])? in
@@ -371,7 +371,7 @@ import UpstreamParity
         counter.becomes(counter + step).when(counter == 0)
       }
     }
-    let runtime = SpecRuntime(spec: spec)
+    let runtime = try SpecRuntime(spec: spec)
     let initial = try #require(runtime.initialStates().first)
     let available = [
       TLAActionInvocation(name: "advance", arguments: [.int(1)]),
@@ -411,7 +411,7 @@ import UpstreamParity
       Variable(counter, 0)
       Action("advance") { counter.becomes(counter + 1).when(StateExpr.variable("missing")) }
     }
-    let runtime = SpecRuntime(spec: spec)
+    let runtime = try SpecRuntime(spec: spec)
     let state = runtime.initialStates().first!
 
     do {
@@ -454,7 +454,7 @@ import UpstreamParity
       Variable(hr, 1)
       Action("Tick") { hr.becomes(hr + 1).when(hr < 12) || (hr == 12 && hr.becomes(1)) }
     }
-    let rt = SpecRuntime(spec: spec)
+    let rt = try SpecRuntime(spec: spec)
     let state = rt.initialStates().first!
     let result = try rt.step(.init(name: "Tick"), from: state)
     if case .ok(let next) = result {

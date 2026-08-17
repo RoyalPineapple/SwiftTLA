@@ -16,11 +16,12 @@ public struct TLAModuleFile: Sendable, Equatable {
   }
 }
 
-/// A source-level linking failure in a TLA+ module bundle.
+/// A post-render integrity failure in a TLA+ module bundle.
 ///
-/// Linking deliberately happens before a renderer hands the bundle to TLC or
-/// PlusCal. A missing module is a bundle construction error, not a tool error.
-public enum TLAModuleBundleLinkError: Error, Equatable, Sendable, CustomStringConvertible {
+/// The compiler's `FormalModuleClosure` is the semantic linker. This type only
+/// reports that emitted text files no longer form the already-linked closure
+/// that TLC will receive.
+public enum TLAModuleBundleIntegrityError: Error, Equatable, Sendable, CustomStringConvertible {
   case duplicateModule(String)
   case missingModule(module: String, importedBy: String, line: Int)
   case cyclicModule(module: String, path: [String])
@@ -51,17 +52,18 @@ public struct TLAModuleBundle: Sendable, Equatable {
   public var cfg: String { root.cfg ?? "" }
   public var files: [TLAModuleFile] { imports + [root] }
 
-  /// Checks the complete in-memory module closure before it is written or
-  /// passed to a formal tool. TLC's bundled standard modules are excluded;
-  /// every other `EXTENDS` or `INSTANCE` target must be present in `imports`.
-  public func validateLink(
+  /// Checks that rendered files still match a complete bundle before TLC runs.
+  ///
+  /// This scans emitted text only for post-render integrity. It must not be
+  /// used to resolve source imports or diagnose compiler linking failures.
+  public func validateRenderedBundleIntegrity(
     standardModules: Set<String>? = nil
   ) throws {
     let standardModules = standardModules ?? Self.tlcStandardModules
     var sources: [String: TLAModuleFile] = [:]
     for file in files {
       guard sources[file.name] == nil else {
-        throw TLAModuleBundleLinkError.duplicateModule(file.name)
+        throw TLAModuleBundleIntegrityError.duplicateModule(file.name)
       }
       sources[file.name] = file
     }
@@ -69,7 +71,7 @@ public struct TLAModuleBundle: Sendable, Equatable {
     for file in files {
       for dependency in Self.dependencies(in: file.tla) where !standardModules.contains(dependency.name) {
         guard sources[dependency.name] != nil else {
-          throw TLAModuleBundleLinkError.missingModule(
+          throw TLAModuleBundleIntegrityError.missingModule(
             module: dependency.name,
             importedBy: file.name,
             line: dependency.line
@@ -82,7 +84,7 @@ public struct TLAModuleBundle: Sendable, Equatable {
     var active: [String] = []
     func visit(_ name: String) throws {
       if let cycleStart = active.firstIndex(of: name) {
-        throw TLAModuleBundleLinkError.cyclicModule(
+        throw TLAModuleBundleIntegrityError.cyclicModule(
           module: name,
           path: Array(active[cycleStart...]) + [name]
         )
@@ -221,6 +223,89 @@ public struct FormalModuleClosure: Sendable {
   public let entries: [Entry]
   public let edges: [Edge]
 
+  public var resolvedRecursiveFuncs: [RecursiveFunc] {
+    let modules = Dictionary(uniqueKeysWithValues: entries.map { ($0.module.name, $0.module) })
+    func resolve(_ name: String, replacements: [FormalModuleReplacement]) -> [RecursiveFunc] {
+      guard let module = modules[name] else { return [] }
+      var result: [RecursiveFunc] = []
+      for edge in edges where edge.fromModule == name {
+        switch edge.kind {
+        case .importModule(let configuration):
+          result += resolve(edge.toModule, replacements: configuration?.replacements ?? [])
+        case .namedInstance(let namespace, let arguments):
+          let functions = resolve(edge.toModule, replacements: [])
+          let localNames = Set(functions.map(\.name))
+          result += functions.map { function in
+            let body = arguments.reduce(function.body) {
+              StateExpr.substituteVariable($1.parameter, with: $1.value, in: $0)
+            }
+            return RecursiveFunc(
+              name: "\(namespace)!\(function.name)", params: function.params,
+              body: StateExpr.renamingRecursiveCalls(in: body) {
+                localNames.contains($0) ? "\(namespace)!\($0)" : $0
+              }
+            )
+          }
+        }
+      }
+      result += module.recursiveFuncs.map { function in
+        RecursiveFunc(
+          name: function.name, params: function.params,
+          body: replacements.reduce(function.body) {
+            StateExpr.substituteVariable($1.operatorName, with: $1.expression, in: $0)
+          }
+        )
+      }
+      return result
+    }
+    return resolve(root.module.name, replacements: [])
+  }
+
+  public var resolvedFormalOperatorDefinitions: [FormalOperatorDefinition] {
+    let modules = Dictionary(uniqueKeysWithValues: entries.map { ($0.module.name, $0.module) })
+    func resolve(
+      _ name: String,
+      replacements: [FormalModuleReplacement]
+    ) -> [FormalOperatorDefinition] {
+      guard let module = modules[name] else { return [] }
+      var result: [FormalOperatorDefinition] = []
+      for edge in edges where edge.fromModule == name {
+        switch edge.kind {
+        case .importModule(let configuration):
+          result += resolve(
+            edge.toModule,
+            replacements: configuration?.replacements ?? []
+          )
+        case .namedInstance(let namespace, let arguments):
+          let definitions = resolve(edge.toModule, replacements: [])
+          let localNames = Set(definitions.map(\.name))
+          result += definitions.map { definition in
+            let body = arguments.reduce(definition.body) {
+              StateExpr.substituteVariable($1.parameter, with: $1.value, in: $0)
+            }
+            return FormalOperatorDefinition(
+              name: "\(namespace)!\(definition.name)", parameters: definition.parameters,
+              body: StateExpr.renamingRecursiveCalls(in: body) {
+                localNames.contains($0) ? "\(namespace)!\($0)" : $0
+              }
+            )
+          }
+        }
+      }
+      result += module.formalOperatorDefinitions.map { definition in
+        FormalOperatorDefinition(
+          name: definition.name,
+          parameters: definition.parameters,
+          body: replacements.reduce(definition.body) {
+            StateExpr.substituteVariable($1.operatorName, with: $1.expression, in: $0)
+          }
+        )
+      }
+      return result
+    }
+    return resolve(root.module.name, replacements: [])
+  }
+
   public static func resolve(root: TLASpec) throws -> FormalModuleClosure {
     var entries: [Entry] = []
     var edges: [Edge] = []
@@ -245,15 +330,36 @@ public struct FormalModuleClosure: Sendable {
     }
 
     func validateDeclaredRelationships(_ module: TLASpec, path: [String]) throws {
+      let parameterNames = module.formalParameters.map(\.name)
+      if let invalid = parameterNames.first(where: { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }) {
+        throw diagnostic(.invalidFormalModuleParameter, path: path + ["parameters"], expected: "a non-empty formal parameter", actual: "an empty parameter name", nextSafeAction: "Name the formal parameter, then compile again.")
+      }
+      if let duplicate = Self.firstDuplicate(in: parameterNames) {
+        throw diagnostic(.duplicateFormalModuleParameter, path: path + ["parameters", duplicate], expected: "one formal parameter named '\(duplicate)'", actual: "multiple formal parameters", nextSafeAction: "Rename or remove the duplicate parameter, then compile again.")
+      }
       let importNames = module.imports.map(\.name)
-      if let duplicate = Self.firstDuplicate(in: importNames) {
-        throw diagnostic(
-          .duplicateFormalModuleImport,
-          path: path + ["imports", duplicate],
-          expected: "one import relationship for '\(duplicate)'",
-          actual: "multiple import relationships",
-          nextSafeAction: "Keep one import relationship for the module, then compile again."
-        )
+      var sourceByImportName: [String: String] = [:]
+      for imported in module.imports {
+        let source = imported.compilationFingerprint
+        if let firstSource = sourceByImportName[imported.name] {
+          guard firstSource == source else {
+            throw diagnostic(
+              .conflictingFormalModuleSource,
+              path: path + ["imports", imported.name],
+              expected: "one canonical source for module '\(imported.name)'",
+              actual: "multiple distinct canonical sources",
+              nextSafeAction: "Rename one module or import the same canonical source, then compile again."
+            )
+          }
+          throw diagnostic(
+            .duplicateFormalModuleImport,
+            path: path + ["imports", imported.name],
+            expected: "one import relationship for '\(imported.name)'",
+            actual: "multiple import relationships",
+            nextSafeAction: "Keep one import relationship for the module, then compile again."
+          )
+        }
+        sourceByImportName[imported.name] = source
       }
 
       let configurationNames = module.importConfigurations.map(\.moduleName)
@@ -284,6 +390,11 @@ public struct FormalModuleClosure: Sendable {
             actual: "multiple replacement bindings",
             nextSafeAction: "Keep one replacement binding for the operator, then compile again."
           )
+        }
+        guard let target = module.imports.first(where: { $0.name == configuration.moduleName }) else { continue }
+        let targetSymbols = Self.moduleInterfaceSymbols(of: target)
+        for replacement in configuration.replacements where replacement.operatorName.isEmpty || !targetSymbols.contains(replacement.operatorName) {
+          throw diagnostic(.unresolvedFormalModuleReplacement, path: path + ["configurations", configuration.moduleName, replacement.operatorName], expected: "a structural interface symbol of '\(target.name)'", actual: "an unresolved replacement name", nextSafeAction: "Configure a formal parameter or free module symbol, then compile again.")
         }
       }
 
@@ -400,6 +511,67 @@ public struct FormalModuleClosure: Sendable {
     return names.first { !seen.insert($0).inserted }
   }
 
+  /// Names which a consumer may configure when it links this module.
+  ///
+  /// This intentionally uses the typed scope analysis instead of reflecting strings.
+  /// A binder, local operator, assignment target, or record field is not an
+  /// importable interface symbol merely because it happens to share a name
+  /// with one.
+  private static func moduleInterfaceSymbols(of module: TLASpec) -> Set<String> {
+    var symbols = Set(module.formalParameters.map(\.name))
+    let moduleDeclarations = Set(module.variables.map(\.name))
+      .union(module.constants.keys)
+      .union(module.recursiveFuncs.map(\.name))
+      .union(module.formalOperatorDefinitions.map(\.name))
+
+    func actionFreeNames(_ action: ActionExpr) -> Set<String> {
+      switch action {
+      case .assign(_, let value), .guard_(let value), .chooseAction(_, let value):
+        return value.freeVariableNames
+      case .unchanged:
+        return []
+      case .existsAction(let name, let set, let body):
+        return set.freeVariableNames.union(actionFreeNames(body).subtracting([name]))
+      case .ifElse(let condition, let then, let otherwise):
+        return condition.freeVariableNames
+          .union(actionFreeNames(then))
+          .union(actionFreeNames(otherwise))
+      case .define(let name, let value, let body):
+        return value.freeVariableNames.union(actionFreeNames(body).subtracting([name]))
+      case .and(let lhs, let rhs), .or(let lhs, let rhs):
+        return actionFreeNames(lhs).union(actionFreeNames(rhs))
+      }
+    }
+
+    var freeNames = module.variables.flatMap {
+      [$0.initialSet, $0.initExpr, $0.lazySet].compactMap { $0?.freeVariableNames }
+    }.reduce(into: Set<String>()) { $0.formUnion($1) }
+    for action in module.actions {
+      freeNames.formUnion(actionFreeNames(action.body).subtracting(Set(action.bindings.map(\.name))))
+    }
+    module.invariants.forEach { freeNames.formUnion($0.body.freeVariableNames) }
+    for temporal in module.temporalProperties {
+      switch temporal.expr {
+      case .always(let expression), .eventually(let expression), .alwaysEventually(let expression),
+           .eventuallyAlways(let expression):
+        freeNames.formUnion(expression.freeVariableNames)
+      case .leadsTo(let source, let target):
+        freeNames.formUnion(source.freeVariableNames)
+        freeNames.formUnion(target.freeVariableNames)
+      }
+    }
+    if let constraint = module.constraint { freeNames.formUnion(constraint.freeVariableNames) }
+    if let assume = module.assume { freeNames.formUnion(assume.freeVariableNames) }
+    for function in module.recursiveFuncs {
+      freeNames.formUnion(function.body.freeVariableNames.subtracting(Set(function.params)))
+    }
+    for definition in module.formalOperatorDefinitions {
+      freeNames.formUnion(definition.body.freeVariableNames.subtracting(Set(definition.parameters.map(\.name))))
+    }
+    symbols.formUnion(freeNames.subtracting(moduleDeclarations))
+    return symbols
+  }
+
   private static func validateImportedSymbols(
     entries: [Entry],
     edges: [Edge],
@@ -413,9 +585,20 @@ public struct FormalModuleClosure: Sendable {
     for entry in entries {
       var symbols = Set(entry.module.recursiveFuncs.map(\.name))
       symbols.formUnion(entry.module.formalOperatorDefinitions.map(\.name))
+      let localSymbols = entry.module.recursiveFuncs.map(\.name) + entry.module.formalOperatorDefinitions.map(\.name)
+      if let duplicate = Self.firstDuplicate(in: localSymbols) {
+        throw diagnostic(.duplicateFormalModuleSymbol, entry.structuralPath + [duplicate], "one local symbol named '\(duplicate)'", "multiple local declarations", "Rename or remove the duplicate declaration, then compile again.")
+      }
       for edge in importsByModule[entry.module.name, default: []] {
-        guard case .importModule = edge.kind else { continue }
-        guard let imported = exportedSymbols[edge.toModule] else { continue }
+        if case .namedInstance(let namespace, _) = edge.kind, let imported = exportedSymbols[edge.toModule] {
+          let instanceSymbols = imported.map { "\(namespace)!\($0)" }
+          if let duplicate = instanceSymbols.first(where: { symbols.contains($0) }) {
+            throw diagnostic(.duplicateFormalModuleSymbol, edge.structuralPath, "one visible symbol named '\(duplicate)'", "a local or imported symbol has the same qualified name", "Rename the instance or conflicting symbol, then compile again.")
+          }
+          symbols.formUnion(instanceSymbols)
+          continue
+        }
+        guard case .importModule = edge.kind, let imported = exportedSymbols[edge.toModule] else { continue }
         if let duplicate = imported.first(where: { symbols.contains($0) }) {
           throw diagnostic(
             .duplicateFormalModuleSymbol,

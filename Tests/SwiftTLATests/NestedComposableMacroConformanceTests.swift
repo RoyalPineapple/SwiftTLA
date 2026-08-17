@@ -21,7 +21,7 @@ struct NestedComposableMacroConformanceTests {
             Constraint(value <= 2)
         }
         let graph = try ModelChecker(spec: spec).exploreGraph()
-        let runtime = SpecRuntime(spec: spec)
+        let runtime = try SpecRuntime(spec: spec)
 
         for (sourceID, source) in graph.states {
             let checked = (graph.transitions[sourceID] ?? []).compactMap { transition -> (TLAActionInvocation, [String: TLAValue])? in
@@ -78,14 +78,14 @@ struct NestedComposableMacroConformanceTests {
     }
 
     @Test("Availability evaluation failures retain invocation context")
-    func availabilityEvaluationFailureReportsTheEvaluatedInvocation() {
+    func availabilityEvaluationFailureReportsTheEvaluatedInvocation() throws {
         let count = Var<Int>("count")
         let invocation = TLAActionInvocation(name: "advance")
         let spec = TLASpec("UnavailableAvailability") {
             Variable(count, 0)
             Action("advance") { count.becomes(count + 1) }
         }
-        let runtime = SpecRuntime(spec: spec) { _, _, _ in
+        let runtime = try SpecRuntime(spec: spec) { _, _, _ in
             throw AvailabilityEvaluationFailure.unavailable
         }
         let state = runtime.initialStates()[0]

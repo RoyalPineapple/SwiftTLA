@@ -15,7 +15,7 @@ struct SimultaneousUpdateSemanticsTests {
                 right.becomes(left)
             }
         }
-        let runtime = SpecRuntime(spec: spec)
+        let runtime = try SpecRuntime(spec: spec)
         let initial = try #require(runtime.initialStates().first)
 
         let successor = try runtime.apply(.init(name: "swap"), to: initial)
@@ -43,7 +43,7 @@ struct SimultaneousUpdateSemanticsTests {
                 mirror.becomes(source + 1)
             }
         }
-        let runtime = SpecRuntime(spec: spec)
+        let runtime = try SpecRuntime(spec: spec)
         let initial = try #require(runtime.initialStates().first)
 
         let successor = try runtime.apply(.init(name: "advance"), to: initial)
@@ -65,7 +65,7 @@ struct SimultaneousUpdateSemanticsTests {
                 ActionExpr.assign(right.name, .variable("missing"))
             }
         }
-        let runtime = SpecRuntime(spec: spec)
+        let runtime = try SpecRuntime(spec: spec)
         var machine = CanonicalMachine(
             runtime: runtime,
             initial: ["left": TLAValue.int(1), "right": .int(2)],

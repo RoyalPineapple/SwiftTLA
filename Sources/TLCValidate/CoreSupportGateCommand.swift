@@ -304,7 +304,7 @@ if name == "check-all" {
 if name == "bundle" {
     guard let id = args.count >= 2 ? args[1] : nil else { exit(1) }
     guard let entry = Example.all.first(where: { $0.id == id }) else { exit(1) }
-    let b = entry.spec.tlaBundle
+    let b = try entry.spec.compile().tlaBundle
     print("=== TLA ===")
     print(b.tla)
     print("=== CFG ===")
@@ -516,8 +516,9 @@ func runSymmetricCollectionOracle() throws {
 
     for scope in 2...4 {
         let spec = symmetricOracleSpec(scope: scope)
-        let swiftStates = try ModelChecker(compilation: try spec.compile()).exploreGraph().states.count
-        let execution = try executeTLC(bundle: spec.tlaBundle, moduleName: spec.name, jarPath: jarPath)
+        let compilation = try spec.compile()
+        let swiftStates = try ModelChecker(compilation: compilation).exploreGraph().states.count
+        let execution = try executeTLC(bundle: compilation.tlaBundle, moduleName: spec.name, jarPath: jarPath)
         guard let tlcStates = execution.distinctStates else {
             throw SymmetricCollectionOracleError.missingStateCount(execution.output)
         }
@@ -550,8 +551,8 @@ func symmetricOracleSpec(scope: Int) -> TLASpec {
     }
 }
 
-func quotedStringSymmetryControl(scope: Int) -> TLAModuleBundle {
-    let bundle = symmetricOracleSpec(scope: scope).tlaBundle
+func quotedStringSymmetryControl(scope: Int) throws -> TLAModuleBundle {
+    let bundle = try symmetricOracleSpec(scope: scope).compile().tlaBundle
     let members = (0..<scope).map { "DevicesMember\($0)" }
     var tla = bundle.tla.replacingOccurrences(
         of: "CONSTANTS \(members.joined(separator: ", "))\n",

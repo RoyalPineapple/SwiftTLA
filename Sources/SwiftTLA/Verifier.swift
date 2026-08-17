@@ -79,7 +79,7 @@ public struct CheckableSpec: Checkable {
     public var actions: [String] { userActions.map(\.name) }
 
     public func initial() throws -> [[String: TLAValue]] {
-        let initials = computeInitialStates(runtime.spec)
+        let initials = runtime.initialStates()
         guard !initials.isEmpty else { throw E.noInitialStates }
         var deduped: [[String: TLAValue]] = []; var seen = Set<[String: TLAValue]>()
         for s in initials where !seen.contains(s) { seen.insert(s); deduped.append(s) }

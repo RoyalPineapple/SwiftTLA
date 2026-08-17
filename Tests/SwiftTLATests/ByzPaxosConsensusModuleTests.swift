@@ -21,7 +21,7 @@ struct ByzPaxosConsensusModuleTests {
     let refinesRange = try #require(consumerModule.range(of: "Refines == C!Spec"))
     #expect(chosenRange.lowerBound < instanceRange.lowerBound)
     #expect(instanceRange.lowerBound < refinesRange.lowerBound)
-    #expect(consumer.tlaBundle.imports.map(\.name) == ["Consensus"])
+    #expect(try consumer.tlaBundle.imports.map(\.name) == ["Consensus"])
     #expect(ByzPaxosConsensus.module.tlaModule.contains("CONSTANTS Value"))
     #expect(ByzPaxosConsensus.module.tlaModule.contains("VARIABLES chosen"))
     #expect(ByzPaxosConsensus.module.tlaModule.contains("vars == <<chosen>>"))

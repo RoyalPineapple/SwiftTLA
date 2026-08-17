@@ -40,10 +40,10 @@ struct TLAModuleBundleTests {
       tla: "---- MODULE Consumer ----\nEXTENDS Integers, MissingModule\n====\n"
     ))
 
-    #expect(throws: TLAModuleBundleLinkError.missingModule(
+    #expect(throws: TLAModuleBundleIntegrityError.missingModule(
       module: "MissingModule", importedBy: "Consumer", line: 2
     )) {
-      try bundle.validateLink()
+      try bundle.validateRenderedBundleIntegrity()
     }
   }
 
@@ -59,10 +59,10 @@ struct TLAModuleBundleTests {
       ]
     )
 
-    #expect(throws: TLAModuleBundleLinkError.missingModule(
+    #expect(throws: TLAModuleBundleIntegrityError.missingModule(
       module: "MissingModule", importedBy: "Consumer", line: 2
     )) {
-      try bundle.validateLink()
+      try bundle.validateRenderedBundleIntegrity()
     }
   }
 
@@ -76,7 +76,7 @@ struct TLAModuleBundleTests {
       ]
     )
 
-    try bundle.validateLink()
+    try bundle.validateRenderedBundleIntegrity()
   }
 
   @Test("a bundle rejects cyclic nonstandard module dependencies")
@@ -88,10 +88,10 @@ struct TLAModuleBundleTests {
       ]
     )
 
-    #expect(throws: TLAModuleBundleLinkError.cyclicModule(
+    #expect(throws: TLAModuleBundleIntegrityError.cyclicModule(
       module: "Root", path: ["Root", "Support", "Root"]
     )) {
-      try bundle.validateLink()
+      try bundle.validateRenderedBundleIntegrity()
     }
   }
 
@@ -164,7 +164,7 @@ struct TLAModuleBundleTests {
     let sequence = ZeroBasedSequence<Int>.literal(3, 1, 2)
     let rotated = ZSequences.rotation(of: sequence, leftBy: Expr(.int(1)))
     let result = try rotated.raw.evaluate(
-      in: [:], recursiveFuncs: ZSequences.module.resolvedRecursiveFuncs
+      in: [:], recursiveFuncs: try ZSequences.module.compile().formalModuleClosure.resolvedRecursiveFuncs
     )
     #expect(result == .function([
       .int(0): .int(1), .int(1): .int(2), .int(2): .int(3)
@@ -183,13 +183,14 @@ struct TLAModuleBundleTests {
     }
 
     #expect(consumer.tlaModule.contains("EXTENDS Integers, FiniteSets, Sequences, ZSequences"))
-    #expect(consumer.tlaBundle.imports.map { $0.name } == ["ZSequences"])
-    #expect(consumer.tlaBundle.imports[0].tla.contains("Rotation(sequence, shift) =="))
-    #expect(!consumer.tlaBundle.imports[0].tla.contains("VARIABLES"))
-    #expect(!consumer.tlaBundle.imports[0].tla.contains("Spec =="))
+    let bundle = try consumer.tlaBundle
+    #expect(bundle.imports.map { $0.name } == ["ZSequences"])
+    #expect(bundle.imports[0].tla.contains("Rotation(sequence, shift) =="))
+    #expect(!bundle.imports[0].tla.contains("VARIABLES"))
+    #expect(!bundle.imports[0].tla.contains("Spec =="))
     let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? FileManager.default.removeItem(at: directory) }
-    try consumer.tlaBundle.write(to: directory)
+    try bundle.write(to: directory)
     #expect(FileManager.default.fileExists(atPath: directory.appendingPathComponent("UsesZSequences.tla").path))
     #expect(FileManager.default.fileExists(atPath: directory.appendingPathComponent("ZSequences.tla").path))
     let check = try ModelChecker(spec: consumer).check()
@@ -207,12 +208,13 @@ struct TLAModuleBundleTests {
 
     #expect(consumer.tlaModule.contains("ZSequencesNat == 0..2"))
     #expect(consumer.tlaCfg.contains("CONSTANT Nat <- [ZSequences]ZSequencesNat"))
-    #expect(consumer.tlaBundle.imports.map(\.name) == ["ZSequences"])
-    #expect(!consumer.tlaBundle.root.tla.contains("ZSeq(elements) =="))
+    let bundle = try consumer.tlaBundle
+    #expect(bundle.imports.map(\.name) == ["ZSequences"])
+    #expect(!bundle.root.tla.contains("ZSeq(elements) =="))
 
     let sequences = try StateExpr.recursiveCall("ZSeq", [
       .setLiteral([.int(0), .int(1)])
-    ]).evaluate(in: [:], recursiveFuncs: consumer.resolvedRecursiveFuncs)
+    ]).evaluate(in: [:], recursiveFuncs: try consumer.compile().formalModuleClosure.resolvedRecursiveFuncs)
     guard case .set(let values) = sequences else {
       Issue.record("The bounded ZSeq result was not a set.")
       return
@@ -224,7 +226,7 @@ struct TLAModuleBundleTests {
       Import(ZSequences.module, configuring: ZSequences.boundedNaturalNumbers(0...2))
       Variable(from: corpus.name, ZSequences.sequences(over: SetExpr<Int>.literal(0, 1)).raw)
     }
-    #expect(computeInitialStates(initialized).count == 7)
+    #expect(try computeInitialStates(initialized).count == 7)
   }
 
   @Test("an import remains a source dependency and resolves its operators at runtime")
@@ -245,8 +247,9 @@ struct TLAModuleBundleTests {
 
     #expect(consumer.tlaModule.contains("EXTENDS Integers, FiniteSets, Sequences, FormalArithmetic"))
     #expect(!consumer.tlaModule.contains("Twice(value) =="))
-    #expect(consumer.tlaBundle.imports.map { $0.name } == ["FormalArithmetic"])
-    #expect(consumer.tlaBundle.imports.first?.tla.contains("Twice(value) ==") == true)
+    let bundle = try consumer.tlaBundle
+    #expect(bundle.imports.map { $0.name } == ["FormalArithmetic"])
+    #expect(bundle.imports.first?.tla.contains("Twice(value) ==") == true)
     let check = try ModelChecker(spec: consumer).check()
     guard case .ok = check.underlyingOutcome else {
       Issue.record("The imported operator did not evaluate successfully.")
@@ -273,12 +276,13 @@ struct TLAModuleBundleTests {
     #expect(consumer.tlaModule.contains("Math == INSTANCE InstanceArithmetic"))
     #expect(consumer.tlaModule.contains("ValueIsTwoTimesOne == (Math!Twice(value) = 2)"))
     #expect(!consumer.tlaModule.contains("EXTENDS Integers, FiniteSets, Sequences, InstanceArithmetic"))
-    #expect(consumer.tlaBundle.imports.map(\.name) == ["InstanceArithmetic"])
-    #expect(consumer.tlaBundle.imports[0].tla.contains("Twice(value) =="))
+    let bundle = try consumer.tlaBundle
+    #expect(bundle.imports.map(\.name) == ["InstanceArithmetic"])
+    #expect(bundle.imports[0].tla.contains("Twice(value) =="))
 
     let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? FileManager.default.removeItem(at: directory) }
-    try consumer.tlaBundle.write(to: directory)
+    try bundle.write(to: directory)
     #expect(FileManager.default.fileExists(
       atPath: directory.appendingPathComponent("InstanceArithmetic.tla").path
     ))
@@ -310,8 +314,9 @@ struct TLAModuleBundleTests {
       Invariant("CountsDown") { math.call("CountDown", value.stateExpr) == 3 }
     }
 
-    #expect(consumer.resolvedRecursiveFuncs.map(\.name) == ["Math!CountDown"])
-    #expect(consumer.resolvedRecursiveFuncs[0].body.description.contains("Math!CountDown"))
+    let resolved = try consumer.compile().formalModuleClosure.resolvedRecursiveFuncs
+    #expect(resolved.map(\.name) == ["Math!CountDown"])
+    #expect(resolved[0].body.description.contains("Math!CountDown"))
     let result = try ModelChecker(spec: consumer).check()
     guard case .ok = result.underlyingOutcome else {
       Issue.record("The checker did not resolve recursive instance calls.")
@@ -337,8 +342,9 @@ struct TLAModuleBundleTests {
     }
 
     #expect(consumer.tlaModule.contains("Math == INSTANCE ParameterizedArithmetic WITH Base <- 2"))
-    #expect(consumer.tlaBundle.imports[0].tla.contains("CONSTANTS Base"))
-    #expect(!consumer.tlaBundle.imports[0].tla.contains("ASSUME Base"))
+    let bundle = try consumer.tlaBundle
+    #expect(bundle.imports[0].tla.contains("CONSTANTS Base"))
+    #expect(!bundle.imports[0].tla.contains("ASSUME Base"))
     let result = try ModelChecker(spec: consumer).check()
     guard case .ok = result.underlyingOutcome else {
       Issue.record("The checker did not apply the module argument.")
@@ -367,7 +373,7 @@ struct TLAModuleBundleTests {
     }
 
     #expect(consumer.tlaModule.contains("Math == INSTANCE VariableParameterizedArithmetic WITH Base <- value"))
-    #expect(consumer.tlaBundle.imports[0].tla.contains("VARIABLES Base"))
+    #expect(try consumer.tlaBundle.imports[0].tla.contains("VARIABLES Base"))
     let result = try ModelChecker(spec: consumer).check()
     guard case .ok = result.underlyingOutcome else {
       Issue.record("The checker did not substitute the state parameter.")

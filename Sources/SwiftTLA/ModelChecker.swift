@@ -5,20 +5,22 @@
 public struct ModelChecker {
     public let spec: TLASpec
     /// Present when this checker entered through the validated compiler gate.
-    public let compilation: CompiledSpecification?
+    private let compiledSpecification: CompiledSpecification
+    public var compilation: CompiledSpecification? { compiledSpecification }
     public let maxStates: Int
     public let permutationProductBudget: Int
 
-    init(spec: TLASpec, maxStates: Int = 100_000, permutationProductBudget: Int = 100_000) {
-        self.spec = spec
-        self.compilation = nil
-        self.maxStates = maxStates
-        self.permutationProductBudget = permutationProductBudget
+    init(spec: TLASpec, maxStates: Int = 100_000, permutationProductBudget: Int = 100_000) throws {
+        self.init(
+            compilation: try spec.compile(),
+            maxStates: maxStates,
+            permutationProductBudget: permutationProductBudget
+        )
     }
 
     public init(compilation: CompiledSpecification, maxStates: Int = 100_000, permutationProductBudget: Int = 100_000) {
         self.spec = compilation.spec
-        self.compilation = compilation
+        self.compiledSpecification = compilation
         self.maxStates = maxStates
         self.permutationProductBudget = permutationProductBudget
     }
@@ -83,6 +85,7 @@ public struct ModelChecker {
     private typealias State = [String: TLAValue]
 
     private func runExploration() throws -> ModelExplorationResult {
+        let closure = compiledSpecification.formalModuleClosure
         if let validationError = validateSymmetricCollections() {
             return emptyExploration(
                 self.spec,
@@ -91,7 +94,7 @@ public struct ModelChecker {
             )
         }
         let substituted = substituteConstants(self.spec)
-        let transitionRelation = TransitionRelation(resolvedSpec: substituted)
+        let transitionRelation = TransitionRelation(resolvedSpec: substituted, formalModuleClosure: closure)
         let evaluationContext = StateExprEvaluationContext()
         let variableNames = substituted.variables.map(\.name)
         let actions = substituted.actions.isEmpty
@@ -100,6 +103,7 @@ public struct ModelChecker {
 
         let initialStates = computeInitialStates(
             substituted,
+            formalModuleClosure: closure,
             evaluationContext: evaluationContext
         )
         guard !initialStates.isEmpty else {
@@ -129,12 +133,12 @@ public struct ModelChecker {
             expand: buildExpander(transitionRelation, evaluationContext: evaluationContext),
             evaluate: buildEvaluator(
                 runtimeFuncs: substituted.runtimeFuncs,
-                recursiveFuncs: substituted.resolvedRecursiveFuncs,
-                formalOperatorDefinitions: substituted.resolvedFormalOperatorDefinitions,
+                recursiveFuncs: closure.resolvedRecursiveFuncs,
+                formalOperatorDefinitions: closure.resolvedFormalOperatorDefinitions,
                 evaluationContext: evaluationContext
             ),
             actions: actions,
-            formalOperatorDefinitions: substituted.resolvedFormalOperatorDefinitions,
+            formalOperatorDefinitions: closure.resolvedFormalOperatorDefinitions,
             evaluationContext: evaluationContext,
             invariants: substituted.invariants,
             checkDeadlock: substituted.checkDeadlock,
@@ -185,11 +189,12 @@ public struct ModelChecker {
         evaluationContext: StateExprEvaluationContext
     ) throws -> Bool {
         guard let assume = specification.assume else { return true }
+        let closure = compiledSpecification.formalModuleClosure
         return try assume.evaluateBool(
             in: initial,
             runtimeFuncs: specification.runtimeFuncs,
-            recursiveFuncs: specification.resolvedRecursiveFuncs,
-            formalOperatorDefinitions: specification.resolvedFormalOperatorDefinitions,
+            recursiveFuncs: closure.resolvedRecursiveFuncs,
+            formalOperatorDefinitions: closure.resolvedFormalOperatorDefinitions,
             evaluationContext: evaluationContext
         )
     }
