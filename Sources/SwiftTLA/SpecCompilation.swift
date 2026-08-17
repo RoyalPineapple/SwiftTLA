@@ -71,12 +71,12 @@ public struct CompiledSpecification: Sendable {
                 cfg: entry.module.name == spec.name ? entry.module.tlaCfg : nil
             )
         }
-        let root = files[files.count - 1]
+        let rootFile = files[files.count - 1]
         let imports = Array(files.dropLast()) + additionalImports
         let bundle: TLAModuleBundle
         if additionalImports.isEmpty {
             bundle = TLAModuleBundle(
-                root: root,
+                root: rootFile,
                 imports: imports,
                 provenance: .compiled(
                     identity: identity,
@@ -90,7 +90,7 @@ public struct CompiledSpecification: Sendable {
                 )
             )
         } else {
-            bundle = .untrusted(root: root, imports: imports)
+            bundle = .untrusted(root: rootFile, imports: imports)
         }
         try bundle.validateRenderedBundleIntegrity()
         return bundle
