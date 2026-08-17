@@ -62,7 +62,7 @@ jobs:
       - run: swift build --target SwiftTLA -j 1
 
   canonical-corpus-export:
-    runs-on: macos-15
+    runs-on: macos-14
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v5
