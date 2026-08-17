@@ -64,8 +64,16 @@ public enum SpecParser {
         ]) { _, replacement in replacement }
         guard let decodedDefinition = decodeTypedFacadeValue(
             definitionExpression, substitutions: definitionSubstitutions
-        ), let decodedBody = decodeTypedFacadeValue(bodyExpression, substitutions: bodySubstitutions)
-        else { return nil }
+        ) else {
+            algorithmParseFailure = algorithmParseFailure
+                ?? "LetRec '\(name)' could not decode its bounded recursive body."
+            return nil
+        }
+        guard let decodedBody = decodeTypedFacadeValue(bodyExpression, substitutions: bodySubstitutions) else {
+            algorithmParseFailure = algorithmParseFailure
+                ?? "LetRec '\(name)' could not decode its result expression."
+            return nil
+        }
         return .letIn([LocalOperator(
             name,
             parameters: [inputName],
@@ -479,6 +487,14 @@ public enum SpecParser {
         _ expression: ExprSyntax,
         substitutions: [String: StateExpr]
     ) -> StateExpr? {
+        // SwiftSyntax represents a parenthesized expression as a one-element
+        // tuple. Keep decoding through the typed path so scoped facade values
+        // such as `current.expr` retain their lexical substitutions.
+        if let tuple = expression.as(TupleExprSyntax.self),
+           tuple.elements.count == 1,
+           let value = tuple.elements.first?.expression {
+            return decodeTypedFacadeValue(value, substitutions: substitutions)
+        }
         if let call = expression.as(FunctionCallExprSyntax.self),
            let reference = call.calledExpression.as(DeclReferenceExprSyntax.self),
            let function = substitutions[reference.baseName.text],
@@ -487,6 +503,17 @@ public enum SpecParser {
                decodeTypedFacadeValue($0.expression, substitutions: substitutions)
            }) {
             return .functionApply(function, argument)
+        }
+        if let call = expression.as(FunctionCallExprSyntax.self),
+           call.arguments.isEmpty,
+           let access = call.calledExpression.as(MemberAccessExprSyntax.self),
+           let baseSyntax = access.base,
+           let base = decodeTypedFacadeValue(baseSyntax, substitutions: substitutions) {
+            switch access.declName.baseName.text {
+            case "first": return .tupleAccess(base, 1)
+            case "second": return .tupleAccess(base, 2)
+            default: break
+            }
         }
         if let reference = expression.as(DeclReferenceExprSyntax.self),
            let substitution = substitutions[reference.baseName.text] {
@@ -505,6 +532,22 @@ public enum SpecParser {
         }
         if let localRecursion = decodeLocalRecursion(expression, substitutions: substitutions) {
             return localRecursion
+        }
+        if let sequence = expression.as(SequenceExprSyntax.self) {
+            return decodeInfixExpr(Array(sequence.elements)) {
+                decodeTypedFacadeValue($0, substitutions: substitutions)
+            }
+        }
+        // `IntRange` occurs inside scoped typed expressions as well as at the
+        // top level.  Decode both bounds here so closure bindings such as a
+        // local-recursion argument remain available to the upper bound.
+        if let call = expression.as(FunctionCallExprSyntax.self),
+           call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "IntRange",
+           let lowerSyntax = call.arguments.first?.expression,
+           let upperSyntax = call.arguments.first(where: { $0.label?.text == "through" })?.expression,
+           let lower = decodeTypedFacadeValue(lowerSyntax, substitutions: substitutions),
+           let upper = decodeTypedFacadeValue(upperSyntax, substitutions: substitutions) {
+            return .integerRange(lower, upper)
         }
         if let call = expression.as(FunctionCallExprSyntax.self),
            let name = call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text,
@@ -583,15 +626,18 @@ public enum SpecParser {
                 arguments.map(FormalCallArgument.value)
             )
         }
-        // `Pair(first:second:)` is normally inferred from an enclosing
-        // `SetExpr<Pair<...>>`, so SwiftSyntax sees the constructor without
-        // its generic arguments. Its two labeled formal values still retain
-        // the complete tuple shape.
+        // `Pair(first:second:)` and `Pair.literal(_, _)` are normally
+        // inferred from an enclosing `SetExpr<Pair<...>>`, so SwiftSyntax
+        // sees neither spelling with its generic arguments.
         if let call = expression.as(FunctionCallExprSyntax.self),
-           call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "Pair",
+           let pairCall = pairCallKind(call),
            call.arguments.count == 2,
-           let firstSyntax = call.arguments.first(where: { $0.label?.text == "first" })?.expression,
-           let secondSyntax = call.arguments.first(where: { $0.label?.text == "second" })?.expression,
+           let firstSyntax = pairCall == .initializer
+                ? call.arguments.first(where: { $0.label?.text == "first" })?.expression
+                : call.arguments.first?.expression,
+           let secondSyntax = pairCall == .initializer
+                ? call.arguments.first(where: { $0.label?.text == "second" })?.expression
+                : call.arguments.dropFirst().first?.expression,
            let first = decodeTypedFacadeValue(firstSyntax, substitutions: substitutions),
            let second = decodeTypedFacadeValue(secondSyntax, substitutions: substitutions) {
             if case .value(let firstValue) = first,
@@ -677,7 +723,7 @@ public enum SpecParser {
            let baseSyntax = member.base,
            let base = decodeTypedFacadeValue(baseSyntax, substitutions: substitutions) {
             switch member.declName.baseName.text {
-            case "raw": return base
+            case "raw", "stateExpr", "expr": return base
             case "cardinality": return .cardinality(base)
             case "range":
                 return .operatorApplication(.reference("Range", arity: 1), [.value(base)])
@@ -769,11 +815,11 @@ public enum SpecParser {
            let closure = call.trailingClosure,
            let parameter = closureParameterNames(in: closure).first,
            closure.statements.count == 1,
-           case .expr(let bodySyntax) = closure.statements.first?.item,
-           let body = decodeTypedFacadeValue(
-                bodySyntax,
-                substitutions: [parameter: .variable("__pcal_function_key")]
-           ) {
+           case .expr(let bodySyntax) = closure.statements.first?.item {
+            let substitutions = [parameter: StateExpr.variable("__pcal_function_key")]
+            let body = decodeTypedFacadeValue(bodySyntax, substitutions: substitutions)
+                ?? decodeTypedDefaultValue(bodySyntax, expectedType: literalType.arguments.dropFirst().first)
+            guard let body else { return nil }
             return .functionLiteral(
                 .setLiteral(domain.map(StateExpr.value)),
                 "__pcal_function_key",
@@ -900,7 +946,22 @@ public enum SpecParser {
            let value = _enumPhases[type]?[member.declName.baseName.text] {
             return .value(value)
         }
-        return decodeTypedFacadeExpr(expression, substitutions: substitutions) ?? decodeStateExpr(expression)
+        if let decoded = decodeTypedFacadeExpr(expression, substitutions: substitutions) {
+            return decoded
+        }
+        // Some established formal spellings are decoded by the general AST
+        // parser rather than a typed-facade case.  Preserve the lexical typed
+        // bindings after that fallback as well; otherwise a nested scoped
+        // expression can silently lose its `WithValue`/formal parameter
+        // projection.
+        guard let decoded = decodeStateExpr(expression) else { return nil }
+        return substitutions.reduce(decoded) { expression, substitution in
+            StateExpr.substituteVariable(
+                substitution.key,
+                with: substitution.value,
+                in: expression
+            )
+        }
     }
 
     static func typedUpdateSelector(
@@ -958,6 +1019,34 @@ public enum SpecParser {
                 $0.argument.description.trimmingCharacters(in: .whitespacesAndNewlines)
             }
         )
+    }
+
+    private enum PairCallKind: Equatable {
+        case initializer
+        case literal
+    }
+
+    private static func pairCallKind(_ call: FunctionCallExprSyntax) -> PairCallKind? {
+        if call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "Pair" {
+            return .initializer
+        }
+        guard let access = call.calledExpression.as(MemberAccessExprSyntax.self),
+              access.declName.baseName.text == "literal",
+              access.base?.as(DeclReferenceExprSyntax.self)?.baseName.text == "Pair"
+        else { return nil }
+        return .literal
+    }
+
+    /// Decodes a typed value whose Swift spelling omits its generic arguments
+    /// because the surrounding expression already supplies them.
+    static func decodeTypedDefaultValue(_ expression: ExprSyntax, expectedType: String?) -> StateExpr? {
+        guard expectedType?.hasPrefix("SetExpr<") == true,
+              let call = expression.as(FunctionCallExprSyntax.self),
+              call.arguments.isEmpty,
+              call.trailingClosure == nil,
+              call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "SetExpr"
+        else { return nil }
+        return .setLiteral([])
     }
 
     static func decodeTypedRecordLiteral(
@@ -1318,9 +1407,16 @@ public enum SpecParser {
     }
 
     static func decodeInfixExpr(_ elements: [ExprSyntax]) -> StateExpr? {
+        decodeInfixExpr(elements, decoding: decodeStateExpr)
+    }
+
+    static func decodeInfixExpr(
+        _ elements: [ExprSyntax],
+        decoding decodeOperand: (ExprSyntax) -> StateExpr?
+    ) -> StateExpr? {
         guard !elements.isEmpty else { return nil }
         if elements.count == 1 {
-            return decodeStateExpr(elements[0])
+            return decodeOperand(elements[0])
         }
         guard elements.count % 2 == 1 else { return nil }
 
@@ -1352,8 +1448,8 @@ public enum SpecParser {
               })
         else { return nil }
 
-        guard let lhs = decodeInfixExpr(Array(elements[..<split.0])),
-              let rhs = decodeInfixExpr(Array(elements[(split.0 + 1)...]))
+        guard let lhs = decodeInfixExpr(Array(elements[..<split.0]), decoding: decodeOperand),
+              let rhs = decodeInfixExpr(Array(elements[(split.0 + 1)...]), decoding: decodeOperand)
         else { return nil }
         return applyInfixOp(split.1, lhs, rhs)
     }

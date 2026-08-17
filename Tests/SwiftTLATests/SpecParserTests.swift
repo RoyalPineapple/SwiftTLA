@@ -261,6 +261,31 @@ private func parseExpression(_ source: String) -> ExprSyntax {
         #expect(parsed.actions.first?.body.description.contains("destination' = (source + 1)") == true)
     }
 
+    @Test("parser retains typed pair projections and formal calls in a statement macro")
+    func parsesTypedPairStatementMacro() {
+        let source = """
+        {
+            Algorithm("PairVote") {
+                FormalDefinition("SafeAt", taking: Int.self, Int.self) { ballot, value in
+                    ballot >= 0 && value >= 0
+                }
+                let vote = Macro { (pair: MacroParameter<Pair<Int, Int>>) in
+                    When(
+                        pair.expr.first() >= 0
+                            && FormalCall(as: Bool.self, "SafeAt", pair.expr.first(), pair.expr.second())
+                    )
+                }
+                Do("vote") { vote(Pair.literal(1, 2)) }
+            }
+        }
+        """
+        let closure = Parser.parse(source: source).statements.first!.item.as(ClosureExprSyntax.self)!
+        let parsed = SpecParser.parseSpecClosure(closure)
+
+        #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
+        #expect(parsed.actions.first?.body.description.contains("SafeAt(1, 2)") == true)
+    }
+
     @Test("parser rejects an expression used for a macro assignment target")
     func diagnosesExpressionMacroAssignmentTarget() {
         let source = """
@@ -414,6 +439,30 @@ private func parseExpression(_ source: String) -> ExprSyntax {
             guard case .record(let fields) = value else { return false }
             return fields["floor"] == .int(4) && fields["door"] == .string("closed")
         })
+    }
+
+    @Test("parser retains an empty typed set in a function comprehension")
+    func parsesEmptySetFunctionComprehension() {
+        let source = """
+        {
+            Algorithm("Votes") {
+                let votes = SharedVar(initial: Function<Acceptor, SetExpr<Int>>.mapping { _ in SetExpr() })
+                Do("hold") { Assign(votes, to: votes.expr) }
+            }
+        }
+        """
+        let closure = Parser.parse(source: source).statements.first!.item.as(ClosureExprSyntax.self)!
+        let parsed = SpecParser.parseSpecClosure(
+            closure,
+            enumDomains: ["Acceptor": [.string("a1"), .string("a2")]]
+        )
+
+        #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
+        guard case .function(let votes) = parsed.variables.first?.initial else {
+            Issue.record("Expected votes to retain a formal finite function")
+            return
+        }
+        #expect(votes == [.string("a1"): .set([]), .string("a2"): .set([])])
     }
 
     @Test("parser retains a typed finite function literal with its bound key")
@@ -959,6 +1008,21 @@ private enum ParserNode: String, FiniteDomainKey {
         #expect(operators[0].parameters == ["current"])
         #expect(operators[0].body.description.contains("SA["))
         #expect(result.description == "SA[value0]")
+    }
+
+    @Test func typedFormalDefinitionParsesPairLiterals() {
+        let source = """
+        {
+            FormalDefinition("PairAt", taking: Int.self, Int.self) { ballot, value in
+                Pair.literal(ballot.expr, value.expr) == Pair.literal(0, 1)
+            }
+        }
+        """
+        let closure = Parser.parse(source: source).statements.first!.item.as(ClosureExprSyntax.self)!
+        let parsed = SpecParser.parseSpecClosure(closure)
+
+        #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
+        #expect(parsed.formalOperatorDefinitions.first?.body.description == "<<value0, value1>> = <<0, 1>>")
     }
 
     @Test func formalOperatorLambdaAndArgumentKindsRoundTripThroughTheParser() {

@@ -17,7 +17,7 @@ jobs:
   release-code-check:
     runs-on: macos-15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Validate release code-check contract
         run: bash Tests/Fixtures/ReleaseCodeCheck/assert_workflow.sh
@@ -56,12 +56,30 @@ jobs:
 
   build:
     runs-on: macos-15
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - run: swift build --target SwiftTLA -j 1
 
-  macro:
-    runs-on: macos-15
+  canonical-corpus-export:
+    runs-on: macos-14
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-      - run: swift build --target SwiftTLAMacros
+      - uses: actions/checkout@v5
+
+      - name: Build canonical corpus exporter
+        run: swift build --product canonical-corpus-export -j 1
+
+      - name: Export canonical upstream corpus
+        run: |
+          swift run --skip-build canonical-corpus-export \
+            --output .build/canonical-corpus-export \
+            --swift-tla-sha "$GITHUB_SHA"
+
+      - name: Upload canonical corpus input
+        uses: actions/upload-artifact@v5
+        with:
+          name: canonical-corpus-${{ github.sha }}
+          path: .build/canonical-corpus-export
+          if-no-files-found: error
+          retention-days: 14

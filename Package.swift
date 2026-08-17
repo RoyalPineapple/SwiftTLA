@@ -38,15 +38,24 @@ let package = Package(
             .product(name: "SwiftParser", package: "swift-syntax")
         ]),
         .target(name: "SwiftTLAModels", dependencies: ["SwiftTLA", "SwiftTLAMacros"], swiftSettings: settings),
+        // The externally qualified upstream backbone is its own source target
+        // so its exact models can be exported without compiling the full
+        // example gallery. UpstreamParity re-exports these public types.
+        .target(
+            name: "CanonicalUpstreamCorpus",
+            dependencies: ["SwiftTLA", "SwiftTLAMacros"],
+            path: "Sources/UpstreamParity/CanonicalCorpus"
+        ),
         .target(
             name: "UpstreamParity",
             dependencies: [
                 "SwiftTLA",
                 "SwiftTLAMacros",
+                "CanonicalUpstreamCorpus",
                 .product(name: "SwiftParser", package: "swift-syntax"),
                 .product(name: "SwiftSyntax", package: "swift-syntax")
             ],
-            exclude: ["Examples/AGENTS.md"],
+            exclude: ["Examples/AGENTS.md", "CanonicalCorpus"],
             swiftSettings: settings
         ),
         .target(
@@ -65,6 +74,14 @@ let package = Package(
             name: "tlc-validate",
             dependencies: ["SwiftTLA", "UpstreamParity"],
             path: "Sources/TLCValidate"
+        ),
+        // Internal CI appendix: exports the canonical upstream Algorithm
+        // corpus for independent translator/TLC evidence. It is deliberately
+        // not a package product or application-facing API.
+        .executableTarget(
+            name: "canonical-corpus-export",
+            dependencies: ["SwiftTLA", "CanonicalUpstreamCorpus"],
+            path: "Tools/CanonicalCorpusExport"
         ),
         // Fast semantic-core tests. Keep this target free of UpstreamParity so
         // Fast semantic witnesses compile and run without the parity corpus.

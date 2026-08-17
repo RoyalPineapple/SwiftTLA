@@ -228,18 +228,3 @@ public struct KVsnapModel {
         }
     }
 }
-
-extension Example {
-    /// The expected state count is retained by the external oracle benchmark,
-    /// which compares this generated module with the official PlusCal path.
-    public static let kvsnap = Entry(
-        id: "KeyValueStore/KVsnap",
-        upstreamSpec: "KeyValueStore",
-        upstreamModule: "specifications/KeyValueStore/KVsnap.tla",
-        upstreamCfg: "specifications/KeyValueStore/MCKVsnap.cfg",
-        expectedDistinct: 0,
-        verificationStateLimit: 1,
-        spec: KVsnapModel.spec,
-        notes: "Canonical KVsnap source port. The independent ValidationEvidence benchmark retains the bounded TLC count and graph evidence."
-    )
-}

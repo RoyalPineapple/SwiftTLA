@@ -64,7 +64,7 @@ public struct VoteProofModel {
                 let ballots = SetExpr<Int>.literal(0, 1, 2)
 
                 FormalDefinition("SafeAt", taking: Int.self, Value.self) { ballot, value in
-                    LetRec("SA", over: ballots, taking: Int.self, { recursion, currentBallot in
+                    LetRec("SA", over: ballots, taking: Int.self, { (recursion: LocalRecursion<Int, Bool>, currentBallot) in
                         currentBallot == 0 || Exists(in: quorums) { quorum in
                             ForAll(in: quorum.expr) { acceptor in
                                 maxBal[acceptor] >= currentBallot.expr
@@ -141,17 +141,4 @@ public struct VoteProofModel {
             Definition("Refines == C!Spec")
         }
     }
-}
-
-extension Example {
-    public static let voteProof = Entry(
-        id: "byzpaxos/VoteProof",
-        upstreamSpec: "byzpaxos",
-        upstreamModule: "specifications/byzpaxos/VoteProof.tla",
-        upstreamCfg: "specifications/byzpaxos/VoteProof.cfg",
-        expectedDistinct: 0,
-        verificationStateLimit: 1,
-        spec: VoteProofModel.spec,
-        notes: "Canonical VoteProof source port. External validation retains the bounded official PlusCal and TLC comparison."
-    )
 }
