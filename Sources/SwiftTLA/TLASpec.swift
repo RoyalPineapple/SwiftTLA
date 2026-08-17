@@ -666,7 +666,15 @@ public struct FormalOperatorDecl: SpecComponent, Equatable {
 public func FormalDefinition(
   _ name: String,
   parameters: [FormalParameter],
-  body: some StateExprConvertible
+  body: StateExpr
+) -> FormalOperatorDecl {
+  FormalOperatorDecl(FormalOperatorDefinition(name: name, parameters: parameters, body: body))
+}
+
+public func FormalDefinition<Body: StateExprConvertible>(
+  _ name: String,
+  parameters: [FormalParameter],
+  body: Body
 ) -> FormalOperatorDecl {
   FormalOperatorDecl(FormalOperatorDefinition(name: name, parameters: parameters, body: body.stateExpr))
 }
