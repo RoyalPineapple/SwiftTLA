@@ -158,6 +158,18 @@ do {
             throw ExportError.invalidAlgorithmCount(id: item.id, actual: plusCalModules.count)
         }
 
+        let externalInputs = try CanonicalCorpusModuleClosure.inputs(for: item.id).map { input in
+            (input, try fetchPinnedModule(input))
+        }
+        let linkedImports = bundle.imports + externalInputs.map { input, data in
+            TLAModuleFile(name: input.name, tla: String(decoding: data, as: UTF8.self))
+        }
+        try TLAModuleBundle(root: bundle.root, imports: linkedImports).validateLink()
+        try TLAModuleBundle(
+            root: .init(name: bundle.root.name, tla: plusCalModules[0]),
+            imports: linkedImports
+        ).validateLink()
+
         var files = [Manifest.Case.File]()
         files.append(try write(bundle.root.tla, relativePath: "\(item.id)/swift/\(bundle.root.name).tla", under: options.output))
         files.append(try write(item.swiftConfiguration, relativePath: "\(item.id)/swift/\(bundle.root.name).cfg", under: options.output))
@@ -166,8 +178,7 @@ do {
         }
         files.append(try write(plusCalModules[0], relativePath: "\(item.id)/pluscal/\(bundle.root.name).tla", under: options.output))
         files.append(try write(item.plusCalConfiguration, relativePath: "\(item.id)/pluscal/\(bundle.root.name).cfg", under: options.output))
-        for input in CanonicalCorpusModuleClosure.inputs(for: item.id) {
-            let data = try fetchPinnedModule(input)
+        for (input, data) in externalInputs {
             let source = Manifest.Case.File.Source(
                 repository: input.source.repository,
                 commit: input.source.commit,

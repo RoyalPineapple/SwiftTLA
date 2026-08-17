@@ -139,34 +139,34 @@ public struct TLCProcessRequestV1: Equatable, Sendable {
     guard FileManager.default.fileExists(atPath: module.path) else {
       throw TLCProcessErrorV1.invalidModuleBundle(.missingRootModule(path: module.path))
     }
-    var visited: Set<URL> = []
-    try validateModuleDependencies(module, visited: &visited)
-  }
-
-  private func validateModuleDependencies(_ sourceURL: URL, visited: inout Set<URL>) throws {
-    let normalized = sourceURL.standardizedFileURL
-    guard visited.insert(normalized).inserted else { return }
-    let source: String
     do {
-      source = try String(contentsOf: normalized, encoding: .utf8)
+      let directory = module.deletingLastPathComponent()
+      let files = try FileManager.default.contentsOfDirectory(
+        at: directory, includingPropertiesForKeys: nil
+      ).filter { $0.pathExtension == "tla" }
+      let root = TLAModuleFile(
+        name: module.deletingPathExtension().lastPathComponent,
+        tla: try String(contentsOf: module, encoding: .utf8)
+      )
+      let imports = try files.filter { $0.standardizedFileURL != module.standardizedFileURL }.map { url in
+        TLAModuleFile(
+          name: url.deletingPathExtension().lastPathComponent,
+          tla: try String(contentsOf: url, encoding: .utf8)
+        )
+      }
+      try TLAModuleBundle(root: root, imports: imports).validateLink()
     } catch {
-      throw TLCProcessErrorV1.invalidModuleBundle(.unreadableModule(
-        path: normalized.path, reason: sanitized(error.localizedDescription)
-      ))
-    }
-    for dependency in moduleDependencies(in: source) {
-      guard !Self.tlcStandardModules.contains(dependency.name) else { continue }
-      let expected = normalized.deletingLastPathComponent()
-        .appendingPathComponent("\(dependency.name).tla")
-      guard FileManager.default.fileExists(atPath: expected.path) else {
+      if case TLAModuleBundleLinkError.missingModule(let dependency, let importedBy, let line) = error {
         throw TLCProcessErrorV1.invalidModuleBundle(.missingImportedModule(
-          module: dependency.name,
-          importedBy: normalized.path,
-          line: dependency.line,
-          expectedFile: expected.path
+          module: dependency,
+          importedBy: module.deletingLastPathComponent().appendingPathComponent("\(importedBy).tla").path,
+          line: line,
+          expectedFile: module.deletingLastPathComponent().appendingPathComponent("\(dependency).tla").path
         ))
       }
-      try validateModuleDependencies(expected, visited: &visited)
+      throw TLCProcessErrorV1.invalidModuleBundle(.unreadableModule(
+        path: module.path, reason: sanitized(error.localizedDescription)
+      ))
     }
   }
 
@@ -216,36 +216,6 @@ public struct TLCProcessRequestV1: Equatable, Sendable {
     lhs.resolvingSymlinksInPath().standardizedFileURL
       == rhs.resolvingSymlinksInPath().standardizedFileURL
   }
-
-  private struct ModuleDependency: Sendable {
-    let name: String
-    let line: Int
-  }
-
-  private func moduleDependencies(in source: String) -> [ModuleDependency] {
-    source.split(separator: "\n", omittingEmptySubsequences: false).enumerated().flatMap { offset, rawLine in
-      let line = rawLine.trimmingCharacters(in: .whitespaces)
-      if line.hasPrefix("EXTENDS ") {
-        return line.dropFirst("EXTENDS ".count).split(separator: ",").compactMap { token in
-          let name = token.trimmingCharacters(in: .whitespaces)
-          return isModuleIdentifier(name) ? ModuleDependency(name: name, line: offset + 1) : nil
-        }
-      }
-      guard let range = line.range(of: "== INSTANCE ") else { return [] }
-      let remainder = line[range.upperBound...]
-      let name = remainder.prefix { $0.isLetter || $0.isNumber || $0 == "_" }
-      guard isModuleIdentifier(String(name)) else { return [] }
-      return [ModuleDependency(name: String(name), line: offset + 1)]
-    }
-  }
-
-  private func isModuleIdentifier(_ value: String) -> Bool {
-    !value.isEmpty && value.first?.isLetter == true
-  }
-
-  private static let tlcStandardModules: Set<String> = [
-    "Bags", "FiniteSets", "Integers", "Naturals", "Randomization", "RealTime", "Sequences", "TLC"
-  ]
 
   public static let fixture = Self(
     javaExecutable: URL(fileURLWithPath: "/usr/bin/java"),
