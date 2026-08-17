@@ -100,8 +100,7 @@ extension SpecParser {
         }
 
         // Keep the source-level IR before the one and only parser lowering.
-        // The ordinary ParsedSpecModel cannot represent every Algorithm
-        // distinction after lowering.
+        // It is source fidelity evidence, not a second formal model.
         result.algorithmFidelityTokens.append(AlgorithmFidelityToken(model: model))
 
         let lowered: TLASpec
@@ -128,7 +127,10 @@ extension SpecParser {
         })
         for variable in lowered.variables {
             if let index = result.variables.firstIndex(where: { $0.name == variable.name }) {
-                result.variables[index] = (variable.name, variable.initial, variable.initialSet, result.variables[index].swiftTypeName)
+                result.variables[index] = .init(
+                    formal: variable,
+                    swiftTypeName: result.variables[index].swiftTypeName
+                )
             } else {
                 let inferredType = stateTypes[variable.name]
                 let projectedType: String?
@@ -137,12 +139,7 @@ extension SpecParser {
                 } else {
                     projectedType = inferredType
                 }
-                result.variables.append((
-                    variable.name,
-                    variable.initial,
-                    variable.initialSet,
-                    projectedType
-                ))
+                result.variables.append(.init(formal: variable, swiftTypeName: projectedType))
             }
         }
         let processTypes = Dictionary(uniqueKeysWithValues: model.processes.map { process in

@@ -208,7 +208,7 @@ struct MultiCarElevatorDSLTests {
     let builder = MultiCarElevator.builderSpec
     let macro = MultiCarElevatorMacroFixture.spec
 
-    #expect(normalize(builder) == normalize(macro))
+    #expect(_tlaAlphaEquivalent(builder, macro))
 
     let checker = ModelChecker(spec: MultiCarElevatorModel.spec, maxStates: 30_000)
     guard case .ok(let stateCount) = try checker.check() else {
@@ -218,14 +218,6 @@ struct MultiCarElevatorDSLTests {
     #expect(stateCount == 3_276)
 
     #expect(wrapperLines(in: macro.tlaModule) == expectedWrapperLines)
-  }
-
-  private func normalize(_ spec: TLASpec) -> ParsedSpecModel {
-    ParsedSpecModel(
-      variables: spec.variables.map { ($0.name, $0.initial, $0.initialSet) },
-      actions: spec.actions.map { ($0.name, $0.body, $0.bindings) },
-      invariants: spec.invariants.map { ($0.name, $0.body) }
-    )
   }
 
   private func wrapperLines(in tla: String) -> [String] {

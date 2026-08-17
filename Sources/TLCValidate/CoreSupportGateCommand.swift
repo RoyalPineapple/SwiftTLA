@@ -280,7 +280,7 @@ if name == "check-all" {
     var ok = 0; var fail = 0
     print("=== SwiftTLA ModelChecker vs TLC ===")
     for entry in Example.all {
-        let mc = ModelChecker(spec: entry.spec, maxStates: 50000)
+        let mc = ModelChecker(compilation: try entry.spec.compile(), maxStates: 50000)
         do {
             let count = try mc.exploreGraph().states.count
             let result = try mc.check()
@@ -314,7 +314,7 @@ if name == "bundle" {
 
 if name == "test-game-of-life" || name == "test-lazy" {
     let spec = Example.gameOfLife.spec
-    let mc = ModelChecker(spec: spec, maxStates: 100)
+    let mc = ModelChecker(compilation: try spec.compile(), maxStates: 100)
     do { let r = try mc.check(); print("OK: \(r)") } catch { print("ERR: \(error)") }
     exit(0)
 }
@@ -516,7 +516,7 @@ func runSymmetricCollectionOracle() throws {
 
     for scope in 2...4 {
         let spec = symmetricOracleSpec(scope: scope)
-        let swiftStates = try ModelChecker(spec: spec).exploreGraph().states.count
+        let swiftStates = try ModelChecker(compilation: try spec.compile()).exploreGraph().states.count
         let execution = try executeTLC(bundle: spec.tlaBundle, moduleName: spec.name, jarPath: jarPath)
         guard let tlcStates = execution.distinctStates else {
             throw SymmetricCollectionOracleError.missingStateCount(execution.output)

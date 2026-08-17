@@ -96,11 +96,11 @@ struct TLAModuleBundleTests {
     let runtime = TLASpec("Imported") {
       Import(ZSequences.module, configuring: ZSequences.boundedNaturalNumbers(0...2))
     }
-    let parserTree = ParsedSpecModel(
+    let parserTree = canonicalTestSpec(
       variables: [], actions: [], invariants: [], imports: parsed.imports,
       importConfigurations: parsed.importConfigurations
     )
-    let runtimeTree = ParsedSpecModel(
+    let runtimeTree = canonicalTestSpec(
       variables: [], actions: [], invariants: [], imports: runtime.imports.map(\.name),
       importConfigurations: runtime.importConfigurations
     )
@@ -116,10 +116,10 @@ struct TLAModuleBundleTests {
     let runtime = TLASpec("Parameterized") {
       Parameter("Base")
     }
-    let parserTree = ParsedSpecModel(
+    let parserTree = canonicalTestSpec(
       variables: [], actions: [], invariants: [], formalParameters: parsed.formalParameters
     )
-    let runtimeTree = ParsedSpecModel(
+    let runtimeTree = canonicalTestSpec(
       variables: [], actions: [], invariants: [], formalParameters: runtime.formalParameters
     )
 

@@ -2,15 +2,29 @@ public struct SpecRuntime: Sendable {
     public typealias ActionEvaluator = @Sendable (ActionExpr, [String: TLAValue], [String]) throws -> [[String: TLAValue]]
 
     public let spec: TLASpec
+    /// Present when this runtime entered through the validated compiler gate.
+    public let compilation: CompiledSpecification?
     private let invariants: [NamedInvariant]
     private let transitionRelation: TransitionRelation
 
-    public init(
+    init(
         spec: TLASpec,
         actionEvaluator: ActionEvaluator? = nil
     ) {
         let resolvedSpec = substituteConstants(spec)
         self.spec = spec
+        self.compilation = nil
+        self.invariants = resolvedSpec.invariants
+        self.transitionRelation = TransitionRelation(resolvedSpec: resolvedSpec, actionEvaluator: actionEvaluator)
+    }
+
+    public init(
+        compilation: CompiledSpecification,
+        actionEvaluator: ActionEvaluator? = nil
+    ) {
+        let resolvedSpec = substituteConstants(compilation.spec)
+        self.spec = compilation.spec
+        self.compilation = compilation
         self.invariants = resolvedSpec.invariants
         self.transitionRelation = TransitionRelation(resolvedSpec: resolvedSpec, actionEvaluator: actionEvaluator)
     }

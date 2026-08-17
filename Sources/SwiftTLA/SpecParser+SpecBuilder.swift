@@ -6,7 +6,10 @@ extension SpecParser {
     // MARK: - Unified spec builder parser
 
     public struct ParsedSpecComponents {
-        public var variables: [(name: String, initial: TLAValue, initialSet: StateExpr?, swiftTypeName: String?)] = []
+        /// A canonical formal variable plus the Swift-only type fact used by
+        /// generated surface code. The parser does not retain a second
+        /// variable representation.
+        public var variables: [ParsedVariable] = []
         public var actions: [ParsedAction] = []
         public var symmetricCollections: [ParsedSymmetricCollection] = []
         public var collectionActions: [ParsedCollectionAction] = []
@@ -28,6 +31,43 @@ extension SpecParser {
         public var constants: [String: TLAValue] = [:]
         /// Local named values (from NamedValue declarations, resolved in expressions)
         public var localConstants: [String: TLAValue] = [:]
+    }
+
+    public struct ParsedVariable: Sendable, Equatable {
+        public var formal: NamedVar
+        public var swiftTypeName: String?
+
+        public init(
+            name: String,
+            initial: TLAValue,
+            initialSet: StateExpr? = nil,
+            initExpr: StateExpr? = nil,
+            lazySet: StateExpr? = nil,
+            collectionType: CollectionVarType = .scalar,
+            swiftTypeName: String? = nil
+        ) {
+            self.formal = NamedVar(
+                name: name,
+                initial: initial,
+                initialSet: initialSet,
+                initExpr: initExpr,
+                lazySet: lazySet,
+                collectionType: collectionType
+            )
+            self.swiftTypeName = swiftTypeName
+        }
+
+        public init(formal: NamedVar, swiftTypeName: String? = nil) {
+            self.formal = formal
+            self.swiftTypeName = swiftTypeName
+        }
+
+        public var name: String { formal.name }
+        public var initial: TLAValue { formal.initial }
+        public var initialSet: StateExpr? { formal.initialSet }
+        public var initExpr: StateExpr? { formal.initExpr }
+        public var lazySet: StateExpr? { formal.lazySet }
+        public var collectionType: CollectionVarType { formal.collectionType }
     }
 
     public struct ParsedAction: Sendable, Equatable {
@@ -59,15 +99,10 @@ extension SpecParser {
     }
 
     public struct ParsedCollectionAction {
-        public struct RuntimeBranch {
-            public let guardExpressions: [String]
-            public let updateExpression: String?
-        }
-
         public let name: String
         public let collectionName: String
-        public let body: ActionExpr
-        public let runtimeBranches: [RuntimeBranch]
+        /// Swift-only source provenance. The executable action is retained
+        /// only in `ParsedAction` and lowered once into `TLASpec`.
         public let source: String
     }
 
@@ -250,17 +285,17 @@ extension SpecParser {
                ["Function<", "Record<", "SetExpr<"].contains(where: varTypeName.contains),
                let name = args.first?.expression.as(StringLiteralExprSyntax.self)?.segments.description
                 .replacingOccurrences(of: "\"", with: "") {
-                result.variables.append((name, .int(0), nil, varTypeName))
+                result.variables.append(.init(name: name, initial: .int(0), swiftTypeName: varTypeName))
                 continue
             }
 
             if let rangeExpr = args.first(where: { $0.label?.text == "in" })?.expression {
                 if callName == "SharedVar", let range = parseIntegerClosedRange(rangeExpr) {
-                    result.variables.append((
-                        patternName,
-                        .int(range.lowerBound),
-                        .setLiteral(range.map { .value(.int($0)) }),
-                        "Int"
+                    result.variables.append(.init(
+                        name: patternName,
+                        initial: .int(range.lowerBound),
+                        initialSet: .setLiteral(range.map { .value(.int($0)) }),
+                        swiftTypeName: "Int"
                     ))
                     continue
                 }
@@ -270,17 +305,24 @@ extension SpecParser {
                    let first = elements.first,
                    let elementType = setExpressionElementTypeName(rangeExpr) {
                     let initial = (try? first.evaluate(in: [:])) ?? .int(0)
-                    result.variables.append((patternName, initial, initialSet, elementType))
+                    result.variables.append(.init(
+                        name: patternName, initial: initial, initialSet: initialSet,
+                        swiftTypeName: elementType
+                    ))
                     continue
                 }
                 let lowerBound = parseRangeLowerBound(rangeExpr)
-                result.variables.append((patternName, .int(lowerBound), nil, varTypeName))
+                result.variables.append(.init(
+                    name: patternName, initial: .int(lowerBound), swiftTypeName: varTypeName
+                ))
                 continue
             }
 
             if let valuesArg = args.first(where: { $0.label?.text == "values" })?.expression {
                 let firstValue = parseValuesFirst(valuesArg)
-                result.variables.append((patternName, .string(firstValue), nil, varTypeName))
+                result.variables.append(.init(
+                    name: patternName, initial: .string(firstValue), swiftTypeName: varTypeName
+                ))
                 continue
             }
 
@@ -292,11 +334,15 @@ extension SpecParser {
                     ? parsedInitialValue(args[1].expression)
                     : .int(0)
                 let inferredType = args.count >= 2 ? initialValueTypeName(from: args[1].expression) : nil
-                result.variables.append((varName, initial, nil, varTypeName ?? inferredType))
+                result.variables.append(.init(
+                    name: varName, initial: initial, swiftTypeName: varTypeName ?? inferredType
+                ))
             } else {
                 let initial: TLAValue = parsedInitialValue(args[0].expression)
                 let inferredType = initialValueTypeName(from: args[0].expression)
-                result.variables.append((patternName, initial, nil, varTypeName ?? inferredType))
+                result.variables.append(.init(
+                    name: patternName, initial: initial, swiftTypeName: varTypeName ?? inferredType
+                ))
             }
         }
     }
@@ -583,7 +629,7 @@ extension SpecParser {
         case "UseSpec":
             if let name = extractStringArg(call, index: 0),
                let spec = SpecRegistry.lookup(name) {
-                result.variables += spec.variables.map { (name: $0.name, initial: $0.initial, initialSet: $0.initialSet, swiftTypeName: nil) }
+                result.variables += spec.variables.map { .init(formal: $0) }
                 result.invariants += spec.invariants.map { (name: $0.name, body: $0.body) }
                 result.actions += spec.actions.map { ParsedAction(name: $0.name, body: $0.body, bindings: $0.bindings) }
             }
@@ -844,11 +890,9 @@ extension SpecParser {
         let existing = result.variables[matchingIndices[0]]
         let replacement = result.variables[latest]
         result.variables.remove(at: latest)
-        result.variables[matchingIndices[0]] = (
-            replacement.name,
-            replacement.initial,
-            replacement.initialSet,
-            replacement.swiftTypeName ?? existing.swiftTypeName
+        result.variables[matchingIndices[0]] = .init(
+            formal: replacement.formal,
+            swiftTypeName: replacement.swiftTypeName ?? existing.swiftTypeName
         )
     }
 

@@ -267,7 +267,7 @@ private func runCoreConformance(arguments: [String]) -> Never {
                 swiftExploration: {
                     SwiftExplorationEvidenceV1(
                         caseID: caseDefinition.id,
-                        exploration: try ModelChecker(spec: try swiftSpec(entry.swiftSpec)).explore()
+                        exploration: try ModelChecker(compilation: try swiftSpec(entry.swiftSpec).compile()).explore()
                     )
                 },
                 tlcRequest: request,

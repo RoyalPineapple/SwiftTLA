@@ -121,12 +121,12 @@ private struct FoldGeneratedModel {
             return
         }
 
-        let parsedModel = ParsedSpecModel(
+        let parsedModel = canonicalTestSpec(
             variables: [],
             actions: [("evaluate", .guard_(parsed), [])],
             invariants: []
         )
-        let runtimeModel = ParsedSpecModel(
+        let runtimeModel = canonicalTestSpec(
             variables: [],
             actions: [("evaluate", .guard_(runtime.raw), [])],
             invariants: []
@@ -170,8 +170,8 @@ private struct FoldGeneratedModel {
         #expect(try runtime.raw.evaluate(in: [:]) == .int(6))
         #expect(runtime.raw.description.contains("FoldFunction(LAMBDA"))
         #expect(_tlaAlphaEquivalent(
-            ParsedSpecModel(variables: [], actions: [("fold", .guard_(runtime.raw), [])], invariants: []),
-            ParsedSpecModel(variables: [], actions: [("fold", .guard_(parsed), [])], invariants: [])
+            canonicalTestSpec(variables: [], actions: [("fold", .guard_(runtime.raw), [])], invariants: []),
+            canonicalTestSpec(variables: [], actions: [("fold", .guard_(parsed), [])], invariants: [])
         ))
 
         let ordered = StateExpr.foldFunction(

@@ -5,7 +5,7 @@ extension MacroExpander {
     static func generateCanonicalMachineMembers(
         isActor: Bool,
         hasActions: Bool,
-        symmetricCollections: [SpecParser.ParsedSymmetricCollection] = []
+        symmetricCollections: [SymmetricCollectionDecl] = []
     ) -> [DeclSyntax] {
         let modifier = isActor ? "" : "mutating "
         let labelField = hasActions ? "public let label: ActionLabel" : ""

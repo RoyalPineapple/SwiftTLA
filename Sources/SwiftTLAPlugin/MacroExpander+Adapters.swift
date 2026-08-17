@@ -10,7 +10,7 @@ enum NestedAdapterKind {
 extension MacroExpander {
     static func generateNestedAdapterMembers(
         kind: NestedAdapterKind,
-        canonicalModel: ParsedMacroModel,
+        canonicalModel: MacroCompilation,
         needsPublicInitializer: Bool
     ) -> [DeclSyntax] {
         let modelType = canonicalModel.typeName
@@ -66,11 +66,13 @@ extension MacroExpander {
         return declarations
     }
 
-    static func generateNestedObservableMembers(model: ParsedMacroModel) -> [DeclSyntax] {
+    static func generateNestedObservableMembers(model: MacroCompilation) -> [DeclSyntax] {
         let identifiers = generatedActionIdentifiers(actions: model.actions)
         let callbacks = zip(model.actions, identifiers).map { action, identifier in
             let callbackName = "on" + identifier.prefix(1).capitalized + identifier.dropFirst()
-            let parameterTypes = publicBindings(for: action).map { swiftType(for: action, binding: $0) }
+            let parameterTypes = publicBindings(for: action).map {
+                swiftType(for: action, binding: $0, facts: model.swiftFacts)
+            }
             let parameters = (parameterTypes + ["State", "State"]).joined(separator: ", ")
             return DeclSyntax(stringLiteral: "@MainActor public var \(callbackName): ((\(parameters)) async -> Void)?")
         }
@@ -97,7 +99,7 @@ extension MacroExpander {
         let typedActions = zip(model.actions, identifiers).map { action, identifier -> DeclSyntax in
             let bindings = publicBindings(for: action)
             let parameters = bindings.map { binding in
-                "\(binding.name): \(swiftType(for: action, binding: binding))"
+                "\(binding.name): \(swiftType(for: action, binding: binding, facts: model.swiftFacts))"
             }.joined(separator: ", ")
             let labelArguments = bindings.map { "\($0.name): \($0.name)" }.joined(separator: ", ")
             let label = bindings.isEmpty

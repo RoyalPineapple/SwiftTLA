@@ -1,6 +1,6 @@
 extension TLASpec {
   public init(
-    _ name: String, parserTree: ParsedSpecModel? = nil,
+    _ name: String,
     @SpecBuilder _ builder: () -> [SpecComponent]
   ) {
     let components = builder()
@@ -174,30 +174,6 @@ extension TLASpec {
       if let a = used.assume { assumes = assumes.map { .and($0, a) } ?? a }
       symmetrySets += used.symmetrySets
       symmetricCollections += used.symmetricCollections
-    }
-
-    if let tree = parserTree {
-      let built = ParsedSpecModel(
-        variables: variables.map { ($0.name, $0.initial, $0.initialSet) },
-        actions: actions.map { ($0.name, $0.body, $0.bindings) },
-        invariants: invariants.map { ($0.name, $0.body) },
-        temporal: temporalProperties.map { ($0.name, $0.expr) },
-        fairness: fairness,
-        constraint: constraint,
-        imports: importedModules.map(\.name),
-        importConfigurations: importConfigurations,
-        moduleInstances: moduleInstances,
-        formalParameters: formalParameters,
-        formalOperatorDefinitions: formalOperatorDefinitions,
-        definitions: definitions,
-        symmetrySets: symmetrySets
-      )
-      guard _tlaAlphaEquivalent(built, tree) else {
-        fatalError(
-          "SpecParser tree mismatch for '\(name)'. " +
-            _tlaFidelityDiagnostic(tree, built)
-        )
-      }
     }
 
     // Auto-UNCHANGED: push into OR branches so TLC sees complete assignments

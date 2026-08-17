@@ -4,11 +4,21 @@
 /// and composition APIs — not as a decorative controller inside this loop.
 public struct ModelChecker {
     public let spec: TLASpec
+    /// Present when this checker entered through the validated compiler gate.
+    public let compilation: CompiledSpecification?
     public let maxStates: Int
     public let permutationProductBudget: Int
 
-    public init(spec: TLASpec, maxStates: Int = 100_000, permutationProductBudget: Int = 100_000) {
+    init(spec: TLASpec, maxStates: Int = 100_000, permutationProductBudget: Int = 100_000) {
         self.spec = spec
+        self.compilation = nil
+        self.maxStates = maxStates
+        self.permutationProductBudget = permutationProductBudget
+    }
+
+    public init(compilation: CompiledSpecification, maxStates: Int = 100_000, permutationProductBudget: Int = 100_000) {
+        self.spec = compilation.spec
+        self.compilation = compilation
         self.maxStates = maxStates
         self.permutationProductBudget = permutationProductBudget
     }
@@ -58,8 +68,8 @@ public struct ModelChecker {
     }
 
     /// Compose checker lifecycle ⋊ user and explore (bootstrap entry point).
-    public static func compose(_ checker: TLASpec, _ user: TLASpec) -> ModelChecker {
-        ModelChecker(spec: checker.extending(user))
+    public static func compose(_ checker: TLASpec, _ user: TLASpec) throws -> ModelChecker {
+        ModelChecker(compilation: try checker.extending(user).compile())
     }
 
     public static func checkComposed(
