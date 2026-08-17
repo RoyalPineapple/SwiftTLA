@@ -76,15 +76,6 @@ extension TLASpec {
             }
         }
 
-        for instance in moduleInstances {
-            let arguments = instance.arguments.map { argument in
-                "\(argument.parameter) <- \(argument.value)"
-            }.joined(separator: ", ")
-            let withClause = arguments.isEmpty ? "" : " WITH \(arguments)"
-            lines.append("\(instance.name) == INSTANCE \(instance.module.name)\(withClause)")
-            lines.append("")
-        }
-
         for def in definitions {
             lines.append(def)
             lines.append("")
@@ -105,6 +96,18 @@ extension TLASpec {
 
         for body in runtimeFuncBodies {
             lines.append(body)
+            lines.append("")
+        }
+
+        // An INSTANCE's default substitutions resolve against declarations
+        // already in scope.  Emit local definitions first so a same-named
+        // refinement mapping, such as VoteProof's `chosen`, is available.
+        for instance in moduleInstances {
+            let arguments = instance.arguments.map { argument in
+                "\(argument.parameter) <- \(argument.value)"
+            }.joined(separator: ", ")
+            let withClause = arguments.isEmpty ? "" : " WITH \(arguments)"
+            lines.append("\(instance.name) == INSTANCE \(instance.module.name)\(withClause)")
             lines.append("")
         }
 
