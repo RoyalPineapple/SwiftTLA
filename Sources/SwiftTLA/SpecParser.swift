@@ -64,8 +64,16 @@ public enum SpecParser {
         ]) { _, replacement in replacement }
         guard let decodedDefinition = decodeTypedFacadeValue(
             definitionExpression, substitutions: definitionSubstitutions
-        ), let decodedBody = decodeTypedFacadeValue(bodyExpression, substitutions: bodySubstitutions)
-        else { return nil }
+        ) else {
+            algorithmParseFailure = algorithmParseFailure
+                ?? "LetRec '\(name)' could not decode its bounded recursive body."
+            return nil
+        }
+        guard let decodedBody = decodeTypedFacadeValue(bodyExpression, substitutions: bodySubstitutions) else {
+            algorithmParseFailure = algorithmParseFailure
+                ?? "LetRec '\(name)' could not decode its result expression."
+            return nil
+        }
         return .letIn([LocalOperator(
             name,
             parameters: [inputName],
