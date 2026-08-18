@@ -55,10 +55,10 @@ struct PublicWorkflowAnnotationFixtureTests {
 
     #expect(exported == inventoried)
     #expect(!macroSource.contains("public macro TLAValidated"))
+    #expect(!macroSource.contains("public macro TypedVar"))
     let typedVar = try #require(inventory.annotations.first { $0.name == "@TypedVar" })
     #expect(typedVar.advertised == false)
-    #expect(typedVar.decision == "notReleaseFacing")
-    #expect(typedVar.publicAdmission == "notAdmitted")
+    #expect(typedVar.decision == "removed")
   }
 
   @Test("pinned source input digest rejects byte drift")

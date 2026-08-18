@@ -187,7 +187,7 @@ but does not turn the bounded result into general public support.
 
 The current report is `.build/public-workflow-support-gate/support-admission.json`,
 with immutable evidence under `.build/public-workflow-support-gate/runs/<run-id>/`.
-`@TypedVar` is not release-facing or admitted, and `@TLAValidated` was removed.
+`@TypedVar` and `@TLAValidated` were removed and have no public contract.
 See [public workflow conformance](Documentation/PublicWorkflowConformance.md)
 for fixture identities, report fields, workflow artifact locations, authority
 labels, and limits.

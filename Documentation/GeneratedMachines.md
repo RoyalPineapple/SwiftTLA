@@ -426,7 +426,7 @@ The following table is the public inventory for this guide. Sources identify the
 | Generated `synchronousMachineObservation()` | Returns current state and availability without an async boundary on a canonical generated model. | [MacroExpander+CanonicalMachine.swift](../Sources/SwiftTLAPlugin/MacroExpander+CanonicalMachine.swift) |
 | Generated `executeSynchronously(_ invocation: TLAActionInvocation)` | Executes an invocation without an async boundary on a canonical generated model. | [MacroExpander+CanonicalMachine.swift](../Sources/SwiftTLAPlugin/MacroExpander+CanonicalMachine.swift) |
 
-This guide explicitly excludes `@TypedVar`, removed `@TLAValidated`, private
+This guide explicitly excludes removed `@TypedVar` and `@TLAValidated`, private
 `_machine` storage, underscored generated helpers such as `_<action>`, and
 unsupported annotation combinations. Do not use them as stable public APIs.
 

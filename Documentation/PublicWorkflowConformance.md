@@ -63,7 +63,7 @@ only within its parser, evaluator, renderer, and verification boundary.
 | `@TLAModel` | Release-facing fixture pair exists; current local evidence is diagnostic and hosted evidence is a candidate for the exact fixture only. |
 | `@TLAActor` | Same bounded fixture disposition; the actor runtime proof is also diagnostic. |
 | `@TLAObservable` | Same bounded fixture disposition. |
-| `@TypedVar` | Exported compiler symbol, but undocumented, not release-facing, and not admitted. Do not present it as a supported public annotation. |
+| `@TypedVar` | Removed. It was an undocumented implementation surface with no fixture-backed release claim. |
 | `@TLAValidated` | Removed. It had no plugin implementation and has no public contract. |
 
 There are currently no report-derived, generally admitted P4 entries to list in
