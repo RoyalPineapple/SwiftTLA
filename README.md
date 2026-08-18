@@ -136,7 +136,7 @@ failed. The command retains its current report at
 Run the fast local PR validation with:
 
 ```bash
-make ci-local
+make ci-pr
 ```
 
 It validates the release code-check contract, runs advisory SwiftLint, tests
@@ -203,8 +203,7 @@ make ci-pr
 ```
 
 It validates the release code-check contract, runs advisory SwiftLint, tests the
-package once, and builds the package and macro plugin. `make ci-local` remains a
-compatibility alias for this fast path.
+package once, and builds the package and macro plugin.
 
 Before release, run the complete qualification command:
 

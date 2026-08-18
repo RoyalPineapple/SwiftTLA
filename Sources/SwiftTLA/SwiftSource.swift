@@ -2,55 +2,6 @@ import Foundation
 import SwiftSyntax
 import SwiftSyntaxBuilder
 
-extension TLASpec {
-  public var swiftSource: String {
-    var lines: [String] = []
-    lines.append("@TLAModel")
-    lines.append("public struct \(name.replacingOccurrences(of: " ", with: "")) {")
-    lines.append("    static var spec: TLASpec {")
-    lines.append("        TLASpec(\"\(name)\") {")
-    if extendsModules != "Integers" { lines.append("            Extends(\"\(extendsModules)\")") }
-    for (k, v) in constants.sorted(by: { $0.key < $1.key }) {
-      lines.append("            Constant(\"\(k)\", \(v.swiftLiteral))")
-    }
-    for v in variables {
-      switch v.collectionType {
-      case .set:
-        lines.append("            Variable(\"\(v.name)\", .set([]))")
-      case .array(let count):
-        let values = Array(repeating: ".int(0)", count: count).joined(separator: ", ")
-        lines.append("            Variable(\"\(v.name)\", .tuple([\(values)]))")
-      case .dictionary(let scope):
-        lines.append("            Variable(\"\(v.name)\", .function([:])) // former verification scope: \(scope)")
-      case .scalar:
-        lines.append("            Var<Int>(\"\(v.name)\", \(v.initial.swiftLiteral))")
-      }
-    }
-    for action in actions {
-      let parameters = action.bindings.map { binding in
-        "ActionParameter(\"\(binding.name)\", values: [\(binding.values.map(\.swiftLiteral).joined(separator: ", "))])"
-      }
-      if parameters.isEmpty {
-        lines.append("            Action(\"\(action.name)\") { \(action.body.swiftSource) }")
-      } else {
-        lines.append(
-          "            Action(\"\(action.name)\", parameters: [\(parameters.joined(separator: ", "))]) { \(action.body.swiftSource) }"
-        )
-      }
-    }
-    for i in invariants {
-      lines.append("            Invariant(\"\(i.name)\") { \(i.body.swiftSource) }")
-    }
-    for t in temporalProperties {
-      lines.append("            Temporal(\"\(t.name)\") { \(t.expr.swiftSource) }")
-    }
-    lines.append("        }")
-    lines.append("    }")
-    lines.append("}")
-    return lines.joined(separator: "\n")
-  }
-}
-
 extension TLAValue {
   public var swiftLiteral: String {
     switch self {

@@ -28,7 +28,6 @@ forbid() {
 
 require "$makefile" "ci-pr:"
 require "$makefile" "ci-release-qualification:"
-require "$makefile" "ci-local: ci-pr"
 require "$makefile" "temporal-symmetry-release-check:"
 require "$makefile" "public-workflow-release-check:"
 

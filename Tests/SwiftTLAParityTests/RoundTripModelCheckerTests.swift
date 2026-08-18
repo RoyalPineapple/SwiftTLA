@@ -93,26 +93,6 @@ import UpstreamParity
   }
 }
 
-// MARK: - .swiftSource: output coverage
-
-@Suite(.serialized) struct SwiftSourceMatrix {
-  @Test func roundTripStructure() {
-    let x = Var<Int>("x")
-    let spec = TLASpec("Test") {
-      Variable(x, 0)
-      Action("inc") { x.becomes(x + 1).when(x < 5) }
-      Action("reset") { x.becomes(0) }
-      Invariant("ok") { x >= 0 }
-    }
-    let src = spec.swiftSource
-    #expect(src.contains("@TLAModel"))
-    #expect(src.contains("struct Test"))
-    #expect(src.contains("Action(\"inc\")"))
-    #expect(src.contains("Action(\"reset\")"))
-    #expect(src.contains("Invariant(\"ok\")"))
-  }
-}
-
 // MARK: - Core example parity (same shapes as Examples/)
 
 @Suite(.serialized) struct GoldenTests {

@@ -395,12 +395,6 @@ import UpstreamParity
     #expect(labels.map(\.arguments) == expectedArguments)
     #expect(try spec.compile().renderedTLAModuleBundle().tla.contains("board__0_0_0 == board(1, 10, 100)"))
     #expect(try spec.compile().renderedTLAModuleBundle().tla.contains("board__1_1_1 == board(2, 20, 200)"))
-    #expect(
-      spec.swiftSource.contains(
-        "parameters: [ActionParameter(\"person\", values: [1, 2]), "
-          + "ActionParameter(\"elevator\", values: [10, 20]), "
-          + "ActionParameter(\"direction\", values: [100, 200])]"
-      ))
 
     let runtime = try SpecRuntime(spec: spec)
     let initial = try #require(runtime.initialStates().first)
