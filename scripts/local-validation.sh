@@ -3,12 +3,15 @@ set -euo pipefail
 
 # macOS-only, deliberately narrow local diagnostic runner. Hosted Actions is
 # the admission authority; this only bounds a focused command's host impact.
-readonly max_rss_mib=6144
-readonly min_available_mib=1024
+readonly max_rss_mib="${SWIFTTLA_LOCAL_VALIDATION_MAX_RSS_MIB:-12288}"
+readonly min_available_mib="${SWIFTTLA_LOCAL_VALIDATION_MIN_AVAILABLE_MIB:-1024}"
 readonly poll_seconds=2
 # The native advisory lock waits briefly rather than failing at first collision.
 # The environment override keeps the shell-level contention regression fast.
 readonly lock_wait_seconds="${SWIFTTLA_LOCAL_VALIDATION_LOCK_WAIT_SECONDS:-30}"
+# When set, build artifacts are kept under this directory across runs instead
+# of a fresh temp directory per run. The wrapper never removes this directory.
+readonly build_dir="${SWIFTTLA_LOCAL_VALIDATION_BUILD_DIR:-}"
 
 usage() {
     cat >&2 <<'EOF'
@@ -65,7 +68,7 @@ cleanup() {
         kill "$watchdog_pid" 2>/dev/null || true
         wait "$watchdog_pid" 2>/dev/null || true
     fi
-    [[ -z "$scratch_dir" ]] || rm -rf -- "$scratch_dir"
+    [[ -z "$scratch_dir" || "$scratch_dir" == "$build_dir" ]] || rm -rf -- "$scratch_dir"
     exec 9>&- 2>/dev/null || true
 }
 trap 'status=$?; cleanup; exit "$status"' EXIT
@@ -175,7 +178,12 @@ run_guarded() {
         return
     fi
 
-    scratch_dir="$(mktemp -d "${TMPDIR:-/tmp}/swifttla-local-validation.XXXXXX")"
+    if [[ -n "$build_dir" ]]; then
+        mkdir -p -- "$build_dir"
+        scratch_dir="$build_dir"
+    else
+        scratch_dir="$(mktemp -d "${TMPDIR:-/tmp}/swifttla-local-validation.XXXXXX")"
+    fi
     set -m
     case "$mode" in
         swiftpm-test)
