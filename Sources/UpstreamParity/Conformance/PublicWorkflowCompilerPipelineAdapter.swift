@@ -251,8 +251,7 @@ public struct CompilerPipelineDiagnosticEvidenceAdapterV1: Sendable {
     let directOutput = output.appendingPathComponent("direct-graph")
     let request = TLCProcessRequestV1(javaExecutable: java, jar: jar, bridgeClasses: bridgeClasses, module: module, configuration: configuration,
       graphEvents: output.appendingPathComponent("direct-events.jsonl"), traceOutput: output.appendingPathComponent("direct-trace.json"), replayInput: output.appendingPathComponent("direct-replay.json"), workingDirectory: output, arguments: arguments, expectedCase: launch, runID: correlation.comparisonRunID, referencePin: .fixture, referenceArtifacts: artifacts)
-    let swiftActionNames = Dictionary(uniqueKeysWithValues: compilation.spec.actions.map { ($0.name, "Next") })
-    let result = CoreConformanceRunnerV1().run(case: launch, swiftExploration: { .init(caseID: declaration.id, exploration: exploration) }, tlcRequest: request, replay: .none, outputDirectory: directOutput, swiftActionNames: swiftActionNames)
+    let result = CoreConformanceRunnerV1().run(case: launch, swiftExploration: { .init(caseID: declaration.id, exploration: exploration) }, tlcRequest: request, replay: .none, outputDirectory: directOutput)
     guard let comparison = result.comparison, let evidence = result.evidenceDirectory else {
       return (.unavailable, [], result.diagnostic?.message)
     }

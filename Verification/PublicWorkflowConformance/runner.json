@@ -20,7 +20,7 @@
   ],
   "compilerPipeline": {
     "path": "Verification/PublicWorkflowConformance/compiler-pipeline.json",
-    "sha256": "72eed61905ec44af198f39f7150911a154bc3b058c504bbaf1ee427442fe57d9"
+    "sha256": "230cf48699f1b9436bdf50cf19e112aa5ed216957e0fe6dc35461d13193c782b"
   },
   "generatedBehavior": {
     "path": "Verification/PublicWorkflowConformance/generated-behavior.json",

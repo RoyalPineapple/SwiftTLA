@@ -2,7 +2,7 @@
   "schema": "CompilerPipelineDiagnosticManifestV1",
   "authority": "diagnosticOnly",
   "toolchain": [
-    { "role": "adapter", "evidence": { "path": "Sources/UpstreamParity/Conformance/PublicWorkflowCompilerPipelineAdapter.swift", "sha256": "e7d9f9a4fb6fa583c709f575f52402e03e94d8e7109a969845b3dfe850272f5d" } },
+    { "role": "adapter", "evidence": { "path": "Sources/UpstreamParity/Conformance/PublicWorkflowCompilerPipelineAdapter.swift", "sha256": "2e1ca8d576812cc6e62c70e65d89e5d6b5b28a217324a3686517c2a568080ed6" } },
     { "role": "compiler", "evidence": { "path": "Package.swift", "sha256": "cb18ec5ad761cd1f63315a0c09ebfed5c62c018346908a0a8a19a521f66b6ec4" } },
     { "role": "macro", "evidence": { "path": "Sources/SwiftTLAPlugin/ModelMacro.swift", "sha256": "7b81f1c02294d7af1782043e10a7512a3244e341f93cb9a35e449d77312cc268" } },
     { "role": "runtime", "evidence": { "path": "Sources/SwiftTLA/GeneratedMachineContract.swift", "sha256": "f3c29a5b730fe092fc85f915344a6b8ba92ed4e601cd7a102877badb9c0d0ee3" } },

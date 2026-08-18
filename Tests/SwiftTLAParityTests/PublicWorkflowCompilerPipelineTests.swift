@@ -12,6 +12,15 @@ struct PublicWorkflowCompilerPipelineTests {
     #expect(compilation.identity == try PublicWorkflowCompilerPipelineCounterV1.spec.compile().identity)
   }
 
+  @Test("compiler-pipeline direct graph retains canonical action labels")
+  func directGraphRetainsCanonicalActionLabels() throws {
+    let compilation = try PublicWorkflowCompilerPipelineCounterV1.compiledSpecification()
+    let exploration = try ModelChecker(compilation: compilation, maxStates: 4).explore()
+    let direct = try SwiftGraphAdapterV1().adapt(exploration)
+
+    #expect(direct.observableActions == Set(["advance"]))
+  }
+
   @Test("declared compiler-pipeline evidence retains exact bounded bundle and contract artifacts")
   func exactEvidenceIsDiagnosticOnly() throws {
     let fixture = try Fixture(control: .exact)
