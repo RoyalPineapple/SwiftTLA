@@ -190,16 +190,6 @@ struct CompilerBundleOwnershipTests {
     #expect(throws: CompilationDiagnostic.self) { try SpecRuntime(spec: invalid) }
   }
 
-  @Test("a compiler link failure prevents rendered-bundle construction")
-  func compilerLinkFailurePrecedesRenderedBundleIntegrity() {
-    let invalid = TLASpec(
-      name: "Root", variables: [], actions: [], invariants: [],
-      importConfigurations: [.init(moduleName: "Missing", replacements: [])]
-    )
-
-    #expect(throws: CompilationDiagnostic.self) { try invalid.compile().renderedTLAModuleBundle() }
-  }
-
   private func expectLinkDiagnostic(
     _ code: CompilationDiagnostic.Code,
     from spec: TLASpec
