@@ -36,7 +36,7 @@ enum PublicWorkflowCompilerPipelineFixtureRegistryV1 {
       return .init(
         compile: {
           let count = NamedVar(name: "count", initial: .int(0))
-          return try TLASpec("CompilerPipelineStructuralInvalid", variables: [count, count], actions: [], invariants: []).compile()
+          return try TLASpec(name: "CompilerPipelineStructuralInvalid", variables: [count, count], actions: [], invariants: []).compile()
         },
         metadata: { fatalError("structural-invalid fixture has no generated metadata") },
         verificationStateLimit: { fatalError("structural-invalid fixture has no generated machine") },
