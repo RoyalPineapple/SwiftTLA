@@ -4,6 +4,14 @@ import UpstreamParity
 
 @Suite(.serialized)
 struct PublicWorkflowCompilerPipelineTests {
+  @Test("compiler-pipeline fixture uses its declared formal module name")
+  func compilerPipelineFixtureUsesDeclaredFormalModuleName() throws {
+    let compilation = try PublicWorkflowCompilerPipelineCounterV1.compiledSpecification()
+
+    #expect(compilation.spec.name == "CompilerPipelineCounter")
+    #expect(compilation.identity == try PublicWorkflowCompilerPipelineCounterV1.spec.compile().identity)
+  }
+
   @Test("declared compiler-pipeline evidence retains exact bounded bundle and contract artifacts")
   func exactEvidenceIsDiagnosticOnly() throws {
     let fixture = try Fixture(control: .exact)

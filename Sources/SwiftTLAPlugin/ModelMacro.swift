@@ -71,11 +71,11 @@ enum TLASpecVerifier {
             throw SimpleError("Must be applied to a struct, class, or actor")
         }
 
-        guard let closure = Self.findSpec(in: memberList) else {
+        guard let source = try Self.findSpec(in: memberList) else {
             throw SimpleError("Could not find 'TLASpec' builder in '\(typeName)'")
         }
 
-        let rewritten = rewriteVarNames(in: closure)
+        let rewritten = rewriteVarNames(in: source.closure)
         let enumInfos = Self.collectEnumVariables(from: memberList)
         let (enumPhases, caseToType) = collectEnumMetadata(from: memberList)
         let enumDomains = Dictionary(
@@ -126,7 +126,7 @@ enum TLASpecVerifier {
         }
 
         let compilation = try parsed.compile(
-            specificationName: typeName,
+            specificationName: source.name,
             additionalInvariants: allInvariants.dropFirst(parsed.invariants.count).map { $0 }
         )
         let spec = compilation.spec
@@ -391,7 +391,7 @@ enum TLASpecVerifier {
 
     // MARK: - Helpers
 
-    static func findSpec(in members: MemberBlockItemListSyntax) -> ClosureExprSyntax? {
+    static func findSpec(in members: MemberBlockItemListSyntax) throws -> (name: String, closure: ClosureExprSyntax)? {
         for member in members {
             guard let varDecl = member.decl.as(VariableDeclSyntax.self),
                   let binding = varDecl.bindings.first,
@@ -405,7 +405,7 @@ enum TLASpecVerifier {
                         if let returnStmt = stmt.item.as(ReturnStmtSyntax.self) { return returnStmt.expression }
                         return nil
                     }()
-                    if let closure = specBuilderClosure(from: expr) { return closure }
+                    if let source = try specBuilderSource(from: expr) { return source }
                 }
             }
             if let accessors = binding.accessorBlock?.accessors.as(AccessorDeclListSyntax.self) {
@@ -416,7 +416,7 @@ enum TLASpecVerifier {
                             if let returnStmt = stmt.item.as(ReturnStmtSyntax.self) { return returnStmt.expression }
                             return nil
                         }()
-                        if let closure = specBuilderClosure(from: expr) { return closure }
+                        if let source = try specBuilderSource(from: expr) { return source }
                     }
                 }
             }
@@ -424,15 +424,25 @@ enum TLASpecVerifier {
         return nil
     }
 
-    private static func specBuilderClosure(from expression: ExprSyntax?) -> ClosureExprSyntax? {
+    private static func specBuilderSource(from expression: ExprSyntax?) throws -> (name: String, closure: ClosureExprSyntax)? {
         guard let expression else { return nil }
         if let call = expression.as(FunctionCallExprSyntax.self),
            call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "TLASpec" {
-            return call.trailingClosure ?? call.arguments.last?.expression.as(ClosureExprSyntax.self)
+            guard let name = call.arguments.first?.expression.as(StringLiteralExprSyntax.self)?.representedLiteralValue else {
+                throw SimpleError("The formal module name in TLASpec must be a string literal; dynamic names cannot form a stable compilation identity.")
+            }
+            guard let closure = call.trailingClosure ?? call.arguments.last?.expression.as(ClosureExprSyntax.self) else {
+                return nil
+            }
+            return (name, closure)
         }
         if let macro = expression.as(MacroExpansionExprSyntax.self),
            macro.macroName.text == "spec" {
-            return macro.trailingClosure
+            guard let name = macro.arguments.first?.expression.as(StringLiteralExprSyntax.self)?.representedLiteralValue else {
+                throw SimpleError("The formal module name in #spec must be a string literal; dynamic names cannot form a stable compilation identity.")
+            }
+            guard let closure = macro.trailingClosure else { return nil }
+            return (name, closure)
         }
         return nil
     }

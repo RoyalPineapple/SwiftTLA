@@ -200,6 +200,15 @@ struct NestedComposableMacroConformanceTests {
         #expect(result.output.contains("@TLAModel models cannot declare instance stored properties"))
     }
 
+    @Test("Model macro rejects dynamic formal module names")
+    func modelWithDynamicFormalModuleNameDoesNotTypeCheck() throws {
+        let fixture = packageRoot().appendingPathComponent("Tests/Fixtures/InvalidDynamicModelName")
+        let result = try runSwift(["build", "--package-path", fixture.path])
+
+        #expect(result.status != 0)
+        #expect(result.output.contains("must be a string literal; dynamic names cannot form a stable compilation identity"))
+    }
+
     @Test("Model macro rejects observer-backed instance state")
     func modelWithObservedInstanceStateDoesNotTypeCheck() throws {
         let fixture = packageRoot().appendingPathComponent("Tests/Fixtures/InvalidObservedModelState")

@@ -20,10 +20,10 @@
   ],
   "compilerPipeline": {
     "path": "Verification/PublicWorkflowConformance/compiler-pipeline.json",
-    "sha256": "f0da76babf07e2297485d234ccb0d48828997a8ee4ba1cb35ff1a21b48e7dfcc"
+    "sha256": "72eed61905ec44af198f39f7150911a154bc3b058c504bbaf1ee427442fe57d9"
   },
   "generatedBehavior": {
     "path": "Verification/PublicWorkflowConformance/generated-behavior.json",
-    "sha256": "259824124e0d7f13391a97c8f89b5a94e99efb75d00881026606e8b78f71ca3b"
+    "sha256": "b0b9feb40302ea1fb23ffb12fccd3b2e76facc568cd2d2fd25340d1bfec2e720"
   }
 }

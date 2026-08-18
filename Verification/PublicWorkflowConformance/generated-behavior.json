@@ -113,7 +113,7 @@
       { "id": "package", "evidence": { "path": "Package.swift", "sha256": "cb18ec5ad761cd1f63315a0c09ebfed5c62c018346908a0a8a19a521f66b6ec4" } },
       { "id": "packageResolved", "evidence": { "path": "Package.resolved", "sha256": "cfdc69e87cdcea8681bfa8b117d599eef34e6f986fe23d9ad5eb4a320a1a18d7" } },
       { "id": "adapter", "evidence": { "path": "Sources/UpstreamParity/Conformance/PublicWorkflowGeneratedBehaviorAdapter.swift", "sha256": "8507139f561694a64793ae0681214bc4cba5a0050e243f72035590699d35d2c8" } },
-      { "id": "macro", "evidence": { "path": "Sources/SwiftTLAPlugin/ModelMacro.swift", "sha256": "7e30fc4172e52eb68c4b4eecb9ff6d5dc79ba841adba82969040139a2d8f52b5" } }
+      { "id": "macro", "evidence": { "path": "Sources/SwiftTLAPlugin/ModelMacro.swift", "sha256": "7b81f1c02294d7af1782043e10a7512a3244e341f93cb9a35e449d77312cc268" } }
     ],
     "notApplicable": [
       { "id": "tlc", "evidence": { "path": "Verification/PublicWorkflowConformance/Generated/not-applicable.json", "sha256": "53a5c9190f96e11d5273ff6e1a47becbcedd0e83913d586ce3d4651bf1589638" } },

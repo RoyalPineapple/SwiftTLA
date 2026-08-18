@@ -4,7 +4,7 @@
   "toolchain": [
     { "role": "adapter", "evidence": { "path": "Sources/UpstreamParity/Conformance/PublicWorkflowCompilerPipelineAdapter.swift", "sha256": "e7d9f9a4fb6fa583c709f575f52402e03e94d8e7109a969845b3dfe850272f5d" } },
     { "role": "compiler", "evidence": { "path": "Package.swift", "sha256": "cb18ec5ad761cd1f63315a0c09ebfed5c62c018346908a0a8a19a521f66b6ec4" } },
-    { "role": "macro", "evidence": { "path": "Sources/SwiftTLAPlugin/MacroExpander.swift", "sha256": "b10ed0df2789c71543e1a2def01cc0734a02c954895345d2e93311a74f14af43" } },
+    { "role": "macro", "evidence": { "path": "Sources/SwiftTLAPlugin/ModelMacro.swift", "sha256": "7b81f1c02294d7af1782043e10a7512a3244e341f93cb9a35e449d77312cc268" } },
     { "role": "runtime", "evidence": { "path": "Sources/SwiftTLA/GeneratedMachineContract.swift", "sha256": "f3c29a5b730fe092fc85f915344a6b8ba92ed4e601cd7a102877badb9c0d0ee3" } },
     { "role": "tlcAdapter", "evidence": { "path": "Sources/UpstreamParity/Conformance/TLCProcess.swift", "sha256": "6e91f9dab142e69e40b5f3ce3e5be622d9dcec1c57d65ceeec7d090a4b1f109a" } },
     { "role": "graphParser", "evidence": { "path": "Sources/UpstreamParity/Conformance/TLCGraphEventParser.swift", "sha256": "f75bf6cbd3b010d4c25fb110358083a479482ddba9e29b064fa13cf0efc72378" } },

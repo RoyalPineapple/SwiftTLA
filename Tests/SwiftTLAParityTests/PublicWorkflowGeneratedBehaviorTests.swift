@@ -36,8 +36,8 @@ struct PublicWorkflowGeneratedBehaviorTests {
     #expect(actorEvidence.after == modelEvidence.after)
   }
 
-  @Test("compiled registry writes and verifies exact generated observations")
-  func exactFixtureMatchesRetainedObservations() throws {
+  @Test("generated registry keeps macro and builder compilation identities aligned")
+  func generatedRegistryKeepsCompilationIdentityAligned() throws {
     let fixture = try Fixture()
     let (run, output) = try fixture.run(id: "p4-generated-counter")
     defer { try? FileManager.default.removeItem(at: output) }

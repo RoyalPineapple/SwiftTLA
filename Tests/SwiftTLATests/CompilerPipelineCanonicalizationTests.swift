@@ -18,6 +18,17 @@ private struct CompilerPipelineGeneratedModel {
 }
 
 @TLAModel
+private struct CompilerPipelineExplicitFormalNameModel {
+    static var spec: TLASpec {
+        #spec("CompilerPipelineExplicitFormalName") {
+            let counter = Var<Int>("counter", 0)
+            Variable(counter)
+            Action("increment") { counter.becomes(counter + 1) }
+        }
+    }
+}
+
+@TLAModel
 private struct CompilerPipelineAlgorithmModel {
     static var spec: TLASpec {
         #spec("CompilerPipelineAlgorithmModel") {
@@ -59,6 +70,14 @@ private struct CompilerPipelineCollectionModel {
 
 @Suite("Compiler pipeline canonicalization")
 struct CompilerPipelineCanonicalizationTests {
+    @Test("macro compilation uses the explicit formal module name")
+    func macroUsesExplicitFormalModuleName() throws {
+        let compilation = try CompilerPipelineExplicitFormalNameModel.compiledSpecification()
+
+        #expect(compilation.spec.name == "CompilerPipelineExplicitFormalName")
+        #expect(compilation.identity == try CompilerPipelineExplicitFormalNameModel.spec.compile().identity)
+    }
+
     @Test("direct specifications retain one identity through runtime and checker")
     func directSpecificationUsesOneCompiledPayload() throws {
         let counter = Var<Int>("counter", 0)
