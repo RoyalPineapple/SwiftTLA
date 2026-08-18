@@ -48,6 +48,7 @@ enum AlgorithmLowerer {
                 formalOperatorDefinitions: resolvedFormalOperators
             )
         }
+        let requiresProgramCounter = requiresProgramCounter(for: algorithm)
         let shared = algorithm.components.compactMap { component -> AlgorithmStateModel? in
             guard case .shared(let state) = component else { return nil }
             return state
@@ -121,35 +122,36 @@ enum AlgorithmLowerer {
             }
         }
 
-        let controlBinding = "__pcal_initial_process"
-        let controlDomain = processes
-            .map { StateExpr.setLiteral($0.domain.map(StateExpr.value)) }
-            .dropFirst()
-            .reduce(
-                StateExpr.setLiteral(processes.first?.domain.map(StateExpr.value) ?? [])
-            ) { partial, domain in
-                .union(partial, domain)
+        if requiresProgramCounter {
+            let controlBinding = "__pcal_initial_process"
+            let controlDomain = processes
+                .map { StateExpr.setLiteral($0.domain.map(StateExpr.value)) }
+                .dropFirst()
+                .reduce(
+                    StateExpr.setLiteral(processes.first?.domain.map(StateExpr.value) ?? [])
+                ) { partial, domain in
+                    .union(partial, domain)
+                }
+            let controlCases = processes.flatMap { process -> [StateExpr] in
+                guard let first = process.steps.first else { return [] }
+                return [
+                    .in(
+                        .variable(controlBinding),
+                        .setLiteral(process.domain.map(StateExpr.value))
+                    ),
+                    .value(.string(first.label.name))
+                ]
             }
-        let controlCases = processes.flatMap { process -> [StateExpr] in
-            guard let first = process.steps.first else { return [] }
-            return [
-                .in(
-                    .variable(controlBinding),
-                    .setLiteral(process.domain.map(StateExpr.value))
-                ),
-                .value(.string(first.label.name))
-            ]
+            variables.insert(NamedVar(
+                name: controlVariable,
+                initial: .function([:]),
+                initExpr: .functionLiteral(
+                    controlDomain,
+                    controlBinding,
+                    .caseExpr(controlCases, nil)
+                )
+            ), at: 0)
         }
-        let controlInitial = StateExpr.functionLiteral(
-            controlDomain,
-            controlBinding,
-            .caseExpr(controlCases, nil)
-        )
-        variables.insert(NamedVar(
-            name: controlVariable,
-            initial: .function([:]),
-            initExpr: controlInitial
-        ), at: 0)
         if !procedures.isEmpty {
             for slot in procedureSlots(procedures) {
                 variables.append(NamedVar(
@@ -177,9 +179,6 @@ enum AlgorithmLowerer {
         var fairness: [FairnessCondition] = []
         var actions = processes.flatMap { process in
             process.steps.enumerated().map { index, atomic in
-                let guardExpression = StateExpr.equal(
-                    .functionApply(.variable(controlVariable), .variable(processBinding)),
-                    .value(.string(atomic.label.name)))
                 let nextLabel = process.steps.indices.contains(index + 1)
                     ? process.steps[index + 1].label.name
                     : doneLabel
@@ -192,7 +191,9 @@ enum AlgorithmLowerer {
                     nextLabel: nextLabel
                 )
                 let body: ActionExpr
-                if let loopCondition = atomic.loopCondition {
+                if !requiresProgramCounter {
+                    body = loweredStatements
+                } else if let loopCondition = atomic.loopCondition {
                     body = .ifElse(
                         rewrite(loopCondition, localRoots: localRoots),
                         completingControl(loweredStatements, fallthrough: atomic.label.name),
@@ -203,19 +204,32 @@ enum AlgorithmLowerer {
                 }
                 let generatedAction = NamedAction(
                     name: atomic.label.name,
-                    body: completeAction(.and(.guard_(guardExpression), body), allVars: variableNames),
+                    body: completeAction(
+                        requiresProgramCounter
+                            ? .and(
+                                .guard_(.equal(
+                                    .functionApply(.variable(controlVariable), .variable(processBinding)),
+                                    .value(.string(atomic.label.name))
+                                )),
+                                body
+                            )
+                            : body,
+                        allVars: variableNames
+                    ),
                     bindings: [ActionBinding(name: processBinding, values: process.domain)]
                 )
-                let actionAssertions = assertionInvariants(
-                    in: atomic.statements,
-                    process: process,
-                    label: atomic.label.name,
-                    localRoots: localRoots,
-                    executionCondition: atomic.loopCondition.map { rewrite($0, localRoots: localRoots) },
-                    pathCondition: .value(.bool(true)),
-                    quantifiedBindings: []
-                )
-                generatedAssertionInvariants += uniquelyNamed(actionAssertions)
+                if requiresProgramCounter {
+                    let actionAssertions = assertionInvariants(
+                        in: atomic.statements,
+                        process: process,
+                        label: atomic.label.name,
+                        localRoots: localRoots,
+                        executionCondition: atomic.loopCondition.map { rewrite($0, localRoots: localRoots) },
+                        pathCondition: .value(.bool(true)),
+                        quantifiedBindings: []
+                    )
+                    generatedAssertionInvariants += uniquelyNamed(actionAssertions)
+                }
                 fairness += fairnessConditions(for: generatedAction, policy: process.fairness)
                 return generatedAction
             }
@@ -249,22 +263,24 @@ enum AlgorithmLowerer {
         }
         actions += procedureActions
 
-        let allDone = processes.reduce(StateExpr.value(.bool(true))) { condition, process in
-            let members = StateExpr.setLiteral(process.domain.map(StateExpr.value))
-            let processDone = StateExpr.forAll(
-                members,
-                processBinding,
-                .equal(
-                    .functionApply(.variable(controlVariable), .variable(processBinding)),
-                    .value(.string(doneLabel))
+        if requiresProgramCounter {
+            let allDone = processes.reduce(StateExpr.value(.bool(true))) { condition, process in
+                let members = StateExpr.setLiteral(process.domain.map(StateExpr.value))
+                let processDone = StateExpr.forAll(
+                    members,
+                    processBinding,
+                    .equal(
+                        .functionApply(.variable(controlVariable), .variable(processBinding)),
+                        .value(.string(doneLabel))
+                    )
                 )
-            )
-            return .and(condition, processDone)
+                return .and(condition, processDone)
+            }
+            let unchanged = variableNames
+                .map(ActionExpr.unchanged)
+                .reduce(.guard_(allDone), ActionExpr.and)
+            actions.append(NamedAction(name: terminatingAction, body: unchanged))
         }
-        let unchanged = variableNames
-            .map(ActionExpr.unchanged)
-            .reduce(.guard_(allDone), ActionExpr.and)
-        actions.append(NamedAction(name: terminatingAction, body: unchanged))
 
         return TLASpec(
             name: algorithm.name,
@@ -296,6 +312,39 @@ enum AlgorithmLowerer {
 
     private static func controlDomainValues(_ processes: [AlgorithmProcessModel]) -> [TLAValue] {
         Array(Set(processes.flatMap(\.domain))).sorted { $0.description < $1.description }
+    }
+
+    /// The PlusCal translator omits `pc` for a process machine made entirely
+    /// of one unconditional, control-free loop.  Preserve that source-level
+    /// machine shape instead of materializing a constant implementation state.
+    private static func requiresProgramCounter(for algorithm: AlgorithmModel) -> Bool {
+        guard !algorithm.processes.isEmpty, algorithm.procedures.isEmpty else {
+            return true
+        }
+        return !algorithm.processes.allSatisfy { process in
+            guard process.steps.count == 1,
+                  let loopCondition = process.steps.first?.loopCondition,
+                  case .value(.bool(true)) = loopCondition
+            else {
+                return false
+            }
+            return !containsControlTransfer(process.steps[0].statements)
+        }
+    }
+
+    private static func containsControlTransfer(_ statements: [AlgorithmStatementModel]) -> Bool {
+        statements.contains { statement in
+            switch statement {
+            case .assert, .goto, .call, .return, .stop:
+                return true
+            case .letBinding(_, _, let body), .with(_, _, let body), .choose(_, _, let body):
+                return containsControlTransfer(body)
+            case .ifElse(_, let then, let otherwise), .either(let then, let otherwise):
+                return containsControlTransfer(then) || containsControlTransfer(otherwise)
+            case .await, .set, .skip:
+                return false
+            }
+        }
     }
 
     /// Lowers a PlusCal `begin ... end algorithm` body. This is deliberately
