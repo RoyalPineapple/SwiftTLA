@@ -105,10 +105,12 @@ enum MacroExpander {
             decls.append(DeclSyntax(generateActionLabel(actions: plan.actions)))
         }
         decls.append(DeclSyntax(generateStateStruct(variables: plan.variables, enumInfos: model.enumInfos)))
+        decls.append(DeclSyntax(stringLiteral: generateMachineSchema(model: model)))
         decls.append(contentsOf: generateCanonicalMachineMembers(
             isActor: isActor,
             hasActions: !plan.actions.isEmpty,
-            symmetricCollections: plan.symmetricCollections
+            symmetricCollections: plan.symmetricCollections,
+            identityRoutedActions: Set(plan.collectionActions.keys)
         ))
         decls.append(contentsOf: generateCollectionRuntimeMembers(plan.symmetricCollections))
         let symmetricCollectionNames = Set(plan.symmetricCollections.map(\.formalName))
