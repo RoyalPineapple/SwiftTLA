@@ -477,7 +477,7 @@ struct AlgorithmBuilderTests {
 
         let spec = try algorithm.lower()
         #expect(spec.variables.map(\.name) == ["value"])
-        #expect(spec.actions.map(\.name) == ["advance"])
+        #expect(spec.actions.map(\.name) == ["pcalProcess1"])
         #expect(spec.tlaModule.contains("pc") == false)
 
         let initial = try #require(computeInitialStates(spec).first)

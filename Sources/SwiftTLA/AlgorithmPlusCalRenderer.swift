@@ -155,7 +155,7 @@ internal struct AlgorithmPlusCalRenderer {
             lines.append("}")
         }
 
-        let processNames = renderedProcessNames()
+        let processNames = model.translatedProcessNames()
         var processIndex = 0
         for (index, component) in model.components.enumerated() {
             switch component {
@@ -486,51 +486,6 @@ internal struct AlgorithmPlusCalRenderer {
         case .leadsTo(let lhs, let rhs):
             return "(\(try expression(lhs, path: "\(path).from")) ~> \(try expression(rhs, path: "\(path).to")))"
         }
-    }
-
-    private func renderedProcessNames() -> [String] {
-        var used = authoredIdentifiers()
-        return model.processes.indices.map { index in
-            let stem = "pcalProcess\(index + 1)"
-            var candidate = stem
-            var suffix = 2
-            while used.contains(candidate) {
-                candidate = "\(stem)_\(suffix)"
-                suffix += 1
-            }
-            used.insert(candidate)
-            return candidate
-        }
-    }
-
-    private func authoredIdentifiers() -> Set<String> {
-        func collect(_ components: [AlgorithmComponentModel], into names: inout Set<String>) {
-            for component in components {
-                switch component {
-                case .shared(let declaration), .local(let declaration):
-                    names.insert(declaration.root)
-                case .step(let step):
-                    names.insert(step.label.name)
-                case .process(let process):
-                    collect(process.components, into: &names)
-                case .procedure(let procedure):
-                    names.insert(procedure.name)
-                    procedure.parameters.forEach { names.insert($0.root) }
-                    procedure.locals.forEach { names.insert($0.root) }
-                    procedure.steps.forEach { names.insert($0.label.name) }
-                case .invariant(let invariant):
-                    names.insert(invariant.name)
-                case .temporal(let temporal):
-                    names.insert(temporal.name)
-                case .fairness, .formalOperator, .stateConstraint, .propertyBoundary:
-                    continue
-                }
-            }
-        }
-
-        var names: Set<String> = ["self"]
-        collect(model.components, into: &names)
-        return names
     }
 
     private func set(_ values: [TLAValue]) -> String {

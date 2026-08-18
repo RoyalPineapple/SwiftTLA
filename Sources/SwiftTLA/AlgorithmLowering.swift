@@ -49,6 +49,7 @@ enum AlgorithmLowerer {
             )
         }
         let requiresProgramCounter = requiresProgramCounter(for: algorithm)
+        let translatedProcessNames = algorithm.translatedProcessNames()
         let shared = algorithm.components.compactMap { component -> AlgorithmStateModel? in
             guard case .shared(let state) = component else { return nil }
             return state
@@ -177,7 +178,7 @@ enum AlgorithmLowerer {
         let localRoots = Set(localStates.map(\.root) + procedureSlots(procedures).map(\.root))
         var generatedAssertionInvariants: [NamedInvariant] = []
         var fairness: [FairnessCondition] = []
-        var actions = processes.flatMap { process in
+        var actions = processes.enumerated().flatMap { processIndex, process in
             process.steps.enumerated().map { index, atomic in
                 let nextLabel = process.steps.indices.contains(index + 1)
                     ? process.steps[index + 1].label.name
@@ -203,7 +204,7 @@ enum AlgorithmLowerer {
                     body = completingControl(loweredStatements, fallthrough: nextLabel)
                 }
                 let generatedAction = NamedAction(
-                    name: atomic.label.name,
+                    name: requiresProgramCounter ? atomic.label.name : translatedProcessNames[processIndex],
                     body: completeAction(
                         requiresProgramCounter
                             ? .and(
