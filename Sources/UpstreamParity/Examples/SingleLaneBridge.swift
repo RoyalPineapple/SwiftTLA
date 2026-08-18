@@ -32,10 +32,10 @@ public struct SingleLaneBridgeModel {
 
         return #spec("SingleLaneBridge") {
             Extends("Naturals")
-            Constant("CarsRight", TLAValue.set(carsRight))
-            Constant("CarsLeft", TLAValue.set(carsLeft))
-            Constant("Bridge", TLAValue.set(Set(bridge.map { TLAValue.int($0) })))
-            Constant("Positions", TLAValue.set(Set((1...8).map { TLAValue.int($0) })))
+            Constant("CarsRight", SetExpr<String>("r1", "r2"))
+            Constant("CarsLeft", SetExpr<String>("l1", "l2"))
+            Constant("Bridge", SetExpr<Int>(4, 5))
+            Constant("Positions", SetExpr<Int>(1, 2, 3, 4, 5, 6, 7, 8))
 
             let lv = Var<TLAValue>("Location")
             let wv = Var<TLAValue>("WaitingBeforeBridge")
