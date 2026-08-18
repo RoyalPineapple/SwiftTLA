@@ -115,8 +115,7 @@ spaces, other generated models, or unsupported language constructs.
 
 ## Evidence status
 
-The compiler-pipeline case record for this contract is always
-`diagnosticOnly`. The aggregate Public Workflow report can record
-`candidateEvidence` when the checked-in GitHub workflow runs its exact fixture.
-That aggregate status does not change the case record or admit general
+Generated-machine contract evidence is diagnostic-only. The aggregate Public
+Workflow report can record `candidateEvidence` when the checked-in GitHub
+workflow runs its exact fixture. That aggregate status does not admit general
 generated-machine support. See `Documentation/PublicWorkflowConformance.md`.

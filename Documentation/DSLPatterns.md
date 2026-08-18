@@ -3,8 +3,8 @@
 ## Core rule: the DSL is the runtime
 
 Every construct in the DSL serves **two roles**:
-1. **TLA+ output** — `try spec.compile().tlaBundle` provides the linked TLA+
-   source bundle
+1. **TLA+ output** — `try spec.compile().renderedTLAModuleBundle()` provides the
+   linked TLA+ source bundle
 2. **Runtime evaluation** — `Evaluator` interprets it against an internal formal state
 
 There is never a raw TLA+ string where a DSL construct could express the same thing.

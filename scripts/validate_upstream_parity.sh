@@ -1,5 +1,5 @@
 #!/bin/bash
-# TLC parity: Swift .tlaModule vs expected distinct states (and optional upstream).
+# TLC parity: Swift rendered TLA+ module vs expected distinct states (and optional upstream).
 # Registry: scripts/parity_registry.json (all validated exhaustive-success models)
 # Ports:    UpstreamParity.ParityCatalog
 set -euo pipefail
@@ -61,7 +61,7 @@ check_swift_port() {
   cfg="$TMP/${mod}.cfg"
   cp "$raw" "$name_tla"
 
-  # Use spec's own tlaBundle for .cfg
+  # Use the compiled bundle's CFG
   swift run tlc-validate bundle "$id" 2>/dev/null | awk '/=== CFG ===/{flag=1; next} flag{print}' > "$cfg"
 
   local cr count result

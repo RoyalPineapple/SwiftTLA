@@ -51,32 +51,6 @@ The mismatch and failure cases prove that the runner detects those declared
 conditions. They are not supported behaviors and do not enlarge the positive
 scope.
 
-### Compiler-pipeline diagnostic cases
-
-The compiler-pipeline register is
-`Verification/PublicWorkflowConformance/compiler-pipeline.json`. Each case
-pins the source fixture, configuration, toolchain inputs, finite bound, and
-expected outcome.
-
-| Case | Bound | Expected outcome | Meaning |
-|---|---:|---|---|
-| `compiler-pipeline-counter` | `maxStates: 4` | `exact` | The declared counter compilation, bundle, and generated contract agree. |
-| `compiler-pipeline-structural-invalid` | `maxStates: 1` | `difference` | A duplicate variable blocks compilation before rendering. |
-| `compiler-pipeline-metadata-mismatch` | `maxStates: 4` | `difference` | An intentionally changed metadata assertion remains visible. |
-| `compiler-pipeline-unavailable` | `maxStates: 1` | `unavailable` | A missing required evaluation remains unavailable. |
-
-The last three cases are permanent controls. They show that the runner can
-detect the named failure. They do not show supported behavior.
-
-Each retained compiler-pipeline record is
-`CompilerPipelineDiagnosticEvidenceV1`. It records the compilation diagnostic,
-when there is one, and the source, bundle, configuration, toolchain, bound,
-correlation ID, artifacts, and result. Read `outcome`, `status`, and
-`authority` together. Every individual compiler-pipeline record remains
-`diagnosticOnly`, including when the hosted aggregate report is
-`candidateEvidence`. A missing tool, stale artifact, foreign output, or digest
-mismatch is `unavailable`, never a success.
-
 Generated behavior uses the application-facing typed surface. A fixture reads
 generated `State` and `TransitionResult` values. It does not read an unguarded
 formal state map. The formal engine can use its internal map representation
