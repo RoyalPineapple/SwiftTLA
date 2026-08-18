@@ -463,6 +463,35 @@ struct AlgorithmBuilderTests {
         ]))
     }
 
+    @Test("an unconditional single-loop process does not invent a program counter")
+    func elidesRedundantProgramCounter() throws {
+        let algorithm = Algorithm("SingleLoop") {
+            let value = SharedVar("value", initial: 0)
+            value
+            Each(Node.all) { _ in
+                While("advance", true) {
+                    Assign(value, to: value + 1)
+                }
+            }
+        }
+
+        let spec = try algorithm.lower()
+        #expect(spec.variables.map(\.name) == ["value"])
+        #expect(spec.actions.map(\.name) == ["advance"])
+        #expect(spec.tlaModule.contains("pc") == false)
+
+        let initial = try #require(computeInitialStates(spec).first)
+        let advance = try #require(spec.actions.first)
+        let successor = try #require(
+            ActionEnumerator.enumerate(
+                advance.body,
+                from: initial,
+                varNames: spec.variables.map(\.name)
+            ).first
+        )
+        #expect(successor["value"] == .int(1))
+    }
+
     @Test("lowered atomic actions advance pc and stop before the explicit terminating self loop")
     func lowersAtomicSemantics() throws {
         let algorithm = Algorithm("BoundedCounter") {
