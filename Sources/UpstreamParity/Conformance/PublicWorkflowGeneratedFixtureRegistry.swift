@@ -70,7 +70,7 @@ enum PublicWorkflowGeneratedFixtureRegistryV1 {
 @TLAModel
 struct P4GeneratedCounterFixture {
   static var spec: TLASpec {
-    TLASpec("P4GeneratedCounter") {
+    #spec("P4GeneratedCounter") {
       let value = Var<Int>("value")
       Variable(value, 0)
       Action("advance") { value.becomes(value + 1).when(value < 1) }
@@ -88,7 +88,7 @@ struct P4GeneratedCounterFixture {
 @TLAModel
 struct P4GeneratedCounterMismatchFixture {
   static var spec: TLASpec {
-    TLASpec("P4GeneratedCounterIntentionalMismatch") {
+    #spec("P4GeneratedCounterIntentionalMismatch") {
       let value = Var<Int>("value")
       Variable(value, 0)
       Action("advance") { value.becomes(value + 1).when(value < 1) }
