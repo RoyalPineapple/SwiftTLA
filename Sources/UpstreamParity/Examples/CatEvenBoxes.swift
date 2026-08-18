@@ -2,7 +2,7 @@ import SwiftTLA
 import SwiftTLAMacros
 
 @TLAModel
-public struct CatEvenBoxesModel {
+public struct CatEvenBoxesModel: Sendable {
     public enum Direction: String, TLAValueType {
         case left
         case right
@@ -33,7 +33,7 @@ public struct CatEvenBoxesModel {
 }
 
 @TLAModel
-public struct CatOddBoxesModel {
+public struct CatOddBoxesModel: Sendable {
     public enum Direction: String, TLAValueType {
         case left
         case right

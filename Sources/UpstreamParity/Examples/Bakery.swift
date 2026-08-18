@@ -7,7 +7,7 @@ import SwiftTLAMacros
 /// creates the function-shaped process-local state and program counter that
 /// the upstream PlusCal translator creates.
 @TLAModel
-public struct BakeryN2Model {
+public struct BakeryN2Model: Sendable {
     public enum Process: Int, CaseIterable, FiniteDomainKey {
         case one = 1
         case two = 2

@@ -57,13 +57,27 @@ generated typed `state` property instead.
 useful at protocol boundaries. Convert between it and a generated
 `ActionLabel` with `toInvocation()` and `init?(invocation:)`.
 
+## Inspect an unknown generated machine
+
+Every generated machine exposes `machineSchema`, emitted from the same macro
+plan as its typed `State` and `ActionLabel`. A generic tool can use this
+schema with `TLAMachineObservation` to render variables and formal action
+invocations without importing the model's generated Swift types.
+
+For ordered live inspection, place a generated model in
+`TLAMachineSession`. Its `machineUpdates()` stream first yields a current
+snapshot, then yields each successfully committed transition with a monotonic
+sequence number. A failed execution publishes no update. Streams use bounded
+buffering, so tools must treat a sequence gap as a request to resynchronize
+with `machineObservation()`.
+
 ## Actors and observables
 
 Nested `@TLAActor` and `@TLAObservable` declarations adapt one canonical model
 type. They expose that model's `State`, `Variables`, `ActionLabel`, and
 `TransitionResult` through type aliases.
 
-An actor reads `state()` across its isolation boundary. A nested observable is
+An actor reads its asynchronous `state` property across its isolation boundary. A nested observable is
 main-actor isolated. It publishes typed `on<Action>` callbacks after a
 successful transition commits.
 

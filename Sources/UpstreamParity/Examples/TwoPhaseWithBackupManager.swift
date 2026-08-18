@@ -7,7 +7,7 @@ import SwiftTLAMacros
 /// keeps that bounded configuration and expresses its three fair process groups,
 /// typed state functions, and `Prepare`, `Decide`, and `Fail` statement macros.
 @TLAModel
-public struct TwoPhaseWithBackupManagerModel {
+public struct TwoPhaseWithBackupManagerModel: Sendable {
     public enum ResourceManager: String, CaseIterable, FiniteDomainKey {
         case one = "rm1"
         case two = "rm2"

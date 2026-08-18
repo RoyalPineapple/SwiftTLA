@@ -8,7 +8,7 @@ import SwiftTLAMacros
 /// chosen, and no execution can choose a second value. The source uses a
 /// parameterless `Choose()` macro, a guarded `when`, and a scoped `with`.
 @TLAModel
-public struct ConsensusModel {
+public struct ConsensusModel: Sendable {
     public enum Value: String, CaseIterable, FiniteDomainKey {
         case one = "v1"
         case two = "v2"

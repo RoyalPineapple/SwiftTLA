@@ -7,7 +7,7 @@ import SwiftTLAMacros
 /// are authored in the SwiftTLA DSL. The generated machine is therefore a
 /// typed view of the same model used for parity checking.
 @TLAModel
-public struct ChannelModel {
+public struct ChannelModel: Sendable {
     public enum Data: String, CaseIterable, FiniteDomainKey {
         case d1
         case d2

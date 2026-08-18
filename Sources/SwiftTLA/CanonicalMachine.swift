@@ -191,6 +191,9 @@ public enum GeneratedMachineError: Error {
     case stateDecodingFailed(TLAStateProjectionDiagnostic)
     case unexpected(any Error)
     case unrepresentableActionLabel(TLAActionInvocation)
+    /// This action selects a live identified collection member and must use
+    /// the generated `action(id:)` API rather than generic execution.
+    case identityRoutedActionRequiresID(TLAActionInvocation)
 }
 
 /// Explains why a machine cannot report its currently available actions.

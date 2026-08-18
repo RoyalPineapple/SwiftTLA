@@ -7,7 +7,7 @@ import SwiftTLAMacros
 /// nondeterministic initial value; `processState` is derived from it in the
 /// formal initial state. Every message is explicitly delivered clockwise.
 @TLAModel
-public struct ChangRobertsModel {
+public struct ChangRobertsModel: Sendable {
     public enum Node: Int, FiniteDomainKey {
         case one = 1
         case two = 2

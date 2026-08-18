@@ -7,7 +7,7 @@ import SwiftTLAMacros
 /// parameterized actions retain the upstream transition relation without
 /// manufacturing a separate action for each manager in Swift.
 @TLAModel
-public struct TCommitModel {
+public struct TCommitModel: Sendable {
     public enum ResourceManager: String, CaseIterable, FiniteDomainKey {
         case one = "r1"
         case two = "r2"

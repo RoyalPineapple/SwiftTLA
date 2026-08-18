@@ -22,8 +22,8 @@ extension MacroExpander {
             DeclSyntax(stringLiteral: "public typealias CanonicalModel = \(modelType)"),
             DeclSyntax(stringLiteral: "public typealias State = \(modelType).State"),
             DeclSyntax(stringLiteral: "public typealias Variables = \(modelType).Variables"),
-            DeclSyntax(stringLiteral: "public typealias ActionLabel = \(modelType).ActionLabel"),
             DeclSyntax(stringLiteral: "public typealias TransitionResult = \(modelType).TransitionResult"),
+            DeclSyntax(stringLiteral: "public static var machineSchema: MachineSchema { CanonicalModel.machineSchema }"),
             DeclSyntax(stringLiteral: "public static var generatedMachineMetadata: GeneratedMachineMetadata { CanonicalModel.generatedMachineMetadata }"),
             DeclSyntax(stringLiteral: "public static func verifyGeneratedMachineContract(metadata: GeneratedMachineMetadata? = nil, verificationStateLimit: Int? = nil) -> GeneratedMachineContractReport { CanonicalModel.verifyGeneratedMachineContract(metadata: metadata, verificationStateLimit: verificationStateLimit) }"),
             DeclSyntax(stringLiteral: canonicalStorage),
@@ -35,6 +35,9 @@ extension MacroExpander {
             }
             """)
         ]
+        if !canonicalModel.machineSurface.actions.isEmpty {
+            declarations.insert(DeclSyntax(stringLiteral: "public typealias ActionLabel = \(modelType).ActionLabel"), at: 3)
+        }
         if kind == .observable {
             if needsPublicInitializer {
                 declarations.append(DeclSyntax(stringLiteral: """
@@ -114,7 +117,7 @@ extension MacroExpander {
             }
             """)
         }
-        return callbacks + [
+        var declarations = callbacks + [
             DeclSyntax(stringLiteral: """
             @MainActor public var state: State {
                 _canonical.state
@@ -130,7 +133,18 @@ extension MacroExpander {
                 _canonical.tlaSnapshot()
             }
             """),
-            DeclSyntax(stringLiteral: """
+        ]
+        let executeBody: String
+        if actions.isEmpty {
+            executeBody = """
+            @MainActor public func execute(_ invocation: TLAActionInvocation) async throws -> TransitionResult {
+                try await withCanonicalMachine { canonical in
+                    try canonical.executeSynchronously(invocation)
+                }
+            }
+            """
+        } else {
+            executeBody = """
             @MainActor public func execute(_ invocation: TLAActionInvocation) async throws -> TransitionResult {
                 let evidence = try await withCanonicalMachine { canonical in
                     try canonical.executeSynchronously(invocation)
@@ -140,7 +154,9 @@ extension MacroExpander {
                 }
                 return evidence
             }
-            """)
-        ] + typedActions
+            """
+        }
+        declarations.append(DeclSyntax(stringLiteral: executeBody))
+        return declarations + typedActions
     }
 }

@@ -5,7 +5,8 @@ extension MacroExpander {
     static func generateCanonicalMachineMembers(
         isActor: Bool,
         hasActions: Bool,
-        symmetricCollections: [MachineSurfacePlan.SymmetricCollection] = []
+        symmetricCollections: [MachineSurfacePlan.SymmetricCollection] = [],
+        identityRoutedActions: Set<String> = []
     ) -> [DeclSyntax] {
         let modifier = isActor ? "" : "mutating "
         let labelField = hasActions ? "public let label: ActionLabel" : ""
@@ -15,6 +16,17 @@ extension MacroExpander {
                 }
         """ : ""
         let labelArgument = hasActions ? "label: label," : ""
+        let identityRoutedNames = identityRoutedActions.sorted().map { "\"\($0)\"" }.joined(separator: ", ")
+        let invocationFilter = identityRoutedActions.isEmpty
+            ? ""
+            : ".filter { !_identityRoutedActionNames.contains($0.name) }"
+        let invocationGuard = identityRoutedActions.isEmpty
+            ? ""
+            : """
+                guard !_identityRoutedActionNames.contains(invocation.name) else {
+                    throw GeneratedMachineError.identityRoutedActionRequiresID(invocation)
+                }
+            """
         let typedApply = hasActions ? """
             public \(modifier)func apply(_ action: ActionLabel) throws -> TransitionResult {
                 try apply(action.toInvocation())
@@ -22,7 +34,7 @@ extension MacroExpander {
             """ : ""
         let availableActions = hasActions ? """
             public func availableActions() throws -> [ActionLabel] {
-                try _machine.availableInvocations(in: _stateWithLiveCollections()).map { invocation in
+                try _machine.availableInvocations(in: _stateWithLiveCollections())\(invocationFilter).map { invocation in
                     guard let label = ActionLabel(invocation: invocation) else {
                         throw GeneratedMachineError.unrepresentableActionLabel(invocation)
                     }
@@ -31,7 +43,7 @@ extension MacroExpander {
             }
             """ : """
             public func availableInvocations() throws -> [TLAActionInvocation] {
-                try _machine.availableInvocations(in: _stateWithLiveCollections())
+                try _machine.availableInvocations(in: _stateWithLiveCollections())\(invocationFilter)
             }
             """
         let liveProjection = symmetricCollections.map {
@@ -57,6 +69,7 @@ extension MacroExpander {
                 _machine.snapshot
             }
             """),
+            DeclSyntax(stringLiteral: "private static let _identityRoutedActionNames: Set<String> = [\(identityRoutedNames)]"),
             DeclSyntax(stringLiteral: """
             private func _stateWithLiveCollections() throws -> TLAStateProjection {
                 \(stateWithLiveCollections)
@@ -77,6 +90,7 @@ extension MacroExpander {
             DeclSyntax(stringLiteral: typedApply),
             DeclSyntax(stringLiteral: """
             public \(modifier)func apply(_ invocation: TLAActionInvocation) throws -> TransitionResult {
+                \(invocationGuard)
                 \(labelValidation)
                 let evidence = try _machine.apply(invocation, from: _stateWithLiveCollections()) { _ in true }
                 return TransitionResult(
@@ -101,7 +115,7 @@ extension MacroExpander {
                     )
                 }
                 do {
-                    return .init(state: state, availability: .available(try _machine.availableInvocations(in: projection)))
+                    return .init(state: state, availability: .available(try _machine.availableInvocations(in: projection)\(invocationFilter)))
                 } catch {
                     return .init(
                         state: state,

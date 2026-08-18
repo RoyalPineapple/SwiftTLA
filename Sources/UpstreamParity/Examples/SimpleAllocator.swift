@@ -2,7 +2,7 @@ import SwiftTLA
 import SwiftTLAMacros
 
 @TLAModel
-public struct SimpleAllocatorModel {
+public struct SimpleAllocatorModel: Sendable {
     public static var spec: TLASpec {
         let clients = ["c1", "c2", "c3"]
         let nonemptySubsets: [TLAValue] = [

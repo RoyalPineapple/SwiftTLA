@@ -8,7 +8,7 @@ import SwiftTLAMacros
 /// and its generated `pc` function; the Swift source does not unroll a
 /// separate action or program counter for every process.
 @TLAModel
-public struct TeachingSimpleN2Model {
+public struct TeachingSimpleN2Model: Sendable {
     public enum Process: Int, CaseIterable, FiniteDomainKey {
         case p0
         case p1
@@ -63,7 +63,7 @@ public struct TeachingSimpleN2Model {
 }
 
 @TLAModel
-public struct TeachingSimpleN3Model {
+public struct TeachingSimpleN3Model: Sendable {
     public enum Process: Int, CaseIterable, FiniteDomainKey {
         case p0
         case p1

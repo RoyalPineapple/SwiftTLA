@@ -2,7 +2,7 @@ import SwiftTLA
 import SwiftTLAMacros
 
 @TLAModel
-public struct NanoBlockchainModel {
+public struct NanoBlockchainModel: Sendable {
     public static var spec: TLASpec {
         let nodes = ["n1", "n2"]
         let hashes = ["h1", "h2", "h3"]

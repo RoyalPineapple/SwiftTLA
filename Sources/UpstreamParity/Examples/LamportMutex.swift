@@ -2,7 +2,7 @@ import SwiftTLA
 import SwiftTLAMacros
 
 @TLAModel
-public struct LamportMutexModel {
+public struct LamportMutexModel: Sendable {
     public static var spec: TLASpec {
         let N = 2
         let nodes = Array(1...N)

@@ -2,7 +2,7 @@ import SwiftTLA
 import SwiftTLAMacros
 
 @TLAModel
-public struct BarrierModel {
+public struct BarrierModel: Sendable {
     public enum BarrierPhase: String, TLAValueType {
         case b0, b1
     }

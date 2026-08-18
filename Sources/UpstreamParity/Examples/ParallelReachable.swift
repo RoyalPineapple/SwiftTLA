@@ -7,7 +7,7 @@ import SwiftTLAMacros
 /// nodes into the shared frontier one at a time. The separate `a`, `b`, and
 /// `c` steps deliberately mirror the published PlusCal labels.
 @TLAModel
-public struct ParallelReachableModel {
+public struct ParallelReachableModel: Sendable {
     public enum Node: Int, FiniteDomainKey {
         case one = 1, two = 2, three = 3, four = 4
 

@@ -7,7 +7,7 @@ import SwiftTLAMacros
 /// read may observe. The three labels are the upstream regular-register
 /// write/write/read steps; this is not a sequential Swift simulation.
 @TLAModel
-public struct TeachingSimpleRegularN8Model {
+public struct TeachingSimpleRegularN8Model: Sendable {
     public enum Process: Int, CaseIterable, FiniteDomainKey {
         case p0, p1, p2, p3, p4, p5, p6, p7
 

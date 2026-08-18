@@ -8,7 +8,7 @@ import SwiftTLAMacros
 /// every node its own set of messages, while each `Each(Node.all)` body is an
 /// independently scheduled PlusCal process.
 @TLAModel
-public struct EchoModel {
+public struct EchoModel: Sendable {
     public enum Node: String, TLAValueType, FiniteDomainKey {
         case a, b, c
 

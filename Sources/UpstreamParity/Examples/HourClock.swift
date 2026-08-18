@@ -2,7 +2,7 @@ import SwiftTLA
 import SwiftTLAMacros
 
 @TLAModel
-public struct HourClockModel {
+public struct HourClockModel: Sendable {
     public static var spec: TLASpec {
         #spec("HourClock") {
             let hr = SharedVar(in: 1...12)

@@ -225,5 +225,8 @@ struct GeneratedMachineContractTests {
         #expect(report.status == .exact)
         #expect(report.initialStateCount == 1)
         #expect(report.transitionCount == 1)
+        #expect(GeneratedContractSurfaceModel.machineSchema.model.name == "GeneratedContractSurfaceModel")
+        #expect(GeneratedContractSurfaceModel.machineSchema.state.map(\.id) == ["count"])
+        #expect(GeneratedContractSurfaceModel.machineSchema.actions.map(\.id) == ["advance"])
     }
 }

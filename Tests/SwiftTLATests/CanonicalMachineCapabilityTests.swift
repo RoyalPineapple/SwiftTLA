@@ -32,8 +32,15 @@ private struct AdapterTransitionResult: Sendable, Equatable {
     let after: Int
 }
 
-private struct MutableCanonicalMachine: TLAMachineAdapterCanonicalModel {
+private struct MutableCanonicalMachine: TLAMachineAdapterCanonicalModel, TLAMachineSchemaProviding {
     private var count = 0
+
+    static let machineSchema = MachineSchema(
+        identifier: "mutable-canonical-machine-v1",
+        model: .init(name: "MutableCanonicalMachine"),
+        state: [.init(id: "count", display: .init(name: "count"), value: .integer, swiftType: "Int")],
+        actions: [.init(id: "advance", display: .init(name: "advance"), parameters: [])]
+    )
 
     func machineObservation() async -> TLAMachineObservation {
         .init(
@@ -260,6 +267,23 @@ struct CanonicalMachineCapabilityTests {
         #expect(after.state.projection?.value(for: countToken) == .int(1))
         #expect(after.availableInvocations == [])
         #expect(rejected == after)
+    }
+
+    @Test("Session publishes an initial snapshot and each committed transition in sequence")
+    func sessionStreamsCommittedObservations() async throws {
+        let session = TLAMachineSession(MutableCanonicalMachine())
+        var updates = await session.machineUpdates().makeAsyncIterator()
+
+        let initial = await updates.next()
+        _ = try await session.execute(.init(name: "advance"))
+        let transition = await updates.next()
+
+        #expect(initial?.sequence == 0)
+        #expect(initial?.cause == .initial)
+        #expect(initial?.observation.availableInvocations == [.init(name: "advance")])
+        #expect(transition?.sequence == 1)
+        #expect(transition?.cause == .transition(.init(name: "advance")))
+        #expect(transition?.observation.availableInvocations == [])
     }
 
     private func observe<Machine: TLAMachineObserving>(_ machine: Machine) async -> TLAMachineObservation {
