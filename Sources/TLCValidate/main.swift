@@ -11,21 +11,27 @@ if args.first == "temporal-symmetry" {
 if args.first == "public-workflow" {
     runPublicWorkflow(arguments: Array(args.dropFirst()))
 }
+if args.first == "symmetric-collections" || args.first == "symmetric-oracle" {
+    do {
+        try runSymmetricCollectionOracle()
+        exit(0)
+    } catch {
+        fputs("Symmetric collection TLC oracle failed: \(error)\n", stderr)
+        exit(1)
+    }
+}
 guard let name = args.first else {
     fputs("""
-    Usage: tlc-validate <name>
-      operators: arithmetic comparison logic sets tuples records functions casexpr choose forall
-      parity:    list | <ParityCatalog id>
-      oracle:    symmetric-collections (alias: symmetric-oracle)
+    Usage: tlc-validate <command>
+      core-conformance run|gate ...
+      temporal-symmetry run|gate ...
+      public-workflow ...
+      symmetric-collections (alias: symmetric-oracle)
     """, stderr)
     exit(1)
 }
-do {
-    try runLegacyCommand(name: name, arguments: args)
-} catch {
-    fputs("tlc-validate: \(error)\n", stderr)
-    exit(1)
-}
+fputs("tlc-validate: unknown command \(name)\n", stderr)
+exit(1)
 private typealias CoreConformanceManifest = CoreConformanceCasesManifestV1
 
 private struct PublicWorkflowOptions {

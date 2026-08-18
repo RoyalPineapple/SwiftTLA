@@ -2,22 +2,15 @@
 
 SwiftTLA has two related but different TLC checks.
 
-Legacy upstream parity is a diagnostic suite. It checks selected Swift ports
-against their expected distinct-state counts and can run exported modules with
-TLC. It is useful regression coverage, but equal counts do not prove equal
-initial states, state values, action labels, edges, or outcomes.
+The parity corpus ports keep regression coverage through their in-process
+tests: each port checks its expected distinct-state count and exported module
+shape. Equal counts do not prove equal initial states, state values, action
+labels, edges, or outcomes.
 
 Core graph conformance is the stronger, bounded relation for the cases in
 `Verification/CoreConformance/cases.json`. It compares canonical initial
 states, state bindings, and the complete labeled transition multiset from an
 independent Swift BFS run and a pinned TLC run.
-
-Run the legacy diagnostics with:
-
-```sh
-make parity
-./scripts/validate_upstream_parity.sh
-```
 
 Run exact finite graph conformance with:
 
