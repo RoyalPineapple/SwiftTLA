@@ -10,6 +10,7 @@ for the symbol-oriented reference.
 
 - [Generate a machine](#generate-a-machine)
 - [Run actions](#run-actions)
+- [Implement a generic observer](#implement-a-generic-observer)
 - [Nest a machine](#nest-a-machine)
 - [Isolation and callbacks](#isolation-and-callbacks)
 - [Test an integration](#test-an-integration)
@@ -117,6 +118,113 @@ let label: CounterHost.Actor.ActionLabel = .advance
 let invocation = label.toInvocation()
 let result = try await actor.execute(invocation)
 ```
+
+## Implement a generic observer
+
+An observer can inspect a generated machine without importing its generated
+`State` or `ActionLabel` types. It uses the generated `MachineSchema` and a
+`TLAMachineSession`.
+
+Put the model in one session. Then use the session for observation and action
+execution. Do not keep a second mutable copy of the model.
+
+```swift
+let session = TLAMachineSession(BoundedCounter())
+```
+
+Read `schema` before you render a state. The schema contains the model name,
+state fields, actions, display names, and formal value shapes. The macro emits
+this value from the same plan that emits `State` and `ActionLabel`.
+
+```swift
+let schema = await session.schema
+
+for action in schema.actions {
+    print(action.id)
+    for parameter in action.parameters {
+        print(parameter.id, parameter.value)
+    }
+}
+```
+
+Use `machineUpdates()` for live inspection. The first update is a current
+snapshot. Later updates describe committed transitions. Each update has a
+machine ID and a sequence number.
+
+```swift
+func observe<Model>(_ session: TLAMachineSession<Model>) async
+where Model: TLAMachineAdapterCanonicalModel & TLAMachineSchemaProviding {
+    let schema = await session.schema
+
+    while !Task.isCancelled {
+        var expectedSequence: UInt64?
+        let updates = await session.machineUpdates()
+
+        for await update in updates {
+            if let expectedSequence, update.sequence != expectedSequence {
+                let observation = await session.machineObservation()
+                render(schema: schema, observation: observation)
+                break
+            }
+
+            render(schema: schema, observation: update.observation)
+            expectedSequence = update.sequence &+ 1
+        }
+    }
+}
+```
+
+This code starts a new subscription after a sequence gap. The new subscription
+starts with a current snapshot. This prevents the observer from rendering an
+old buffered update after it gets a newer snapshot.
+
+`machineUpdates()` uses a buffer of 64 updates for each subscriber. A slow
+observer can lose updates. A sequence gap is the signal to resynchronize. It
+is not an error in the machine.
+
+Render the state through its guarded projection. Do not read a raw TLA state
+map. Use each schema field ID to make a validated projection token.
+
+```swift
+func render(schema: MachineSchema, observation: TLAMachineObservation) {
+    guard let projection = observation.projection else {
+        print(observation.projectionDiagnostic?.description ?? "State is unavailable")
+        return
+    }
+
+    for field in schema.state {
+        guard let token = TLAStateProjection.Token(validating: field.id) else {
+            continue
+        }
+        print(field.display.name, projection.value(for: token) as Any)
+    }
+
+    if let invocations = observation.availableInvocations {
+        for invocation in invocations {
+            print(invocation)
+        }
+    } else if let diagnostic = observation.availabilityDiagnostic {
+        print(diagnostic.message)
+    }
+}
+```
+
+Execute a selected invocation through the same session. A successful execution
+commits the transition and publishes one update. A failed execution publishes
+no update.
+
+```swift
+let invocation = TLAActionInvocation(name: "advance")
+_ = try await session.execute(invocation)
+```
+
+Only execute an invocation that the latest observation advertises. Some
+identity-routed collection actions need the generated typed `action(id:)` API.
+A generic observer cannot execute these actions.
+
+An observer is not a trace system. It has no persisted history, timestamps,
+correlation IDs, export protocol, or invariant-status feed. The session stream
+reports the current observation and later committed transitions only.
 
 ## Nest a machine
 
@@ -404,6 +512,10 @@ The following table is the public inventory for this guide. Sources identify the
 | `TLAMachineAvailabilityDiagnostic` | Reports an `evaluationFailed` or `stateProjectionFailed` code and a message. | [CanonicalMachine.swift](../Sources/SwiftTLA/CanonicalMachine.swift) |
 | `TLAMachineObserving` | Provides async `machineObservation()`. Its extensions provide `machineState()` and `machineAvailability()`. | [CanonicalMachine.swift](../Sources/SwiftTLA/CanonicalMachine.swift) |
 | `TLAMachineExecuting` | Extends observation with async throwing `execute(_ invocation: TLAActionInvocation)`. | [CanonicalMachine.swift](../Sources/SwiftTLA/CanonicalMachine.swift) |
+| `TLAMachineSchemaProviding` | Provides the generated `machineSchema` for a machine. | [MachineSchema.swift](../Sources/SwiftTLA/MachineSchema.swift) |
+| `MachineSchema` | Describes generated state fields, actions, display names, and formal value shapes. | [MachineSchema.swift](../Sources/SwiftTLA/MachineSchema.swift) |
+| `TLAMachineStreaming` | Provides an async stream of an initial observation and later committed updates. | [MachineStreaming.swift](../Sources/SwiftTLA/MachineStreaming.swift) |
+| `TLAMachineSession` | Owns a generated model and serializes observation, generic execution, and update delivery. | [MachineStreaming.swift](../Sources/SwiftTLA/MachineStreaming.swift) |
 | `TLAMachineAdapterCanonicalModel` | Protocol for a canonical adapter model. It provides synchronous observation and `executeSynchronously(_:)`. | [CanonicalMachine.swift](../Sources/SwiftTLA/CanonicalMachine.swift) |
 | `TLAMachineAdapterAccess` | Protocol for an adapter that provides async `withCanonicalMachine(_:)`. Its constrained extension provides `canonicalMachineObservation()` and `executeCanonical(_:)`. | [CanonicalMachine.swift](../Sources/SwiftTLA/CanonicalMachine.swift) |
 | `TLAActionInvocation` | Identifies an action by name and declared arguments. It is the untyped invocation form. | [TLASpec.swift](../Sources/SwiftTLA/TLASpec.swift) |
