@@ -641,3 +641,175 @@ import UpstreamParity
     #expect(g.states.count <= 2)
   }
 }
+
+// MARK: - completion coverage
+@Suite(.serialized) struct CompletionCoverageTests { @Test("completeAction pushes UNCHANGED into OR branches")
+  func perBranchUnchanged() {
+    // OR action: only one branch assigns x, the other doesn't
+    let action: ActionExpr = .or(
+      .assign("x", .value(.int(1))),
+      .assign("y", .value(.int(2)))
+    )
+    // completeAction should add UNCHANGED y to first branch, UNCHANGED x to second
+    let completed = completeAction(action, allVars: ["x", "y"])
+    let desc = completed.description
+    #expect(desc.contains("UNCHANGED y"))
+    #expect(desc.contains("UNCHANGED x"))
+  }
+
+  @Test("completeAction doesn't add UNCHANGED when all vars assigned")
+  func noUnchangedWhenAllAssigned() {
+    let action: ActionExpr = .and(
+      .assign("x", .value(.int(1))),
+      .assign("y", .value(.int(2)))
+    )
+    let completed = completeAction(action, allVars: ["x", "y"])
+    #expect(!completed.description.contains("UNCHANGED"))
+  }
+
+  @Test("CHOOSE + functionApply + EXCEPT in single action enumerates correctly")
+  func chooseWithFunctionApply() throws {
+    let chosenProcess: ActionExpr = .chooseAction(
+      "process", .setLiteral([.value(.int(1)), .value(.int(2))]))
+    let readState: ActionExpr = .guard_(
+      .equal(
+        .functionApply(.variable("programCounter"), .variable("process")),
+        .value(.string("initial"))
+      ))
+    let updateState: ActionExpr = .assign(
+      "programCounter",
+      .except(.variable("programCounter"), .variable("process"), .value(.string("done")))
+    )
+    let unchanged: ActionExpr = .unchanged("sent")
+    let action = ActionExpr.and(
+      chosenProcess, ActionExpr.and(readState, ActionExpr.and(updateState, unchanged)))
+    let state: [String: TLAValue] = [
+      "programCounter": .function([.int(1): "initial", .int(2): "initial"]),
+      "sent": .set([]),
+      "process": .int(0)
+    ]
+    let successors = try ActionEnumerator.enumerate(
+      action, from: state, varNames: ["programCounter", "sent", "process"])
+    #expect(successors.count == 2)
+    for s in successors {
+      let pc = s["programCounter"]
+      let proc = s["process"]
+      guard case .function(let mapping) = pc else {
+        #expect(Bool(false))
+        return
+      }
+      if case .int(1) = proc {
+        #expect(mapping[.int(1)] == "done")
+        #expect(mapping[.int(2)] == "initial")
+      }
+    }
+  }
+
+  @Test("RecursiveFunction builtins evaluate correctly")
+  func recursiveBuiltins() throws {
+    let result = try StateExpr.recursiveCall(
+      "SeqFromSet", [.value(.set([.int(3), .int(1), .int(2)]))]
+    ).evaluate(in: [:])
+    #expect(result == .tuple([.int(1), .int(2), .int(3)]))
+  }
+
+  @Test("DefineRecursive DSL body evaluates with depth tracking")
+  func recursiveDSLEval() throws {
+    let body: StateExpr = .ifThenElse(
+      .equal(.setLiteral([]), .variable("S")),
+      .tupleLiteral([]),
+      .tupleConcatenate(
+        .tupleLiteral([.any(from: .variable("S"))]),
+        .recursiveCall(
+          "SfS",
+          [
+            .setDifference(
+              .variable("S"),
+              .setLiteral([.any(from: .variable("S"))])
+            )
+          ])
+      )
+    )
+    let fn = RecursiveFunc(name: "SfS", params: ["S"], body: body)
+    let result = try StateExpr.recursiveCall("SfS", [.value(.set([.int(3), .int(1), .int(2)]))])
+      .evaluate(in: [:], recursiveFuncs: [fn])
+    guard case .tuple(let tv) = result else {
+      #expect(Bool(false))
+      return
+    }
+    #expect(Set(tv) == Set([.int(1), .int(2), .int(3)]))
+  }
+
+  @Test("TLAValue.function Comparable ordering")
+  func functionComparable() {
+    let small = TLAValue.function([.int(1): "a"])
+    let large = TLAValue.function([.int(1): "a", .int(2): "b"])
+    #expect(small < large)
+    #expect(!(large < small))
+  }
+
+  @Test("renameVar replaces variable references by AST rewrite")
+  func renameVarReplacesNested() {
+    let body: StateExpr = .add(
+      .multiply(.variable("userVar"), .value(.int(2))),
+      .variable("userVar")
+    )
+    let result = renameVar("userVar", to: "x0", in: body)
+    let desc = result.description
+    #expect(!desc.contains("userVar"))
+    #expect(desc.contains("x0"))
+  }
+
+  @Test("raw function AST construction remains explicit")
+  func rawFunctionASTConstruction() {
+    let pc = Var<TLAValue>("pc")
+    let selfProcess = Var<Int>("self")
+    let read = StateExpr.functionApply(pc.stateExpr, selfProcess.stateExpr)
+    let result = StateExpr.except(pc.stateExpr, selfProcess.stateExpr, .value(.string("done")))
+    #expect(read == .functionApply(.variable("pc"), .variable("self")))
+    let expected: StateExpr = .except(.variable("pc"), .variable("self"), .value(.string("done")))
+    #expect(result == expected)
+  }
+
+  @Test("Function-typed variable works end-to-end in ModelChecker")
+  func functionVariableEndToEnd() throws {
+    let programCounter = Var<TLAValue>("programCounter")
+    let selfProcess = Var<Int>("selfProcess")
+    let spec = TLASpec("FuncEndToEnd") {
+      Variable(programCounter, TLAValue.function([.int(1): "initial", .int(2): "initial"]))
+      Variable(selfProcess, 0)
+      Action("process") {
+        choose(selfProcess, from: StateExpr.set([1, 2]))
+          && StateExpr.functionApply(programCounter.stateExpr, selfProcess.stateExpr) == "initial"
+          && .assign(
+            programCounter.name,
+            .except(programCounter.stateExpr, selfProcess.stateExpr, .value(.string("done")))
+          )
+      }
+    }
+    if case .ok(let count) = try ModelChecker(spec: spec, maxStates: 50).check() {
+      #expect(count >= 2)
+    } else {
+      #expect(Bool(false))
+    }
+  }
+
+  @Test("SpecRuntime handles function-typed variable correctly")
+  func functionTypeRuntime() throws {
+    let programCounter = Var<TLAValue>("programCounter")
+    let spec = TLASpec("FuncGen") {
+      Variable(programCounter, TLAValue.function([:]))
+      Action("init") {
+        let domain = StateExpr.set([1])
+        let p = Var<Int>("p")
+        let fun = StateExpr.functionLiteral(p, in: domain, "ready")
+        programCounter.becomes(Expr<TLAValue>(fun)).when(
+          programCounter.stateExpr.domain.cardinality == 0)
+      }
+    }
+    let rt = try SpecRuntime(spec: spec)
+    let state = rt.initialStates().first!
+    let next = try rt.apply(.init(name: "init"), to: state)
+    #expect(next["programCounter"] != nil)
+  }
+}
