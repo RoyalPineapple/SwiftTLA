@@ -55,10 +55,11 @@ where Model: TLAMachineAdapterCanonicalModel & TLAMachineSchemaProviding {
     public func machineUpdates() -> AsyncStream<TLAMachineUpdate> {
         let subscriberID = UUID()
         let initial = makeUpdate(cause: .initial)
+        let session = self
         return AsyncStream(bufferingPolicy: .bufferingNewest(64)) { continuation in
             continuations[subscriberID] = continuation
-            continuation.onTermination = { [weak self] _ in
-                Task { await self?.removeSubscriber(subscriberID) }
+            continuation.onTermination = { _ in
+                Task { await session.removeSubscriber(subscriberID) }
             }
             continuation.yield(initial)
         }
