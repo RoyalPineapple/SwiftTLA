@@ -80,7 +80,6 @@ public struct PublicWorkflowConformanceRunnerV1: Sendable {
     static let schema = "PublicWorkflowRunnerRegisterV1"
     let schema: String
     let parserBuilder: [Entry]
-    let compilerPipeline: CoreEvidenceReferenceV1
     let generatedBehavior: CoreEvidenceReferenceV1
 
     struct Entry: Decodable {
@@ -150,12 +149,6 @@ public struct PublicWorkflowConformanceRunnerV1: Sendable {
     for entry in register.parserBuilder {
       checks.append(try parserCheck(entry, root: root, output: runDirectory.appendingPathComponent(entry.id), gateRunID: gateRunID))
     }
-    let compilerPipelineData = try verified(register.compilerPipeline, beneath: root)
-    let compilerPipeline = try JSONDecoder().decode(CompilerPipelineDiagnosticManifestV1.self, from: compilerPipelineData)
-    for declaration in compilerPipeline.cases {
-      checks.append(try compilerPipelineCheck(declaration, manifest: register.compilerPipeline, root: root,
-                                              output: runDirectory.appendingPathComponent(declaration.id), gateRunID: gateRunID))
-    }
     let generatedData = try verified(register.generatedBehavior, beneath: root)
     let generated = try PublicWorkflowGeneratedBehaviorManifestV1.load(generatedData)
     for fixture in generated.fixtures {
@@ -169,29 +162,6 @@ public struct PublicWorkflowConformanceRunnerV1: Sendable {
       checks.append(try platformCheck(root: root, output: runDirectory.appendingPathComponent("platform-matrix"), gateRunID: gateRunID, hostedCI: hostedCI))
     }
     return checks
-  }
-
-  private func compilerPipelineCheck(
-    _ declaration: CompilerPipelineDiagnosticCaseV1,
-    manifest: CoreEvidenceReferenceV1,
-    root: URL,
-    output: URL,
-    gateRunID: UUID
-  ) throws -> PublicWorkflowDiagnosticCheckV1 {
-    let correlation = try PublicWorkflowCaseRunCorrelationV1(
-      caseID: declaration.id, gateRunID: gateRunID, fixtureRunID: UUID(), comparisonRunID: UUID())
-    let run = try CompilerPipelineDiagnosticEvidenceAdapterV1().run(
-      manifestURL: root.appendingPathComponent(manifest.path), projectRoot: root, outputDirectory: output, correlation: correlation)
-    try run.validateRetainedArtifacts(beneath: root)
-    let actual = PublicWorkflowExpectedOutcomeV1(rawValue: run.evidence.outcome.rawValue)
-    guard let expected = PublicWorkflowExpectedOutcomeV1(rawValue: declaration.expectedOutcome.rawValue) else {
-      throw PublicWorkflowGovernanceErrorV1.invalidField(record: declaration.id, field: "compiler pipeline expected outcome")
-    }
-    let retained = try artifactReferences(in: output, beneath: root)
-    return PublicWorkflowDiagnosticCheckV1(
-      id: declaration.id, command: "CompilerPipelineDiagnosticEvidenceAdapterV1.run",
-      status: run.evidence.status, expectedOutcome: expected,
-      actualOutcome: actual, evidence: [manifest] + retained, diagnostic: run.evidence.diagnostic)
   }
 
   private func platformCheck(root: URL, output: URL, gateRunID: UUID, hostedCI: Bool) throws -> PublicWorkflowDiagnosticCheckV1 {

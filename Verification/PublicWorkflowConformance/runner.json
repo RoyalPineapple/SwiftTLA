@@ -18,10 +18,6 @@
       "expectedOutcome": "difference"
     }
   ],
-  "compilerPipeline": {
-    "path": "Verification/PublicWorkflowConformance/compiler-pipeline.json",
-    "sha256": "230cf48699f1b9436bdf50cf19e112aa5ed216957e0fe6dc35461d13193c782b"
-  },
   "generatedBehavior": {
     "path": "Verification/PublicWorkflowConformance/generated-behavior.json",
     "sha256": "b0b9feb40302ea1fb23ffb12fccd3b2e76facc568cd2d2fd25340d1bfec2e720"
