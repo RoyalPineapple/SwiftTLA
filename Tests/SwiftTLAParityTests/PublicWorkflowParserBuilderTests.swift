@@ -137,9 +137,9 @@ struct PublicWorkflowParserBuilderTests {
       case .swiftTLAPackagePin:
         try replaceFirst("\"sha256\": \"9dd427098bbacebacb55a8d16d23853352a4af7dc41a78c3f771db6e2a896442\"", with: "\"sha256\": \"\(String(repeating: "0", count: 64))\"")
       case .bridgeSourcePin:
-        try replaceFirst("\"bridgeSourceSHA256\": \"363be60962a3921039c9c2068150214c23524949035ae902078441df96947a94\"", with: "\"bridgeSourceSHA256\": \"\(String(repeating: "0", count: 64))\"")
+        try replaceFirst("\"bridgeSourceSHA256\": \"3626e246c966e654372fd000088f5e8706286d38ff50ba3b57eee09294e61db9\"", with: "\"bridgeSourceSHA256\": \"\(String(repeating: "0", count: 64))\"")
       case .adapterSourceEvidencePin:
-        try replaceFirst("\"adapterSource\", \"evidence\": { \"path\": \"Sources/UpstreamParity/Conformance/PublicWorkflowParserBuilderAdapter.swift\", \"sha256\": \"363be60962a3921039c9c2068150214c23524949035ae902078441df96947a94\"", with: "\"adapterSource\", \"evidence\": { \"path\": \"Sources/UpstreamParity/Conformance/PublicWorkflowParserBuilderAdapter.swift\", \"sha256\": \"\(String(repeating: "0", count: 64))\"")
+        try replaceFirst("\"adapterSource\", \"evidence\": { \"path\": \"Sources/UpstreamParity/Conformance/PublicWorkflowParserBuilderAdapter.swift\", \"sha256\": \"3626e246c966e654372fd000088f5e8706286d38ff50ba3b57eee09294e61db9\"", with: "\"adapterSource\", \"evidence\": { \"path\": \"Sources/UpstreamParity/Conformance/PublicWorkflowParserBuilderAdapter.swift\", \"sha256\": \"\(String(repeating: "0", count: 64))\"")
       case .nonApplicablePin:
         try replaceFirst("\"tlcJarSHA256\": \"95f89bf42ce10922c7a60ed4e026ac0a2dc8550fae2a518e8d842f5836518a75\"", with: "\"tlcJarSHA256\": \"\(String(repeating: "0", count: 64))\"")
       case .pathEscape:
@@ -155,7 +155,7 @@ struct PublicWorkflowParserBuilderTests {
     private func replaceFirst(_ target: String, with replacement: String) throws {
       let body = try String(contentsOf: manifest)
       if target.contains("9dd427098bbacebacb55a8d16d23853352a4af7dc41a78c3f771db6e2a896442") {
-        let currentPackagePin = "e60782d1d1f92f3fdf5b3181f0936eff5997da8f090dee6815bd65c77743516d"
+        let currentPackagePin = "cb18ec5ad761cd1f63315a0c09ebfed5c62c018346908a0a8a19a521f66b6ec4"
         guard let range = body.range(of: currentPackagePin) else { throw CocoaError(.fileNoSuchFile) }
         try body.replacingCharacters(in: range, with: String(repeating: "0", count: 64)).write(to: manifest, atomically: true, encoding: .utf8)
         return
