@@ -532,7 +532,7 @@ func runSymmetricCollectionOracle() throws {
         print("OK   symmetric scope \(scope) — Swift/TLC \(swiftStates) orbit states")
     }
 
-    let control = quotedStringSymmetryControl(scope: 2)
+    let control = try quotedStringSymmetryControl(scope: 2)
     let execution = try executeTLC(bundle: control, moduleName: "SymmetricOracle2", jarPath: jarPath)
     guard execution.status != 0 else {
         throw SymmetricCollectionOracleError.quotedStringControlAccepted(execution.output)
