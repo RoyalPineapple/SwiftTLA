@@ -341,7 +341,7 @@ algorithm evidence.
 
 ## Port inventory
 
-**Selected TLC parity ports** — `scripts/validate_upstream_parity.sh` checks these ports against [tlaplus/Examples](https://github.com/tlaplus/Examples).
+**Selected TLC parity ports** — ported from [tlaplus/Examples](https://github.com/tlaplus/Examples) with in-process distinct-state regression tests; exact finite graph comparison for the declared core cases runs through the pinned core-conformance toolchain.
 
 | Spec | States | Key features |
 |------|--------|-------------|

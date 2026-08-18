@@ -192,15 +192,7 @@ See [public workflow conformance](Documentation/PublicWorkflowConformance.md)
 for fixture identities, report fields, workflow artifact locations, authority
 labels, and limits.
 
-State counts alone do not establish behavioral equivalence. A successful bounded check does not prove arbitrary population sizes, liveness, or unsupported TLA+ constructs.
-
-```bash
-./scripts/setup-tlc.sh
-./scripts/validate_tlc.sh              # operator matrix vs TLC
-./scripts/validate_upstream_parity.sh  # Swift ports ↔ upstream TLC
-swift test
-make parity
-```
+State counts alone do not establish behavioral equivalence. A successful bounded check does not prove arbitrary population sizes, liveness, or unsupported TLA+ constructs. Exact finite graph comparison runs through `make core-conformance` with the pinned toolchain; see [core graph conformance](Documentation/CoreGraphConformance.md).
 
 ## Local validation
 
