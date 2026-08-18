@@ -215,7 +215,7 @@ private struct FoldGeneratedModel {
 
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
-        try (try FoldGeneratedModel.spec.compile().renderedTLAModuleBundle()).write(to: directory)
+        try FoldGeneratedModel.spec.compile().materializeModuleBundle(to: directory)
 
         let process = Process()
         process.executableURL = URL(fileURLWithPath: java)
@@ -252,7 +252,7 @@ private struct FoldGeneratedModel {
 
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
-        try (try KeyValueStoreUtil.module.compile().renderedTLAModuleBundle()).write(to: directory)
+        try KeyValueStoreUtil.module.compile().materializeModuleBundle(to: directory)
 
         let process = Process()
         process.executableURL = URL(fileURLWithPath: java)
