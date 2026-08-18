@@ -1,5 +1,6 @@
 import CryptoKit
-@preconcurrency import Foundation
+@preconcurrency import Swift
+import Foundation
 import CanonicalUpstreamCorpus
 import SwiftTLA
 
