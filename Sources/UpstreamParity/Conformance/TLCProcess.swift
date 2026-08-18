@@ -1,6 +1,7 @@
 import Darwin
 import Foundation
 import os
+import SwiftTLA
 
 public enum TLCTraceModeV1: Equatable, Sendable {
   case none
