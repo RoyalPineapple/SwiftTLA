@@ -112,7 +112,7 @@ Production exploration is plain BFS. Composition is for self-proof, not a contro
 
 ## Examples and TLC checks
 
-Core ports live under `Examples/` (HourClock, DieHard, CoffeeCan, MovingCat, Majority, Allocator, and more). State counts for core specifications are regression-tested.
+Core ports live under `Sources/UpstreamParity/Examples/` (HourClock, DieHard, CoffeeCan, MovingCat, Majority, Allocator, and more). State counts for core specifications are regression-tested.
 
 For selected finite core models, the repository can compare the complete labeled
 transition relation with a pinned TLC run. The support gate admits only the

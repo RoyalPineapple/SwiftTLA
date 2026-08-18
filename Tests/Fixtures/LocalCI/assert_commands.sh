@@ -43,7 +43,7 @@ forbid "$pr_runner" "core-conformance"
 forbid "$pr_runner" "temporal-symmetry"
 forbid "$pr_runner" "public-workflow"
 
-require "$smoke_runner" "swift test --filter"
+require "$smoke_runner" "local-validation.sh swiftpm-test"
 require "$smoke_runner" "GeneratedStateMachineTests"
 require "$smoke_runner" "NestedComposableMacroConformanceTests"
 require "$smoke_runner" "SpecParserTests"
