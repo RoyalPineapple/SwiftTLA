@@ -1,8 +1,8 @@
 import SwiftTLA
 import UpstreamParity
-@preconcurrency import Swift
 import Foundation
-let args = Array(CommandLine.arguments.dropFirst())
+nonisolated(unsafe) private var commandLineArguments = CommandLine.arguments
+let args = Array(commandLineArguments.dropFirst())
 if args.first == "core-conformance" {
     runCoreConformance(arguments: Array(args.dropFirst()))
 }

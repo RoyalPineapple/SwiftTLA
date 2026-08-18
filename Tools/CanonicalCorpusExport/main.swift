@@ -1,8 +1,9 @@
 import CryptoKit
-@preconcurrency import Swift
 import Foundation
 import CanonicalUpstreamCorpus
 import SwiftTLA
+
+nonisolated(unsafe) private var commandLineArguments = CommandLine.arguments
 
 private struct Manifest: Codable {
     let schema: String
@@ -145,7 +146,7 @@ private func parseArguments(_ arguments: [String]) throws -> (output: URL, sha: 
 }
 
 do {
-    let options = try parseArguments(Array(CommandLine.arguments.dropFirst()))
+    let options = try parseArguments(Array(commandLineArguments.dropFirst()))
     guard !FileManager.default.fileExists(atPath: options.output.path) else {
         throw ExportError.outputExists(options.output.path)
     }
