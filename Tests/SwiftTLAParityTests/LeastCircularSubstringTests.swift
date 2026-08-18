@@ -6,7 +6,7 @@ import Testing
 struct LeastCircularSubstringTests {
   @Test("emits the upstream dependency as a separate module with its scoped finite configuration")
   func emitsModuleBundle() throws {
-    let bundle = try LeastCircularSubstringModel.spec.tlaBundle
+    let bundle = try LeastCircularSubstringModel.spec.compile().renderedTLAModuleBundle()
     guard let config = bundle.root.cfg else {
       Issue.record("The root module needs a TLC configuration.")
       return

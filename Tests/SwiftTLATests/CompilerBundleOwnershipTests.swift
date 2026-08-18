@@ -197,7 +197,7 @@ struct CompilerBundleOwnershipTests {
       importConfigurations: [.init(moduleName: "Missing", replacements: [])]
     )
 
-    #expect(throws: CompilationDiagnostic.self) { try invalid.tlaBundle }
+    #expect(throws: CompilationDiagnostic.self) { try invalid.compile().renderedTLAModuleBundle() }
   }
 
   private func expectLinkDiagnostic(

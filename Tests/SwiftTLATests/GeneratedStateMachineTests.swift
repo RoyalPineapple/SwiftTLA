@@ -798,7 +798,7 @@ struct GeneratedStateMachineTests {
             .map(\.invocation.arguments)
         #expect(initialInvocations == expectedArguments)
 
-        let wrappers = builder.tlaModule.split(separator: "\n").filter { $0.hasPrefix("board__") }
+        let wrappers = try builder.compile().renderedTLAModuleBundle().tla.split(separator: "\n").filter { $0.hasPrefix("board__") }
         #expect(wrappers == [
             "board__0_0_0 == board(1, 10, 100)",
             "board__0_0_1 == board(1, 10, 200)",

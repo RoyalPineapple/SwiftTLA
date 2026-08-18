@@ -265,8 +265,8 @@ struct AlgorithmBuilderTests {
             .string("second"): .string("stringProcess"),
             .string("other"): .string("otherProcess")
         ]))
-        #expect(spec.tlaModule.contains("({\"first\", \"second\"} \\cup {\"other\"})"))
-        #expect(spec.tlaModule.contains("__pcal_initial_process =") == false)
+        #expect(try spec.compile().renderedTLAModuleBundle().tla.contains("({\"first\", \"second\"} \\cup {\"other\"})"))
+        #expect(try spec.compile().renderedTLAModuleBundle().tla.contains("__pcal_initial_process =") == false)
     }
 
     @Test("a begin-style algorithm keeps a scalar program counter")
@@ -685,7 +685,7 @@ struct AlgorithmBuilderTests {
         let spec = TLASpec("Formal Operators") { algorithm }
         #expect(spec.formalOperatorDefinitions == lowered.formalOperatorDefinitions)
         #expect(spec.definitions.filter { $0.hasPrefix("same(") }.count == 1)
-        #expect(spec.tlaModule.components(separatedBy: "same(value0, value1)").count == 2)
+        #expect(try spec.compile().renderedTLAModuleBundle().tla.components(separatedBy: "same(value0, value1)").count == 2)
     }
 
     @Test("When, Assert, With, and process fairness lower as formal semantics")
@@ -713,7 +713,7 @@ struct AlgorithmBuilderTests {
         #expect(spec.fairness == [FairnessCondition.weakFairnessInvocation(.init(name: "choose", arguments: [.string("first")])),
             .weakFairnessInvocation(.init(name: "choose", arguments: [.string("second")]))
         ])
-        let rendered = spec.tlaModule
+        let rendered = try spec.compile().renderedTLAModuleBundle().tla
         #expect(rendered.contains("WF_<<count, selected, pc>>(choose__0)"))
         #expect(rendered.contains("WF_<<count, selected, pc>>(choose__1)"))
 

@@ -179,7 +179,7 @@ public struct CompilerPipelineDiagnosticEvidenceAdapterV1: Sendable {
       }
       let compilationURL = output.appendingPathComponent("compilation.json")
       try writeCanonical(CompilerPipelineCompilationArtifactV1(compilationIdentity: compilation.identity.value, maxStates: maxStates), to: compilationURL)
-      let bundle = try renderedBundle(try compilation.tlaBundle, mode: configuration.renderedBundleMode)
+      let bundle = try renderedBundle(try compilation.renderedTLAModuleBundle(), mode: configuration.renderedBundleMode)
       try bundle.validateRenderedBundleIntegrity()
       let bundleDirectory = output.appendingPathComponent("bundle")
       if configuration.renderedBundleMode == .exact {

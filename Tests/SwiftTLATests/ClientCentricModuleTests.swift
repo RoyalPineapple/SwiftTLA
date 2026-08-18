@@ -25,8 +25,8 @@ struct ClientCentricModuleTests {
       recursiveFuncs: try consumer.compile().formalModuleClosure.resolvedRecursiveFuncs,
       formalOperatorDefinitions: try consumer.compile().formalModuleClosure.resolvedFormalOperatorDefinitions
     ) == .bool(true))
-    #expect(try consumer.tlaBundle.imports.map(\.name) == ["Folds", "Functions", "Util", "ClientCentric"])
-    #expect(consumer.tlaModule.contains("CC == INSTANCE ClientCentric WITH Keys <- {\"k\"}, Values <- {\"none\"}"))
+    #expect(try consumer.compile().renderedTLAModuleBundle().imports.map(\.name) == ["Folds", "Functions", "Util", "ClientCentric"])
+    #expect(try consumer.compile().renderedTLAModuleBundle().tla.contains("CC == INSTANCE ClientCentric WITH Keys <- {\"k\"}, Values <- {\"none\"}"))
   }
 
   @Test("a selected injective function can concatenate as a TLA sequence")

@@ -3,7 +3,13 @@ import SwiftSyntax
 import SwiftSyntaxBuilder
 
 extension TLASpec {
-    var tlaModule: String {
+    /// Renders the TLA+ module source for one specification.
+    ///
+    /// This is the compiler-internal renderer consumed by
+    /// `CompiledSpecification.renderedTLAModuleBundle()`. Application code must
+    /// compile first and read the bundle's `.tla` field instead of rendering a
+    /// raw `TLASpec`.
+    func renderTLAModuleSource() -> String {
         validateSymmetricCollectionExport()
         let varNames = variables.map(\.name)
         let algorithmSymbols = algorithmExportSymbols(sourceAlgorithms, actions: actions)
@@ -234,8 +240,11 @@ extension TLASpec {
         }
     }
 
-    /// Auto-generated TLC configuration matching the module.
-    var tlaCfg: String {
+    /// Renders the auto-generated TLC configuration matching the module.
+    ///
+    /// Compiler-internal; application code must compile first and read the
+    /// bundle's `.cfg` field.
+    func renderTLCConfiguration() -> String {
         validateSymmetricCollectionExport()
         var lines: [String] = []
         lines.append("SPECIFICATION Spec")
@@ -269,16 +278,6 @@ extension TLASpec {
             lines.append("SYMMETRY \(collection.metadata.symmetrySymbol)")
         }
         return lines.joined(separator: "\n") + "\n"
-    }
-
-    /// Complete TLA+ source bundle from this specification's compiled closure.
-    ///
-    /// Rendering cannot discover or resolve imports; `compile()` owns that
-    /// semantic link phase.
-    var tlaBundle: TLAModuleBundle {
-        get throws {
-            try compile().tlaBundle
-        }
     }
 
     private func validateSymmetricCollectionExport() {
