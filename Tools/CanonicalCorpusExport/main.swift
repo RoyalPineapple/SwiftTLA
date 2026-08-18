@@ -3,8 +3,6 @@ import Foundation
 import CanonicalUpstreamCorpus
 import SwiftTLA
 
-nonisolated(unsafe) private var commandLineArguments = CommandLine.arguments
-
 private struct Manifest: Codable {
     let schema: String
     let swiftTLASHA: String
@@ -145,8 +143,11 @@ private func parseArguments(_ arguments: [String]) throws -> (output: URL, sha: 
     return (URL(fileURLWithPath: output).standardizedFileURL, sha)
 }
 
-do {
-    let options = try parseArguments(Array(commandLineArguments.dropFirst()))
+@main
+private enum CanonicalCorpusExport {
+    static func main() {
+        do {
+    let options = try parseArguments(Array(CommandLine.arguments.dropFirst()))
     guard !FileManager.default.fileExists(atPath: options.output.path) else {
         throw ExportError.outputExists(options.output.path)
     }
@@ -204,7 +205,9 @@ do {
         to: options.output.appendingPathComponent("manifest.json"),
         options: Data.WritingOptions.atomic
     )
-} catch {
+        } catch {
     fputs("canonical-corpus-export: \(error)\n", stderr)
     exit(2)
+        }
+    }
 }

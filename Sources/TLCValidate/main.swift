@@ -1,8 +1,10 @@
 import SwiftTLA
 import UpstreamParity
 import Foundation
-nonisolated(unsafe) private var commandLineArguments = CommandLine.arguments
-let args = Array(commandLineArguments.dropFirst())
+@main
+private enum TLCValidate {
+    static func main() {
+let args = Array(CommandLine.arguments.dropFirst())
 if args.first == "core-conformance" {
     runCoreConformance(arguments: Array(args.dropFirst()))
 }
@@ -26,6 +28,8 @@ do {
 } catch {
     fputs("tlc-validate: \(error)\n", stderr)
     exit(1)
+}
+    }
 }
 private typealias CoreConformanceManifest = CoreConformanceCasesManifestV1
 
