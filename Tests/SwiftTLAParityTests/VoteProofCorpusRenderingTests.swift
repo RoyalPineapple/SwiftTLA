@@ -1,7 +1,7 @@
 import Testing
 @testable import UpstreamParity
 
-struct VoteProofMigrationTests {
+struct VoteProofCorpusRenderingTests {
     @Test("VoteProof preserves typed local recursion and formal module composition")
     func parserBuilderFidelity() throws {
         VoteProofModel._checkParserTree()

@@ -1,7 +1,7 @@
 import Testing
 @testable import UpstreamParity
 
-struct BoulangerMigrationTests {
+struct BoulangerCorpusRenderingTests {
     @Test("Boulanger preserves its Algorithm source through parser and builder")
     func parserBuilderFidelity() throws {
         BoulangerModel._checkParserTree()

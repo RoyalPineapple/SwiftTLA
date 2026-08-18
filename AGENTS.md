@@ -30,3 +30,9 @@ Treat string-keyed and otherwise untyped data as a guarded boundary.
 - New application models, examples, and documentation use `#spec` with `Algorithm`, `SharedVar`, `LocalVar`, `Each`, and `Do`.
 - Keep `Var`, `Variable`, and `Action` in the formal core for generated code, imported TLA+ modules, and parity fixtures. Do not introduce them as a second public authoring style.
 - Remove compatibility spellings instead of preserving them. Migrate repository callers in the same change.
+
+## Test Naming and Cleanliness
+
+- Name a test suite and its cases for the behavior or compiler contract they prove, not for the implementation type, temporary migration, or refactor that introduced them.
+- An upstream model name may appear only to identify the canonical corpus owner. Pair it with the tested contract, for example `VoteProofCorpusRenderingTests`, not `VoteProofMigrationTests`.
+- Each implementation phase includes a Ponytail review and a cleanliness pass: delete obsolete paths, migrate callers, and reject compatibility shims, duplicate witnesses, and stale generated evidence.

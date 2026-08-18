@@ -3,7 +3,7 @@ import SwiftTLA
 import UpstreamParity
 
 @Suite(.serialized)
-struct ChangRobertsMigrationTests {
+struct ChangRobertsCorpusContractTests {
     @Test("PlusCal-shaped Chang–Roberts retains the upstream N=3 state count")
     func generatedAlgorithmMatchesUpstreamStateCount() throws {
         let entry = Example.changRobertsN3
