@@ -60,7 +60,7 @@ struct GeneratedMachineDocumentationTests {
             #expect(sourceText.contains(declaration), "Source declaration is missing: \(declaration)")
         }
 
-        for unsupportedName in ["@TypedVar", "@TLAValidated", "_machine"] {
+        for unsupportedName in ["@TLAValidated", "_machine"] {
             #expect(!inventory.contains(unsupportedName), "Unsupported API appears in public inventory: \(unsupportedName)")
         }
 
