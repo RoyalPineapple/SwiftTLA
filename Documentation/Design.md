@@ -422,7 +422,7 @@ graph TD
 
     subgraph Runtime["Interactive Runtime"]
         direction TB
-        SR["SpecRuntime<br/>init(spec:)<br/>initialStates(), apply(actionName:to:),<br/>availableActions(in:), check(_:in:), step(_:from:)"]
+        SR["SpecRuntime<br/>init(spec:)<br/>initialStates(), apply(actionName:to:),<br/>actionReport(named:in:), check(_:in:), step(_:from:)"]
         SR --> AE2["ActionEnumerator.enumerate()"]
         SR --> EVAL2["Evaluator.evaluateBool()"]
     end

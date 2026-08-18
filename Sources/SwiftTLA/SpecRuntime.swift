@@ -113,54 +113,6 @@ public struct SpecRuntime: Sendable {
         }
     }
 
-    /// Compatibility projection for callers that do not need parameter labels.
-    public func availableActions(in state: [String: TLAValue]) -> [String] {
-        (try? availableInvocations(in: state).map(\.name)) ?? []
-    }
-
-    public func actionOutcome(named actionName: String, in state: [String: TLAValue]) -> RuntimeActionOutcome {
-        actionOutcome(
-            named: actionName,
-            in: state,
-            evaluationContext: StateExprEvaluationContext()
-        )
-    }
-
-    private func actionOutcome(
-        named actionName: String,
-        in state: [String: TLAValue],
-        evaluationContext: StateExprEvaluationContext
-    ) -> RuntimeActionOutcome {
-        guard let action = spec.actions.first(where: { $0.name == actionName }) else {
-            return .actionNotFound(actionName: actionName)
-        }
-        do {
-            let successors = try actionInvocations(action).flatMap {
-                try transitionRelation.successors(
-                    for: $0.invocation,
-                    from: state,
-                    evaluationContext: evaluationContext
-                ).map(\.state)
-            }
-            return successors.isEmpty ? .disabled(actionName: actionName) : .enabled(actionName: actionName, successors: successors)
-        } catch let error as TransitionRelation.Error {
-            return actionOutcomeFailure(actionName: actionName, error: error)
-        } catch {
-            return .evaluationFailed(actionName: actionName, diagnostic: .init(code: .evaluationError, message: String(describing: error)))
-        }
-    }
-
-    public func generatedActionOutcome(actionName: String, in state: [String: TLAValue]) -> RuntimeActionOutcome {
-        actionOutcome(named: actionName, in: state)
-    }
-
-    /// A guarded, inspection-ready account of one requested action.
-    ///
-    /// `RuntimeActionOutcome` remains the compact compatibility result used by
-    /// generated source.  Application and tooling code should prefer this
-    /// report when it needs to explain an unavailable action: it retains the
-    /// requested formal action, the safely projected pre-state, available
-    /// alternatives, whether anything changed, and a safe next action.
     public func actionReport(named actionName: String, in state: [String: TLAValue]) -> RuntimeActionReport {
         let evaluationContext = StateExprEvaluationContext()
         let requested = TLAActionInvocation(name: actionName)
@@ -176,11 +128,44 @@ public struct SpecRuntime: Sendable {
             ))
         }
 
-        let outcome = actionOutcome(
-            named: actionName,
-            in: state,
-            evaluationContext: evaluationContext
-        )
+        let status: RuntimeActionReport.Status
+        let nextSafeAction: String
+        if let action = spec.actions.first(where: { $0.name == actionName }) {
+            do {
+                let successors = try actionInvocations(action).flatMap {
+                    try transitionRelation.successors(
+                        for: $0.invocation,
+                        from: state,
+                        evaluationContext: evaluationContext
+                    ).map(\.state)
+                }
+                if successors.isEmpty {
+                    status = .unavailable(
+                        expected: "the guard for \(actionName) to be true",
+                        actual: "the action produced no successor from this state"
+                    )
+                    nextSafeAction = "Apply one of the available actions, or inspect \(actionName)'s guard against this state."
+                } else {
+                    status = .enabled(successorCount: successors.count)
+                    nextSafeAction = "Choose one returned successor and commit it through the generated machine."
+                }
+            } catch let error as TransitionRelation.Error {
+                let diagnostic = actionOutcomeFailureDiagnostic(error: error)
+                status = .evaluationFailed(diagnostic)
+                nextSafeAction = diagnostic.nextSafeAction
+            } catch {
+                let diagnostic = ActionEvaluationDiagnostic(code: .evaluationError, message: String(describing: error))
+                status = .evaluationFailed(diagnostic)
+                nextSafeAction = diagnostic.nextSafeAction
+            }
+        } else {
+            status = .unavailable(
+                expected: "a declared action named \(actionName)",
+                actual: "no such action exists in specification \(spec.name)"
+            )
+            nextSafeAction = "Use one of the declared action names before retrying."
+        }
+
         let availability: RuntimeActionReport.Availability
         do {
             availability = .known(try availableInvocations(
@@ -198,53 +183,13 @@ public struct SpecRuntime: Sendable {
             ))
         }
 
-        switch outcome {
-        case .enabled(_, let successors):
-            return .init(
-                requested: requested,
-                state: projection,
-                availability: availability,
-                status: .enabled(successorCount: successors.count),
-                nextSafeAction: "Choose one returned successor and commit it through the generated machine."
-            )
-        case .disabled:
-            return .init(
-                requested: requested,
-                state: projection,
-                availability: availability,
-                status: .unavailable(
-                    expected: "the guard for \(actionName) to be true",
-                    actual: "the action produced no successor from this state"
-                ),
-                nextSafeAction: "Apply one of the available actions, or inspect \(actionName)'s guard against this state."
-            )
-        case .actionNotFound:
-            return .init(
-                requested: requested,
-                state: projection,
-                availability: availability,
-                status: .unavailable(
-                    expected: "a declared action named \(actionName)",
-                    actual: "no such action exists in specification \(spec.name)"
-                ),
-                nextSafeAction: "Use one of the declared action names before retrying."
-            )
-        case .evaluationFailed(_, let diagnostic), .evaluationUnavailable(_, let diagnostic):
-            return .init(
-                requested: requested,
-                state: projection,
-                availability: availability,
-                status: .evaluationFailed(diagnostic),
-                nextSafeAction: diagnostic.nextSafeAction
-            )
-        }
-    }
-
-    public func actionOutcomes(in state: [String: TLAValue]) -> [RuntimeActionOutcome] {
-        let evaluationContext = StateExprEvaluationContext()
-        return spec.actions.map {
-            actionOutcome(named: $0.name, in: state, evaluationContext: evaluationContext)
-        }
+        return .init(
+            requested: requested,
+            state: projection,
+            availability: availability,
+            status: status,
+            nextSafeAction: nextSafeAction
+        )
     }
 
     public func propertyOutcomes(in state: [String: TLAValue]) -> [RuntimePropertyOutcome] {
@@ -373,31 +318,22 @@ public struct SpecRuntime: Sendable {
         }
     }
 
-    private func actionOutcomeFailure(
-        actionName: String,
+    private func actionOutcomeFailureDiagnostic(
         error: TransitionRelation.Error
-    ) -> RuntimeActionOutcome {
+    ) -> ActionEvaluationDiagnostic {
         guard case .enumerationFailed(_, let underlying) = error else {
-            return .evaluationFailed(actionName: actionName, diagnostic: .init(code: .evaluationError, message: String(describing: error)))
+            return .init(code: .evaluationError, message: String(describing: error))
         }
         if case RuntimeError.evaluationUnavailable(let message) = underlying {
-            return .evaluationUnavailable(actionName: actionName, diagnostic: .init(code: .evaluatorUnavailable, message: message))
+            return .init(code: .evaluatorUnavailable, message: message)
         }
         if let error = underlying as? EvalError {
-            return .evaluationFailed(actionName: actionName, diagnostic: .init(code: .evaluationError, message: error.description))
+            return .init(code: .evaluationError, message: error.description)
         }
         if let error = underlying as? ActionError {
-            return .evaluationFailed(actionName: actionName, diagnostic: .init(code: .actionError, message: error.description))
+            return .init(code: .actionError, message: error.description)
         }
-        return .evaluationFailed(actionName: actionName, diagnostic: .init(code: .evaluationError, message: String(describing: underlying)))
-    }
-
-    public enum RuntimeActionOutcome: Sendable, Equatable {
-        case enabled(actionName: String, successors: [[String: TLAValue]])
-        case disabled(actionName: String)
-        case evaluationFailed(actionName: String, diagnostic: ActionEvaluationDiagnostic)
-        case evaluationUnavailable(actionName: String, diagnostic: ActionEvaluationDiagnostic)
-        case actionNotFound(actionName: String)
+        return .init(code: .evaluationError, message: String(describing: underlying))
     }
 
     public enum RuntimePropertyOutcome: Sendable, Equatable {

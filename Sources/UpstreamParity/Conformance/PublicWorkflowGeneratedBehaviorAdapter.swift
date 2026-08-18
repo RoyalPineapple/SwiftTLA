@@ -227,13 +227,13 @@ public struct PublicWorkflowGeneratedBehaviorToolchainV1: Equatable, Codable, Se
 struct PublicWorkflowGeneratedMachineHarnessV1 {
   let initialStates: [[String: TLAValue]]
   let actionNames: [String]
-  let apply: ([String: TLAValue], String) -> SpecRuntime.RuntimeActionOutcome
+  let apply: ([String: TLAValue], String) -> GeneratedActionResult
   let propertyOutcomes: ([String: TLAValue]) -> [SpecRuntime.RuntimePropertyOutcome]
 
   init(
     initialStates: [[String: TLAValue]],
     actionNames: [String],
-    apply: @escaping ([String: TLAValue], String) -> SpecRuntime.RuntimeActionOutcome,
+    apply: @escaping ([String: TLAValue], String) -> GeneratedActionResult,
     propertyOutcomes: @escaping ([String: TLAValue]) -> [SpecRuntime.RuntimePropertyOutcome]
   ) {
     self.initialStates = initialStates
@@ -241,6 +241,17 @@ struct PublicWorkflowGeneratedMachineHarnessV1 {
     self.apply = apply
     self.propertyOutcomes = propertyOutcomes
   }
+}
+
+/// The harness-local result of asking a generated machine about one action.
+/// It is owned by the generated-behavior comparison boundary, not by the
+/// public runtime surface.
+enum GeneratedActionResult: Equatable, Sendable {
+  case enabled(actionName: String, successors: [[String: TLAValue]])
+  case disabled(actionName: String)
+  case actionNotFound(actionName: String)
+  case evaluationFailed(actionName: String, diagnostic: SpecRuntime.ActionEvaluationDiagnostic)
+  case evaluationUnavailable(actionName: String, diagnostic: SpecRuntime.ActionEvaluationDiagnostic)
 }
 
 public struct PublicWorkflowGeneratedFixtureConfigurationV1: Codable, Sendable {

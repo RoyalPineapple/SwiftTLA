@@ -23,7 +23,7 @@ enum PublicWorkflowGeneratedFixtureRegistryV1 {
           initialStates: P4GeneratedCounterFixture.runtime.initialStates(),
           actionNames: ["advance"],
           apply: { state, actionName in
-            P4GeneratedCounterFixture.runtime.generatedActionOutcome(actionName: actionName, in: state)
+            generatedActionResult(P4GeneratedCounterFixture.runtime, actionName: actionName, in: state)
           },
           propertyOutcomes: P4GeneratedCounterFixture.runtime.propertyOutcomes(in:)))
     case "p4-generated-counter-intentional-mismatch":
@@ -105,12 +105,60 @@ struct P4GeneratedCounterMismatchFixture: Sendable {
   static func intentionalMismatchActionOutcome(
     actionName: String,
     in state: [String: TLAValue]
-  ) -> SpecRuntime.RuntimeActionOutcome {
-    switch runtime.generatedActionOutcome(actionName: actionName, in: state) {
+  ) -> GeneratedActionResult {
+    switch generatedActionResult(runtime, actionName: actionName, in: state) {
     case .enabled(let actionName, _):
       return .enabled(actionName: actionName, successors: [["value": .int(2)]])
     case let outcome:
       return outcome
     }
+  }
+}
+
+func generatedActionResult(
+  _ runtime: SpecRuntime,
+  actionName: String,
+  in state: [String: TLAValue]
+) -> GeneratedActionResult {
+  guard runtime.spec.actions.contains(where: { $0.name == actionName }) else {
+    return .actionNotFound(actionName: actionName)
+  }
+  do {
+    let successors = try runtime.successors(.init(name: actionName), from: state)
+    return successors.isEmpty
+      ? .disabled(actionName: actionName)
+      : .enabled(actionName: actionName, successors: successors)
+  } catch let error as SpecRuntime.RuntimeError {
+    switch error {
+    case .enumerationFailed(_, _, let underlying):
+      if case SpecRuntime.RuntimeError.evaluationUnavailable(let message) = underlying {
+        return .evaluationUnavailable(
+          actionName: actionName,
+          diagnostic: .init(code: .evaluatorUnavailable, message: message))
+      }
+      if let eval = underlying as? EvalError {
+        return .evaluationFailed(
+          actionName: actionName,
+          diagnostic: .init(code: .evaluationError, message: eval.description))
+      }
+      if let action = underlying as? ActionError {
+        return .evaluationFailed(
+          actionName: actionName,
+          diagnostic: .init(code: .actionError, message: action.description))
+      }
+      return .evaluationFailed(
+        actionName: actionName,
+        diagnostic: .init(code: .evaluationError, message: String(describing: underlying)))
+    case .actionNotFound:
+      return .actionNotFound(actionName: actionName)
+    default:
+      return .evaluationFailed(
+        actionName: actionName,
+        diagnostic: .init(code: .evaluationError, message: String(describing: error)))
+    }
+  } catch {
+    return .evaluationFailed(
+      actionName: actionName,
+      diagnostic: .init(code: .evaluationError, message: String(describing: error)))
   }
 }
