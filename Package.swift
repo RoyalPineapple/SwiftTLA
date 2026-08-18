@@ -28,7 +28,7 @@ let package = Package(
             .product(name: "SwiftSyntax", package: "swift-syntax"),
             .product(name: "SwiftSyntaxMacros", package: "swift-syntax")
         ], swiftSettings: settings),
-        .target(name: "SwiftTLAMacros", dependencies: ["SwiftTLA", "SwiftTLAPlugin"]),
+        .target(name: "SwiftTLAMacros", dependencies: ["SwiftTLA", "SwiftTLAPlugin"], swiftSettings: settings),
         .macro(name: "SwiftTLAPlugin", dependencies: [
             "SwiftTLA",
             .product(name: "SwiftCompilerPlugin", package: "swift-syntax"),
@@ -36,7 +36,7 @@ let package = Package(
             .product(name: "SwiftSyntaxMacros", package: "swift-syntax"),
             .product(name: "SwiftDiagnostics", package: "swift-syntax"),
             .product(name: "SwiftParser", package: "swift-syntax")
-        ]),
+        ], swiftSettings: settings),
         .target(name: "SwiftTLAModels", dependencies: ["SwiftTLA", "SwiftTLAMacros"], swiftSettings: settings),
         // The externally qualified upstream backbone is its own source target
         // so its exact models can be exported without compiling the full
@@ -44,7 +44,8 @@ let package = Package(
         .target(
             name: "CanonicalUpstreamCorpus",
             dependencies: ["SwiftTLA", "SwiftTLAMacros"],
-            path: "Sources/UpstreamParity/CanonicalCorpus"
+            path: "Sources/UpstreamParity/CanonicalCorpus",
+            swiftSettings: settings
         ),
         .target(
             name: "UpstreamParity",
@@ -73,7 +74,8 @@ let package = Package(
         .executableTarget(
             name: "tlc-validate",
             dependencies: ["SwiftTLA", "UpstreamParity"],
-            path: "Sources/TLCValidate"
+            path: "Sources/TLCValidate",
+            swiftSettings: settings
         ),
         // Internal CI appendix: exports the canonical upstream Algorithm
         // corpus for independent translator/TLC evidence. It is deliberately
@@ -81,7 +83,8 @@ let package = Package(
         .executableTarget(
             name: "canonical-corpus-export",
             dependencies: ["SwiftTLA", "CanonicalUpstreamCorpus"],
-            path: "Tools/CanonicalCorpusExport"
+            path: "Tools/CanonicalCorpusExport",
+            swiftSettings: settings
         ),
         // Fast semantic-core tests. Keep this target free of UpstreamParity so
         // Fast semantic witnesses compile and run without the parity corpus.
