@@ -7,7 +7,7 @@ struct PublicWorkflowParserBuilderTests {
   @Test("source-controlled portable fixture produces pinned canonical observations")
   func portableManifestProducesComparison() throws {
     if let relativeOutput = ProcessInfo.processInfo.environment["PUBLIC_WORKFLOW_PARSER_BUILDER_OUTPUT"] {
-      let root = try Fixture.packageRoot()
+      let root = try throwingPackageRoot()
       let output = root.appendingPathComponent(relativeOutput)
       let run = try PublicWorkflowParserBuilderAdapterV1().run(
         manifestURL: root.appendingPathComponent("Tests/Fixtures/PublicWorkflowConformance/ParserBuilder/manifest.json"),
@@ -31,7 +31,7 @@ struct PublicWorkflowParserBuilderTests {
   @Test("source-controlled mismatch fixture retains a difference")
   func portableManifestRetainsMismatch() throws {
     if let relativeOutput = ProcessInfo.processInfo.environment["PUBLIC_WORKFLOW_PARSER_BUILDER_MISMATCH_OUTPUT"] {
-      let root = try Fixture.packageRoot()
+      let root = try throwingPackageRoot()
       let run = try PublicWorkflowParserBuilderAdapterV1().run(
         manifestURL: root.appendingPathComponent("Tests/Fixtures/PublicWorkflowConformance/ParserBuilder/Mismatch/manifest.json"),
         projectRoot: root, outputDirectory: root.appendingPathComponent(relativeOutput),
@@ -59,7 +59,7 @@ struct PublicWorkflowParserBuilderTests {
 
   @Test("canonical project roots accept an equivalent symlinked output spelling")
   func acceptsEquivalentSymlinkedOutputDirectory() throws {
-    let root = try Fixture.packageRoot().resolvingSymlinksInPath().standardizedFileURL
+    let root = try throwingPackageRoot().resolvingSymlinksInPath().standardizedFileURL
     guard let equivalentRoot = Self.privateTmpSpelling(of: root) else {
       return
     }
@@ -95,7 +95,7 @@ struct PublicWorkflowParserBuilderTests {
     let manifest: URL
 
     init(relativeManifest: String = "Tests/Fixtures/PublicWorkflowConformance/ParserBuilder/manifest.json") throws {
-      sourceRoot = try Self.packageRoot()
+      sourceRoot = try throwingPackageRoot()
       root = FileManager.default.temporaryDirectory.appendingPathComponent("PublicWorkflowParserBuilderTests-\(UUID())")
       manifest = root.appendingPathComponent(relativeManifest)
       try stage("Tests/Fixtures/PublicWorkflowConformance/ParserBuilder")
@@ -175,16 +175,6 @@ struct PublicWorkflowParserBuilderTests {
       let destination = root.appendingPathComponent(relativePath)
       guard !FileManager.default.fileExists(atPath: destination.path) else { return }
       try stage(relativePath)
-    }
-
-    static func packageRoot() throws -> URL {
-      var directory = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
-      while !FileManager.default.fileExists(atPath: directory.appendingPathComponent("Package.swift").path) {
-        let parent = directory.deletingLastPathComponent()
-        guard parent != directory else { throw CocoaError(.fileNoSuchFile) }
-        directory = parent
-      }
-      return directory
     }
   }
 }

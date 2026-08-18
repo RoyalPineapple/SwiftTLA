@@ -146,15 +146,6 @@ struct CoreGovernanceRegisterFixtureTests {
     projectURL("Verification/CoreConformance/\(path)")
   }
 
-  private func projectURL(_ path: String) -> URL {
-    URL(fileURLWithPath: #filePath)
-      .deletingLastPathComponent()
-      .deletingLastPathComponent()
-      .deletingLastPathComponent()
-      .appendingPathComponent(path)
-      .standardizedFileURL
-  }
-
   private struct RetainedComparison: Decodable {
     struct Correlation: Decodable {
       let caseID: String
