@@ -6,7 +6,7 @@ extension MacroExpander {
         let formalVariables = Dictionary(uniqueKeysWithValues: model.compilation.spec.variables.map { ($0.name, $0.initial) })
         let fields = plan.variables.map { variable in
             let value = formalVariables[variable.formalName] ?? .constant("unknown")
-            """
+            return """
             .init(id: \"\(variable.formalName)\", display: .init(name: \"\(variable.formalName)\"), value: \(schemaValue(value)), swiftType: \"\(variable.swiftType)\")
             """
         }.joined(separator: ",\n                ")
@@ -32,10 +32,10 @@ extension MacroExpander {
 
     private static func schemaValue(_ value: TLAValue) -> String {
         switch value {
-        case .int: ".integer"
-        case .bool: ".boolean"
-        case .string: ".string"
-        case .constant: ".constant"
+        case .int: return ".integer"
+        case .bool: return ".boolean"
+        case .string: return ".string"
+        case .constant: return ".constant"
         case .set(let values):
             guard let first = values.sorted().first else { return ".set(element: .opaque)" }
             return ".set(element: \(schemaValue(first)))"

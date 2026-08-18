@@ -36,7 +36,7 @@ extension MacroExpander {
             """)
         ]
         if !canonicalModel.machineSurface.actions.isEmpty {
-            declarations.insert(3, DeclSyntax(stringLiteral: "public typealias ActionLabel = \(modelType).ActionLabel"))
+            declarations.insert(DeclSyntax(stringLiteral: "public typealias ActionLabel = \(modelType).ActionLabel"), at: 3)
         }
         if kind == .observable {
             if needsPublicInitializer {
