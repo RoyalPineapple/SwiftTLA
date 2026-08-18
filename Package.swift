@@ -8,6 +8,10 @@ let settings: [SwiftSetting] = [
     .unsafeFlags(["-warnings-as-errors"])
 ]
 
+let executableSettings: [SwiftSetting] = [
+    .unsafeFlags(["-warnings-as-errors"])
+]
+
 let package = Package(
     name: "SwiftTLA",
     platforms: [.macOS(.v14)],
@@ -75,7 +79,7 @@ let package = Package(
             name: "tlc-validate",
             dependencies: ["SwiftTLA", "UpstreamParity"],
             path: "Sources/TLCValidate",
-            swiftSettings: settings
+            swiftSettings: executableSettings
         ),
         // Internal CI appendix: exports the canonical upstream Algorithm
         // corpus for independent translator/TLC evidence. It is deliberately
@@ -84,7 +88,7 @@ let package = Package(
             name: "canonical-corpus-export",
             dependencies: ["SwiftTLA", "CanonicalUpstreamCorpus"],
             path: "Tools/CanonicalCorpusExport",
-            swiftSettings: settings
+            swiftSettings: executableSettings
         ),
         // Fast semantic-core tests. Keep this target free of UpstreamParity so
         // Fast semantic witnesses compile and run without the parity corpus.

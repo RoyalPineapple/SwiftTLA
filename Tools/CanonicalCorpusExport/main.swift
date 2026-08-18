@@ -143,10 +143,7 @@ private func parseArguments(_ arguments: [String]) throws -> (output: URL, sha: 
     return (URL(fileURLWithPath: output).standardizedFileURL, sha)
 }
 
-@main
-private enum CanonicalCorpusExport {
-    static func main() {
-        do {
+do {
     let options = try parseArguments(Array(CommandLine.arguments.dropFirst()))
     guard !FileManager.default.fileExists(atPath: options.output.path) else {
         throw ExportError.outputExists(options.output.path)
@@ -205,9 +202,7 @@ private enum CanonicalCorpusExport {
         to: options.output.appendingPathComponent("manifest.json"),
         options: Data.WritingOptions.atomic
     )
-        } catch {
+} catch {
     fputs("canonical-corpus-export: \(error)\n", stderr)
     exit(2)
-        }
-    }
 }
