@@ -337,7 +337,7 @@ algorithm evidence.
 | **Symmetry reduction** | ~ | `SymmetryDecl` exists; not active |
 | **LET in actions** | ✓ | Swift `let` in `Action { }` builder for StateExpr; no ActionExpr-level LET needed |
 | **Record field shorthand** | ✓ | `@dynamicMemberLookup` on `Var` — `msg.type` works in builders |
-| **Export** | ✓ | `try spec.compile().tlaBundle` produces linked SANY/TLC input |
+| **Export** | ✓ | `try spec.compile().renderedTLAModuleBundle()` produces linked SANY/TLC input |
 
 ## Port inventory
 
@@ -436,7 +436,7 @@ graph TD
     subgraph Parity["Evidence corpora"]
         DIRECT["Broad direct-TLA example catalogue<br/>semantic regression coverage<br/>not the external canonical corpus"]
         CORPUS["Canonical PlusCal corpus<br/>source-owned models and bundle manifests"]
-        EXPORTER["Canonical corpus export<br/>writes the source-owned tlaBundle artifact"]
+        EXPORTER["Canonical corpus export<br/>writes the source-owned rendered bundle artifact"]
         EVIDENCE["ValidationEvidence hosted workflow<br/>official PlusCal translation + pinned TLC<br/>exact canonical graph comparison"]
         CORPUS --> EXPORTER
         BUNDLE --> EXPORTER

@@ -180,7 +180,7 @@ struct SymmetricCollectionCanonicalizationTests {
       SymmetricCollection(members, verificationScope: 2, initial: 0)
     }
 
-    let bundle = try spec.tlaBundle
+    let bundle = try spec.compile().renderedTLAModuleBundle()
     #expect(bundle.tla.contains("CONSTANTS DevicePhasesMember0, DevicePhasesMember1"))
     #expect(bundle.tla.contains("DevicePhasesKeys == {DevicePhasesMember0, DevicePhasesMember1}"))
     #expect(bundle.tla.contains("SymmDevicePhases == Permutations(DevicePhasesKeys)"))

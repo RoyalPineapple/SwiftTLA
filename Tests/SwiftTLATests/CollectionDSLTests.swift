@@ -60,7 +60,7 @@ struct TypedFormalCollectionTests {
       return
     }
     #expect(count == 2)
-    #expect(TypedSetAlgorithm.spec.tlaModule.contains("seen' = (seen \\cup {1})"))
+    #expect(try TypedSetAlgorithm.spec.compile().renderedTLAModuleBundle().tla.contains("seen' = (seen \\cup {1})"))
   }
 
   @Test func typedTupleLowersAndChecksThroughBothPaths() throws {
@@ -71,7 +71,7 @@ struct TypedFormalCollectionTests {
       return
     }
     #expect(count == 3)
-    #expect(TypedTupleAlgorithm.spec.tlaModule.contains("values' = Append(values, 1)"))
+    #expect(try TypedTupleAlgorithm.spec.compile().renderedTLAModuleBundle().tla.contains("values' = Append(values, 1)"))
   }
 
   @Test func formalValuesRoundTripWithoutHostCollections() {

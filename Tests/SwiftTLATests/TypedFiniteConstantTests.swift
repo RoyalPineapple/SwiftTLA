@@ -42,7 +42,7 @@ private struct VoteProofShapedConstantGeneratedModel {
 }
 
 struct TypedFiniteConstantTests {
-    @Test func builderRetainsAndExportsAClosedTypedFiniteSet() {
+    @Test func builderRetainsAndExportsAClosedTypedFiniteSet() throws {
         let spec = TLASpec("TypedFiniteConstant") {
             Constant("Value", SetExpr<Int>(1, 2))
             let count = Var<Int>("count")
@@ -50,7 +50,7 @@ struct TypedFiniteConstantTests {
         }
 
         #expect(spec.constants == ["Value": .set([.int(1), .int(2)])])
-        #expect(spec.tlaModule.contains("ASSUME Value = {1, 2}"))
+        #expect(try spec.compile().renderedTLAModuleBundle().tla.contains("ASSUME Value = {1, 2}"))
     }
 
     @Test func parserRetainsTheSameTypedFiniteSet() {
@@ -67,12 +67,12 @@ struct TypedFiniteConstantTests {
         #expect(parsed.constants == ["Value": .set([.int(1), .int(2)])])
     }
 
-    @Test func generatedModelRetainsTheTypedFiniteSet() {
+    @Test func generatedModelRetainsTheTypedFiniteSet() throws {
         #expect(TypedFiniteConstantGeneratedModel.spec.constants == ["Value": .set([.int(1), .int(2)])])
-        #expect(TypedFiniteConstantGeneratedModel.spec.tlaModule.contains("ASSUME Value = {1, 2}"))
+        #expect(try TypedFiniteConstantGeneratedModel.spec.compile().renderedTLAModuleBundle().tla.contains("ASSUME Value = {1, 2}"))
     }
 
-    @Test func generatedModelRetainsVoteProofShapedFiniteEnumConstants() {
+    @Test func generatedModelRetainsVoteProofShapedFiniteEnumConstants() throws {
         #expect(VoteProofShapedConstantGeneratedModel.spec.constants == [
             "Value": .set([.string("v1"), .string("v2")]),
             "Acceptor": .set([.string("a1"), .string("a2"), .string("a3")]),
@@ -81,8 +81,8 @@ struct TypedFiniteConstantTests {
                 .set([.string("a2"), .string("a3")])
             ])
         ])
-        #expect(VoteProofShapedConstantGeneratedModel.spec.tlaModule.contains("ASSUME Value = {\"v1\", \"v2\"}"))
-        #expect(VoteProofShapedConstantGeneratedModel.spec.tlaModule.contains("ASSUME Quorum = {{\"a1\", \"a2\"}, {\"a2\", \"a3\"}}"))
+        #expect(try VoteProofShapedConstantGeneratedModel.spec.compile().renderedTLAModuleBundle().tla.contains("ASSUME Value = {\"v1\", \"v2\"}"))
+        #expect(try VoteProofShapedConstantGeneratedModel.spec.compile().renderedTLAModuleBundle().tla.contains("ASSUME Quorum = {{\"a1\", \"a2\"}, {\"a2\", \"a3\"}}"))
     }
 
     @Test func parserDiagnosesDynamicConstantValues() {

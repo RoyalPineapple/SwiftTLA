@@ -41,7 +41,6 @@ enum PublicWorkflowDecodingV1 {
 
 public enum PublicWorkflowCaseCategoryV1: String, Codable, Sendable {
   case annotation
-  case compilerPipeline
   case parserBuilder
   case generatedBehavior
   case nestedPackage

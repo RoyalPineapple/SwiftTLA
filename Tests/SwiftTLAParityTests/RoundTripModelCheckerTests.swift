@@ -6,10 +6,10 @@ import SwiftTLAModels
 import Testing
 import UpstreamParity
 
-// MARK: - .tlaModule: section coverage
+// MARK: - TLA+ module: section coverage
 
 @Suite(.serialized) struct TLAModuleMatrix {
-  @Test func constantsAndAssume() {
+  @Test func constantsAndAssume() throws {
     let x = Var<Int>("x")
     let spec = TLASpec("Test") {
       Extends("Naturals")
@@ -18,23 +18,23 @@ import UpstreamParity
       Variable(x, 0)
       Action("inc") { x.becomes(x + 1).when(x < 3) }
     }
-    let tla = spec.tlaModule
+    let tla = try spec.compile().renderedTLAModuleBundle().tla
     #expect(tla.contains("CONSTANTS N"))
     #expect(tla.contains("ASSUME"))
   }
 
-  @Test func fairnessWF() {
+  @Test func fairnessWF() throws {
     let x = Var<Int>("x")
     let spec = TLASpec("Test") {
       Variable(x, 0)
       Action("Next") { x.becomes(x + 1).when(x < 3) }
       WeakFairness("Next")
     }
-    let tla = spec.tlaModule
+    let tla = try spec.compile().renderedTLAModuleBundle().tla
     #expect(tla.contains("WF_x(Next)"))  // single var → no tuple brackets
   }
 
-  @Test func generatedCfgReferencesNamedDefinitions() {
+  @Test func generatedCfgReferencesNamedDefinitions() throws {
     let x = Var<Int>("x")
     let spec = TLASpec("Config") {
       Variable(x, 0)
@@ -44,51 +44,51 @@ import UpstreamParity
       WeakFairness("Next")
     }
 
-    #expect(spec.tlaCfg.contains("CONSTRAINT StateConstraint"))
-    #expect(!spec.tlaCfg.contains("CONSTRAINT ("))
-    #expect(!spec.tlaCfg.contains("WF_"))
+    #expect(try spec.compile().renderedTLAModuleBundle().cfg.contains("CONSTRAINT StateConstraint"))
+    #expect(!(try spec.compile().renderedTLAModuleBundle().cfg.contains("CONSTRAINT (")))
+    #expect(!(try spec.compile().renderedTLAModuleBundle().cfg.contains("WF_")))
   }
 
-  @Test func generatedCfgAssignsConstants() {
+  @Test func generatedCfgAssignsConstants() throws {
     let x = Var<Int>("x")
     let spec = TLASpec("ConstantsConfig") {
       Constant("N", 3)
       Variable(x, 0)
     }
 
-    #expect(spec.tlaCfg.contains("CONSTANT N = 3"))
+    #expect(try spec.compile().renderedTLAModuleBundle().cfg.contains("CONSTANT N = 3"))
   }
 
-  @Test func theoremOutput() {
+  @Test func theoremOutput() throws {
     let x = Var<Int>("x")
     let spec = TLASpec("Test") {
       Variable(x, 0)
       Action("inc") { x.becomes(x + 1).when(x < 3) }
       Theorem("Spec => [](x >= 0)")
     }
-    let tla = spec.tlaModule
+    let tla = try spec.compile().renderedTLAModuleBundle().tla
     #expect(tla.contains("THEOREM"))
   }
 
-  @Test func definitionsOutput() {
+  @Test func definitionsOutput() throws {
     let x = Var<Int>("x")
     let spec = TLASpec("Test") {
       Definition("Min(m,n) == IF m < n THEN m ELSE n")
       Variable(x, 0)
       Action("inc") { x.becomes(x + 1).when(x < 3) }
     }
-    let tla = spec.tlaModule
+    let tla = try spec.compile().renderedTLAModuleBundle().tla
     #expect(tla.contains("Min(m,n) =="))
   }
 
-  @Test func extendsNaturals() {
+  @Test func extendsNaturals() throws {
     let x = Var<Int>("x")
     let spec = TLASpec("Test") {
       Extends("Naturals")
       Variable(x, 0)
       Action("inc") { x.becomes(x + 1).when(x < 3) }
     }
-    let tla = spec.tlaModule
+    let tla = try spec.compile().renderedTLAModuleBundle().tla
     #expect(tla.contains("EXTENDS Naturals"))
   }
 }
@@ -484,8 +484,8 @@ import UpstreamParity
   }
 
   @Test("BFSExplorer TLA+ output structure")
-  func bfsExplorerTLA() {
-    let tla = BFSExplorer.spec.tlaModule
+  func bfsExplorerTLA() throws {
+    let tla = try BFSExplorer.spec.compile().renderedTLAModuleBundle().tla
     #expect(tla.contains("q"))
     #expect(tla.contains("visited"))
     #expect(tla.contains("explored"))

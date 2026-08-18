@@ -304,7 +304,7 @@ if name == "check-all" {
 if name == "bundle" {
     guard let id = args.count >= 2 ? args[1] : nil else { exit(1) }
     guard let entry = Example.all.first(where: { $0.id == id }) else { exit(1) }
-    let b = try entry.spec.compile().tlaBundle
+    let b = try entry.spec.compile().renderedTLAModuleBundle()
     print("=== TLA ===")
     print(b.tla)
     print("=== CFG ===")
@@ -349,7 +349,7 @@ case "arithmetic":
         Action("div") { x.becomes(x / 2).when(x == 2) }
         Action("mod") { x.becomes(x % 3).when(x == 0) }
         Action("neg") { x.becomes(-x).when(x == 1) }
-    }.compile().tlaModule
+    }.compile().renderedTLAModuleBundle().tla
 
 case "comparison":
     let x = Var<Int>("x")
@@ -359,7 +359,7 @@ case "comparison":
         Action("neq") { x.becomes(2).when(x != 0) || x.becomes(0).when(x == 1) }
         Action("lt") { x.becomes(3).when(x < 2) }
         Action("gt") { x.becomes(4).when(x > 1) || x.becomes(0).when(x == 3) }
-    }.compile().tlaModule
+    }.compile().renderedTLAModuleBundle().tla
 
 case "logic":
     let a = Var<Bool>("a")
@@ -370,7 +370,7 @@ case "logic":
             (a == false) && (b == false) && a.becomes(true) ||
             (a == true) && a.becomes(false) && b.becomes(true)
         }
-    }.compile().tlaModule
+    }.compile().renderedTLAModuleBundle().tla
 
 case "sets":
     let s = Var<TLAValue>("s")
@@ -383,7 +383,7 @@ case "sets":
         Action("shrink") {
             s.stateExpr.cardinality == 1 && s.becomes(Expr<TLAValue>(StateExpr.setLiteral([])))
         }
-    }.compile().tlaModule
+    }.compile().renderedTLAModuleBundle().tla
 
 case "tuples":
     let val = Var<Int>("val")
@@ -391,7 +391,7 @@ case "tuples":
         Variable(val, 0)
         Action("set") { val.becomes(Expr<Int>(StateExpr.tuple([1, 2]).count)).when(val == 0) }
         Action("access") { val.becomes(Expr<Int>(StateExpr.tuple([5, 6]).at(1))).when(val == 2) }
-    }.compile().tlaModule
+    }.compile().renderedTLAModuleBundle().tla
 
 case "records":
     let r = Var<Int>("r")
@@ -400,7 +400,7 @@ case "records":
         Action("set") {
             r.becomes(Expr<Int>(StateExpr.record(["a": 3, "b": 7]).domain.cardinality)).when(r == 0)
         }
-    }.compile().tlaModule
+    }.compile().renderedTLAModuleBundle().tla
 
 case "functions":
     let f = Var<Int>("f")
@@ -409,7 +409,7 @@ case "functions":
         Action("apply") {
             f.becomes(Expr<Int>(StateExpr.function(domain: StateExpr.set([1]), 42).applying(1))).when(f == 0)
         }
-    }.compile().tlaModule
+    }.compile().renderedTLAModuleBundle().tla
 
 case "casexpr":
     let x = Var<Int>("x")
@@ -422,7 +422,7 @@ case "casexpr":
                 fallback: 99
             ))).when(x < 2)
         }
-    }.compile().tlaModule
+    }.compile().renderedTLAModuleBundle().tla
 
 case "choose":
     let picked = Var<Int>("picked")
@@ -435,7 +435,7 @@ case "choose":
                 && choose(picked, from: q)
                 && q.becomes(Expr<TLAValue>(q.stateExpr.subtracting(StateExpr.singleton(picked))))
         }
-    }.compile().tlaModule
+    }.compile().renderedTLAModuleBundle().tla
 
 case "forall":
     let ok = Var<Bool>("ok")
@@ -443,11 +443,11 @@ case "forall":
     output = try TLASpec("forall") {
         Variable(ok, false)
         Action("check") { StateExpr.for(allIn: s, 1 >= 0) && ok.becomes(true) }
-    }.compile().tlaModule
+    }.compile().renderedTLAModuleBundle().tla
 
 default:
     if let entry = Example.all.first(where: { $0.id == name }) {
-        output = try entry.spec.compile().tlaModule
+        output = try entry.spec.compile().renderedTLAModuleBundle().tla
     } else {
         fputs("Unknown spec: \(name)\n", stderr)
         fputs("Run: tlc-validate list\n", stderr)
@@ -518,7 +518,7 @@ func runSymmetricCollectionOracle() throws {
         let spec = symmetricOracleSpec(scope: scope)
         let compilation = try spec.compile()
         let swiftStates = try ModelChecker(compilation: compilation).exploreGraph().states.count
-        let execution = try executeTLC(bundle: compilation.tlaBundle, moduleName: spec.name, jarPath: jarPath)
+        let execution = try executeTLC(bundle: try compilation.renderedTLAModuleBundle(), moduleName: spec.name, jarPath: jarPath)
         guard let tlcStates = execution.distinctStates else {
             throw SymmetricCollectionOracleError.missingStateCount(execution.output)
         }
@@ -552,7 +552,7 @@ func symmetricOracleSpec(scope: Int) -> TLASpec {
 }
 
 func quotedStringSymmetryControl(scope: Int) throws -> TLAModuleBundle {
-    let bundle = try symmetricOracleSpec(scope: scope).compile().tlaBundle
+    let bundle = try symmetricOracleSpec(scope: scope).compile().renderedTLAModuleBundle()
     let members = (0..<scope).map { "DevicesMember\($0)" }
     var tla = bundle.tla.replacingOccurrences(
         of: "CONSTANTS \(members.joined(separator: ", "))\n",

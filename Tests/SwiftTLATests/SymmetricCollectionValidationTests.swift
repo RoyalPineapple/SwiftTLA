@@ -135,16 +135,16 @@ struct SymmetricCollectionValidationTests {
   }
 
   @Test("Ordinary specifications do not opt into collection symmetry export")
-  func ordinarySpecificationsDoNotEmitCollectionSymmetry() {
+  func ordinarySpecificationsDoNotEmitCollectionSymmetry() throws {
     let counter = Var<Int>("counter")
     let spec = TLASpec("Ordinary") {
       Variable(counter, 0)
     }
 
-    #expect(!spec.tlaModule.contains("TLC"))
-    #expect(!spec.tlaModule.contains("Permutations("))
-    #expect(!spec.tlaCfg.contains("SYMMETRY"))
-    #expect(!spec.tlaCfg.contains("Member0"))
+    #expect(!(try spec.compile().renderedTLAModuleBundle().tla.contains("TLC")))
+    #expect(!(try spec.compile().renderedTLAModuleBundle().tla.contains("Permutations(")))
+    #expect(!(try spec.compile().renderedTLAModuleBundle().cfg.contains("SYMMETRY")))
+    #expect(!(try spec.compile().renderedTLAModuleBundle().cfg.contains("Member0")))
   }
 
   private func symbolCollision(_ spec: TLASpec) -> String? {

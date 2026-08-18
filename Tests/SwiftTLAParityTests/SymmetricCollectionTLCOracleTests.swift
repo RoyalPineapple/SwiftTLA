@@ -22,7 +22,7 @@ struct SymmetricCollectionTLCOracleTests {
       #expect(result.boundedScopes == [
         SymmetricCollectionScope(collectionName: "devices", verificationScope: scope)
       ])
-      let bundle = try spec.tlaBundle
+      let bundle = try spec.compile().renderedTLAModuleBundle()
       #expect(bundle.tla.contains("DevicesKeys == {DevicesMember0"))
       #expect(bundle.cfg.contains("CONSTANT DevicesMember\(scope - 1) = DevicesMember\(scope - 1)"))
       #expect(bundle.cfg.contains("SYMMETRY SymmDevices"))
@@ -145,18 +145,18 @@ struct SymmetricCollectionTLCOracleTests {
     let ordinaryResult = try ModelChecker(spec: ordinary).check()
     #expect({ if case .ok = ordinaryResult { true } else { false } }())
     #expect(ordinaryResult.description == "OK — explored 1 state(s)")
-    #expect(!ordinary.tlaModule.contains("TLC"))
-    #expect(!ordinary.tlaCfg.contains("SYMMETRY"))
+    #expect(!(try ordinary.compile().renderedTLAModuleBundle().tla.contains("TLC")))
+    #expect(!(try ordinary.compile().renderedTLAModuleBundle().cfg.contains("SYMMETRY")))
 
     let lazy = Var<Int>("lazy")
     let lazySpec = TLASpec("LazyInit") {
       Variable(from: lazy.name, StateExpr.set([1, 2, 3]))
     }
     #expect(try ModelChecker(spec: lazySpec).exploreGraph().states.count == 3)
-    #expect(lazySpec.tlaModule.contains("Init == lazy \\in {1, 2, 3}"))
+    #expect(try lazySpec.compile().renderedTLAModuleBundle().tla.contains("Init == lazy \\in {1, 2, 3}"))
 
     #expect(try ModelChecker(spec: Example.gameOfLife.spec, maxStates: 10).exploreGraph().states.count == 2)
-    let gameOfLifeCFG = Example.gameOfLife.spec.tlaCfg
+    let gameOfLifeCFG = try Example.gameOfLife.spec.compile().renderedTLAModuleBundle().cfg
     #expect(gameOfLifeCFG.contains("SPECIFICATION Spec"))
     #expect(gameOfLifeCFG.contains("INVARIANT TypeOK"))
     #expect(!gameOfLifeCFG.contains("SYMMETRY"))

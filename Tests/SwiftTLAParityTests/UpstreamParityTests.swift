@@ -76,9 +76,9 @@ struct UpstreamParityTests {
         #expect(try BarriersN6Model.verifySpec() == Example.barriersN6.expectedDistinct)
     }
 
-    @Test("HourClock .tlaModule is TLC-shaped")
-    func hourClockTLA() {
-        let tla = Example.hourClock.spec.tlaModule
+    @Test("HourClock TLA+ module is TLC-shaped")
+    func hourClockTLA() throws {
+        let tla = try Example.hourClock.spec.compile().renderedTLAModuleBundle().tla
         #expect(tla.contains("MODULE HourClock"))
         #expect(tla.contains("hr \\in"))
         #expect(tla.contains("HCnxt"))
@@ -86,8 +86,8 @@ struct UpstreamParityTests {
     }
 
     @Test("DieHard actions match upstream names")
-    func dieHardNames() {
-        let tla = Example.dieHardTypeOK.spec.tlaModule
+    func dieHardNames() throws {
+        let tla = try Example.dieHardTypeOK.spec.compile().renderedTLAModuleBundle().tla
         for name in ["FillSmallJug", "FillBigJug", "EmptySmallJug", "EmptyBigJug", "SmallToBig", "BigToSmall", "TypeOK"] {
             #expect(tla.contains(name), "missing \(name)")
         }
@@ -153,8 +153,8 @@ struct UpstreamParityTests {
     func binarySearchParity() throws {
         let count = try BinarySearchModel.verifySpec()
         #expect(count == Example.binarySearch.expectedDistinct)
-        #expect(BinarySearchModel.spec.tlaModule.contains("WF_"))
-        #expect(BinarySearchModel.spec.tlaModule.contains("(Next)"))
+        #expect(try BinarySearchModel.spec.compile().renderedTLAModuleBundle().tla.contains("WF_"))
+        #expect(try BinarySearchModel.spec.compile().renderedTLAModuleBundle().tla.contains("(Next)"))
     }
 
     @Test("Consensus PlusCal port matches its bounded TLC configuration")

@@ -1,6 +1,6 @@
 {
   "source": "https://github.com/tlaplus/Examples",
-  "definition": "Parity = TLC(Swift .tlaModule) distinct states + outcome match TLC(upstream module+cfg)",
+  "definition": "Parity = TLC(Swift rendered TLA+ module) distinct states + outcome match TLC(upstream module+cfg)",
   "entries": [
     {
       "id": "Bakery-Boulangerie/MCBakery",

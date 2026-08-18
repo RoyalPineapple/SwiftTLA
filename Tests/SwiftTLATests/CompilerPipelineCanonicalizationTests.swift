@@ -105,7 +105,7 @@ struct CompilerPipelineCanonicalizationTests {
         #expect(CompilerPipelineAlgorithmModel.runtime.compilation?.identity == compilation.identity)
         #expect(try CompilerPipelineAlgorithmModel.verifySpec() > 0)
         #expect(try CompilerPipelineAlgorithmModel.transitionMatrix().isEmpty == false)
-        #expect(compilation.spec.tlaModule == CompilerPipelineAlgorithmModel.spec.tlaModule)
+        #expect(try compilation.renderedTLAModuleBundle().tla == try CompilerPipelineAlgorithmModel.spec.compile().renderedTLAModuleBundle().tla)
     }
 
     @Test("duplicate declarations fail with an actionable typed diagnostic")
@@ -129,7 +129,7 @@ struct CompilerPipelineCanonicalizationTests {
         #expect(CompilerPipelineGeneratedModel.runtime.compilation?.identity == compilation.identity)
         #expect(try CompilerPipelineGeneratedModel.verifySpec() > 0)
         #expect(try CompilerPipelineGeneratedModel.transitionMatrix().isEmpty == false)
-        #expect(compilation.spec.tlaModule == CompilerPipelineGeneratedModel.spec.tlaModule)
+        #expect(try compilation.renderedTLAModuleBundle().tla == try CompilerPipelineGeneratedModel.spec.compile().renderedTLAModuleBundle().tla)
     }
 
     @Test("#spec lowering preserves every canonical variable initialization field")

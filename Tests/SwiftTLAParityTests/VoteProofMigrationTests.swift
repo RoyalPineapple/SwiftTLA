@@ -7,7 +7,7 @@ struct VoteProofMigrationTests {
         VoteProofModel._checkParserTree()
         #expect(try VoteProofModel.spec.compile().spec.name == "VoteProof")
 
-        let bundle = VoteProofModel.spec.tlaBundle
+        let bundle = try VoteProofModel.spec.compile().renderedTLAModuleBundle()
         #expect(VoteProofModel.spec.constants == [
             "Value": .set([.string("v1"), .string("v2")]),
             "Acceptor": .set([.string("a1"), .string("a2"), .string("a3")]),

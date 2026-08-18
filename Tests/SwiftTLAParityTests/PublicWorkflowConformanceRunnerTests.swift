@@ -17,7 +17,7 @@ struct PublicWorkflowConformanceRunnerTests {
     if case .diagnostic = result.report.authority {} else { Issue.record("report must be diagnostic locally") }
     #expect(result.report.claimStatus == "diagnosticOnly")
     let diagnostic = result.report.checks.compactMap(\.diagnostic).joined(separator: "\n")
-    #expect(result.report.checks.count == 10, Comment(rawValue: diagnostic))
+    #expect(result.report.checks.count == 6, Comment(rawValue: diagnostic))
     #expect(result.report.checks.allSatisfy { $0.status == .matched })
     if case .success = result.report.finalExitClass {} else { Issue.record("matched corpus must succeed") }
     #expect(FileManager.default.fileExists(atPath: result.reportURL.path))
@@ -124,10 +124,6 @@ struct PublicWorkflowConformanceRunnerTests {
     let expected: [String: PublicWorkflowExpectedOutcomeV1] = [
       "parser-builder-bounded-counter": .exact,
       "parser-builder-bounded-counter-mismatch": .difference,
-      "compiler-pipeline-counter": .exact,
-      "compiler-pipeline-structural-invalid": .difference,
-      "compiler-pipeline-metadata-mismatch": .difference,
-      "compiler-pipeline-unavailable": .unavailable,
       "p4-generated-counter": .exact,
       "p4-generated-counter-intentional-mismatch": .difference,
       "p4-generated-counter-evaluation-failed": .difference,

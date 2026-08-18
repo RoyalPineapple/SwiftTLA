@@ -272,7 +272,7 @@ struct LocalOperatorTests {
   }
 
   @Test("LET operators are emitted as executable TLA+ source")
-  func emitsLetInSource() {
+  func emitsLetInSource() throws {
     let local = LocalOperator("AddOne", parameters: ["number"], body: .add(.variable("number"), .int(1)))
     let spec = TLASpec("LocalOperatorSource") {
       Definition("Answer") {
@@ -280,8 +280,8 @@ struct LocalOperatorTests {
       }
     }
 
-    #expect(spec.tlaModule.contains("Answer == LET AddOne(number) == (number + 1)"))
-    #expect(spec.tlaModule.contains("IN AddOne(41)"))
+    #expect(try spec.compile().renderedTLAModuleBundle().tla.contains("Answer == LET AddOne(number) == (number + 1)"))
+    #expect(try spec.compile().renderedTLAModuleBundle().tla.contains("IN AddOne(41)"))
   }
 
   @Test("the macro parser retains LET operator definitions")

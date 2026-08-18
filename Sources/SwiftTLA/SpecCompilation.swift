@@ -67,8 +67,8 @@ public struct CompiledSpecification: Sendable {
         let files = entries.map { entry in
             TLAModuleFile(
                 name: entry.module.name,
-                tla: entry.module.tlaModule,
-                cfg: entry.module.name == spec.name ? entry.module.tlaCfg : nil
+                tla: entry.module.renderTLAModuleSource(),
+                cfg: entry.module.name == spec.name ? entry.module.renderTLCConfiguration() : nil
             )
         }
         let rootFile = files[files.count - 1]
@@ -160,22 +160,6 @@ public struct CompiledSpecification: Sendable {
             Manifest(compilationIdentity: identity.value, ownership: ownership)
         )
         try data.write(to: directory.appendingPathComponent("bundle-manifest.json"), options: .atomic)
-    }
-
-    /// Compatibility export for callers that only need an in-memory bundle.
-    /// New compiler-boundary callers should use `renderedTLAModuleBundle()`.
-    public var tlaBundle: TLAModuleBundle {
-        get throws { try renderedTLAModuleBundle() }
-    }
-
-    /// The root TLA+ source of this validated compilation.
-    public var tlaModule: String {
-        get throws { try renderedTLAModuleBundle().tla }
-    }
-
-    /// The root TLC configuration of this validated compilation.
-    public var tlaCfg: String {
-        get throws { try renderedTLAModuleBundle().cfg }
     }
 
     /// The authored PlusCal presentation of this validated compilation.

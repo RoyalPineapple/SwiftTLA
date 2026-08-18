@@ -6,7 +6,7 @@ struct ElevatorBankDemoTests {
     @Test("elevator bank keeps every car, door, and rider transition in the generated model")
     func formalMachineBoardsMovesAndExits() throws {
         let builderSpec = ElevatorBank.spec
-        #expect(builderSpec.tlaModule == ElevatorBank.spec.tlaModule)
+        #expect(try builderSpec.compile().renderedTLAModuleBundle().tla == try ElevatorBank.spec.compile().renderedTLAModuleBundle().tla)
 
         var machine = ElevatorBank()
         #expect(machine.state.cars[.carA][ElevatorBank.CarSchema.floor] == .one)

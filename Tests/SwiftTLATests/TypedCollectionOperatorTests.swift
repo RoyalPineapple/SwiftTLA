@@ -143,7 +143,7 @@ private struct FoldGeneratedModel {
 
         #expect(Set(result.before.values.elements) == Set([1, 2, 3, 4]))
         #expect(Set(result.after.values.elements) == Set([4, 16]))
-        #expect(TypedCollectionGeneratedModel.spec.tlaModule.contains("keepEvenSquares"))
+        #expect(try TypedCollectionGeneratedModel.spec.compile().renderedTLAModuleBundle().tla.contains("keepEvenSquares"))
     }
 
     @Test("typed conditional values parse without losing their result type")
@@ -192,8 +192,8 @@ private struct FoldGeneratedModel {
         let result = try model.apply(.sum)
 
         #expect(result.after.total == 6)
-        #expect(FoldGeneratedModel.spec.tlaModule.contains("FoldFunction(LAMBDA"))
-        #expect(try FoldGeneratedModel.spec.tlaBundle.imports.map(\.name) == ["Folds", "Functions"])
+        #expect(try FoldGeneratedModel.spec.compile().renderedTLAModuleBundle().tla.contains("FoldFunction(LAMBDA"))
+        #expect(try FoldGeneratedModel.spec.compile().renderedTLAModuleBundle().imports.map(\.name) == ["Folds", "Functions"])
     }
 
     @Test("the bundled Functions module makes FoldFunction valid TLA+ source")
@@ -215,7 +215,7 @@ private struct FoldGeneratedModel {
 
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
-        try (try FoldGeneratedModel.spec.tlaBundle).write(to: directory)
+        try (try FoldGeneratedModel.spec.compile().renderedTLAModuleBundle()).write(to: directory)
 
         let process = Process()
         process.executableURL = URL(fileURLWithPath: java)
@@ -252,7 +252,7 @@ private struct FoldGeneratedModel {
 
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
-        try (try KeyValueStoreUtil.module.tlaBundle).write(to: directory)
+        try (try KeyValueStoreUtil.module.compile().renderedTLAModuleBundle()).write(to: directory)
 
         let process = Process()
         process.executableURL = URL(fileURLWithPath: java)
@@ -268,7 +268,7 @@ private struct FoldGeneratedModel {
             data: output.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8
         ) ?? "<non-UTF-8 SANY output>"
         #expect(process.terminationStatus == 0, "SANY rejected bundled Util:\n\(text)")
-        #expect(try KeyValueStoreUtil.module.tlaBundle.imports.map(\.name) == ["Folds", "Functions"])
+        #expect(try KeyValueStoreUtil.module.compile().renderedTLAModuleBundle().imports.map(\.name) == ["Folds", "Functions"])
     }
 
     @Test("bounded sequence domains and terminal predicates parse as formal expressions")
@@ -322,7 +322,7 @@ private struct FoldGeneratedModel {
         var model = ZeroBasedSequenceGeneratedModel()
         let result = try model.apply(.writeFirst)
         #expect(result.after.table[0] == result.after.input[0])
-        #expect(ZeroBasedSequenceGeneratedModel.spec.tlaModule.contains("0.."))
+        #expect(try ZeroBasedSequenceGeneratedModel.spec.compile().renderedTLAModuleBundle().tla.contains("0.."))
     }
 
     @Test("non-empty subset domains parse and exclude the empty formal set")
@@ -344,7 +344,7 @@ private struct FoldGeneratedModel {
         #expect(initialStates.count == 3)
         let representative = NonEmptySubsetGeneratedModel.spec.variables.first?.initial
         #expect(initialStates.contains { $0["selectedKeys"] == representative })
-        #expect(NonEmptySubsetGeneratedModel.spec.tlaModule.contains("SUBSET"))
+        #expect(try NonEmptySubsetGeneratedModel.spec.compile().renderedTLAModuleBundle().tla.contains("SUBSET"))
     }
 
     @Test("typed bounded quantifiers parse, evaluate, and generate")
@@ -362,6 +362,6 @@ private struct FoldGeneratedModel {
         var model = TypedQuantifierGeneratedModel()
         let result = try model.apply(.findEven)
         #expect(result.after.result == true)
-        #expect(TypedQuantifierGeneratedModel.spec.tlaModule.contains("\\E"))
+        #expect(try TypedQuantifierGeneratedModel.spec.compile().renderedTLAModuleBundle().tla.contains("\\E"))
     }
 }

@@ -130,7 +130,7 @@ import UpstreamParity
   }
 
   @Test("CONSTANT with ASSUME generates valid TLA+ and model-checks")
-  func constantModelCheck() {
+  func constantModelCheck() throws {
     let bound = 5
     let x = Var<Int>("x")
     let spec = TLASpec("ConstTest") {
@@ -138,7 +138,7 @@ import UpstreamParity
       Variable(x, 0)
       Action("inc") { x.becomes(x + 1).when(x < bound) }
     }
-    let tla = spec.tlaModule
+    let tla = try spec.compile().renderedTLAModuleBundle().tla
     #expect(tla.contains("CONSTANTS N"))
     #expect(tla.contains("ASSUME N = 5"))
     let g = try! ModelChecker(spec: substituteConstants(spec), maxStates: 10).exploreGraph()

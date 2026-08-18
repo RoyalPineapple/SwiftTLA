@@ -6,7 +6,7 @@ struct KVsnapMigrationTests {
     func parserBuilderFidelity() throws {
         KVsnapModel._checkParserTree()
 
-        let bundle = try KVsnapModel.spec.tlaBundle
+        let bundle = try KVsnapModel.spec.compile().renderedTLAModuleBundle()
         #expect(bundle.root.tla.contains("CC == INSTANCE ClientCentric"))
         #expect(bundle.imports.map(\.name).contains("ClientCentric"))
         #expect(bundle.root.tla.contains("CONSTANTS NoVal, k1, k2, t1, t2, t3"))

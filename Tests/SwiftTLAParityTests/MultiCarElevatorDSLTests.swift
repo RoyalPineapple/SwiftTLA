@@ -217,7 +217,7 @@ struct MultiCarElevatorDSLTests {
     }
     #expect(stateCount == 3_276)
 
-    #expect(wrapperLines(in: macro.tlaModule) == expectedWrapperLines)
+    #expect(wrapperLines(in: try macro.compile().renderedTLAModuleBundle().tla) == expectedWrapperLines)
   }
 
   private func wrapperLines(in tla: String) -> [String] {

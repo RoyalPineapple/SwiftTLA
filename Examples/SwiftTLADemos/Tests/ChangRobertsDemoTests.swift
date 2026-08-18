@@ -6,7 +6,7 @@ struct ChangRobertsDemoTests {
     @Test("Chang–Roberts exposes typed actor deliveries and typed message records")
     func exposesTypedMessages() throws {
         let builderSpec = ChangRoberts.spec
-        #expect(builderSpec.tlaModule == ChangRoberts.spec.tlaModule)
+        #expect(try builderSpec.compile().renderedTLAModuleBundle().tla == try ChangRoberts.spec.compile().renderedTLAModuleBundle().tla)
         var machine = ChangRoberts()
 
         #expect(machine.state.leader == 0)

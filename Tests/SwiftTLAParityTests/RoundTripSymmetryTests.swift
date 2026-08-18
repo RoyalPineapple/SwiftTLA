@@ -82,18 +82,18 @@ struct SymmetryReductionTests { @Test("Symmetry reduces ChangRoberts state count
   }
 
   @Test("TLA+ symmetry operator and config directive are emitted")
-  func symmetryTLAOutput() {
+  func symmetryTLAOutput() throws {
     let spec = TLASpec("SymOut") {
       let x = Var<Int>("x")
       Variable(x, in: [1, 2, 3])
       Invariant("TypeOK") { x >= 1 }
       Symmetry("x", [1, 2, 3] as Set<Int>)
     }
-    let tla = spec.tlaModule
+    let tla = try spec.compile().renderedTLAModuleBundle().tla
     #expect(tla.contains("EXTENDS Integers, FiniteSets, Sequences, TLC"))
     #expect(tla.contains("Symmx == Permutations({1, 2, 3})"))
     #expect(tla.contains("Symmx"))
-    #expect(spec.tlaCfg.contains("SYMMETRY Symmx"))
+    #expect(try spec.compile().renderedTLAModuleBundle().cfg.contains("SYMMETRY Symmx"))
   }
 }
 // MARK: - Initialized-variable parity
@@ -189,7 +189,7 @@ enum Status: String, TLAValueType, StateExprConvertible {
   }
 
   @Test("Int-backed enum TLA+ output uses raw values")
-  func intEnumTLAOutput() {
+  func intEnumTLAOutput() throws {
     let mode = Var<Mode>("mode")
     let spec = TLASpec("IntEnum") {
       Variable(mode, Mode.idle)
@@ -198,13 +198,13 @@ enum Status: String, TLAValueType, StateExprConvertible {
           || (mode == Mode.active) && mode.becomes(Mode.idle)
       }
     }
-    let tla = spec.tlaModule
+    let tla = try spec.compile().renderedTLAModuleBundle().tla
     #expect(tla.contains("mode = 0"))
     #expect(tla.contains("toggle =="))
   }
 
   @Test("String-backed enum TLA+ output uses raw string values")
-  func stringEnumTLAOutput() {
+  func stringEnumTLAOutput() throws {
     let state = Var<Status>("state")
     let spec = TLASpec("StringEnum") {
       Variable(state, Status.on)
@@ -213,7 +213,7 @@ enum Status: String, TLAValueType, StateExprConvertible {
           || (state == Status.off) && state.becomes(Status.on)
       }
     }
-    let tla = spec.tlaModule
+    let tla = try spec.compile().renderedTLAModuleBundle().tla
     #expect(tla.contains("state = \"on\""))
     #expect(tla.contains("toggle =="))
   }
@@ -248,7 +248,7 @@ enum Status: String, TLAValueType, StateExprConvertible {
       }
       Invariant("TypeOK") { (mode == Mode.idle) || (mode == Mode.active) }
     }
-    let bundle = try spec.tlaBundle
+    let bundle = try spec.compile().renderedTLAModuleBundle()
     #expect(bundle.tla.contains("MODULE"))
     #expect(bundle.tla.contains("VARIABLES mode"))
     #expect(bundle.cfg.contains("INVARIANT TypeOK"))
@@ -268,7 +268,7 @@ enum Status: String, TLAValueType, StateExprConvertible {
   }
 
   @Test("Enum vars work with stays expression")
-  func enumStays() {
+  func enumStays() throws {
     let phase = Var<Mode>("phase")
     let spec = TLASpec("EnumStays") {
       Variable(phase, Mode.idle)
@@ -276,7 +276,7 @@ enum Status: String, TLAValueType, StateExprConvertible {
         (phase == Mode.idle) && phase.stays
       }
     }
-    let tla = spec.tlaModule
+    let tla = try spec.compile().renderedTLAModuleBundle().tla
     #expect(tla.contains("UNCHANGED phase"))
   }
 

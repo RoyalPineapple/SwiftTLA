@@ -393,8 +393,8 @@ import UpstreamParity
       [.int(2), .int(20), .int(100)], [.int(2), .int(20), .int(200)]
     ]
     #expect(labels.map(\.arguments) == expectedArguments)
-    #expect(spec.tlaModule.contains("board__0_0_0 == board(1, 10, 100)"))
-    #expect(spec.tlaModule.contains("board__1_1_1 == board(2, 20, 200)"))
+    #expect(try spec.compile().renderedTLAModuleBundle().tla.contains("board__0_0_0 == board(1, 10, 100)"))
+    #expect(try spec.compile().renderedTLAModuleBundle().tla.contains("board__1_1_1 == board(2, 20, 200)"))
     #expect(
       spec.swiftSource.contains(
         "parameters: [ActionParameter(\"person\", values: [1, 2]), "
@@ -435,8 +435,8 @@ import UpstreamParity
       ])
     #expect(
       Set(graph.transitions[.init(0)]!.map(\.action)) == ["moveElevator(1)", "moveElevator(2)"])
-    #expect(spec.tlaModule.contains("moveElevator(id) =="))
-    #expect(spec.tlaModule.contains("moveElevator__0 == moveElevator(1)"))
+    #expect(try spec.compile().renderedTLAModuleBundle().tla.contains("moveElevator(id) =="))
+    #expect(try spec.compile().renderedTLAModuleBundle().tla.contains("moveElevator__0 == moveElevator(1)"))
   }
 
   @Test("parameterized invocations retain every label when they discover one successor")
@@ -600,7 +600,7 @@ import UpstreamParity
     let states = try computeInitialStates(spec)
     #expect(Set(states.compactMap { $0["x"] }) == Set([.int(1), .int(2), .int(3)]))
     #expect(try ModelChecker(spec: spec).exploreGraph().states.count == 3)
-    #expect(spec.tlaModule.contains("Init == x \\in {1, 2, 3}"))
+    #expect(try spec.compile().renderedTLAModuleBundle().tla.contains("Init == x \\in {1, 2, 3}"))
   }
 
   @Test func dieHard16() throws {

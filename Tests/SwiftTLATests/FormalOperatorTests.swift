@@ -30,7 +30,7 @@ private struct GeneratedHigherOrderFormalModel {
 @Suite("Formal operators")
 struct FormalOperatorTests {
   @Test("a nullary formal operator uses standard TLA+ syntax")
-  func rendersNullaryFormalOperatorWithoutParentheses() {
+  func rendersNullaryFormalOperatorWithoutParentheses() throws {
     let initialState = FormalOperatorDefinition(
       name: "InitialState",
       parameters: [],
@@ -44,7 +44,7 @@ struct FormalOperatorTests {
       formalOperatorDefinitions: [initialState]
     )
 
-    #expect(spec.tlaModule.contains("InitialState == 0"))
+    #expect(try spec.compile().renderedTLAModuleBundle().tla.contains("InitialState == 0"))
     #expect(
       StateExpr.operatorApplication(.reference("InitialState", arity: 0), []).description
         == "InitialState"
@@ -255,7 +255,7 @@ struct FormalOperatorTests {
         formalOperatorDefinitions: try Folds.module.compile().formalModuleClosure.resolvedFormalOperatorDefinitions
       ) == .int(6)
     )
-    #expect(Folds.module.tlaModule.contains("MapThenFoldSet(op(_, _), base, f(_), choose(_), S) =="))
+    #expect(try Folds.module.compile().renderedTLAModuleBundle().tla.contains("MapThenFoldSet(op(_, _), base, f(_), choose(_), S) =="))
   }
 
   @Test("Functions definitions execute through the imported formal environment")
@@ -296,7 +296,7 @@ struct FormalOperatorTests {
     #expect(try pointwise.evaluate(in: [:], formalOperatorDefinitions: FunctionsModule.module.compile().formalModuleClosure.resolvedFormalOperatorDefinitions) == .function([
       .int(1): .int(11), .int(2): .int(22), .int(3): .int(33)
     ]))
-    #expect(FunctionsModule.module.tlaModule.contains("Restrict(f, S) =="))
+    #expect(try FunctionsModule.module.compile().renderedTLAModuleBundle().tla.contains("Restrict(f, S) =="))
   }
 
   @Test("Util definitions execute without flattening their Functions dependency")
@@ -335,7 +335,7 @@ struct FormalOperatorTests {
     #expect(try permutations.evaluate(in: [:], formalOperatorDefinitions: KeyValueStoreUtil.module.compile().formalModuleClosure.resolvedFormalOperatorDefinitions) == .set([
       .tuple([.int(1), .int(2)]), .tuple([.int(2), .int(1)])
     ]))
-    #expect(KeyValueStoreUtil.module.tlaModule.contains("ReduceSet(op(_, _), set, base) =="))
-    #expect(KeyValueStoreUtil.module.tlaModule.contains("Remove(seq, elem) == SelectSeq(seq, LAMBDA e : e /= elem)"))
+    #expect(try KeyValueStoreUtil.module.compile().renderedTLAModuleBundle().tla.contains("ReduceSet(op(_, _), set, base) =="))
+    #expect(try KeyValueStoreUtil.module.compile().renderedTLAModuleBundle().tla.contains("Remove(seq, elem) == SelectSeq(seq, LAMBDA e : e /= elem)"))
   }
 }
