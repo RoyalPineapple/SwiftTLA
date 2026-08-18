@@ -6,17 +6,7 @@ struct ElevatorBankDemoTests {
     @Test("elevator bank keeps every car, door, and rider transition in the generated model")
     func formalMachineBoardsMovesAndExits() throws {
         let builderSpec = ElevatorBank.spec
-        let builderTree = ParsedSpecModel(
-            variables: builderSpec.variables.map { ($0.name, $0.initial, $0.initialSet) },
-            actions: builderSpec.actions.map { ($0.name, $0.body, $0.bindings) },
-            invariants: builderSpec.invariants.map { ($0.name, $0.body) },
-            temporal: builderSpec.temporalProperties.map { ($0.name, $0.expr) },
-            fairness: builderSpec.fairness
-        )
-        #expect(
-            _tlaAlphaEquivalent(builderTree, ElevatorBank._parserTree),
-            Comment(rawValue: _tlaFidelityDiagnostic(ElevatorBank._parserTree, builderTree))
-        )
+        #expect(builderSpec.tlaModule == ElevatorBank.spec.tlaModule)
 
         var machine = ElevatorBank()
         #expect(machine.state.cars[.carA][ElevatorBank.CarSchema.floor] == .one)

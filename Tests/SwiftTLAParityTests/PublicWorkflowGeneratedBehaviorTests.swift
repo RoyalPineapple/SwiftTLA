@@ -6,6 +6,13 @@ import UpstreamParity
 
 @Suite(.serialized)
 struct PublicWorkflowGeneratedBehaviorTests {
+  @Test("generated fixture retains one compilation identity from its #spec source")
+  func generatedFixtureUsesCanonicalCompilation() throws {
+    let compilation = try P4GeneratedCounter.compiledSpecification()
+    #expect(compilation.identity == try P4GeneratedCounter.spec.compile().identity)
+    #expect(P4GeneratedCounter.generatedMachineMetadata.compilationIdentity == compilation.identity)
+  }
+
   @Test("public workflow fixture executes through nested generated adapters")
   @MainActor
   func nestedFixtureAdaptersMatchTheCanonicalCounter() async throws {
@@ -29,8 +36,8 @@ struct PublicWorkflowGeneratedBehaviorTests {
     #expect(actorEvidence.after == modelEvidence.after)
   }
 
-  @Test("compiled registry writes and verifies exact generated observations")
-  func exactFixtureMatchesRetainedObservations() throws {
+  @Test("generated registry keeps macro and builder compilation identities aligned")
+  func generatedRegistryKeepsCompilationIdentityAligned() throws {
     let fixture = try Fixture()
     let (run, output) = try fixture.run(id: "p4-generated-counter")
     defer { try? FileManager.default.removeItem(at: output) }

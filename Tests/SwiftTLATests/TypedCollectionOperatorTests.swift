@@ -1,4 +1,4 @@
-import SwiftTLA
+@testable import SwiftTLA
 import SwiftTLAMacros
 import SwiftParser
 import SwiftSyntax
@@ -121,12 +121,12 @@ private struct FoldGeneratedModel {
             return
         }
 
-        let parsedModel = ParsedSpecModel(
+        let parsedModel = canonicalTestSpec(
             variables: [],
             actions: [("evaluate", .guard_(parsed), [])],
             invariants: []
         )
-        let runtimeModel = ParsedSpecModel(
+        let runtimeModel = canonicalTestSpec(
             variables: [],
             actions: [("evaluate", .guard_(runtime.raw), [])],
             invariants: []
@@ -170,8 +170,8 @@ private struct FoldGeneratedModel {
         #expect(try runtime.raw.evaluate(in: [:]) == .int(6))
         #expect(runtime.raw.description.contains("FoldFunction(LAMBDA"))
         #expect(_tlaAlphaEquivalent(
-            ParsedSpecModel(variables: [], actions: [("fold", .guard_(runtime.raw), [])], invariants: []),
-            ParsedSpecModel(variables: [], actions: [("fold", .guard_(parsed), [])], invariants: [])
+            canonicalTestSpec(variables: [], actions: [("fold", .guard_(runtime.raw), [])], invariants: []),
+            canonicalTestSpec(variables: [], actions: [("fold", .guard_(parsed), [])], invariants: [])
         ))
 
         let ordered = StateExpr.foldFunction(
@@ -193,7 +193,7 @@ private struct FoldGeneratedModel {
 
         #expect(result.after.total == 6)
         #expect(FoldGeneratedModel.spec.tlaModule.contains("FoldFunction(LAMBDA"))
-        #expect(FoldGeneratedModel.spec.tlaBundle.imports.map(\.name) == ["Folds", "Functions"])
+        #expect(try FoldGeneratedModel.spec.tlaBundle.imports.map(\.name) == ["Folds", "Functions"])
     }
 
     @Test("the bundled Functions module makes FoldFunction valid TLA+ source")
@@ -215,7 +215,7 @@ private struct FoldGeneratedModel {
 
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
-        try FoldGeneratedModel.spec.tlaBundle.write(to: directory)
+        try (try FoldGeneratedModel.spec.tlaBundle).write(to: directory)
 
         let process = Process()
         process.executableURL = URL(fileURLWithPath: java)
@@ -252,7 +252,7 @@ private struct FoldGeneratedModel {
 
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
-        try KeyValueStoreUtil.module.tlaBundle.write(to: directory)
+        try (try KeyValueStoreUtil.module.tlaBundle).write(to: directory)
 
         let process = Process()
         process.executableURL = URL(fileURLWithPath: java)
@@ -268,7 +268,7 @@ private struct FoldGeneratedModel {
             data: output.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8
         ) ?? "<non-UTF-8 SANY output>"
         #expect(process.terminationStatus == 0, "SANY rejected bundled Util:\n\(text)")
-        #expect(KeyValueStoreUtil.module.tlaBundle.imports.map(\.name) == ["Folds", "Functions"])
+        #expect(try KeyValueStoreUtil.module.tlaBundle.imports.map(\.name) == ["Folds", "Functions"])
     }
 
     @Test("bounded sequence domains and terminal predicates parse as formal expressions")
@@ -340,7 +340,7 @@ private struct FoldGeneratedModel {
         ]))
 
         NonEmptySubsetGeneratedModel._checkParserTree()
-        let initialStates = computeInitialStates(NonEmptySubsetGeneratedModel.spec)
+        let initialStates = try computeInitialStates(NonEmptySubsetGeneratedModel.spec)
         #expect(initialStates.count == 3)
         let representative = NonEmptySubsetGeneratedModel.spec.variables.first?.initial
         #expect(initialStates.contains { $0["selectedKeys"] == representative })

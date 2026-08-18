@@ -10,7 +10,7 @@ enum NestedAdapterKind {
 extension MacroExpander {
     static func generateNestedAdapterMembers(
         kind: NestedAdapterKind,
-        canonicalModel: ParsedMacroModel,
+        canonicalModel: MacroCompilation,
         needsPublicInitializer: Bool
     ) -> [DeclSyntax] {
         let modelType = canonicalModel.typeName
@@ -24,6 +24,8 @@ extension MacroExpander {
             DeclSyntax(stringLiteral: "public typealias Variables = \(modelType).Variables"),
             DeclSyntax(stringLiteral: "public typealias ActionLabel = \(modelType).ActionLabel"),
             DeclSyntax(stringLiteral: "public typealias TransitionResult = \(modelType).TransitionResult"),
+            DeclSyntax(stringLiteral: "public static var generatedMachineMetadata: GeneratedMachineMetadata { CanonicalModel.generatedMachineMetadata }"),
+            DeclSyntax(stringLiteral: "public static func verifyGeneratedMachineContract(metadata: GeneratedMachineMetadata? = nil, verificationStateLimit: Int? = nil) -> GeneratedMachineContractReport { CanonicalModel.verifyGeneratedMachineContract(metadata: metadata, verificationStateLimit: verificationStateLimit) }"),
             DeclSyntax(stringLiteral: canonicalStorage),
             DeclSyntax(stringLiteral: """
             \(isolation)public func withCanonicalMachine<Result: Sendable>(
@@ -66,24 +68,26 @@ extension MacroExpander {
         return declarations
     }
 
-    static func generateNestedObservableMembers(model: ParsedMacroModel) -> [DeclSyntax] {
-        let identifiers = generatedActionIdentifiers(actions: model.actions)
-        let callbacks = zip(model.actions, identifiers).map { action, identifier in
+    static func generateNestedObservableMembers(model: MacroCompilation) -> [DeclSyntax] {
+        let actions = model.machineSurface.actions
+        let callbacks = actions.map { action in
+            let identifier = action.swiftIdentifier
             let callbackName = "on" + identifier.prefix(1).capitalized + identifier.dropFirst()
-            let parameterTypes = publicBindings(for: action).map { swiftType(for: action, binding: $0) }
+            let parameterTypes = action.bindings.filter(\.isPublic).map(\.swiftType)
             let parameters = (parameterTypes + ["State", "State"]).joined(separator: ", ")
             return DeclSyntax(stringLiteral: "@MainActor public var \(callbackName): ((\(parameters)) async -> Void)?")
         }
-        let notifications = zip(model.actions, identifiers).map { action, identifier -> String in
+        let notifications = actions.map { action -> String in
+            let identifier = action.swiftIdentifier
             let callbackName = "on" + identifier.prefix(1).capitalized + identifier.dropFirst()
-            let publicBindings = publicBindings(for: action)
+            let publicBindings = action.bindings.filter(\.isPublic)
             let pattern: String
             let arguments: String
             if publicBindings.isEmpty {
                 pattern = ".\(identifier)"
                 arguments = "evidence.before, evidence.after"
             } else {
-                let names = publicBindings.map(\.name)
+                let names = publicBindings.map(\.formalName)
                 pattern = ".\(identifier)(\(names.map { "let \($0)" }.joined(separator: ", ")))"
                 arguments = (names + ["evidence.before", "evidence.after"]).joined(separator: ", ")
             }
@@ -94,12 +98,13 @@ extension MacroExpander {
                     }
             """
         }.joined(separator: "\n")
-        let typedActions = zip(model.actions, identifiers).map { action, identifier -> DeclSyntax in
-            let bindings = publicBindings(for: action)
+        let typedActions = actions.map { action -> DeclSyntax in
+            let identifier = action.swiftIdentifier
+            let bindings = action.bindings.filter(\.isPublic)
             let parameters = bindings.map { binding in
-                "\(binding.name): \(swiftType(for: action, binding: binding))"
+                "\(binding.formalName): \(binding.swiftType)"
             }.joined(separator: ", ")
-            let labelArguments = bindings.map { "\($0.name): \($0.name)" }.joined(separator: ", ")
+            let labelArguments = bindings.map { "\($0.formalName): \($0.formalName)" }.joined(separator: ", ")
             let label = bindings.isEmpty
                 ? "ActionLabel.\(identifier).toInvocation()"
                 : "ActionLabel.\(identifier)(\(labelArguments)).toInvocation()"

@@ -21,7 +21,7 @@ struct NestedComposableMacroConformanceTests {
             Constraint(value <= 2)
         }
         let graph = try ModelChecker(spec: spec).exploreGraph()
-        let runtime = SpecRuntime(spec: spec)
+        let runtime = try SpecRuntime(spec: spec)
 
         for (sourceID, source) in graph.states {
             let checked = (graph.transitions[sourceID] ?? []).compactMap { transition -> (TLAActionInvocation, [String: TLAValue])? in
@@ -78,14 +78,14 @@ struct NestedComposableMacroConformanceTests {
     }
 
     @Test("Availability evaluation failures retain invocation context")
-    func availabilityEvaluationFailureReportsTheEvaluatedInvocation() {
+    func availabilityEvaluationFailureReportsTheEvaluatedInvocation() throws {
         let count = Var<Int>("count")
         let invocation = TLAActionInvocation(name: "advance")
         let spec = TLASpec("UnavailableAvailability") {
             Variable(count, 0)
             Action("advance") { count.becomes(count + 1) }
         }
-        let runtime = SpecRuntime(spec: spec) { _, _, _ in
+        let runtime = try SpecRuntime(spec: spec) { _, _, _ in
             throw AvailabilityEvaluationFailure.unavailable
         }
         let state = runtime.initialStates()[0]
@@ -198,6 +198,15 @@ struct NestedComposableMacroConformanceTests {
 
         #expect(result.status != 0)
         #expect(result.output.contains("@TLAModel models cannot declare instance stored properties"))
+    }
+
+    @Test("Model macro rejects dynamic formal module names")
+    func modelWithDynamicFormalModuleNameDoesNotTypeCheck() throws {
+        let fixture = packageRoot().appendingPathComponent("Tests/Fixtures/InvalidDynamicModelName")
+        let result = try runSwift(["build", "--package-path", fixture.path])
+
+        #expect(result.status != 0)
+        #expect(result.output.contains("must be a string literal; dynamic names cannot form a stable compilation identity"))
     }
 
     @Test("Model macro rejects observer-backed instance state")

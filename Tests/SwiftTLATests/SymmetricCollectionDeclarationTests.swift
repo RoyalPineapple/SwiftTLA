@@ -32,7 +32,7 @@ struct SymmetricCollectionDeclarationTests {
     #expect(initial.count == 2)
     #expect(Set(initial.values) == Set([TLAValue.int(0)]))
 
-    let initialState = computeInitialStates(spec)[0]
+    let initialState = try computeInitialStates(spec)[0]
     let successors = try ActionEnumerator.enumerate(
       spec.actions[0].body,
       from: initialState,

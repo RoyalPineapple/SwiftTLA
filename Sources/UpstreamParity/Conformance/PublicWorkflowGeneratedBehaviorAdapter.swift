@@ -530,13 +530,14 @@ public struct PublicWorkflowGeneratedBehaviorAdapterV1: Sendable {
 
   private func observeBuilder(spec: TLASpec, maxStates: Int) throws -> PublicWorkflowCanonicalObservationV1 {
     do {
-      let run = try SwiftGraphAdapterV1().adapt(ModelChecker(spec: spec, maxStates: maxStates).explore())
+      let compilation = try spec.compile()
+      let run = try SwiftGraphAdapterV1().adapt(ModelChecker(compilation: compilation, maxStates: maxStates).explore())
       return try observation(
         graph: run.graph,
         outcome: run.outcome,
         diagnostics: run.errors.map { "builder:\($0.code):\($0.message)" },
         traces: run.traces,
-        propertyOutcomes: SpecRuntime(spec: spec).propertyOutcomes(in:))
+        propertyOutcomes: SpecRuntime(compilation: compilation).propertyOutcomes(in:))
     } catch {
       return try unavailableObservation("builder:\(String(describing: error))")
     }

@@ -82,6 +82,73 @@ struct AlgorithmPlusCalRendererTests {
         #expect(rendered.contains("previous = -1"))
     }
 
+    @Test("keeps prelude helpers outside and state helpers inside define")
+    func rendersStructuredDeclarationSections() throws {
+        let model = AlgorithmModel(name: "Sections", components: [
+            .shared(.init(root: "count", initial: .value(.int(0)))),
+            .step(.init(label: .init(name: "done"), statements: [.stop]))
+        ])
+        let module = AuthoredPlusCalModule(
+            name: "Sections",
+            extendsModules: ["Naturals"],
+            constants: [],
+            definitionsBeforeInstances: ["Bound == 2"],
+            instances: [],
+            definitionsAfterInstances: [],
+            algorithm: model,
+            defineDeclarations: ["UsesCount == count = 0"],
+            postTranslationDeclarations: []
+        )
+
+        let rendered = try AlgorithmPlusCalRenderer(model: model).render(module)
+        let algorithmRange = try #require(rendered.range(of: "(*--algorithm Sections"))
+        let preludeRange = try #require(rendered.range(of: "Bound == 2"))
+        let defineRange = try #require(rendered.range(of: "define {"))
+        let stateHelperRange = try #require(rendered.range(of: "UsesCount == count = 0"))
+        #expect(preludeRange.lowerBound < algorithmRange.lowerBound)
+        #expect(defineRange.lowerBound < stateHelperRange.lowerBound)
+    }
+
+    @Test("direct Algorithm export retains formal definition phase")
+    func rendersDirectFormalDefinitionInDefine() throws {
+        let algorithm = Algorithm("Direct Sections") {
+            let count = SharedVar("count", initial: 0)
+            count
+            FormalDefinition("Ready", taking: Int.self, plusCalPhase: .define) { _ in
+                count == 0
+            }
+            Do("done") { Stop() }
+        }
+
+        let rendered = try algorithm.renderPlusCalModule()
+        let variableRange = try #require(rendered.range(of: "count = 0"))
+        let defineRange = try #require(rendered.range(of: "define {"))
+        let definitionRange = try #require(rendered.range(of: "Ready(value0) =="))
+        let actionRange = try #require(rendered.range(of: "done:"))
+        #expect(variableRange.lowerBound < defineRange.lowerBound)
+        #expect(defineRange.lowerBound < definitionRange.lowerBound)
+        #expect(definitionRange.lowerBound < actionRange.lowerBound)
+    }
+
+    @Test("rejects unresolved authored declaration dependencies")
+    func rejectsMissingDeclarationDependency() {
+        #expect(throws: AlgorithmPlusCalRenderDiagnostic.self) {
+            try AuthoredPlusCalDeclarationSections([
+                .init(name: "UsesMissing", text: "UsesMissing == TRUE", phase: .define, dependencies: ["Missing"])
+            ])
+        }
+    }
+
+    @Test("rejects cyclic authored declaration dependencies")
+    func rejectsCyclicDeclarationDependency() {
+        #expect(throws: AlgorithmPlusCalRenderDiagnostic.self) {
+            try AuthoredPlusCalDeclarationSections([
+                .init(name: "First", text: "First == TRUE", phase: .define, dependencies: ["Second"]),
+                .init(name: "Second", text: "Second == TRUE", phase: .define, dependencies: ["First"])
+            ])
+        }
+    }
+
     @Test("renders the PlusCal brace control grammar literally")
     func rendersBraceControlGrammar() throws {
         let loop = AlgorithmLabelModel(name: "loop")

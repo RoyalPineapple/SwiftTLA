@@ -46,7 +46,7 @@ struct CoreConformanceTLCAdapterTests { @Test("frozen graph stream becomes compl
     )
 
     do {
-      try request.validateModuleBundle()
+      try request.validateRenderedBundleIntegrity()
       Issue.record("Module-bundle validation accepted a missing Folds.tla dependency.")
     } catch let error as TLCProcessErrorV1 {
       let expected = TLCProcessErrorV1.invalidModuleBundle(.missingImportedModule(

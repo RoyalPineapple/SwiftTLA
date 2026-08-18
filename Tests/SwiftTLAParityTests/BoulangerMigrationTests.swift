@@ -6,7 +6,7 @@ struct BoulangerMigrationTests {
     func parserBuilderFidelity() throws {
         BoulangerModel._checkParserTree()
 
-        let module = try #require(BoulangerModel.spec.renderAuthoredPlusCalModules().first)
+        let module = try #require(BoulangerModel.spec.compile().renderedAuthoredPlusCalModules().first)
         #expect(module.contains("fair process"))
         #expect(module.contains("StateConstraint =="))
         #expect(module.contains("MutualExclusion =="))

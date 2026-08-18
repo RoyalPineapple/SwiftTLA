@@ -48,7 +48,7 @@ public struct VoteProofModel {
                 SetExpr<Acceptor>(.a1, .a2, .a3)
             ))
             Constant("Ballot", SetExpr<Int>(0, 1, 2))
-            Instance("C", of: ByzPaxosConsensus.module)
+            Instance("C", of: ByzPaxosConsensus.module, plusCalPhase: .define, dependsOn: ["chosen"])
 
             Algorithm("Voting") {
                 let votes = SharedVar(initial: Function<Acceptor, SetExpr<Pair<Int, Value>>>.mapping { _ in SetExpr() })
@@ -63,7 +63,7 @@ public struct VoteProofModel {
                 )
                 let ballots = SetExpr<Int>.literal(0, 1, 2)
 
-                FormalDefinition("SafeAt", taking: Int.self, Value.self) { ballot, value in
+                FormalDefinition("SafeAt", taking: Int.self, Value.self, plusCalPhase: .define) { ballot, value in
                     LetRec("SA", over: ballots, taking: Int.self, { (recursion: LocalRecursion<Int, Bool>, currentBallot) in
                         currentBallot == 0 || Exists(in: quorums) { quorum in
                             ForAll(in: quorum.expr) { acceptor in
@@ -131,14 +131,14 @@ public struct VoteProofModel {
                 }
             }
 
-            Definition("ChosenIn(b, v) == \\E Q \\in Quorum : \\A a \\in Q : <<b, v>> \\in votes[a]")
-            Definition("chosen == {v \\in Value : \\E b \\in Ballot : ChosenIn(b, v)}")
-            Definition("TypeOK == /\\ votes \\in [Acceptor -> SUBSET (Ballot \\X Value)] /\\ maxBal \\in [Acceptor -> Ballot \\cup {-1}]")
-            Definition("VInv1 == \\A a \\in Acceptor, b \\in Ballot, v, w \\in Value : <<b, v>> \\in votes[a] /\\ <<b, w>> \\in votes[a] => v = w")
-            Definition("VInv2 == \\A a \\in Acceptor, b \\in Ballot, v \\in Value : <<b, v>> \\in votes[a] => SafeAt(b, v)")
-            Definition("VInv3 == \\A a1, a2 \\in Acceptor, b \\in Ballot, v1, v2 \\in Value : <<b, v1>> \\in votes[a1] /\\ <<b, v2>> \\in votes[a2] => v1 = v2")
-            Definition("VInv4 == \\A v, w \\in Value : v \\in chosen /\\ w \\in chosen => v = w")
-            Definition("Refines == C!Spec")
+            Definition("ChosenIn(b, v) == \\E Q \\in Quorum : \\A a \\in Q : <<b, v>> \\in votes[a]", named: "ChosenIn", plusCalPhase: .define)
+            Definition("chosen == {v \\in Value : \\E b \\in Ballot : ChosenIn(b, v)}", named: "chosen", plusCalPhase: .define, dependsOn: ["ChosenIn"])
+            Definition("TypeOK == /\\ votes \\in [Acceptor -> SUBSET (Ballot \\X Value)] /\\ maxBal \\in [Acceptor -> Ballot \\cup {-1}]", named: "TypeOK", plusCalPhase: .define)
+            Definition("VInv1 == \\A a \\in Acceptor, b \\in Ballot, v, w \\in Value : <<b, v>> \\in votes[a] /\\ <<b, w>> \\in votes[a] => v = w", named: "VInv1", plusCalPhase: .define)
+            Definition("VInv2 == \\A a \\in Acceptor, b \\in Ballot, v \\in Value : <<b, v>> \\in votes[a] => SafeAt(b, v)", named: "VInv2", plusCalPhase: .define, dependsOn: ["SafeAt"])
+            Definition("VInv3 == \\A a1, a2 \\in Acceptor, b \\in Ballot, v1, v2 \\in Value : <<b, v1>> \\in votes[a1] /\\ <<b, v2>> \\in votes[a2] => v1 = v2", named: "VInv3", plusCalPhase: .define)
+            Definition("VInv4 == \\A v, w \\in Value : v \\in chosen /\\ w \\in chosen => v = w", named: "VInv4", plusCalPhase: .define, dependsOn: ["chosen"])
+            Definition("Refines == C!Spec", named: "Refines", plusCalPhase: .define, dependsOn: ["C"])
         }
     }
 }

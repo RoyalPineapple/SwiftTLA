@@ -21,21 +21,35 @@ public struct TransitionRelation: Sendable {
     private let spec: TLASpec
     private let variableNames: [String]
     private let actionEvaluator: ActionEvaluator?
+    private let formalModuleClosure: FormalModuleClosure
 
     public init(
         spec: TLASpec,
         actionEvaluator: ActionEvaluator? = nil
+    ) throws {
+        self.init(compilation: try spec.compile(), actionEvaluator: actionEvaluator)
+    }
+
+    public init(
+        compilation: CompiledSpecification,
+        actionEvaluator: ActionEvaluator? = nil
     ) {
-        self.init(resolvedSpec: substituteConstants(spec), actionEvaluator: actionEvaluator)
+        self.init(
+            resolvedSpec: substituteConstants(compilation.spec),
+            formalModuleClosure: compilation.formalModuleClosure,
+            actionEvaluator: actionEvaluator
+        )
     }
 
     init(
         resolvedSpec: TLASpec,
+        formalModuleClosure: FormalModuleClosure,
         actionEvaluator: ActionEvaluator? = nil
     ) {
         self.spec = resolvedSpec
         self.variableNames = resolvedSpec.variables.map(\.name)
         self.actionEvaluator = actionEvaluator
+        self.formalModuleClosure = formalModuleClosure
     }
 
     public func successors(from state: State) throws -> [Successor] {
@@ -95,8 +109,8 @@ public struct TransitionRelation: Sendable {
                     try constraint.evaluateBool(
                         in: successor,
                         runtimeFuncs: spec.runtimeFuncs,
-                        recursiveFuncs: spec.resolvedRecursiveFuncs,
-                        formalOperatorDefinitions: spec.resolvedFormalOperatorDefinitions,
+                        recursiveFuncs: formalModuleClosure.resolvedRecursiveFuncs,
+                        formalOperatorDefinitions: formalModuleClosure.resolvedFormalOperatorDefinitions,
                         evaluationContext: evaluationContext
                     ) ? Successor(invocation: variant.invocation, state: successor) : nil
                 }
@@ -119,7 +133,7 @@ public struct TransitionRelation: Sendable {
                 action,
                 from: state,
                 varNames: variableNames,
-                formalOperatorDefinitions: spec.resolvedFormalOperatorDefinitions,
+                formalOperatorDefinitions: formalModuleClosure.resolvedFormalOperatorDefinitions,
                 evaluationContext: evaluationContext
             )
         }

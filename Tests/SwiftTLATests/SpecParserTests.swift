@@ -597,17 +597,17 @@ private func parseExpression(_ source: String) -> ExprSyntax {
                 }
             }
         }
-        let runtimeTree = ParsedSpecModel(
+        let runtimeTree = canonicalTestSpec(
             variables: runtime.variables.map { ($0.name, $0.initial, $0.initialSet) },
             actions: runtime.actions.map { ($0.name, $0.body, $0.bindings) },
             invariants: runtime.invariants.map { ($0.name, $0.body) }
         )
-        let parserTree = ParsedSpecModel(
+        let parserTree = canonicalTestSpec(
             variables: parsed.variables.map { ($0.name, $0.initial, $0.initialSet) },
             actions: parsed.actions.map { ($0.name, $0.body, $0.bindings) },
             invariants: parsed.invariants
         )
-        #expect(parserTree == runtimeTree)
+        #expect(_tlaAlphaEquivalent(parserTree, runtimeTree))
     }
 }
 
@@ -694,7 +694,7 @@ private enum ParserNode: String, FiniteDomainKey {
     }
 
     @Test func finiteVariableDomainsCompareAsFormalSets() {
-        let parsed = ParsedSpecModel(
+        let parsed = canonicalTestSpec(
             variables: [(
                 name: "counter",
                 initial: .set([.int(0), .int(1)]),
@@ -703,7 +703,7 @@ private enum ParserNode: String, FiniteDomainKey {
             actions: [],
             invariants: []
         )
-        let built = ParsedSpecModel(
+        let built = canonicalTestSpec(
             variables: [(
                 name: "counter",
                 initial: .set([.int(0), .int(1)]),
@@ -717,7 +717,7 @@ private enum ParserNode: String, FiniteDomainKey {
     }
 
     @Test func fidelityDifferenceRetainsTheFirstFormalNodeAndRecoveryAction() {
-        let parserTree = ParsedSpecModel(
+        let parserTree = canonicalTestSpec(
             variables: [(
                 name: "counter",
                 initial: .int(0),
@@ -726,7 +726,7 @@ private enum ParserNode: String, FiniteDomainKey {
             actions: [("advance", .assign("counter", .int(1)), [])],
             invariants: []
         )
-        let builderTree = ParsedSpecModel(
+        let builderTree = canonicalTestSpec(
             variables: [(
                 name: "counter",
                 initial: .int(0),
@@ -749,7 +749,7 @@ private enum ParserNode: String, FiniteDomainKey {
     }
 
     @Test func formalOperatorDefinitionsArePartOfParserBuilderFidelity() {
-        let parserTree = ParsedSpecModel(
+        let parserTree = canonicalTestSpec(
             variables: [],
             actions: [],
             invariants: [],
@@ -761,7 +761,7 @@ private enum ParserNode: String, FiniteDomainKey {
                 )
             ]
         )
-        let builderTree = ParsedSpecModel(
+        let builderTree = canonicalTestSpec(
             variables: [],
             actions: [],
             invariants: [],
@@ -793,10 +793,10 @@ private enum ParserNode: String, FiniteDomainKey {
         """
         let closure = Parser.parse(source: source).statements.first!.item.as(ClosureExprSyntax.self)!
         let parsed = SpecParser.parseSpecClosure(closure)
-        let parserTree = ParsedSpecModel(
+        let parserTree = canonicalTestSpec(
             variables: [], actions: [], invariants: [], definitions: parsed.definitions
         )
-        let builderTree = ParsedSpecModel(
+        let builderTree = canonicalTestSpec(
             variables: [], actions: [], invariants: [], definitions: ["Refines == C!Spec"]
         )
 
@@ -823,7 +823,7 @@ private enum ParserNode: String, FiniteDomainKey {
     }
 
     @Test func formalDefinitionParameterNamesAreAlphaEquivalent() {
-        let parserTree = ParsedSpecModel(
+        let parserTree = canonicalTestSpec(
             variables: [],
             actions: [],
             invariants: [],
@@ -838,7 +838,7 @@ private enum ParserNode: String, FiniteDomainKey {
                 )
             ]
         )
-        let builderTree = ParsedSpecModel(
+        let builderTree = canonicalTestSpec(
             variables: [],
             actions: [],
             invariants: [],
@@ -1065,7 +1065,7 @@ private enum ParserNode: String, FiniteDomainKey {
     }
 
     @Test func localOperatorParameterNamesAreAlphaEquivalent() {
-        let parserTree = ParsedSpecModel(
+        let parserTree = canonicalTestSpec(
             variables: [],
             actions: [(
                 "advance",
@@ -1083,7 +1083,7 @@ private enum ParserNode: String, FiniteDomainKey {
             )],
             invariants: []
         )
-        let builderTree = ParsedSpecModel(
+        let builderTree = canonicalTestSpec(
             variables: [],
             actions: [(
                 "advance",
@@ -1817,6 +1817,35 @@ private let cameraModePhases: [String: [String: TLAValue]] = [
 private enum TestPersonID: String, FiniteTLAValueDomain {
     case alice, bob
     static let finiteValues = [Self.alice, .bob]
+}
+
+@TLAModel
+private struct DefinePhaseGeneratedModel {
+    enum Mode: String, FiniteTLAValueDomain {
+        case define
+
+        static let finiteValues = [Self.define]
+    }
+
+    static var spec: TLASpec {
+        #spec("DefinePhaseGeneratedModel") {
+            Algorithm("Phase") {
+                let mode: SharedVariable<Mode> = SharedVar(initial: .define)
+                Do("stay") { Assign(mode, to: mode) }
+            }
+            Definition("Visible == TRUE", named: "Visible", plusCalPhase: .define)
+        }
+    }
+}
+
+@Suite(.serialized) struct DefinePhaseGeneratedModelTests {
+    @Test("generated models retain definitions in the authored PlusCal define section")
+    func keepsDefinePhaseDeclaration() throws {
+        let plusCal = try #require(DefinePhaseGeneratedModel.spec.compile().renderedAuthoredPlusCalModules().first)
+        let define = try #require(plusCal.range(of: "define {"))
+        let visible = try #require(plusCal.range(of: "Visible == TRUE"))
+        #expect(define.lowerBound < visible.lowerBound)
+    }
 }
 
 @TLAModel

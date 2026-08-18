@@ -59,7 +59,7 @@ extension SpecParser {
             source: call.description,
             declaration: declaration
         ))
-        result.variables.append((collectionName, declaration.variable.initial, nil, nil))
+        result.variables.append(.init(formal: declaration.variable))
     }
 
     static func parseCollectionAction(
@@ -106,13 +106,6 @@ extension SpecParser {
         result.collectionActions.append(.init(
             name: actionName,
             collectionName: collectionName,
-            body: .existsAction(member, .domain(.variable(collectionName)), actionBody),
-            runtimeBranches: runtimeBranches(
-                in: closure,
-                collection: collectionName,
-                member: memberName,
-                runtimeVariables: Set(result.variables.map(\.name))
-            ),
             source: call.description
         ))
         result.actions.append(.init(name: actionName, body: .existsAction(
@@ -277,148 +270,19 @@ extension SpecParser {
         return call.arguments.first(where: { $0.label?.text == "to" })
     }
 
-    static func runtimeBranches(
-        in closure: ClosureExprSyntax,
-        collection: String,
-        member: String,
-        runtimeVariables: Set<String>
-    ) -> [ParsedCollectionAction.RuntimeBranch] {
-        let expressions = closure.statements.compactMap { statement -> ExprSyntax? in
-            guard case .expr(let expression) = statement.item else { return nil }
-            return expression
-        }
-        guard let first = expressions.first else { return [] }
-        return expressions.dropFirst().reduce(
-            runtimeBranches(
-                for: first,
-                collection: collection,
-                member: member,
-                runtimeVariables: runtimeVariables
-            )
-        ) { partial, expression in
-            combineRuntimeBranches(
-                partial,
-                runtimeBranches(
-                    for: expression,
-                    collection: collection,
-                    member: member,
-                    runtimeVariables: runtimeVariables
-                )
-            )
-        }
-    }
-
-    static func runtimeBranches(
-        for expression: ExprSyntax,
-        collection: String,
-        member: String,
-        runtimeVariables: Set<String>
-    ) -> [ParsedCollectionAction.RuntimeBranch] {
-        if let tuple = expression.as(TupleExprSyntax.self),
-           tuple.elements.count == 1,
-           let nested = tuple.elements.first?.expression {
-            return runtimeBranches(
-                for: nested,
-                collection: collection,
-                member: member,
-                runtimeVariables: runtimeVariables
-            )
-        }
-        if let sequence = expression.as(SequenceExprSyntax.self),
-           let split = collectionActionSequenceSplit(Array(sequence.elements)) {
-            let left = runtimeBranches(
-                for: split.left,
-                collection: collection,
-                member: member,
-                runtimeVariables: runtimeVariables
-            )
-            let right = runtimeBranches(
-                for: split.right,
-                collection: collection,
-                member: member,
-                runtimeVariables: runtimeVariables
-            )
-            return split.operatorText == "&&"
-                ? combineRuntimeBranches(left, right)
-                : left + right
-        }
-        if let update = collectionUpdate(expression, collection: collection, member: member) {
-            let runtimeUpdate = CollectionReadRewriter(
-                collection: collection,
-                member: member,
-                replacement: "entry.value",
-                asStateExpression: false,
-                runtimeVariables: runtimeVariables
-            ).visit(update.expression).formatted().description
-            return [.init(guardExpressions: [], updateExpression: runtimeUpdate)]
-        }
-        let runtimeGuard = CollectionRuntimeGuardRewriter(
-            collection: collection,
-            member: member,
-            runtimeVariables: runtimeVariables
-        ).visit(expression).formatted().description
-        return [.init(guardExpressions: [runtimeGuard], updateExpression: nil)]
-    }
-
-    static func combineRuntimeBranches(
-        _ left: [ParsedCollectionAction.RuntimeBranch],
-        _ right: [ParsedCollectionAction.RuntimeBranch]
-    ) -> [ParsedCollectionAction.RuntimeBranch] {
-        left.flatMap { lhs in
-            right.compactMap { rhs in
-                guard lhs.updateExpression == nil || rhs.updateExpression == nil else { return nil }
-                return .init(
-                    guardExpressions: lhs.guardExpressions + rhs.guardExpressions,
-                    updateExpression: lhs.updateExpression ?? rhs.updateExpression
-                )
-            }
-        }
-    }
-
-    private final class CollectionRuntimeGuardRewriter: SyntaxRewriter {
-        let collection: String
-        let member: String
-        let runtimeVariables: Set<String>
-
-        init(collection: String, member: String, runtimeVariables: Set<String>) {
-            self.collection = collection
-            self.member = member
-            self.runtimeVariables = runtimeVariables
-        }
-
-        override func visit(_ node: SubscriptCallExprSyntax) -> ExprSyntax {
-            guard node.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == collection,
-                  node.arguments.count == 1,
-                  node.arguments.first?.expression.as(DeclReferenceExprSyntax.self)?.baseName.text == member
-            else { return super.visit(node) }
-            return ExprSyntax(stringLiteral: "(entry.value)")
-        }
-
-        override func visit(_ node: DeclReferenceExprSyntax) -> ExprSyntax {
-            guard runtimeVariables.contains(node.baseName.text) else { return super.visit(node) }
-            return ExprSyntax(stringLiteral: "_state.\(node.baseName.text)")
-        }
-    }
-
     private final class CollectionReadRewriter: SyntaxRewriter {
         let collection: String
         let member: String
         let replacement: String
-        let asStateExpression: Bool
-        let runtimeVariables: Set<String>
 
         init(
             collection: String,
             member: String,
-            replacement: String,
-            asStateExpression: Bool = true,
-            runtimeVariables: Set<String> = []
+            replacement: String
         ) {
             self.collection = collection
             self.member = member
             self.replacement = replacement
-            self.asStateExpression = asStateExpression
-            self.runtimeVariables = runtimeVariables
         }
 
         override func visit(_ node: SubscriptCallExprSyntax) -> ExprSyntax {
@@ -426,16 +290,7 @@ extension SpecParser {
                   node.arguments.count == 1,
                   node.arguments.first?.expression.as(DeclReferenceExprSyntax.self)?.baseName.text == member
             else { return super.visit(node) }
-            if asStateExpression {
-                return ExprSyntax(stringLiteral: "\(collection).applying(\(replacement))")
-            }
-            return ExprSyntax(stringLiteral: "(\(replacement)) ")
-        }
-
-        override func visit(_ node: DeclReferenceExprSyntax) -> ExprSyntax {
-            guard !asStateExpression, runtimeVariables.contains(node.baseName.text)
-            else { return super.visit(node) }
-            return ExprSyntax(stringLiteral: "_state.\(node.baseName.text)")
+            return ExprSyntax(stringLiteral: "\(collection).applying(\(replacement))")
         }
     }
 
@@ -573,6 +428,23 @@ extension SpecParser {
 
     static func parseVariableDecl(_ call: FunctionCallExprSyntax, into result: inout ParsedSpecComponents) {
         let args = Array(call.arguments)
+        if args.first?.label?.text == "from",
+           args.count >= 2,
+           let name = parsedVariableName(args[0].expression),
+           let range = decodeStateExpr(args[1].expression) {
+            result.variables.append(.init(name: name, initial: .int(0), lazySet: range))
+            return
+        }
+        if args.first?.label?.text == "computed",
+           let name = parsedVariableName(args[0].expression),
+           let expression = call.trailingClosure?.statements.first.flatMap({ statement -> ExprSyntax? in
+               guard case .expr(let expression) = statement.item else { return nil }
+               return expression
+           }),
+           let initial = decodeStateExpr(expression) {
+            result.variables.append(.init(name: name, initial: .int(0), initExpr: initial))
+            return
+        }
         guard let firstName = args.first?.expression.as(DeclReferenceExprSyntax.self)?.baseName.text
             ?? args.first?.expression.as(MemberAccessExprSyntax.self)?.declName.baseName.text
         else { return }
@@ -583,7 +455,7 @@ extension SpecParser {
             if label == "in" {
                 if let setExpr = decodeStateExpr(args[1].expression) {
                     let initial = (try? setExpr.evaluate(in: [:])) ?? .int(0)
-                    result.variables.append((firstName, initial, setExpr, nil))
+                    result.variables.append(.init(name: firstName, initial: initial, initialSet: setExpr))
                     return
                 }
             }
@@ -593,15 +465,15 @@ extension SpecParser {
         if args.count >= 2 {
             let valExpr = args[1].expression
             if let intVal = valExpr.as(IntegerLiteralExprSyntax.self) {
-                result.variables.append((firstName, .int(Int(intVal.literal.text) ?? 0), nil, nil))
+                result.variables.append(.init(name: firstName, initial: .int(Int(intVal.literal.text) ?? 0)))
                 return
             }
             if let boolVal = valExpr.as(BooleanLiteralExprSyntax.self) {
-                result.variables.append((firstName, .bool(boolVal.literal.text == "true"), nil, nil))
+                result.variables.append(.init(name: firstName, initial: .bool(boolVal.literal.text == "true")))
                 return
             }
             if let stringVal = valExpr.as(StringLiteralExprSyntax.self) {
-                result.variables.append((firstName, .string(stringVal.segments.description), nil, nil))
+                result.variables.append(.init(name: firstName, initial: .string(stringVal.segments.description)))
                 return
             }
             // TLAValue.set([]), TLAValue.tuple([]), etc.
@@ -611,7 +483,7 @@ extension SpecParser {
                base.baseName.text == "TLAValue" {
                 let name = memberAccess.declName.baseName.text
                 if let parsed = parseTLAValueConstructor(name: name, call: fc) {
-                    result.variables.append((firstName, parsed, nil, nil))
+                    result.variables.append(.init(name: firstName, initial: parsed))
                     return
                 }
             }
@@ -620,8 +492,23 @@ extension SpecParser {
         // Variable(name, initializerExpr) — fallback
         if args.count >= 2 {
             let initial: TLAValue = .int(0)
-            result.variables.append((firstName, initial, nil, nil))
+            result.variables.append(.init(name: firstName, initial: initial))
         }
+    }
+
+    static func parsedVariableName(_ expression: ExprSyntax) -> String? {
+        if let literal = expression.as(StringLiteralExprSyntax.self) {
+            return literal.segments.description.replacingOccurrences(of: "\"", with: "")
+        }
+        if let reference = expression.as(DeclReferenceExprSyntax.self) {
+            return reference.baseName.text
+        }
+        if let member = expression.as(MemberAccessExprSyntax.self),
+           member.declName.baseName.text == "name",
+           let reference = member.base?.as(DeclReferenceExprSyntax.self) {
+            return reference.baseName.text
+        }
+        return nil
     }
 
     static func parseTLAValueConstructor(name: String, call: FunctionCallExprSyntax) -> TLAValue? {

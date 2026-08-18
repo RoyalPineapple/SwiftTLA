@@ -1,4 +1,4 @@
-import SwiftTLA
+@testable import SwiftTLA
 import Testing
 
 @Suite(.serialized)
@@ -174,13 +174,13 @@ struct SymmetricCollectionCanonicalizationTests {
   }
 
   @Test("TLA and CFG declare symmetric members as TLC model values")
-  func symmetricCollectionsEmitModelValueSymmetryBundle() {
+  func symmetricCollectionsEmitModelValueSymmetryBundle() throws {
     let members = SymmetricCollectionVar<Device, Int>("devicePhases")
     let spec = TLASpec("DevicePhases") {
       SymmetricCollection(members, verificationScope: 2, initial: 0)
     }
 
-    let bundle = spec.tlaBundle
+    let bundle = try spec.tlaBundle
     #expect(bundle.tla.contains("CONSTANTS DevicePhasesMember0, DevicePhasesMember1"))
     #expect(bundle.tla.contains("DevicePhasesKeys == {DevicePhasesMember0, DevicePhasesMember1}"))
     #expect(bundle.tla.contains("SymmDevicePhases == Permutations(DevicePhasesKeys)"))

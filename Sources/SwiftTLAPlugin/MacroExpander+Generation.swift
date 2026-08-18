@@ -18,7 +18,7 @@ extension MacroExpander {
         DeclSyntax(stringLiteral: """
         @discardableResult
         public static func verifySpec() throws -> Int {
-            let result = try ModelChecker(spec: Self.spec, maxStates: Self.verificationStateLimit).check()
+            let result = try ModelChecker(compilation: Self.compiledSpecification(), maxStates: Self.verificationStateLimit).check()
             switch result {
             case .ok(let count):
                 guard count > 0 else { throw VerificationError("No states found") }
@@ -40,7 +40,7 @@ extension MacroExpander {
     static func generateTransitionMatrix() -> [DeclSyntax] {
         [DeclSyntax(stringLiteral: """
         private static func _formalTransitionMatrix() throws -> [(from: [String: TLAValue], invocation: TLAActionInvocation, to: [String: TLAValue])] {
-            let graph = try ModelChecker(spec: Self.spec, maxStates: Self.verificationStateLimit).exploreGraph()
+            let graph = try ModelChecker(compilation: Self.compiledSpecification(), maxStates: Self.verificationStateLimit).exploreGraph()
             var matrix: [(from: [String: TLAValue], invocation: TLAActionInvocation, to: [String: TLAValue])] = []
             for (fromID, transitions) in graph.transitions {
                 guard let fromState = graph.states[fromID] else { continue }
@@ -58,8 +58,8 @@ extension MacroExpander {
         }
         """)]
     }
-    static func generateTransitionsTest(_ actions: [SpecParser.ParsedAction]) -> [DeclSyntax] {
-        if actions.isEmpty { return [] }
+    static func generateTransitionsTest(hasActions: Bool) -> [DeclSyntax] {
+        if !hasActions { return [] }
         return [DeclSyntax(stringLiteral: """
         public static func verifyTransitions() throws {
             let matrix = try Self._formalTransitionMatrix()
@@ -109,17 +109,16 @@ extension MacroExpander {
     // MARK: - Observable code generation
     static func generateObservableMembers(
         typeName: String,
-        variables: [(name: String, initial: TLAValue, initialSet: StateExpr?, swiftTypeName: String?)],
-        actions: [SpecParser.ParsedAction],
+        plan: MachineSurfacePlan,
         enumInfos: [ParsedEnumInfo] = []
     ) -> [DeclSyntax] {
         var decls: [DeclSyntax] = []
-        let actionIdentifiers = generatedActionIdentifiers(actions: actions)
-        for (a, identifier) in zip(actions, actionIdentifiers) {
-            let callbackName = "on" + identifier.prefix(1).capitalized + identifier.dropFirst()
+        for action in plan.actions {
+            let callbackName = "on" + action.swiftIdentifier.prefix(1).capitalized + action.swiftIdentifier.dropFirst()
             let callbackType: String
-            if !a.bindings.isEmpty {
-                let parameterTypes = a.bindings.map { swiftType(for: a, binding: $0) }.joined(separator: ", ")
+            let bindings = action.bindings.filter(\.isPublic)
+            if !bindings.isEmpty {
+                let parameterTypes = bindings.map(\.swiftType).joined(separator: ", ")
                 callbackType = "(@Sendable (\(parameterTypes), State, State) -> Void)?"
             } else {
                 callbackType = "(@Sendable (State, State) async -> Void)?"
@@ -132,10 +131,10 @@ extension MacroExpander {
             }
             """))
         }
-        decls.append(DeclSyntax(generateVariablesEnum(variables: variables)))
-        decls.append(DeclSyntax(generateActionsEnum(actions: actions)))
-        decls.append(DeclSyntax(generateActionLabel(actions: actions)))
-        decls.append(DeclSyntax(generateStateStruct(variables: variables, enumInfos: enumInfos)))
+        decls.append(DeclSyntax(generateVariablesEnum(variables: plan.variables)))
+        decls.append(DeclSyntax(generateActionsEnum(actions: plan.actions)))
+        decls.append(DeclSyntax(generateActionLabel(actions: plan.actions)))
+        decls.append(DeclSyntax(generateStateStruct(variables: plan.variables, enumInfos: enumInfos)))
         decls.append(DeclSyntax(stringLiteral: """
         private let _machine = CanonicalMachineStorage(CanonicalMachine(
             runtime: \(typeName).runtime,
@@ -146,10 +145,10 @@ extension MacroExpander {
         """))
         decls.append(contentsOf: generateCanonicalMachineMembers(
             isActor: true,
-            hasActions: !actions.isEmpty
+            hasActions: !plan.actions.isEmpty
         ))
-        decls.append(contentsOf: generateVariableProperties(variables: variables, enumInfos: enumInfos).map(DeclSyntax.init))
-        decls.append(contentsOf: generateObservableActionMethods(variables: variables, actions: actions).map(DeclSyntax.init))
+        decls.append(contentsOf: generateVariableProperties(variables: plan.variables, enumInfos: enumInfos).map(DeclSyntax.init))
+        decls.append(contentsOf: generateObservableActionMethods(actions: plan.actions).map(DeclSyntax.init))
         decls.append(DeclSyntax(
             VariableDeclSyntax(
                 modifiers: [DeclModifierSyntax(name: .keyword(.public)), DeclModifierSyntax(name: .keyword(.static))],
@@ -158,7 +157,7 @@ extension MacroExpander {
                     pattern: IdentifierPatternSyntax(identifier: "runtime"),
                     typeAnnotation: TypeAnnotationSyntax(type: IdentifierTypeSyntax(name: "SpecRuntime")),
                     accessorBlock: AccessorBlockSyntax(accessors: .getter(
-                        CodeBlockItemListSyntax { ExprSyntax(stringLiteral: "SpecRuntime(spec: spec)") }
+                        CodeBlockItemListSyntax { ExprSyntax(stringLiteral: "do { return try SpecRuntime(compilation: compiledSpecification()) } catch { fatalError(String(describing: error)) }") }
                     ))
                 )]
             )
@@ -166,20 +165,20 @@ extension MacroExpander {
         return decls
     }
     static func generateObservableActionMethods(
-        variables: [(name: String, initial: TLAValue, initialSet: StateExpr?, swiftTypeName: String?)],
-        actions: [SpecParser.ParsedAction]
+        actions: [MachineSurfacePlan.Action]
     ) -> [FunctionDeclSyntax] {
-        let identifiers = generatedActionIdentifiers(actions: actions)
-        return zip(actions, identifiers).map { a, identifier in
+        return actions.map { action in
+            let identifier = action.swiftIdentifier
             let callbackName = "on" + identifier.prefix(1).capitalized + identifier.dropFirst()
-            if !a.bindings.isEmpty {
-                let parameters = a.bindings.map { binding in
-                    "\(binding.name): \(swiftType(for: a, binding: binding))"
+            let bindings = action.bindings.filter(\.isPublic)
+            if !bindings.isEmpty {
+                let parameters = bindings.map { binding in
+                    "\(binding.formalName): \(binding.swiftType)"
                 }.joined(separator: ", ")
-                let callbackArguments = a.bindings.map(\.name).joined(separator: ", ")
+                let callbackArguments = bindings.map(\.formalName).joined(separator: ", ")
                 let source = """
                 public func _\(identifier)(\(parameters)) throws -> TransitionResult {
-                    let evidence = try apply(.\(identifier)(\(a.bindings.map { "\($0.name): \($0.name)" }.joined(separator: ", "))))
+                    let evidence = try apply(.\(identifier)(\(bindings.map { "\($0.formalName): \($0.formalName)" }.joined(separator: ", "))))
                     if let h = \(callbackName) { h(\(callbackArguments), evidence.before, evidence.after) }
                     return evidence
                 }
@@ -212,7 +211,7 @@ extension MacroExpander {
         default: "0"
         }
     }
-    static func generateCallbackProtocol(typeName: String, actions: [SpecParser.ParsedAction]) throws -> [DeclSyntax] {
+    static func generateCallbackProtocol(typeName: String, actions: [NamedAction]) throws -> [DeclSyntax] {
         let protoName = "\(typeName)Actions"
         var callbackDecls: [String] = []
         var defaultDecls: [String] = []
@@ -257,12 +256,22 @@ extension MacroExpander {
         case .constant: "String"
         }
     }
-    static func stateType(for v: (name: String, initial: TLAValue, initialSet: StateExpr?, swiftTypeName: String?), enumInfos: [ParsedEnumInfo]) -> String {
-        let inferred = v.swiftTypeName ?? swiftType(for: v.initial)
+    static func stateType(for v: NamedVar, facts: MacroSwiftFacts, enumInfos: [ParsedEnumInfo]) -> String {
+        let inferred = facts.variableTypes[v.name] ?? swiftType(for: v.initial)
         if ["Int", "Bool", "String"].contains(inferred) { return inferred }
         if enumInfos.contains(where: { $0.typeName == inferred }) { return inferred }
         if inferred.hasPrefix("Record<") || inferred.hasPrefix("Function<") || inferred.hasPrefix("SetExpr<") {
             return inferred
+        }
+        return "TLAValue"
+    }
+
+    static func stateType(for variable: MachineSurfacePlan.Variable, enumInfos: [ParsedEnumInfo]) -> String {
+        let type = variable.swiftType
+        if ["Int", "Bool", "String", "TLAValue"].contains(type) { return type }
+        if enumInfos.contains(where: { $0.typeName == type }) { return type }
+        if type.hasPrefix("Record<") || type.hasPrefix("Function<") || type.hasPrefix("SetExpr<") {
+            return type
         }
         return "TLAValue"
     }
@@ -327,16 +336,18 @@ extension MacroExpander {
     // MARK: - Native action codegen
     static func codegenExpr(
         _ expr: StateExpr,
-        variables: [(name: String, initial: TLAValue, initialSet: StateExpr?, swiftTypeName: String?)],
+        variables: [NamedVar],
+        facts: MacroSwiftFacts = .init(),
         enumInfos: [ParsedEnumInfo],
         boundVarName: String? = nil
     ) -> String {
-        let forceTLAValue = containsTLAValueField(expr, variables: variables, enumInfos: enumInfos, boundVarName: boundVarName)
-        return codegenExprInner(expr, variables: variables, enumInfos: enumInfos, forceTLAValue: forceTLAValue, boundVarName: boundVarName)
+        let forceTLAValue = containsTLAValueField(expr, variables: variables, facts: facts, enumInfos: enumInfos, boundVarName: boundVarName)
+        return codegenExprInner(expr, variables: variables, facts: facts, enumInfos: enumInfos, forceTLAValue: forceTLAValue, boundVarName: boundVarName)
     }
     static func codegenExprInner(
         _ expr: StateExpr,
-        variables: [(name: String, initial: TLAValue, initialSet: StateExpr?, swiftTypeName: String?)],
+        variables: [NamedVar],
+        facts: MacroSwiftFacts = .init(),
         enumInfos: [ParsedEnumInfo],
         forceTLAValue: Bool,
         boundVarName: String? = nil
@@ -345,6 +356,7 @@ extension MacroExpander {
             codegenExprInner(
                 $0,
                 variables: variables,
+                facts: facts,
                 enumInfos: enumInfos,
                 forceTLAValue: forceTLAValue,
                 boundVarName: boundVarName
@@ -397,6 +409,7 @@ extension MacroExpander {
             let predicate = codegenExprInner(
                 p,
                 variables: variables,
+                facts: facts,
                 enumInfos: enumInfos,
                 forceTLAValue: forceTLAValue,
                 boundVarName: qv
@@ -406,6 +419,7 @@ extension MacroExpander {
             let mapping = codegenExprInner(
                 e,
                 variables: variables,
+                facts: facts,
                 enumInfos: enumInfos,
                 forceTLAValue: forceTLAValue,
                 boundVarName: qv
@@ -425,6 +439,7 @@ extension MacroExpander {
             let body = codegenExprInner(
                 b,
                 variables: variables,
+                facts: facts,
                 enumInfos: enumInfos,
                 forceTLAValue: forceTLAValue,
                 boundVarName: qv
@@ -442,14 +457,15 @@ extension MacroExpander {
     }
     static func containsTLAValueField(
         _ expr: StateExpr,
-        variables: [(name: String, initial: TLAValue, initialSet: StateExpr?, swiftTypeName: String?)],
+        variables: [NamedVar],
+        facts: MacroSwiftFacts = .init(),
         enumInfos: [ParsedEnumInfo],
         boundVarName: String? = nil
     ) -> Bool {
         var found = false
         walkStateExpr(expr) { e in
             if case .variable(let name) = e, name != boundVarName {
-                if isTLAValueField(name, variables: variables, enumInfos: enumInfos) {
+                if isTLAValueField(name, variables: variables, facts: facts, enumInfos: enumInfos) {
                     found = true; return true
                 }
             }
@@ -539,11 +555,12 @@ extension MacroExpander {
     }
     static func isTLAValueField(
         _ name: String,
-        variables: [(name: String, initial: TLAValue, initialSet: StateExpr?, swiftTypeName: String?)],
+        variables: [NamedVar],
+        facts: MacroSwiftFacts = .init(),
         enumInfos: [ParsedEnumInfo]
     ) -> Bool {
         guard let v = variables.first(where: { $0.name == name }) else { return false }
-        let typeName = v.swiftTypeName ?? swiftType(for: v.initial)
+        let typeName = facts.variableTypes[v.name] ?? swiftType(for: v.initial)
         if ["Int", "Bool", "String"].contains(typeName) { return false }
         if enumInfos.contains(where: { $0.typeName == typeName }) { return false }
         return true
@@ -572,7 +589,8 @@ extension MacroExpander {
     // MARK: - Action body codegen (T2)
     static func codegenActionBody(
         _ action: ActionExpr,
-        variables: [(name: String, initial: TLAValue, initialSet: StateExpr?, swiftTypeName: String?)],
+        variables: [NamedVar],
+        facts: MacroSwiftFacts = .init(),
         enumInfos: [ParsedEnumInfo]
     ) -> String? {
         let expanded = inlineDefines(in: action)
@@ -581,9 +599,9 @@ extension MacroExpander {
         let disjuncts = distributeOr(expanded)
         if disjuncts.isEmpty { return nil }
         if disjuncts.count == 1 {
-            return codegenSingleDisjunct(disjuncts[0], variables: variables, enumInfos: enumInfos)
+            return codegenSingleDisjunct(disjuncts[0], variables: variables, facts: facts, enumInfos: enumInfos)
         }
-        return codegenMultiDisjunct(disjuncts, variables: variables, enumInfos: enumInfos)
+        return codegenMultiDisjunct(disjuncts, variables: variables, facts: facts, enumInfos: enumInfos)
     }
     static func containsRuntimeOnlyExpr(_ action: ActionExpr) -> Bool {
         var found = false
@@ -801,7 +819,8 @@ extension MacroExpander {
     }
     static func codegenSingleDisjunct(
         _ disjunct: ActionExpr,
-        variables: [(name: String, initial: TLAValue, initialSet: StateExpr?, swiftTypeName: String?)],
+        variables: [NamedVar],
+        facts: MacroSwiftFacts = .init(),
         enumInfos: [ParsedEnumInfo]
     ) -> String {
         let extracted: (assignments: [String: StateExpr], guards: [StateExpr])
@@ -810,11 +829,11 @@ extension MacroExpander {
         } catch {
             return "fatalError(\"\\(error)\")"
         }
-        let guardExprs = extracted.guards.map { codegenExpr($0, variables: variables, enumInfos: enumInfos) }
+        let guardExprs = extracted.guards.map { codegenExpr($0, variables: variables, facts: facts, enumInfos: enumInfos) }
         let guardBlock = guardExprs.isEmpty ? "" : "guard \(guardExprs.joined(separator: ", ")) else { return }"
         let assignments = extracted.assignments.compactMap { name, expr -> String? in
             if case .variable(let refName) = expr, refName == name { return nil }
-            let rhs = codegenExpr(expr, variables: variables, enumInfos: enumInfos)
+            let rhs = codegenExpr(expr, variables: variables, facts: facts, enumInfos: enumInfos)
                 .replacingOccurrences(of: "_state.", with: "_saved.")
             return "_state.\(name) = \(rhs)"
         }
@@ -823,7 +842,8 @@ extension MacroExpander {
     }
     static func codegenMultiDisjunct(
         _ disjuncts: [ActionExpr],
-        variables: [(name: String, initial: TLAValue, initialSet: StateExpr?, swiftTypeName: String?)],
+        variables: [NamedVar],
+        facts: MacroSwiftFacts = .init(),
         enumInfos: [ParsedEnumInfo]
     ) -> String {
         let parts = disjuncts.map { disjunct -> String in
@@ -833,11 +853,11 @@ extension MacroExpander {
             } catch {
                 return "fatalError(\"\\(error)\")"
             }
-            let guardExprs = extracted.guards.map { codegenExpr($0, variables: variables, enumInfos: enumInfos) }
+            let guardExprs = extracted.guards.map { codegenExpr($0, variables: variables, facts: facts, enumInfos: enumInfos) }
             let condition = guardExprs.isEmpty ? "true" : guardExprs.joined(separator: " && ")
             let assignments = extracted.assignments.compactMap { name, expr -> String? in
                 if case .variable(let refName) = expr, refName == name { return nil }
-                let rhs = codegenExpr(expr, variables: variables, enumInfos: enumInfos).replacingOccurrences(of: "_state.", with: "_saved.")
+                let rhs = codegenExpr(expr, variables: variables, facts: facts, enumInfos: enumInfos).replacingOccurrences(of: "_state.", with: "_saved.")
                 return "_state.\(name) = \(rhs)"
             }
             return "if \(condition) {\n            \(assignments.joined(separator: "\n            "))\n            return\n        }"
@@ -853,7 +873,7 @@ extension MacroExpander {
     }
     // MARK: - Apply dispatcher generation (T3)
     static func generateApplyDispatcher(
-        actions: [SpecParser.ParsedAction],
+        actions: [NamedAction],
         nativeNames: Set<String>,
         isActor: Bool = false
     ) -> FunctionDeclSyntax {

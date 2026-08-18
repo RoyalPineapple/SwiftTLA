@@ -6,14 +6,14 @@ struct KVsnapMigrationTests {
     func parserBuilderFidelity() throws {
         KVsnapModel._checkParserTree()
 
-        let bundle = KVsnapModel.spec.tlaBundle
+        let bundle = try KVsnapModel.spec.tlaBundle
         #expect(bundle.root.tla.contains("CC == INSTANCE ClientCentric"))
         #expect(bundle.imports.map(\.name).contains("ClientCentric"))
         #expect(bundle.root.tla.contains("CONSTANTS NoVal, k1, k2, t1, t2, t3"))
         #expect(bundle.cfg.contains("CONSTANT k1 = k1"))
         #expect(bundle.cfg.contains("SYMMETRY SymmTxId"))
 
-        let plusCal = try #require(KVsnapModel.spec.renderAuthoredPlusCalModules().first)
+        let plusCal = try #require(KVsnapModel.spec.compile().renderedAuthoredPlusCalModules().first)
         #expect(plusCal.contains("EXTENDS"))
         #expect(plusCal.contains("KeyValueStoreUtil"))
         #expect(plusCal.contains("CC == INSTANCE ClientCentric"))

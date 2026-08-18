@@ -5,6 +5,7 @@ struct VoteProofMigrationTests {
     @Test("VoteProof preserves typed local recursion and formal module composition")
     func parserBuilderFidelity() throws {
         VoteProofModel._checkParserTree()
+        #expect(try VoteProofModel.spec.compile().spec.name == "VoteProof")
 
         let bundle = VoteProofModel.spec.tlaBundle
         #expect(VoteProofModel.spec.constants == [
@@ -30,9 +31,19 @@ struct VoteProofMigrationTests {
         #expect(bundle.root.tla.contains("ChosenIn(b, v) =="))
         #expect(bundle.root.tla.contains("Refines == C!Spec"))
 
-        let plusCal = try #require(VoteProofModel.spec.renderAuthoredPlusCalModules().first)
+        let plusCal = try #require(VoteProofModel.spec.compile().renderedAuthoredPlusCalModules().first)
         #expect(plusCal.contains("--algorithm Voting"))
-        #expect(plusCal.contains("} *)\nSafeAt(value0, value1) =="))
-        #expect(plusCal.contains("chosen == {v \\in Value : \\E b \\in Ballot : ChosenIn(b, v)}\nC == INSTANCE Consensus\nRefines == C!Spec"))
+        let algorithmRange = try #require(plusCal.range(of: "(*--algorithm Voting"))
+        let defineRange = try #require(plusCal.range(of: "define {"))
+        let defineEndRange = try #require(plusCal.range(of: "}\n\nfair process"))
+        let refinesRange = try #require(plusCal.range(of: "Refines == C!Spec"))
+        let instanceRange = try #require(plusCal.range(of: "C == INSTANCE Consensus"))
+        let safeAtRange = try #require(plusCal.range(of: "SafeAt(value0, value1) =="))
+        let chosenRange = try #require(plusCal.range(of: "ChosenIn(b, v) =="))
+        #expect(defineRange.lowerBound > algorithmRange.lowerBound)
+        #expect(defineRange.lowerBound < safeAtRange.lowerBound)
+        #expect(chosenRange.lowerBound < instanceRange.lowerBound)
+        #expect(instanceRange.lowerBound < refinesRange.lowerBound)
+        #expect(refinesRange.lowerBound < defineEndRange.lowerBound)
     }
 }

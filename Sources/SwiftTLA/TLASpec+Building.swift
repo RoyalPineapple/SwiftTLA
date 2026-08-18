@@ -1,6 +1,6 @@
 extension TLASpec {
   public init(
-    _ name: String, parserTree: ParsedSpecModel? = nil,
+    _ name: String,
     @SpecBuilder _ builder: () -> [SpecComponent]
   ) {
     let components = builder()
@@ -12,6 +12,7 @@ extension TLASpec {
     var constants: [String: TLAValue] = [:]
     var formalParameters: [FormalModuleParameter] = []
     var definitions: [String] = []
+    var authoredPlusCalDeclarations: [AuthoredPlusCalDeclaration] = []
     var theorems: [String] = []
     var assumes: StateExpr?
     var extendsMods = "Integers"
@@ -73,7 +74,15 @@ extension TLASpec {
           temporalProperties += lowered.temporalProperties
           fairness += lowered.fairness
           formalOperatorDefinitions += algorithm.model.formalOperatorDefinitions
-          definitions += algorithm.model.formalOperatorDefinitions.map { FormalOperatorDecl($0).tlaText }
+          for definition in algorithm.model.formalOperatorDefinitions {
+            let text = FormalOperatorDecl(definition).tlaText
+            definitions.append(text)
+            authoredPlusCalDeclarations.append(AuthoredPlusCalDeclaration(
+              name: definition.name, text: text,
+              phase: definition.plusCalPhase,
+              dependencies: definition.plusCalDependencies
+            ))
+          }
           if let loweredConstraint = lowered.constraint {
             constraint = constraint.map { .and($0, loweredConstraint) } ?? loweredConstraint
           }
@@ -91,13 +100,23 @@ extension TLASpec {
       } else if let parameter = comp as? FormalParameterDecl {
         formalParameters.append(parameter.parameter)
       } else if let d = comp as? DefinitionDecl {
+        let text: String
         if let name = d.name, let body = d.body {
-          definitions.append("\(name) == \(body)")
+          text = "\(name) == \(body)"
         } else {
-          definitions.append(d.tlaText)
+          text = d.tlaText
         }
+        definitions.append(text)
+        authoredPlusCalDeclarations.append(AuthoredPlusCalDeclaration(
+          name: d.name, text: text, phase: d.plusCalPhase, dependencies: d.plusCalDependencies
+        ))
       } else if let definition = comp as? FormalOperatorDecl {
         definitions.append(definition.tlaText)
+        authoredPlusCalDeclarations.append(AuthoredPlusCalDeclaration(
+          name: definition.definition.name, text: definition.tlaText,
+          phase: definition.definition.plusCalPhase,
+          dependencies: definition.definition.plusCalDependencies
+        ))
       } else if let th = comp as? TheoremDecl {
         if !th.tlaText.isEmpty {
           theorems.append(th.tlaText)
@@ -159,6 +178,7 @@ extension TLASpec {
       constants.merge(used.constants) { $1 }
       formalParameters += used.formalParameters
       definitions += used.definitions
+      authoredPlusCalDeclarations += used.authoredPlusCalDeclarations
       recursiveDefs += used.recursiveDefs
       recursiveFuncs += used.recursiveFuncs
       formalOperatorDefinitions += used.formalOperatorDefinitions
@@ -174,30 +194,6 @@ extension TLASpec {
       if let a = used.assume { assumes = assumes.map { .and($0, a) } ?? a }
       symmetrySets += used.symmetrySets
       symmetricCollections += used.symmetricCollections
-    }
-
-    if let tree = parserTree {
-      let built = ParsedSpecModel(
-        variables: variables.map { ($0.name, $0.initial, $0.initialSet) },
-        actions: actions.map { ($0.name, $0.body, $0.bindings) },
-        invariants: invariants.map { ($0.name, $0.body) },
-        temporal: temporalProperties.map { ($0.name, $0.expr) },
-        fairness: fairness,
-        constraint: constraint,
-        imports: importedModules.map(\.name),
-        importConfigurations: importConfigurations,
-        moduleInstances: moduleInstances,
-        formalParameters: formalParameters,
-        formalOperatorDefinitions: formalOperatorDefinitions,
-        definitions: definitions,
-        symmetrySets: symmetrySets
-      )
-      guard _tlaAlphaEquivalent(built, tree) else {
-        fatalError(
-          "SpecParser tree mismatch for '\(name)'. " +
-            _tlaFidelityDiagnostic(tree, built)
-        )
-      }
     }
 
     // Auto-UNCHANGED: push into OR branches so TLC sees complete assignments
@@ -217,6 +213,7 @@ extension TLASpec {
     self.assume = assumes
     self.checkDeadlock = deadlockFlag
     self.definitions = definitions
+    self.authoredPlusCalDeclarations = authoredPlusCalDeclarations
     self.theorems = theorems
     self.extendsModules = extendsMods
     self.constraint = constraint
@@ -236,7 +233,7 @@ extension TLASpec {
   }
 }
 
-public extension TLASpec {
+extension TLASpec {
   /// Renders each Algorithm authored in this builder as an independent
   /// PlusCal module. Direct TLA+ specifications have no Algorithm source and
   /// therefore return an empty array instead of inventing a reverse lowering.
@@ -258,15 +255,18 @@ public extension TLASpec {
           nextSafeAction: "Declare properties inside Algorithm, or add a source-level renderer for the top-level declaration before exporting PlusCal."
         )
       }
+      let declarationSections = try authoredPlusCalDeclarationSections()
       let module = AuthoredPlusCalModule(
         name: name.replacingOccurrences(of: " ", with: ""),
         extendsModules: authoredPlusCalExtends,
         constants: authoredPlusCalPrelude,
-        definitionsBeforeInstances: authoredPlusCalDefinitionsBeforeInstances,
-        instances: moduleInstances,
-        definitionsAfterInstances: authoredPlusCalDefinitionsAfterInstances,
+        definitionsBeforeInstances: declarationSections.prelude,
+        instances: [],
+        definitionsAfterInstances: [],
         algorithm: algorithm.model,
-        postTranslationDeclarations: sourceProperties.map(\.definition) + authoredPlusCalSymmetry
+        defineDeclarations: declarationSections.define,
+        postTranslationDeclarations: sourceProperties.map(\.definition)
+          + authoredPlusCalSymmetry
       )
       return try AlgorithmPlusCalRenderer(model: algorithm.model).render(module)
     }
@@ -292,22 +292,18 @@ public extension TLASpec {
     return lines
   }
 
-  /// Definitions used by authored Algorithm declarations must be visible
-  /// before the PlusCal comment. `pcal.trans` resolves initializers and
-  /// qualified operators before it appends translated TLA+ code.
-  private var authoredPlusCalDefinitionsBeforeInstances: [String] {
-    definitions.filter { definition in
-      !moduleInstances.contains { definition.contains("\($0.name)!") }
-    } + recursiveDefs + runtimeFuncBodies
-  }
-
-  /// These declarations reference an imported instance and therefore follow
-  /// its structural `INSTANCE` declaration while still preceding the
-  /// Algorithm that uses them.
-  private var authoredPlusCalDefinitionsAfterInstances: [String] {
-    definitions.filter { definition in
-      moduleInstances.contains { definition.contains("\($0.name)!") }
+  private func authoredPlusCalDeclarationSections() throws -> AuthoredPlusCalDeclarationSections {
+    let instances = moduleInstances.map { instance in
+      let arguments = instance.arguments.map { "\($0.parameter) <- \($0.value)" }.joined(separator: ", ")
+      let withClause = arguments.isEmpty ? "" : " WITH \(arguments)"
+      return AuthoredPlusCalDeclaration(
+        name: instance.name,
+        text: "\(instance.name) == INSTANCE \(instance.module.name)\(withClause)",
+        phase: instance.plusCalPhase,
+        dependencies: instance.plusCalDependencies
+      )
     }
+    return try AuthoredPlusCalDeclarationSections(authoredPlusCalDeclarations + instances)
   }
 
   private var authoredPlusCalSymmetry: [String] {
@@ -317,6 +313,36 @@ public extension TLASpec {
         .joined(separator: ", ")
       return "Symm\(symmetry.variableName) == Permutations({\(values)})"
     }
+  }
+}
+
+struct AuthoredPlusCalDeclarationSections {
+  let prelude: [String]
+  let define: [String]
+
+  init(_ declarations: [AuthoredPlusCalDeclaration]) throws {
+    var emitted: Set<String> = []
+    func order(_ phase: AuthoredPlusCalDeclarationPhase) throws -> [String] {
+      var pending = declarations.filter { $0.phase == phase }
+      var result: [String] = []
+      let declared = Set(declarations.compactMap(\.name))
+      if let unresolved = pending.first(where: { $0.dependencies.contains(where: { !declared.contains($0) }) }) {
+        throw AlgorithmPlusCalRenderDiagnostic(failedConcept: "authored PlusCal declaration dependency", path: unresolved.name ?? "unnamed", expected: "a declared dependency", actual: unresolved.dependencies.joined(separator: ", "), nextSafeAction: "Declare the dependency or remove its placement edge.")
+      }
+      while let index = pending.firstIndex(where: { declaration in
+        declaration.dependencies.allSatisfy(emitted.contains)
+      }) {
+        let declaration = pending.remove(at: index)
+        result.append(declaration.text)
+        if let name = declaration.name { emitted.insert(name) }
+      }
+      if !pending.isEmpty {
+        throw AlgorithmPlusCalRenderDiagnostic(failedConcept: "authored PlusCal declaration dependency", path: pending.compactMap(\.name).joined(separator: ","), expected: "an acyclic declaration dependency graph", actual: "cyclic dependencies", nextSafeAction: "Break the declaration cycle or move the declarations to one legal phase.")
+      }
+      return result
+    }
+    prelude = try order(.prelude)
+    define = try order(.define)
   }
 }
 

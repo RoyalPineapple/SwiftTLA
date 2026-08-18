@@ -1,4 +1,4 @@
-import SwiftTLA
+@testable import SwiftTLA
 import SwiftTLAMacros
 import Testing
 
@@ -173,7 +173,7 @@ struct FormalOperatorTests {
       formalOperatorDefinitions: [applyTwice]
     )
 
-    let runtime = SpecRuntime(spec: spec)
+    let runtime = try SpecRuntime(spec: spec)
     let initial = try #require(runtime.initialStates().first)
     #expect(try runtime.apply(.init(name: "advance"), to: initial)["counter"] == .int(2))
     let result = try ModelChecker(spec: spec, maxStates: 10).check()
@@ -221,7 +221,7 @@ struct FormalOperatorTests {
       imports: [library]
     )
 
-    let runtime = SpecRuntime(spec: consumer)
+    let runtime = try SpecRuntime(spec: consumer)
     let initial = try #require(runtime.initialStates().first)
     #expect(try runtime.apply(.init(name: "advance"), to: initial)["counter"] == .int(2))
     let result = try ModelChecker(spec: consumer, maxStates: 10).check()
@@ -252,7 +252,7 @@ struct FormalOperatorTests {
     #expect(
       try expression.evaluate(
         in: [:],
-        formalOperatorDefinitions: Folds.module.resolvedFormalOperatorDefinitions
+        formalOperatorDefinitions: try Folds.module.compile().formalModuleClosure.resolvedFormalOperatorDefinitions
       ) == .int(6)
     )
     #expect(Folds.module.tlaModule.contains("MapThenFoldSet(op(_, _), base, f(_), choose(_), S) =="))
@@ -287,13 +287,13 @@ struct FormalOperatorTests {
       ]
     )
 
-    #expect(try restrict.evaluate(in: [:], formalOperatorDefinitions: FunctionsModule.module.resolvedFormalOperatorDefinitions) == .function([
+    #expect(try restrict.evaluate(in: [:], formalOperatorDefinitions: FunctionsModule.module.compile().formalModuleClosure.resolvedFormalOperatorDefinitions) == .function([
       .int(1): .int(10), .int(3): .int(30)
     ]))
-    #expect(try range.evaluate(in: [:], formalOperatorDefinitions: FunctionsModule.module.resolvedFormalOperatorDefinitions) == .set([
+    #expect(try range.evaluate(in: [:], formalOperatorDefinitions: FunctionsModule.module.compile().formalModuleClosure.resolvedFormalOperatorDefinitions) == .set([
       .int(10), .int(20), .int(30)
     ]))
-    #expect(try pointwise.evaluate(in: [:], formalOperatorDefinitions: FunctionsModule.module.resolvedFormalOperatorDefinitions) == .function([
+    #expect(try pointwise.evaluate(in: [:], formalOperatorDefinitions: FunctionsModule.module.compile().formalModuleClosure.resolvedFormalOperatorDefinitions) == .function([
       .int(1): .int(11), .int(2): .int(22), .int(3): .int(33)
     ]))
     #expect(FunctionsModule.module.tlaModule.contains("Restrict(f, S) =="))
@@ -329,10 +329,10 @@ struct FormalOperatorTests {
       ]
     )
 
-    #expect(try reduced.evaluate(in: [:], formalOperatorDefinitions: KeyValueStoreUtil.module.resolvedFormalOperatorDefinitions) == .int(6))
-    #expect(try index.evaluate(in: [:], formalOperatorDefinitions: KeyValueStoreUtil.module.resolvedFormalOperatorDefinitions) == .int(2))
-    #expect(try sequenceSet.evaluate(in: [:], formalOperatorDefinitions: KeyValueStoreUtil.module.resolvedFormalOperatorDefinitions) == .set([.int(1), .int(2)]))
-    #expect(try permutations.evaluate(in: [:], formalOperatorDefinitions: KeyValueStoreUtil.module.resolvedFormalOperatorDefinitions) == .set([
+    #expect(try reduced.evaluate(in: [:], formalOperatorDefinitions: KeyValueStoreUtil.module.compile().formalModuleClosure.resolvedFormalOperatorDefinitions) == .int(6))
+    #expect(try index.evaluate(in: [:], formalOperatorDefinitions: KeyValueStoreUtil.module.compile().formalModuleClosure.resolvedFormalOperatorDefinitions) == .int(2))
+    #expect(try sequenceSet.evaluate(in: [:], formalOperatorDefinitions: KeyValueStoreUtil.module.compile().formalModuleClosure.resolvedFormalOperatorDefinitions) == .set([.int(1), .int(2)]))
+    #expect(try permutations.evaluate(in: [:], formalOperatorDefinitions: KeyValueStoreUtil.module.compile().formalModuleClosure.resolvedFormalOperatorDefinitions) == .set([
       .tuple([.int(1), .int(2)]), .tuple([.int(2), .int(1)])
     ]))
     #expect(KeyValueStoreUtil.module.tlaModule.contains("ReduceSet(op(_, _), set, base) =="))

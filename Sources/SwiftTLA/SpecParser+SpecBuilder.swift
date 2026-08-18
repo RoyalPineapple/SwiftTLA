@@ -6,7 +6,10 @@ extension SpecParser {
     // MARK: - Unified spec builder parser
 
     public struct ParsedSpecComponents {
-        public var variables: [(name: String, initial: TLAValue, initialSet: StateExpr?, swiftTypeName: String?)] = []
+        /// A canonical formal variable plus the Swift-only type fact used by
+        /// generated surface code. The parser does not retain a second
+        /// variable representation.
+        public var variables: [ParsedVariable] = []
         public var actions: [ParsedAction] = []
         public var symmetricCollections: [ParsedSymmetricCollection] = []
         public var collectionActions: [ParsedCollectionAction] = []
@@ -21,6 +24,7 @@ extension SpecParser {
         public var formalParameters: [FormalModuleParameter] = []
         public var formalOperatorDefinitions: [FormalOperatorDefinition] = []
         public var definitions: [String] = []
+        public var authoredPlusCalDeclarations: [AuthoredPlusCalDeclaration] = []
         public var symmetrySets: [SymmetrySet] = []
         /// Opaque, pre-lowering Algorithm evidence retained independently of
         /// the ordinary parsed specification tree.
@@ -28,6 +32,43 @@ extension SpecParser {
         public var constants: [String: TLAValue] = [:]
         /// Local named values (from NamedValue declarations, resolved in expressions)
         public var localConstants: [String: TLAValue] = [:]
+    }
+
+    public struct ParsedVariable: Sendable, Equatable {
+        public var formal: NamedVar
+        public var swiftTypeName: String?
+
+        public init(
+            name: String,
+            initial: TLAValue,
+            initialSet: StateExpr? = nil,
+            initExpr: StateExpr? = nil,
+            lazySet: StateExpr? = nil,
+            collectionType: CollectionVarType = .scalar,
+            swiftTypeName: String? = nil
+        ) {
+            self.formal = NamedVar(
+                name: name,
+                initial: initial,
+                initialSet: initialSet,
+                initExpr: initExpr,
+                lazySet: lazySet,
+                collectionType: collectionType
+            )
+            self.swiftTypeName = swiftTypeName
+        }
+
+        public init(formal: NamedVar, swiftTypeName: String? = nil) {
+            self.formal = formal
+            self.swiftTypeName = swiftTypeName
+        }
+
+        public var name: String { formal.name }
+        public var initial: TLAValue { formal.initial }
+        public var initialSet: StateExpr? { formal.initialSet }
+        public var initExpr: StateExpr? { formal.initExpr }
+        public var lazySet: StateExpr? { formal.lazySet }
+        public var collectionType: CollectionVarType { formal.collectionType }
     }
 
     public struct ParsedAction: Sendable, Equatable {
@@ -59,15 +100,10 @@ extension SpecParser {
     }
 
     public struct ParsedCollectionAction {
-        public struct RuntimeBranch {
-            public let guardExpressions: [String]
-            public let updateExpression: String?
-        }
-
         public let name: String
         public let collectionName: String
-        public let body: ActionExpr
-        public let runtimeBranches: [RuntimeBranch]
+        /// Swift-only source provenance. The executable action is retained
+        /// only in `ParsedAction` and lowered once into `TLASpec`.
         public let source: String
     }
 
@@ -250,17 +286,17 @@ extension SpecParser {
                ["Function<", "Record<", "SetExpr<"].contains(where: varTypeName.contains),
                let name = args.first?.expression.as(StringLiteralExprSyntax.self)?.segments.description
                 .replacingOccurrences(of: "\"", with: "") {
-                result.variables.append((name, .int(0), nil, varTypeName))
+                result.variables.append(.init(name: name, initial: .int(0), swiftTypeName: varTypeName))
                 continue
             }
 
             if let rangeExpr = args.first(where: { $0.label?.text == "in" })?.expression {
                 if callName == "SharedVar", let range = parseIntegerClosedRange(rangeExpr) {
-                    result.variables.append((
-                        patternName,
-                        .int(range.lowerBound),
-                        .setLiteral(range.map { .value(.int($0)) }),
-                        "Int"
+                    result.variables.append(.init(
+                        name: patternName,
+                        initial: .int(range.lowerBound),
+                        initialSet: .setLiteral(range.map { .value(.int($0)) }),
+                        swiftTypeName: "Int"
                     ))
                     continue
                 }
@@ -270,17 +306,24 @@ extension SpecParser {
                    let first = elements.first,
                    let elementType = setExpressionElementTypeName(rangeExpr) {
                     let initial = (try? first.evaluate(in: [:])) ?? .int(0)
-                    result.variables.append((patternName, initial, initialSet, elementType))
+                    result.variables.append(.init(
+                        name: patternName, initial: initial, initialSet: initialSet,
+                        swiftTypeName: elementType
+                    ))
                     continue
                 }
                 let lowerBound = parseRangeLowerBound(rangeExpr)
-                result.variables.append((patternName, .int(lowerBound), nil, varTypeName))
+                result.variables.append(.init(
+                    name: patternName, initial: .int(lowerBound), swiftTypeName: varTypeName
+                ))
                 continue
             }
 
             if let valuesArg = args.first(where: { $0.label?.text == "values" })?.expression {
                 let firstValue = parseValuesFirst(valuesArg)
-                result.variables.append((patternName, .string(firstValue), nil, varTypeName))
+                result.variables.append(.init(
+                    name: patternName, initial: .string(firstValue), swiftTypeName: varTypeName
+                ))
                 continue
             }
 
@@ -292,11 +335,15 @@ extension SpecParser {
                     ? parsedInitialValue(args[1].expression)
                     : .int(0)
                 let inferredType = args.count >= 2 ? initialValueTypeName(from: args[1].expression) : nil
-                result.variables.append((varName, initial, nil, varTypeName ?? inferredType))
+                result.variables.append(.init(
+                    name: varName, initial: initial, swiftTypeName: varTypeName ?? inferredType
+                ))
             } else {
                 let initial: TLAValue = parsedInitialValue(args[0].expression)
                 let inferredType = initialValueTypeName(from: args[0].expression)
-                result.variables.append((patternName, initial, nil, varTypeName ?? inferredType))
+                result.variables.append(.init(
+                    name: patternName, initial: initial, swiftTypeName: varTypeName ?? inferredType
+                ))
             }
         }
     }
@@ -583,7 +630,7 @@ extension SpecParser {
         case "UseSpec":
             if let name = extractStringArg(call, index: 0),
                let spec = SpecRegistry.lookup(name) {
-                result.variables += spec.variables.map { (name: $0.name, initial: $0.initial, initialSet: $0.initialSet, swiftTypeName: nil) }
+                result.variables += spec.variables.map { .init(formal: $0) }
                 result.invariants += spec.invariants.map { (name: $0.name, body: $0.body) }
                 result.actions += spec.actions.map { ParsedAction(name: $0.name, body: $0.body, bindings: $0.bindings) }
             }
@@ -657,7 +704,6 @@ extension SpecParser {
         }
         let name = definition.name
         let parameters = definition.parameters
-        let body = definition.body
         guard !result.formalOperatorDefinitions.contains(where: { $0.name == name }) else {
             result.diagnostics.append(.init(
                 message: "FormalDefinition '\(name)' is declared more than once.",
@@ -672,9 +718,13 @@ extension SpecParser {
             ))
             return
         }
-        result.formalOperatorDefinitions.append(
-            FormalOperatorDefinition(name: name, parameters: parameters, body: body)
-        )
+        result.formalOperatorDefinitions.append(definition)
+        result.authoredPlusCalDeclarations.append(AuthoredPlusCalDeclaration(
+            name: definition.name,
+            text: FormalOperatorDecl(definition).tlaText,
+            phase: definition.plusCalPhase,
+            dependencies: definition.plusCalDependencies
+        ))
     }
 
     static func decodeFormalDefinition(
@@ -686,7 +736,8 @@ extension SpecParser {
            let bodySyntax = call.arguments.first(where: { $0.label?.text == "body" })?.expression,
            let parameters = parseFormalParameters(parametersSyntax),
            let body = decodeTypedFacadeValue(bodySyntax, substitutions: [:]) ?? decodeStateExpr(bodySyntax) {
-            return FormalOperatorDefinition(name: name, parameters: parameters, body: body)
+            return FormalOperatorDefinition(name: name, parameters: parameters, body: body,
+                plusCalPhase: plusCalPhase(call), plusCalDependencies: plusCalDependencies(call))
         }
 
         guard let closure = call.trailingClosure,
@@ -694,7 +745,9 @@ extension SpecParser {
               case .expr(let bodySyntax) = closure.statements.first?.item
         else { return nil }
         let parameters = closureParameterNames(in: closure)
-        let typeWitnesses = Array(call.arguments.dropFirst())
+        let typeWitnesses = call.arguments.dropFirst().filter { argument in
+            argument.label?.text != "plusCalPhase" && argument.label?.text != "dependsOn"
+        }
         guard (1...2).contains(parameters.count),
               parameters.count == typeWitnesses.count,
               typeWitnesses.first?.label?.text == "taking",
@@ -711,7 +764,9 @@ extension SpecParser {
         return FormalOperatorDefinition(
             name: name,
             parameters: formalParameters,
-            body: body
+            body: body,
+            plusCalPhase: plusCalPhase(call),
+            plusCalDependencies: plusCalDependencies(call)
         )
     }
 
@@ -720,7 +775,7 @@ extension SpecParser {
         into result: inout ParsedSpecComponents
     ) {
         let arguments = Array(call.arguments)
-        guard arguments.count == 1,
+        guard arguments.first?.label == nil,
               call.trailingClosure == nil,
               let literal = arguments[0].expression.as(StringLiteralExprSyntax.self),
               literal.segments.allSatisfy({ $0.is(StringSegmentSyntax.self) }),
@@ -735,6 +790,13 @@ extension SpecParser {
             return
         }
         result.definitions.append(definition)
+        result.authoredPlusCalDeclarations.append(AuthoredPlusCalDeclaration(
+            name: call.arguments.first(where: { $0.label?.text == "named" })?.expression
+                .as(StringLiteralExprSyntax.self)?.representedLiteralValue,
+            text: definition,
+            phase: plusCalPhase(call),
+            dependencies: plusCalDependencies(call)
+        ))
     }
 
     private static func parseFormalParameters(_ expression: ExprSyntax) -> [FormalParameter]? {
@@ -811,7 +873,24 @@ extension SpecParser {
             result.diagnostics.append(.init(message: "Instance arguments must name parameters declared by '\(module.name)'.", source: call))
             return
         }
-        result.moduleInstances.append(FormalModuleInstance(name, of: module, with: arguments))
+        result.moduleInstances.append(FormalModuleInstance(
+            name, of: module, with: arguments,
+            plusCalPhase: plusCalPhase(call), dependsOn: plusCalDependencies(call)
+        ))
+    }
+
+    private static func plusCalPhase(_ call: FunctionCallExprSyntax) -> AuthoredPlusCalDeclarationPhase {
+        let phase = call.arguments.first(where: { $0.label?.text == "plusCalPhase" })?
+            .expression.as(MemberAccessExprSyntax.self)?.declName.baseName.text
+        switch phase {
+        case "define": return .define
+        default: return .prelude
+        }
+    }
+
+    private static func plusCalDependencies(_ call: FunctionCallExprSyntax) -> [String] {
+        guard let array = call.arguments.first(where: { $0.label?.text == "dependsOn" })?.expression.as(ArrayExprSyntax.self) else { return [] }
+        return array.elements.compactMap { $0.expression.as(StringLiteralExprSyntax.self)?.representedLiteralValue }
     }
 
     private static func parseFormalModuleConfiguration(
@@ -844,11 +923,9 @@ extension SpecParser {
         let existing = result.variables[matchingIndices[0]]
         let replacement = result.variables[latest]
         result.variables.remove(at: latest)
-        result.variables[matchingIndices[0]] = (
-            replacement.name,
-            replacement.initial,
-            replacement.initialSet,
-            replacement.swiftTypeName ?? existing.swiftTypeName
+        result.variables[matchingIndices[0]] = .init(
+            formal: replacement.formal,
+            swiftTypeName: replacement.swiftTypeName ?? existing.swiftTypeName
         )
     }
 

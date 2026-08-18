@@ -3,7 +3,7 @@ import SwiftSyntax
 import SwiftSyntaxBuilder
 
 extension TLASpec {
-    public var tlaModule: String {
+    var tlaModule: String {
         validateSymmetricCollectionExport()
         let varNames = variables.map(\.name)
         let algorithmSymbols = algorithmExportSymbols(sourceAlgorithms, actions: actions)
@@ -235,7 +235,7 @@ extension TLASpec {
     }
 
     /// Auto-generated TLC configuration matching the module.
-    public var tlaCfg: String {
+    var tlaCfg: String {
         validateSymmetricCollectionExport()
         var lines: [String] = []
         lines.append("SPECIFICATION Spec")
@@ -271,30 +271,14 @@ extension TLASpec {
         return lines.joined(separator: "\n") + "\n"
     }
 
-    /// Complete TLA+ source bundle: the root module, its configuration, and
-    /// each imported module in dependency order.
-    public var tlaBundle: TLAModuleBundle {
-        var emitted = Set<String>()
-        var files: [TLAModuleFile] = []
-
-        func appendImports(of module: TLASpec) {
-            for imported in module.imports {
-                appendImports(of: imported)
-                guard emitted.insert(imported.name).inserted else { continue }
-                files.append(TLAModuleFile(name: imported.name, tla: imported.tlaModule))
-            }
-            for instance in module.moduleInstances {
-                appendImports(of: instance.module)
-                guard emitted.insert(instance.module.name).inserted else { continue }
-                files.append(TLAModuleFile(name: instance.module.name, tla: instance.module.tlaModule))
-            }
+    /// Complete TLA+ source bundle from this specification's compiled closure.
+    ///
+    /// Rendering cannot discover or resolve imports; `compile()` owns that
+    /// semantic link phase.
+    var tlaBundle: TLAModuleBundle {
+        get throws {
+            try compile().tlaBundle
         }
-
-        appendImports(of: self)
-        return TLAModuleBundle(
-            root: TLAModuleFile(name: name, tla: tlaModule, cfg: tlaCfg),
-            imports: files
-        )
     }
 
     private func validateSymmetricCollectionExport() {

@@ -1,12 +1,12 @@
 import Testing
-import SwiftTLA
+@testable import SwiftTLA
 @testable import UpstreamParity
 
 @Suite("Least Circular Substring module port")
 struct LeastCircularSubstringTests {
   @Test("emits the upstream dependency as a separate module with its scoped finite configuration")
-  func emitsModuleBundle() {
-    let bundle = LeastCircularSubstringModel.spec.tlaBundle
+  func emitsModuleBundle() throws {
+    let bundle = try LeastCircularSubstringModel.spec.tlaBundle
     guard let config = bundle.root.cfg else {
       Issue.record("The root module needs a TLC configuration.")
       return

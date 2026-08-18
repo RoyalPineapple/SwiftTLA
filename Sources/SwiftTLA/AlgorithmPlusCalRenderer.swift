@@ -45,7 +45,7 @@ public struct AlgorithmPlusCalRenderDiagnostic: Error, Sendable, Hashable, Custo
 /// PlusCal algorithm comment. This is deliberately a syntax renderer: it does
 /// not invoke `AlgorithmLowerer`, construct a `TLASpec`, or introduce any
 /// generated program-counter semantics.
-public extension Algorithm {
+extension Algorithm {
     func renderPlusCalModule() throws -> String {
         try AlgorithmPlusCalRenderer(model: model).render()
     }
@@ -66,6 +66,7 @@ internal struct AuthoredPlusCalModule: Sendable {
     let instances: [FormalModuleInstance]
     let definitionsAfterInstances: [String]
     let algorithm: AlgorithmModel
+    let defineDeclarations: [String]
     let postTranslationDeclarations: [String]
 
     var supportDeclarations: [String] {
@@ -94,10 +95,6 @@ internal struct AlgorithmPlusCalRenderer {
         try properties(in: model.components, path: "components")
     }
 
-    func sourceFormalOperatorDefinitions() -> [String] {
-        model.formalOperatorDefinitions.map { FormalOperatorDecl($0).tlaText }
-    }
-
     /// PlusCal's translator defines this temporal operator for a single
     /// process family.  Emitting the equivalent authored spelling after the
     /// comment would redeclare the translator-owned name.
@@ -108,15 +105,26 @@ internal struct AlgorithmPlusCalRenderer {
     }
 
     func render() throws -> String {
-        try render(
+        let sections = try AuthoredPlusCalDeclarationSections(
+            model.formalOperatorDefinitions.map { definition in
+                AuthoredPlusCalDeclaration(
+                    name: definition.name,
+                    text: FormalOperatorDecl(definition).tlaText,
+                    phase: definition.plusCalPhase,
+                    dependencies: definition.plusCalDependencies
+                )
+            }
+        )
+        return try render(
             AuthoredPlusCalModule(
                 name: moduleName(model.name),
                 extendsModules: ["Naturals", "Integers", "Sequences", "FiniteSets"],
                 constants: [],
-                definitionsBeforeInstances: sourceFormalOperatorDefinitions(),
+                definitionsBeforeInstances: sections.prelude,
                 instances: [],
                 definitionsAfterInstances: [],
                 algorithm: model,
+                defineDeclarations: sections.define,
                 postTranslationDeclarations: try sourcePropertyDefinitions().map(\.definition)
             )
         )
@@ -140,6 +148,11 @@ internal struct AlgorithmPlusCalRenderer {
         if !shared.isEmpty {
             lines.append("variables")
             lines += try declarations(shared, indent: "  ", terminator: ";", path: "shared")
+        }
+        if !module.defineDeclarations.isEmpty {
+            lines.append("define {")
+            lines += module.defineDeclarations.map { "  \($0)" }
+            lines.append("}")
         }
 
         let processNames = renderedProcessNames()

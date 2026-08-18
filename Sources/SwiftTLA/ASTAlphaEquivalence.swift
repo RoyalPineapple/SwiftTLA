@@ -4,13 +4,13 @@
 /// free variables compare exactly. Only names introduced by a local binder
 /// (`\A`, `\E`, `CHOOSE`, function literals, filters, and action-local
 /// bindings) may differ.
-public func _tlaAlphaEquivalent(_ lhs: ParsedSpecModel, _ rhs: ParsedSpecModel) -> Bool {
+public func _tlaAlphaEquivalent(_ lhs: TLASpec, _ rhs: TLASpec) -> Bool {
     guard lhs.variables.elementsEqual(rhs.variables, by: variablesEquivalent),
           lhs.actions.count == rhs.actions.count,
           lhs.invariants.count == rhs.invariants.count,
-          lhs.temporal.count == rhs.temporal.count,
+          lhs.temporalProperties.count == rhs.temporalProperties.count,
           lhs.fairness == rhs.fairness,
-          lhs.imports == rhs.imports,
+          lhs.imports.map(\.compilationFingerprint) == rhs.imports.map(\.compilationFingerprint),
           lhs.importConfigurations == rhs.importConfigurations,
           lhs.moduleInstances == rhs.moduleInstances,
           lhs.formalParameters == rhs.formalParameters,
@@ -28,7 +28,7 @@ public func _tlaAlphaEquivalent(_ lhs: ParsedSpecModel, _ rhs: ParsedSpecModel) 
     for (left, right) in zip(lhs.invariants, rhs.invariants) {
         guard left.name == right.name, alphaKey(left.body) == alphaKey(right.body) else { return false }
     }
-    for (left, right) in zip(lhs.temporal, rhs.temporal) {
+    for (left, right) in zip(lhs.temporalProperties, rhs.temporalProperties) {
         guard left.name == right.name, alphaKey(left.expr) == alphaKey(right.expr) else { return false }
     }
     return true
@@ -111,8 +111,8 @@ public struct TLAParserFidelityDiagnostic: Error, Sendable, Hashable, CustomStri
 /// point at the original declaration; callers can inspect this value for the
 /// expected and actual formal trees without scraping text.
 public func _tlaFidelityEvidence(
-    _ expected: ParsedSpecModel,
-    _ actual: ParsedSpecModel
+    _ expected: TLASpec,
+    _ actual: TLASpec
 ) -> TLAParserFidelityDiagnostic? {
     func difference(
         _ whatFailed: String,
@@ -130,8 +130,8 @@ public func _tlaFidelityEvidence(
         )
     }
 
-    guard expected.imports == actual.imports else {
-        return difference("imported module list differs", at: "imports", expected: "\(expected.imports)", actual: "\(actual.imports)")
+    guard expected.imports.map(\.compilationFingerprint) == actual.imports.map(\.compilationFingerprint) else {
+        return difference("imported module list differs", at: "imports", expected: "\(expected.imports.map(\.name))", actual: "\(actual.imports.map(\.name))")
     }
     guard expected.importConfigurations == actual.importConfigurations else {
         return difference("import configuration differs", at: "importConfigurations", expected: "\(expected.importConfigurations)", actual: "\(actual.importConfigurations)")
@@ -230,10 +230,10 @@ public func _tlaFidelityEvidence(
             return difference("invariant body differs after alpha normalization", at: "invariants[\(index)].body (\(left.name))", expected: expectedKey, actual: actualKey)
         }
     }
-    guard expected.temporal.count == actual.temporal.count else {
-        return difference("temporal property count differs", at: "temporal", expected: "\(expected.temporal.count) properties", actual: "\(actual.temporal.count) properties")
+    guard expected.temporalProperties.count == actual.temporalProperties.count else {
+        return difference("temporal property count differs", at: "temporal", expected: "\(expected.temporalProperties.count) properties", actual: "\(actual.temporalProperties.count) properties")
     }
-    for (index, pair) in zip(expected.temporal, actual.temporal).enumerated() {
+    for (index, pair) in zip(expected.temporalProperties, actual.temporalProperties).enumerated() {
         let (left, right) = pair
         guard left.name == right.name else {
             return difference("temporal property name or order differs", at: "temporal[\(index)]", expected: "property '\(left.name)'", actual: "property '\(right.name)'")
@@ -255,7 +255,7 @@ public func _tlaFidelityEvidence(
 
 /// Compatibility text for traps emitted by existing generated code.
 /// Prefer ``_tlaFidelityEvidence(_:_: )`` when a caller can retain evidence.
-public func _tlaFidelityDiagnostic(_ expected: ParsedSpecModel, _ actual: ParsedSpecModel) -> String {
+public func _tlaFidelityDiagnostic(_ expected: TLASpec, _ actual: TLASpec) -> String {
     _tlaFidelityEvidence(expected, actual)?.description
         ?? "Parser fidelity check was requested although the parser and builder trees agree. Next safe action: retain the matching trees or rerun the comparison with the values that differed."
 }
@@ -271,11 +271,13 @@ private func optionalStateEquivalent(_ lhs: StateExpr?, _ rhs: StateExpr?) -> Bo
     }
 }
 
-private func variablesEquivalent(
-    _ lhs: (name: String, initial: TLAValue, initialSet: StateExpr?),
-    _ rhs: (name: String, initial: TLAValue, initialSet: StateExpr?)
-) -> Bool {
-    guard lhs.name == rhs.name, lhs.initial == rhs.initial else { return false }
+private func variablesEquivalent(_ lhs: NamedVar, _ rhs: NamedVar) -> Bool {
+    guard lhs.name == rhs.name,
+          lhs.initial == rhs.initial,
+          lhs.collectionType == rhs.collectionType,
+          optionalStateEquivalent(lhs.initExpr, rhs.initExpr),
+          optionalStateEquivalent(lhs.lazySet, rhs.lazySet)
+    else { return false }
     switch (lhs.initialSet, rhs.initialSet) {
     case (nil, nil): return true
     case let (.some(left), .some(right)): return alphaKey(left) == alphaKey(right)

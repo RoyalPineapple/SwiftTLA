@@ -6,6 +6,9 @@ set -euo pipefail
 readonly max_rss_mib=6144
 readonly min_available_mib=1024
 readonly poll_seconds=2
+# The native advisory lock waits briefly rather than failing at first collision.
+# The environment override keeps the shell-level contention regression fast.
+readonly lock_wait_seconds="${SWIFTTLA_LOCAL_VALIDATION_LOCK_WAIT_SECONDS:-30}"
 
 usage() {
     cat >&2 <<'EOF'
@@ -19,6 +22,12 @@ EOF
 fail() {
     echo "local-validation: $*" >&2
     exit 64
+}
+
+require_positive_integer() {
+    local name="$1"
+    local value="$2"
+    [[ "$value" =~ ^[1-9][0-9]*$ ]] || fail "$name must be a positive integer"
 }
 
 [[ "$(uname -s)" == "Darwin" ]] || fail "macOS is required"
@@ -38,12 +47,12 @@ case "$mode" in
 esac
 
 readonly common_git_dir="$(git rev-parse --git-common-dir)"
-readonly lock_dir="$common_git_dir/swifttla-local-validation.lock"
+readonly lock_file="$common_git_dir/swifttla-local-validation.advisory.lock"
+require_positive_integer "SWIFTTLA_LOCAL_VALIDATION_LOCK_WAIT_SECONDS" "$lock_wait_seconds"
 scratch_dir=""
 command_pid=""
 command_group=""
 watchdog_pid=""
-lock_held=false
 
 terminate_group() {
     [[ -n "$command_group" ]] || return 0
@@ -57,19 +66,48 @@ cleanup() {
         wait "$watchdog_pid" 2>/dev/null || true
     fi
     [[ -z "$scratch_dir" ]] || rm -rf -- "$scratch_dir"
-    if [[ "$lock_held" == true ]]; then
-        rm -f -- "$lock_dir/pid"
-        rmdir "$lock_dir" 2>/dev/null || true
-    fi
+    exec 9>&- 2>/dev/null || true
 }
 trap 'status=$?; cleanup; exit "$status"' EXIT
 trap 'exit 130' HUP INT TERM
 
-if ! mkdir "$lock_dir" 2>/dev/null; then
-    fail "another local validation is active (lock: $lock_dir)"
+lock_owner_diagnostics() {
+    local owner_pid="" owner_command=""
+    if [[ ! -r "$lock_file" ]]; then
+        printf '%s' 'lock owner data is unavailable (metadata is missing or unreadable)'
+        return
+    fi
+    IFS= read -r owner_pid < "$lock_file" || true
+    if [[ ! "$owner_pid" =~ ^[1-9][0-9]*$ ]]; then
+        printf '%s' 'lock owner data is unavailable (pid is missing or invalid)'
+        return
+    fi
+    if ! kill -0 "$owner_pid" 2>/dev/null; then
+        printf 'lock owner is likely stale (pid %s has no running process)' "$owner_pid"
+        return
+    fi
+    owner_command="$(ps -p "$owner_pid" -o command= 2>/dev/null | tr '\n' ' ' | sed 's/[[:space:]]\\+/ /g; s/^ //; s/ $//')"
+    if [[ -n "$owner_command" ]]; then
+        printf 'lock owner appears active (pid %s, process %s)' "$owner_pid" "$owner_command"
+    else
+        printf 'lock owner appears active (pid %s, process identity unavailable)' "$owner_pid"
+    fi
+}
+
+exec 9>>"$lock_file"
+set +e
+/usr/bin/lockf -s -t "$lock_wait_seconds" 9
+lock_status=$?
+set -e
+if [[ "$lock_status" -ne 0 ]]; then
+    owner="$(lock_owner_diagnostics)"
+    if [[ "$lock_status" -eq 75 ]]; then
+        fail "timed out after ${lock_wait_seconds}s waiting for validation lock ($lock_file); ${owner}; lock was not changed"
+    fi
+    fail "could not acquire validation lock ($lock_file; lockf status $lock_status); ${owner}; lock was not changed"
 fi
-lock_held=true
-printf '%s\n' "$$" > "$lock_dir/pid"
+
+printf '%s\n' "$$" > "$lock_file"
 
 tree_rss_mib() {
     ps -axo pid=,ppid=,rss= | awk -v root="$1" '

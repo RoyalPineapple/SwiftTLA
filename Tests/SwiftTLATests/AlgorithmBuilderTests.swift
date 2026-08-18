@@ -163,7 +163,7 @@ struct AlgorithmBuilderTests {
         }
 
         let spec = try algorithm.lower()
-        #expect(computeInitialStates(spec).count == 4)
+        #expect(try computeInitialStates(spec).count == 4)
     }
 
     @Test("static formal selection uses the matching finite value")
@@ -192,19 +192,19 @@ struct AlgorithmBuilderTests {
     @Test("generated models retain typed filtered function domains")
     func generatedModelRetainsFilteredFunctionDomain() throws {
         FunctionDomainGeneratedModel._checkParserTree()
-        #expect(computeInitialStates(FunctionDomainGeneratedModel.spec).count == 4)
+        #expect(try computeInitialStates(FunctionDomainGeneratedModel.spec).count == 4)
     }
 
     @Test("generated models retain static formal selections")
     func generatedModelRetainsStaticFormalSelection() {
         StaticFormalSelectionModel._checkParserTree()
-        #expect(computeInitialStates(StaticFormalSelectionModel.spec).first?["current"] == .int(2))
+        #expect(try computeInitialStates(StaticFormalSelectionModel.spec).first?["current"] == .int(2))
     }
 
     @Test("generated models retain static filtered function selections")
     func generatedModelRetainsStaticFilteredFunctionSelection() {
         StaticFilteredFunctionSelectionModel._checkParserTree()
-        #expect(computeInitialStates(StaticFilteredFunctionSelectionModel.spec).count == 1)
+        #expect(try computeInitialStates(StaticFilteredFunctionSelectionModel.spec).count == 1)
     }
 
     @Test("statement macros accept the current typed process identifier")
@@ -835,7 +835,7 @@ struct AlgorithmBuilderTests {
         }
 
         let spec = try algorithm.lower()
-        let states = computeInitialStates(spec)
+        let states = try computeInitialStates(spec)
 
         #expect(Set(states.compactMap { $0["hour"] }) == [.int(1), .int(2), .int(3)])
         #expect(spec.variables.first { $0.name == "hour" }?.initialSet == .setLiteral([
@@ -857,7 +857,7 @@ struct AlgorithmBuilderTests {
         }
 
         let spec = try algorithm.lower()
-        #expect(Set(computeInitialStates(spec).compactMap { $0["candidate"] }) == [
+        #expect(Set(try computeInitialStates(spec).compactMap { $0["candidate"] }) == [
             .int(0), .int(1), .int(2)
         ])
     }
@@ -978,7 +978,7 @@ struct AlgorithmBuilderTests {
         }
 
         let spec = try algorithm.lower()
-        let states = computeInitialStates(spec)
+        let states = try computeInitialStates(spec)
 
         #expect(Set(states.compactMap { $0["seed"] }) == [.bool(false), .bool(true)])
         #expect(Set(states.compactMap { $0["mirrors"] }) == [

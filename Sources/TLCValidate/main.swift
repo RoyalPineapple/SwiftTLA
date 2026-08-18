@@ -20,7 +20,12 @@ guard let name = args.first else {
     """, stderr)
     exit(1)
 }
-runLegacyCommand(name: name, arguments: args)
+do {
+    try runLegacyCommand(name: name, arguments: args)
+} catch {
+    fputs("tlc-validate: \(error)\n", stderr)
+    exit(1)
+}
 private typealias CoreConformanceManifest = CoreConformanceCasesManifestV1
 
 private struct PublicWorkflowOptions {
@@ -267,7 +272,7 @@ private func runCoreConformance(arguments: [String]) -> Never {
                 swiftExploration: {
                     SwiftExplorationEvidenceV1(
                         caseID: caseDefinition.id,
-                        exploration: try ModelChecker(spec: try swiftSpec(entry.swiftSpec)).explore()
+                        exploration: try ModelChecker(compilation: try swiftSpec(entry.swiftSpec).compile()).explore()
                     )
                 },
                 tlcRequest: request,

@@ -2,21 +2,38 @@ public struct SpecRuntime: Sendable {
     public typealias ActionEvaluator = @Sendable (ActionExpr, [String: TLAValue], [String]) throws -> [[String: TLAValue]]
 
     public let spec: TLASpec
+    /// Present when this runtime entered through the validated compiler gate.
+    private let compiledSpecification: CompiledSpecification
+    public var compilation: CompiledSpecification? { compiledSpecification }
     private let invariants: [NamedInvariant]
     private let transitionRelation: TransitionRelation
+    private let formalModuleClosure: FormalModuleClosure
 
-    public init(
+    init(
         spec: TLASpec,
         actionEvaluator: ActionEvaluator? = nil
+    ) throws {
+        self.init(compilation: try spec.compile(), actionEvaluator: actionEvaluator)
+    }
+
+    public init(
+        compilation: CompiledSpecification,
+        actionEvaluator: ActionEvaluator? = nil
     ) {
-        let resolvedSpec = substituteConstants(spec)
-        self.spec = spec
+        let resolvedSpec = substituteConstants(compilation.spec)
+        self.spec = compilation.spec
+        self.compiledSpecification = compilation
+        self.formalModuleClosure = compilation.formalModuleClosure
         self.invariants = resolvedSpec.invariants
-        self.transitionRelation = TransitionRelation(resolvedSpec: resolvedSpec, actionEvaluator: actionEvaluator)
+        self.transitionRelation = TransitionRelation(resolvedSpec: resolvedSpec, formalModuleClosure: formalModuleClosure, actionEvaluator: actionEvaluator)
     }
 
     public func initialStates() -> [[String: TLAValue]] {
-        computeInitialStates(spec, evaluationContext: StateExprEvaluationContext())
+        computeInitialStates(
+            spec,
+            formalModuleClosure: formalModuleClosure,
+            evaluationContext: StateExprEvaluationContext()
+        )
     }
 
     public func apply(_ invocation: TLAActionInvocation, to state: [String: TLAValue]) throws -> [String: TLAValue] {
@@ -237,8 +254,8 @@ public struct SpecRuntime: Sendable {
                 return try invariant.body.evaluateBool(
                     in: state,
                     runtimeFuncs: spec.runtimeFuncs,
-                    recursiveFuncs: spec.resolvedRecursiveFuncs,
-                    formalOperatorDefinitions: spec.resolvedFormalOperatorDefinitions,
+                    recursiveFuncs: formalModuleClosure.resolvedRecursiveFuncs,
+                    formalOperatorDefinitions: formalModuleClosure.resolvedFormalOperatorDefinitions,
                     evaluationContext: evaluationContext
                 )
                     ? .satisfied(name: invariant.name) : .violated(name: invariant.name)
@@ -265,8 +282,8 @@ public struct SpecRuntime: Sendable {
         return try inv.body.evaluateBool(
             in: state,
             runtimeFuncs: spec.runtimeFuncs,
-            recursiveFuncs: spec.resolvedRecursiveFuncs,
-            formalOperatorDefinitions: spec.resolvedFormalOperatorDefinitions,
+            recursiveFuncs: formalModuleClosure.resolvedRecursiveFuncs,
+            formalOperatorDefinitions: formalModuleClosure.resolvedFormalOperatorDefinitions,
             evaluationContext: StateExprEvaluationContext()
         )
     }
@@ -293,8 +310,8 @@ public struct SpecRuntime: Sendable {
             if !(try inv.body.evaluateBool(
                 in: next,
                 runtimeFuncs: spec.runtimeFuncs,
-                recursiveFuncs: spec.resolvedRecursiveFuncs,
-                formalOperatorDefinitions: spec.resolvedFormalOperatorDefinitions,
+                recursiveFuncs: formalModuleClosure.resolvedRecursiveFuncs,
+                formalOperatorDefinitions: formalModuleClosure.resolvedFormalOperatorDefinitions,
                 evaluationContext: evaluationContext
             )) {
                 violations.append(inv.name)

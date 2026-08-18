@@ -1,6 +1,7 @@
 import Darwin
 import Foundation
 import os
+import SwiftTLA
 
 public enum TLCTraceModeV1: Equatable, Sendable {
   case none
@@ -31,7 +32,7 @@ public struct TLCProcessExecutionFailureV1: Equatable, Sendable {
   }
 }
 
-/// A source dependency required by an emitted TLC module bundle was absent.
+/// A rendered source dependency required by an emitted TLC module bundle was absent.
 ///
 /// TLA+ reports this only after TLC starts. SwiftTLA validates it before launch
 /// so a user sees the importing source line and the missing file directly.
@@ -132,10 +133,11 @@ public struct TLCProcessRequestV1: Equatable, Sendable {
     )
   }
 
-  /// Checks source-level module dependencies that TLC must resolve from the
-  /// emitted bundle directory. Standard-library modules are supplied by TLC;
-  /// every other `EXTENDS` or `INSTANCE` target must have its own `.tla` file.
-  public func validateModuleBundle() throws {
+  /// Checks post-render bundle integrity before TLC launch.
+  ///
+  /// This protects the external boundary from incomplete staged files. It does
+  /// not resolve imports or provide compiler-linking diagnostics.
+  public func validateRenderedBundleIntegrity() throws {
     guard FileManager.default.fileExists(atPath: module.path) else {
       throw TLCProcessErrorV1.invalidModuleBundle(.missingRootModule(path: module.path))
     }
@@ -154,9 +156,9 @@ public struct TLCProcessRequestV1: Equatable, Sendable {
           tla: try String(contentsOf: url, encoding: .utf8)
         )
       }
-      try TLAModuleBundle(root: root, imports: imports).validateLink()
+      try TLAModuleBundle.untrusted(root: root, imports: imports).validateRenderedBundleIntegrity()
     } catch {
-      if case TLAModuleBundleLinkError.missingModule(let dependency, let importedBy, let line) = error {
+      if case TLAModuleBundleIntegrityError.missingModule(let dependency, let importedBy, let line) = error {
         throw TLCProcessErrorV1.invalidModuleBundle(.missingImportedModule(
           module: dependency,
           importedBy: module.deletingLastPathComponent().appendingPathComponent("\(importedBy).tla").path,
@@ -276,7 +278,7 @@ public struct SystemTLCProcessExecutorV1: TLCProcessExecuting {
 
   public func execute(_ request: TLCProcessRequestV1) throws -> TLCProcessResultV1 {
     try request.validateLaunchBinding()
-    try request.validateModuleBundle()
+    try request.validateRenderedBundleIntegrity()
     if validatesReferences {
       guard let pin = request.referencePin, let artifacts = request.referenceArtifacts else {
         throw CoreConformanceCaseErrorV1.missingArtifact("reference pin and artifacts")

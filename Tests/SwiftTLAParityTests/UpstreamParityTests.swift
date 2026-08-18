@@ -1,5 +1,5 @@
 import Testing
-import SwiftTLA
+@testable import SwiftTLA
 @testable import UpstreamParity
 
 struct UpstreamParityTests {
@@ -13,7 +13,7 @@ struct UpstreamParityTests {
     func modelCheckerMatchesTLC() throws {
         for entry in Example.all {
 
-            let mc = ModelChecker(spec: entry.spec, maxStates: entry.verificationStateLimit)
+            let mc = try ModelChecker(spec: entry.spec, maxStates: entry.verificationStateLimit)
             let count = try mc.exploreGraph().states.count
             let result = try mc.check()
 
@@ -29,7 +29,7 @@ struct UpstreamParityTests {
 
     @Test("Game of Life function update matches TLC")
     func gameOfLifeMatchesTLC() throws {
-        let checker = ModelChecker(spec: Example.gameOfLife.spec, maxStates: 10)
+        let checker = try ModelChecker(spec: Example.gameOfLife.spec, maxStates: 10)
         #expect(try checker.exploreGraph().states.count == 2)
         guard case .ok(let count) = try checker.check() else {
             Issue.record("Game of Life did not verify")
@@ -41,7 +41,7 @@ struct UpstreamParityTests {
     @Test("N-Queens FourQueens PlusCal port matches the published TLC graph")
     func nQueensMatchesTLC() throws {
         try NQueensModel.verifySpec()
-        let checker = ModelChecker(spec: Example.nQueensFour.spec, maxStates: 5_000)
+        let checker = try ModelChecker(spec: Example.nQueensFour.spec, maxStates: 5_000)
         #expect(try checker.exploreGraph().states.count == Example.nQueensFour.expectedDistinct)
         guard case .ok = try checker.check() else {
             Issue.record("N-Queens did not verify")
@@ -52,7 +52,7 @@ struct UpstreamParityTests {
     @Test("two-process Lock PlusCal port matches TLC")
     func lockMatchesTLC() throws {
         try LockModel.verifySpec()
-        let checker = ModelChecker(spec: Example.lockTwoProcess.spec, maxStates: 100)
+        let checker = try ModelChecker(spec: Example.lockTwoProcess.spec, maxStates: 100)
         #expect(try checker.exploreGraph().states.count == Example.lockTwoProcess.expectedDistinct)
         guard case .ok = try checker.check() else {
             Issue.record("Lock did not verify")
@@ -63,7 +63,7 @@ struct UpstreamParityTests {
     @Test("two-process Peterson PlusCal port matches TLC")
     func petersonMatchesTLC() throws {
         try PetersonModel.verifySpec()
-        let checker = ModelChecker(spec: Example.petersonTwoProcess.spec, maxStates: 1_000)
+        let checker = try ModelChecker(spec: Example.petersonTwoProcess.spec, maxStates: 1_000)
         #expect(try checker.exploreGraph().states.count == Example.petersonTwoProcess.expectedDistinct)
         guard case .ok = try checker.check() else {
             Issue.record("Peterson did not verify")
@@ -96,7 +96,7 @@ struct UpstreamParityTests {
     @Test("Channel typed record model matches its validated state count")
     func channelTypedRecordParity() throws {
         try ChannelModel.verifySpec()
-        let checker = ModelChecker(spec: ChannelModel.spec, maxStates: 50_000)
+        let checker = try ModelChecker(spec: ChannelModel.spec, maxStates: 50_000)
         #expect(try checker.exploreGraph().states.count == Example.channel.expectedDistinct)
         guard case .ok = try checker.check() else {
             Issue.record("Typed Channel model did not verify")
@@ -107,7 +107,7 @@ struct UpstreamParityTests {
     @Test("AsynchInterface typed record model matches its validated state count")
     func asynchInterfaceTypedRecordParity() throws {
         try AsynchInterfaceModel.verifySpec()
-        let checker = ModelChecker(spec: AsynchInterfaceModel.spec, maxStates: 50_000)
+        let checker = try ModelChecker(spec: AsynchInterfaceModel.spec, maxStates: 50_000)
         #expect(try checker.exploreGraph().states.count == Example.asynchInterface.expectedDistinct)
         guard case .ok = try checker.check() else {
             Issue.record("Typed AsynchInterface model did not verify")
@@ -120,8 +120,8 @@ struct UpstreamParityTests {
         try TeachingSimpleN2Model.verifySpec()
         try TeachingSimpleN3Model.verifySpec()
 
-        let n2 = ModelChecker(spec: TeachingSimpleN2Model.spec, maxStates: 50_000)
-        let n3 = ModelChecker(spec: TeachingSimpleN3Model.spec, maxStates: 50_000)
+        let n2 = try ModelChecker(spec: TeachingSimpleN2Model.spec, maxStates: 50_000)
+        let n3 = try ModelChecker(spec: TeachingSimpleN3Model.spec, maxStates: 50_000)
         #expect(try n2.exploreGraph().states.count == Example.teachingSimpleN2.expectedDistinct)
         #expect(try n3.exploreGraph().states.count == Example.teachingSimpleN3.expectedDistinct)
     }
@@ -140,7 +140,7 @@ struct UpstreamParityTests {
     @Test("Dijkstra mutex preserves its bounded PlusCal model")
     func dijkstraMutexParity() throws {
         DijkstraMutexModel._checkParserTree()
-        let checker = ModelChecker(
+        let checker = try ModelChecker(
             spec: DijkstraMutexModel.spec,
             maxStates: Example.dijkstraMutex.verificationStateLimit
         )
@@ -194,7 +194,7 @@ struct UpstreamParityTests {
     @Test("EWD840 uses typed finite function state")
     func ewd840TypedFunctionParity() throws {
         try EWD840Model.verifySpec()
-        let checker = ModelChecker(spec: EWD840Model.spec, maxStates: 50_000)
+        let checker = try ModelChecker(spec: EWD840Model.spec, maxStates: 50_000)
         #expect(try checker.exploreGraph().states.count == Example.ewd840.expectedDistinct)
         guard case .ok = try checker.check() else {
             Issue.record("Typed EWD840 model did not verify")
@@ -205,7 +205,7 @@ struct UpstreamParityTests {
     @Test("EWD998 uses typed finite functions and parameterized actions")
     func ewd998TypedFunctionParity() throws {
         try EWD998TerminationModel.verifySpec()
-        let checker = ModelChecker(spec: EWD998TerminationModel.spec, maxStates: 50_000)
+        let checker = try ModelChecker(spec: EWD998TerminationModel.spec, maxStates: 50_000)
         #expect(try checker.exploreGraph().states.count == Example.ewd998.expectedDistinct)
         guard case .ok = try checker.check() else {
             Issue.record("Typed EWD998 model did not verify")
@@ -218,8 +218,8 @@ struct UpstreamParityTests {
         try CatEvenBoxesModel.verifySpec()
         try CatOddBoxesModel.verifySpec()
 
-        let even = ModelChecker(spec: CatEvenBoxesModel.spec, maxStates: 50_000)
-        let odd = ModelChecker(spec: CatOddBoxesModel.spec, maxStates: 50_000)
+        let even = try ModelChecker(spec: CatEvenBoxesModel.spec, maxStates: 50_000)
+        let odd = try ModelChecker(spec: CatOddBoxesModel.spec, maxStates: 50_000)
         #expect(try even.exploreGraph().states.count == Example.catEvenBoxes.expectedDistinct)
         #expect(try odd.exploreGraph().states.count == Example.catOddBoxes.expectedDistinct)
     }
@@ -227,7 +227,7 @@ struct UpstreamParityTests {
     @Test("Sync termination detector uses typed finite function state")
     func syncTerminationTypedFunctionParity() throws {
         try SyncTerminationDetectionModel.verifySpec()
-        let checker = ModelChecker(spec: SyncTerminationDetectionModel.spec, maxStates: 50_000)
+        let checker = try ModelChecker(spec: SyncTerminationDetectionModel.spec, maxStates: 50_000)
         #expect(try checker.exploreGraph().states.count == Example.syncTD.expectedDistinct)
     }
 }

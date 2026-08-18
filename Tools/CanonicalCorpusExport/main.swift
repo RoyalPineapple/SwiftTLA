@@ -93,7 +93,7 @@ private func write(
         at: destination.deletingLastPathComponent(),
         withIntermediateDirectories: true
     )
-    try data.write(to: destination, options: .atomic)
+    try data.write(to: destination, options: Data.WritingOptions.atomic)
     return .init(path: relativePath, sha256: sha256(data), source: source)
 }
 
@@ -152,28 +152,28 @@ do {
 
     let cases = try corpus.map { item -> Manifest.Case in
         let specification = item.specification()
-        let bundle = specification.tlaBundle
-        let plusCalModules = try specification.renderAuthoredPlusCalModules()
-        guard plusCalModules.count == 1 else {
-            throw ExportError.invalidAlgorithmCount(id: item.id, actual: plusCalModules.count)
-        }
-
+        let compilation = try specification.compile()
         let externalInputs = try CanonicalCorpusModuleClosure.inputs(for: item.id).map { input in
             (input, try fetchPinnedModule(input))
         }
-        let linkedImports = bundle.imports + externalInputs.map { input, data in
+        let externalImports = externalInputs.map { input, data in
             TLAModuleFile(name: input.name, tla: String(decoding: data, as: UTF8.self))
         }
-        try TLAModuleBundle(root: bundle.root, imports: linkedImports).validateLink()
-        try TLAModuleBundle(
-            root: .init(name: bundle.root.name, tla: plusCalModules[0]),
-            imports: linkedImports
-        ).validateLink()
+        let bundle = try compilation.renderedTLAModuleBundle(additionalImports: externalImports)
+        let plusCalModules = try compilation.renderedAuthoredPlusCalModules(additionalImports: externalImports)
+        guard plusCalModules.count == 1 else {
+            throw ExportError.invalidAlgorithmCount(id: item.id, actual: plusCalModules.count)
+        }
+        try TLAModuleBundle.untrusted(
+            root: TLAModuleFile(name: bundle.root.name, tla: plusCalModules[0]),
+            imports: bundle.imports
+        ).validateRenderedBundleIntegrity()
 
         var files = [Manifest.Case.File]()
         files.append(try write(bundle.root.tla, relativePath: "\(item.id)/swift/\(bundle.root.name).tla", under: options.output))
         files.append(try write(item.swiftConfiguration, relativePath: "\(item.id)/swift/\(bundle.root.name).cfg", under: options.output))
-        for imported in bundle.imports {
+        let externalNames = Set(externalImports.map(\.name))
+        for imported in bundle.imports where !externalNames.contains(imported.name) {
             files.append(try write(imported.tla, relativePath: "\(item.id)/imports/\(imported.name).tla", under: options.output))
         }
         files.append(try write(plusCalModules[0], relativePath: "\(item.id)/pluscal/\(bundle.root.name).tla", under: options.output))
@@ -198,7 +198,10 @@ do {
     let encoder = JSONEncoder()
     encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
     let data = try encoder.encode(manifest)
-    try data.write(to: options.output.appendingPathComponent("manifest.json"), options: .atomic)
+    try data.write(
+        to: options.output.appendingPathComponent("manifest.json"),
+        options: Data.WritingOptions.atomic
+    )
 } catch {
     fputs("canonical-corpus-export: \(error)\n", stderr)
     exit(2)

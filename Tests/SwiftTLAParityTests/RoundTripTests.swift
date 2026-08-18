@@ -1,7 +1,7 @@
 import Foundation
 import SwiftParser
 import SwiftSyntax
-import SwiftTLA
+@testable import SwiftTLA
 import SwiftTLAModels
 import Testing
 import UpstreamParity
@@ -368,7 +368,7 @@ import UpstreamParity
           programCounter.stateExpr.domain.cardinality == 0)
       }
     }
-    let rt = SpecRuntime(spec: spec)
+    let rt = try SpecRuntime(spec: spec)
     let state = rt.initialStates().first!
     let next = try rt.apply(.init(name: "init"), to: state)
     #expect(next["programCounter"] != nil)
@@ -464,7 +464,7 @@ import UpstreamParity
 @Test("ChangRoberts liveness: cand ~> won holds")
 func changRobertsLiveness() throws {
   let spec = Example.changRobertsN3.spec
-  let mc = ModelChecker(spec: spec, maxStates: 500)
+  let mc = try ModelChecker(spec: spec, maxStates: 500)
   let graph = try mc.exploreGraph()
   let lc = LivenessChecker(graph: graph)
   // Verify temporal property exists
@@ -478,7 +478,7 @@ func changRobertsLiveness() throws {
 @Test("ChangRoberts liveness verified by TLC")
 func changRobertsLivenessParity() throws {
   let spec = Example.changRobertsN3.spec
-  let mc = ModelChecker(spec: spec, maxStates: 500)
+  let mc = try ModelChecker(spec: spec, maxStates: 500)
   let graph = try mc.exploreGraph()
   let lc = LivenessChecker(graph: graph)
   let results = try lc.checkAll(

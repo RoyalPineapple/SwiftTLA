@@ -68,17 +68,18 @@ public struct CheckableSpec: Checkable {
     private let userVarNames: [String]
     private let invariants: [NamedInvariant]
 
-    public init(_ spec: TLASpec) {
-        self.runtime = SpecRuntime(spec: spec)
-        self.userActions = spec.actions.filter { !$0.name.hasPrefix("_") }
-        self.userVarNames = spec.variables.map(\.name)
-        self.invariants = spec.invariants.filter { !$0.name.hasPrefix("_") }
+    public init(_ spec: TLASpec) throws {
+        let compilation = try spec.compile()
+        self.runtime = SpecRuntime(compilation: compilation)
+        self.userActions = compilation.spec.actions.filter { !$0.name.hasPrefix("_") }
+        self.userVarNames = compilation.spec.variables.map(\.name)
+        self.invariants = compilation.spec.invariants.filter { !$0.name.hasPrefix("_") }
     }
 
     public var actions: [String] { userActions.map(\.name) }
 
     public func initial() throws -> [[String: TLAValue]] {
-        let initials = computeInitialStates(runtime.spec)
+        let initials = runtime.initialStates()
         guard !initials.isEmpty else { throw E.noInitialStates }
         var deduped: [[String: TLAValue]] = []; var seen = Set<[String: TLAValue]>()
         for s in initials where !seen.contains(s) { seen.insert(s); deduped.append(s) }

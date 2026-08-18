@@ -87,7 +87,7 @@ public struct TemporalSymmetryConformanceRunnerV1: Sendable {
       if FileManager.default.fileExists(atPath: source.path),
          SHA256V1.hex(try Data(contentsOf: source)) == declaredCase.sourceInput.sha256 {
         if let model = TemporalSymmetryModelCatalogV1.model(for: declaredCase) {
-          let exploration = try ModelChecker(spec: model.spec, maxStates: model.maxStates).explore()
+          let exploration = try ModelChecker(compilation: try model.spec.compile(), maxStates: model.maxStates).explore()
           guard exploration.graph.states.count == model.expectedStateCount else {
             throw TemporalSymmetryGovernanceErrorV1.invalidField(
               record: declaredCase.id, field: "bounded Swift graph expectation")

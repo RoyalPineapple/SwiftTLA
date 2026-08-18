@@ -44,6 +44,9 @@ jobs:
       - name: Check aggregate workflow contract
         run: bash Tests/Fixtures/PublicWorkflowConformance/CI/assert_workflow.sh
 
+      - name: Provision pinned TLC graph tools
+        run: scripts/setup-core-conformance-tools.sh --tool-root "$GITHUB_WORKSPACE/.build/core-conformance-tools" --cases Verification/CoreConformance/cases.json
+
       - name: Run correlated public-workflow validation
         run: |
           scripts/run_public_workflow_support_gate.sh --hosted-ci \

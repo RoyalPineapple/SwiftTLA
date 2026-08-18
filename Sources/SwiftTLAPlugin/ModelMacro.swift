@@ -25,39 +25,29 @@ struct ParsedEnumInfo {
     var domain: Set<TLAValue> { Set(cases.map(\.value)) }
 }
 
-struct ParsedMacroModel {
+struct MacroCompilation {
     let typeName: String
-    let variables: [(name: String, initial: TLAValue, initialSet: StateExpr?, swiftTypeName: String?)]
-    let actions: [SpecParser.ParsedAction]
-    let symmetricCollections: [SpecParser.ParsedSymmetricCollection]
-    let collectionActions: [SpecParser.ParsedCollectionAction]
+    let compilation: CompiledSpecification
+    let machineSurface: MachineSurfacePlan
+    let swiftFacts: MacroSwiftFacts
     let enumInfos: [ParsedEnumInfo]
-    let hasInvariants: Bool
-    let invariants: [(String, StateExpr)]
-    let temporal: [(String, TemporalExpr)]
-    let fairness: [FairnessCondition]
-    let constraint: StateExpr?
-    let imports: [String]
-    let importConfigurations: [FormalModuleConfiguration]
-    let moduleInstances: [FormalModuleInstance]
-    let formalParameters: [FormalModuleParameter]
-    let formalOperatorDefinitions: [FormalOperatorDefinition]
-    let definitions: [String]
-    let symmetrySets: [SymmetrySet]
-    let algorithmFidelityTokens: [AlgorithmFidelityToken]
+
+    var hasInvariants: Bool { !compilation.spec.invariants.isEmpty }
 }
+
+typealias MacroSwiftFacts = MachineSurfaceSwiftFacts
 
 enum NestedAdapterModelRegistry {
     private static let lock = NSLock()
-    nonisolated(unsafe) private static var models: [String: ParsedMacroModel] = [:]
+    nonisolated(unsafe) private static var models: [String: MacroCompilation] = [:]
 
-    static func record(_ model: ParsedMacroModel) {
+    static func record(_ model: MacroCompilation) {
         lock.lock()
         models[model.typeName] = model
         lock.unlock()
     }
 
-    static func model(named typeName: String) -> ParsedMacroModel? {
+    static func model(named typeName: String) -> MacroCompilation? {
         lock.lock()
         defer { lock.unlock() }
         return models[typeName]
@@ -67,7 +57,7 @@ enum NestedAdapterModelRegistry {
 enum TLASpecVerifier {
     typealias EnumPhaseMap = [String: [String: TLAValue]]
 
-    static func parseAndVerify(_ declaration: some DeclGroupSyntax) throws -> ParsedMacroModel {
+    static func parseAndVerify(_ declaration: some DeclGroupSyntax) throws -> MacroCompilation {
         let typeName: String
         let memberList: MemberBlockItemListSyntax
 
@@ -81,11 +71,11 @@ enum TLASpecVerifier {
             throw SimpleError("Must be applied to a struct, class, or actor")
         }
 
-        guard let closure = Self.findSpec(in: memberList) else {
+        guard let source = try Self.findSpec(in: memberList) else {
             throw SimpleError("Could not find 'TLASpec' builder in '\(typeName)'")
         }
 
-        let rewritten = rewriteVarNames(in: closure)
+        let rewritten = rewriteVarNames(in: source.closure)
         let enumInfos = Self.collectEnumVariables(from: memberList)
         let (enumPhases, caseToType) = collectEnumMetadata(from: memberList)
         let enumDomains = Dictionary(
@@ -135,31 +125,11 @@ enum TLASpecVerifier {
             }
         }
 
-        let imports = try parsed.imports.map { name -> TLASpec in
-            guard let module = FormalModuleRegistry.lookup(name) else {
-                throw SimpleError("Unknown formal module '\(name)'.")
-            }
-            return module
-        }
-        let spec = TLASpec(
-            name: typeName,
-            variables: parsed.variables.map { NamedVar(name: $0.name, initial: $0.initial, initialSet: $0.initialSet) },
-            constants: parsed.constants,
-            formalParameters: parsed.formalParameters,
-            actions: parsed.actions.map { NamedAction(name: $0.name, body: $0.body, bindings: $0.bindings) },
-            invariants: allInvariants,
-            temporalProperties: parsed.temporal.map { NamedTemporal(name: $0.name, expr: $0.expr) },
-            fairness: parsed.fairness,
-            definitions: parsed.definitions,
-            constraint: parsed.constraint,
-            formalOperatorDefinitions: parsed.formalOperatorDefinitions,
-            imports: imports,
-            importConfigurations: parsed.importConfigurations,
-            moduleInstances: parsed.moduleInstances,
-            symmetrySets: parsed.symmetrySets,
-            symmetricCollections: parsed.symmetricCollections.map(\.declaration),
-            algorithmFidelityTokens: parsed.algorithmFidelityTokens
+        let compilation = try parsed.compile(
+            specificationName: source.name,
+            additionalInvariants: allInvariants.dropFirst(parsed.invariants.count).map { $0 }
         )
+        let spec = compilation.spec
 
         let hasComplexType = parsed.symmetricCollections.isEmpty && parsed.variables.contains { v in
             let typeName = v.swiftTypeName ?? MacroExpander.swiftType(for: v.initial)
@@ -170,7 +140,7 @@ enum TLASpecVerifier {
         if hasComplexType {
             SpecRegistry.register(spec)
         } else {
-            let result = try ModelChecker(spec: spec, maxStates: 1_000_000).check()
+            let result = try ModelChecker(compilation: compilation, maxStates: 1_000_000).check()
             switch result {
             case .invariantViolated(let inv, _, let trace):
                 throw SimpleError("Invariant '\(inv)' violated:\n\(trace.map(String.init(describing:)).joined(separator: "\n"))")
@@ -187,20 +157,30 @@ enum TLASpecVerifier {
             }
         }
 
-        let hasInvs = !allInvariants.isEmpty
-
-        return ParsedMacroModel(
-            typeName: typeName, variables: parsed.variables, actions: parsed.actions,
-            symmetricCollections: parsed.symmetricCollections, collectionActions: parsed.collectionActions,
-            enumInfos: enumInfos, hasInvariants: hasInvs, invariants: parsed.invariants,
-            temporal: parsed.temporal, fairness: parsed.fairness, constraint: parsed.constraint,
-            imports: parsed.imports, importConfigurations: parsed.importConfigurations,
-            moduleInstances: parsed.moduleInstances,
-            formalParameters: parsed.formalParameters,
-            formalOperatorDefinitions: parsed.formalOperatorDefinitions,
-            definitions: parsed.definitions,
-            symmetrySets: parsed.symmetrySets,
-            algorithmFidelityTokens: parsed.algorithmFidelityTokens
+        let swiftFacts = MacroSwiftFacts(
+            variableTypes: Dictionary(
+                uniqueKeysWithValues: parsed.variables.compactMap { variable in
+                    variable.swiftTypeName.map { (variable.name, $0) }
+                }
+            ),
+            actionBindingTypes: Dictionary(
+                uniqueKeysWithValues: parsed.actions.map { ($0.name, $0.bindingSwiftTypes) }
+            ),
+            symmetricCollections: Dictionary(
+                uniqueKeysWithValues: parsed.symmetricCollections.map {
+                    ($0.name, .init(elementType: $0.elementType, valueType: $0.valueType))
+                }
+            ),
+            collectionActions: Dictionary(
+                uniqueKeysWithValues: parsed.collectionActions.map { ($0.name, $0.collectionName) }
+            )
+        )
+        return MacroCompilation(
+            typeName: typeName,
+            compilation: compilation,
+            machineSurface: try MachineSurfacePlan(compilation: compilation, swiftFacts: swiftFacts),
+            swiftFacts: swiftFacts,
+            enumInfos: enumInfos
         )
     }
 
@@ -411,7 +391,7 @@ enum TLASpecVerifier {
 
     // MARK: - Helpers
 
-    static func findSpec(in members: MemberBlockItemListSyntax) -> ClosureExprSyntax? {
+    static func findSpec(in members: MemberBlockItemListSyntax) throws -> (name: String, closure: ClosureExprSyntax)? {
         for member in members {
             guard let varDecl = member.decl.as(VariableDeclSyntax.self),
                   let binding = varDecl.bindings.first,
@@ -425,7 +405,7 @@ enum TLASpecVerifier {
                         if let returnStmt = stmt.item.as(ReturnStmtSyntax.self) { return returnStmt.expression }
                         return nil
                     }()
-                    if let closure = specBuilderClosure(from: expr) { return closure }
+                    if let source = try specBuilderSource(from: expr) { return source }
                 }
             }
             if let accessors = binding.accessorBlock?.accessors.as(AccessorDeclListSyntax.self) {
@@ -436,7 +416,7 @@ enum TLASpecVerifier {
                             if let returnStmt = stmt.item.as(ReturnStmtSyntax.self) { return returnStmt.expression }
                             return nil
                         }()
-                        if let closure = specBuilderClosure(from: expr) { return closure }
+                        if let source = try specBuilderSource(from: expr) { return source }
                     }
                 }
             }
@@ -444,15 +424,25 @@ enum TLASpecVerifier {
         return nil
     }
 
-    private static func specBuilderClosure(from expression: ExprSyntax?) -> ClosureExprSyntax? {
+    private static func specBuilderSource(from expression: ExprSyntax?) throws -> (name: String, closure: ClosureExprSyntax)? {
         guard let expression else { return nil }
         if let call = expression.as(FunctionCallExprSyntax.self),
            call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "TLASpec" {
-            return call.trailingClosure ?? call.arguments.last?.expression.as(ClosureExprSyntax.self)
+            guard let name = call.arguments.first?.expression.as(StringLiteralExprSyntax.self)?.representedLiteralValue else {
+                throw SimpleError("The formal module name in TLASpec must be a string literal; dynamic names cannot form a stable compilation identity.")
+            }
+            guard let closure = call.trailingClosure ?? call.arguments.last?.expression.as(ClosureExprSyntax.self) else {
+                return nil
+            }
+            return (name, closure)
         }
         if let macro = expression.as(MacroExpansionExprSyntax.self),
            macro.macroName.text == "spec" {
-            return macro.trailingClosure
+            guard let name = macro.arguments.first?.expression.as(StringLiteralExprSyntax.self)?.representedLiteralValue else {
+                throw SimpleError("The formal module name in #spec must be a string literal; dynamic names cannot form a stable compilation identity.")
+            }
+            guard let closure = macro.trailingClosure else { return nil }
+            return (name, closure)
         }
         return nil
     }
@@ -555,6 +545,10 @@ private final class EnumDotRewriter: SyntaxRewriter {
     override func visit(_ node: MemberAccessExprSyntax) -> ExprSyntax {
         guard node.base == nil else { return super.visit(node) }
         let caseName = node.declName.baseName.text
+        if caseName == "define",
+           node.parent?.as(LabeledExprSyntax.self)?.label?.text == "plusCalPhase" {
+            return super.visit(node)
+        }
         guard let enumType = caseToType[caseName] else {
             if isEnumCaseName(caseName) {
                 unknownDots.append(caseName)
@@ -635,7 +629,7 @@ public struct ModelMacro: MemberMacro, ExtensionMacro {
     }
 
     public static func expansion(of node: AttributeSyntax, providingMembersOf declaration: some DeclGroupSyntax, in context: some MacroExpansionContext) throws -> [DeclSyntax] {
-        let parsed: ParsedMacroModel
+        let parsed: MacroCompilation
         do {
             parsed = try TLASpecVerifier.parseAndVerify(declaration)
         } catch let diagnostic as SpecParser.SymmetricCollectionParseDiagnostic {

@@ -1,7 +1,7 @@
 import Foundation
 import SwiftParser
 import SwiftSyntax
-import SwiftTLA
+@testable import SwiftTLA
 import SwiftTLAModels
 import Testing
 import UpstreamParity
@@ -9,7 +9,7 @@ import UpstreamParity
 struct SymmetryReductionTests { @Test("Symmetry reduces ChangRoberts state count")
   func changRobertsSymmetryReduction() throws {
     let specNoSym = Example.changRobertsN3.spec
-    let mcNoSym = ModelChecker(spec: specNoSym, maxStates: 500)
+    let mcNoSym = try ModelChecker(spec: specNoSym, maxStates: 500)
     let graphNoSym = try mcNoSym.exploreGraph()
     #expect(graphNoSym.states.count == 137)
     let specWithSym = TLASpec("ChangRobertsSym") {
@@ -17,7 +17,7 @@ struct SymmetryReductionTests { @Test("Symmetry reduces ChangRoberts state count
       Use(spec: specNoSym)
       Symmetry("pc", [1, 2, 3] as Set<Int>)
     }
-    let mcWithSym = ModelChecker(spec: specWithSym, maxStates: 500)
+    let mcWithSym = try ModelChecker(spec: specWithSym, maxStates: 500)
     let graphWithSym = try mcWithSym.exploreGraph()
     #expect(graphWithSym.states.count < 137)
     #expect(graphWithSym.states.count > 0)
@@ -32,7 +32,7 @@ struct SymmetryReductionTests { @Test("Symmetry reduces ChangRoberts state count
       Invariant("TypeOK") { x >= 1 && x <= 3 }
       Symmetry("x", [1, 2, 3] as Set<Int>)
     }
-    let mc = ModelChecker(spec: spec, maxStates: 100)
+    let mc = try ModelChecker(spec: spec, maxStates: 100)
     let result = try mc.check()
     guard case .ok(let count) = result else {
       #expect(Bool(false))
@@ -56,7 +56,7 @@ struct SymmetryReductionTests { @Test("Symmetry reduces ChangRoberts state count
       Symmetry("x", [1, 2] as Set<Int>)
       Symmetry("y", [10, 20] as Set<Int>)
     }
-    let mc = ModelChecker(spec: spec, maxStates: 100)
+    let mc = try ModelChecker(spec: spec, maxStates: 100)
     let result = try mc.check()
     guard case .ok = result else {
       #expect(Bool(false))
@@ -72,7 +72,7 @@ struct SymmetryReductionTests { @Test("Symmetry reduces ChangRoberts state count
       Action("inc") { x < 3 && x.becomes(x + 1) }
       Invariant("TypeOK") { x >= 1 && x <= 3 }
     }
-    let mc = ModelChecker(spec: spec, maxStates: 100)
+    let mc = try ModelChecker(spec: spec, maxStates: 100)
     let result = try mc.check()
     guard case .ok(let count) = result else {
       #expect(Bool(false))
@@ -238,7 +238,7 @@ enum Status: String, TLAValueType, StateExprConvertible {
   }
 
   @Test("Enum-backed spec produces valid TLA+ bundle")
-  func enumBundle() {
+  func enumBundle() throws {
     let mode = Var<Mode>("mode")
     let spec = TLASpec("IntEnumBundle") {
       Variable(mode, Mode.idle)
@@ -248,7 +248,7 @@ enum Status: String, TLAValueType, StateExprConvertible {
       }
       Invariant("TypeOK") { (mode == Mode.idle) || (mode == Mode.active) }
     }
-    let bundle = spec.tlaBundle
+    let bundle = try spec.tlaBundle
     #expect(bundle.tla.contains("MODULE"))
     #expect(bundle.tla.contains("VARIABLES mode"))
     #expect(bundle.cfg.contains("INVARIANT TypeOK"))
@@ -286,7 +286,7 @@ enum Status: String, TLAValueType, StateExprConvertible {
     let spec = TLASpec("EnumInit") {
       Variable(mode, Mode.idle)
     }
-    let states = computeInitialStates(spec)
+    let states = try computeInitialStates(spec)
     #expect(states.count == 1)
     #expect(states[0]["mode"] == TLAValue.int(0))
   }
