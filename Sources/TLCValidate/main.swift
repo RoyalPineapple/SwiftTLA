@@ -1,6 +1,6 @@
 import SwiftTLA
 import UpstreamParity
-import Foundation
+@preconcurrency import Foundation
 let args = Array(CommandLine.arguments.dropFirst())
 if args.first == "core-conformance" {
     runCoreConformance(arguments: Array(args.dropFirst()))
