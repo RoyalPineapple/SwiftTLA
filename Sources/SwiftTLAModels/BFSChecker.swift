@@ -5,7 +5,7 @@ import SwiftTLAMacros
 /// Bound `maxStates = 20` baked in so `@TLAModel` can parse literals.
 /// For dynamic bounds use `TLASpec.bfsChecker(maxStates:)`.
 @TLAModel
-public struct BFSChecker {
+public struct BFSChecker: Sendable {
     public static var spec: TLASpec {
         TLASpec("BFSChecker") {
             let phase = Var<Int>("phase")

@@ -7,7 +7,7 @@ import SwiftTLAMacros
 /// sequences of length at most three. `Sequences(of:lengths:)` states those
 /// bounds directly in SwiftTLA instead of hiding them in host-language data.
 @TLAModel
-public struct FindHighestModel {
+public struct FindHighestModel: Sendable {
     private enum Step: String, PlusCalLabel {
         case lb
     }

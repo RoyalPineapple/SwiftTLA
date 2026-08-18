@@ -9,7 +9,7 @@ import SwiftTLAMacros
 /// so this source-faithful model is checked by the builder/parser fidelity
 /// gate rather than added to the finite graph-count catalogue.
 @TLAModel
-public struct AddTwoModel {
+public struct AddTwoModel: Sendable {
     private enum Label: String, PlusCalLabel {
         case increase
     }

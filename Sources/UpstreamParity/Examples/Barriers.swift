@@ -4,7 +4,7 @@ import SwiftTLAMacros
 /// The upstream two-chamber barrier, expressed with the same PlusCal
 /// statement macros (`Lock`, `Unlock`, `Wait`, and `Signal`) as its source.
 @TLAModel
-public struct BarriersN6Model {
+public struct BarriersN6Model: Sendable {
     public enum Process: Int, CaseIterable, FiniteDomainKey {
         case one = 1
         case two = 2

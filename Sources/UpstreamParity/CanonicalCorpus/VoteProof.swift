@@ -3,7 +3,7 @@ import SwiftTLAMacros
 
 /// The bounded `byzpaxos/VoteProof` model from the upstream PlusCal corpus.
 @TLAModel
-public struct VoteProofModel {
+public struct VoteProofModel: Sendable {
     public enum Value: String, FiniteDomainKey {
         case v1, v2
 

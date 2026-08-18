@@ -5,7 +5,7 @@ import SwiftTLA
 /// The generated surface includes `State`, `ActionLabel`, `TransitionResult`,
 /// execution methods, and bounded verification helpers.
 @attached(member, names: arbitrary)
-@attached(extension, conformances: Sendable, TLAModelType, TLAMachineExecuting, TLAMachineAdapterCanonicalModel, TLAMachineSchemaProviding, names: arbitrary)
+@attached(extension, conformances: TLAModelType, TLAMachineExecuting, TLAMachineAdapterCanonicalModel, TLAMachineSchemaProviding, names: arbitrary)
 public macro TLAModel() = #externalMacro(module: "SwiftTLAPlugin", type: "ModelMacro")
 
 /// Requires a nested actor and generates an adapter for its enclosing `@TLAModel`.

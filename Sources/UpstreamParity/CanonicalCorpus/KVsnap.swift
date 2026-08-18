@@ -8,7 +8,7 @@ import SwiftTLAMacros
 /// the published cross-transaction invariant, where the upstream model reads
 /// the complete generated local function through `Range(ops)`.
 @TLAModel
-public struct KVsnapModel {
+public struct KVsnapModel: Sendable {
     public enum Key: String, FiniteDomainKey {
         case k1, k2
 

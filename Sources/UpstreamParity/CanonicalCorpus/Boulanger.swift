@@ -4,7 +4,7 @@ import SwiftTLAMacros
 /// The bounded `Boulanger` process-control model from the upstream PlusCal
 /// corpus. The bound and state constraint match MCBoulanger.
 @TLAModel
-public struct BoulangerModel {
+public struct BoulangerModel: Sendable {
     public enum Process: Int, FiniteDomainKey {
         case one = 1
         case two = 2

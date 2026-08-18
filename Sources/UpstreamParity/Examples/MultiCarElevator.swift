@@ -238,7 +238,7 @@ public struct MultiCarElevatorModel {
 }
 
 @TLAModel
-public struct MultiCarElevatorMacroFixture {
+public struct MultiCarElevatorMacroFixture: Sendable {
     enum PersonID: String, CaseIterable, FiniteTLAValueDomain {
         case alice, bob
 

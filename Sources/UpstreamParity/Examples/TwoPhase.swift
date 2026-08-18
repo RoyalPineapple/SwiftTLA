@@ -7,7 +7,7 @@ import SwiftTLAMacros
 /// PlusCal-shaped processes. Messages are a typed formal record set, not a
 /// Swift dictionary or a raw string-keyed state value.
 @TLAModel
-public struct TwoPhaseModel {
+public struct TwoPhaseModel: Sendable {
     public enum ResourceManager: String, CaseIterable, FiniteDomainKey {
         case one = "r1"
         case two = "r2"

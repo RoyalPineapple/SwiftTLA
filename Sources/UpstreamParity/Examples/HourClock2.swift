@@ -2,7 +2,7 @@ import SwiftTLA
 import SwiftTLAMacros
 
 @TLAModel
-public struct HourClock2Model {
+public struct HourClock2Model: Sendable {
     public enum ClockProcess: String, CaseIterable, FiniteDomainKey {
         case clock
 

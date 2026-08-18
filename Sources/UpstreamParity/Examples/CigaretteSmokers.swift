@@ -2,7 +2,7 @@ import SwiftTLA
 import SwiftTLAMacros
 
 @TLAModel
-public struct CigaretteSmokersModel {
+public struct CigaretteSmokersModel: Sendable {
     public static var spec: TLASpec {
         #spec("CigaretteSmokers") {
             Extends("Integers")

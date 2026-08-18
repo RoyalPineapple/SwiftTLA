@@ -7,7 +7,7 @@ import SwiftTLAMacros
 /// node has exactly two successors. This model makes that configuration a
 /// static formal choice, then runs the published work-list algorithm.
 @TLAModel
-public struct ReachableModel {
+public struct ReachableModel: Sendable {
     public enum Node: Int, FiniteDomainKey {
         case one = 1
         case two = 2

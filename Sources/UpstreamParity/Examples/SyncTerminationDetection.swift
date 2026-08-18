@@ -3,7 +3,7 @@ import SwiftTLAMacros
 
 /// The three-node bounded termination detector from EWD 840.
 @TLAModel
-public struct SyncTerminationDetectionModel {
+public struct SyncTerminationDetectionModel: Sendable {
     public enum Node: Int, CaseIterable, FiniteDomainKey {
         case zero = 0
         case one = 1

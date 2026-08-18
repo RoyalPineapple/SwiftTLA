@@ -5,7 +5,7 @@ import SwiftTLAMacros
 // Upstream: specifications/DiningPhilosophers/DiningPhilosophers.tla
 
 @TLAModel
-public struct DiningPhilosophersModel {
+public struct DiningPhilosophersModel: Sendable {
     public enum Philosopher: Int, FiniteDomainKey {
         case one = 1
         case two = 2

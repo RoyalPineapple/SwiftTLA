@@ -2,7 +2,7 @@ import SwiftTLA
 import SwiftTLAMacros
 
 @TLAModel
-public struct DieHardModel {
+public struct DieHardModel: Sendable {
     public static var spec: TLASpec {
         #spec("DieHard") {
             Extends("Naturals")

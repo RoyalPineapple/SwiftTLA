@@ -6,7 +6,7 @@ import SwiftTLAMacros
 /// The value, ready, and acknowledgement fields are formal record fields, so
 /// the authored model and generated state machine share their names and types.
 @TLAModel
-public struct AsynchInterfaceModel {
+public struct AsynchInterfaceModel: Sendable {
     public enum Data: String, CaseIterable, FiniteDomainKey {
         case d1
         case d2

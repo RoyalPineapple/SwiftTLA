@@ -7,7 +7,7 @@ import SwiftTLAMacros
 /// Parameterized actions replace the old raw existential action bodies, so the
 /// same authoring surface drives the parser, builder, and generated machine.
 @TLAModel
-public struct EWD998TerminationModel {
+public struct EWD998TerminationModel: Sendable {
     public enum Node: Int, CaseIterable, FiniteDomainKey {
         case zero = 0
         case one = 1

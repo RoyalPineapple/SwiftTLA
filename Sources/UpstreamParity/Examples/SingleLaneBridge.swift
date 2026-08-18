@@ -6,7 +6,7 @@ import SwiftTLAMacros
 // Upstream: specifications/SingleLaneBridge/SingleLaneBridge.tla
 
 @TLAModel
-public struct SingleLaneBridgeModel {
+public struct SingleLaneBridgeModel: Sendable {
     public static var spec: TLASpec {
         let carsRight: Set<TLAValue> = [.string("r1"), .string("r2")]
         let carsLeft: Set<TLAValue>  = [.string("l1"), .string("l2")]
