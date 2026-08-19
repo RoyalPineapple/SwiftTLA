@@ -80,7 +80,7 @@ jobs:
             --swift-tla-sha "$GITHUB_SHA"
 
       - name: Upload canonical corpus input
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: canonical-corpus-${{ github.sha }}
           path: .build/canonical-corpus-export
