@@ -3,6 +3,12 @@
   "tlc": {
     "tag": "v1.8.0",
     "commit": "0894c3407f4717fec7cc18bde3bf3c857fa47333",
+    "standardModules": [
+      "Bags", "FiniteSets", "Integers", "Json", "Naturals", "Randomization", "RealTime",
+      "Reals", "Sequences", "TLC", "TLCExt", "Toolbox", "_DotTrace", "_JsonTrace",
+      "_Possible", "_TLAPlusCounterExample", "_TLCActionTrace", "_TLCTESpec", "_TLCTrace",
+      "_TLCTracePlain"
+    ],
     "jar": {
       "url": "https://github.com/tlaplus/tlaplus/releases/download/v1.8.0/tla2tools.jar",
       "sha256": "ab323b79802aedc3203b3f9af37c6aca3ed43f4e0225b36f2aa77b26de46c05f"

@@ -95,7 +95,7 @@ public struct TLAModuleBundle: Sendable, Equatable {
   public func validateRenderedBundleIntegrity(
     standardModules: Set<String>? = nil
   ) throws {
-    let standardModules = standardModules ?? Self.tlcStandardModules
+    let standardModules = standardModules ?? Self.formalStandardModules
     var sources: [String: TLAModuleFile] = [:]
     for file in files {
       guard sources[file.name] == nil else {
@@ -168,7 +168,7 @@ public struct TLAModuleBundle: Sendable, Equatable {
     !value.isEmpty && value.first?.isLetter == true
   }
 
-  private static let tlcStandardModules: Set<String> = [
+  private static let formalStandardModules: Set<String> = [
     "Bags", "FiniteSets", "Integers", "Naturals", "Randomization", "RealTime", "Sequences", "TLC"
   ]
 }
