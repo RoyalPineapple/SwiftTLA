@@ -70,7 +70,16 @@ struct CoreConformanceTLCAdapterTests { @Test("frozen graph stream becomes compl
     defer { try? FileManager.default.removeItem(at: directory) }
     try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
     let module = directory.appendingPathComponent("Trace.tla")
-    try "---- MODULE Trace ----\nEXTENDS TLCExt, Toolbox\n====\n".write(
+    try """
+    ---- MODULE Trace ----
+    EXTENDS TLCExt, Toolbox
+    _expression == LET DieHard_TEExpression == INSTANCE DieHard_TEExpression IN DieHard_TEExpression!expression
+    ====
+    ---- MODULE DieHard_TEExpression ----
+    EXTENDS TLCExt, Toolbox
+    expression == TRUE
+    ====
+    """.write(
       to: module, atomically: true, encoding: .utf8)
     let fixture = TLCProcessRequestV1.fixture
     let request = TLCProcessRequestV1(
