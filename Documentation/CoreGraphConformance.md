@@ -27,7 +27,7 @@ make core-support-gate
 Run the fast local PR validation on a local Mac:
 
 ```bash
-make ci-local
+make ci-pr
 ```
 
 This command validates the local CI command contract, runs advisory SwiftLint,

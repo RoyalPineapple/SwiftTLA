@@ -143,11 +143,11 @@ enum MacroExpander {
         decls.append(contentsOf: generateSpecTest())
         if !isActor {
             decls.append(DeclSyntax(stringLiteral: """
-            public static func generatedActionOutcome(
+            public static func generatedActionReport(
                 actionName: String,
                 in state: State
-            ) -> SpecRuntime.RuntimeActionOutcome {
-                Self.runtime.actionOutcome(named: actionName, in: state.asDictionary)
+            ) -> SpecRuntime.RuntimeActionReport {
+                Self.runtime.actionReport(named: actionName, in: state.asDictionary)
             }
             """))
             decls.append(DeclSyntax(stringLiteral: """

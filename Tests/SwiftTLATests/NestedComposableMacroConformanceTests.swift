@@ -356,14 +356,6 @@ struct NestedComposableMacroConformanceTests {
         )
     }
 
-    private func packageRoot() -> URL {
-        var directory = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
-        while !FileManager.default.fileExists(atPath: directory.appendingPathComponent("Package.swift").path) {
-            directory.deleteLastPathComponent()
-        }
-        return directory
-    }
-}
 
 private final class MacroEmissionStringCollector: SyntaxVisitor {
     private(set) var fragments: [String] = []

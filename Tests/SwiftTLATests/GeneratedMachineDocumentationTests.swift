@@ -60,7 +60,7 @@ struct GeneratedMachineDocumentationTests {
             #expect(sourceText.contains(declaration), "Source declaration is missing: \(declaration)")
         }
 
-        for unsupportedName in ["@TypedVar", "@TLAValidated", "_machine"] {
+        for unsupportedName in ["@TLAValidated", "_machine"] {
             #expect(!inventory.contains(unsupportedName), "Unsupported API appears in public inventory: \(unsupportedName)")
         }
 
@@ -267,12 +267,3 @@ struct GeneratedMachineDocumentationTests {
     private func outputTail(_ output: String) -> String {
         String(output.suffix(4_000))
     }
-
-    private func packageRoot() -> URL {
-        var directory = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
-        while !FileManager.default.fileExists(atPath: directory.appendingPathComponent("Package.swift").path) {
-            directory.deleteLastPathComponent()
-        }
-        return directory
-    }
-}

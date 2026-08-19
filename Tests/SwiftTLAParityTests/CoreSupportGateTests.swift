@@ -662,9 +662,4 @@ private final class GateFixture {
   private func write(_ object: Any, named file: String, in directory: URL) throws {
     try JSONSerialization.data(withJSONObject: object, options: [.sortedKeys]).write(to: directory.appendingPathComponent(file))
   }
-
-  private func projectURL(_ path: String) -> URL {
-    URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
-      .deletingLastPathComponent().appendingPathComponent(path).standardizedFileURL
-  }
 }

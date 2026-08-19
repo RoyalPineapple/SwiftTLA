@@ -190,9 +190,10 @@ struct TLAModuleBundleTests {
     #expect(!bundle.imports[0].tla.contains("Spec =="))
     let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? FileManager.default.removeItem(at: directory) }
-    try bundle.write(to: directory)
+    try consumer.compile().materializeModuleBundle(to: directory)
     #expect(FileManager.default.fileExists(atPath: directory.appendingPathComponent("UsesZSequences.tla").path))
     #expect(FileManager.default.fileExists(atPath: directory.appendingPathComponent("ZSequences.tla").path))
+    #expect(FileManager.default.fileExists(atPath: directory.appendingPathComponent("bundle-manifest.json").path))
     let check = try ModelChecker(spec: consumer).check()
     guard case .ok = check.underlyingOutcome else {
       Issue.record("The imported ZSequences operators did not evaluate successfully.")
@@ -282,9 +283,12 @@ struct TLAModuleBundleTests {
 
     let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? FileManager.default.removeItem(at: directory) }
-    try bundle.write(to: directory)
+    try consumer.compile().materializeModuleBundle(to: directory)
     #expect(FileManager.default.fileExists(
       atPath: directory.appendingPathComponent("InstanceArithmetic.tla").path
+    ))
+    #expect(FileManager.default.fileExists(
+      atPath: directory.appendingPathComponent("bundle-manifest.json").path
     ))
     let result = try ModelChecker(spec: consumer).check()
     guard case .ok = result.underlyingOutcome else {

@@ -253,13 +253,6 @@ public func _tlaFidelityEvidence(
     return nil
 }
 
-/// Compatibility text for traps emitted by existing generated code.
-/// Prefer ``_tlaFidelityEvidence(_:_: )`` when a caller can retain evidence.
-public func _tlaFidelityDiagnostic(_ expected: TLASpec, _ actual: TLASpec) -> String {
-    _tlaFidelityEvidence(expected, actual)?.description
-        ?? "Parser fidelity check was requested although the parser and builder trees agree. Next safe action: retain the matching trees or rerun the comparison with the values that differed."
-}
-
 private func optionalStateEquivalent(_ lhs: StateExpr?, _ rhs: StateExpr?) -> Bool {
     switch (lhs, rhs) {
     case (nil, nil):

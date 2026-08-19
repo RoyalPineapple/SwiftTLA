@@ -43,12 +43,25 @@ public struct P4GeneratedCounterIntentionalMismatch {
     public static func intentionalMismatchActionOutcome(
         actionName: String,
         in state: [String: TLAValue]
-    ) -> SpecRuntime.RuntimeActionOutcome {
-        switch runtime.generatedActionOutcome(actionName: actionName, in: state) {
-        case .enabled(let actionName, _):
-            return .enabled(actionName: actionName, successors: [["value": .int(2)]])
-        case let outcome:
-            return outcome
+    ) -> SpecRuntime.RuntimeActionReport {
+        let report = runtime.actionReport(named: actionName, in: state)
+        switch report.status {
+        case .enabled:
+            return .init(
+                requested: report.requested,
+                state: report.state,
+                availability: report.availability,
+                status: .enabled(successorCount: 2),
+                nextSafeAction: "Intentional mismatch fixture successor count."
+            )
+        case let status:
+            return .init(
+                requested: report.requested,
+                state: report.state,
+                availability: report.availability,
+                status: status,
+                nextSafeAction: report.nextSafeAction
+            )
         }
     }
 }

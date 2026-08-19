@@ -6,7 +6,7 @@ import UpstreamParity
 struct PublicWorkflowConformanceRunnerTests {
   @Test("runner writes one correlated diagnostic report for the declared portable corpus")
   func runnerWritesMatchedDiagnosticReport() throws {
-    let root = try packageRoot()
+    let root = try throwingPackageRoot()
     let output = root.appending(path: ".build/PublicWorkflowConformanceRunnerTests-\(UUID())")
     defer { try? FileManager.default.removeItem(at: output) }
 
@@ -56,7 +56,7 @@ struct PublicWorkflowConformanceRunnerTests {
 
   @Test("public-workflow CLI binds the declared platform command digest and retains 0, 1, and 2 reports")
   func cliUsesCanonicalPlatformCommandDigestAndRetainsExitClasses() throws {
-    let root = try packageRoot()
+    let root = try throwingPackageRoot()
     let temporary = root.appending(path: ".build/PublicWorkflowCLIRunner-\(UUID())")
     defer { try? FileManager.default.removeItem(at: temporary) }
     try FileManager.default.createDirectory(at: temporary, withIntermediateDirectories: true)
@@ -103,7 +103,7 @@ struct PublicWorkflowConformanceRunnerTests {
 
   @Test("release wrapper retains every declared permanent public-workflow control as local diagnostic evidence")
   func releaseWrapperRetainsDeclaredControls() throws {
-    let root = try packageRoot()
+    let root = try throwingPackageRoot()
     let temporary = root.appending(path: ".build/PublicWorkflowReleaseControls-\(UUID())")
     defer { try? FileManager.default.removeItem(at: temporary) }
     try FileManager.default.createDirectory(at: temporary, withIntermediateDirectories: true)
@@ -143,7 +143,7 @@ struct PublicWorkflowConformanceRunnerTests {
 
   @Test("release wrapper preserves CLI report and exit classes")
   func releaseWrapperPropagatesReportAndExitClasses() throws {
-    let root = try packageRoot()
+    let root = try throwingPackageRoot()
     let temporary = root.appending(path: ".build/PublicWorkflowReleaseExitClasses-\(UUID())")
     defer { try? FileManager.default.removeItem(at: temporary) }
     try FileManager.default.createDirectory(at: temporary, withIntermediateDirectories: true)
@@ -201,7 +201,7 @@ struct PublicWorkflowConformanceRunnerTests {
 
   @Test("a local hosted flag remains diagnostic without a GitHub Actions identity")
   func localHostedFlagCannotCreateCandidateEvidence() throws {
-    let root = try packageRoot()
+    let root = try throwingPackageRoot()
     let temporary = root.appending(path: ".build/PublicWorkflowLocalHostedFlag-\(UUID())")
     defer { try? FileManager.default.removeItem(at: temporary) }
     try FileManager.default.createDirectory(at: temporary, withIntermediateDirectories: true)
@@ -267,15 +267,5 @@ struct PublicWorkflowConformanceRunnerTests {
     try process.run()
     process.waitUntilExit()
     return process.terminationStatus
-  }
-
-  private func packageRoot() throws -> URL {
-    var directory = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
-    while !FileManager.default.fileExists(atPath: directory.appendingPathComponent("Package.swift").path) {
-      let parent = directory.deletingLastPathComponent()
-      guard parent != directory else { throw CocoaError(.fileNoSuchFile) }
-      directory = parent
-    }
-    return directory
   }
 }

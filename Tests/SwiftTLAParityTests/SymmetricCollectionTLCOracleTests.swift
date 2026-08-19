@@ -204,22 +204,3 @@ struct SymmetricCollectionTLCOracleTests {
       .first { $0.bundleURL.lastPathComponent == "SwiftTLATests.xctest" }
       .map { $0.bundleURL.deletingLastPathComponent().appendingPathComponent(name).path }
   }
-
-  private func packageRoot() -> URL {
-    var directory = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
-    while !FileManager.default.fileExists(atPath: directory.appendingPathComponent("Package.swift").path) {
-      directory.deleteLastPathComponent()
-    }
-    return directory
-  }
-
-  private func normalizedActions(_ actions: [NamedAction]) -> [String] {
-    actions.map { action in
-      action.description.replacingOccurrences(
-        of: "x[0-9]+",
-        with: "member",
-        options: .regularExpression
-      )
-    }
-  }
-}

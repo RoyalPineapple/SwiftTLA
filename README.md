@@ -112,7 +112,7 @@ Production exploration is plain BFS. Composition is for self-proof, not a contro
 
 ## Examples and TLC checks
 
-Core ports live under `Examples/` (HourClock, DieHard, CoffeeCan, MovingCat, Majority, Allocator, and more). State counts for core specifications are regression-tested.
+Core ports live under `Sources/UpstreamParity/Examples/` (HourClock, DieHard, CoffeeCan, MovingCat, Majority, Allocator, and more). State counts for core specifications are regression-tested.
 
 For selected finite core models, the repository can compare the complete labeled
 transition relation with a pinned TLC run. The support gate admits only the
@@ -136,7 +136,7 @@ failed. The command retains its current report at
 Run the fast local PR validation with:
 
 ```bash
-make ci-local
+make ci-pr
 ```
 
 It validates the release code-check contract, runs advisory SwiftLint, tests
@@ -187,20 +187,12 @@ but does not turn the bounded result into general public support.
 
 The current report is `.build/public-workflow-support-gate/support-admission.json`,
 with immutable evidence under `.build/public-workflow-support-gate/runs/<run-id>/`.
-`@TypedVar` is not release-facing or admitted, and `@TLAValidated` was removed.
+`@TypedVar` and `@TLAValidated` were removed and have no public contract.
 See [public workflow conformance](Documentation/PublicWorkflowConformance.md)
 for fixture identities, report fields, workflow artifact locations, authority
 labels, and limits.
 
-State counts alone do not establish behavioral equivalence. A successful bounded check does not prove arbitrary population sizes, liveness, or unsupported TLA+ constructs.
-
-```bash
-./scripts/setup-tlc.sh
-./scripts/validate_tlc.sh              # operator matrix vs TLC
-./scripts/validate_upstream_parity.sh  # Swift ports ↔ upstream TLC
-swift test
-make parity
-```
+State counts alone do not establish behavioral equivalence. A successful bounded check does not prove arbitrary population sizes, liveness, or unsupported TLA+ constructs. Exact finite graph comparison runs through `make core-conformance` with the pinned toolchain; see [core graph conformance](Documentation/CoreGraphConformance.md).
 
 ## Local validation
 
@@ -211,8 +203,7 @@ make ci-pr
 ```
 
 It validates the release code-check contract, runs advisory SwiftLint, tests the
-package once, and builds the package and macro plugin. `make ci-local` remains a
-compatibility alias for this fast path.
+package once, and builds the package and macro plugin.
 
 Before release, run the complete qualification command:
 

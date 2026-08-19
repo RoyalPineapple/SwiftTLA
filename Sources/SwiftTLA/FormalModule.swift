@@ -137,33 +137,6 @@ public struct TLAModuleBundle: Sendable, Equatable {
     try visit(root.name)
   }
 
-  /// Writes every module source file and the root TLC configuration into one
-  /// directory. TLC resolves imports from this directory exactly as it would
-  /// for an upstream multi-module specification.
-  ///
-  /// This legacy convenience method is not an atomic bundle materialization
-  /// boundary. Use `CompiledSpecification.materializeModuleBundle(to:)` when
-  /// a caller needs a validated compiler result with all-or-nothing output.
-  public func write(to directory: URL) throws {
-    try FileManager.default.createDirectory(
-      at: directory, withIntermediateDirectories: true
-    )
-    for file in files {
-      try file.tla.write(
-        to: directory.appendingPathComponent("\(file.name).tla"),
-        atomically: true,
-        encoding: .utf8
-      )
-      if let cfg = file.cfg {
-        try cfg.write(
-          to: directory.appendingPathComponent("\(file.name).cfg"),
-          atomically: true,
-          encoding: .utf8
-        )
-      }
-    }
-  }
-
   private struct Dependency {
     let name: String
     let line: Int

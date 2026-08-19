@@ -1,31 +1,42 @@
 import Testing
 @testable import SwiftTLA
 
-@Suite("Runtime action outcomes")
-struct RuntimeActionOutcomeTests {
+@Suite("Runtime action reports")
+struct RuntimeActionReportTests {
     private let state: [String: TLAValue] = ["x": .int(0)]
 
-    @Test("enabled actions retain their successors")
+    @Test("enabled actions report their successor count")
     func enabledAction() throws {
         let runtime = try runtime(action: .assign("x", .value(.int(1))))
-        let successors: [[String: TLAValue]] = [["x": .int(1)]]
 
-        #expect(runtime.actionOutcome(named: "Next", in: state) == .enabled(
-            actionName: "Next", successors: successors))
+        let report = runtime.actionReport(named: "Next", in: state)
+        #expect(report.requested == .init(name: "Next"))
+        #expect(report.stateCommitted == false)
+        #expect(report.status == .enabled(successorCount: 1))
+        #expect(report.availability == .known([]))
     }
 
     @Test("disabled actions are distinct from evaluation failures")
     func disabledAction() throws {
         let runtime = try runtime(action: .guard_(.value(.bool(false))))
 
-        #expect(runtime.actionOutcome(named: "Next", in: state) == .disabled(actionName: "Next"))
+        let report = runtime.actionReport(named: "Next", in: state)
+        #expect(report.status == .unavailable(
+            expected: "the guard for Next to be true",
+            actual: "the action produced no successor from this state"
+        ))
+        #expect(report.nextSafeAction.contains("available actions"))
     }
 
     @Test("unknown actions report action not found")
     func actionNotFound() throws {
         let runtime = try runtime(action: .assign("x", .value(.int(1))))
 
-        #expect(runtime.actionOutcome(named: "Missing", in: state) == .actionNotFound(actionName: "Missing"))
+        let report = runtime.actionReport(named: "Missing", in: state)
+        #expect(report.status == .unavailable(
+            expected: "a declared action named Missing",
+            actual: "no such action exists in specification RuntimeActionReport"
+        ))
     }
 
     @Test("throwing action evaluation never becomes disabled")
@@ -34,9 +45,10 @@ struct RuntimeActionOutcomeTests {
             .assign("x", .value(.int(1))),
             .assign("x", .value(.int(2)))))
 
-        #expect(runtime.actionOutcome(named: "Next", in: state) == .evaluationFailed(
-            actionName: "Next",
-            diagnostic: .init(code: .actionError, message: "Variable 'x' is assigned multiple times in one action branch")))
+        let report = runtime.actionReport(named: "Next", in: state)
+        #expect(report.status == .evaluationFailed(.init(
+            code: .actionError,
+            message: "Variable 'x' is assigned multiple times in one action branch")))
     }
 
     @Test("unavailable action evaluation remains explicit")
@@ -45,9 +57,10 @@ struct RuntimeActionOutcomeTests {
             action: .assign("x", .value(.int(1))),
             actionEvaluator: { _, _, _ in throw SpecRuntime.RuntimeError.evaluationUnavailable("evaluator offline") })
 
-        #expect(runtime.actionOutcome(named: "Next", in: state) == .evaluationUnavailable(
-            actionName: "Next",
-            diagnostic: .init(code: .evaluatorUnavailable, message: "evaluator offline")))
+        let report = runtime.actionReport(named: "Next", in: state)
+        #expect(report.status == .evaluationFailed(.init(
+            code: .evaluatorUnavailable,
+            message: "evaluator offline")))
     }
 
     @Test("action reports retain safe state and explain an unavailable guard")
@@ -73,7 +86,7 @@ struct RuntimeActionOutcomeTests {
         actionEvaluator: SpecRuntime.ActionEvaluator? = nil
     ) throws -> SpecRuntime {
         let x = Var<Int>("x")
-        let spec = TLASpec("RuntimeActionOutcome") {
+        let spec = TLASpec("RuntimeActionReport") {
             Variable(x, 0)
             Action("Next") { action }
         }

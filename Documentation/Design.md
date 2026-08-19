@@ -341,7 +341,7 @@ algorithm evidence.
 
 ## Port inventory
 
-**Selected TLC parity ports** — `scripts/validate_upstream_parity.sh` checks these ports against [tlaplus/Examples](https://github.com/tlaplus/Examples).
+**Selected TLC parity ports** — ported from [tlaplus/Examples](https://github.com/tlaplus/Examples) with in-process distinct-state regression tests; exact finite graph comparison for the declared core cases runs through the pinned core-conformance toolchain.
 
 | Spec | States | Key features |
 |------|--------|-------------|
@@ -422,7 +422,7 @@ graph TD
 
     subgraph Runtime["Interactive Runtime"]
         direction TB
-        SR["SpecRuntime<br/>init(spec:)<br/>initialStates(), apply(actionName:to:),<br/>availableActions(in:), check(_:in:), step(_:from:)"]
+        SR["SpecRuntime<br/>init(spec:)<br/>initialStates(), apply(actionName:to:),<br/>actionReport(named:in:), check(_:in:), step(_:from:)"]
         SR --> AE2["ActionEnumerator.enumerate()"]
         SR --> EVAL2["Evaluator.evaluateBool()"]
     end

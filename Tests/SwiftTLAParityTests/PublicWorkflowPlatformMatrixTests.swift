@@ -6,7 +6,7 @@ import Testing
 struct PublicWorkflowPlatformMatrixTests {
   @Test("platform matrix emits V1-decodable succeeded, failed, and unavailable evidence")
   func emittedPlatformEvidenceMatchesV1Contract() throws {
-    let root = try packageRoot()
+    let root = try throwingPackageRoot()
     let scratch = FileManager.default.temporaryDirectory.appendingPathComponent("PublicWorkflowPlatformMatrixTests-\(UUID())")
     let outputRoot = root.appendingPathComponent(".build/PublicWorkflowPlatformMatrixTests-\(UUID())")
     defer {
@@ -47,19 +47,9 @@ struct PublicWorkflowPlatformMatrixTests {
 
   private enum Outcome { case succeeded, failed, unavailable }
 
-  private func packageRoot() throws -> URL {
-    var directory = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
-    while !FileManager.default.fileExists(atPath: directory.appendingPathComponent("Package.swift").path) {
-      let parent = directory.deletingLastPathComponent()
-      guard parent != directory else { throw CocoaError(.fileNoSuchFile) }
-      directory = parent
-    }
-    return directory
-  }
-
   private func makeContext(at url: URL) throws -> URL {
     let digest = String(repeating: "a", count: 64)
-    let root = try packageRoot()
+    let root = try throwingPackageRoot()
     let sourcePath = "Tests/Fixtures/PublicWorkflowConformance/Platform/assert_platform_matrix.sh"
     let configurationPath = "Package.swift"
     let sourceDigest = SHA256V1.hex(try Data(contentsOf: root.appendingPathComponent(sourcePath)))

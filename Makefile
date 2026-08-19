@@ -1,17 +1,6 @@
-.PHONY: test tlc parity build examples core-conformance core-support-gate temporal-symmetry-support-gate temporal-symmetry-release-check public-workflow-release-check ci-pr ci-release-qualification ci-local
+.PHONY: build examples core-conformance core-support-gate temporal-symmetry-support-gate temporal-symmetry-release-check public-workflow-release-check ci-pr ci-release-qualification
 
 TEMPORAL_SYMMETRY_OUTPUT ?= .build/temporal-symmetry-support-gate
-test:
-	swift test
-
-tlc:
-	./scripts/setup-tlc.sh
-	./scripts/validate_tlc.sh
-
-parity:
-	./scripts/setup-tlc.sh
-	./scripts/validate_upstream_parity.sh
-
 build:
 	swift build
 
@@ -39,5 +28,3 @@ ci-pr:
 
 ci-release-qualification:
 	./scripts/run_release_qualification.sh
-
-ci-local: ci-pr
