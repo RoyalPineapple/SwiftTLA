@@ -95,6 +95,14 @@ public struct TLCReferencePinV1: Equatable, Sendable {
     public static let lockedBridgeSourceSHA256 = "f921b202205dde3d34e626f7801676cc0635de58f503c3dddd3affcc893532ee"
     public static let lockedBridgeBinarySHA256 = "a50ae51e9c540a3c0eb9386b05bb0c0f677cefa62bcfdc48545c6046ccb12d64"
     public static let lockedTLCBanner = "TLC2 Version 2026.08.11.125311 (rev: 0894c34)"
+    public static let standardModuleNames: Set<String> = [
+        "Bags", "FiniteSets", "Integers", "Json", "Naturals", "Randomization", "RealTime",
+        "Reals", "Sequences", "TLC", "TLCExt", "Toolbox", "_DotTrace", "_JsonTrace",
+        "_Possible", "_TLAPlusCounterExample", "_TLCActionTrace", "_TLCTESpec", "_TLCTrace",
+        "_TLCTracePlain"
+    ]
+
+    public var availableStandardModules: Set<String> { Self.standardModuleNames }
 
     public func validate(_ artifacts: TLCReferenceArtifactsV1) throws {
         try Self.verify(artifacts.jar, expected: jarSHA256, name: "TLC JAR")

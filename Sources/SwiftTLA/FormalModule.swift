@@ -95,7 +95,7 @@ public struct TLAModuleBundle: Sendable, Equatable {
   public func validateRenderedBundleIntegrity(
     standardModules: Set<String>? = nil
   ) throws {
-    let standardModules = standardModules ?? Self.tlcStandardModules
+    let standardModules = standardModules ?? Self.formalStandardModules
     var sources: [String: TLAModuleFile] = [:]
     for file in files {
       guard sources[file.name] == nil else {
@@ -143,13 +143,14 @@ public struct TLAModuleBundle: Sendable, Equatable {
   }
 
   private static func dependencies(in source: String) -> [Dependency] {
+    let localModules = moduleNames(in: source)
     var dependencies: [Dependency] = []
     for (offset, rawLine) in source.split(separator: "\n", omittingEmptySubsequences: false).enumerated() {
       let line = rawLine.trimmingCharacters(in: .whitespaces)
       if line.hasPrefix("EXTENDS ") {
         for token in line.dropFirst("EXTENDS ".count).split(separator: ",") {
           let name = token.trimmingCharacters(in: .whitespaces)
-          if isModuleIdentifier(name) {
+          if isModuleIdentifier(name), !localModules.contains(String(name)) {
             dependencies.append(Dependency(name: name, line: offset + 1))
           }
         }
@@ -157,18 +158,27 @@ public struct TLAModuleBundle: Sendable, Equatable {
       }
       guard let range = line.range(of: "INSTANCE ") else { continue }
       let name = line[range.upperBound...].prefix { $0.isLetter || $0.isNumber || $0 == "_" }
-      if isModuleIdentifier(name) {
+      if isModuleIdentifier(name), !localModules.contains(String(name)) {
         dependencies.append(Dependency(name: String(name), line: offset + 1))
       }
     }
     return dependencies
   }
 
+  private static func moduleNames(in source: String) -> Set<String> {
+    Set(source.split(separator: "\n", omittingEmptySubsequences: false).compactMap { rawLine in
+      let line = rawLine.trimmingCharacters(in: .whitespaces)
+      guard line.hasPrefix("---- MODULE ") else { return nil }
+      let name = line.dropFirst("---- MODULE ".count).prefix { $0.isLetter || $0.isNumber || $0 == "_" }
+      return isModuleIdentifier(name) ? String(name) : nil
+    })
+  }
+
   private static func isModuleIdentifier(_ value: some StringProtocol) -> Bool {
     !value.isEmpty && value.first?.isLetter == true
   }
 
-  private static let tlcStandardModules: Set<String> = [
+  private static let formalStandardModules: Set<String> = [
     "Bags", "FiniteSets", "Integers", "Naturals", "Randomization", "RealTime", "Sequences", "TLC"
   ]
 }

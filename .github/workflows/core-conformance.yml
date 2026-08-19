@@ -16,7 +16,7 @@ jobs:
       run_expensive: ${{ steps.head.outputs.run_expensive }}
     steps:
       - id: head
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         with:
           script: |
             if (context.eventName === 'workflow_dispatch') {
@@ -41,9 +41,12 @@ jobs:
     env:
       CORE_CONFORMANCE_TOOL_ROOT: ${{ github.workspace }}/.build/core-conformance-tools
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
-          submodules: recursive
+          submodules: false
+
+      - name: Initialize pinned core-conformance baseline
+        run: git submodule update --init --depth=1 Verification/CoreConformance/baselines
 
       - name: Validate pinned core-conformance baseline
         run: |
@@ -81,8 +84,8 @@ jobs:
               echo "enforcement_exit=1" >> "$GITHUB_OUTPUT"
               ;;
             2)
-              echo "::warning::Core support gate could not evaluate because its exact external verifier or evidence was unavailable (exit 2). Run make ci-local on a provisioned machine before making a support claim."
-              echo "enforcement_exit=0" >> "$GITHUB_OUTPUT"
+              echo "::error::Core support gate could not evaluate because its exact external verifier or evidence was unavailable (exit 2)."
+              echo "enforcement_exit=2" >> "$GITHUB_OUTPUT"
               ;;
             *)
               echo "::error::Core conformance returned an unexpected exit $status."
@@ -93,7 +96,7 @@ jobs:
 
       - name: Upload core-conformance evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: core-conformance-${{ github.run_id }}
           path: |

@@ -64,6 +64,55 @@ struct CoreConformanceTLCAdapterTests { @Test("frozen graph stream becomes compl
     }
   }
 
+  @Test("TLC bundle validation uses the pinned toolchain inventory")
+  func acceptsTraceModulesFromThePinnedTLCDistribution() throws {
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    let module = directory.appendingPathComponent("Trace.tla")
+    try """
+    ---- MODULE Trace ----
+    EXTENDS TLCExt, Toolbox
+    _expression == LET DieHard_TEExpression == INSTANCE DieHard_TEExpression IN DieHard_TEExpression!expression
+    ====
+    ---- MODULE DieHard_TEExpression ----
+    EXTENDS TLCExt, Toolbox
+    expression == TRUE
+    ====
+    """.write(
+      to: module, atomically: true, encoding: .utf8)
+    let fixture = TLCProcessRequestV1.fixture
+    let request = TLCProcessRequestV1(
+      javaExecutable: fixture.javaExecutable,
+      jar: fixture.jar,
+      bridgeClasses: fixture.bridgeClasses,
+      module: module,
+      configuration: directory.appendingPathComponent("Trace.cfg"),
+      graphEvents: directory.appendingPathComponent("events.jsonl"),
+      traceOutput: directory.appendingPathComponent("trace.json"),
+      replayInput: directory.appendingPathComponent("replay.json"),
+      workingDirectory: directory,
+      arguments: fixture.arguments,
+      expectedCase: fixture.expectedCase,
+      runID: fixture.runID,
+      referencePin: .fixture
+    )
+
+    try request.validateRenderedBundleIntegrity()
+  }
+
+  @Test("the TLC pin matches the locked standard-module inventory")
+  func pinnedInventoryMatchesTheToolchainLock() throws {
+    let root = URL(fileURLWithPath: #filePath)
+      .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+    let data = try Data(contentsOf: root.appendingPathComponent("Verification/CoreConformance/toolchain.json"))
+    let lock = try #require(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+    let tlc = try #require(lock["tlc"] as? [String: Any])
+    let names = try #require(tlc["standardModules"] as? [String])
+
+    #expect(Set(names) == TLCReferencePinV1.standardModuleNames)
+  }
+
   @Test("TLC violations remain non-passing canonical outcomes")
   func preservesViolationOutcome() throws {
     let expectedCase = fixtureCase(.fixture)

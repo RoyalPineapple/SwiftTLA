@@ -156,7 +156,9 @@ public struct TLCProcessRequestV1: Equatable, Sendable {
           tla: try String(contentsOf: url, encoding: .utf8)
         )
       }
-      try TLAModuleBundle.untrusted(root: root, imports: imports).validateRenderedBundleIntegrity()
+      try TLAModuleBundle.untrusted(root: root, imports: imports).validateRenderedBundleIntegrity(
+        standardModules: referencePin?.availableStandardModules
+      )
     } catch {
       if case TLAModuleBundleIntegrityError.missingModule(let dependency, let importedBy, let line) = error {
         throw TLCProcessErrorV1.invalidModuleBundle(.missingImportedModule(

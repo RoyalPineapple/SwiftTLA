@@ -188,6 +188,24 @@ download_locked "$TLC_URL" "$TLC_SHA256" "$TLC_JAR"
 download_locked "$JAVA_URL" "$JAVA_SHA256" "$JAVA_ARCHIVE"
 [ "$(sha256 "$BRIDGE_SOURCE")" = "f921b202205dde3d34e626f7801676cc0635de58f503c3dddd3affcc893532ee" ] || fail "bridge source digest mismatch"
 
+python3 - "$TLC_JAR" "$TOOLCHAIN" <<'PY'
+import json
+import sys
+import zipfile
+
+jar_path, toolchain_path = sys.argv[1:]
+with open(toolchain_path, encoding="utf-8") as source:
+    modules = json.load(source)["tlc"]["standardModules"]
+with zipfile.ZipFile(jar_path) as jar:
+    actual = sorted(
+        name.removeprefix("tla2sany/StandardModules/").removesuffix(".tla")
+        for name in jar.namelist()
+        if name.startswith("tla2sany/StandardModules/") and name.endswith(".tla")
+    )
+if modules != actual:
+    raise SystemExit("TLC JAR standard-module inventory differs from the toolchain lock")
+PY
+
 JAVA_HOME="$TOOL_ROOT/java-${ARCHITECTURE}/Contents/Home"
 if [ ! -x "$JAVA_HOME/bin/javac" ]; then
     rm -rf "$TOOL_ROOT/java-${ARCHITECTURE}"
