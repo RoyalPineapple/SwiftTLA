@@ -39,7 +39,7 @@ require 'Pinned core-conformance baseline does not match the repository checkout
 require "make core-support-gate"
 require ".build/core-support-gate"
 require "if: always()"
-require "actions/upload-artifact@v4"
+require "actions/upload-artifact@v6"
 require 'case "$status" in'
 require "0)"
 require "1)"

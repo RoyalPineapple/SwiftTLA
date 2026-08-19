@@ -22,7 +22,7 @@ require "Run correlated public-workflow validation"
 require "GITHUB_RUN_ID"
 require "GITHUB_RUN_ATTEMPT"
 require "if: always()"
-require "actions/upload-artifact@v4"
+require "actions/upload-artifact@v6"
 require "public-workflow-evidence-\${{ github.run_id }}"
 ! grep -Fq -- "swift run" "$WORKFLOW" || { echo "aggregate workflow must not use swift run" >&2; exit 1; }
 ! grep -Fq -- "pull_request:" "$WORKFLOW" || { echo "public workflow must not run on pull requests" >&2; exit 1; }

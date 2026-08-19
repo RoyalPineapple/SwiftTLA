@@ -28,7 +28,7 @@ require "run_expensive"
 require "make temporal-symmetry-release-check"
 require ".build/temporal-symmetry-support-gate"
 require "if: always()"
-require "actions/upload-artifact@v4"
+require "actions/upload-artifact@v6"
 require 'case "$status" in'
 require "0)"
 require "1)"
