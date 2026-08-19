@@ -43,7 +43,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          submodules: recursive
+          submodules: false
+
+      - name: Initialize pinned core-conformance baseline
+        run: git submodule update --init --depth=1 Verification/CoreConformance/baselines
 
       - name: Validate pinned core-conformance baseline
         run: |
@@ -81,8 +84,8 @@ jobs:
               echo "enforcement_exit=1" >> "$GITHUB_OUTPUT"
               ;;
             2)
-              echo "::warning::Core support gate could not evaluate because its exact external verifier or evidence was unavailable (exit 2). Run make ci-local on a provisioned machine before making a support claim."
-              echo "enforcement_exit=0" >> "$GITHUB_OUTPUT"
+              echo "::error::Core support gate could not evaluate because its exact external verifier or evidence was unavailable (exit 2)."
+              echo "enforcement_exit=2" >> "$GITHUB_OUTPUT"
               ;;
             *)
               echo "::error::Core conformance returned an unexpected exit $status."
