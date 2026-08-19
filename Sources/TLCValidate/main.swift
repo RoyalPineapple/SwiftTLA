@@ -286,23 +286,26 @@ private func runCoreConformance(arguments: [String]) -> Never {
                 outputDirectory: caseOutput,
                 swiftActionNames: invocationMappings[entry.id]!
             )
+            let label = expectedExit == CoreConformanceExitCodeV1.semanticDifference.rawValue
+                ? "core-conformance negative control \(entry.id)"
+                : "core-conformance \(entry.id)"
             if let diagnostic = result.diagnostic {
               let report = diagnostic.report
-              fputs("core-conformance \(entry.id): \(report.whatFailed)\n", stderr)
+              fputs("\(label): \(report.whatFailed)\n", stderr)
                 fputs("  where: \(report.whereItFailed)\n", stderr)
                 fputs("  expected: \(report.expected)\n", stderr)
                 fputs("  actual: \(report.actual)\n", stderr)
               fputs("  changed: \(report.systemChange)\n", stderr)
               fputs("  next: \(report.nextSafeAction)\n", stderr)
             } else if let report = result.comparison?.failureReports.first {
-                fputs("core-conformance \(entry.id): \(report.whatFailed)\n", stderr)
+                fputs("\(label): \(report.whatFailed)\n", stderr)
                 fputs("  where: \(report.whereItFailed)\n", stderr)
                 fputs("  expected: \(report.expected)\n", stderr)
                 fputs("  actual: \(report.actual)\n", stderr)
                 fputs("  changed: \(report.systemChange)\n", stderr)
                 fputs("  next: \(report.nextSafeAction)\n", stderr)
             } else {
-                print("core-conformance \(entry.id): \(result.exitCode.rawValue) \(result.evidenceDirectory?.path ?? "")")
+                print("\(label): \(result.exitCode.rawValue) \(result.evidenceDirectory?.path ?? "")")
             }
             if selected.count == 1 {
                 exitCode = result.exitCode.rawValue
