@@ -316,7 +316,8 @@ struct TLCTemporalAdapterTests {
         caseID: coreCase.id, gateRunID: UUID(), swiftRunID: UUID(), tlcRunID: UUID(), comparisonRunID: UUID())
       request = TLCProcessRequest(
         javaExecutable: URL(fileURLWithPath: "/usr/bin/java"), jar: root.appendingPathComponent("tla2tools.jar"),
-        bridgeClasses: root.appendingPathComponent("bridge"), module: module, configuration: configuration,
+        bridgeClasses: root.appendingPathComponent("bridge"),
+        bundle: try TLCProcessRequest.declaredBundle(root: module, configuration: configuration),
         graphEvents: root.appendingPathComponent("events.jsonl"), traceOutput: root.appendingPathComponent("trace.json"),
         replayInput: root.appendingPathComponent("replay.json"), workingDirectory: root, arguments: [],
         expectedCase: coreCase, runID: correlation.tlcRunID)
@@ -347,8 +348,7 @@ struct TLCTemporalAdapterTests {
         javaExecutable: request.javaExecutable,
         jar: request.jar,
         bridgeClasses: request.bridgeClasses,
-        module: request.module,
-        configuration: request.configuration,
+        bundle: request.bundle,
         graphEvents: request.graphEvents,
         traceOutput: traceOutput,
         replayInput: request.replayInput,

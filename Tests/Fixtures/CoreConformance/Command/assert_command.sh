@@ -58,19 +58,22 @@ expect_failure "does not match the accepted TLC reference pin" \
 mkdir -p "$TMP/project/Verification/CoreConformance/fixtures/local" "$TMP/tool-root"
 printf '%s\n' '---- MODULE LocalFixture ----' '====' >"$TMP/project/Verification/CoreConformance/fixtures/local/LocalFixture.tla"
 printf '%s\n' 'SPECIFICATION Spec' >"$TMP/project/Verification/CoreConformance/fixtures/local/LocalFixture.cfg"
+printf '%s\n' '---- MODULE LocalImport ----' '====' >"$TMP/project/Verification/CoreConformance/fixtures/local/LocalImport.tla"
 cat >"$TMP/local-fixtures.json" <<JSON
 {
   "schema": "CoreConformanceCases",
   "cases": [{
     "id": "local-fixture",
     "module": "fixtures/local/LocalFixture.tla",
-    "configuration": "fixtures/local/LocalFixture.cfg"
+    "configuration": "fixtures/local/LocalFixture.cfg",
+    "imports": ["fixtures/local/LocalImport.tla"]
   }]
 }
 JSON
 CORE_CONFORMANCE_PROJECT_ROOT="$TMP/project" "$SETUP" --cases "$TMP/local-fixtures.json" --tool-root "$TMP/tool-root" --stage-inputs-only >/dev/null
 cmp "$TMP/project/Verification/CoreConformance/fixtures/local/LocalFixture.tla" "$TMP/tool-root/inputs/fixtures/local/LocalFixture.tla"
 cmp "$TMP/project/Verification/CoreConformance/fixtures/local/LocalFixture.cfg" "$TMP/tool-root/inputs/fixtures/local/LocalFixture.cfg"
+cmp "$TMP/project/Verification/CoreConformance/fixtures/local/LocalImport.tla" "$TMP/tool-root/inputs/fixtures/local/LocalImport.tla"
 
 python3 - "$TMP/local-fixtures.json" <<'PY'
 import json

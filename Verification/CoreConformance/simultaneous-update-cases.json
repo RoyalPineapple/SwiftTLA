@@ -7,6 +7,7 @@
       "swiftSpec": "simultaneous-swap",
       "module": "simultaneous-swap/SimultaneousSwap.tla",
       "configuration": "simultaneous-swap/SimultaneousSwap.cfg",
+      "imports": [],
       "moduleSHA256": "141b13347389d78173c6771192f1b77094b0a15b7158e225dbb665dd3f18d2c5",
       "cfgSHA256": "04ef5a30beb9c40bf85acb1f851d2d07319dfb21b019d9024f08b065f456bc6e",
       "arguments": ["-workers", "1", "-fp", "1"],

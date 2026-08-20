@@ -604,8 +604,8 @@ extension CoreConformanceRunner {
         systemChange: "No successful conformance claim was published; retained evidence records the completed work.",
         nextSafeAction: nextSafeAction(for: phase),
         evidence: [
-          .init(role: "TLA+ module", location: request.module.path),
-          .init(role: "TLC configuration", location: request.configuration.path),
+          .init(role: "TLA+ module", location: request.moduleFileName),
+          .init(role: "TLC configuration", location: request.configurationFileName),
           .init(role: "TLC graph event output", location: request.graphEvents.path)
         ]
       )

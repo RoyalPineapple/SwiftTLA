@@ -307,8 +307,7 @@ func helperProcessRequest(
     javaExecutable: executable,
     jar: URL(fileURLWithPath: "/tmp/jar"),
     bridgeClasses: directory,
-    module: module,
-    configuration: configuration,
+    bundle: try TLCProcessRequest.declaredBundle(root: module, configuration: configuration),
     graphEvents: directory.appendingPathComponent("events.jsonl"),
     traceOutput: directory.appendingPathComponent("trace.json"),
     replayInput: directory.appendingPathComponent("replay.json"),
@@ -323,12 +322,12 @@ func helperProcessRequest(
 }
 func launchRequest(
   expectedCase: CoreConformanceCase, module: URL, configuration: URL, arguments: [String]
-) -> TLCProcessRequest {
-  TLCProcessRequest(
+) throws -> TLCProcessRequest {
+  try TLCProcessRequest(
     javaExecutable: URL(fileURLWithPath: "/usr/bin/java"),
     jar: URL(fileURLWithPath: "/tmp/tla2tools.jar"),
-    bridgeClasses: URL(fileURLWithPath: "/tmp/bridge-classes"), module: module,
-    configuration: configuration,
+    bridgeClasses: URL(fileURLWithPath: "/tmp/bridge-classes"),
+    bundle: TLCProcessRequest.declaredBundle(root: module, configuration: configuration),
     graphEvents: URL(fileURLWithPath: "/tmp/events.jsonl"),
     traceOutput: URL(fileURLWithPath: "/tmp/trace.json"),
     replayInput: URL(fileURLWithPath: "/tmp/replay.json"),
@@ -343,8 +342,7 @@ func requestWithReferenceArtifacts(
 ) -> TLCProcessRequest {
   TLCProcessRequest(
     javaExecutable: URL(fileURLWithPath: "/usr/bin/java"), jar: jar, bridgeClasses: bridgeClasses,
-    module: URL(fileURLWithPath: "/tmp/Fixture.tla"),
-    configuration: URL(fileURLWithPath: "/tmp/Fixture.cfg"),
+    bundle: .untrusted(root: TLAModuleFile(name: "Fixture", tla: "---- MODULE Fixture ----", cfg: "SPECIFICATION Spec")),
     graphEvents: URL(fileURLWithPath: "/tmp/events.jsonl"),
     traceOutput: URL(fileURLWithPath: "/tmp/trace.json"),
     replayInput: URL(fileURLWithPath: "/tmp/replay.json"),

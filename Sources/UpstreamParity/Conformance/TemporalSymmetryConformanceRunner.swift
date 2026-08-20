@@ -193,6 +193,7 @@ public struct TemporalSymmetryConformanceRunner: Sendable {
     try FileManager.default.createDirectory(at: work, withIntermediateDirectories: true)
     let source = try sourceURL(for: declaredCase.sourceInput, projectRoot: projectRoot)
     let config = try configurationURL(for: declaredCase, projectRoot: projectRoot)
+    let bundle = try TLCProcessRequest.declaredBundle(root: source, configuration: config)
     let launch = try CoreConformanceCase(
       id: declaredCase.id,
       moduleSHA256: declaredCase.provenance.moduleSHA256,
@@ -203,7 +204,7 @@ public struct TemporalSymmetryConformanceRunner: Sendable {
       architecture: context.architecture, environment: [:], pin: pin)
     let request = TLCProcessRequest(
       javaExecutable: context.java, jar: context.jar, bridgeClasses: context.bridgeClasses,
-      module: source, configuration: config,
+      bundle: bundle,
       graphEvents: work.appendingPathComponent("events.jsonl"),
       traceOutput: work.appendingPathComponent("counterexample.json"),
       replayInput: work.appendingPathComponent("replay-input.json"), workingDirectory: work,
@@ -212,6 +213,7 @@ public struct TemporalSymmetryConformanceRunner: Sendable {
     let completeGraphRequest: TLCProcessRequest?
     if let graphPass = declaredCase.configuration.completeGraphPass {
       let graphConfig = try sourceURL(for: graphPass.configuration, projectRoot: projectRoot)
+      let graphBundle = try TLCProcessRequest.declaredBundle(root: source, configuration: graphConfig)
       let graphCase = try CoreConformanceCase(
         id: declaredCase.id, moduleSHA256: declaredCase.provenance.moduleSHA256,
         cfgSHA256: graphPass.configuration.sha256,
@@ -221,7 +223,7 @@ public struct TemporalSymmetryConformanceRunner: Sendable {
         architecture: context.architecture, environment: [:], pin: pin)
       completeGraphRequest = TLCProcessRequest(
         javaExecutable: context.java, jar: context.jar, bridgeClasses: context.bridgeClasses,
-        module: source, configuration: graphConfig,
+        bundle: graphBundle,
         graphEvents: work.appendingPathComponent("complete-graph-events.jsonl"),
         traceOutput: work.appendingPathComponent("complete-graph-counterexample.json"),
         replayInput: work.appendingPathComponent("complete-graph-replay.json"), workingDirectory: work,
@@ -324,7 +326,8 @@ extension TemporalSymmetryConformanceRunner {
   private func request(context: TLCContext, module: URL, configuration: URL, work: URL, declared: CoreConformanceCase, runID: UUID) throws -> TLCProcessRequest {
     try FileManager.default.createDirectory(at: work, withIntermediateDirectories: true)
     return TLCProcessRequest(
-      javaExecutable: context.java, jar: context.jar, bridgeClasses: context.bridgeClasses, module: module, configuration: configuration,
+      javaExecutable: context.java, jar: context.jar, bridgeClasses: context.bridgeClasses,
+      bundle: try TLCProcessRequest.declaredBundle(root: module, configuration: configuration),
       graphEvents: work.appendingPathComponent("events.jsonl"), traceOutput: work.appendingPathComponent("counterexample.json"),
       replayInput: work.appendingPathComponent("replay-input.json"), workingDirectory: work,
       arguments: declared.arguments, expectedCase: declared, runID: runID, referencePin: declared.pin, referenceArtifacts: context.artifacts)

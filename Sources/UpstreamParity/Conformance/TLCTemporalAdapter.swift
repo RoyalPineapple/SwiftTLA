@@ -236,7 +236,7 @@ public struct TLCTemporalAdapter: Sendable {
     if let graphRequest = input.completeGraphRequest {
       guard graphRequest.runID != input.request.runID,
             graphRequest.caseID == input.request.caseID,
-            graphRequest.module == input.request.module,
+            graphRequest.bundle.root == input.request.bundle.root,
             graphRequest.arguments == input.request.arguments,
             graphRequest.expectedCase.pin == input.request.expectedCase.pin,
             graphRequest.expectedCase.workers == input.request.expectedCase.workers,
@@ -276,8 +276,8 @@ public struct TLCTemporalAdapter: Sendable {
       "gateRunID": input.correlation.gateRunID.uuidString.lowercased(),
       "tlcRunID": input.correlation.tlcRunID.uuidString.lowercased(),
       "arguments": input.request.arguments,
-      "module": input.request.module.lastPathComponent,
-      "configuration": input.request.configuration.lastPathComponent
+      "module": input.request.moduleFileName,
+      "configuration": input.request.configurationFileName
     ], to: input.outputDirectory.appendingPathComponent("invocation.json"))
   }
 
@@ -315,7 +315,7 @@ public struct TLCTemporalAdapter: Sendable {
       sourceInput: input.declaredCase.sourceInput,
       configuration: try CoreEvidenceReference(
         path: input.declaredCase.configuration.completeGraphPass!.configuration.path,
-        sha256: SHA256.hex(Data(contentsOf: request.configuration))),
+        sha256: SHA256.hex(Data(request.bundle.cfg.utf8))),
       graphEvents: try CoreEvidenceReference(
         path: "\(input.relativeOutputDirectory)/complete-graph-pass/graph-events.jsonl",
         sha256: SHA256.hex(Data(contentsOf: graphURL))),
@@ -491,8 +491,6 @@ extension TLCTemporalAdapter {
       request.javaExecutable,
       request.jar,
       request.bridgeClasses,
-      request.module,
-      request.configuration,
       request.graphEvents,
       request.replayInput
     ].map(resolvedURL)

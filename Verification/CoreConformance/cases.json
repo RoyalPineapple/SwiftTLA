@@ -7,6 +7,7 @@
       "swiftSpec": "hour-clock",
       "module": "hour-clock/HourClock.tla",
       "configuration": "hour-clock/HourClock.cfg",
+      "imports": [],
       "moduleSHA256": "985903176db4725f9cf25df84ad84dcd53ba94be80d26298b87ec86fbc9b08b3",
       "cfgSHA256": "c1e28ec8c38919b15577a0a7148840ba1d4e4c6541ea43e36edd482c5ff16687",
       "arguments": [
@@ -63,6 +64,7 @@
       "swiftSpec": "die-hard-type-ok",
       "module": "die-hard-type-ok/DieHard.tla",
       "configuration": "die-hard-type-ok/DieHard.cfg",
+      "imports": [],
       "moduleSHA256": "295495de6509d86a82b88757835b95e3f91fad8691d764ece4d98886dcf42b66",
       "cfgSHA256": "d653a6add3e94b67cd6ccdc7e7473ab0a381df7931ecaf3c8760fad4bcabdc7d",
       "arguments": [
@@ -126,6 +128,7 @@
       "swiftSpec": "hour-clock",
       "module": "hour-clock-edge-mismatch/HourClock.tla",
       "configuration": "hour-clock-edge-mismatch/HourClock.cfg",
+      "imports": [],
       "moduleSHA256": "d9095b5892b817e41c8dfb11129703d8d4da6e67e2a2e23fbb57a30ae51c6a8f",
       "cfgSHA256": "5fc99b8399ad0227b0afbf25ff802c3582d4347dd06e26461313ecef6d5253f8",
       "arguments": [
@@ -183,6 +186,7 @@
       "swiftSpec": "die-hard-type-ok",
       "module": "die-hard-violation/DieHard.tla",
       "configuration": "die-hard-violation/DieHard.cfg",
+      "imports": [],
       "moduleSHA256": "59eac00c38748568ee17c85b994b5fbd2864ff8562fb5b1bdd5db786eb6f09bf",
       "cfgSHA256": "59fca38d703a0b17f967b35267fad8581e305b442c72147f1b2a530ea0ba6547",
       "arguments": [
@@ -247,6 +251,7 @@
       "swiftSpec": "multicar-elevator",
       "module": "multicar-elevator/MultiCarElevator.tla",
       "configuration": "multicar-elevator/MultiCarElevator.cfg",
+      "imports": [],
       "moduleSHA256": "af971fe32f8e8fe62e39985201894929beb0e85c99504d6db56350701bcaead5",
       "cfgSHA256": "280ad5e348229375fdfa102db511108fe5bd2237fd4e5f52d0218b2f3e7ec593",
       "arguments": [
@@ -1448,6 +1453,7 @@
       "swiftSpec": "multicar-elevator-edge-mismatch",
       "module": "multicar-elevator-edge-mismatch/MultiCarElevator.tla",
       "configuration": "multicar-elevator-edge-mismatch/MultiCarElevator.cfg",
+      "imports": [],
       "moduleSHA256": "974c63c379431e6800af7f4d05dfa8ee93a84db3ba3072f9ddc15fd6cc599a98",
       "cfgSHA256": "280ad5e348229375fdfa102db511108fe5bd2237fd4e5f52d0218b2f3e7ec593",
       "arguments": [

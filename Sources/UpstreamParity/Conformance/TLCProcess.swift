@@ -37,7 +37,6 @@ public struct TLCProcessExecutionFailure: Equatable, Sendable {
 /// TLA+ reports this only after TLC starts. SwiftTLA validates it before launch
 /// so a user sees the importing source line and the missing file directly.
 public enum TLCModuleBundleError: Error, Equatable, Sendable {
-  case missingRootModule(path: String)
   case unreadableModule(path: String, reason: String)
   case missingImportedModule(
     module: String,
@@ -61,8 +60,8 @@ public struct TLCProcessRequest: Equatable, Sendable {
   public let javaExecutable: URL
   public let jar: URL
   public let bridgeClasses: URL
-  public let module: URL
-  public let configuration: URL
+  /// The only TLA+ sources that this TLC invocation may receive.
+  public let bundle: TLAModuleBundle
   public let graphEvents: URL
   public let traceOutput: URL
   public let replayInput: URL
@@ -79,8 +78,7 @@ public struct TLCProcessRequest: Equatable, Sendable {
     javaExecutable: URL,
     jar: URL,
     bridgeClasses: URL,
-    module: URL,
-    configuration: URL,
+    bundle: TLAModuleBundle,
     graphEvents: URL,
     traceOutput: URL,
     replayInput: URL,
@@ -96,8 +94,7 @@ public struct TLCProcessRequest: Equatable, Sendable {
     self.javaExecutable = javaExecutable
     self.jar = jar
     self.bridgeClasses = bridgeClasses
-    self.module = module
-    self.configuration = configuration
+    self.bundle = bundle
     self.graphEvents = graphEvents
     self.traceOutput = traceOutput
     self.replayInput = replayInput
@@ -114,8 +111,14 @@ public struct TLCProcessRequest: Equatable, Sendable {
   public var caseID: String { expectedCase.id }
 
   public var effectiveEnvironment: [String: String] { expectedCase.environment }
+  public var moduleFileName: String { "\(bundle.root.name).tla" }
+  public var configurationFileName: String { "\(bundle.root.name).cfg" }
 
-  public func commandArguments(traceMode: TLCTraceMode? = nil) throws -> [String] {
+  public func commandArguments(
+    module: URL,
+    configuration: URL,
+    traceMode: TLCTraceMode? = nil
+  ) throws -> [String] {
     let mode = traceMode ?? self.traceMode
     return [
       "-Dswifttla.tlc.graph.path=\(graphEvents.path)",
@@ -127,7 +130,7 @@ public struct TLCProcessRequest: Equatable, Sendable {
     ] + traceArguments(mode) + arguments + ["-config", configuration.path, module.path]
   }
 
-  public func validateLaunchBinding() throws {
+  public func validateLaunchBinding(module: URL, configuration: URL) throws {
     try expectedCase.validateLaunch(
       module: module, configuration: configuration, arguments: arguments, caseID: caseID
     )
@@ -138,38 +141,82 @@ public struct TLCProcessRequest: Equatable, Sendable {
   /// This protects the external boundary from incomplete staged files. It does
   /// not resolve imports or provide compiler-linking diagnostics.
   public func validateRenderedBundleIntegrity() throws {
-    guard FileManager.default.fileExists(atPath: module.path) else {
-      throw TLCProcessError.invalidModuleBundle(.missingRootModule(path: module.path))
+    do {
+      try bundle.validateRenderedBundleIntegrity(standardModules: referencePin?.availableStandardModules)
+    } catch {
+      if case TLAModuleBundleIntegrityError.missingModule(let dependency, let importedBy, let line) = error {
+        throw TLCProcessError.invalidModuleBundle(.missingImportedModule(
+          module: dependency,
+          importedBy: "\(importedBy).tla",
+          line: line,
+          expectedFile: "\(dependency).tla"
+        ))
+      }
+      throw TLCProcessError.invalidModuleBundle(.unreadableModule(
+        path: bundle.root.name + ".tla", reason: sanitized(error.localizedDescription)
+      ))
+    }
+  }
+
+  /// Writes exactly the declared bundle to a fresh directory for one TLC invocation.
+  /// Nothing else in the source checkout can become an accidental TLC import.
+  public func stageDeclaredBundle() throws -> (module: URL, configuration: URL) {
+    guard let cfg = bundle.root.cfg else {
+      throw TLCProcessError.invalidModuleBundle(.unreadableModule(
+        path: bundle.root.name + ".cfg", reason: "the declared root has no TLC configuration"
+      ))
+    }
+    try validateRenderedBundleIntegrity()
+    let input = workingDirectory.appendingPathComponent(
+      "input-\(runID.uuidString.lowercased())-\(traceMode)", isDirectory: true)
+    guard !FileManager.default.fileExists(atPath: input.path) else {
+      throw TLCProcessError.invalidModuleBundle(.unreadableModule(
+        path: input.path, reason: "the declared TLC input directory already exists"
+      ))
     }
     do {
-      let directory = module.deletingLastPathComponent()
-      let files = try FileManager.default.contentsOfDirectory(
-        at: directory, includingPropertiesForKeys: nil
-      ).filter { $0.pathExtension == "tla" }
-      let root = TLAModuleFile(
-        name: module.deletingPathExtension().lastPathComponent,
-        tla: try String(contentsOf: module, encoding: .utf8)
+      try FileManager.default.createDirectory(at: input, withIntermediateDirectories: true)
+      for file in bundle.files {
+        try Data(file.tla.utf8).write(
+          to: input.appendingPathComponent("\(file.name).tla"), options: .atomic)
+      }
+      try Data(cfg.utf8).write(
+        to: input.appendingPathComponent("\(bundle.root.name).cfg"), options: .atomic)
+      return (
+        input.appendingPathComponent("\(bundle.root.name).tla"),
+        input.appendingPathComponent("\(bundle.root.name).cfg")
       )
-      let imports = try files.filter { $0.standardizedFileURL != module.standardizedFileURL }.map { url in
+    } catch {
+      try? FileManager.default.removeItem(at: input)
+      throw TLCProcessError.invalidModuleBundle(.unreadableModule(
+        path: input.path, reason: sanitized(error.localizedDescription)
+      ))
+    }
+  }
+
+  /// Reads an explicitly declared root, configuration, and import list.
+  /// This is the only URL-to-bundle boundary; it never enumerates a directory.
+  public static func declaredBundle(
+    root: URL,
+    configuration: URL,
+    imports: [URL] = []
+  ) throws -> TLAModuleBundle {
+    do {
+      let rootFile = TLAModuleFile(
+        name: root.deletingPathExtension().lastPathComponent,
+        tla: try String(contentsOf: root, encoding: .utf8),
+        cfg: try String(contentsOf: configuration, encoding: .utf8)
+      )
+      let importedFiles = try imports.map { url in
         TLAModuleFile(
           name: url.deletingPathExtension().lastPathComponent,
           tla: try String(contentsOf: url, encoding: .utf8)
         )
       }
-      try TLAModuleBundle.untrusted(root: root, imports: imports).validateRenderedBundleIntegrity(
-        standardModules: referencePin?.availableStandardModules
-      )
+      return TLAModuleBundle.untrusted(root: rootFile, imports: importedFiles)
     } catch {
-      if case TLAModuleBundleIntegrityError.missingModule(let dependency, let importedBy, let line) = error {
-        throw TLCProcessError.invalidModuleBundle(.missingImportedModule(
-          module: dependency,
-          importedBy: module.deletingLastPathComponent().appendingPathComponent("\(importedBy).tla").path,
-          line: line,
-          expectedFile: module.deletingLastPathComponent().appendingPathComponent("\(dependency).tla").path
-        ))
-      }
       throw TLCProcessError.invalidModuleBundle(.unreadableModule(
-        path: module.path, reason: sanitized(error.localizedDescription)
+        path: root.path, reason: sanitized(error.localizedDescription)
       ))
     }
   }
@@ -225,8 +272,7 @@ public struct TLCProcessRequest: Equatable, Sendable {
     javaExecutable: URL(fileURLWithPath: "/usr/bin/java"),
     jar: URL(fileURLWithPath: "/tmp/tla2tools.jar"),
     bridgeClasses: URL(fileURLWithPath: "/tmp/bridge-classes"),
-    module: URL(fileURLWithPath: "/tmp/Fixture.tla"),
-    configuration: URL(fileURLWithPath: "/tmp/Fixture.cfg"),
+    bundle: .untrusted(root: TLAModuleFile(name: "Fixture", tla: "---- MODULE Fixture ----", cfg: "SPECIFICATION Spec")),
     graphEvents: URL(fileURLWithPath: "/tmp/events.jsonl"),
     traceOutput: URL(fileURLWithPath: "/tmp/counterexample.json"),
     replayInput: URL(fileURLWithPath: "/tmp/counterexample.json"),
@@ -279,8 +325,8 @@ public struct SystemTLCProcessExecutor: TLCProcessExecuting {
   }
 
   public func execute(_ request: TLCProcessRequest) throws -> TLCProcessResult {
-    try request.validateLaunchBinding()
-    try request.validateRenderedBundleIntegrity()
+    let input = try request.stageDeclaredBundle()
+    try request.validateLaunchBinding(module: input.module, configuration: input.configuration)
     if validatesReferences {
       guard let pin = request.referencePin, let artifacts = request.referenceArtifacts else {
         throw CoreConformanceCaseError.missingArtifact("reference pin and artifacts")
@@ -294,7 +340,7 @@ public struct SystemTLCProcessExecutor: TLCProcessExecuting {
     }
     let result = try executeProcess(
       executable: request.javaExecutable,
-      arguments: try request.commandArguments(),
+      arguments: try request.commandArguments(module: input.module, configuration: input.configuration),
       directory: request.workingDirectory,
       timeout: request.timeout,
       environment: request.effectiveEnvironment
@@ -361,7 +407,7 @@ public struct TLCProcessAdapter: Sendable {
     TLCProcessRequest(
       javaExecutable: request.javaExecutable, jar: request.jar,
       bridgeClasses: request.bridgeClasses,
-      module: request.module, configuration: request.configuration,
+      bundle: request.bundle,
       graphEvents: graphEvents(for: request.graphEvents, mode: traceMode),
       traceOutput: request.traceOutput, replayInput: request.replayInput,
       workingDirectory: request.workingDirectory, arguments: request.arguments,

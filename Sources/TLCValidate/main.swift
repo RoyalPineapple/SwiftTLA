@@ -257,12 +257,16 @@ private func runCoreConformance(arguments: [String]) -> Never {
                 ? output
                 : output.appendingPathComponent(entry.id, isDirectory: true)
             let caseDefinition = try declaredCase(entry, pin: pin, architecture: architecture)
+            let bundle = try TLCProcessRequest.declaredBundle(
+                root: inputPath(entry.module, within: inputRoot),
+                configuration: inputPath(entry.configuration, within: inputRoot),
+                imports: try entry.imports.map { try inputPath($0, within: inputRoot) }
+            )
             let request = TLCProcessRequest(
                 javaExecutable: java,
                 jar: jar,
                 bridgeClasses: bridgeClasses,
-                module: try inputPath(entry.module, within: inputRoot),
-                configuration: try inputPath(entry.configuration, within: inputRoot),
+                bundle: bundle,
                 graphEvents: runRoot.appendingPathComponent("\(entry.id).events.jsonl"),
                 traceOutput: runRoot.appendingPathComponent("\(entry.id).counterexample.json"),
                 replayInput: runRoot.appendingPathComponent("\(entry.id).counterexample.json"),
