@@ -242,7 +242,7 @@ public func Select<Value: TLAValueType>(
     binding,
     predicate(WithValue<Value>(expression: .variable(binding)))
   )
-  guard let value = try? choice.evaluate(in: [:]) else {
+  guard let value = try? evaluateClosed(choice) else {
     preconditionFailure("Select(from:matching:) requires a non-empty static formal domain")
   }
   return Expr(.value(value))
