@@ -17,26 +17,11 @@ private struct LiveCounter {
     actor Actor {}
 }
 
-@TLAModel
-private struct OtherLiveCounter {
-    static var spec: TLASpec {
-        TLASpec("OtherLiveCounter") {
-            let count = Var<Int>("count")
-            Variable(count, 0)
-            Action("advance") { count.becomes(count + 1).when(count < 1) }
-        }
-    }
-
-    @TLAActor
-    actor Actor {}
-}
-
 @Suite("Live machine")
 struct LiveMachineTests {
     @Test("A model creates and executes its typed live machine")
     func typedActionCommitsTypedState() async throws {
-        let owner = try LiveCounter.makeLiveOwner()
-        let live = try LiveCounter.Live(handle: owner.handle)
+        let live = try LiveCounter.makeLive()
 
         let outcome = try await live.execute(.advance)
         guard case .committed(let transition) = outcome else {
@@ -54,18 +39,9 @@ struct LiveMachineTests {
         #expect(snapshot.position == .init(value: 1))
     }
 
-    @Test("A typed live machine rejects a handle from another model")
-    func rejectsForeignHandle() throws {
-        let foreign = try OtherLiveCounter.makeLiveOwner()
-        #expect(throws: GeneratedMachineError.self) {
-            try LiveCounter.Live(handle: foreign.handle)
-        }
-    }
-
     @Test("A disabled typed action leaves the live state unchanged")
     func typedRejectionPreservesState() async throws {
-        let owner = try LiveCounter.makeLiveOwner()
-        let live = try LiveCounter.Live(handle: owner.handle)
+        let live = try LiveCounter.makeLive()
         _ = try await live.execute(.advance)
 
         guard case .rejected(let rejection) = try await live.execute(.advance) else {

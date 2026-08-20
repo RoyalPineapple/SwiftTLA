@@ -4,7 +4,7 @@ import SwiftTLA
 extension MacroExpander {
     static func generateLiveMachineMembers(model: MacroCompilation) -> [DeclSyntax] {
         let typeName = model.typeName
-        let hasActions = !model.machineSurface.actions.isEmpty
+        let hasActions = model.machineSurface.actions.isEmpty == false
 
         let typedExecute: [String] = hasActions ? [
             """
@@ -37,21 +37,26 @@ extension MacroExpander {
 
         let liveMembers = ([
             """
-                fileprivate let _handle: TLALiveMachine
+                private let _owner: TLALiveMachineOwner
+                private let _handle: TLALiveMachine
 
-                public init(handle: TLALiveMachine) throws {
-                    guard handle.schema == \(typeName).machineSchema else {
-                        throw GeneratedMachineError.liveMachineSchemaMismatch(
-                            expected: \(typeName).machineSchema.identifier,
-                            actual: handle.schema.identifier
-                        )
-                    }
-                    _handle = handle
+                private init() throws {
+                    let owner = try \(typeName)._makeLiveOwner()
+                    _owner = owner
+                    _handle = owner.handle
                 }
 
                 public var identity: TLALiveMachineIdentity { _handle.identity }
 
                 public var schema: MachineSchema { _handle.schema }
+
+                public func end() async {
+                    await _owner.end()
+                }
+
+                fileprivate func _observe() async -> TLALiveMachineAttachmentOutcome {
+                    await _handle.observe()
+                }
 
                 public func current() async throws -> CurrentResult {
                     switch await _handle.current() {
@@ -101,13 +106,13 @@ extension MacroExpander {
                         try runtime.successors(invocation, from: state)
                     },
                     availableInvocations: { state in
-                        try runtime.availableInvocations(in: state).filter { !identityRouted.contains($0.name) }
+                        try runtime.availableInvocations(in: state).filter { identityRouted.contains($0.name) == false }
                     },
                     validateInvocation: { invocation in
                         guard let action = actions[invocation.name] else { return .unknownAction }
                         guard action.bindings.count == invocation.arguments.count else { return .invalidArity }
                         for (binding, argument) in zip(action.bindings, invocation.arguments)
-                        where !binding.values.contains(argument) {
+                        where binding.values.contains(argument) == false {
                             return .actionArgumentOutOfDomain
                         }
                         return identityRouted.contains(invocation.name)
@@ -121,7 +126,7 @@ extension MacroExpander {
             }
             """),
             DeclSyntax(stringLiteral: """
-            public static func makeLiveOwner() throws -> TLALiveMachineOwner {
+            private static func _makeLiveOwner() throws -> TLALiveMachineOwner {
                 let runtime = try _runtime()
                 guard let initial = try runtime.initialStateProjections().first else {
                     throw GeneratedMachineError.noInitialState
@@ -132,6 +137,11 @@ extension MacroExpander {
                     initial: initial,
                     driver: _liveDriver(runtime)
                 )
+            }
+            """),
+            DeclSyntax(stringLiteral: """
+            public static func makeLive() throws -> Live {
+                try Live()
             }
             """),
             DeclSyntax(stringLiteral: """

@@ -92,7 +92,7 @@ struct GeneratedMachineDocumentationTests {
             encoding: .utf8
         )
 
-        for term in ["TransitionResult", "MachineObservation", "ActionLabel", "State", "TLALiveMachine"] {
+        for term in ["TransitionResult", "MachineObservation", "ActionLabel", "State", "makeLive()"] {
             #expect(guide.contains(term), "Markdown guide is missing typed term: \(term)")
             #expect(docc.contains(term), "SwiftTLA DocC is missing typed term: \(term)")
         }
@@ -106,7 +106,7 @@ struct GeneratedMachineDocumentationTests {
         }
     }
 
-    @Test("Live-machine guide describes one owner and existing-handle binding")
+    @Test("Live-machine guide describes typed live factories")
     func liveMachineGuideDescribesOneOwner() throws {
         let root = packageRoot()
         let guide = try String(
@@ -118,11 +118,11 @@ struct GeneratedMachineDocumentationTests {
             encoding: .utf8
         )
         for term in [
-            "makeLiveOwner()",
-            "Live(handle:)",
+            "makeLive()",
+            "Actor(live:)",
             "non-cancellable",
-            "resynchronize()",
-            "TLALiveMachineObservationSubscription"
+            "Runtime scope",
+            "Live.Outcome"
         ] {
             #expect(live.contains(term), "Live-machine guide is missing: \(term)")
         }
@@ -156,10 +156,8 @@ struct GeneratedMachineDocumentationTests {
         "`availableActions()`",
         "`apply(_:)`",
         "A nested `@TLAObservable` adapter is main-actor isolated",
-        "Neither adapter owns a formal specification",
+        "Adapters\nshare the enclosing model's typed `Live` runtime",
         "reduces a contiguous committed update",
-        "`TLALiveMachineOwner`",
-        "`TLALiveMachineObservationSubscription`",
         "Generated `VerificationError`",
         "Generated `verifySpec()`",
         "Generated `transitionMatrix()`",

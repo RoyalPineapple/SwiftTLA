@@ -23,7 +23,7 @@ extension MacroExpander {
             DeclSyntax(stringLiteral: "public static var machineSchema: MachineSchema { CanonicalModel.machineSchema }"),
             DeclSyntax(stringLiteral: "public static var generatedMachineMetadata: GeneratedMachineMetadata { CanonicalModel.generatedMachineMetadata }")
         ]
-        if !model.machineSurface.actions.isEmpty {
+        if model.machineSurface.actions.isEmpty == false {
             declarations.insert(DeclSyntax(stringLiteral: "public typealias ActionLabel = \(model.typeName).ActionLabel"), at: 3)
             declarations.insert(DeclSyntax(stringLiteral: "public typealias Outcome = \(model.typeName).Live.Outcome"), at: 4)
         }
@@ -34,8 +34,7 @@ extension MacroExpander {
         var declarations = commonAdapterAliases(model: model)
         declarations += [
             DeclSyntax(stringLiteral: "private let _live: Live"),
-            DeclSyntax(stringLiteral: "public init(handle: TLALiveMachine) throws { _live = try Live(handle: handle) }"),
-            DeclSyntax(stringLiteral: "public var handle: TLALiveMachine { _live._handle }"),
+            DeclSyntax(stringLiteral: "public init(live: Live) { _live = live }"),
             DeclSyntax(stringLiteral: "public var identity: TLALiveMachineIdentity { _live.identity }"),
             DeclSyntax(stringLiteral: "public func current() async throws -> Live.CurrentResult { try await _live.current() }")
         ]
@@ -51,14 +50,14 @@ extension MacroExpander {
             DeclSyntax(stringLiteral: "private let _subscription: TLALiveMachineObservationSubscription"),
             DeclSyntax(stringLiteral: "private var _observationTask: Task<Void, Never>?"),
             DeclSyntax(stringLiteral: """
-            @MainActor public init(handle: TLALiveMachine) async throws {
-                _live = try Live(handle: handle)
+            @MainActor public init(live: Live) async throws {
+                _live = live
                 _reducer = TLALiveMachineObservableReducer(
-                    identity: handle.identity,
-                    schemaIdentifier: handle.schemaIdentifier,
+                    identity: live.identity,
+                    schemaIdentifier: live.schema.identifier,
                     decode: { try State(projection: $0) }
                 )
-                switch await handle.observe() {
+                switch await live._observe() {
                 case .attached(let subscription): _subscription = subscription
                 case .unavailable(let reason): throw GeneratedMachineError.liveMachineUnavailable(reason)
                 }
@@ -72,7 +71,6 @@ extension MacroExpander {
             }
             """),
             DeclSyntax(stringLiteral: "deinit { _observationTask?.cancel() }"),
-            DeclSyntax(stringLiteral: "public var handle: TLALiveMachine { _live._handle }"),
             DeclSyntax(stringLiteral: "public var identity: TLALiveMachineIdentity { _live.identity }"),
             DeclSyntax(stringLiteral: "public var status: TLALiveMachineAdapterStatus { _reducer.status }"),
             DeclSyntax(stringLiteral: "public var current: TLALiveMachineAdapterSnapshot<State>? { _reducer.current }"),
@@ -108,7 +106,7 @@ extension MacroExpander {
     }
 
     static func observableReducerMethod(model: MacroCompilation) -> String {
-        guard !model.machineSurface.actions.isEmpty else {
+        guard model.machineSurface.actions.isEmpty == false else {
             return """
             private func _reduce(_ event: TLALiveMachineObservationEvent, subscription: TLALiveMachineObservationSubscription) async {
                 _ = _reducer.reduce(event)
