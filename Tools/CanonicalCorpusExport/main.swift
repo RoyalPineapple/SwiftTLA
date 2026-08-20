@@ -27,13 +27,6 @@ private struct Manifest: Codable {
     }
 }
 
-private struct CorpusCase {
-    let id: String
-    let specification: () -> TLASpec
-    let swiftConfiguration: String
-    let plusCalConfiguration: String
-}
-
 private enum ExportError: Error, CustomStringConvertible {
     case usage
     case outputExists(String)
@@ -53,27 +46,6 @@ private enum ExportError: Error, CustomStringConvertible {
         }
     }
 }
-
-private let corpus = [
-    CorpusCase(
-        id: "boulanger-upstream-port",
-        specification: { BoulangerModel.spec },
-        swiftConfiguration: "SPECIFICATION Spec\nCONSTRAINT StateConstraint\n",
-        plusCalConfiguration: "SPECIFICATION Spec\nCONSTRAINT StateConstraint\n"
-    ),
-    CorpusCase(
-        id: "kvsnap-upstream-port",
-        specification: { KVsnapModel.spec },
-        swiftConfiguration: "SPECIFICATION Spec\nINVARIANTS TypeOK SnapshotIsolation\nPROPERTIES Termination\nCONSTANT k1 = k1\nCONSTANT k2 = k2\nCONSTANT t1 = t1\nCONSTANT t2 = t2\nCONSTANT t3 = t3\nCONSTANT NoVal = NoVal\n",
-        plusCalConfiguration: "SPECIFICATION Spec\nINVARIANTS TypeOK SnapshotIsolation\nPROPERTIES Termination\nCONSTANT k1 = k1\nCONSTANT k2 = k2\nCONSTANT t1 = t1\nCONSTANT t2 = t2\nCONSTANT t3 = t3\nCONSTANT NoVal = NoVal\n"
-    ),
-    CorpusCase(
-        id: "voteproof-upstream-port",
-        specification: { VoteProofModel.spec },
-        swiftConfiguration: "SPECIFICATION Spec\nINVARIANTS TypeOK VInv1 VInv2 VInv3 VInv4\nPROPERTIES Refines\nCONSTANT Value = {\"v1\", \"v2\"}\nCONSTANT Acceptor = {\"a1\", \"a2\", \"a3\"}\nCONSTANT Quorum = {{\"a1\", \"a2\"}, {\"a1\", \"a3\"}, {\"a2\", \"a3\"}, {\"a1\", \"a2\", \"a3\"}}\nCONSTANT Ballot = {0, 1, 2}\nCHECK_DEADLOCK FALSE\n",
-        plusCalConfiguration: "SPECIFICATION Spec\nINVARIANTS TypeOK VInv1 VInv2 VInv3 VInv4\nPROPERTIES Refines\nCONSTANT Value = {\"v1\", \"v2\"}\nCONSTANT Acceptor = {\"a1\", \"a2\", \"a3\"}\nCONSTANT Quorum = {{\"a1\", \"a2\"}, {\"a1\", \"a3\"}, {\"a1\", \"a2\", \"a3\"}}\nCONSTANT Ballot = {0, 1, 2}\nCHECK_DEADLOCK FALSE\n"
-    ),
-]
 
 private func sha256(_ data: Data) -> String {
     SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
@@ -147,10 +119,10 @@ do {
     }
     try FileManager.default.createDirectory(at: options.output, withIntermediateDirectories: true)
 
-    let cases = try corpus.map { item -> Manifest.Case in
+    let cases = try CanonicalCorpus.entries.map { item -> Manifest.Case in
         let specification = item.specification()
         let compilation = try specification.compile()
-        let externalInputs = try CanonicalCorpusModuleClosure.inputs(for: item.id).map { input in
+        let externalInputs = try item.externalInputs.map { input in
             (input, try fetchPinnedModule(input))
         }
         let externalImports = externalInputs.map { input, data in
