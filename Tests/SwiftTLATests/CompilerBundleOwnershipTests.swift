@@ -186,7 +186,7 @@ struct CompilerBundleOwnershipTests {
 
     #expect(throws: CompilationDiagnostic.self) { try computeInitialStates(invalid) }
     #expect(throws: CompilationDiagnostic.self) { try ModelChecker(spec: invalid) }
-    #expect(throws: CompilationDiagnostic.self) { try SpecRuntime(spec: invalid) }
+    #expect(throws: CompilationDiagnostic.self) { try invalid.compile() }
   }
 
   private func expectLinkDiagnostic(

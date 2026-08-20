@@ -439,7 +439,7 @@ Generated source layout, private storage, underscored helpers, callback scheduli
 |---|---|
 | Public annotations | `Sources/SwiftTLAMacros/Macros.swift` |
 | Generated model and adapter members | `Sources/SwiftTLAPlugin/MacroExpander+CanonicalMachine.swift`, `Sources/SwiftTLAPlugin/MacroExpander+Adapters.swift`, and `Sources/SwiftTLAPlugin/MacroExpander+Generation.swift` |
-| Observation and error behavior | `Sources/SwiftTLA/CanonicalMachine.swift` and `Sources/SwiftTLA/SpecRuntime.swift` |
+| Observation and error behavior | `Sources/SwiftTLA/CanonicalMachine.swift` and `Sources/SwiftTLA/CompiledRuntime.swift` |
 | Action failure preserves state | `CanonicalMachine.apply(_:)` and `Tests/SwiftTLATests/GeneratedStateMachineTests.swift` |
 | Public-workflow evidence labels | [Public workflow conformance](PublicWorkflowConformance.md) |
 | Compilable examples | The fixtures named beside each example ID |

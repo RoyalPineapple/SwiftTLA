@@ -253,15 +253,33 @@ private func value(
   }
 }
 
-// MARK: - SpecRuntime
+// MARK: - Compiled execution
 
-@Suite(.serialized) struct RuntimeTests {
+@Suite(.serialized) struct CompiledExecutionTests {
   private func successor(
-    _ runtime: SpecRuntime,
-    _ invocation: TLAActionInvocation,
+    _ compilation: CompiledSpecification,
+    named name: String,
+    arguments: [TLAValue] = [],
     from state: TLAStateProjection
   ) throws -> TLAStateProjection {
-    try #require(try runtime.successors(invocation, from: state).first)
+    let action = try #require(compilation.layout.actionID(named: name))
+    return try #require(try compilation.successors(for: action, arguments: arguments, from: state).first)
+  }
+
+  private func successors(
+    _ compilation: CompiledSpecification,
+    from state: TLAStateProjection
+  ) throws -> [(TLAActionInvocation, TLAStateProjection)] {
+    let formalState = try FormalState(projection: state, compilation: compilation)
+    return try CompiledRuntime(compilation: compilation)
+      .successors(from: formalState)
+      .map { successor in
+        let invocation = TLAActionInvocation(
+          name: compilation.layout.actions[successor.action.ordinal].declaration.name,
+          arguments: successor.arguments
+        )
+        return (invocation, try successor.state.projection(using: compilation.layout))
+      }
   }
 
   private func value(_ name: String, in state: TLAStateProjection) throws -> TLAValue {
@@ -272,20 +290,20 @@ private func value(
     return value
   }
 
-  @Test("Runtime applies action and produces new state")
+  @Test("compiled execution applies an action")
   func applyAction() throws {
     let hr = Var<Int>("hr")
     let spec = TLASpec("HourClock") {
       Variable(hr, 1)
       Action("Tick") { hr.becomes(hr + 1).when(hr < 12) || (hr == 12 && hr.becomes(1)) }
     }
-    let rt = try SpecRuntime(spec: spec)
-    let state = try #require(rt.initialStateProjections().first)
-    let next = try successor(rt, .init(name: "Tick"), from: state)
+    let compilation = try spec.compile()
+    let state = try #require(try compilation.initialStateProjections().first)
+    let next = try successor(compilation, named: "Tick", from: state)
     #expect(try value("hr", in: next) == .int(2))
   }
 
-  @Test("Runtime checks invariants")
+  @Test("compiled execution checks invariants")
   func checkInvariant() throws {
     let hr = Var<Int>("hr")
     let spec = TLASpec("HourClock") {
@@ -293,25 +311,25 @@ private func value(
       Action("Tick") { hr.becomes(hr + 1).when(hr < 12) || (hr == 12 && hr.becomes(1)) }
       Invariant("Positive") { hr > 0 }
     }
-    let rt = try SpecRuntime(spec: spec)
-    let state = try #require(rt.initialStateProjections().first)
-    #expect(try rt.check("Positive", in: state) == true)
+    let compilation = try spec.compile()
+    let state = try #require(try compilation.initialStateProjections().first)
+    #expect(compilation.propertyOutcomes(in: state) == [.satisfied(name: "Positive")])
   }
 
-  @Test("Runtime lists available actions")
+  @Test("compiled execution lists available actions")
   func availableActions() throws {
     let hr = Var<Int>("hr")
     let spec = TLASpec("HourClock") {
       Variable(hr, 1)
       Action("Tick") { hr.becomes(hr + 1).when(hr < 12) || (hr == 12 && hr.becomes(1)) }
     }
-    let rt = try SpecRuntime(spec: spec)
-    let state = try #require(rt.initialStateProjections().first)
-    let available = try rt.availableInvocations(in: state)
+    let compilation = try spec.compile()
+    let state = try #require(try compilation.initialStateProjections().first)
+    let available = try successors(compilation, from: state).map(\.0)
     #expect(available.contains(.init(name: "Tick")))
   }
 
-  @Test("Runtime successor relation matches checked transitions from every reachable state")
+  @Test("compiled successor relation matches checked transitions from every reachable state")
   func runtimeSuccessorsMatchCheckedTransitions() throws {
     let counter = Var<Int>("counter")
     let step = Var<Int>("step")
@@ -324,22 +342,20 @@ private func value(
       Constraint(counter <= StateExpr.value(.constant("limit")))
     }
     let graph = try ModelChecker(spec: spec).exploreGraph()
-    let runtime = try SpecRuntime(spec: spec)
+    let compilation = try spec.compile()
 
     for (sourceID, source) in graph.states {
       let checked = (graph.transitions[sourceID] ?? []).compactMap { transition -> (TLAActionInvocation, TLAStateProjection)? in
         guard let successor = graph.states[transition.target] else { return nil }
         return (transition.label.invocation, successor)
       }
-      let runtimeSuccessors = try runtime.availableInvocations(in: source).flatMap { invocation in
-        try runtime.successors(invocation, from: source).map { (invocation, $0) }
-      }
+      let runtimeSuccessors = try successors(compilation, from: source)
 
       #expect(multiset(runtimeSuccessors) == multiset(checked))
     }
   }
 
-  @Test("Runtime functions survive constant resolution in constraints and invariant checks")
+  @Test("compiled functions survive constant resolution in constraints and invariant checks")
   func runtimeFunctionsSurviveConstantResolution() throws {
     let counter = Var<Int>("counter")
     let increment = Var<Int>("step")
@@ -363,20 +379,17 @@ private func value(
       Invariant("AtMostLimit") { isAtMostLimit }
     }
     let graph = try ModelChecker(spec: spec).exploreGraph()
-    let runtime = try SpecRuntime(spec: spec)
+    let compilation = try spec.compile()
 
     for (sourceID, source) in graph.states {
       let checked = (graph.transitions[sourceID] ?? []).compactMap { transition -> (TLAActionInvocation, TLAStateProjection)? in
         guard let successor = graph.states[transition.target] else { return nil }
         return (transition.label.invocation, successor)
       }
-      let runtimeSuccessors = try runtime.availableInvocations(in: source).flatMap { invocation in
-        try runtime.successors(invocation, from: source).map { (invocation, $0) }
-      }
+      let runtimeSuccessors = try successors(compilation, from: source)
 
       #expect(multiset(runtimeSuccessors) == multiset(checked))
-      #expect(try runtime.check("AtMostLimit", in: source))
-      #expect(runtime.propertyOutcomes(in: source) == [.satisfied(name: "AtMostLimit")])
+      #expect(compilation.propertyOutcomes(in: source) == [.satisfied(name: "AtMostLimit")])
     }
   }
 
@@ -389,8 +402,8 @@ private func value(
     )
   }
 
-  @Test("Runtime validates action arguments and reports disabled successors")
-  func runtimeValidatesArgumentsAndReportsDisabledSuccessors() throws {
+  @Test("compiled execution preserves parameter domains and disabled successors")
+  func compiledExecutionPreservesParameterDomainsAndDisabledSuccessors() throws {
     let counter = Var<Int>("counter")
     let step = Var<Int>("step")
     let spec = TLASpec("RuntimeErrors") {
@@ -399,87 +412,55 @@ private func value(
         counter.becomes(counter + step).when(counter == 0)
       }
     }
-    let runtime = try SpecRuntime(spec: spec)
-    let initial = try #require(runtime.initialStateProjections().first)
+    let compilation = try spec.compile()
+    let initial = try #require(try compilation.initialStateProjections().first)
     let available = [
       TLAActionInvocation(name: "advance", arguments: [.int(1)]),
       TLAActionInvocation(name: "advance", arguments: [.int(2)])
     ]
 
-    do {
-      _ = try runtime.successors(.init(name: "advance", arguments: [.int(3)]), from: initial)
-      Issue.record("Expected invalid arguments")
-    } catch let error as SpecRuntime.RuntimeError {
-      guard case .invalidActionArguments(let invocation, let actualAvailable) = error else {
-        Issue.record("Expected invalidActionArguments, got \(error)")
-        return
-      }
-      #expect(invocation == .init(name: "advance", arguments: [.int(3)]))
-      #expect(actualAvailable == available)
-    }
+    #expect(try successors(compilation, from: initial).map(\.0) == available)
 
-    let advanced = try successor(runtime, .init(name: "advance", arguments: [.int(1)]), from: initial)
-    #expect(try runtime.successors(.init(name: "advance", arguments: [.int(1)]), from: advanced).isEmpty)
+    let advanced = try successor(compilation, named: "advance", arguments: [.int(1)], from: initial)
+    let action = try #require(compilation.layout.actionID(named: "advance"))
+    #expect(try compilation.successors(for: action, arguments: [.int(1)], from: advanced).isEmpty)
+    #expect(try compilation.successors(for: action, arguments: [.int(3)], from: initial).isEmpty)
   }
 
-  @Test("Runtime reports availability evaluation failures with invocation context")
-  func runtimePropagatesAvailabilityEvaluationFailures() throws {
+  @Test("compiled execution propagates invalid action evaluation")
+  func compiledExecutionPropagatesInvalidActionEvaluation() throws {
     let counter = Var<Int>("counter")
     let spec = TLASpec("InvalidAvailability") {
       Variable(counter, 0)
       Action("advance") { counter.becomes(counter + 1).when(StateExpr.variable("missing")) }
     }
-    let runtime = try SpecRuntime(spec: spec)
-    let state = try #require(runtime.initialStateProjections().first)
+    let compilation = try spec.compile()
+    let state = try #require(try compilation.initialStateProjections().first)
 
     do {
-      _ = try runtime.availableInvocations(in: state)
+      _ = try successors(compilation, from: state)
       Issue.record("Expected availability evaluation failure")
-    } catch let error as SpecRuntime.RuntimeError {
-      guard case .enumerationFailed(let requested, let evaluated, let underlying) = error else {
-        Issue.record("Expected enumerationFailed, got \(error)")
-        return
-      }
-      #expect(requested == nil)
-      #expect(evaluated == .init(name: "advance"))
-      guard case .undefinedVariable("missing") = underlying as? EvalError else {
-        Issue.record("Expected missing-variable evaluator error, got \(underlying)")
+    } catch let error as EvalError {
+      guard case .undefinedVariable("missing") = error else {
+        Issue.record("Expected missing-variable evaluator error, got \(error)")
         return
       }
     }
 
-    do {
-      _ = try runtime.successors(.init(name: "unknown"), from: state)
-      Issue.record("Expected availability evaluation failure during application")
-    } catch let error as SpecRuntime.RuntimeError {
-      guard case .enumerationFailed(let requested, let evaluated, let underlying) = error else {
-        Issue.record("Expected enumerationFailed, got \(error)")
-        return
-      }
-      #expect(requested == .init(name: "unknown"))
-      #expect(evaluated == .init(name: "advance"))
-      guard case .undefinedVariable("missing") = underlying as? EvalError else {
-        Issue.record("Expected missing-variable evaluator error, got \(underlying)")
-        return
-      }
-    }
+    #expect(compilation.layout.actionID(named: "unknown") == nil)
   }
 
-  @Test("Runtime step validates + applies")
-  func step() throws {
+  @Test("compiled execution applies a declared action")
+  func appliesDeclaredAction() throws {
     let hr = Var<Int>("hr")
     let spec = TLASpec("HourClock") {
       Variable(hr, 1)
       Action("Tick") { hr.becomes(hr + 1).when(hr < 12) || (hr == 12 && hr.becomes(1)) }
     }
-    let rt = try SpecRuntime(spec: spec)
-    let state = try #require(rt.initialStateProjections().first)
-    let result = try rt.step(.init(name: "Tick"), from: state)
-    if case .ok(let next) = result {
-      #expect(try value("hr", in: next) == .int(2))
-    } else {
-      #expect(Bool(false))
-    }
+    let compilation = try spec.compile()
+    let state = try #require(try compilation.initialStateProjections().first)
+    let next = try successor(compilation, named: "Tick", from: state)
+    #expect(try value("hr", in: next) == .int(2))
   }
 }
 
@@ -529,8 +510,8 @@ private func value(
     #expect(graph.variableNames.contains("counter"))
   }
 
-  @Test("BFSChecker @TLAModel exposes SpecRuntime")
-  func bfsCheckerRuntime() throws {
+  @Test("BFSChecker @TLAModel exposes compiled execution")
+  func bfsCheckerCompiledExecution() throws {
     let graph = try ModelChecker(spec: BFSChecker.spec, maxStates: 20).exploreGraph()
     let initial = try #require(graph.initialStateIDs.first)
     let state = try #require(graph.states[initial])
@@ -838,8 +819,8 @@ private func value(
     }
   }
 
-  @Test("SpecRuntime handles function-typed variable correctly")
-  func functionTypeRuntime() throws {
+  @Test("compiled execution handles function-typed variables")
+  func functionTypeCompiledExecution() throws {
     let programCounter = Var<TLAValue>("programCounter")
     let spec = TLASpec("FuncGen") {
       Variable(programCounter, TLAValue.function([:]))
@@ -851,9 +832,10 @@ private func value(
           programCounter.stateExpr.domain.cardinality == 0)
       }
     }
-    let rt = try SpecRuntime(spec: spec)
-    let state = try #require(rt.initialStateProjections().first)
-    let next = try #require(try rt.successors(.init(name: "init"), from: state).first)
+    let compilation = try spec.compile()
+    let action = try #require(compilation.layout.actionID(named: "init"))
+    let state = try #require(try compilation.initialStateProjections().first)
+    let next = try #require(try compilation.successors(for: action, arguments: [], from: state).first)
     let programCounter = try #require(TLAStateProjection.Token(validating: "programCounter"))
     if next.value(for: programCounter) == nil {
       Issue.record("Expected programCounter in successor")

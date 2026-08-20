@@ -17,16 +17,23 @@ struct NestedComposableMacroConformanceTests {
             Constraint(value <= 2)
         }
         let graph = try ModelChecker(spec: spec).exploreGraph()
-        let runtime = try SpecRuntime(spec: spec)
+        let compilation = try spec.compile()
 
         for (sourceID, source) in graph.states {
             let checked = (graph.transitions[sourceID] ?? []).compactMap { transition -> (TLAActionInvocation, TLAStateProjection)? in
                 guard let successor = graph.states[transition.target] else { return nil }
                 return (transition.label.invocation, successor)
             }
-            let runtimeSuccessors = try runtime.availableInvocations(in: source).flatMap { invocation in
-                try runtime.successors(invocation, from: source).map { (invocation, $0) }
-            }
+            let state = try FormalState(projection: source, compilation: compilation)
+            let runtimeSuccessors = try CompiledRuntime(compilation: compilation)
+                .successors(from: state)
+                .map { successor in
+                    let invocation = TLAActionInvocation(
+                        name: compilation.layout.actions[successor.action.ordinal].declaration.name,
+                        arguments: successor.arguments
+                    )
+                    return (invocation, try successor.state.projection(using: compilation.layout))
+                }
 
             #expect(multiset(runtimeSuccessors) == multiset(checked))
             let value = try #require(TLAStateProjection.Token(validating: "value"))

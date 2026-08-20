@@ -440,16 +440,21 @@ private func compiledValue(
     #expect(try spec.compile().renderedTLAModuleBundle().tla.contains("board__0_0_0 == board(1, 10, 100)"))
     #expect(try spec.compile().renderedTLAModuleBundle().tla.contains("board__1_1_1 == board(2, 20, 200)"))
 
-    let runtime = try SpecRuntime(spec: spec)
-    let initial = try #require(runtime.initialStateProjections().first)
-    let next = try #require(try runtime.successors(
-      .init(name: "board", arguments: [.int(2), .int(20), .int(200)]), from: initial).first)
+    let compilation = try spec.compile()
+    let action = try #require(compilation.layout.actionID(named: "board"))
+    let initial = try #require(try compilation.initialStateProjections().first)
+    let next = try #require(try compilation.successors(
+      for: action,
+      arguments: [.int(2), .int(20), .int(200)],
+      from: initial
+    ).first)
     let floor = try #require(TLAStateProjection.Token(validating: "floor"))
     #expect(next.value(for: floor) == .int(222))
-    #expect(throws: SpecRuntime.RuntimeError.self) {
-      try runtime.successors(
-        .init(name: "board", arguments: [.int(3), .int(20), .int(200)]), from: initial)
-    }
+    #expect(try compilation.successors(
+      for: action,
+      arguments: [.int(3), .int(20), .int(200)],
+      from: initial
+    ).isEmpty)
     #expect(initial.value(for: floor) == .int(0))
   }
 

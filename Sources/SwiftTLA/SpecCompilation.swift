@@ -122,6 +122,60 @@ public struct CompiledSpecification: Sendable {
         }
     }
 
+    package func actionID(named name: String) -> ActionID? {
+        layout.actionID(named: name)
+    }
+
+    package func successors(
+        for action: ActionID,
+        arguments: [TLAValue],
+        from state: TLAStateProjection
+    ) throws -> [TLAStateProjection] {
+        let formalState = try FormalState(projection: state, compilation: self)
+        return try CompiledRuntime(compilation: self)
+            .successors(for: action, from: formalState)
+            .filter { $0.arguments == arguments }
+            .map { try $0.state.projection(using: layout) }
+    }
+
+    package func propertyOutcomes(
+        in state: TLAStateProjection
+    ) -> [CompiledPropertyOutcome] {
+        let runtime = CompiledRuntime(compilation: self)
+        let formalState: FormalState
+        do {
+            formalState = try FormalState(projection: state, compilation: self)
+        } catch {
+            return model.invariants.map {
+                .evaluationFailed(
+                    name: $0.name,
+                    diagnostic: .init(code: .evaluationError, message: String(describing: error))
+                )
+            }
+        }
+        let invariants = model.invariants.map { invariant -> CompiledPropertyOutcome in
+            do {
+                return try runtime.invariantHolds(invariant, in: formalState)
+                    ? .satisfied(name: invariant.name)
+                    : .violated(name: invariant.name)
+            } catch {
+                return .evaluationFailed(
+                    name: invariant.name,
+                    diagnostic: .init(code: .evaluationError, message: String(describing: error))
+                )
+            }
+        }
+        return invariants + model.temporalProperties.map {
+            .evaluationUnavailable(
+                name: $0.name,
+                diagnostic: .init(
+                    code: .evaluatorUnavailable,
+                    message: "Temporal properties require a complete graph evaluation"
+                )
+            )
+        }
+    }
+
     init(
         spec: TLASpec,
         formalModuleClosure: FormalModuleClosure,

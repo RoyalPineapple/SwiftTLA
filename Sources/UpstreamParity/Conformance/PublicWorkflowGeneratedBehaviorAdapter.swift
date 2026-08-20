@@ -228,13 +228,13 @@ struct PublicWorkflowGeneratedMachineHarness {
   let initialStates: [TLAStateProjection]
   let actionNames: [String]
   let apply: (TLAStateProjection, String) -> GeneratedActionResult
-  let propertyOutcomes: (TLAStateProjection) -> [SpecRuntime.RuntimePropertyOutcome]
+  let propertyOutcomes: (TLAStateProjection) -> [CompiledPropertyOutcome]
 
   init(
     initialStates: [TLAStateProjection],
     actionNames: [String],
     apply: @escaping (TLAStateProjection, String) -> GeneratedActionResult,
-    propertyOutcomes: @escaping (TLAStateProjection) -> [SpecRuntime.RuntimePropertyOutcome]
+    propertyOutcomes: @escaping (TLAStateProjection) -> [CompiledPropertyOutcome]
   ) {
     self.initialStates = initialStates
     self.actionNames = actionNames
@@ -250,8 +250,19 @@ enum GeneratedActionResult: Equatable, Sendable {
   case enabled(actionName: String, successors: [TLAStateProjection])
   case disabled(actionName: String)
   case actionNotFound(actionName: String)
-  case evaluationFailed(actionName: String, diagnostic: SpecRuntime.ActionEvaluationDiagnostic)
-  case evaluationUnavailable(actionName: String, diagnostic: SpecRuntime.ActionEvaluationDiagnostic)
+  case evaluationFailed(actionName: String, diagnostic: GeneratedActionDiagnostic)
+  case evaluationUnavailable(actionName: String, diagnostic: GeneratedActionDiagnostic)
+}
+
+struct GeneratedActionDiagnostic: Equatable, Sendable {
+  enum Code: String, Equatable, Sendable {
+    case actionError
+    case evaluationError
+    case evaluatorUnavailable
+  }
+
+  let code: Code
+  let message: String
 }
 
 public struct PublicWorkflowGeneratedFixtureConfiguration: Codable, Sendable {
@@ -548,7 +559,7 @@ public struct PublicWorkflowGeneratedBehaviorAdapter: Sendable {
         outcome: run.outcome,
         diagnostics: run.errors.map { "builder:\($0.code):\($0.message)" },
         traces: run.traces,
-        propertyOutcomes: SpecRuntime(compilation: compilation).propertyOutcomes(in:))
+        propertyOutcomes: compilation.propertyOutcomes(in:))
     } catch {
       return try unavailableObservation("builder:\(String(describing: error))")
     }
@@ -641,7 +652,7 @@ public struct PublicWorkflowGeneratedBehaviorAdapter: Sendable {
     outcome: CanonicalOutcome,
     diagnostics: [String],
     traces: [CanonicalTrace],
-    propertyOutcomes: (TLAStateProjection) -> [SpecRuntime.RuntimePropertyOutcome],
+    propertyOutcomes: (TLAStateProjection) -> [CompiledPropertyOutcome],
     explicitFailures: [String] = [],
     explicitTrace: [String]? = nil,
     traceForState: ((CanonicalStateKey) -> [String])? = nil
@@ -680,7 +691,7 @@ public struct PublicWorkflowGeneratedBehaviorAdapter: Sendable {
 
   private func propertyProjection(
     graph: CanonicalGraph,
-    outcomes: (TLAStateProjection) -> [SpecRuntime.RuntimePropertyOutcome],
+    outcomes: (TLAStateProjection) -> [CompiledPropertyOutcome],
     traceForState: (CanonicalStateKey) -> [String]
   ) -> (records: [String], failures: [String], diagnostics: [String], trace: [String]?) {
     var records = [String]()
