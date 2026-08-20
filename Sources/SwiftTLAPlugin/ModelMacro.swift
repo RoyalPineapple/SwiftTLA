@@ -258,7 +258,6 @@ enum TLASpecVerifier {
             let baseName = callee.as(DeclReferenceExprSyntax.self)?.baseName.text
                 ?? callee.as(GenericSpecializationExprSyntax.self)?.expression.as(DeclReferenceExprSyntax.self)?.baseName.text
             let isVar = baseName == "Var"
-            let isValue = baseName == "Value"
             if isVar {
                 if let firstArg = fc.arguments.first,
                    let label = firstArg.label?.text,
@@ -296,29 +295,7 @@ enum TLASpecVerifier {
                 continue
             }
 
-            guard isVar || isValue
-            else { newBindings.append(binding); continue }
-
-            let hasStringArg = fc.arguments.contains { arg in
-                arg.label == nil && arg.expression.is(StringLiteralExprSyntax.self)
-            }
-            if hasStringArg { newBindings.append(binding); continue }
-
-            let nameArg = LabeledExprSyntax(
-                expression: StringLiteralExprSyntax(content: patternName)
-            )
-            var newArgs = fc.arguments
-            if let firstArg = newArgs.first, firstArg.label?.text == "value" {
-                newArgs.insert(nameArg, at: newArgs.startIndex)
-            } else {
-                newArgs.insert(nameArg, at: newArgs.startIndex)
-            }
-
-            let newFC = fc.with(\.arguments, newArgs)
-            let newInit = initializer.with(\.value, ExprSyntax(newFC))
-            let newBinding = binding.with(\.initializer, newInit)
-            newBindings.append(newBinding)
-            bindingsChanged = true
+            newBindings.append(binding)
         }
 
         guard bindingsChanged else { return item }

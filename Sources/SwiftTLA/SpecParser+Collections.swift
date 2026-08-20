@@ -561,17 +561,4 @@ extension ParserSession {
         }
     }
 
-    /// Parse `NamedValue("poweredOn", 5)` → register in localConstants
-    func parseNamedValueConstant(_ call: FunctionCallExprSyntax, name: String, into result: inout ParsedSpecComponents) -> Bool {
-        let args = Array(call.arguments)
-        guard args.count >= 2 else { return false }
-        if let intVal = args[1].expression.as(IntegerLiteralExprSyntax.self), let v = Int(intVal.literal.text) {
-            result.localConstants[name] = .int(v); return true
-        }
-        if let boolVal = args[1].expression.as(BooleanLiteralExprSyntax.self) {
-            result.localConstants[name] = .bool(boolVal.literal.text == "true"); return true
-        }
-        return false
-    }
-
 }

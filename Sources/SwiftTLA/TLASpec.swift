@@ -430,10 +430,6 @@ public struct FormalParameterDecl: SpecComponent {
   public let parameter: FormalModuleParameter
   init(_ parameter: FormalModuleParameter) { self.parameter = parameter }
 }
-public struct NamedValueDecl: Equatable, Sendable {
-  public let name: String
-  public let value: TLAValue
-}
 public struct OpDecl: SpecComponent {
   public let name: String
   public let params: [String]
@@ -673,7 +669,6 @@ public enum SpecBuilder {
   public static func buildExpression(_ expr: RuntimeFuncDecl) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: SymmetrySetDecl) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: SymmetricCollectionDecl) -> [SpecComponent] { [expr] }
-  public static func buildExpression(_ expr: NamedValueDecl) -> [SpecComponent] { [] }
   public static func buildExpression(_ expr: OpDecl) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: OpUse) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: Algorithm) -> [SpecComponent] { [expr] }
@@ -882,11 +877,6 @@ public func Parameter(
   kind: FormalModuleParameterKind = .constant
 ) -> FormalParameterDecl {
   FormalParameterDecl(FormalModuleParameter(name, kind: kind))
-}
-/// Register a named value constant for use in spec expressions.
-/// `Value("poweredOn", 5)` makes `poweredOn` resolve to 5 in spec expressions.
-public func Value(_ name: String, _ value: some TLAValueConvertible) -> NamedValueDecl {
-  NamedValueDecl(name: name, value: value.tlaValue)
 }
 public func Definition(
   _ tlaText: String,

@@ -611,9 +611,6 @@ extension ParserSession {
             if let fc = decodeFairness(call) {
                 result.fairness.append(fc)
             }
-        case "Value":
-            if let name = extractStringArg(call, index: 0),
-               parseNamedValueConstant(call, name: name, into: &result) { }
         case "Import":
             guard let argument = call.arguments.first?.expression else { return }
             let reference = argument.description.trimmingCharacters(in: .whitespacesAndNewlines)
