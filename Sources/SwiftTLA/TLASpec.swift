@@ -173,7 +173,6 @@ public struct TLASpec: Sendable {
   public var runtimeFuncs: [String: @Sendable ([TLAValue]) -> TLAValue] = [:]
   public var runtimeFuncBodies: [String] = []
   public let symmetrySets: [SymmetrySet]
-  public let symmetryGroups: [SymmetryVariableGroup]
   public let symmetricCollections: [SymmetricCollectionDecl]
   /// Opaque source-level Algorithm evidence. This is distinct from the
   /// lowered variables/actions and never exposes the Algorithm IR.
@@ -196,7 +195,6 @@ public struct TLASpec: Sendable {
     formalOperatorDefinitions: [FormalOperatorDefinition] = [], imports: [TLASpec] = [],
     importConfigurations: [FormalModuleConfiguration] = [],
     moduleInstances: [FormalModuleInstance] = [], symmetrySets: [SymmetrySet] = [],
-    symmetryGroups: [SymmetryVariableGroup] = [],
     symmetricCollections: [SymmetricCollectionDecl] = [],
     algorithmFidelityTokens: [AlgorithmFidelityToken] = [],
     sourceAlgorithms: [Algorithm] = [],
@@ -223,7 +221,6 @@ public struct TLASpec: Sendable {
     self.importConfigurations = importConfigurations
     self.moduleInstances = moduleInstances
     self.symmetrySets = symmetrySets
-    self.symmetryGroups = symmetryGroups
     self.symmetricCollections = symmetricCollections
     self.algorithmFidelityTokens = algorithmFidelityTokens
     self.sourceAlgorithms = sourceAlgorithms
@@ -279,7 +276,6 @@ public struct TLASpec: Sendable {
       imports: self.imports + other.imports,
       moduleInstances: self.moduleInstances + other.moduleInstances,
       symmetrySets: self.symmetrySets + other.symmetrySets,
-      symmetryGroups: self.symmetryGroups + other.symmetryGroups,
       symmetricCollections: self.symmetricCollections + other.symmetricCollections
     )
   }
@@ -306,7 +302,6 @@ public struct TLASpec: Sendable {
       imports: self.imports,
       moduleInstances: self.moduleInstances,
       symmetrySets: self.symmetrySets,
-      symmetryGroups: self.symmetryGroups,
       symmetricCollections: self.symmetricCollections
     )
   }
@@ -677,9 +672,6 @@ public enum SpecBuilder {
   public static func buildExpression(_ expr: RecursiveFuncDecl) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: RuntimeFuncDecl) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: SymmetrySetDecl) -> [SpecComponent] { [expr] }
-  public static func buildExpression(_ expr: SymmetryVariableGroupDecl) -> [SpecComponent] {
-    [expr]
-  }
   public static func buildExpression(_ expr: SymmetricCollectionDecl) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: NamedValueDecl) -> [SpecComponent] { [] }
   public static func buildExpression(_ expr: OpDecl) -> [SpecComponent] { [expr] }

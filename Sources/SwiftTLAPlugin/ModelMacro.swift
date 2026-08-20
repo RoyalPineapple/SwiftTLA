@@ -29,13 +29,11 @@ struct MacroCompilation {
     let typeName: String
     let compilation: CompiledSpecification
     let machineSurface: MachineSurfacePlan
-    let swiftFacts: MacroSwiftFacts
+    let swiftFacts: MachineSurfaceSwiftFacts
     let enumInfos: [ParsedEnumInfo]
 
     var hasInvariants: Bool { !compilation.spec.invariants.isEmpty }
 }
-
-typealias MacroSwiftFacts = MachineSurfaceSwiftFacts
 
 enum NestedAdapterModelRegistry {
     private static let lock = NSLock()
@@ -152,7 +150,7 @@ enum TLASpecVerifier {
             }
         }
 
-        let swiftFacts = MacroSwiftFacts(
+        let swiftFacts = MachineSurfaceSwiftFacts(
             variableTypes: Dictionary(
                 uniqueKeysWithValues: parsed.variables.compactMap { variable in
                     variable.swiftTypeName.map { (variable.name, $0) }

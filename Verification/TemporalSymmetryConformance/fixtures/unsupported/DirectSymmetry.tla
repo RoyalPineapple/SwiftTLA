@@ -1,4 +1,4 @@
----- MODULE LegacySymmetry ----
+---- MODULE DirectSymmetry ----
 EXTENDS FiniteSets
 
 CONSTANT Members
@@ -8,6 +8,6 @@ Init == chosen = {}
 Choose(m) == /\ m \in Members
              /\ chosen' = chosen \cup {m}
 Next == \E m \in Members : Choose(m)
-LegacySymmetryGroup == Permutations(Members)
+MemberPermutations == Permutations(Members)
 Spec == Init /\ [][Next]_chosen
 ====

@@ -67,7 +67,7 @@ The following controls are explicitly unsupported:
 - Symmetry scope 5 and larger scopes.
 - Temporal properties evaluated through symmetry reduction.
 - Multiple collections.
-- Legacy `Symmetry` or `SymmetryGroup` declarations.
+- Direct `Symmetry` declarations.
 - Symmetry over nested member-bearing values.
 
 These controls make the boundary visible. They do not establish support.

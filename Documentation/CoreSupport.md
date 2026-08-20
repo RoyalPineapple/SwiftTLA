@@ -28,7 +28,7 @@ unavailable or unsafe. It always retains a report and never converts `1` or
 P3 currently evaluates only declared temporal matrix cases and one
 binary-valued `SymmetricCollection` at exact scopes 2, 3, and 4. It explicitly
 does not support larger scopes, combined temporal-plus-symmetry checking,
-multiple collections, legacy symmetry declarations, or nested member-bearing
+multiple collections, direct symmetry declarations, or nested member-bearing
 values. See [temporal and symmetry conformance](TemporalSymmetryConformance.md)
 for the algorithms, evidence, and diagnosis steps.
 

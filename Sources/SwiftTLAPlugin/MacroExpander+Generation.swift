@@ -256,7 +256,7 @@ extension MacroExpander {
         case .constant: "String"
         }
     }
-    static func stateType(for v: NamedVar, facts: MacroSwiftFacts, enumInfos: [ParsedEnumInfo]) -> String {
+    static func stateType(for v: NamedVar, facts: MachineSurfaceSwiftFacts, enumInfos: [ParsedEnumInfo]) -> String {
         let inferred = facts.variableTypes[v.name] ?? swiftType(for: v.initial)
         if ["Int", "Bool", "String"].contains(inferred) { return inferred }
         if enumInfos.contains(where: { $0.typeName == inferred }) { return inferred }

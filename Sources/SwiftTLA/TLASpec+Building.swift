@@ -29,7 +29,6 @@ extension TLASpec {
     var runtimeFuncCollector: [String: @Sendable ([TLAValue]) -> TLAValue] = [:]
     var runtimeFuncBodiesCollector: [String] = []
     var symmetrySets: [SymmetrySet] = []
-    var symmetryGroups: [SymmetryVariableGroup] = []
     var symmetricCollections: [SymmetricCollectionDecl] = []
     var algorithmFidelityTokens: [AlgorithmFidelityToken] = []
     var sourceAlgorithms: [Algorithm] = []
@@ -149,8 +148,6 @@ extension TLASpec {
         runtimeFuncCollector[rtf.name] = rtf.implementation
         runtimeFuncBodiesCollector.append(rtf.tlaBody)
         runtimeFuncBodies.append(rtf.tlaBody)
-      } else if let s = comp as? SymmetryVariableGroupDecl {
-        symmetryGroups.append(SymmetryVariableGroup(s.names))
       } else if let s = comp as? SymmetrySetDecl {
         symmetrySets.append(SymmetrySet(variableName: s.variableName, values: s.values))
       } else if comp is OpDecl {
@@ -227,7 +224,6 @@ extension TLASpec {
     self.runtimeFuncs = runtimeFuncCollector
     self.runtimeFuncBodies = runtimeFuncBodiesCollector
     self.symmetrySets = symmetrySets
-    self.symmetryGroups = symmetryGroups
     self.symmetricCollections = symmetricCollections
     self.algorithmFidelityTokens = algorithmFidelityTokens
     self.sourceAlgorithms = sourceAlgorithms
@@ -398,7 +394,6 @@ public func substituteConstants(_ spec: TLASpec) -> TLASpec {
     importConfigurations: spec.importConfigurations,
     moduleInstances: spec.moduleInstances,
     symmetrySets: spec.symmetrySets,
-    symmetryGroups: spec.symmetryGroups,
     symmetricCollections: spec.symmetricCollections,
     algorithmFidelityTokens: spec.algorithmFidelityTokens,
     sourceAlgorithms: spec.sourceAlgorithms
