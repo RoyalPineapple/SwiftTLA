@@ -25,30 +25,45 @@ public struct SpecRuntime: Sendable {
         from state: TLAStateProjection
     ) throws -> [TLAStateProjection] {
         let formalState = try FormalState(projection: state, compilation: compilation)
-        return try evaluatedSuccessors(invocation, from: formalState).map {
+        let request = try compiledActionRequest(invocation, in: formalState)
+        return try evaluatedSuccessors(request, from: formalState, requested: invocation).map {
             try $0.state.projection(using: layout)
         }
     }
 
-    private func evaluatedSuccessors(
+    private func compiledActionRequest(
         _ invocation: TLAActionInvocation,
-        from formalState: FormalState
-    ) throws -> [CompiledSuccessor] {
+        in formalState: FormalState
+    ) throws -> CompiledActionRequest {
         guard let actionID = layout.actionID(named: invocation.name) else {
             throw RuntimeError.actionNotFound(
                 invocation,
                 available: try availableInvocations(in: formalState, requested: invocation)
             )
         }
-        guard argumentSets(for: actionID).contains(invocation.arguments) else {
+        let request = CompiledActionRequest(
+            compilation: compilation.identity,
+            action: actionID,
+            arguments: invocation.arguments.map(CompiledValue.init(formal:))
+        )
+        guard argumentSets(for: actionID).contains(request.arguments) else {
             throw RuntimeError.invalidActionArguments(
                 invocation,
                 available: try availableInvocations(in: formalState, requested: invocation)
             )
         }
+        return request
+    }
+
+    private func evaluatedSuccessors(
+        _ request: CompiledActionRequest,
+        from formalState: FormalState,
+        requested invocation: TLAActionInvocation
+    ) throws -> [CompiledSuccessor] {
+        try request.requireIdentity(compilation.identity)
         do {
-            return try runtime.successors(for: actionID, from: formalState)
-                .filter { $0.arguments == invocation.arguments }
+            return try runtime.successors(for: request.action, from: formalState)
+                .filter { $0.arguments.map(CompiledValue.init(formal:)) == request.arguments }
         } catch {
             throw RuntimeError.enumerationFailed(
                 requested: invocation,
@@ -98,7 +113,8 @@ public struct SpecRuntime: Sendable {
             do {
                 let formalState = try FormalState(projection: state, compilation: compilation)
                 let successors = try actionInvocations(action).flatMap {
-                    try evaluatedSuccessors($0.invocation, from: formalState)
+                    let request = try compiledActionRequest($0.invocation, in: formalState)
+                    return try evaluatedSuccessors(request, from: formalState, requested: $0.invocation)
                 }
                 if successors.isEmpty {
                     status = .unavailable(
@@ -203,17 +219,15 @@ public struct SpecRuntime: Sendable {
         guard available.contains(invocation) else {
             return .actionNotEnabled(invocation, available: available)
         }
-        guard let next = try evaluatedSuccessors(
-            invocation,
-            from: formalState
-        ).first else {
+        let request = try compiledActionRequest(invocation, in: formalState)
+        guard let next = try evaluatedSuccessors(request, from: formalState, requested: invocation).first else {
             return .actionNotEnabled(invocation, available: available)
         }
         let formalNext = next.state
         let violations = try compilation.model.invariants.compactMap { invariant in
             try runtime.invariantHolds(invariant, in: formalNext) ? nil : invariant.name
         }
-        if !violations.isEmpty {
+        if violations.isEmpty == false {
             return .invariantViolated(violations)
         }
         return .ok(try formalNext.projection(using: layout))
@@ -238,12 +252,12 @@ public struct SpecRuntime: Sendable {
         case invariantNotFound(String)
     }
 
-    private func argumentSets(for actionID: ActionID) -> [[TLAValue]] {
+    private func argumentSets(for actionID: ActionID) -> [[CompiledValue]] {
         guard let action = compilation.model.actions.first(where: { $0.id == actionID }) else {
             return []
         }
         return action.bindings.reduce([[]]) { arguments, binding in
-            arguments.flatMap { prefix in binding.values.map { prefix + [$0] } }
+            arguments.flatMap { prefix in binding.values.map { prefix + [.init(formal: $0)] } }
         }
     }
 
@@ -327,6 +341,21 @@ public struct SpecRuntime: Sendable {
             self.status = status
             self.stateCommitted = stateCommitted
             self.nextSafeAction = nextSafeAction
+        }
+    }
+}
+
+private struct CompiledActionRequest: Sendable {
+    let compilation: CompilationIdentity
+    let action: ActionID
+    let arguments: [CompiledValue]
+
+    func requireIdentity(_ expected: CompilationIdentity) throws {
+        guard compilation == expected else {
+            throw CompiledEvaluationError.invalidCompilationIdentity(
+                expected: expected,
+                actual: compilation
+            )
         }
     }
 }
