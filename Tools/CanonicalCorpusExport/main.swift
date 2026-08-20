@@ -130,7 +130,7 @@ do {
             TLAModuleFile(name: input.name, tla: String(decoding: data, as: UTF8.self))
         }
         let bundle = try compilation.renderedTLAModuleBundle(additionalImports: externalImports)
-        let plusCalBundle = try compilation.authoredPlusCalBundle(additionalImports: externalImports)
+        let plusCalBundle = try compilation.renderedPlusCalBundle(additionalImports: externalImports)
 
         var files = [Manifest.Case.File]()
         files.append(try write(bundle.root.tla, relativePath: "\(item.id)/swift/\(bundle.root.name).tla", under: options.output))

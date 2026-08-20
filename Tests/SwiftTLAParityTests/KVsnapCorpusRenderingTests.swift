@@ -13,7 +13,7 @@ struct KVsnapCorpusRenderingTests {
         #expect(bundle.cfg.contains("CONSTANT k1 = k1"))
         #expect(bundle.cfg.contains("SYMMETRY SymmTxId"))
 
-        let plusCal = try KVsnapModel.spec.compile().authoredPlusCalBundle().root.tla
+        let plusCal = try KVsnapModel.spec.compile().renderedPlusCalBundle().root.tla
         #expect(plusCal.contains("EXTENDS"))
         #expect(plusCal.contains("KeyValueStoreUtil"))
         #expect(plusCal.contains("CC == INSTANCE ClientCentric"))

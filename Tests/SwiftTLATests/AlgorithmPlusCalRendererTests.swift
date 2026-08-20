@@ -294,7 +294,7 @@ struct AlgorithmPlusCalRendererTests {
             }
         }
 
-        let module = try spec.compile().authoredPlusCalBundle().root.tla
+        let module = try spec.compile().renderedPlusCalBundle().root.tla
 
         #expect(module.contains("(*--algorithm Retained {"))
         #expect(module.contains("} *)\nStateConstraint == (count < 2)\n===="))
@@ -317,7 +317,7 @@ struct AlgorithmPlusCalRendererTests {
             }
         }
 
-        let module = try spec.compile().authoredPlusCalBundle().root.tla
+        let module = try spec.compile().renderedPlusCalBundle().root.tla
 
         #expect(module.contains("CONSTANTS N"))
         #expect(module.contains("TLC"))

@@ -104,7 +104,7 @@ struct CompiledSpecificationRendererTests {
         }
         let compilation = try specification.compile()
 
-        let bundle = try compilation.authoredPlusCalBundle()
+        let bundle = try compilation.renderedPlusCalBundle()
         #expect(bundle.root.tla.contains("--algorithm Authored"))
         #expect(bundle.root.cfg == try compilation.renderedTLAModuleBundle().root.cfg)
         #expect(bundle.imports.map(\.name) == ["Support"])
@@ -122,7 +122,7 @@ struct CompiledSpecificationRendererTests {
             directModuleSections: compilation.directModuleSections
         )
         #expect(throws: CompilationDiagnostic.self) {
-            try stale.authoredPlusCalBundle()
+            try stale.renderedPlusCalBundle()
         }
     }
 
@@ -133,7 +133,7 @@ struct CompiledSpecificationRendererTests {
         ).compile()
 
         #expect(throws: AlgorithmPlusCalRenderDiagnostic.self) {
-            try compilation.authoredPlusCalBundle()
+            try compilation.renderedPlusCalBundle()
         }
     }
 
