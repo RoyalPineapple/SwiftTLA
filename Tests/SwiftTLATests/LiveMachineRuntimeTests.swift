@@ -35,10 +35,6 @@ struct LiveMachineRuntimeTests {
         }
     }
 
-    private static func formalStateDictionary(_ projection: TLAStateProjection) -> [String: TLAValue] {
-        Dictionary(uniqueKeysWithValues: projection.entries.map { ($0.token.description, $0.value) })
-    }
-
     private static func transitionDriver(
         runtime: SpecRuntime,
         successors: @escaping @Sendable (TLAStateProjection, TLAActionInvocation) throws -> [TLAStateProjection],
@@ -48,7 +44,7 @@ struct LiveMachineRuntimeTests {
         return TLALiveMachineTransitionDriver(
             successors: successors,
             availableInvocations: { projection in
-                try runtime.availableInvocations(in: formalStateDictionary(projection))
+                try runtime.availableInvocations(in: projection)
             },
             validateInvocation: { invocation in
                 guard let action = formalActions[invocation.name] else { return .unknownAction }
@@ -67,8 +63,7 @@ struct LiveMachineRuntimeTests {
         _ runtime: SpecRuntime
     ) -> @Sendable (TLAStateProjection, TLAActionInvocation) throws -> [TLAStateProjection] {
         { projection, invocation in
-            try runtime.successors(invocation, from: formalStateDictionary(projection))
-                .map { try TLAStateProjection(formalValues: $0) }
+            try runtime.successors(invocation, from: projection)
         }
     }
 

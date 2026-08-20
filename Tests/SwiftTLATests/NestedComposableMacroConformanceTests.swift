@@ -4,10 +4,6 @@ import SwiftParser
 import SwiftSyntax
 import Testing
 
-private enum AvailabilityEvaluationFailure: Error {
-    case unavailable
-}
-
 @Suite(.serialized)
 struct NestedComposableMacroConformanceTests {
     @Test("Runtime successor relation preserves parameterized nondeterministic checked edges")
@@ -33,7 +29,8 @@ struct NestedComposableMacroConformanceTests {
             }
 
             #expect(multiset(runtimeSuccessors) == multiset(checked))
-            #expect(!runtimeSuccessors.contains { $0.1.formalValues == ["value": .int(3)] })
+            let value = try #require(TLAStateProjection.Token(validating: "value"))
+            #expect(runtimeSuccessors.contains { $0.1.value(for: value) == .int(3) } == false)
         }
     }
 
@@ -63,7 +60,7 @@ struct NestedComposableMacroConformanceTests {
         let first = TLAActionInvocation(name: "board", arguments: [.int(1), .int(10), .int(100)])
         let selected = TLAActionInvocation(name: "board", arguments: [.int(2), .int(20), .int(200)])
         let runtime = EndToEndThreeParameterActionMachine.runtime
-        let initial = try #require(runtime.initialStates().first)
+        let initial = try #require(runtime.initialStateProjections().first)
         let available = try runtime.availableInvocations(in: initial)
         let observable = ThreeParameterActionMachine.Observable()
         let actor = ThreeParameterActionMachine.Actor()
@@ -72,37 +69,11 @@ struct NestedComposableMacroConformanceTests {
         #expect(Set(available).count == 8)
         #expect(available.contains(first))
         #expect(available.contains(selected))
-        #expect(try runtime.apply(selected, to: initial)["floor"] == .int(222))
+        let floor = try #require(TLAStateProjection.Token(validating: "floor"))
+        let successor = try #require(try runtime.successors(selected, from: initial).first)
+        #expect(successor.value(for: floor) == .int(222))
         #expect(try await observable.execute(selected).action == .board(person: 2, elevator: 20, direction: 200))
         #expect(try await actor.execute(selected).action == .board(person: 2, elevator: 20, direction: 200))
-    }
-
-    @Test("Availability evaluation failures retain invocation context")
-    func availabilityEvaluationFailureReportsTheEvaluatedInvocation() throws {
-        let count = Var<Int>("count")
-        let invocation = TLAActionInvocation(name: "advance")
-        let spec = TLASpec("UnavailableAvailability") {
-            Variable(count, 0)
-            Action("advance") { count.becomes(count + 1) }
-        }
-        let runtime = try SpecRuntime(spec: spec) { _, _, _ in
-            throw AvailabilityEvaluationFailure.unavailable
-        }
-        let state = runtime.initialStates()[0]
-
-        do {
-            _ = try runtime.availableInvocations(in: state)
-            Issue.record("Expected availability evaluation to fail")
-        } catch let error as SpecRuntime.RuntimeError {
-            guard case .enumerationFailed(let requested, let evaluated, _) = error else {
-                Issue.record("Expected enumerationFailed, got \(error)")
-                return
-            }
-            #expect(requested == nil)
-            #expect(evaluated == invocation)
-        } catch {
-            Issue.record("Expected runtime error, got \(error)")
-        }
     }
 
     @Test("Invalid nested macro composition emits enclosure diagnostics")

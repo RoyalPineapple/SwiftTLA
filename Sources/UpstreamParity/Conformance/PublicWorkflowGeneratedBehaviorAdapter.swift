@@ -225,16 +225,16 @@ public struct PublicWorkflowGeneratedBehaviorToolchain: Equatable, Codable, Send
 }
 
 struct PublicWorkflowGeneratedMachineHarness {
-  let initialStates: [[String: TLAValue]]
+  let initialStates: [TLAStateProjection]
   let actionNames: [String]
-  let apply: ([String: TLAValue], String) -> GeneratedActionResult
-  let propertyOutcomes: ([String: TLAValue]) -> [SpecRuntime.RuntimePropertyOutcome]
+  let apply: (TLAStateProjection, String) -> GeneratedActionResult
+  let propertyOutcomes: (TLAStateProjection) -> [SpecRuntime.RuntimePropertyOutcome]
 
   init(
-    initialStates: [[String: TLAValue]],
+    initialStates: [TLAStateProjection],
     actionNames: [String],
-    apply: @escaping ([String: TLAValue], String) -> GeneratedActionResult,
-    propertyOutcomes: @escaping ([String: TLAValue]) -> [SpecRuntime.RuntimePropertyOutcome]
+    apply: @escaping (TLAStateProjection, String) -> GeneratedActionResult,
+    propertyOutcomes: @escaping (TLAStateProjection) -> [SpecRuntime.RuntimePropertyOutcome]
   ) {
     self.initialStates = initialStates
     self.actionNames = actionNames
@@ -247,7 +247,7 @@ struct PublicWorkflowGeneratedMachineHarness {
 /// It is owned by the generated-behavior comparison boundary, not by the
 /// public runtime surface.
 enum GeneratedActionResult: Equatable, Sendable {
-  case enabled(actionName: String, successors: [[String: TLAValue]])
+  case enabled(actionName: String, successors: [TLAStateProjection])
   case disabled(actionName: String)
   case actionNotFound(actionName: String)
   case evaluationFailed(actionName: String, diagnostic: SpecRuntime.ActionEvaluationDiagnostic)
@@ -554,11 +554,18 @@ public struct PublicWorkflowGeneratedBehaviorAdapter: Sendable {
     }
   }
 
+  private func canonicalState(from projection: TLAStateProjection) throws -> CanonicalState {
+    let bindings = Dictionary(uniqueKeysWithValues: projection.entries.map {
+      ($0.token.description, CanonicalValue($0.value))
+    })
+    return CanonicalState(bindings: bindings)
+  }
+
   private func observeGenerated(
     machine: PublicWorkflowGeneratedMachineHarness,
     maxStates: Int
   ) throws -> PublicWorkflowCanonicalObservation {
-    var queue: [[String: TLAValue]] = []
+    var queue: [TLAStateProjection] = []
     var seen = Set<CanonicalStateKey>()
     var states: [CanonicalStateKey: CanonicalState] = [:]
     var initial = [CanonicalState]()
@@ -569,7 +576,7 @@ public struct PublicWorkflowGeneratedBehaviorAdapter: Sendable {
     var failureTrace: [String]?
 
     for state in machine.initialStates {
-      let canonical = CanonicalState(bindings: state.mapValues(CanonicalValue.init))
+      let canonical = try canonicalState(from: state)
       guard seen.insert(canonical.key).inserted else { continue }
       initial.append(canonical)
       states[canonical.key] = canonical
@@ -585,12 +592,12 @@ public struct PublicWorkflowGeneratedBehaviorAdapter: Sendable {
       }
       let state = queue[index]
       index += 1
-      let source = CanonicalState(bindings: state.mapValues(CanonicalValue.init))
+      let source = try canonicalState(from: state)
       for actionName in machine.actionNames.sorted() {
         switch machine.apply(state, actionName) {
         case .enabled(_, let successors):
           for successor in successors {
-            let target = CanonicalState(bindings: successor.mapValues(CanonicalValue.init))
+            let target = try canonicalState(from: successor)
             edges.append(CanonicalEdge(source: source.key, action: actionName, target: target.key))
             if seen.insert(target.key).inserted {
               states[target.key] = target
@@ -634,7 +641,7 @@ public struct PublicWorkflowGeneratedBehaviorAdapter: Sendable {
     outcome: CanonicalOutcome,
     diagnostics: [String],
     traces: [CanonicalTrace],
-    propertyOutcomes: ([String: TLAValue]) -> [SpecRuntime.RuntimePropertyOutcome],
+    propertyOutcomes: (TLAStateProjection) -> [SpecRuntime.RuntimePropertyOutcome],
     explicitFailures: [String] = [],
     explicitTrace: [String]? = nil,
     traceForState: ((CanonicalStateKey) -> [String])? = nil
@@ -673,7 +680,7 @@ public struct PublicWorkflowGeneratedBehaviorAdapter: Sendable {
 
   private func propertyProjection(
     graph: CanonicalGraph,
-    outcomes: ([String: TLAValue]) -> [SpecRuntime.RuntimePropertyOutcome],
+    outcomes: (TLAStateProjection) -> [SpecRuntime.RuntimePropertyOutcome],
     traceForState: (CanonicalStateKey) -> [String]
   ) -> (records: [String], failures: [String], diagnostics: [String], trace: [String]?) {
     var records = [String]()
@@ -681,8 +688,23 @@ public struct PublicWorkflowGeneratedBehaviorAdapter: Sendable {
     var diagnostics = [String]()
     var trace: [String]?
     for state in graph.states.keys.sorted() {
-      guard let bindings = graph.states[state]?.bindings.mapValues({ TLAValue($0) }) else { continue }
-      for outcome in outcomes(bindings) {
+      guard let canonical = graph.states[state] else { continue }
+      let projection: TLAStateProjection
+      do {
+        let entries = try canonical.bindings.map { name, value -> TLAStateProjection.Entry in
+          guard let token = TLAStateProjection.Token(validating: name) else {
+            throw TLAStateProjectionDiagnostic.invalidKey(path: name)
+          }
+          return .init(token: token, value: TLAValue(value))
+        }
+        projection = try TLAStateProjection(validating: entries)
+      } catch {
+        failures.append("propertyProjectionFailed:\(state.canonicalEncoding):\(error)")
+        diagnostics.append("property:projectionFailed")
+        trace = trace ?? traceForState(state)
+        continue
+      }
+      for outcome in outcomes(projection) {
         switch outcome {
         case .satisfied(let name):
           records.append("property:\(state.canonicalEncoding):satisfied:\(name)")

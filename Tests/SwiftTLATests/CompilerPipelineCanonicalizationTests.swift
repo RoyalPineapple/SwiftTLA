@@ -93,11 +93,14 @@ struct CompilerPipelineCanonicalizationTests {
         let runtime = SpecRuntime(compilation: compilation)
         let checker = ModelChecker(compilation: compilation, maxStates: 3)
 
-        #expect(runtime.compilation?.identity == compilation.identity)
-        #expect(checker.compilation?.identity == compilation.identity)
-        #expect(try runtime.successors(.init(name: "increment"), from: ["counter": .int(0)]) == [["counter": .int(1)]])
-        #expect(try runtime.check("NonNegative", in: ["counter": .int(0)]))
-        #expect(runtime.propertyOutcomes(in: ["counter": .int(0)]) == [.satisfied(name: "NonNegative")])
+        #expect(runtime.compilation.identity == compilation.identity)
+        #expect(checker.compilation.identity == compilation.identity)
+        let counter = try #require(TLAStateProjection.Token(validating: "counter"))
+        let initial = try TLAStateProjection(validating: [.init(token: counter, value: .int(0))])
+        let successor = try #require(try runtime.successors(.init(name: "increment"), from: initial).first)
+        #expect(successor.value(for: counter) == .int(1))
+        #expect(try runtime.check("NonNegative", in: initial))
+        #expect(runtime.propertyOutcomes(initial) == [.satisfied(name: "NonNegative")])
         #expect(try checker.exploreGraph().states.count == 3)
     }
 
@@ -618,7 +621,7 @@ struct CompilerPipelineCanonicalizationTests {
     func algorithmSpecificationUsesMacroCompiledPayload() throws {
         let compilation = try CompilerPipelineAlgorithmModel.compiledSpecification()
 
-        #expect(CompilerPipelineAlgorithmModel.runtime.compilation?.identity == compilation.identity)
+        #expect(CompilerPipelineAlgorithmModel.runtime.compilation.identity == compilation.identity)
         #expect(try CompilerPipelineAlgorithmModel.verifySpec() > 0)
         #expect(try CompilerPipelineAlgorithmModel.transitionMatrix().isEmpty == false)
         #expect(try compilation.renderedTLAModuleBundle().tla == try CompilerPipelineAlgorithmModel.spec.compile().renderedTLAModuleBundle().tla)
@@ -761,7 +764,7 @@ struct CompilerPipelineCanonicalizationTests {
     func macroGeneratedConsumersUseCompiledPayload() throws {
         let compilation = try CompilerPipelineGeneratedModel.compiledSpecification()
 
-        #expect(CompilerPipelineGeneratedModel.runtime.compilation?.identity == compilation.identity)
+        #expect(CompilerPipelineGeneratedModel.runtime.compilation.identity == compilation.identity)
         #expect(try CompilerPipelineGeneratedModel.verifySpec() > 0)
         #expect(try CompilerPipelineGeneratedModel.transitionMatrix().isEmpty == false)
         #expect(try compilation.renderedTLAModuleBundle().tla == try CompilerPipelineGeneratedModel.spec.compile().renderedTLAModuleBundle().tla)
@@ -777,7 +780,7 @@ struct CompilerPipelineCanonicalizationTests {
         #expect(computed.lazySet == nil)
         #expect(choice.initExpr == nil)
         #expect(choice.lazySet == .setLiteral([.value(.int(1)), .value(.int(2))]))
-        #expect(CompilerPipelineInitializationModel.runtime.compilation?.identity == compilation.identity)
+        #expect(CompilerPipelineInitializationModel.runtime.compilation.identity == compilation.identity)
     }
 
     @Test("#spec lowering preserves symmetric collection metadata")
@@ -789,7 +792,7 @@ struct CompilerPipelineCanonicalizationTests {
         #expect(devices.collectionType == .dictionary(2))
         #expect(declaration.variable == devices)
         #expect(declaration.verificationScope == 2)
-        #expect(CompilerPipelineCollectionModel.runtime.compilation?.identity == compilation.identity)
+        #expect(CompilerPipelineCollectionModel.runtime.compilation.identity == compilation.identity)
     }
 
     @Test("semantic compilation fields change the identity")

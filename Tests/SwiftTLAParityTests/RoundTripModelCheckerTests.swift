@@ -176,7 +176,12 @@ import UpstreamParity
       DeadlockCheck()
     }
     let r = try ModelChecker(spec: spec, maxStates: 100).check()
-    if case .deadlocked(let s) = r { #expect(s["x"] == .int(1)) } else { #expect(Bool(false)) }
+    if case .deadlocked(let state) = r {
+      let token = try #require(TLAStateProjection.Token(validating: "x"))
+      #expect(state.value(for: token) == .int(1))
+    } else {
+      #expect(Bool(false))
+    }
   }
 
   @Test("Majority Boyer-Moore shape explores")
@@ -221,9 +226,25 @@ import UpstreamParity
   }
 }
 
-// MARK: - SpecRuntime: thin interpreter over ActionEnumerator/Evaluator
+// MARK: - SpecRuntime
 
 @Suite(.serialized) struct RuntimeTests {
+  private func successor(
+    _ runtime: SpecRuntime,
+    _ invocation: TLAActionInvocation,
+    from state: TLAStateProjection
+  ) throws -> TLAStateProjection {
+    try #require(try runtime.successors(invocation, from: state).first)
+  }
+
+  private func value(_ name: String, in state: TLAStateProjection) throws -> TLAValue {
+    guard let token = TLAStateProjection.Token(validating: name),
+          let value = state.value(for: token) else {
+      throw TLAStateProjectionDiagnostic.missingValue(path: name)
+    }
+    return value
+  }
+
   @Test("Runtime applies action and produces new state")
   func applyAction() throws {
     let hr = Var<Int>("hr")
@@ -232,9 +253,9 @@ import UpstreamParity
       Action("Tick") { hr.becomes(hr + 1).when(hr < 12) || (hr == 12 && hr.becomes(1)) }
     }
     let rt = try SpecRuntime(spec: spec)
-    let state = rt.initialStates().first!
-    let next = try rt.apply(.init(name: "Tick"), to: state)
-    #expect(next["hr"] == .int(2))
+    let state = try #require(rt.initialStateProjections().first)
+    let next = try successor(rt, .init(name: "Tick"), from: state)
+    #expect(try value("hr", in: next) == .int(2))
   }
 
   @Test("Runtime checks invariants")
@@ -246,7 +267,7 @@ import UpstreamParity
       Invariant("Positive") { hr > 0 }
     }
     let rt = try SpecRuntime(spec: spec)
-    let state = rt.initialStates().first!
+    let state = try #require(rt.initialStateProjections().first)
     #expect(try rt.check("Positive", in: state) == true)
   }
 
@@ -258,7 +279,7 @@ import UpstreamParity
       Action("Tick") { hr.becomes(hr + 1).when(hr < 12) || (hr == 12 && hr.becomes(1)) }
     }
     let rt = try SpecRuntime(spec: spec)
-    let state = rt.initialStates().first!
+    let state = try #require(rt.initialStateProjections().first)
     let available = try rt.availableInvocations(in: state)
     #expect(available.contains(.init(name: "Tick")))
   }
@@ -341,8 +362,8 @@ import UpstreamParity
     )
   }
 
-  @Test("Runtime errors retain invocation and complete availability context")
-  func runtimeErrorsRetainInvocationAndAvailabilityContext() throws {
+  @Test("Runtime validates action arguments and reports disabled successors")
+  func runtimeValidatesArgumentsAndReportsDisabledSuccessors() throws {
     let counter = Var<Int>("counter")
     let step = Var<Int>("step")
     let spec = TLASpec("RuntimeErrors") {
@@ -352,14 +373,14 @@ import UpstreamParity
       }
     }
     let runtime = try SpecRuntime(spec: spec)
-    let initial = try #require(runtime.initialStates().first)
+    let initial = try #require(runtime.initialStateProjections().first)
     let available = [
       TLAActionInvocation(name: "advance", arguments: [.int(1)]),
       TLAActionInvocation(name: "advance", arguments: [.int(2)])
     ]
 
     do {
-      _ = try runtime.apply(.init(name: "advance", arguments: [.int(3)]), to: initial)
+      _ = try runtime.successors(.init(name: "advance", arguments: [.int(3)]), from: initial)
       Issue.record("Expected invalid arguments")
     } catch let error as SpecRuntime.RuntimeError {
       guard case .invalidActionArguments(let invocation, let actualAvailable) = error else {
@@ -370,18 +391,8 @@ import UpstreamParity
       #expect(actualAvailable == available)
     }
 
-    let advanced = try runtime.apply(.init(name: "advance", arguments: [.int(1)]), to: initial)
-    do {
-      _ = try runtime.apply(.init(name: "advance", arguments: [.int(1)]), to: advanced)
-      Issue.record("Expected disabled action")
-    } catch let error as SpecRuntime.RuntimeError {
-      guard case .actionNotEnabled(let invocation, let actualAvailable) = error else {
-        Issue.record("Expected actionNotEnabled, got \(error)")
-        return
-      }
-      #expect(invocation == .init(name: "advance", arguments: [.int(1)]))
-      #expect(actualAvailable.isEmpty)
-    }
+    let advanced = try successor(runtime, .init(name: "advance", arguments: [.int(1)]), from: initial)
+    #expect(try runtime.successors(.init(name: "advance", arguments: [.int(1)]), from: advanced).isEmpty)
   }
 
   @Test("Runtime reports availability evaluation failures with invocation context")
@@ -392,7 +403,7 @@ import UpstreamParity
       Action("advance") { counter.becomes(counter + 1).when(StateExpr.variable("missing")) }
     }
     let runtime = try SpecRuntime(spec: spec)
-    let state = runtime.initialStates().first!
+    let state = try #require(runtime.initialStateProjections().first)
 
     do {
       _ = try runtime.availableInvocations(in: state)
@@ -411,7 +422,7 @@ import UpstreamParity
     }
 
     do {
-      _ = try runtime.apply(.init(name: "unknown"), to: state)
+      _ = try runtime.successors(.init(name: "unknown"), from: state)
       Issue.record("Expected availability evaluation failure during application")
     } catch let error as SpecRuntime.RuntimeError {
       guard case .enumerationFailed(let requested, let evaluated, let underlying) = error else {
@@ -435,10 +446,10 @@ import UpstreamParity
       Action("Tick") { hr.becomes(hr + 1).when(hr < 12) || (hr == 12 && hr.becomes(1)) }
     }
     let rt = try SpecRuntime(spec: spec)
-    let state = rt.initialStates().first!
+    let state = try #require(rt.initialStateProjections().first)
     let result = try rt.step(.init(name: "Tick"), from: state)
     if case .ok(let next) = result {
-      #expect(next["hr"] == .int(2))
+      #expect(try value("hr", in: next) == .int(2))
     } else {
       #expect(Bool(false))
     }
@@ -494,10 +505,12 @@ import UpstreamParity
   @Test("BFSChecker @TLAModel exposes SpecRuntime")
   func bfsCheckerRuntime() throws {
     let rt = BFSChecker.runtime
-    let state = rt.initialStates().first!
-    #expect(state["phase"] == .int(0))
-    let next = try rt.apply(.init(name: "StepDiscover"), to: state)
-    #expect(next["processed"] == .int(1))
+    let state = try #require(rt.initialStateProjections().first)
+    let phase = try #require(TLAStateProjection.Token(validating: "phase"))
+    #expect(state.value(for: phase) == .int(0))
+    let next = try #require(try rt.successors(.init(name: "StepDiscover"), from: state).first)
+    let processed = try #require(TLAStateProjection.Token(validating: "processed"))
+    #expect(next.value(for: processed) == .int(1))
   }
 
   @Test("checkComposed works with plain TLASpec")
@@ -808,8 +821,11 @@ import UpstreamParity
       }
     }
     let rt = try SpecRuntime(spec: spec)
-    let state = rt.initialStates().first!
-    let next = try rt.apply(.init(name: "init"), to: state)
-    #expect(next["programCounter"] != nil)
+    let state = try #require(rt.initialStateProjections().first)
+    let next = try #require(try rt.successors(.init(name: "init"), from: state).first)
+    let programCounter = try #require(TLAStateProjection.Token(validating: "programCounter"))
+    if next.value(for: programCounter) == nil {
+      Issue.record("Expected programCounter in successor")
+    }
   }
 }

@@ -397,15 +397,16 @@ import UpstreamParity
     #expect(try spec.compile().renderedTLAModuleBundle().tla.contains("board__1_1_1 == board(2, 20, 200)"))
 
     let runtime = try SpecRuntime(spec: spec)
-    let initial = try #require(runtime.initialStates().first)
-    let next = try runtime.apply(
-      .init(name: "board", arguments: [.int(2), .int(20), .int(200)]), to: initial)
-    #expect(next["floor"] == .int(222))
+    let initial = try #require(runtime.initialStateProjections().first)
+    let next = try #require(try runtime.successors(
+      .init(name: "board", arguments: [.int(2), .int(20), .int(200)]), from: initial).first)
+    let floor = try #require(TLAStateProjection.Token(validating: "floor"))
+    #expect(next.value(for: floor) == .int(222))
     #expect(throws: SpecRuntime.RuntimeError.self) {
-      try runtime.apply(
-        .init(name: "board", arguments: [.int(3), .int(20), .int(200)]), to: initial)
+      try runtime.successors(
+        .init(name: "board", arguments: [.int(3), .int(20), .int(200)]), from: initial)
     }
-    #expect(initial["floor"] == .int(0))
+    #expect(initial.value(for: floor) == .int(0))
   }
 
   @Test func parameterizedActionExpandsFiniteDomainAndLabelsTransitions() throws {

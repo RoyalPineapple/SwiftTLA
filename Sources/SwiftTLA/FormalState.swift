@@ -16,19 +16,21 @@ struct FormalState: Hashable, Sendable {
         self.init(validatedValues: values, compilationIdentity: compilation.identity)
     }
 
-    init(projected valuesByName: [String: TLAValue], compilation: CompiledSpecification) throws {
+    init(projection: TLAStateProjection, compilation: CompiledSpecification) throws {
         let expectedNames = Set(compilation.layout.variables.map(\.declaration.name))
-        guard Set(valuesByName.keys) == expectedNames else {
+        let actualNames = Set(projection.entries.map { $0.token.description })
+        guard actualNames == expectedNames else {
             throw CompiledEvaluationError.invalidStateLayout(
                 expected: expectedNames.count,
-                actual: valuesByName.count
+                actual: actualNames.count
             )
         }
         let values: [CompiledValue] = try compilation.layout.variables.map { variable in
-            guard let value = valuesByName[variable.declaration.name] else {
+            guard let token = TLAStateProjection.Token(validating: variable.declaration.name),
+                  let value = projection.value(for: token) else {
                 throw CompiledEvaluationError.invalidStateLayout(
                     expected: expectedNames.count,
-                    actual: valuesByName.count
+                    actual: actualNames.count
                 )
             }
             return CompiledValue(formal: value)
@@ -71,16 +73,26 @@ struct FormalState: Hashable, Sendable {
         values.contains { $0.contains(value) }
     }
 
-    func projected(using layout: CompiledLayout) throws -> [String: TLAValue] {
+    func projection(using layout: CompiledLayout) throws -> TLAStateProjection {
         guard values.count == layout.variables.count else {
             throw CompiledEvaluationError.invalidStateLayout(
                 expected: layout.variables.count,
                 actual: values.count
             )
         }
-        return try Dictionary(uniqueKeysWithValues: layout.variables.map { variable in
-            (variable.declaration.name, try values[variable.id.ordinal].rendered(using: layout))
-        })
+        let entries = try layout.variables.map { variable -> TLAStateProjection.Entry in
+            guard let token = TLAStateProjection.Token(validating: variable.declaration.name) else {
+                throw CompiledEvaluationError.invalidStateLayout(
+                    expected: layout.variables.count,
+                    actual: values.count
+                )
+            }
+            return .init(
+                token: token,
+                value: try values[variable.id.ordinal].rendered(using: layout)
+            )
+        }
+        return try TLAStateProjection(validating: entries)
     }
 
     func requireIdentity(_ identity: CompilationIdentity) throws {

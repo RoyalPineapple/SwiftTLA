@@ -20,7 +20,7 @@ enum PublicWorkflowGeneratedFixtureRegistry {
       return PublicWorkflowGeneratedFixture(
         builderSpec: P4GeneratedCounterFixture.spec,
         machine: PublicWorkflowGeneratedMachineHarness(
-          initialStates: P4GeneratedCounterFixture.runtime.initialStates(),
+          initialStates: try P4GeneratedCounterFixture.runtime.initialStateProjections(),
           actionNames: ["advance"],
           apply: { state, actionName in
             generatedActionResult(P4GeneratedCounterFixture.runtime, actionName: actionName, in: state)
@@ -30,7 +30,7 @@ enum PublicWorkflowGeneratedFixtureRegistry {
       return PublicWorkflowGeneratedFixture(
         builderSpec: P4GeneratedCounterMismatchFixture.spec,
         machine: PublicWorkflowGeneratedMachineHarness(
-          initialStates: P4GeneratedCounterMismatchFixture.runtime.initialStates(),
+          initialStates: try P4GeneratedCounterMismatchFixture.runtime.initialStateProjections(),
           actionNames: ["advance"],
           apply: { state, actionName in
             P4GeneratedCounterMismatchFixture.intentionalMismatchActionOutcome(actionName: actionName, in: state)
@@ -40,7 +40,7 @@ enum PublicWorkflowGeneratedFixtureRegistry {
       return PublicWorkflowGeneratedFixture(
         builderSpec: P4GeneratedCounterFixture.spec,
         machine: PublicWorkflowGeneratedMachineHarness(
-          initialStates: P4GeneratedCounterFixture.runtime.initialStates(),
+          initialStates: try P4GeneratedCounterFixture.runtime.initialStateProjections(),
           actionNames: ["advance"],
           apply: { _, actionName in
             .evaluationFailed(
@@ -52,7 +52,7 @@ enum PublicWorkflowGeneratedFixtureRegistry {
       return PublicWorkflowGeneratedFixture(
         builderSpec: P4GeneratedCounterFixture.spec,
         machine: PublicWorkflowGeneratedMachineHarness(
-          initialStates: P4GeneratedCounterFixture.runtime.initialStates(),
+          initialStates: try P4GeneratedCounterFixture.runtime.initialStateProjections(),
           actionNames: ["advance"],
           apply: { _, actionName in
             .evaluationUnavailable(
@@ -104,11 +104,24 @@ struct P4GeneratedCounterMismatchFixture: Sendable {
 
   static func intentionalMismatchActionOutcome(
     actionName: String,
-    in state: [String: TLAValue]
+    in state: TLAStateProjection
   ) -> GeneratedActionResult {
     switch generatedActionResult(runtime, actionName: actionName, in: state) {
     case .enabled(let actionName, _):
-      return .enabled(actionName: actionName, successors: [["value": .int(2)]])
+      do {
+        guard let token = TLAStateProjection.Token(validating: "value") else {
+          return .evaluationFailed(
+            actionName: actionName,
+            diagnostic: .init(code: .evaluationError, message: "invalid fixture state token")
+          )
+        }
+        return .enabled(actionName: actionName, successors: [try state.replacing(.int(2), for: token)])
+      } catch {
+        return .evaluationFailed(
+          actionName: actionName,
+          diagnostic: .init(code: .evaluationError, message: String(describing: error))
+        )
+      }
     case let outcome:
       return outcome
     }
@@ -118,7 +131,7 @@ struct P4GeneratedCounterMismatchFixture: Sendable {
 func generatedActionResult(
   _ runtime: SpecRuntime,
   actionName: String,
-  in state: [String: TLAValue]
+  in state: TLAStateProjection
 ) -> GeneratedActionResult {
   guard runtime.spec.actions.contains(where: { $0.name == actionName }) else {
     return .actionNotFound(actionName: actionName)
