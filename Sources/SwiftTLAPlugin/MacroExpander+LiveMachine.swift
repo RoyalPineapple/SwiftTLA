@@ -5,11 +5,12 @@ extension MacroExpander {
     static func generateLiveMachineMembers(model: MacroCompilation) -> [DeclSyntax] {
         let typeName = model.typeName
         let hasActions = model.machineSurface.actions.isEmpty == false
+        let actionType = hasActions ? "ActionLabel" : "Never"
 
         let typedExecute: [String] = hasActions ? [
             """
                 public func execute(_ action: ActionLabel, requestID: Foundation.UUID = Foundation.UUID()) async throws -> Outcome {
-                    switch await _handle.execute(\(typeName)._liveInvocation(for: action), requestID: requestID) {
+                    switch await _handle.execute(action, requestID: requestID) {
                     case .committed(let commit):
                         return .committed(TransitionResult(
                             action: action,
@@ -29,16 +30,48 @@ extension MacroExpander {
             """
                 public enum Outcome: Sendable, Equatable {
                     case committed(TransitionResult)
-                    case rejected(TLALiveActionRejection)
-                    case failed(TLALiveActionFailure)
+                    case rejected(TLALiveActionRejection<ActionLabel>)
+                    case failed(TLALiveActionFailure<ActionLabel>)
                 }
             """
         ] : []
 
+        let liveDriver = hasActions ? """
+            private static func _liveDriver(_ runtime: SpecRuntime) -> TLALiveMachineTransitionDriver<ActionLabel> {
+                let executor = CompiledActionExecutor(
+                    runtime: runtime,
+                    actionOrdinal: { Self._actionOrdinal(for: $0) },
+                    arguments: { Self._actionArguments(for: $0) },
+                    label: { Self._actionLabel(actionAt: $0, arguments: $1) }
+                )
+                return TLALiveMachineTransitionDriver(
+                    successors: { state, action in
+                        try executor.successors(for: action, from: state)
+                    },
+                    validateAction: { action in
+                        Self._identityRoutedActionOrdinals.contains(Self._actionOrdinal(for: action))
+                            ? .identityRoutedActionRequiresID
+                            : nil
+                    },
+                    decodeState: { state in
+                        _ = try State(projection: state)
+                    }
+                )
+            }
+            """ : """
+            private static func _liveDriver(_ runtime: SpecRuntime) -> TLALiveMachineTransitionDriver<Never> {
+                .init(
+                    successors: { _, action in switch action {} },
+                    validateAction: { action in switch action {} },
+                    decodeState: { state in _ = try State(projection: state) }
+                )
+            }
+            """
+
         let liveMembers = ([
             """
-                private let _owner: TLALiveMachineOwner
-                private let _handle: TLALiveMachine
+                private let _owner: TLALiveMachineOwner<\(actionType)>
+                private let _handle: TLALiveMachine<\(actionType)>
 
                 private init() throws {
                     let owner = try \(typeName)._makeLiveOwner()
@@ -54,7 +87,7 @@ extension MacroExpander {
                     await _owner.end()
                 }
 
-                fileprivate func _observe() async -> TLALiveMachineAttachmentOutcome {
+                fileprivate func _observe() async -> TLALiveMachineAttachmentOutcome<\(actionType)> {
                     await _handle.observe()
                 }
 
@@ -97,42 +130,9 @@ extension MacroExpander {
         ] + outcomeType).joined(separator: "\n\n")
 
         return [
+            DeclSyntax(stringLiteral: liveDriver),
             DeclSyntax(stringLiteral: """
-            private static func _liveDriver(_ runtime: SpecRuntime) -> TLALiveMachineTransitionDriver {
-                let actions = Dictionary(uniqueKeysWithValues: runtime.spec.actions.map { ($0.name, $0) })
-                let identityRouted = _identityRoutedActionOrdinals
-                let actionOrdinal = { invocation in
-                    _machineSurfacePlan.actions.firstIndex(where: { $0.formalName == invocation.name })
-                }
-                return TLALiveMachineTransitionDriver(
-                    successors: { state, invocation in
-                        try runtime.successors(invocation, from: state)
-                    },
-                    availableInvocations: { state in
-                        try runtime.availableInvocations(in: state).filter { invocation in
-                            actionOrdinal(invocation).map { identityRouted.contains($0) } == false
-                        }
-                    },
-                    validateInvocation: { invocation in
-                        guard let ordinal = actionOrdinal(invocation),
-                              let action = actions[invocation.name] else { return .unknownAction }
-                        guard action.bindings.count == invocation.arguments.count else { return .invalidArity }
-                        for (binding, argument) in zip(action.bindings, invocation.arguments)
-                        where binding.values.contains(argument) == false {
-                            return .actionArgumentOutOfDomain
-                        }
-                        return identityRouted.contains(ordinal)
-                            ? .identityRoutedActionRequiresID
-                            : nil
-                    },
-                    decodeState: { state in
-                        _ = try State(projection: state)
-                    }
-                )
-            }
-            """),
-            DeclSyntax(stringLiteral: """
-            private static func _makeLiveOwner() throws -> TLALiveMachineOwner {
+            private static func _makeLiveOwner() throws -> TLALiveMachineOwner<\(actionType)> {
                 let runtime = try _runtime()
                 guard let initial = try runtime.initialStateProjections().first else {
                     throw GeneratedMachineError.noInitialState

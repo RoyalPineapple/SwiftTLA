@@ -2,9 +2,18 @@ import Foundation
 import Testing
 @testable import SwiftTLA
 
+private enum ObservationAction: Hashable, Sendable {
+    case advance
+}
+
 @Suite("Live machine observation")
 struct LiveMachineObservationTests {
-    private static let countToken = TLAStateProjection.Token(validating: "count")!
+    private static func countToken() throws -> TLAStateProjection.Token {
+        guard let token = TLAStateProjection.Token(validating: "count") else {
+            throw ObservationTestError.invalidToken
+        }
+        return token
+    }
     private static let schema = MachineSchema(
         identifier: "live-machine-observation-tests.counter-v1",
         model: .init(name: "ObservationCounter"),
@@ -12,20 +21,19 @@ struct LiveMachineObservationTests {
         actions: [.init(id: "advance", display: .init(name: "advance"), parameters: [])]
     )
 
-    private static func makeOwner(capacity: Int = 64) throws -> TLALiveMachineOwner {
+    private static func makeOwner(capacity: Int = 64) throws -> TLALiveMachineOwner<ObservationAction> {
         let initial = try TLAStateProjection(validating: [
-            .init(token: countToken, value: .int(0))
+            .init(token: try countToken(), value: .int(0))
         ])
         let driver = TLALiveMachineTransitionDriver(
-            successors: { projection, invocation in
-                guard invocation.name == "advance" else { return [] }
-                guard case .int(let count)? = projection.value(for: countToken) else { return [] }
+            successors: { projection, action in
+                guard action == .advance else { return [] }
+                guard case .int(let count)? = projection.value(for: try Self.countToken()) else { return [] }
                 return [try TLAStateProjection(validating: [
-                    .init(token: countToken, value: .int(count + 1))
+                    .init(token: try Self.countToken(), value: .int(count + 1))
                 ])]
             },
-            availableInvocations: { _ in [.init(name: "advance")] },
-            validateInvocation: { invocation in invocation.name == "advance" ? nil : .unknownAction },
+            validateAction: { _ in nil },
             decodeState: { _ in }
         )
         return TLALiveMachineOwner.create(
@@ -37,8 +45,8 @@ struct LiveMachineObservationTests {
     }
 
     private static func attached(
-        _ machine: TLALiveMachine
-    ) async throws -> TLALiveMachineObservationSubscription {
+        _ machine: TLALiveMachine<ObservationAction>
+    ) async throws -> TLALiveMachineObservationSubscription<ObservationAction> {
         guard case .attached(let subscription) = await machine.observe() else {
             throw ObservationTestError.expectedAttachment
         }
@@ -46,8 +54,8 @@ struct LiveMachineObservationTests {
     }
 
     private static func next(
-        _ iterator: inout TLALiveMachineObservationSubscription.AsyncIterator
-    ) async throws -> TLALiveMachineObservationEvent {
+        _ iterator: inout TLALiveMachineObservationSubscription<ObservationAction>.AsyncIterator
+    ) async throws -> TLALiveMachineObservationEvent<ObservationAction> {
         try #require(await iterator.next())
     }
 
@@ -55,7 +63,7 @@ struct LiveMachineObservationTests {
     func attachmentAfterPriorCommitUsesExistingRuntime() async throws {
         let owner = try Self.makeOwner()
         let machine = owner.handle
-        _ = await machine.execute(.init(name: "advance"), requestID: UUID())
+        _ = await machine.execute(.advance, requestID: UUID())
 
         let subscription = try await Self.attached(machine)
         var iterator = subscription.makeAsyncIterator()
@@ -67,7 +75,7 @@ struct LiveMachineObservationTests {
         }
         #expect(snapshot.identity == machine.identity)
         #expect(snapshot.position == .init(value: 1))
-        #expect(snapshot.state.value(for: Self.countToken) == .int(1))
+        #expect(snapshot.state.value(for: try Self.countToken()) == .int(1))
     }
 
     @Test("Attachment baseline is followed by commits in runtime order")
@@ -78,7 +86,7 @@ struct LiveMachineObservationTests {
         var iterator = subscription.makeAsyncIterator()
 
         let baseline = try await Self.next(&iterator)
-        _ = await machine.execute(.init(name: "advance"), requestID: UUID())
+        _ = await machine.execute(.advance, requestID: UUID())
         let update = try await Self.next(&iterator)
 
         guard case .snapshot(let snapshot, reason: .attached) = baseline,
@@ -100,8 +108,8 @@ struct LiveMachineObservationTests {
         var iterator = subscription.makeAsyncIterator()
         _ = try await Self.next(&iterator)
 
-        _ = await machine.execute(.init(name: "advance"), requestID: UUID())
-        _ = await machine.execute(.init(name: "advance"), requestID: UUID())
+        _ = await machine.execute(.advance, requestID: UUID())
+        _ = await machine.execute(.advance, requestID: UUID())
 
         let lossEvent = try await Self.next(&iterator)
         guard case .loss(let loss) = lossEvent else {
@@ -119,10 +127,10 @@ struct LiveMachineObservationTests {
             return
         }
         #expect(snapshot.position == .init(value: 2))
-        #expect(snapshot.state.value(for: Self.countToken) == .int(2))
+        #expect(snapshot.state.value(for: try Self.countToken()) == .int(2))
         #expect(loss.lastContiguousPosition == .init(value: 0))
 
-        _ = await machine.execute(.init(name: "advance"), requestID: UUID())
+        _ = await machine.execute(.advance, requestID: UUID())
         let update = try await Self.next(&iterator)
         guard case .update(let commit) = update else {
             Issue.record("Expected ordered post-recovery update")
@@ -145,7 +153,7 @@ struct LiveMachineObservationTests {
 
         await cancelled.cancel()
         #expect(await cancelledIterator.next() == nil)
-        _ = await machine.execute(.init(name: "advance"), requestID: UUID())
+        _ = await machine.execute(.advance, requestID: UUID())
 
         let peerEvent = try await Self.next(&peerIterator)
         guard case .update(let commit) = peerEvent else {
@@ -193,12 +201,13 @@ struct LiveMachineObservationTests {
     @Test("Observation values remain Sendable")
     func publicObservationValuesAreSendable() {
         func requireSendable<Value: Sendable>(_: Value.Type) {}
-        requireSendable(TLALiveMachineObservationEvent.self)
-        requireSendable(TLALiveMachineObservationSubscription.self)
-        requireSendable(TLALiveMachineObservationSubscription.AsyncIterator.self)
+        requireSendable(TLALiveMachineObservationEvent<ObservationAction>.self)
+        requireSendable(TLALiveMachineObservationSubscription<ObservationAction>.self)
+        requireSendable(TLALiveMachineObservationSubscription<ObservationAction>.AsyncIterator.self)
     }
 }
 
 private enum ObservationTestError: Error {
     case expectedAttachment
+    case invalidToken
 }

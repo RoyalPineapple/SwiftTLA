@@ -43,11 +43,11 @@ public struct TLALiveMachineTermination: Sendable, Equatable {
 }
 
 /// One event from an attached live-machine observation.
-public enum TLALiveMachineObservationEvent: Sendable, Equatable {
+public enum TLALiveMachineObservationEvent<Action: Sendable & Equatable>: Sendable, Equatable {
     /// An atomic baseline captured at attachment or recovery.
     case snapshot(TLALiveMachineSnapshot, reason: TLALiveMachineSnapshotReason)
     /// One committed transition in this runtime's commit order.
-    case update(TLALiveMachineCommit)
+    case update(TLALiveMachineCommit<Action>)
     /// A bounded mailbox discarded one or more ordinary updates.
     case loss(TLALiveMachineObservationLoss)
     /// The owner ended the runtime. This is delivered at most once.
@@ -55,8 +55,8 @@ public enum TLALiveMachineObservationEvent: Sendable, Equatable {
 }
 
 /// The result of attaching an observer to an existing runtime.
-public enum TLALiveMachineAttachmentOutcome: Sendable {
-    case attached(TLALiveMachineObservationSubscription)
+public enum TLALiveMachineAttachmentOutcome<Action: Sendable & Equatable>: Sendable {
+    case attached(TLALiveMachineObservationSubscription<Action>)
     case unavailable(TLALiveMachineUnavailableReason)
 }
 
@@ -75,14 +75,14 @@ public enum TLALiveMachineResynchronizationOutcome: Sendable, Equatable {
 /// The subscription carries no machine state. Its operations route to the
 /// authoritative runtime storage actor, where attachment, commits, recovery,
 /// cancellation, and owner termination are serialized.
-public final class TLALiveMachineObservationSubscription: AsyncSequence, Sendable {
-    public typealias Element = TLALiveMachineObservationEvent
+public final class TLALiveMachineObservationSubscription<Action: Sendable & Equatable>: AsyncSequence, Sendable {
+    public typealias Element = TLALiveMachineObservationEvent<Action>
 
     public let identity: TLALiveMachineIdentity
     private let subscriptionID: UUID
-    private let storage: TLALiveMachineStorage
+    private let storage: TLALiveMachineStorage<Action>
 
-    init(identity: TLALiveMachineIdentity, subscriptionID: UUID, storage: TLALiveMachineStorage) {
+    init(identity: TLALiveMachineIdentity, subscriptionID: UUID, storage: TLALiveMachineStorage<Action>) {
         self.identity = identity
         self.subscriptionID = subscriptionID
         self.storage = storage
@@ -95,13 +95,13 @@ public final class TLALiveMachineObservationSubscription: AsyncSequence, Sendabl
     }
 
     public struct AsyncIterator: AsyncIteratorProtocol, Sendable {
-        private let subscription: TLALiveMachineObservationSubscription
+        private let subscription: TLALiveMachineObservationSubscription<Action>
 
-        init(subscription: TLALiveMachineObservationSubscription) {
+        init(subscription: TLALiveMachineObservationSubscription<Action>) {
             self.subscription = subscription
         }
 
-        public mutating func next() async -> TLALiveMachineObservationEvent? {
+        public mutating func next() async -> TLALiveMachineObservationEvent<Action>? {
             let observation = subscription
             return await withTaskCancellationHandler {
                 await observation.next()
@@ -125,7 +125,7 @@ public final class TLALiveMachineObservationSubscription: AsyncSequence, Sendabl
         await storage.cancel(subscriptionID)
     }
 
-    private func next() async -> TLALiveMachineObservationEvent? {
+    private func next() async -> TLALiveMachineObservationEvent<Action>? {
         await storage.next(subscriptionID)
     }
 }

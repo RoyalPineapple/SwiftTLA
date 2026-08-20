@@ -8,9 +8,6 @@ import SwiftParser
 import SwiftTLA
 
 enum MacroExpander {
-    /// The formal action label is external specification data and is kept
-    /// verbatim in `TLAActionInvocation`. Generated Swift declarations need a
-    /// separate, collision-safe identifier surface.
     static func generatedActionIdentifiers(actions: [NamedAction]) -> [String] {
         let reserved: Set<String> = ["init", "deinit", "subscript", "toInvocation", "rawValue"]
         var used: Set<String> = []
@@ -83,14 +80,6 @@ enum MacroExpander {
                     actionOrdinal: { Self._actionOrdinal(for: $0) },
                     arguments: { Self._actionArguments(for: $0) },
                     label: { Self._actionLabel(actionAt: $0, arguments: $1) }
-                )
-            }
-            """))
-            decls.append(DeclSyntax(stringLiteral: """
-            private static func _liveInvocation(for action: ActionLabel) -> TLAActionInvocation {
-                .init(
-                    name: _machineSurfacePlan.actions[_actionOrdinal(for: action)].formalName,
-                    arguments: _actionArguments(for: action)
                 )
             }
             """))

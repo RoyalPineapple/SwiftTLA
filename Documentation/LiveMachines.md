@@ -33,7 +33,7 @@ case .unavailable(let reason):
 }
 ```
 
-The position starts at zero and advances once for each committed action. It is ordered only within this runtime identity. The snapshot's availability is the availability computed for that same committed state.
+The position starts at zero and advances once for each committed action. It is ordered within this runtime identity.
 
 ## Execute actions
 
@@ -45,11 +45,11 @@ let typedOutcome = try await live.execute(.advance)
 
 Each request produces exactly one generated `Live.Outcome`:
 
-- `committed` contains the request ID, invocation, and atomic before/after snapshots. The after position is one more than the before position.
+- `committed` contains the request ID, typed action, and atomic before/after snapshots. The after position is one more than the before position.
 - `rejected` includes the current snapshot and a typed reason.
 - `failed` includes the current snapshot and a typed failure.
 
-Once execution enters the runtime, it is non-cancellable. Cancelling the caller cannot turn an accepted action into a non-commit result. It completes as a normal `committed` or `failed` outcome. Live execution also requires one formal successor. If the formal evaluator returns multiple successors, the runtime returns `ambiguousSuccessors` and commits none of them; successor array order is never a policy.
+Live execution selects one successor for each typed action. A multiple-successor result produces `ambiguousSuccessors` and leaves the runtime at its current snapshot.
 
 ## Create generated adapters
 
