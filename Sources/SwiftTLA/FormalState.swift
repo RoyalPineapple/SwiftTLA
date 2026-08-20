@@ -65,7 +65,6 @@ enum CompiledEvaluationError: Error, Sendable {
     case invalidStateLayout(expected: Int, actual: Int)
     case invalidVariableID(VariableID)
     case unboundBinder(BinderID)
-    case unsupportedExpression
     case unresolvedOperator
     case conflictingAssignment(VariableID)
 }

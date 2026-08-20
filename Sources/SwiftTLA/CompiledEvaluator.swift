@@ -500,8 +500,6 @@ struct CompiledEvaluator {
                 ).evaluate(function.body)
             }
             throw CompiledEvaluationError.unresolvedOperator
-        default:
-            throw CompiledEvaluationError.unsupportedExpression
         }
     }
 }
