@@ -210,7 +210,7 @@ struct CompiledLowerer {
 
     private func lower(_ lambda: FormalLambda, at path: String) throws -> CompiledFormalLambda {
         .init(
-            parameters: try lambda.parameters.map { try binder(at: "\(path).\($0)") },
+            parameters: try lambda.parameters.map { try binder(at: "\(path).parameters.\($0)") },
             body: try lower(lambda.body, at: "\(path).body")
         )
     }
