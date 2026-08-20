@@ -10,6 +10,10 @@ struct ActionID: Hashable, Sendable {
     let ordinal: Int
 }
 
+struct OperatorID: Hashable, Sendable {
+    let ordinal: Int
+}
+
 struct CompiledDeclaration: Hashable, Sendable {
     enum Kind: String, Hashable, Sendable {
         case variable
@@ -80,40 +84,55 @@ enum CompiledReference: Hashable, Sendable {
     case variable(VariableID)
     case binder(BinderID)
     case action(ActionID)
-    case symbol(String)
+    case constant(TLAValue)
+    case `operator`(OperatorID)
 }
 
 struct CompiledBindingTable: Sendable {
     let variables: [String: VariableID]
     let actions: [String: ActionID]
+    let operators: [String: OperatorID]
     let references: [String: CompiledReference]
 
-    init(layout: CompiledLayout, references: [String: CompiledReference] = [:]) {
+    init(
+        layout: CompiledLayout,
+        operators: [String: OperatorID] = [:],
+        references: [String: CompiledReference] = [:]
+    ) {
         variables = Dictionary(
             uniqueKeysWithValues: layout.variables.map { ($0.declaration.name, $0.id) }
         )
         actions = Dictionary(
             uniqueKeysWithValues: layout.actions.map { ($0.declaration.name, $0.id) }
         )
+        self.operators = operators
         self.references = references
     }
 }
 
 struct BindingValidator {
     private let layout: CompiledLayout
-    private var symbols: Set<String>
+    private let closure: FormalModuleClosure
+    private let constants: [String: TLAValue]
+    private var operators: [String: OperatorID]
     private var nextBinderOrdinal = 0
+    private var nextOperatorOrdinal = 0
     private var knownBinderNames: Set<String> = []
     private var references: [String: CompiledReference] = [:]
 
     init(spec: TLASpec, layout: CompiledLayout, closure: FormalModuleClosure) {
         self.layout = layout
-        symbols = Set(spec.constants.keys)
-            .union(spec.formalParameters.map(\.name))
-            .union(spec.formalOperatorDefinitions.map(\.name))
-            .union(spec.recursiveFuncs.map(\.name))
-            .union(closure.resolvedFormalOperatorDefinitions.map(\.name))
-            .union(closure.resolvedRecursiveFuncs.map(\.name))
+        self.closure = closure
+        constants = spec.constants
+        let names = spec.formalOperatorDefinitions.map(\.name)
+            + spec.recursiveFuncs.map(\.name)
+            + closure.resolvedFormalOperatorDefinitions.map(\.name)
+            + closure.resolvedRecursiveFuncs.map(\.name)
+        operators = names.reduce(into: [:]) { result, name in
+            guard result[name] == nil else { return }
+            result[name] = OperatorID(ordinal: result.count)
+        }
+        nextOperatorOrdinal = operators.count
     }
 
     mutating func validate(spec: TLASpec) throws -> CompiledBindingTable {
@@ -136,14 +155,44 @@ struct BindingValidator {
         try validateExpression(spec.constraint, at: "constraint", scope: [:])
         try validateExpression(spec.assume, at: "assume", scope: [:])
         for definition in spec.formalOperatorDefinitions {
-            let scope = try bind(definition.parameters.map(\.name), at: "formalOperators.\(definition.name).parameters", scope: [:])
+            guard let id = operators[definition.name] else {
+                throw diagnostic(code: .unknownReference, path: "formalOperators.\(definition.name)", expected: "a declared operator", actual: "no operator identity")
+            }
+            references["formalOperators.\(definition.name).declaration"] = .operator(id)
+            let outerOperators = operators
+            let scope = try bindFormalParameters(definition.parameters, at: "formalOperators.\(definition.name).parameters", scope: [:])
             try validateExpression(definition.body, at: "formalOperators.\(definition.name).body", scope: scope)
+            operators = outerOperators
         }
         for function in spec.recursiveFuncs {
+            guard let id = operators[function.name] else {
+                throw diagnostic(code: .unknownReference, path: "recursiveFunctions.\(function.name)", expected: "a declared operator", actual: "no operator identity")
+            }
+            references["recursiveFunctions.\(function.name).declaration"] = .operator(id)
             let scope = try bind(function.params, at: "recursiveFunctions.\(function.name).parameters", scope: [:])
             try validateExpression(function.body, at: "recursiveFunctions.\(function.name).body", scope: scope)
         }
-        return CompiledBindingTable(layout: layout, references: references)
+        let localFormalNames = Set(spec.formalOperatorDefinitions.map(\.name))
+        for definition in closure.resolvedFormalOperatorDefinitions where !localFormalNames.contains(definition.name) {
+            guard let id = operators[definition.name] else {
+                throw diagnostic(code: .unknownReference, path: "linkedFormalOperators.\(definition.name)", expected: "a declared operator", actual: "no operator identity")
+            }
+            references["linkedFormalOperators.\(definition.name).declaration"] = .operator(id)
+            let outerOperators = operators
+            let scope = try bindFormalParameters(definition.parameters, at: "linkedFormalOperators.\(definition.name).parameters", scope: [:])
+            try validateExpression(definition.body, at: "linkedFormalOperators.\(definition.name).body", scope: scope)
+            operators = outerOperators
+        }
+        let localRecursiveNames = Set(spec.recursiveFuncs.map(\.name))
+        for function in closure.resolvedRecursiveFuncs where !localRecursiveNames.contains(function.name) {
+            guard let id = operators[function.name] else {
+                throw diagnostic(code: .unknownReference, path: "linkedRecursiveFunctions.\(function.name)", expected: "a declared operator", actual: "no operator identity")
+            }
+            references["linkedRecursiveFunctions.\(function.name).declaration"] = .operator(id)
+            let scope = try bind(function.params, at: "linkedRecursiveFunctions.\(function.name).parameters", scope: [:])
+            try validateExpression(function.body, at: "linkedRecursiveFunctions.\(function.name).body", scope: scope)
+        }
+        return CompiledBindingTable(layout: layout, operators: operators, references: references)
     }
 
     private mutating func validateExpression(
@@ -234,7 +283,7 @@ struct BindingValidator {
                 }
             }
         case .recursiveCall(let name, let arguments):
-            guard symbols.contains(name) else {
+            guard let id = operators[name] else {
                 throw diagnostic(
                     code: .unresolvedImportedSymbol,
                     path: path,
@@ -242,7 +291,7 @@ struct BindingValidator {
                     actual: "unresolved symbol '\(name)'"
                 )
             }
-            references[path] = .symbol(name)
+            references[path] = .operator(id)
             for (index, argument) in arguments.enumerated() {
                 try validateExpression(argument, at: "\(path).arguments[\(index)]", scope: scope)
             }
@@ -258,7 +307,7 @@ struct BindingValidator {
     private mutating func formalOperator(_ operation: FormalOperator, at path: String, scope: [String: BinderID]) throws {
         switch operation {
         case .reference(let name, _):
-            guard symbols.contains(name) else {
+            guard let id = operators[name] else {
                 throw diagnostic(
                     code: .unresolvedImportedSymbol,
                     path: path,
@@ -266,7 +315,7 @@ struct BindingValidator {
                     actual: "unresolved symbol '\(name)'"
                 )
             }
-            references[path] = .symbol(name)
+            references[path] = .operator(id)
         case .lambda(let lambda):
             let bodyScope = try bind(lambda.parameters, at: "\(path).parameters", scope: scope)
             try validateExpression(lambda.body, at: "\(path).body", scope: bodyScope)
@@ -280,18 +329,26 @@ struct BindingValidator {
         scope: [String: BinderID]
     ) throws {
         try duplicate(operators.map(\.name), at: "\(path).operators")
-        let operatorNames = Set(operators.map(\.name))
-        let outerSymbols = symbols
-        symbols.formUnion(operatorNames)
-        defer { symbols = outerSymbols }
+        let outerOperators = self.operators
+        let localOperators = operators.map { operation in
+            (operation.name, OperatorID(ordinal: nextOperatorOrdinal))
+        }
+        nextOperatorOrdinal += localOperators.count
+        for local in localOperators {
+            self.operators[local.0] = local.1
+        }
+        defer { self.operators = outerOperators }
         for operation in operators {
             try validateExpression(operation.domain, at: "\(path).\(operation.name).domain", scope: scope)
             let bodyScope = try bind(operation.parameters, at: "\(path).\(operation.name).parameters", scope: scope)
             try validateExpression(operation.body, at: "\(path).\(operation.name).body", scope: bodyScope)
-            references["\(path).\(operation.name).declaration"] = .symbol(operation.name)
+            guard let id = self.operators[operation.name] else {
+                throw diagnostic(code: .unknownReference, path: path, expected: "a declared operator", actual: "no operator identity")
+            }
+            references["\(path).\(operation.name).declaration"] = .operator(id)
         }
-        for name in operatorNames {
-            references["\(path).operators.\(name)"] = .symbol(name)
+        for local in localOperators {
+            references["\(path).operators.\(local.0)"] = .operator(local.1)
         }
         try validateExpression(body, at: "\(path).body", scope: scope)
     }
@@ -335,8 +392,12 @@ struct BindingValidator {
             references[path] = .variable(id)
             return
         }
-        if symbols.contains(name) {
-            references[path] = .symbol(name)
+        if let value = constants[name] {
+            references[path] = .constant(value)
+            return
+        }
+        if let id = operators[name] {
+            references[path] = .operator(id)
             return
         }
         try unresolved(name, at: path, expected: "a declared variable, scoped binder, or linked symbol")
@@ -367,6 +428,31 @@ struct BindingValidator {
             knownBinderNames.insert(name)
             nested[name] = id
             references["\(path).\(name)"] = .binder(id)
+        }
+        return nested
+    }
+
+    private mutating func bindFormalParameters(
+        _ parameters: [FormalParameter],
+        at path: String,
+        scope: [String: BinderID]
+    ) throws -> [String: BinderID] {
+        try duplicate(parameters.map(\.name), at: path)
+        var nested = scope
+        for parameter in parameters {
+            switch parameter {
+            case .value(let name):
+                let id = BinderID(ordinal: nextBinderOrdinal)
+                nextBinderOrdinal += 1
+                knownBinderNames.insert(name)
+                nested[name] = id
+                references["\(path).\(name)"] = .binder(id)
+            case .operator(let name, _):
+                let id = OperatorID(ordinal: nextOperatorOrdinal)
+                nextOperatorOrdinal += 1
+                operators[name] = id
+                references["\(path).\(name)"] = .operator(id)
+            }
         }
         return nested
     }

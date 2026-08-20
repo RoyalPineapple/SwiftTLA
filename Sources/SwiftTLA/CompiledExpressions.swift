@@ -2,7 +2,7 @@ indirect enum CompiledStateExpr: Sendable {
     case value(TLAValue)
     case stateVariable(VariableID)
     case boundValue(BinderID)
-    case symbol(String)
+    case operatorReference(OperatorID)
 
     case add(CompiledStateExpr, CompiledStateExpr)
     case subtract(CompiledStateExpr, CompiledStateExpr)
@@ -61,7 +61,7 @@ indirect enum CompiledStateExpr: Sendable {
     case functionSet(CompiledStateExpr, CompiledStateExpr)
     case foldFunction(CompiledFormalLambda, initial: CompiledStateExpr, sequence: CompiledStateExpr)
     case operatorApplication(CompiledFormalOperator, [CompiledFormalCallArgument])
-    case recursiveCall(String, [CompiledStateExpr])
+    case recursiveCall(OperatorID, [CompiledStateExpr])
     case letValue(BinderID, CompiledStateExpr, CompiledStateExpr)
     case letIn([CompiledLocalOperator], CompiledStateExpr)
 }
@@ -73,7 +73,14 @@ struct CompiledFormalLambda: Sendable {
 
 enum CompiledFormalOperator: Sendable {
     case lambda(CompiledFormalLambda)
-    case reference(String, arity: Int)
+    case reference(OperatorID, arity: Int)
+
+    var arity: Int {
+        switch self {
+        case .lambda(let lambda): return lambda.parameters.count
+        case .reference(_, let arity): return arity
+        }
+    }
 }
 
 indirect enum CompiledFormalCallArgument: Sendable {
@@ -82,7 +89,7 @@ indirect enum CompiledFormalCallArgument: Sendable {
 }
 
 struct CompiledLocalOperator: Sendable {
-    let name: String
+    let id: OperatorID
     let parameters: [BinderID]
     let domain: CompiledStateExpr?
     let body: CompiledStateExpr
@@ -117,13 +124,18 @@ struct CompiledInvariant: Sendable {
 }
 
 struct CompiledFormalOperatorDefinition: Sendable {
-    let name: String
-    let parameters: [BinderID]
+    let id: OperatorID
+    let parameters: [CompiledFormalParameter]
     let body: CompiledStateExpr
 }
 
+enum CompiledFormalParameter: Sendable {
+    case value(BinderID)
+    case `operator`(OperatorID, arity: Int)
+}
+
 struct CompiledRecursiveFunction: Sendable {
-    let name: String
+    let id: OperatorID
     let parameters: [BinderID]
     let body: CompiledStateExpr
 }

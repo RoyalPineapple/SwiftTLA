@@ -1,5 +1,6 @@
 struct CompiledLowerer {
     let bindings: CompiledBindingTable
+    let closure: FormalModuleClosure
 
     func lower(spec: TLASpec) throws -> CompiledModel {
         var initializers: [VariableID: CompiledVariableInitializer] = [:]
@@ -19,30 +20,50 @@ struct CompiledLowerer {
         }
         let formalOperators: [CompiledFormalOperatorDefinition] = try spec.formalOperatorDefinitions.map { definition in
             CompiledFormalOperatorDefinition(
-                name: definition.name,
-                parameters: try definition.parameters.map {
-                    try binder(at: "formalOperators.\(definition.name).parameters.\($0.name)")
-                },
+                id: try operatorID(at: "formalOperators.\(definition.name).declaration"),
+                parameters: try lower(definition.parameters, at: "formalOperators.\(definition.name).parameters"),
                 body: try lower(definition.body, at: "formalOperators.\(definition.name).body")
             )
         }
         let recursiveFunctions: [CompiledRecursiveFunction] = try spec.recursiveFuncs.map { function in
             CompiledRecursiveFunction(
-                name: function.name,
+                id: try operatorID(at: "recursiveFunctions.\(function.name).declaration"),
                 parameters: try function.params.map {
                     try binder(at: "recursiveFunctions.\(function.name).parameters.\($0)")
                 },
                 body: try lower(function.body, at: "recursiveFunctions.\(function.name).body")
             )
         }
+        let localFormalNames = Set(spec.formalOperatorDefinitions.map(\.name))
+        let linkedFormalOperators = try closure.resolvedFormalOperatorDefinitions
+            .filter { !localFormalNames.contains($0.name) }
+            .map { definition in
+                CompiledFormalOperatorDefinition(
+                    id: try operatorID(at: "linkedFormalOperators.\(definition.name).declaration"),
+                    parameters: try lower(definition.parameters, at: "linkedFormalOperators.\(definition.name).parameters"),
+                    body: try lower(definition.body, at: "linkedFormalOperators.\(definition.name).body")
+                )
+            }
+        let localRecursiveNames = Set(spec.recursiveFuncs.map(\.name))
+        let linkedRecursiveFunctions = try closure.resolvedRecursiveFuncs
+            .filter { !localRecursiveNames.contains($0.name) }
+            .map { function in
+                CompiledRecursiveFunction(
+                    id: try operatorID(at: "linkedRecursiveFunctions.\(function.name).declaration"),
+                    parameters: try function.params.map {
+                        try binder(at: "linkedRecursiveFunctions.\(function.name).parameters.\($0)")
+                    },
+                    body: try lower(function.body, at: "linkedRecursiveFunctions.\(function.name).body")
+                )
+            }
         return CompiledModel(
             variableInitializers: initializers,
             actions: actions,
             invariants: invariants,
             constraint: try lowerOptional(spec.constraint, at: "constraint"),
             assume: try lowerOptional(spec.assume, at: "assume"),
-            formalOperatorDefinitions: formalOperators,
-            recursiveFunctions: recursiveFunctions
+            formalOperatorDefinitions: formalOperators + linkedFormalOperators,
+            recursiveFunctions: recursiveFunctions + linkedRecursiveFunctions
         )
     }
 
@@ -155,8 +176,8 @@ struct CompiledLowerer {
                 lower(operation, at: "\(path).operator"),
                 arguments.enumerated().map { index, argument in try lower(argument, at: "\(path).arguments[\(index)]") }
             )
-        case .recursiveCall(let name, let arguments):
-            return try .recursiveCall(name, arguments.enumerated().map { index, argument in
+        case .recursiveCall(_, let arguments):
+            return try .recursiveCall(try operatorID(at: path), arguments.enumerated().map { index, argument in
                 try lower(argument, at: "\(path).arguments[\(index)]")
             })
         case .letValue(let name, let value, let body):
@@ -204,11 +225,25 @@ struct CompiledLowerer {
 
     private func lower(_ operation: LocalOperator, at path: String) throws -> CompiledLocalOperator {
         .init(
-            name: operation.name,
+            id: try operatorID(at: "\(path).declaration"),
             parameters: try operation.parameters.map { try binder(at: "\(path).parameters.\($0)") },
             domain: try lowerOptional(operation.domain, at: "\(path).domain"),
             body: try lower(operation.body, at: "\(path).body")
         )
+    }
+
+    private func lower(
+        _ parameters: [FormalParameter],
+        at path: String
+    ) throws -> [CompiledFormalParameter] {
+        try parameters.map { parameter in
+            switch parameter {
+            case .value(let name):
+                return .value(try binder(at: "\(path).\(name)"))
+            case .operator(let name, let arity):
+                return .operator(try operatorID(at: "\(path).\(name)"), arity: arity)
+            }
+        }
     }
 
     private func lower(_ lambda: FormalLambda, at path: String) throws -> CompiledFormalLambda {
@@ -220,7 +255,7 @@ struct CompiledLowerer {
 
     private func lower(_ operation: FormalOperator, at path: String) throws -> CompiledFormalOperator {
         switch operation {
-        case .reference(let name, let arity): return .reference(name, arity: arity)
+        case .reference(_, let arity): return try .reference(operatorID(at: path), arity: arity)
         case .lambda(let lambda): return .lambda(try lower(lambda, at: path))
         }
     }
@@ -263,7 +298,8 @@ struct CompiledLowerer {
         switch try reference(at: path) {
         case .variable(let id): return .stateVariable(id)
         case .binder(let id): return .boundValue(id)
-        case .symbol(let name): return .symbol(name)
+        case .constant(let value): return .value(value)
+        case .operator(let id): return .operatorReference(id)
         case .action: throw diagnostic(path: path)
         }
     }
@@ -280,6 +316,11 @@ struct CompiledLowerer {
 
     private func action(at path: String) throws -> ActionID {
         guard case .action(let id) = try reference(at: path) else { throw diagnostic(path: path) }
+        return id
+    }
+
+    private func operatorID(at path: String) throws -> OperatorID {
+        guard case .operator(let id) = try reference(at: path) else { throw diagnostic(path: path) }
         return id
     }
 
