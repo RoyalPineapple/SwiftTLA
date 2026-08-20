@@ -104,7 +104,7 @@ struct SymmetricCollectionTLCOracleTests {
       == runtime.symmetricCollections.map(\.metadata))
     #expect(normalizedActions(parsed.actions.map { NamedAction(name: $0.name, body: $0.body) })
       == normalizedActions(runtime.actions))
-    #expect(try computeInitialStates(parsedSpec) == computeInitialStates(runtime))
+    #expect(try parsedSpec.compile().initialStateProjections() == runtime.compile().initialStateProjections())
     #expect(try ModelChecker(spec: parsedSpec).check().description == ModelChecker(spec: runtime).check().description)
   }
 

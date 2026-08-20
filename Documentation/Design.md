@@ -407,11 +407,11 @@ graph TD
         SUB["substituteConstants()<br/>inlines CONSTANT values<br/>also handles temporals via substituteInTemporal"]
         INIT["CompiledRuntime.initialStates()<br/>nondet sets → cartesian → initExpr"]
         LOOP["BFS loop: queue, visited set"]
-        EXPAND["buildExpander:<br/>for each action: ActionEnumerator.enumerate()<br/>→ filter successors by constraint (Evaluator)"]
+        EXPAND["for each action: CompiledActionEnumerator.enumerate()<br/>→ filter successors by constraint"]
         DIST["distributeOr()<br/>single canonical function<br/>or→split, and→distribute, ifElse→guard+split, exists→pushInto"]
-        PDIS["processDisjunct()<br/>1. extractExistsActions → expand<br/>2. extractChooseActions → cartesian<br/>3. extractAssignments + guards → evaluate → new state"]
-        EVAL["Evaluator.evaluate()<br/>recursive interpreter for all 51 cases<br/>substituteVariable for _x binding<br/>recursiveCall: Sum + SeqFromSet builtins"]
-        INV["check invariants<br/>Evaluator.evaluateBool()"]
+        PDIS["compiled action branches<br/>bindings → guards → assignments → slot-backed successor"]
+        EVAL["CompiledEvaluator<br/>typed expressions and scoped bindings"]
+        INV["check compiled invariants"]
         RESULT["CheckResult<br/>.ok | .invariantViolated | .deadlocked | .depthExceeded | .error"]
         GRAPH["StateGraph<br/>states + transitions + variableNames"]
 
@@ -453,8 +453,8 @@ graph TD
 | `TLAValue` | TLAValue.swift | — | 8-case runtime value |
 | `Var<T>` | Var.swift | name | `.becomes`, `.stays`, `@dynamicMemberLookup` |
 | `TLASpec` | TLASpec.swift | DSL builder | immutable spec with 14 component types |
-| `Evaluator` | Evaluator.swift | StateExpr + state | TLAValue |
-| `ActionEnumerator` | ActionEnumerator.swift | ActionExpr + state | successor states |
+| `CompiledEvaluator` | CompiledEvaluator.swift | CompiledStateExpr + FormalState | CompiledValue |
+| `CompiledActionEnumerator` | CompiledActionEnumerator.swift | CompiledAction + FormalState | slot-backed successors |
 | `ModelChecker` | ModelChecker.swift | TLASpec | CheckResult + StateGraph |
 | `CompiledRuntime` | CompiledRuntime.swift | CompiledSpecification | FormalState successors and invariant results |
 | `SpecParser` | SpecParser.swift | SwiftSyntax | DSL types (7 public methods) |
@@ -462,7 +462,6 @@ graph TD
 | `PrettyPrint` | TLASpec+PrettyPrint.swift | TLASpec | .tla string (13-step generation) |
 | `distributeOr` | TLASpec+PrettyPrint.swift | ActionExpr | [[ActionExpr]] disjuncts |
 | `completeAction` | TLASpec+PrettyPrint.swift | ActionExpr + vars | completed ActionExpr with per-branch UNCHANGED |
-| `computeInitialStates` | TLASpec.swift | TLASpec | [[String: TLAValue]] |
 | `substituteConstants` | TLASpec.swift | TLASpec | TLASpec with constants inlined |
 
 ## Package Structure
@@ -496,7 +495,7 @@ SwiftTLA (library)
 |---|-------|-----------|
 | 1 | ComputedInitDecl dead code | Removed |
 | 2 | SymmetryDecl dead code | Removed |
-| 3 | Duplicate init state computation | Extracted shared `computeInitialStates()` |
+| 3 | Duplicate init state computation | CompiledRuntime owns initial-state construction |
 | 4 | substituteConstants skipped temporals | Added `substituteInTemporal` |
 | 5 | Two OR-distribution algorithms | Consolidated to single `distributeOr` |
 | 6 | Var.init `value:` parameter | Intentional — type documentation |

@@ -150,7 +150,7 @@ func generatedActionResult(
     return .evaluationFailed(
       actionName: actionName,
       diagnostic: .init(
-        code: error is ActionError ? .actionError : .evaluationError,
+        code: .evaluationError,
         message: String(describing: error)
       )
     )
