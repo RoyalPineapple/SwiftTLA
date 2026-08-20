@@ -1,33 +1,3 @@
-/// Runtime storage for a symmetric verification collection.
-///
-/// Its keys are application identities, which deliberately never enter the
-/// verification AST or the generated model-value domain.
-public struct SymmetricCollectionProjection<ID: Hashable> {
-  public let modelValue: TLAValue
-  private let keys: [ID: TLAValue]
-  private let values: [ID: TLAValue]
-
-  init(modelValue: TLAValue, keys: [ID: TLAValue], values: [ID: TLAValue]) {
-    self.modelValue = modelValue
-    self.keys = keys
-    self.values = values
-  }
-
-  public func key(for id: ID, collection: String, action: String) throws -> TLAValue {
-    guard let key = keys[id] else {
-      throw SymmetricCollectionRuntimeError.unknownMember(collection: collection, action: action)
-    }
-    return key
-  }
-
-  public func value(for id: ID, collection: String, action: String) throws -> TLAValue {
-    guard let value = values[id] else {
-      throw SymmetricCollectionRuntimeError.unknownMember(collection: collection, action: action)
-    }
-    return value
-  }
-}
-
 public struct IdentifiedModelCollection<Element: Identifiable, Value: TLAValueType> {
   public struct Entry {
     public let element: Element
@@ -102,24 +72,11 @@ public struct IdentifiedModelCollection<Element: Identifiable, Value: TLAValueTy
     return entry
   }
 
-  public func projection() -> SymmetricCollectionProjection<Element.ID> {
-    let pairs = insertionOrder.enumerated().compactMap { index, id -> (Element.ID, TLAValue, TLAValue)? in
-      guard let entry = entries[id] else { return nil }
-      return (id, .constant("\(name)LiveMember\(index)"), entry.value.tlaValue)
-    }
-    return .init(
-      modelValue: .function(Dictionary(uniqueKeysWithValues: pairs.map { ($0.1, $0.2) })),
-      keys: Dictionary(uniqueKeysWithValues: pairs.map { ($0.0, $0.1) }),
-      values: Dictionary(uniqueKeysWithValues: pairs.map { ($0.0, $0.2) })
-    )
-  }
-
   public func projectedModelValue(preserving modelKeys: [TLAValue]) -> TLAValue {
-    let projection = projection()
     let entries = insertionOrder.enumerated().compactMap { index, id -> (TLAValue, TLAValue)? in
-      guard let value = try? projection.value(for: id, collection: name, action: "projection") else { return nil }
+      guard let entry = self.entries[id] else { return nil }
       let key = modelKeys.indices.contains(index) ? modelKeys[index] : .constant("\(name)LiveMember\(index)")
-      return (key, value)
+      return (key, entry.value.tlaValue)
     }
     return .function(Dictionary(uniqueKeysWithValues: entries))
   }
