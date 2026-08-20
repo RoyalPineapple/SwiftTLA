@@ -10,6 +10,7 @@ struct CanonicalGraphReceipt: Hashable, Sendable {
   }
 
   static let format = "canonical-graph-receipt/v1"
+  static let recordsPerChunk = 512
 
   let formatVersion: String
   let compiledModelIdentity: String
@@ -24,6 +25,7 @@ struct CanonicalGraphReceipt: Hashable, Sendable {
   let initialStatesDigest: String
   let statesDigest: String
   let edgesDigest: String
+  let graphChunkDigests: [String]
   let graphDigest: String
 
   init(
@@ -48,16 +50,16 @@ struct CanonicalGraphReceipt: Hashable, Sendable {
     self.stateCount = graph.states.count
     self.edgeCount = graph.edgeOccurrences.values.reduce(0, +)
 
-    let initialRecords = graph.initialStateKeys.sorted().map { "initial:\($0.canonicalEncoding)" }
-    let stateRecords = graph.states.keys.sorted().map { "state:\($0.canonicalEncoding)" }
-    let edgeRecords = graph.edgeOccurrences.keys.sorted().map { edge in
-      "edge:\(edge.canonicalEncoding);occurrences:\(graph.edgeOccurrences[edge, default: 0])"
-    }
+    let initialRecords = Self.initialRecords(for: graph)
+    let stateRecords = Self.stateRecords(for: graph)
+    let edgeRecords = Self.edgeRecords(for: graph)
+    let chunks = Self.graphRecordChunks(for: graph)
     let outcomeRecords = Self.outcomeRecords(outcome, diagnostics: diagnostics)
 
     self.initialStatesDigest = Self.digest(initialRecords)
     self.statesDigest = Self.digest(stateRecords)
     self.edgesDigest = Self.digest(edgeRecords)
+    self.graphChunkDigests = chunks.map(Self.digest)
     self.graphDigest = Self.digest(
       [
         "header:formatVersion:\(self.formatVersion)",
@@ -72,7 +74,9 @@ struct CanonicalGraphReceipt: Hashable, Sendable {
         "header:initialStateCount:\(self.initialStateCount)",
         "header:stateCount:\(self.stateCount)",
         "header:edgeCount:\(self.edgeCount)"
-      ].compactMap { $0 } + initialRecords + stateRecords + edgeRecords + outcomeRecords
+      ].compactMap { $0 }
+        + self.graphChunkDigests.map { "graphChunk:\($0)" }
+        + outcomeRecords
     )
   }
 
@@ -122,6 +126,28 @@ struct CanonicalGraphReceipt: Hashable, Sendable {
       .map { "diagnostic:\(encodedBytes($0.code)):\(encodedBytes($0.message))" }
       .sorted(by: canonicalBytes)
     return [outcomeRecord] + diagnosticRecords
+  }
+
+  static func graphRecordChunks(for graph: CanonicalGraph) -> [[String]] {
+    let records = initialRecords(for: graph) + stateRecords(for: graph) + edgeRecords(for: graph)
+    guard !records.isEmpty else { return [[]] }
+    return stride(from: 0, to: records.count, by: recordsPerChunk).map {
+      Array(records[$0..<min($0 + recordsPerChunk, records.count)])
+    }
+  }
+
+  private static func initialRecords(for graph: CanonicalGraph) -> [String] {
+    graph.initialStateKeys.sorted().map { "initial:\($0.canonicalEncoding)" }
+  }
+
+  private static func stateRecords(for graph: CanonicalGraph) -> [String] {
+    graph.states.keys.sorted().map { "state:\($0.canonicalEncoding)" }
+  }
+
+  private static func edgeRecords(for graph: CanonicalGraph) -> [String] {
+    graph.edgeOccurrences.keys.sorted().map { edge in
+      "edge:\(edge.canonicalEncoding);occurrences:\(graph.edgeOccurrences[edge, default: 0])"
+    }
   }
 
   private static func explorationStatus(for run: CanonicalRun) -> ExplorationStatus {

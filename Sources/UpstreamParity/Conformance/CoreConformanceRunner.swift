@@ -5,6 +5,14 @@ public enum CoreConformanceExitCode: Int32, Equatable, Sendable {
   case semanticDifference = 1
   case failure = 2
 }
+public enum CoreConformanceEvidenceRetention: Sendable {
+  case routine
+  case baseline
+  case externalAdmission
+}
+private enum CoreConformanceRetentionError: Error {
+  case graphReceiptChunkMismatch
+}
 public enum CoreConformanceEngine: String, Equatable, Sendable {
   case swift
   case tlc
@@ -91,7 +99,8 @@ public struct CoreConformanceRunner: Sendable {
     tlcRequest: TLCProcessRequest,
     replay: TLCReplayPolicy,
     outputDirectory: URL,
-    swiftActionNames: [String: String] = [:]
+    swiftActionNames: [String: String] = [:],
+    retention: CoreConformanceEvidenceRetention = .externalAdmission
   ) -> CoreConformanceRunResult {
     let correlations = Correlations(
       caseID: declaredCase.id,
@@ -184,7 +193,13 @@ public struct CoreConformanceRunner: Sendable {
       )
       let exitCode: CoreConformanceExitCode =
         comparison.isConformant ? .exact : .semanticDifference
-      try writeComparison(comparison, correlation: correlations.runner, to: createdStaging)
+      try writeReceipts(comparison, correlation: correlations.runner, to: createdStaging)
+      if retention != .routine || !comparison.isConformant {
+        try writeComparison(comparison, correlation: correlations.runner, to: createdStaging)
+        try writeGraphChunks(comparison, expected: tlcRun, actual: swiftRun, to: createdStaging)
+      } else {
+        try removeCanonicalRuns(from: createdStaging)
+      }
       try writeRun(
         exitCode: exitCode, correlation: correlations.runner, diagnostic: nil, to: createdStaging)
       phase = .publication
@@ -563,6 +578,67 @@ extension CoreConformanceRunner {
         to: directory.appendingPathComponent("comparison-diagnostics.json"))
     }
   }
+  private func writeReceipts(
+    _ comparison: ExactFiniteTLCComparison,
+    correlation: CoreConformanceCorrelation,
+    to directory: URL
+  ) throws {
+    guard let expectedReceipt = comparison.expectedReceipt,
+          let actualReceipt = comparison.actualReceipt else {
+      return
+    }
+    try writeJSON(
+      [
+        "correlation": correlationJSON(correlation),
+        "expected": receiptJSON(expectedReceipt),
+        "actual": receiptJSON(actualReceipt)
+      ], to: directory.appendingPathComponent("receipts.json"))
+  }
+  private func removeCanonicalRuns(from directory: URL) throws {
+    for name in ["swift.json", "tlc.json"] {
+      try FileManager.default.removeItem(at: directory.appendingPathComponent(name))
+    }
+  }
+  private func writeGraphChunks(
+    _ comparison: ExactFiniteTLCComparison,
+    expected: CanonicalRun,
+    actual: CanonicalRun,
+    to directory: URL
+  ) throws {
+    guard let expectedReceipt = comparison.expectedReceipt,
+          let actualReceipt = comparison.actualReceipt else {
+      return
+    }
+    try writeGraphChunks(expected.graph, receipt: expectedReceipt, named: "tlc", to: directory)
+    try writeGraphChunks(actual.graph, receipt: actualReceipt, named: "swift", to: directory)
+  }
+  private func writeGraphChunks(
+    _ graph: CanonicalGraph,
+    receipt: CanonicalGraphReceipt,
+    named name: String,
+    to directory: URL
+  ) throws {
+    let chunks = CanonicalGraphReceipt.graphRecordChunks(for: graph)
+    guard chunks.count == receipt.graphChunkDigests.count else {
+      throw CoreConformanceRetentionError.graphReceiptChunkMismatch
+    }
+    guard chunks.count > 1 else { return }
+    let chunksDirectory = directory.appendingPathComponent("graph-records").appendingPathComponent(name)
+    try FileManager.default.createDirectory(at: chunksDirectory, withIntermediateDirectories: true)
+    for (index, records) in chunks.enumerated() {
+      let chunkFile = String(format: "%06d.jsonl", index)
+      try writeText(records.joined(separator: "\n") + "\n", to: chunksDirectory.appendingPathComponent(chunkFile))
+    }
+    try writeJSON(
+      [
+        "graphDigest": receipt.graphDigest,
+        "chunks": receipt.graphChunkDigests.enumerated().map { index, digest in
+          ["file": String(format: "%06d.jsonl", index), "digest": digest]
+        }
+      ],
+      to: chunksDirectory.appendingPathComponent("manifest.json")
+    )
+  }
   private func writeDiagnostic(_ diagnostic: CoreConformanceDiagnostic, to directory: URL) throws {
     try writeJSON(
       [
@@ -738,6 +814,7 @@ extension CoreConformanceRunner {
       "initialStatesDigest": receipt.initialStatesDigest,
       "statesDigest": receipt.statesDigest,
       "edgesDigest": receipt.edgesDigest,
+      "graphChunkDigests": receipt.graphChunkDigests,
       "graphDigest": receipt.graphDigest
     ]
     if let mappingIdentity = receipt.observableNameMappingIdentity {
