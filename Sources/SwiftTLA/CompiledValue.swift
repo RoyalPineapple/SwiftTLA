@@ -49,8 +49,8 @@ indirect enum CompiledValue: Hashable, Sendable {
         case .tuple(let values):
             self = .tuple(values.map { Self(formal: $0) })
         case .record(let values):
-            self = .record(CompiledRecord(values.map {
-                .init(name: $0.key, value: Self(formal: $0.value))
+            self = .record(CompiledRecord(values.fields.map {
+                .init(name: $0.name, value: Self(formal: $0.value))
             }))
         case .function(let values):
             self = .function(Dictionary(uniqueKeysWithValues: values.map {
