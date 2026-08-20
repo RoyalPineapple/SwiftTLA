@@ -159,67 +159,6 @@ public struct SpecRuntime: Sendable {
         return request
     }
 
-    public func actionReport(named actionName: String, in state: TLAStateProjection) -> RuntimeActionReport {
-        let requested = TLAActionInvocation(name: actionName)
-        let projection = TLAStateProjectionResult.projected(state)
-
-        let status: RuntimeActionReport.Status
-        let nextSafeAction: String
-        if let action = spec.actions.first(where: { $0.name == actionName }) {
-            do {
-                let formalState = try FormalState(projection: state, compilation: compilation)
-                let successors = try actionInvocations(action).flatMap {
-                    let request = try compiledActionRequest($0.invocation, in: formalState)
-                    return try evaluatedSuccessors(request, from: formalState, requested: $0.invocation)
-                }
-                if successors.isEmpty {
-                    status = .unavailable(
-                        expected: "the guard for \(actionName) to be true",
-                        actual: "the action produced no successor from this state"
-                    )
-                    nextSafeAction = "Apply one of the available actions, or inspect \(actionName)'s guard against this state."
-                } else {
-                    status = .enabled(successorCount: successors.count)
-                    nextSafeAction = "Choose one returned successor and commit it through the generated machine."
-                }
-            } catch {
-                let diagnostic = ActionEvaluationDiagnostic(code: .evaluationError, message: String(describing: error))
-                status = .evaluationFailed(diagnostic)
-                nextSafeAction = diagnostic.nextSafeAction
-            }
-        } else {
-            status = .unavailable(
-                expected: "a declared action named \(actionName)",
-                actual: "no such action exists in specification \(spec.name)"
-            )
-            nextSafeAction = "Use one of the declared action names before retrying."
-        }
-
-        let availability: RuntimeActionReport.Availability
-        do {
-            availability = .known(try availableInvocations(
-                in: FormalState(projection: state, compilation: compilation),
-                requested: nil
-            ))
-        } catch let error as RuntimeError {
-            availability = .unavailable(.init(error: error))
-        } catch {
-            availability = .unavailable(.init(
-                code: .evaluationError,
-                message: "Could not enumerate available actions: \(error)",
-                nextSafeAction: "Inspect the formal state and the action guards before retrying."
-            ))
-        }
-
-        return .init(
-            requested: requested,
-            state: projection,
-            availability: availability,
-            status: status,
-            nextSafeAction: nextSafeAction
-        )
-    }
-
     public func propertyOutcomes(in state: TLAStateProjection) -> [RuntimePropertyOutcome] {
         invariantOutcomes(in: state) + spec.temporalProperties.map {
             .evaluationUnavailable(
@@ -359,46 +298,6 @@ public struct SpecRuntime: Sendable {
         public init(code: Code, message: String) { self.code = code; self.message = message }
     }
 
-    /// A typed explanation of a runtime action query. No raw formal-state map
-    /// crosses this public boundary; callers receive a validated projection or
-    /// the precise reason a projection was unavailable.
-    public struct RuntimeActionReport: Sendable, Equatable {
-        public enum Availability: Sendable, Equatable {
-            case known([TLAActionInvocation])
-            case unavailable(ActionEvaluationDiagnostic)
-        }
-
-        public enum Status: Sendable, Equatable {
-            case enabled(successorCount: Int)
-            case unavailable(expected: String, actual: String)
-            case evaluationFailed(ActionEvaluationDiagnostic)
-        }
-
-        public let requested: TLAActionInvocation
-        public let state: TLAStateProjectionResult
-        public let availability: Availability
-        public let status: Status
-        /// Runtime reports never commit state. A successful report only says
-        /// successors were found; `CanonicalMachine.apply` performs a commit.
-        public let stateCommitted: Bool
-        public let nextSafeAction: String
-
-        public init(
-            requested: TLAActionInvocation,
-            state: TLAStateProjectionResult,
-            availability: Availability,
-            status: Status,
-            stateCommitted: Bool = false,
-            nextSafeAction: String
-        ) {
-            self.requested = requested
-            self.state = state
-            self.availability = availability
-            self.status = status
-            self.stateCommitted = stateCommitted
-            self.nextSafeAction = nextSafeAction
-        }
-    }
 }
 
 private struct CompiledActionRequest: Sendable {

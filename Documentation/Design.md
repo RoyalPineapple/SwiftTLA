@@ -422,7 +422,7 @@ graph TD
 
     subgraph Runtime["Interactive Runtime"]
         direction TB
-        SR["SpecRuntime<br/>init(spec:)<br/>initialStates(), apply(actionName:to:),<br/>actionReport(named:in:), check(_:in:), step(_:from:)"]
+        SR["SpecRuntime<br/>compiled formal engine<br/>initial projections, properties, and internal action execution"]
         SR --> AE2["ActionEnumerator.enumerate()"]
         SR --> EVAL2["Evaluator.evaluateBool()"]
     end
