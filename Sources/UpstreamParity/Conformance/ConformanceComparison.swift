@@ -1,3 +1,5 @@
+import Foundation
+
 public struct ObservableNameMapping: Hashable, Sendable {
     public let expectedVariables: Set<String>
     public let actualVariables: Set<String>
@@ -38,9 +40,21 @@ public struct ObservableNameMapping: Hashable, Sendable {
         }
         return failures
     }
+
+    var canonicalIdentity: String {
+        let records =
+            variables.sorted { canonicalBytes($0.key, $1.key) }.map {
+                "variable:\(encodedBytes($0.key))->\(encodedBytes($0.value))"
+            }
+            + actions.sorted { canonicalBytes($0.key, $1.key) }.map {
+                "action:\(encodedBytes($0.key))->\(encodedBytes($0.value))"
+            }
+        return SHA256.hex(Data(records.joined(separator: "\n").utf8))
+    }
 }
 
 public enum ConformanceDifferenceCategory: String, Hashable, Sendable {
+    case receipt
     case mapping
     case initialStates
     case states
@@ -52,6 +66,7 @@ public enum ConformanceDifferenceCategory: String, Hashable, Sendable {
 }
 
 public enum ConformanceDifference: Equatable, Sendable {
+    case receipt(expectedDigest: String, actualDigest: String)
     case mapping([String])
     case initialStates(expected: Set<CanonicalStateKey>, actual: Set<CanonicalStateKey>)
     case states(expected: Set<CanonicalStateKey>, actual: Set<CanonicalStateKey>)
@@ -66,6 +81,7 @@ public enum ConformanceDifference: Equatable, Sendable {
 
     public var category: ConformanceDifferenceCategory {
         switch self {
+        case .receipt: .receipt
         case .mapping: .mapping
         case .initialStates: .initialStates
         case .states: .states
@@ -80,9 +96,23 @@ public enum ConformanceDifference: Equatable, Sendable {
 
 public struct ExactFiniteTLCComparison: Equatable, Sendable {
     public let differences: [ConformanceDifference]
+    let expectedReceipt: CanonicalGraphReceipt?
+    let actualReceipt: CanonicalGraphReceipt?
 
     public init(differences: [ConformanceDifference]) {
         self.differences = differences
+        expectedReceipt = nil
+        actualReceipt = nil
+    }
+
+    init(
+        differences: [ConformanceDifference],
+        expectedReceipt: CanonicalGraphReceipt,
+        actualReceipt: CanonicalGraphReceipt
+    ) {
+        self.differences = differences
+        self.expectedReceipt = expectedReceipt
+        self.actualReceipt = actualReceipt
     }
 
     public var isConformant: Bool { differences.isEmpty }
@@ -93,9 +123,67 @@ public func exactFiniteTLCGraph(
     actual: CanonicalRun,
     mapping: ObservableNameMapping? = nil
 ) -> ExactFiniteTLCComparison {
-    var differences: [ConformanceDifference] = []
-    let normalizedActual: CanonicalRun
+    let inputs = normalizedComparisonInputs(expected: expected, actual: actual, mapping: mapping)
+    return compare(expected: expected, actual: inputs.actual, leadingDifferences: inputs.differences)
+}
 
+public func exactFiniteTLCGraph(
+    expected: CanonicalRun,
+    actual: CanonicalRun,
+    mapping: ObservableNameMapping? = nil,
+    compiledModelIdentity: String,
+    configurationIdentity: String,
+    symmetrySchemaIdentity: String,
+    maximumStateLimit: Int,
+    observableNameMappingIdentity: String? = nil
+) -> ExactFiniteTLCComparison {
+    let inputs = normalizedComparisonInputs(expected: expected, actual: actual, mapping: mapping)
+    let expectedReceipt = CanonicalGraphReceipt(
+        run: expected,
+        compiledModelIdentity: compiledModelIdentity,
+        configurationIdentity: configurationIdentity,
+        symmetrySchemaIdentity: symmetrySchemaIdentity,
+        observableNameMappingIdentity: inputs.mappingIdentity ?? observableNameMappingIdentity,
+        maximumStateLimit: maximumStateLimit
+    )
+    let actualReceipt = CanonicalGraphReceipt(
+        run: inputs.actual,
+        compiledModelIdentity: compiledModelIdentity,
+        configurationIdentity: configurationIdentity,
+        symmetrySchemaIdentity: symmetrySchemaIdentity,
+        observableNameMappingIdentity: inputs.mappingIdentity ?? observableNameMappingIdentity,
+        maximumStateLimit: maximumStateLimit
+    )
+    let comparison = compare(
+        expected: expected,
+        actual: inputs.actual,
+        leadingDifferences: inputs.differences
+    )
+    let differences = expectedReceipt == actualReceipt
+        ? comparison.differences
+        : [.receipt(
+            expectedDigest: expectedReceipt.graphDigest,
+            actualDigest: actualReceipt.graphDigest
+        )] + comparison.differences
+    return .init(
+        differences: differences,
+        expectedReceipt: expectedReceipt,
+        actualReceipt: actualReceipt
+    )
+}
+
+private struct NormalizedComparisonInputs {
+    let actual: CanonicalRun
+    let differences: [ConformanceDifference]
+    let mappingIdentity: String?
+}
+
+private func normalizedComparisonInputs(
+    expected: CanonicalRun,
+    actual: CanonicalRun,
+    mapping: ObservableNameMapping?
+) -> NormalizedComparisonInputs {
+    var differences: [ConformanceDifference] = []
     if let mapping {
         let failures = mapping.validationFailures + declaredNameFailures(
             mapping: mapping,
@@ -103,18 +191,14 @@ public func exactFiniteTLCGraph(
             actual: actual
         )
         guard failures.isEmpty else {
-            differences.append(.mapping(failures))
-            return compare(expected: expected, actual: actual, leadingDifferences: differences)
+            return .init(actual: actual, differences: [.mapping(failures)], mappingIdentity: mapping.canonicalIdentity)
         }
-        normalizedActual = remap(actual, with: mapping)
-    } else {
-        normalizedActual = actual
-        if expected.graph.variableNames != actual.graph.variableNames || expected.observableActions != actual.observableActions {
-            differences.append(.mapping(["observable names differ without a declared total bijection"]))
-        }
+        return .init(actual: remap(actual, with: mapping), differences: [], mappingIdentity: mapping.canonicalIdentity)
     }
-
-    return compare(expected: expected, actual: normalizedActual, leadingDifferences: differences)
+    if expected.graph.variableNames != actual.graph.variableNames || expected.observableActions != actual.observableActions {
+        differences.append(.mapping(["observable names differ without a declared total bijection"]))
+    }
+    return .init(actual: actual, differences: differences, mappingIdentity: nil)
 }
 
 private func compare(

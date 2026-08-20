@@ -11,10 +11,19 @@ public enum SwiftGraphAdapterError: Error, Equatable, Sendable {
 public struct SwiftExplorationEvidence {
   public let caseID: String
   public let exploration: ModelExplorationResult
+  public let compiledModelIdentity: String
+  public let maximumStateLimit: Int
 
-  public init(caseID: String, exploration: ModelExplorationResult) {
+  public init(
+    caseID: String,
+    exploration: ModelExplorationResult,
+    compiledModelIdentity: String,
+    maximumStateLimit: Int
+  ) {
     self.caseID = caseID
     self.exploration = exploration
+    self.compiledModelIdentity = compiledModelIdentity
+    self.maximumStateLimit = maximumStateLimit
   }
 }
 

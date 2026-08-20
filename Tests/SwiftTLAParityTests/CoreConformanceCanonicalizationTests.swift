@@ -84,7 +84,12 @@ struct CoreConformanceCanonicalizationTests {
         )
 
         let run = try SwiftGraphAdapter().adapt(
-            SwiftExplorationEvidence(caseID: declaredCase.id, exploration: exploration),
+            SwiftExplorationEvidence(
+                caseID: declaredCase.id,
+                exploration: exploration,
+                compiledModelIdentity: "fixture-model",
+                maximumStateLimit: 10
+            ),
             for: declaredCase
         )
         let expectedFirst = CanonicalState(bindings: [

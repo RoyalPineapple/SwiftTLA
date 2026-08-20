@@ -15,6 +15,7 @@ struct CanonicalGraphReceipt: Hashable, Sendable {
   let compiledModelIdentity: String
   let configurationIdentity: String
   let symmetrySchemaIdentity: String
+  let observableNameMappingIdentity: String?
   let explorationStatus: ExplorationStatus
   let maximumStateLimit: Int
   let initialStateCount: Int
@@ -30,6 +31,7 @@ struct CanonicalGraphReceipt: Hashable, Sendable {
     compiledModelIdentity: String,
     configurationIdentity: String,
     symmetrySchemaIdentity: String,
+    observableNameMappingIdentity: String? = nil,
     explorationStatus: ExplorationStatus,
     maximumStateLimit: Int,
     outcome: CanonicalOutcome,
@@ -39,6 +41,7 @@ struct CanonicalGraphReceipt: Hashable, Sendable {
     self.compiledModelIdentity = compiledModelIdentity
     self.configurationIdentity = configurationIdentity
     self.symmetrySchemaIdentity = symmetrySchemaIdentity
+    self.observableNameMappingIdentity = observableNameMappingIdentity
     self.explorationStatus = explorationStatus
     self.maximumStateLimit = maximumStateLimit
     self.initialStateCount = graph.initialStateKeys.count
@@ -61,12 +64,36 @@ struct CanonicalGraphReceipt: Hashable, Sendable {
         "header:compiledModelIdentity:\(encodedBytes(self.compiledModelIdentity))",
         "header:configurationIdentity:\(encodedBytes(self.configurationIdentity))",
         "header:symmetrySchemaIdentity:\(encodedBytes(self.symmetrySchemaIdentity))",
+        self.observableNameMappingIdentity.map {
+          "header:observableNameMappingIdentity:\(encodedBytes($0))"
+        },
         "header:explorationStatus:\(self.explorationStatus.rawValue)",
         "header:maximumStateLimit:\(self.maximumStateLimit)",
         "header:initialStateCount:\(self.initialStateCount)",
         "header:stateCount:\(self.stateCount)",
         "header:edgeCount:\(self.edgeCount)"
-      ] + initialRecords + stateRecords + edgeRecords + outcomeRecords
+      ].compactMap { $0 } + initialRecords + stateRecords + edgeRecords + outcomeRecords
+    )
+  }
+
+  init(
+    run: CanonicalRun,
+    compiledModelIdentity: String,
+    configurationIdentity: String,
+    symmetrySchemaIdentity: String,
+    observableNameMappingIdentity: String? = nil,
+    maximumStateLimit: Int
+  ) {
+    self.init(
+      graph: run.graph,
+      compiledModelIdentity: compiledModelIdentity,
+      configurationIdentity: configurationIdentity,
+      symmetrySchemaIdentity: symmetrySchemaIdentity,
+      observableNameMappingIdentity: observableNameMappingIdentity,
+      explorationStatus: Self.explorationStatus(for: run),
+      maximumStateLimit: maximumStateLimit,
+      outcome: run.outcome,
+      diagnostics: run.errors
     )
   }
 
@@ -95,6 +122,13 @@ struct CanonicalGraphReceipt: Hashable, Sendable {
       .map { "diagnostic:\(encodedBytes($0.code)):\(encodedBytes($0.message))" }
       .sorted(by: canonicalBytes)
     return [outcomeRecord] + diagnosticRecords
+  }
+
+  private static func explorationStatus(for run: CanonicalRun) -> ExplorationStatus {
+    if !run.errors.isEmpty { return .failed }
+    if case .incomplete = run.outcome { return .bounded }
+    if case .executionError = run.outcome { return .failed }
+    return .complete
   }
 
   private static func digest(_ records: [String]) -> String {
