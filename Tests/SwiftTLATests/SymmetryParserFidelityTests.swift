@@ -16,7 +16,13 @@ struct SymmetryParserFidelityTests {
 
         let parsed = SpecParser.parseSpecClosure(
             closure,
-            enumDomains: ["Transaction": [.string("t1"), .string("t2")]]
+            enumDefinitions: [
+                .init(
+                    typeName: "Transaction",
+                    cases: .init([]),
+                    formalDomain: [.string("t1"), .string("t2")]
+                )
+            ]
         )
 
         #expect(parsed.diagnostics.isEmpty)

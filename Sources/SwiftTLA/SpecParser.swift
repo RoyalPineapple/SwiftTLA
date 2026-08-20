@@ -6,12 +6,27 @@ import Foundation
 /// Parses SwiftSyntax AST nodes into DSL types (StateExpr, ActionExpr, etc.).
 /// Every AST pattern maps deterministically to a DSL value.
 /// Tests live in SpecParserTests.
+public struct ParserEnumDefinition: Sendable {
+    public let typeName: String
+    public let cases: TLARecord
+    public let formalDomain: [TLAValue]
+
+    public init(typeName: String, cases: TLARecord, formalDomain: [TLAValue]? = nil) {
+        self.typeName = typeName
+        self.cases = cases
+        self.formalDomain = formalDomain ?? cases.fields.map(\.value)
+    }
+
+    public func value(named name: String) -> TLAValue? {
+        cases.value(named: name)
+    }
+}
+
 public final class ParserSession {
     /// Facts that exist for one syntax tree only. They never escape into a
     /// later parse or another macro expansion.
     var constants: [ConstantDecl] = []
-    let enumPhases: [String: [String: TLAValue]]
-    let enumDomains: [String: [TLAValue]]
+    let enumDefinitions: [ParserEnumDefinition]
     /// Tuple-shaped algorithm state currently in scope. This lets the parser
     /// distinguish `sequence[index]` from a finite-function lookup without
     /// exposing raw type maps to authors.
@@ -19,15 +34,13 @@ public final class ParserSession {
     var algorithmParseFailure: String?
 
     init(
-        enumPhases: [String: [String: TLAValue]] = [:],
-        enumDomains: [String: [TLAValue]] = [:]
+        enumDefinitions: [ParserEnumDefinition] = []
     ) {
-        self.enumPhases = enumPhases
-        self.enumDomains = enumDomains.isEmpty
-            ? enumPhases.mapValues { phases in
-                phases.keys.sorted().compactMap { phases[$0] }
-            }
-            : enumDomains
+        self.enumDefinitions = enumDefinitions
+    }
+
+    func enumDefinition(named typeName: String) -> ParserEnumDefinition? {
+        enumDefinitions.first { $0.typeName == typeName }
     }
 
     private func decodeLocalRecursion(
@@ -193,8 +206,8 @@ public final class ParserSession {
         }
         if let memberAccess = expression.as(MemberAccessExprSyntax.self),
            let baseRef = memberAccess.base?.as(DeclReferenceExprSyntax.self),
-           let cases = enumPhases[baseRef.baseName.text] {
-            return cases[memberAccess.declName.baseName.text].map { .value($0) }
+           let definition = enumDefinition(named: baseRef.baseName.text) {
+            return definition.value(named: memberAccess.declName.baseName.text).map { .value($0) }
         }
         if let memberAccess = expression.as(MemberAccessExprSyntax.self),
            let base = memberAccess.base,
@@ -314,7 +327,7 @@ public final class ParserSession {
         }
         guard let access = expression.as(MemberAccessExprSyntax.self) else { return nil }
         if let type = access.base?.as(DeclReferenceExprSyntax.self)?.baseName.text,
-           case .string(let label) = enumPhases[type]?[access.declName.baseName.text] {
+           case .string(let label) = enumDefinition(named: type)?.value(named: access.declName.baseName.text) {
             return label
         }
         return access.declName.baseName.text
@@ -815,7 +828,7 @@ public final class ParserSession {
            let literalType = typedLiteralType(access.base),
            literalType.name == "Function",
            let domainType = literalType.arguments.first,
-           let domain = enumDomains[domainType],
+           let domain = enumDefinition(named: domainType)?.formalDomain,
            let closure = call.trailingClosure,
            let parameter = closureParameterNames(in: closure).first,
            closure.statements.count == 1,
@@ -947,7 +960,7 @@ public final class ParserSession {
         // facade treats member access as a record field or a property.
         if let member = expression.as(MemberAccessExprSyntax.self),
            let type = member.base?.as(DeclReferenceExprSyntax.self)?.baseName.text,
-           let value = enumPhases[type]?[member.declName.baseName.text] {
+           let value = enumDefinition(named: type)?.value(named: member.declName.baseName.text) {
             return .value(value)
         }
         if let decoded = decodeTypedFacadeExpr(expression, substitutions: substitutions) {
@@ -994,7 +1007,7 @@ public final class ParserSession {
         guard let member = expression.as(MemberAccessExprSyntax.self),
               member.declName.baseName.text != "finiteValues"
         else { return nil }
-        if let typeName = terminalTypeName(in: member.base), enumPhases[typeName] != nil {
+        if let typeName = terminalTypeName(in: member.base), enumDefinition(named: typeName) != nil {
             return nil
         }
         return member.declName.baseName.text
@@ -1080,7 +1093,7 @@ public final class ParserSession {
     /// spelling only when its formal enum value is globally unambiguous.
     func decodeUniqueUnqualifiedEnumCase(_ expression: ExprSyntax) -> StateExpr? {
         guard let member = expression.as(MemberAccessExprSyntax.self), member.base == nil else { return nil }
-        let matches = enumPhases.values.compactMap { $0[member.declName.baseName.text] }
+        let matches = enumDefinitions.compactMap { $0.value(named: member.declName.baseName.text) }
         guard matches.count == 1, let value = matches.first else { return nil }
         return .value(value)
     }
@@ -1094,7 +1107,7 @@ public final class ParserSession {
             if let member = element.expression.as(MemberAccessExprSyntax.self),
                member.base == nil,
                let elementType,
-               let value = enumPhases[elementType]?[member.declName.baseName.text] {
+               let value = enumDefinition(named: elementType)?.value(named: member.declName.baseName.text) {
                 return StateExpr.value(value)
             }
             return decodeTypedFacadeValue(element.expression, substitutions: substitutions)
@@ -1109,7 +1122,7 @@ public final class ParserSession {
         substitutions: [String: StateExpr]
     ) -> StateExpr? {
         guard let domainType,
-              let domain = enumDomains[domainType],
+              let domain = enumDefinition(named: domainType)?.formalDomain,
               !domain.isEmpty
         else { return nil }
         var pairs: [StateExpr] = []
@@ -1490,10 +1503,9 @@ public enum SpecParser {
 
     public static func parseSpecClosure(
         _ closure: ClosureExprSyntax,
-        enumPhases: [String: [String: TLAValue]] = [:],
-        enumDomains: [String: [TLAValue]] = [:]
+        enumDefinitions: [ParserEnumDefinition] = []
     ) -> ParsedSpecComponents {
-        ParserSession(enumPhases: enumPhases, enumDomains: enumDomains).parseSpecClosure(closure)
+        ParserSession(enumDefinitions: enumDefinitions).parseSpecClosure(closure)
     }
 
     public static func decodeStateExpr(_ expression: ExprSyntax) -> StateExpr? {

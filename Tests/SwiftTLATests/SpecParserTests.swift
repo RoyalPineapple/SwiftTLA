@@ -15,6 +15,14 @@ private func parseExpression(_ source: String) -> ExprSyntax {
     Parser.parse(source: source).statements.first!.item.as(ExprSyntax.self)!
 }
 
+private func parserEnum(
+    _ typeName: String,
+    cases: TLARecord = .init([]),
+    formalDomain: [TLAValue]? = nil
+) -> ParserEnumDefinition {
+    .init(typeName: typeName, cases: cases, formalDomain: formalDomain)
+}
+
 @Suite(.serialized) struct AlgorithmBuilderParsingTests {
     @Test("Algorithm Each Do syntax lowers through the ordinary parser AST")
     func parsesBoundedAlgorithm() {
@@ -34,7 +42,7 @@ private func parseExpression(_ source: String) -> ExprSyntax {
         let closure = Parser.parse(source: source).statements.first!.item.as(ClosureExprSyntax.self)!
         let parsed = SpecParser.parseSpecClosure(
             closure,
-            enumDomains: ["Node": [.string("left"), .string("right")]]
+            enumDefinitions: [parserEnum("Node", formalDomain: [.string("left"), .string("right")])]
         )
 
         #expect(parsed.diagnostics.isEmpty)
@@ -88,7 +96,7 @@ private func parseExpression(_ source: String) -> ExprSyntax {
         let closure = Parser.parse(source: source).statements.first!.item.as(ClosureExprSyntax.self)!
         let parsed = SpecParser.parseSpecClosure(
             closure,
-            enumDomains: ["Node": [.string("left"), .string("right")]]
+            enumDefinitions: [parserEnum("Node", formalDomain: [.string("left"), .string("right")])]
         )
 
         #expect(parsed.diagnostics.isEmpty)
@@ -127,7 +135,7 @@ private func parseExpression(_ source: String) -> ExprSyntax {
         let closure = Parser.parse(source: source).statements.first!.item.as(ClosureExprSyntax.self)!
         let parsed = SpecParser.parseSpecClosure(
             closure,
-            enumDomains: ["Worker": [.string("left"), .string("right")]]
+            enumDefinitions: [parserEnum("Worker", formalDomain: [.string("left"), .string("right")])]
         )
 
         #expect(parsed.diagnostics.isEmpty)
@@ -210,7 +218,7 @@ private func parseExpression(_ source: String) -> ExprSyntax {
         let closure = Parser.parse(source: source).statements.first!.item.as(ClosureExprSyntax.self)!
         let parsed = SpecParser.parseSpecClosure(
             closure,
-            enumDomains: ["Node": [.string("left"), .string("right")]]
+            enumDefinitions: [parserEnum("Node", formalDomain: [.string("left"), .string("right")])]
         )
 
         #expect(parsed.diagnostics.isEmpty)
@@ -397,8 +405,10 @@ private func parseExpression(_ source: String) -> ExprSyntax {
         let closure = Parser.parse(source: source).statements.first!.item.as(ClosureExprSyntax.self)!
         let parsed = SpecParser.parseSpecClosure(
             closure,
-            enumPhases: ["Node": ["first": .string("first"), "second": .string("second")]],
-            enumDomains: ["Node": [.string("first"), .string("second")]]
+            enumDefinitions: [parserEnum(
+                "Node",
+                cases: ["first": .string("first"), "second": .string("second")]
+            )]
         )
 
         #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
@@ -424,8 +434,10 @@ private func parseExpression(_ source: String) -> ExprSyntax {
         let closure = Parser.parse(source: source).statements.first!.item.as(ClosureExprSyntax.self)!
         let parsed = SpecParser.parseSpecClosure(
             closure,
-            enumPhases: ["Door": ["closed": .string("closed")]],
-            enumDomains: ["Car": [.string("north"), .string("south")]]
+            enumDefinitions: [
+                parserEnum("Door", cases: ["closed": .string("closed")]),
+                parserEnum("Car", formalDomain: [.string("north"), .string("south")])
+            ]
         )
 
         #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
@@ -454,7 +466,7 @@ private func parseExpression(_ source: String) -> ExprSyntax {
         let closure = Parser.parse(source: source).statements.first!.item.as(ClosureExprSyntax.self)!
         let parsed = SpecParser.parseSpecClosure(
             closure,
-            enumDomains: ["Acceptor": [.string("a1"), .string("a2")]]
+            enumDefinitions: [parserEnum("Acceptor", formalDomain: [.string("a1"), .string("a2")])]
         )
 
         #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
@@ -485,8 +497,10 @@ private func parseExpression(_ source: String) -> ExprSyntax {
         let closure = Parser.parse(source: source).statements.first!.item.as(ClosureExprSyntax.self)!
         let parsed = SpecParser.parseSpecClosure(
             closure,
-            enumPhases: ["Node": ["one": .int(1), "two": .int(2)]],
-            enumDomains: ["Node": [.int(1), .int(2)]]
+            enumDefinitions: [parserEnum(
+                "Node",
+                cases: ["one": .int(1), "two": .int(2)]
+            )]
         )
 
         #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
@@ -533,8 +547,10 @@ private func parseExpression(_ source: String) -> ExprSyntax {
         let closure = Parser.parse(source: source).statements.first!.item.as(ClosureExprSyntax.self)!
         let parsed = SpecParser.parseSpecClosure(
             closure,
-            enumPhases: ["Node": ["left": .string("left"), "right": .string("right")]],
-            enumDomains: ["Node": [.string("left"), .string("right")]]
+            enumDefinitions: [parserEnum(
+                "Node",
+                cases: ["left": .string("left"), "right": .string("right")]
+            )]
         )
 
         #expect(parsed.diagnostics.isEmpty)
@@ -557,8 +573,10 @@ private func parseExpression(_ source: String) -> ExprSyntax {
         let closure = Parser.parse(source: source).statements.first!.item.as(ClosureExprSyntax.self)!
         let parsed = SpecParser.parseSpecClosure(
             closure,
-            enumPhases: ["Step": ["resourceManager": .string("RS")]],
-            enumDomains: ["Node": [.string("left"), .string("right")]]
+            enumDefinitions: [
+                parserEnum("Step", cases: ["resourceManager": .string("RS")]),
+                parserEnum("Node", formalDomain: [.string("left"), .string("right")])
+            ]
         )
 
         #expect(parsed.diagnostics.isEmpty)
@@ -583,7 +601,7 @@ private func parseExpression(_ source: String) -> ExprSyntax {
         let closure = Parser.parse(source: source).statements.first!.item.as(ClosureExprSyntax.self)!
         let parsed = SpecParser.parseSpecClosure(
             closure,
-            enumDomains: ["Node": [.string("left"), .string("right")]]
+            enumDefinitions: [parserEnum("Node", formalDomain: [.string("left"), .string("right")])]
         )
         let runtime = TLASpec("Counter") {
             Algorithm("Counter") {
@@ -894,7 +912,7 @@ private enum ParserNode: String, FiniteDomainKey {
         let closure = Parser.parse(source: source).statements.first!.item.as(ClosureExprSyntax.self)!
         let parsed = SpecParser.parseSpecClosure(
             closure,
-            enumDomains: ["Key": [.string("k1"), .string("k2")]]
+            enumDefinitions: [parserEnum("Key", formalDomain: [.string("k1"), .string("k2")])]
         )
 
         #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
@@ -1551,14 +1569,15 @@ private func parseClosure(_ source: String) -> ClosureExprSyntax {
 
 // MARK: - Enum phase parsing
 
-private let cameraModePhases: [String: [String: TLAValue]] = [
-    "CameraMode": [
+private let cameraModeDefinition = parserEnum(
+    "CameraMode",
+    cases: [
         "idle": .string("idle"),
         "live": .string("live"),
         "recording": .string("recording"),
         "playback": .string("playback")
     ]
-]
+)
 
 @Suite(.serialized) struct EnumPhaseParsingTests {
     @Test func enumFactsDoNotLeakFromOneParseIntoTheNextDecoderCall() {
@@ -1568,7 +1587,7 @@ private let cameraModePhases: [String: [String: TLAValue]] = [
         }
         """).statements.first!.item.as(ClosureExprSyntax.self)!
 
-        let parsed = SpecParser.parseSpecClosure(closure, enumPhases: cameraModePhases)
+        let parsed = SpecParser.parseSpecClosure(closure, enumDefinitions: [cameraModeDefinition])
         #expect(parsed.invariants.first?.body == .equal(.variable("mode"), .value(.string("idle"))))
         #expect(
             SpecParser.decodeStateExpr(parseExpression("CameraMode.idle"))
@@ -1585,7 +1604,7 @@ private let cameraModePhases: [String: [String: TLAValue]] = [
         }
         """
         let closure = Parser.parse(source: source).statements.first!.item.as(ClosureExprSyntax.self)!
-        let parsed = SpecParser.parseSpecClosure(closure, enumPhases: cameraModePhases)
+        let parsed = SpecParser.parseSpecClosure(closure, enumDefinitions: [cameraModeDefinition])
         #expect(parsed.invariants.count == 1)
         #expect(parsed.invariants[0].body == .equal(.variable("mode"), .value(.string("idle"))))
     }
@@ -1599,7 +1618,7 @@ private let cameraModePhases: [String: [String: TLAValue]] = [
         }
         """
         let closure = Parser.parse(source: source).statements.first!.item.as(ClosureExprSyntax.self)!
-        let parsed = SpecParser.parseSpecClosure(closure, enumPhases: cameraModePhases)
+        let parsed = SpecParser.parseSpecClosure(closure, enumDefinitions: [cameraModeDefinition])
         #expect(parsed.actions.count == 1)
         #expect(parsed.actions[0].body == .assign("mode", .value(.string("live"))))
     }
@@ -1701,20 +1720,15 @@ private let cameraModePhases: [String: [String: TLAValue]] = [
             }
         }
         """
-        let phases: [String: [String: TLAValue]] = [
-            "PersonID": ["alice": .string("alice"), "bob": .string("bob")],
-            "CarID": ["carA": .string("carA"), "carB": .string("carB")],
-            "Direction": ["up": .string("up"), "down": .string("down")]
+        let enumDefinitions = [
+            parserEnum("PersonID", cases: ["alice": .string("alice"), "bob": .string("bob")]),
+            parserEnum("CarID", cases: ["carA": .string("carA"), "carB": .string("carB")]),
+            parserEnum("Direction", cases: ["up": .string("up"), "down": .string("down")])
         ]
         let closure = Parser.parse(source: source).statements.first!.item.as(ClosureExprSyntax.self)!
         let parsed = SpecParser.parseSpecClosure(
             closure,
-            enumPhases: phases,
-            enumDomains: [
-                "PersonID": [.string("alice"), .string("bob")],
-                "CarID": [.string("carA"), .string("carB")],
-                "Direction": [.string("up"), .string("down")]
-            ]
+            enumDefinitions: enumDefinitions
         )
 
         let floor = Var<Int>("floor")
@@ -1792,7 +1806,7 @@ private let cameraModePhases: [String: [String: TLAValue]] = [
         }
         """
         let closure = Parser.parse(source: source).statements.first!.item.as(ClosureExprSyntax.self)!
-        let parsed = SpecParser.parseSpecClosure(closure, enumPhases: cameraModePhases)
+        let parsed = SpecParser.parseSpecClosure(closure, enumDefinitions: [cameraModeDefinition])
         #expect(parsed.invariants.isEmpty)
         #expect(parsed.diagnostics.isEmpty)
     }
@@ -1805,11 +1819,11 @@ private let cameraModePhases: [String: [String: TLAValue]] = [
             }
         }
         """
-        let phases: [String: [String: TLAValue]] = [
-            "CameraMode": ["idle": .string("idle"), "error": .string("error")]
+        let enumDefinitions = [
+            parserEnum("CameraMode", cases: ["idle": .string("idle"), "error": .string("error")])
         ]
         let closure = Parser.parse(source: source).statements.first!.item.as(ClosureExprSyntax.self)!
-        let parsed = SpecParser.parseSpecClosure(closure, enumPhases: phases)
+        let parsed = SpecParser.parseSpecClosure(closure, enumDefinitions: enumDefinitions)
         #expect(parsed.invariants.count == 1)
         #expect(parsed.invariants[0].body == .notEqual(.variable("mode"), .value(.string("error"))))
     }
@@ -1821,7 +1835,7 @@ private let cameraModePhases: [String: [String: TLAValue]] = [
         }
         """
         let closure = Parser.parse(source: source).statements.first!.item.as(ClosureExprSyntax.self)!
-        let parsed = SpecParser.parseSpecClosure(closure, enumPhases: cameraModePhases)
+        let parsed = SpecParser.parseSpecClosure(closure, enumDefinitions: [cameraModeDefinition])
         #expect(parsed.variables.count == 1)
         #expect(parsed.variables[0].name == "mode")
         #expect(parsed.variables[0].initial == .string("idle"))

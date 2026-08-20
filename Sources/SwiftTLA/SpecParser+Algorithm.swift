@@ -382,7 +382,7 @@ extension ParserSession {
               let domain = finiteAlgorithmDomain(domainSyntax),
               let closure = call.trailingClosure
         else {
-            let knownDomains = enumDomains.keys.sorted()
+            let knownDomains = enumDefinitions.map(\.typeName).sorted()
             let known = knownDomains.isEmpty ? "none" : knownDomains.joined(separator: ", ")
             algorithmParseFailure = "Each could not resolve its finite domain. Known finite domains: \(known)."
             return nil
@@ -951,7 +951,8 @@ extension ParserSession {
         }
         if let access = expression.as(MemberAccessExprSyntax.self) {
             if let type = access.base?.as(DeclReferenceExprSyntax.self)?.baseName.text,
-               case .string(let rawLabel) = enumPhases[type]?[access.declName.baseName.text] {
+               case .string(let rawLabel) = enumDefinition(named: type)?
+                    .value(named: access.declName.baseName.text) {
                 return rawLabel
             }
             return access.declName.baseName.text
@@ -966,7 +967,7 @@ extension ParserSession {
         guard let access = expression.as(MemberAccessExprSyntax.self),
               access.declName.baseName.text == "all",
               let type = access.base?.as(DeclReferenceExprSyntax.self)?.baseName.text,
-              let values = enumDomains[type], !values.isEmpty
+              let values = enumDefinition(named: type)?.formalDomain, !values.isEmpty
         else { return nil }
         return (type, values)
     }

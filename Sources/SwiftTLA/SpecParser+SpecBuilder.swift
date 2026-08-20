@@ -467,13 +467,13 @@ extension ParserSession {
         }
         if let memberAccess = expression.as(MemberAccessExprSyntax.self) {
             if let baseRef = memberAccess.base?.as(DeclReferenceExprSyntax.self),
-               let cases = enumPhases[baseRef.baseName.text],
-               let value = cases[memberAccess.declName.baseName.text] {
+               let value = enumDefinition(named: baseRef.baseName.text)?
+                    .value(named: memberAccess.declName.baseName.text) {
                 return value
             }
             let caseName = memberAccess.declName.baseName.text
-            for (_, cases) in enumPhases {
-                if let value = cases[caseName] { return value }
+            for definition in enumDefinitions {
+                if let value = definition.value(named: caseName) { return value }
             }
         }
         if let fc = expression.as(FunctionCallExprSyntax.self),
@@ -1145,7 +1145,7 @@ extension ParserSession {
               member.declName.baseName.text == "finiteValues",
               let type = member.base?.as(DeclReferenceExprSyntax.self)?.baseName.text
         else { return nil }
-        return enumDomains[type]
+        return enumDefinition(named: type)?.formalDomain
     }
 
     func parseInvariant(
