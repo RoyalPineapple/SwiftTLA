@@ -18,6 +18,7 @@ public struct CompilationDescription: Sendable, Equatable {
     public let identity: CompilationIdentity
     public let variables: [VariableDescription]
     public let actions: [ActionDescription]
+    public let procedures: [ProcedureDescription]
     public let controlLabels: [ControlLabelDescription]
     public let imports: [ModuleDescription]
 }
@@ -28,6 +29,12 @@ public struct VariableDescription: Sendable, Equatable {
 }
 
 public struct ActionDescription: Sendable, Equatable {
+    public let name: String
+    public let sourceOffset: Int?
+}
+
+public struct ProcedureDescription: Sendable, Equatable {
+    public let algorithm: String
     public let name: String
     public let sourceOffset: Int?
 }
@@ -83,6 +90,13 @@ public struct CompiledSpecification: Sendable {
             },
             actions: layout.actions.map {
                 .init(name: $0.declaration.name, sourceOffset: $0.declaration.sourceOffset)
+            },
+            procedures: layout.procedures.map {
+                .init(
+                    algorithm: $0.algorithm,
+                    name: $0.name,
+                    sourceOffset: $0.sourceOffset
+                )
             },
             controlLabels: layout.controlLabels.map {
                 .init(

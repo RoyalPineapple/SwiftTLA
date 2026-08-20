@@ -148,12 +148,15 @@ struct CompilerPipelineCanonicalizationTests {
         }
 
         let compilation = try algorithm.lower().compile()
-        let labels = compilation.layout.controlLabels
+        let description = compilation.description
 
-        #expect(labels.map(\.id) == [.init(ordinal: 0), .init(ordinal: 1), .init(ordinal: 2), .init(ordinal: 3)])
-        #expect(labels.map(\.sourceName) == ["start", "start", "start", "Done"])
-        #expect(labels.map(\.renderedName) == ["start", "procedure.first.start", "procedure.second.start", "Done"])
-        #expect(labels.map(\.owner) == [
+        #expect(description.procedures.map { "\($0.algorithm).\($0.name)" } == [
+            "ControlLayout.first",
+            "ControlLayout.second"
+        ])
+        #expect(description.controlLabels.map(\.sourceName) == ["start", "start", "start", "Done"])
+        #expect(description.controlLabels.map(\.renderedName) == ["start", "procedure.first.start", "procedure.second.start", "Done"])
+        #expect(description.controlLabels.map(\.owner) == [
             .process(algorithm: "ControlLayout", ordinal: 0, typeName: "Node"),
             .procedure(algorithm: "ControlLayout", name: "first"),
             .procedure(algorithm: "ControlLayout", name: "second"),
