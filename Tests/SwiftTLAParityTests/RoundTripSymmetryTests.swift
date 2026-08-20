@@ -284,9 +284,13 @@ enum Status: String, TLAValueType, StateExprConvertible {
     let spec = TLASpec("EnumInit") {
       Variable(mode, Mode.idle)
     }
-    let states = try computeInitialStates(spec)
+    let compilation = try spec.compile()
+    let states = try CompiledRuntime(compilation: compilation).initialStates()
+    let state = try #require(states.first)
+    let projection = try state.projection(using: compilation.layout)
+    let modeToken = try #require(TLAStateProjection.Token(validating: "mode"))
     #expect(states.count == 1)
-    #expect(states[0]["mode"] == TLAValue.int(0))
+    #expect(projection.value(for: modeToken) == .int(0))
   }
 }
 // MARK: - Round-trip: parse(swiftSource(expr)) == expr for every StateExpr case

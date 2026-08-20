@@ -6,6 +6,51 @@ import SwiftTLAModels
 import Testing
 import UpstreamParity
 
+private func compiledSuccessors(
+  _ body: ActionExpr,
+  from values: [String: TLAValue],
+  variables: [String]
+) throws -> [TLAStateProjection] {
+  let spec = TLASpec(
+    name: "ActionFixture",
+    variables: variables.map { NamedVar(name: $0, initial: .int(0)) },
+    actions: [NamedAction(name: "step", body: body)],
+    invariants: []
+  )
+  let compilation = try spec.compile()
+  let state = try FormalState(
+    projection: .init(formalValues: values),
+    compilation: compilation
+  )
+  let action = try #require(compilation.model.actions.first)
+  return try CompiledActionEnumerator(state: state, model: compilation.model)
+    .enumerate(action)
+    .map { try $0.projection(using: compilation.layout) }
+}
+
+private func compiledInitialProjections(_ spec: TLASpec) throws -> [TLAStateProjection] {
+  let compilation = try spec.compile()
+  return try CompiledRuntime(compilation: compilation).initialStates()
+    .map { try $0.projection(using: compilation.layout) }
+}
+
+private func compiledValue(
+  _ expression: StateExpr,
+  values: [String: TLAValue] = [:]
+) throws -> TLAValue {
+  let resultName = "result"
+  let spec = TLASpec(
+    name: "ExpressionFixture",
+    variables: values.sorted { $0.key < $1.key }.map { NamedVar(name: $0.key, initial: $0.value) }
+      + [NamedVar(name: resultName, initial: .int(0), initExpr: expression)],
+    actions: [],
+    invariants: []
+  )
+  let result = try #require(try compiledInitialProjections(spec).first)
+  let token = try #require(TLAStateProjection.Token(validating: resultName))
+  return try #require(result.value(for: token))
+}
+
 // MARK: - Var<T> operators: full matrix
 
 @Suite(.serialized) struct VarOperatorMatrix {
@@ -78,7 +123,7 @@ import UpstreamParity
     case "twoVars": action = .and(.assign("x", .value(.int(1))), .assign("y", .value(.int(2))))
     default: action = .assign("x", .value(.int(0)))
     }
-    let r = try ActionEnumerator.enumerate(action, from: s, varNames: ["x", "y"])
+    let r = try compiledSuccessors(action, from: s, variables: ["x", "y"])
     #expect(r.count == expected)
   }
 
@@ -181,39 +226,38 @@ import UpstreamParity
   let s2: [String: TLAValue] = ["a": .int(0), "b": .int(0)]
 
   @Test func simpleAssign() throws {
-    let r = try ActionEnumerator.enumerate(
-      .assign("x", .value(.int(42))), from: s0, varNames: ["x"])
-    #expect(r.count == 1 && r[0]["x"] == .int(42))
+    let r = try compiledSuccessors(.assign("x", .value(.int(42))), from: s0, variables: ["x"])
+    #expect(r.count == 1 && r[0].formalValues["x"] == .int(42))
   }
 
   @Test func unchanged() throws {
-    let r = try ActionEnumerator.enumerate(.unchanged("x"), from: s0, varNames: ["x"])
-    #expect(r.count == 1 && r[0]["x"] == .int(0))
+    let r = try compiledSuccessors(.unchanged("x"), from: s0, variables: ["x"])
+    #expect(r.count == 1 && r[0].formalValues["x"] == .int(0))
   }
 
   @Test func guardTrue() throws {
     let a: ActionExpr = .and(
       .guard_(.equal(.variable("x"), .value(.int(0)))), .assign("x", .value(.int(1))))
-    let r = try ActionEnumerator.enumerate(a, from: s0, varNames: ["x"])
+    let r = try compiledSuccessors(a, from: s0, variables: ["x"])
     #expect(r.count == 1)
   }
 
   @Test func guardFalse() throws {
     let a: ActionExpr = .and(
       .guard_(.equal(.variable("x"), .value(.int(1)))), .assign("x", .value(.int(2))))
-    let r = try ActionEnumerator.enumerate(a, from: s0, varNames: ["x"])
+    let r = try compiledSuccessors(a, from: s0, variables: ["x"])
     #expect(r.isEmpty)
   }
 
   @Test func twoVars() throws {
     let a: ActionExpr = .and(.assign("a", .value(.int(1))), .assign("b", .value(.int(2))))
-    let r = try ActionEnumerator.enumerate(a, from: s2, varNames: ["a", "b"])
-    #expect(r.count == 1 && r[0]["a"] == .int(1) && r[0]["b"] == .int(2))
+    let r = try compiledSuccessors(a, from: s2, variables: ["a", "b"])
+    #expect(r.count == 1 && r[0].formalValues["a"] == .int(1) && r[0].formalValues["b"] == .int(2))
   }
 
   @Test func orBranches() throws {
     let a: ActionExpr = .or(.assign("x", .value(.int(1))), .assign("x", .value(.int(2))))
-    let r = try ActionEnumerator.enumerate(a, from: s0, varNames: ["x"])
+    let r = try compiledSuccessors(a, from: s0, variables: ["x"])
     #expect(r.count == 2)
   }
 
@@ -221,7 +265,7 @@ import UpstreamParity
     let a: ActionExpr = .or(
       .or(.assign("x", .value(.int(1))), .assign("x", .value(.int(2)))),
       .assign("x", .value(.int(3))))
-    let r = try ActionEnumerator.enumerate(a, from: s0, varNames: ["x"])
+    let r = try compiledSuccessors(a, from: s0, variables: ["x"])
     #expect(r.count == 3)
   }
 
@@ -235,11 +279,11 @@ import UpstreamParity
       )
     )
 
-    let blocked = try ActionEnumerator.enumerate(action, from: ["x": .int(1)], varNames: ["x"])
+    let blocked = try compiledSuccessors(action, from: ["x": .int(1)], variables: ["x"])
     #expect(blocked.isEmpty)
 
-    let advanced = try ActionEnumerator.enumerate(action, from: s0, varNames: ["x"])
-    #expect(advanced == [["x": .int(1)]])
+    let advanced = try compiledSuccessors(action, from: s0, variables: ["x"])
+    #expect(advanced.map(\.formalValues) == [["x": .int(1)]])
   }
 
   @Test func equivalentAssignmentsAroundAnExistentialAgree() throws {
@@ -252,8 +296,8 @@ import UpstreamParity
       .assign("x", .value(.int(1)))
     )
 
-    let successors = try ActionEnumerator.enumerate(action, from: s0, varNames: ["x"])
-    #expect(successors == [["x": .int(1)]])
+    let successors = try compiledSuccessors(action, from: s0, variables: ["x"])
+    #expect(successors.map(\.formalValues) == [["x": .int(1)]])
   }
 
 }
@@ -310,7 +354,7 @@ import UpstreamParity
   @Test("StateExpr evaluates correctly in state")
   func evaluatesInState() throws {
     let e: StateExpr = .add(.variable("x"), .int(1))
-    let v = try e.evaluate(in: ["x": .int(5)])
+    let v = try compiledValue(e, values: ["x": .int(5)])
     #expect(v == .int(6))
   }
 }
@@ -333,7 +377,7 @@ import UpstreamParity
   func functionApplyLookup() throws {
     let v: TLAValue = .function([.int(1): .string("one")])
     let state: [String: TLAValue] = ["f": v, "k": .int(1)]
-    let result = try StateExpr.functionApply(.variable("f"), .variable("k")).evaluate(in: state)
+    let result = try compiledValue(StateExpr.functionApply(.variable("f"), .variable("k")), values: state)
     #expect(result == .string("one"))
   }
 }
@@ -355,7 +399,7 @@ import UpstreamParity
     ] as [(String, ActionExpr, Int)])
   func enumerate(_ name: String, _ a: ActionExpr, _ expected: Int) throws {
     let s: [String: TLAValue] = ["x": .int(0), "y": .int(0)]
-    let r = try ActionEnumerator.enumerate(a, from: s, varNames: ["x", "y"])
+    let r = try compiledSuccessors(a, from: s, variables: ["x", "y"])
     #expect(r.count == expected, "\(name): expected \(expected), got \(r.count)")
   }
 }
@@ -592,8 +636,9 @@ import UpstreamParity
       Invariant("TypeOK") { x >= 1 && x <= 3 }
     }
 
-    let states = try computeInitialStates(spec)
-    #expect(Set(states.compactMap { $0["x"] }) == Set([.int(1), .int(2), .int(3)]))
+    let states = try compiledInitialProjections(spec)
+    let x = try #require(TLAStateProjection.Token(validating: "x"))
+    #expect(Set(states.compactMap { $0.value(for: x) }) == Set([.int(1), .int(2), .int(3)]))
     #expect(try ModelChecker(spec: spec).exploreGraph().states.count == 3)
     #expect(try spec.compile().renderedTLAModuleBundle().tla.contains("Init == x \\in {1, 2, 3}"))
   }
@@ -624,11 +669,11 @@ import UpstreamParity
 
 // MARK: - Phase 1-7: bound variables, functions, sequences, EXCEPT, CONSTANTS
 @Suite(.serialized) struct BoundVariableTests { @Test("Function literal with bound variable evaluates correctly")
-  func functionLiteralWithBoundVar() {
+  func functionLiteralWithBoundVar() throws {
     let p = Var<Int>("p")
     let domain = StateExpr.set([1, 2, 3])
     let fun = StateExpr.functionLiteral(p, in: domain, (p * 2).raw)
-    let result = try! fun.evaluate(in: [:])
+    let result = try compiledValue(fun)
     guard case .function(let mapping) = result else {
       #expect(Bool(false))
       return
@@ -644,7 +689,7 @@ import UpstreamParity
     let domain = StateExpr.set([1, 2])
     let fun = StateExpr.functionLiteral(p, in: domain, (p * 10).raw)
     let apply = StateExpr.functionApply(fun, .value(.int(2)))
-    let result = try apply.evaluate(in: [:])
+    let result = try compiledValue(apply)
     #expect(result == .int(20))
   }
 
@@ -654,7 +699,7 @@ import UpstreamParity
     let domain = StateExpr.set([1, 2])
     let fun = StateExpr.functionLiteral(p, in: domain, (p * 10).raw)
     let updated = StateExpr.except(fun, .value(.int(1)), .value(.int(99)))
-    let result = try updated.evaluate(in: [:])
+    let result = try compiledValue(updated)
     guard case .function(let mapping) = result else {
       #expect(Bool(false))
       return
@@ -672,7 +717,7 @@ import UpstreamParity
       StateExpr.except(fun, .value(.int(1)), .value(.int(10))),
       .value(.int(2)), .value(.int(20))
     )
-    let result = try expr.evaluate(in: [:])
+    let result = try compiledValue(expr)
     guard case .function(let mapping) = result else {
       #expect(Bool(false))
       return
@@ -687,8 +732,7 @@ import UpstreamParity
     let domain = StateExpr.set([1, 2, 3])
     let predicate = StateExpr.forAll(
       p, in: domain, StateExpr.greaterThan(p.stateExpr, StateExpr.value(.int(0))))
-    let result = try predicate.evaluateBool(in: [:])
-    #expect(result)
+    #expect(try compiledValue(predicate) == .bool(true))
   }
 
   @Test("exists with bound variable finds matching element")
@@ -697,8 +741,7 @@ import UpstreamParity
     let domain = StateExpr.set([1, 2, 3])
     let predicate = StateExpr.exists(
       p, in: domain, StateExpr.equal(p.stateExpr, StateExpr.value(.int(2))))
-    let result = try predicate.evaluateBool(in: [:])
-    #expect(result)
+    #expect(try compiledValue(predicate) == .bool(true))
   }
 
   @Test("Sequence variable append and read in model checker")
