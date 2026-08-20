@@ -195,13 +195,6 @@ extension MacroExpander {
             return DeclSyntax(stringLiteral: source).as(FunctionDeclSyntax.self)!
         }
     }
-    static func tlaValueConstructor(for swiftType: String, value: String) -> String {
-        switch swiftType {
-        case "Int": return ".int(\(value))"
-        case "Bool": return ".bool(\(value))"
-        default: return ".string(\(value))"
-        }
-    }
     static func literalExpr(for initial: TLAValue) -> String {
         switch initial {
         case .int(let v): "\(v)"
@@ -210,38 +203,6 @@ extension MacroExpander {
         case .set(let v): "[\(v.map(String.init).joined(separator: ", "))]"
         default: "0"
         }
-    }
-    static func generateCallbackProtocol(typeName: String, actions: [NamedAction]) throws -> [DeclSyntax] {
-        let protoName = "\(typeName)Actions"
-        var callbackDecls: [String] = []
-        var defaultDecls: [String] = []
-        for (_, identifier) in zip(actions, generatedActionIdentifiers(actions: actions)) {
-            let callbackName = "on" + identifier.prefix(1).capitalized + identifier.dropFirst()
-            callbackDecls.append("func \(callbackName)()")
-            defaultDecls.append("""
-                func \(callbackName)() {
-                    runtimeWarning("\(typeName).\(callbackName)() not overridden")
-                }
-                """)
-        }
-        let protoCode = """
-            protocol \(protoName) {
-                \(callbackDecls.joined(separator: "\n    "))
-            }
-            """
-        let extCode = """
-            extension \(protoName) {
-                \(defaultDecls.joined(separator: "\n    "))
-            }
-            """
-        let conformanceCode = """
-            extension \(typeName): \(protoName) {}
-            """
-        return [
-            DeclSyntax(stringLiteral: protoCode),
-            DeclSyntax(stringLiteral: extCode),
-            DeclSyntax(stringLiteral: conformanceCode)
-        ]
     }
     // MARK: - Helpers
     static func swiftType(for initial: TLAValue) -> String {
@@ -256,16 +217,6 @@ extension MacroExpander {
         case .constant: "String"
         }
     }
-    static func stateType(for v: NamedVar, facts: MachineSurfaceSwiftFacts, enumInfos: [ParsedEnumInfo]) -> String {
-        let inferred = facts.variableTypes[v.name] ?? swiftType(for: v.initial)
-        if ["Int", "Bool", "String"].contains(inferred) { return inferred }
-        if enumInfos.contains(where: { $0.typeName == inferred }) { return inferred }
-        if inferred.hasPrefix("Record<") || inferred.hasPrefix("Function<") || inferred.hasPrefix("SetExpr<") {
-            return inferred
-        }
-        return "TLAValue"
-    }
-
     static func stateType(for variable: MachineSurfacePlan.Variable, enumInfos: [ParsedEnumInfo]) -> String {
         let type = variable.swiftType
         if ["Int", "Bool", "String", "TLAValue"].contains(type) { return type }
