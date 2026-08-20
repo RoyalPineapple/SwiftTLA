@@ -4,11 +4,13 @@ struct CompiledActionEnumerator {
 
     func enumerate(_ action: CompiledAction) throws -> [FormalState] {
         let choices = chooseActions(in: action.body)
-        let selections = try selectChoices(choices)
-        return try selections.flatMap { selection in
-            let evaluationState = try state.updating(selection)
-            return try execute(action.body, state: evaluationState, bindings: .init()).map { delta in
-                try state.updating(selection).updating(delta.assignments)
+        return try actionBindings(action.bindings).flatMap { bindings in
+            let selections = try selectChoices(choices, bindings: bindings)
+            return try selections.flatMap { selection in
+                let evaluationState = try state.updating(selection)
+                return try execute(action.body, state: evaluationState, bindings: bindings).map { delta in
+                    try state.updating(selection).updating(delta.assignments)
+                }
             }
         }
     }
@@ -62,11 +64,22 @@ struct CompiledActionEnumerator {
         }
     }
 
-    private func selectChoices(_ choices: [(VariableID, CompiledStateExpr)]) throws -> [[VariableID: TLAValue]] {
+    private func actionBindings(_ bindings: [CompiledActionBinding]) -> [CompiledBindings] {
+        bindings.reduce([.init()]) { partial, binding in
+            partial.flatMap { values in
+                binding.values.map { values.binding($0, to: binding.binder) }
+            }
+        }
+    }
+
+    private func selectChoices(
+        _ choices: [(VariableID, CompiledStateExpr)],
+        bindings: CompiledBindings
+    ) throws -> [[VariableID: TLAValue]] {
         try choices.reduce([[:]]) { selections, choice in
             try selections.flatMap { selection in
                 let selectionState = try state.updating(selection)
-                let evaluator = CompiledEvaluator(state: selectionState, model: model, bindings: .init())
+                let evaluator = CompiledEvaluator(state: selectionState, model: model, bindings: bindings)
                 guard case .set(let values) = try evaluator.evaluate(choice.1) else {
                     throw EvalError.typeMismatch("CHOOSE requires a set")
                 }

@@ -178,6 +178,29 @@ struct CompilerPipelineCanonicalizationTests {
         #expect(try nextStates[0].value(for: .init(ordinal: 1)) == .int(2))
     }
 
+    @Test("compiled action bindings enumerate their declared values")
+    func compiledActionBindingsUseBinderSlots() throws {
+        let spec = TLASpec(
+            name: "CompiledActionBinding",
+            variables: [.init(name: "counter", initial: .int(0))],
+            actions: [
+                .init(
+                    name: "advance",
+                    body: .assign("counter", .variable("increment")),
+                    bindings: [.init(name: "increment", values: [.int(1), .int(2)])]
+                )
+            ],
+            invariants: []
+        )
+        let compilation = try spec.compile()
+        let state = try FormalState(values: [.int(0)], layout: compilation.layout)
+        let next = try CompiledActionEnumerator(state: state, model: compilation.model)
+            .enumerate(try #require(compilation.model.actions.first))
+
+        let values = try next.map { try $0.value(for: .init(ordinal: 0)) }
+        #expect(Set(values) == [.int(1), .int(2)])
+    }
+
     @Test("compiled formal calls use operator identities")
     func compiledFormalCallsUseOperatorIDs() throws {
         let double = FormalOperatorDefinition(
