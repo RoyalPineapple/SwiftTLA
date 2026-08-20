@@ -150,6 +150,34 @@ struct CompilerPipelineCanonicalizationTests {
         #expect(value == binder)
     }
 
+    @Test("compiled choices are visible to their action guards and updates")
+    func compiledChoicesUseSelectedSlotValues() throws {
+        let spec = TLASpec(
+            name: "CompiledChoice",
+            variables: [
+                .init(name: "counter", initial: .int(0)),
+                .init(name: "candidate", initial: .int(0))
+            ],
+            actions: [
+                .init(
+                    name: "select",
+                    body: .chooseAction("candidate", .setLiteral([.int(1), .int(2)]))
+                        && .guard_(.equal(.variable("candidate"), .int(2)))
+                        && .assign("counter", .variable("candidate"))
+                )
+            ],
+            invariants: []
+        )
+        let compilation = try spec.compile()
+        let state = try FormalState(values: [.int(0), .int(0)], layout: compilation.layout)
+        let nextStates = try CompiledActionEnumerator(state: state, model: compilation.model)
+            .enumerate(try #require(compilation.model.actions.first))
+
+        #expect(nextStates.count == 1)
+        #expect(try nextStates[0].value(for: .init(ordinal: 0)) == .int(2))
+        #expect(try nextStates[0].value(for: .init(ordinal: 1)) == .int(2))
+    }
+
     @Test("compiled higher-order calls retain lambda binder identities")
     func compiledHigherOrderCallsUsePrivateIdentities() throws {
         let call = StateExpr.operatorApplication(
