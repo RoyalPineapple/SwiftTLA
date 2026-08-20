@@ -797,11 +797,11 @@ private enum ParserNode: String, FiniteDomainKey {
             variables: [], actions: [], invariants: [], definitions: parsed.definitions
         )
         let builderTree = canonicalTestSpec(
-            variables: [], actions: [], invariants: [], definitions: ["Refines == C!Spec"]
+            variables: [], actions: [], invariants: [], definitions: [.init(text: "Refines == C!Spec")]
         )
 
         #expect(parsed.diagnostics.isEmpty)
-        #expect(parsed.definitions == ["Refines == C!Spec"])
+        #expect(parsed.definitions == [.init(text: "Refines == C!Spec")])
         #expect(_tlaAlphaEquivalent(parserTree, builderTree))
         #expect(_tlaFidelityEvidence(parserTree, builderTree) == nil)
     }
@@ -1862,7 +1862,7 @@ private struct DefinitionFidelityMacro {
 
 @Suite(.serialized) struct DefinitionFidelityMacroTests {
     @Test func generatedModelRetainsLiteralDefinition() {
-        #expect(DefinitionFidelityMacro.spec.definitions == ["Refines == TRUE"])
+        #expect(DefinitionFidelityMacro.spec.definitions == [.init(text: "Refines == TRUE")])
         _ = DefinitionFidelityMacro.runtime
     }
 }

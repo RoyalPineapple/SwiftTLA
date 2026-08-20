@@ -708,12 +708,12 @@ struct AlgorithmBuilderTests {
                 body: .equal(.variable("value0"), .variable("value1"))
             )
         ])
-        #expect(lowered.definitions == ["same(value0, value1) == (value0 = value1)"])
+        #expect(lowered.definitions.map(\.text) == ["same(value0, value1) == (value0 = value1)"])
         #expect(try algorithm.renderPlusCalModule().contains("same(value0, value1) == (value0 = value1)"))
 
         let spec = TLASpec("Formal Operators") { algorithm }
         #expect(spec.formalOperatorDefinitions == lowered.formalOperatorDefinitions)
-        #expect(spec.definitions.filter { $0.hasPrefix("same(") }.count == 1)
+        #expect(spec.definitions.filter { $0.text.hasPrefix("same(") }.count == 1)
         #expect(try spec.compile().renderedTLAModuleBundle().tla.components(separatedBy: "same(value0, value1)").count == 2)
     }
 

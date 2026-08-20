@@ -128,6 +128,21 @@ public struct NamedInvariant: Sendable, CustomStringConvertible, Equatable {
   }
   public var description: String { "\(name): \(body)" }
 }
+/// A direct TLA+ declaration with explicit linker dependencies.
+///
+/// Rendering receives these declarations in compilation-owned order; it never
+/// searches declaration text to discover a dependency on an `INSTANCE`.
+public struct DirectModuleDefinition: Sendable, Equatable {
+  public let name: String?
+  public let text: String
+  public let dependencies: [String]
+
+  public init(name: String? = nil, text: String, dependencies: [String] = []) {
+    self.name = name
+    self.text = text
+    self.dependencies = dependencies
+  }
+}
 public struct TLASpec: Sendable {
   public let name: String
   public let variables: [NamedVar]
@@ -140,7 +155,7 @@ public struct TLASpec: Sendable {
   public let fairness: [FairnessCondition]
   public let assume: StateExpr?
   public let checkDeadlock: Bool
-  public let definitions: [String]
+  public let definitions: [DirectModuleDefinition]
   public let theorems: [String]
   public let extendsModules: String
   public let constraint: StateExpr?
@@ -175,7 +190,7 @@ public struct TLASpec: Sendable {
     formalParameters: [FormalModuleParameter] = [],
     actions: [NamedAction], invariants: [NamedInvariant], temporalProperties: [NamedTemporal] = [],
     fairness: [FairnessCondition] = [], assume: StateExpr? = nil, checkDeadlock: Bool = false,
-    definitions: [String] = [], theorems: [String] = [], extendsModules: String = "Integers",
+    definitions: [DirectModuleDefinition] = [], theorems: [String] = [], extendsModules: String = "Integers",
     constraint: StateExpr? = nil, recursiveDefs: [String] = [],
     recursiveFuncs: [RecursiveFunc] = [],
     formalOperatorDefinitions: [FormalOperatorDefinition] = [], imports: [TLASpec] = [],

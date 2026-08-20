@@ -12,7 +12,7 @@ func canonicalTestSpec(
     moduleInstances: [FormalModuleInstance] = [],
     formalParameters: [FormalModuleParameter] = [],
     formalOperatorDefinitions: [FormalOperatorDefinition] = [],
-    definitions: [String] = [],
+    definitions: [DirectModuleDefinition] = [],
     symmetrySets: [SymmetrySet] = []
 ) -> TLASpec {
     TLASpec(
