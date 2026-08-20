@@ -1,15 +1,13 @@
-# Symmetric Collections (formal-engine boundary)
+# Symmetric Collections
 
 New application models do not use `SymmetricCollectionVar`. Author them with
 `#spec`, `Algorithm`, `SharedVar`, and typed `Function`, `SetExpr`, and
-`Record` values. This document describes the retained formal-engine and parity
-support for legacy symmetric-collection fixtures; it is not a second public
-authoring language.
+`Record` values. This document describes the formal-engine and parity support
+for symmetric-collection fixtures.
 
 A symmetric collection models a finite group of members that are exchangeable
-for a checked property. Equivalent symmetry evidence for the canonical
-PlusCal-shaped collection vocabulary is required before this legacy boundary
-can be removed.
+for a checked property. The canonical PlusCal-shaped collection vocabulary
+carries the same symmetry evidence.
 
 ## Compiler pipeline
 
@@ -58,7 +56,7 @@ action that is not enabled for the selected live entry reports a typed
 
 ## DSL lowering and the symmetry contract
 
-The legacy `SymmetricCollection` declaration creates a modeled function initialized uniformly over
+The `SymmetricCollection` declaration creates a modeled function initialized uniformly over
 its opaque member domain. `CollectionAction` lowers its closure to an
 existential action over that function's domain. A read such as `phases[member]`
 lowers to function application; `phases.update(member, to:)` lowers to the

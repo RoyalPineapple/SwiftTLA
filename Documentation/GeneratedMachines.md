@@ -461,7 +461,6 @@ The documented names and observable outcomes in this guide form the current gene
 
 Generated source layout, private storage, underscored helpers, callback scheduling outside stated isolation, and unsupported annotation combinations are not part of this contract.
 
-No SemVer promise is made here. If a future release changes a documented public contract, its release notes must name the affected contract and required migration action.
 
 ## Claim sources
 

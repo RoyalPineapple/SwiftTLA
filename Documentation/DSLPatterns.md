@@ -18,7 +18,7 @@ AST, runs global model checking, and emits executable state-machine or actor
 behavior only after that check succeeds. The generated runtime reuses the
 verified model's actions rather than accepting a separate implementation.
 
-## Legacy symmetric-collection boundary
+## Formal-engine symmetric collections
 
 `SymmetricCollectionVar<Element, Value>` is retained for formal-engine and
 parity fixtures only. Do not use it in new application models, demos, or

@@ -2,7 +2,7 @@
 
 A live machine is a reference-owned runtime. It has one identity, one mutable state, and one commit order. It is the public way to inspect, observe, and control a machine that is already running.
 
-This is different from a generated model value. Its explicit non-live name is `Simulation`; it can be useful for local work, but it is not a handle to an existing live runtime. Creating a value or a legacy session does not attach to another machine.
+A generated model value uses `Simulation` for local value work. A live runtime is created through `TLALiveMachineOwner` and shared through its handle.
 
 ## Create and share a runtime
 
