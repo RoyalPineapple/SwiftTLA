@@ -422,9 +422,6 @@ struct NestedAdapterConcurrencyTests {
     @Test("Nested adapters observe and execute through their canonical model")
     @MainActor
     func nestedAdaptersShareCanonicalObservation() async throws {
-        let modelVariable: NestedComposedCounter.Variables = .count
-        let observableVariable: NestedComposedCounter.Observable.Variables = .count
-        let actorVariable: NestedComposedCounter.Actor.Variables = .count
         let observableLabel: NestedComposedCounter.Observable.ActionLabel = .advance
         let actorLabel: NestedComposedCounter.Actor.ActionLabel = .advance
         var model = try NestedComposedCounter.makeMachine()
@@ -436,9 +433,6 @@ struct NestedAdapterConcurrencyTests {
         }
 
         let expectedBefore = await model.machineObservation()
-        #expect(modelVariable == .count)
-        #expect(observableVariable == .count)
-        #expect(actorVariable == .count)
         #expect(observableLabel == .advance)
         #expect(actorLabel == .advance)
         #expect(await observable.machineObservation() == expectedBefore)

@@ -44,8 +44,8 @@ extension MacroExpander {
             """ : ""
         let liveProjection = symmetricCollections.map {
             """
-            guard let token = TLAStateProjection.Token(validating: Variables.\($0.formalName).rawValue) else {
-                throw TLAStateProjectionDiagnostic.invalidKey(path: Variables.\($0.formalName).rawValue)
+            guard let token = TLAStateProjection.Token(validating: \(String(reflecting: $0.formalName))) else {
+                throw TLAStateProjectionDiagnostic.invalidKey(path: \(String(reflecting: $0.formalName)))
             }
             state = try state.replacing(\($0.formalName).projection().modelValue, for: token)
             """
