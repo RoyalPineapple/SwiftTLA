@@ -4,8 +4,8 @@ import Testing
 @testable import SwiftTLA
 import UpstreamParity
 
-@Suite("Multi-car elevator typed DSL")
-struct MultiCarElevatorDSLTests {
+@Suite("Typed facade contracts")
+struct TypedFacadeContractTests {
   enum CarID: String, CaseIterable, FiniteTLAValueDomain {
     case carA
     case carB
@@ -203,8 +203,8 @@ struct MultiCarElevatorDSLTests {
         ))
   }
 
-  @Test("bounded elevator builder and macro fixtures preserve the complete typed model")
-  func boundedElevatorFixtureChecksAndExports() throws {
+  @Test("bounded builder and macro fixtures preserve the complete typed model")
+  func boundedModelFixtureChecksAndExports() throws {
     let builder = MultiCarElevator.builderSpec
     let macro = MultiCarElevatorMacroFixture.spec
 

@@ -1,7 +1,7 @@
 import Testing
 @testable import UpstreamParity
 
-struct SingleLaneBridgeMigrationTests {
+struct SingleLaneBridgeCorpusDomainTests {
     @Test("SingleLaneBridge keeps its upstream finite constant domains")
     func preservesFiniteConstantDomains() {
         #expect(SingleLaneBridgeModel.spec.constants == [

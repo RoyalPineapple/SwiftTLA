@@ -31,8 +31,8 @@ struct DuckDuckLeaderCanonical {
     actor Actor {}
 }
 
-struct DuckDuckLeaderAdapterTests {
-    @Test("Duck Duck Leader actor preserves canonical arbitrary-length evidence")
+struct GeneratedActorExecutionContractTests {
+    @Test("actor preserves canonical arbitrary-length evidence")
     func actorMatchesCanonicalSchedule() async throws {
         var canonical = DuckDuckLeaderCanonical()
         let actor = DuckDuckLeaderCanonical.Actor()
@@ -61,7 +61,7 @@ struct DuckDuckLeaderAdapterTests {
         }
     }
 
-    @Test("Duck Duck Leader actor rejects unavailable invocations without mutation")
+    @Test("actor rejects unavailable invocations without mutation")
     func unavailableActionPreservesActorSnapshot() async throws {
         let actor = DuckDuckLeaderCanonical.Actor()
         let unavailable = TLAActionInvocation(name: "pass", arguments: [.int(2), .int(1), .int(1)])
@@ -69,7 +69,7 @@ struct DuckDuckLeaderAdapterTests {
 
         do {
             _ = try await actor.execute(unavailable)
-            Issue.record("Expected unavailable Duck Duck Leader action")
+            Issue.record("Expected unavailable actor action")
         } catch let GeneratedMachineError.runtime(.actionNotEnabled(invocation, available)) {
             #expect(invocation == unavailable)
             #expect(available.contains(unavailable) == false)
@@ -78,7 +78,7 @@ struct DuckDuckLeaderAdapterTests {
         #expect(await actor.tlaSnapshot() == before)
     }
 
-    @Test("Duck Duck Leader actor serializes concurrent duplicate submissions")
+    @Test("actor serializes concurrent duplicate submissions")
     func concurrentSubmissionsMatchActualCanonicalEvidence() async throws {
         let actor = DuckDuckLeaderCanonical.Actor()
         let invocation = TLAActionInvocation(name: "pass", arguments: [.int(1), .int(2), .int(1)])

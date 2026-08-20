@@ -2,7 +2,7 @@ import Testing
 import SwiftTLA
 import UpstreamParity
 
-struct BakeryPlusCalMigrationTests {
+struct BakeryBoundedGraphContractTests {
     @Test("Bakery PlusCal-shaped model matches its upstream bounded graph")
     func bakeryN2MatchesTLC() throws {
         try BakeryN2Model.verifySpec()
