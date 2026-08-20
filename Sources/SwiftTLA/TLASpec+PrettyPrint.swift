@@ -9,7 +9,7 @@ extension TLASpec {
     /// `CompiledSpecification.renderedTLAModuleBundle()`. Application code must
     /// compile first and read the bundle's `.tla` field instead of rendering a
     /// raw `TLASpec`.
-    func renderTLAModuleSource() -> String {
+    func renderTLAModuleSource(sectionPlan: DirectModuleSectionPlan) -> String {
         validateSymmetricCollectionExport()
         let varNames = variables.map(\.name)
         let algorithmSymbols = algorithmExportSymbols(sourceAlgorithms, actions: actions)
@@ -82,11 +82,8 @@ extension TLASpec {
             }
         }
 
-        let instanceDependentDefinitions = definitions.filter { definition in
-            moduleInstances.contains { definition.contains("\($0.name)!") }
-        }
-        for def in definitions where !instanceDependentDefinitions.contains(def) {
-            lines.append(def)
+        for definition in sectionPlan.definitionsBeforeInstances {
+            lines.append(definition.text)
             lines.append("")
         }
 
@@ -120,8 +117,8 @@ extension TLASpec {
             lines.append("")
         }
 
-        for def in instanceDependentDefinitions {
-            lines.append(def)
+        for definition in sectionPlan.definitionsAfterInstances {
+            lines.append(definition.text)
             lines.append("")
         }
 

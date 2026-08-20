@@ -279,7 +279,7 @@ public extension TLASpec {
     reservedSymbols.formUnion(temporalProperties.map(\.name))
     reservedSymbols.formUnion(recursiveFuncs.map(\.name))
     reservedSymbols.formUnion(symmetrySets.map { "Symm\($0.variableName)" })
-    reservedSymbols.formUnion(definitions.compactMap(tlaDeclaredSymbol))
+    reservedSymbols.formUnion(definitions.compactMap(\.name))
     reservedSymbols.formUnion(recursiveDefs.compactMap(tlaDeclaredSymbol))
     reservedSymbols.formUnion(runtimeFuncBodies.compactMap(tlaDeclaredSymbol))
     reservedSymbols.formUnion(theorems.compactMap(tlaDeclaredSymbol))

@@ -77,7 +77,8 @@ struct CompiledSpecificationRendererTests {
         let stale = CompiledSpecification(
             spec: compilation.spec,
             formalModuleClosure: compilation.formalModuleClosure,
-            identity: .init(value: "stale")
+            identity: .init(value: "stale"),
+            directModuleSections: compilation.directModuleSections
         )
 
         do {
@@ -105,7 +106,8 @@ struct CompiledSpecificationRendererTests {
         let stale = CompiledSpecification(
             spec: compilation.spec,
             formalModuleClosure: compilation.formalModuleClosure,
-            identity: .init(value: "stale")
+            identity: .init(value: "stale"),
+            directModuleSections: compilation.directModuleSections
         )
         #expect(throws: CompilationDiagnostic.self) {
             try stale.renderedAuthoredPlusCalModules()
@@ -123,7 +125,8 @@ struct CompiledSpecificationRendererTests {
         let invalid = CompiledSpecification(
             spec: compilation.spec,
             formalModuleClosure: incompleteClosure,
-            identity: compilation.identity
+            identity: compilation.identity,
+            directModuleSections: compilation.directModuleSections
         )
 
         #expect(throws: TLAModuleBundleIntegrityError.self) {

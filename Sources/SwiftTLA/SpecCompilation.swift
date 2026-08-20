@@ -14,6 +14,12 @@ public struct CompilationIdentity: Sendable, Hashable, CustomStringConvertible {
     public var description: String { value }
 }
 
+/// The legal direct-module declaration order, resolved before rendering.
+public struct DirectModuleSectionPlan: Sendable, Equatable {
+    let definitionsBeforeInstances: [DirectModuleDefinition]
+    let definitionsAfterInstances: [DirectModuleDefinition]
+}
+
 /// The point at which a formal specification becomes available to consumers.
 ///
 /// A compiled specification owns the sole semantic `TLASpec` payload. Later
@@ -23,11 +29,18 @@ public struct CompiledSpecification: Sendable {
     public let spec: TLASpec
     public let formalModuleClosure: FormalModuleClosure
     public let identity: CompilationIdentity
+    let directModuleSections: DirectModuleSectionPlan
 
-    init(spec: TLASpec, formalModuleClosure: FormalModuleClosure, identity: CompilationIdentity) {
+    init(
+        spec: TLASpec,
+        formalModuleClosure: FormalModuleClosure,
+        identity: CompilationIdentity,
+        directModuleSections: DirectModuleSectionPlan
+    ) {
         self.spec = spec
         self.formalModuleClosure = formalModuleClosure
         self.identity = identity
+        self.directModuleSections = directModuleSections
     }
 
     /// Renders a complete TLA+/CFG bundle from the already-linked closure.
@@ -64,10 +77,13 @@ public struct CompiledSpecification: Sendable {
             )
         }
 
-        let files = entries.map { entry in
-            TLAModuleFile(
+        let files = try entries.map { entry in
+            let sectionPlan = entry.module.name == spec.name
+                ? directModuleSections
+                : try entry.module.directModuleSectionPlan()
+            return TLAModuleFile(
                 name: entry.module.name,
-                tla: entry.module.renderTLAModuleSource(),
+                tla: entry.module.renderTLAModuleSource(sectionPlan: sectionPlan),
                 cfg: entry.module.name == spec.name ? entry.module.renderTLCConfiguration() : nil
             )
         }
@@ -203,6 +219,7 @@ public struct CompilationDiagnostic: Error, Sendable, Hashable, CustomStringConv
         case invalidFormalModuleParameter
         case duplicateFormalModuleParameter
         case unresolvedFormalModuleReplacement
+        case unresolvedDirectModuleDependency
     }
 
     public enum ChangeStatus: String, Sendable, Hashable {
@@ -309,10 +326,39 @@ public extension TLASpec {
         try validateUnique(actions.map(\.name), code: .duplicateAction, path: "actions")
         try validateUnique(invariants.map(\.name), code: .duplicateInvariant, path: "invariants")
         let closure = try FormalModuleClosure.resolve(root: self)
+        let directModuleSections = try directModuleSectionPlan()
         return CompiledSpecification(
             spec: self,
             formalModuleClosure: closure,
-            identity: .init(value: compilationFingerprint)
+            identity: .init(value: compilationFingerprint),
+            directModuleSections: directModuleSections
+        )
+    }
+
+    func directModuleSectionPlan() throws -> DirectModuleSectionPlan {
+        let instanceNames = Set(moduleInstances.map(\.name))
+        let declaredNames = instanceNames
+            .union(definitions.compactMap(\.name))
+            .union(formalOperatorDefinitions.map(\.name))
+        for definition in definitions {
+            for dependency in definition.dependencies where !declaredNames.contains(dependency) {
+                throw CompilationDiagnostic(
+                    code: .unresolvedDirectModuleDependency,
+                    stage: .linking,
+                    path: "definitions.\(definition.name ?? definition.text).dependencies.\(dependency)",
+                    expected: "a definition or INSTANCE declared by this module",
+                    actual: "no declaration named '\(dependency)'",
+                    nextSafeAction: "Declare the dependency or remove it from dependsOn, then compile again."
+                )
+            }
+        }
+        return DirectModuleSectionPlan(
+            definitionsBeforeInstances: definitions.filter {
+                instanceNames.isDisjoint(with: $0.dependencies)
+            },
+            definitionsAfterInstances: definitions.filter {
+                !instanceNames.isDisjoint(with: $0.dependencies)
+            }
         )
     }
 
@@ -393,7 +439,14 @@ private struct CanonicalSpecificationEncoder {
         list("fairness", spec.fairness, canonicalFairness)
         field("assume", canonicalOptional(spec.assume.map(canonicalExpression)))
         field("checkDeadlock", node("bool", [String(spec.checkDeadlock)]))
-        list("definitions", spec.definitions) { $0 }
+        let definitions = spec.definitions.map {
+            node("definition", [
+                canonicalOptional($0.name),
+                $0.text,
+                canonicalList($0.dependencies)
+            ])
+        }
+        list("definitions", definitions) { $0 }
         list("theorems", spec.theorems) { $0 }
         field("extendsModules", spec.extendsModules)
         field("constraint", canonicalOptional(spec.constraint.map(canonicalExpression)))

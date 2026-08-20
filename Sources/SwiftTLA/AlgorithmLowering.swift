@@ -290,7 +290,9 @@ enum AlgorithmLowerer {
             invariants: declaredInvariants + processInvariants + generatedAssertionInvariants,
             temporalProperties: declaredTemporal,
             fairness: declaredFairness + fairness,
-            definitions: algorithm.formalOperatorDefinitions.map { FormalOperatorDecl($0).tlaText },
+            definitions: algorithm.formalOperatorDefinitions.map {
+                .init(name: $0.name, text: FormalOperatorDecl($0).tlaText, dependencies: $0.plusCalDependencies)
+            },
             constraint: declaredConstraint,
             formalOperatorDefinitions: resolvedFormalOperators,
             sourceAlgorithms: [Algorithm(model: algorithm)])
@@ -421,7 +423,9 @@ enum AlgorithmLowerer {
                 invariants: declaredInvariants,
                 temporalProperties: declaredTemporal,
                 fairness: declaredFairness,
-                definitions: algorithm.formalOperatorDefinitions.map { FormalOperatorDecl($0).tlaText },
+                definitions: algorithm.formalOperatorDefinitions.map {
+                    .init(name: $0.name, text: FormalOperatorDecl($0).tlaText, dependencies: $0.plusCalDependencies)
+                },
                 constraint: declaredConstraint,
                 formalOperatorDefinitions: formalOperatorDefinitions,
                 sourceAlgorithms: [Algorithm(model: algorithm)]
@@ -494,7 +498,9 @@ enum AlgorithmLowerer {
             invariants: declaredInvariants + generatedAssertionInvariants,
             temporalProperties: declaredTemporal,
             fairness: declaredFairness,
-            definitions: algorithm.formalOperatorDefinitions.map { FormalOperatorDecl($0).tlaText },
+            definitions: algorithm.formalOperatorDefinitions.map {
+                .init(name: $0.name, text: FormalOperatorDecl($0).tlaText, dependencies: $0.plusCalDependencies)
+            },
             constraint: declaredConstraint,
             formalOperatorDefinitions: formalOperatorDefinitions,
             sourceAlgorithms: [Algorithm(model: algorithm)]

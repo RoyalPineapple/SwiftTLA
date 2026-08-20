@@ -11,7 +11,7 @@ extension TLASpec {
     var fairness: [FairnessCondition] = []
     var constants: [String: TLAValue] = [:]
     var formalParameters: [FormalModuleParameter] = []
-    var definitions: [String] = []
+    var definitions: [DirectModuleDefinition] = []
     var authoredPlusCalDeclarations: [AuthoredPlusCalDeclaration] = []
     var theorems: [String] = []
     var assumes: StateExpr?
@@ -76,7 +76,9 @@ extension TLASpec {
           formalOperatorDefinitions += algorithm.model.formalOperatorDefinitions
           for definition in algorithm.model.formalOperatorDefinitions {
             let text = FormalOperatorDecl(definition).tlaText
-            definitions.append(text)
+            definitions.append(.init(
+              name: definition.name, text: text, dependencies: definition.plusCalDependencies
+            ))
             authoredPlusCalDeclarations.append(AuthoredPlusCalDeclaration(
               name: definition.name, text: text,
               phase: definition.plusCalPhase,
@@ -106,12 +108,16 @@ extension TLASpec {
         } else {
           text = d.tlaText
         }
-        definitions.append(text)
+        definitions.append(.init(name: d.name, text: text, dependencies: d.plusCalDependencies))
         authoredPlusCalDeclarations.append(AuthoredPlusCalDeclaration(
           name: d.name, text: text, phase: d.plusCalPhase, dependencies: d.plusCalDependencies
         ))
       } else if let definition = comp as? FormalOperatorDecl {
-        definitions.append(definition.tlaText)
+        definitions.append(.init(
+          name: definition.definition.name,
+          text: definition.tlaText,
+          dependencies: definition.definition.plusCalDependencies
+        ))
         authoredPlusCalDeclarations.append(AuthoredPlusCalDeclaration(
           name: definition.definition.name, text: definition.tlaText,
           phase: definition.definition.plusCalPhase,

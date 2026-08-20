@@ -23,7 +23,7 @@ extension SpecParser {
         public var moduleInstances: [FormalModuleInstance] = []
         public var formalParameters: [FormalModuleParameter] = []
         public var formalOperatorDefinitions: [FormalOperatorDefinition] = []
-        public var definitions: [String] = []
+        public var definitions: [DirectModuleDefinition] = []
         public var authoredPlusCalDeclarations: [AuthoredPlusCalDeclaration] = []
         public var symmetrySets: [SymmetrySet] = []
         /// Opaque, pre-lowering Algorithm evidence retained independently of
@@ -782,13 +782,15 @@ extension SpecParser {
             ))
             return
         }
-        result.definitions.append(definition)
+        let name = call.arguments.first(where: { $0.label?.text == "named" })?.expression
+            .as(StringLiteralExprSyntax.self)?.representedLiteralValue
+        let dependencies = plusCalDependencies(call)
+        result.definitions.append(.init(name: name, text: definition, dependencies: dependencies))
         result.authoredPlusCalDeclarations.append(AuthoredPlusCalDeclaration(
-            name: call.arguments.first(where: { $0.label?.text == "named" })?.expression
-                .as(StringLiteralExprSyntax.self)?.representedLiteralValue,
+            name: name,
             text: definition,
             phase: plusCalPhase(call),
-            dependencies: plusCalDependencies(call)
+            dependencies: dependencies
         ))
     }
 
