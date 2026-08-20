@@ -124,6 +124,19 @@ struct CompiledInvariant: Sendable {
     let body: CompiledStateExpr
 }
 
+indirect enum CompiledTemporalExpr: Sendable {
+    case always(CompiledStateExpr)
+    case eventually(CompiledStateExpr)
+    case alwaysEventually(CompiledStateExpr)
+    case eventuallyAlways(CompiledStateExpr)
+    case leadsTo(CompiledStateExpr, CompiledStateExpr)
+}
+
+struct CompiledTemporal: Sendable {
+    let name: String
+    let expression: CompiledTemporalExpr
+}
+
 struct CompiledFormalOperatorDefinition: Sendable {
     let id: OperatorID
     let parameters: [CompiledFormalParameter]
@@ -160,6 +173,7 @@ struct CompiledModel: Sendable {
     let variableInitializers: [VariableID: CompiledVariableInitializer]
     let actions: [CompiledAction]
     let invariants: [CompiledInvariant]
+    let temporalProperties: [CompiledTemporal]
     let constraint: CompiledStateExpr?
     let assume: CompiledStateExpr?
     let formalOperatorDefinitions: [CompiledFormalOperatorDefinition]
