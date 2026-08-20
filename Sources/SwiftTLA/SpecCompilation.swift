@@ -18,6 +18,8 @@ public struct CompilationIdentity: Sendable, Hashable, CustomStringConvertible {
 public struct DirectModuleSectionPlan: Sendable, Equatable {
     let definitionsBeforeInstances: [DirectModuleDefinition]
     let definitionsAfterInstances: [DirectModuleDefinition]
+    let actions: [NamedAction]
+    let emittedActionNames: [String: String]
 }
 
 /// The point at which a formal specification becomes available to consumers.
@@ -432,6 +434,8 @@ public extension TLASpec {
         let definitionsAfterInstances = allDefinitions.filter {
             !instanceNames.isDisjoint(with: $0.dependencies)
         }
+        let controlSymbols = controlExportSymbols(sourceAlgorithms, actions: actions)
+        let emittedActionNames = tlaActionNames(actions, preferredNames: controlSymbols.actionNames)
         return DirectModuleSectionPlan(
             definitionsBeforeInstances: try orderDirectDefinitions(
                 definitionsBeforeInstances,
@@ -440,7 +444,15 @@ public extension TLASpec {
             definitionsAfterInstances: try orderDirectDefinitions(
                 definitionsAfterInstances,
                 declared: Set(definitionsBeforeInstances.compactMap(\.name)).union(instanceNames)
-            )
+            ),
+            actions: actions.map {
+                .init(
+                    name: $0.name,
+                    body: exportControlStates(in: $0.body, using: controlSymbols),
+                    bindings: $0.bindings
+                )
+            },
+            emittedActionNames: emittedActionNames
         )
     }
 
@@ -500,6 +512,128 @@ public extension TLASpec {
             hash &*= 0x100000001b3
         }
         return String(format: "%016llx", hash)
+    }
+}
+
+private func tlaActionNames(
+    _ actions: [NamedAction],
+    preferredNames: [String: String] = [:]
+) -> [String: String] {
+    var emitted: [String: String] = [:]
+    var used: Set<String> = []
+    for action in actions where emitted[action.name] == nil {
+        let raw = (preferredNames[action.name] ?? action.name).unicodeScalars.map { scalar -> String in
+            switch scalar.value {
+            case 48...57, 65...90, 97...122, 95: String(scalar)
+            default: "_"
+            }
+        }.joined()
+        let stem = raw.first?.isNumber == true ? "_\(raw)" : raw
+        var candidate = stem.isEmpty ? "Action" : stem
+        var suffix = 2
+        while used.contains(candidate) {
+            candidate = "\(stem)__\(suffix)"
+            suffix += 1
+        }
+        emitted[action.name] = candidate
+        used.insert(candidate)
+    }
+    return emitted
+}
+
+private struct ControlExportSymbols {
+    let actionNames: [String: String]
+}
+
+private func controlExportSymbols(
+    _ algorithms: [Algorithm],
+    actions: [NamedAction]
+) -> ControlExportSymbols {
+    let actionNames = Set(actions.map(\.name))
+    var candidates: [(qualified: String, label: String)] = []
+    for algorithm in algorithms {
+        for procedure in algorithm.model.procedures {
+            for step in procedure.steps {
+                candidates.append((
+                    qualified: "procedure.\(procedure.name).\(step.label.name)",
+                    label: step.label.name
+                ))
+            }
+        }
+    }
+
+    let labelCounts = Dictionary(grouping: candidates, by: { $0.label }).mapValues { $0.count }
+    let unqualifiedActions = Set(actions.map(\.name)).subtracting(Set(candidates.map { $0.qualified }))
+    let usable = candidates.filter {
+        actionNames.contains($0.qualified)
+            && labelCounts[$0.label] == 1
+            && !unqualifiedActions.contains($0.label)
+    }
+    return ControlExportSymbols(actionNames: Dictionary(uniqueKeysWithValues: usable.map { ($0.qualified, $0.label) }))
+}
+
+private func exportControlStates(
+    in action: ActionExpr,
+    using symbols: ControlExportSymbols
+) -> ActionExpr {
+    func controlValue(_ expression: StateExpr) -> StateExpr {
+        switch expression {
+        case .value(.string(let value)):
+            return .value(.string(symbols.actionNames[value] ?? value))
+        case .except(let function, let key, let value):
+            return .except(function, key, controlValue(value))
+        case .tupleLiteral(let values):
+            return .tupleLiteral(values.map(controlValue))
+        case .tupleConcatenate(let lhs, let rhs):
+            return .tupleConcatenate(controlValue(lhs), controlValue(rhs))
+        case .recordLiteral(let fields):
+            return .recordLiteral(fields.mapValues(controlValue))
+        default:
+            return expression
+        }
+    }
+
+    func isControlReference(_ expression: StateExpr) -> Bool {
+        switch expression {
+        case .variable("pc"), .functionApply(.variable("pc"), _):
+            return true
+        default:
+            return false
+        }
+    }
+
+    func controlGuard(_ expression: StateExpr) -> StateExpr {
+        switch expression {
+        case .equal(let lhs, let rhs) where isControlReference(lhs):
+            return .equal(lhs, controlValue(rhs))
+        case .equal(let lhs, let rhs) where isControlReference(rhs):
+            return .equal(controlValue(lhs), rhs)
+        case .notEqual(let lhs, let rhs) where isControlReference(lhs):
+            return .notEqual(lhs, controlValue(rhs))
+        case .notEqual(let lhs, let rhs) where isControlReference(rhs):
+            return .notEqual(controlValue(lhs), rhs)
+        default:
+            return expression
+        }
+    }
+
+    switch action {
+    case .assign(let name, let value):
+        return .assign(name, name == "pc" || name == "stack" ? controlValue(value) : value)
+    case .unchanged, .chooseAction:
+        return action
+    case .guard_(let condition):
+        return .guard_(controlGuard(condition))
+    case .existsAction(let name, let set, let body):
+        return .existsAction(name, set, exportControlStates(in: body, using: symbols))
+    case .ifElse(let condition, let then, let otherwise):
+        return .ifElse(controlGuard(condition), exportControlStates(in: then, using: symbols), exportControlStates(in: otherwise, using: symbols))
+    case .define(let name, let value, let body):
+        return .define(name, value, exportControlStates(in: body, using: symbols))
+    case .and(let lhs, let rhs):
+        return .and(exportControlStates(in: lhs, using: symbols), exportControlStates(in: rhs, using: symbols))
+    case .or(let lhs, let rhs):
+        return .or(exportControlStates(in: lhs, using: symbols), exportControlStates(in: rhs, using: symbols))
     }
 }
 
