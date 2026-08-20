@@ -53,7 +53,7 @@ If a model has `Algorithm` source, its authored PlusCal export is also
 throwing:
 
 ```swift
-let bundle = try compilation.authoredPlusCalBundle()
+let bundle = try compilation.renderedPlusCalBundle()
 ```
 
 `AlgorithmPlusCalRenderDiagnostic` identifies an Algorithm node that has no

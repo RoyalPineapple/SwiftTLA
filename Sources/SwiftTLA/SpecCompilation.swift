@@ -66,8 +66,8 @@ public struct DirectModuleSectionPlan: Sendable, Equatable {
 /// pipeline stages can attach validated module and generated-machine plans
 /// without reparsing or rebuilding that payload.
 public struct CompiledSpecification: Sendable {
-    public let spec: TLASpec
-    public let formalModuleClosure: FormalModuleClosure
+    package let spec: TLASpec
+    package let formalModuleClosure: FormalModuleClosure
     public let identity: CompilationIdentity
     let layout: CompiledLayout
     let bindings: CompiledBindingTable
@@ -262,7 +262,7 @@ public struct CompiledSpecification: Sendable {
     /// The bundle keeps the same linked imports and configuration as direct
     /// TLA+ export. It is the only supported PlusCal export path: callers do
     /// not reconstruct a second bundle around renderer strings.
-    public func authoredPlusCalBundle(
+    public func renderedPlusCalBundle(
         additionalImports: [TLAModuleFile] = []
     ) throws -> TLAModuleBundle {
         guard let authoredPlusCalModule else {
