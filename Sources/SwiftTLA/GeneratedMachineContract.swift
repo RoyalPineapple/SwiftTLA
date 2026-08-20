@@ -233,7 +233,7 @@ public struct MachineSurfacePlan: Sendable, Equatable {
             guard let variable = variablesByName[layout.declaration.name] else {
                 throw Self.unknownFact("compiledLayout.variables.\(layout.declaration.name)")
             }
-            Variable(
+            return Variable(
                 formalName: layout.declaration.name,
                 swiftType: swiftFacts.variableTypes[layout.declaration.name] ?? Self.defaultSwiftType(for: variable.initial),
                 valueShape: .init(variable.initial),
@@ -245,7 +245,7 @@ public struct MachineSurfacePlan: Sendable, Equatable {
             guard let action = actionsByName[layout.declaration.name] else {
                 throw Self.unknownFact("compiledLayout.actions.\(layout.declaration.name)")
             }
-            Action(
+            return Action(
                 formalName: layout.declaration.name,
                 swiftIdentifier: identifier,
                 bindings: action.bindings.map { binding in
