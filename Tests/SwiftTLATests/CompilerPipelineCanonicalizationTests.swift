@@ -279,6 +279,33 @@ struct CompilerPipelineCanonicalizationTests {
         #expect(try #require(next.first).value(for: .init(ordinal: 0)) == .int(6))
     }
 
+    @Test("compiled runtime enumerates slot-backed initial and successor states")
+    func compiledRuntimeUsesSlotsForExecution() throws {
+        let spec = TLASpec(
+            name: "CompiledRuntime",
+            variables: [
+                .init(name: "counter", initial: .int(0)),
+                .init(name: "choice", initialSet: .setLiteral([.int(1), .int(2)]))
+            ],
+            actions: [
+                .init(
+                    name: "advance",
+                    body: .guard_(.lessThan(.variable("counter"), .variable("choice")))
+                        && .assign("counter", .add(.variable("counter"), .int(1)))
+                )
+            ],
+            invariants: [.init(name: "Bounded", body: .lessOrEqual(.variable("counter"), .variable("choice"))]
+        )
+        let compilation = try spec.compile()
+        let runtime = CompiledRuntime(compilation: compilation)
+        let initial = try runtime.initialStates()
+
+        #expect(initial.count == 2)
+        let firstSuccessor = try runtime.successors(from: try #require(initial.first))
+        #expect(firstSuccessor.count == 1)
+        #expect(try runtime.invariantHolds(compilation.model.invariants[0], in: firstSuccessor[0].state))
+    }
+
     @Test("compiled higher-order calls retain lambda binder identities")
     func compiledHigherOrderCallsUsePrivateIdentities() throws {
         let call = StateExpr.operatorApplication(
