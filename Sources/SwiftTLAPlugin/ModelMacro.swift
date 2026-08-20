@@ -513,12 +513,6 @@ private final class EnumDotRewriter: SyntaxRewriter {
     ]
 }
 
-enum GenerationMode {
-    case model
-    case actor
-    case observable
-}
-
 struct SimpleError: Error, CustomStringConvertible {
     let description: String
     init(_ description: String) { self.description = description }
@@ -531,11 +525,8 @@ public struct ModelMacro: MemberMacro, ExtensionMacro {
         guard diagnoseStoredInstanceState(in: declaration, context: context) == false else {
             return []
         }
-        let conformances = hasNestedLiveAdapter(in: declaration)
-            ? "TLAModelType, TLAMachineExecuting, TLAMachineSchemaProviding, TLAGeneratedLiveModel"
-            : "TLAModelType, TLAMachineExecuting, TLAMachineSchemaProviding"
         guard let ext = ("""
-            extension \(type.trimmed): \(raw: conformances) {}
+            extension \(type.trimmed): TLAModelType, TLAMachineExecuting, TLAMachineSchemaProviding {}
             """ as DeclSyntax).as(ExtensionDeclSyntax.self) else { return [] }
         return [ext]
     }
@@ -552,7 +543,7 @@ public struct ModelMacro: MemberMacro, ExtensionMacro {
             return []
         }
         NestedAdapterModelRegistry.record(parsed)
-        return MacroExpander.generate(mode: .model, model: parsed)
+        return MacroExpander.generate(model: parsed)
     }
 }
 

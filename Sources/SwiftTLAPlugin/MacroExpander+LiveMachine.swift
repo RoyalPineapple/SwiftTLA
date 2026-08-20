@@ -5,19 +5,16 @@ extension MacroExpander {
     static func generateLiveMachineMembers(model: MacroCompilation) -> [DeclSyntax] {
         let typeName = model.typeName
         let hasActions = !model.machineSurface.actions.isEmpty
-        let identityRoutedNames = model.machineSurface.collectionActions.keys.sorted()
-            .map { "\"\($0)\"" }
-            .joined(separator: ", ")
 
         let typedExecute: [String] = hasActions ? [
             """
-                public func execute(_ action: ActionLabel, requestID: Foundation.UUID = Foundation.UUID()) async -> Outcome {
-                    switch await _machine.execute(action, requestID: requestID) {
+                public func execute(_ action: ActionLabel, requestID: Foundation.UUID = Foundation.UUID()) async throws -> Outcome {
+                    switch await _handle.execute(action.toInvocation(), requestID: requestID) {
                     case .committed(let commit):
                         return .committed(TransitionResult(
                             action: action,
-                            before: try! State(projection: commit.before.state),
-                            after: try! State(projection: commit.after.state)
+                            before: try State(projection: commit.before.state),
+                            after: try State(projection: commit.after.state)
                         ))
                     case .rejected(let rejection):
                         return .rejected(rejection)
@@ -40,35 +37,35 @@ extension MacroExpander {
 
         let liveMembers = ([
             """
-                private let _machine: GeneratedLiveMachine<\(typeName)>
+                fileprivate let _handle: TLALiveMachine
 
                 public init(handle: TLALiveMachine) throws {
-                    _machine = try GeneratedLiveMachine(handle: handle)
+                    guard handle.schema == \(typeName).machineSchema else {
+                        throw GeneratedMachineError.liveMachineSchemaMismatch(
+                            expected: \(typeName).machineSchema.identifier,
+                            actual: handle.schema.identifier
+                        )
+                    }
+                    _handle = handle
                 }
 
-                public var handle: TLALiveMachine { _machine.handle }
+                public var identity: TLALiveMachineIdentity { _handle.identity }
 
-                public var identity: TLALiveMachineIdentity { _machine.identity }
+                public var schema: MachineSchema { _handle.schema }
 
-                public var schema: MachineSchema { _machine.schema }
-
-                public func current() async -> CurrentResult {
-                    switch await _machine.current() {
+                public func current() async throws -> CurrentResult {
+                    switch await _handle.current() {
                     case .snapshot(let snapshot):
                         return .snapshot(.init(
                             identity: snapshot.identity,
                             position: snapshot.position,
-                            state: try! State(projection: snapshot.state)
+                            state: try State(projection: snapshot.state)
                         ))
                     case .unavailable(let reason):
                         return .unavailable(reason)
                     }
                 }
-
-                public func execute(_ invocation: TLAActionInvocation, requestID: Foundation.UUID = Foundation.UUID()) async -> TLALiveActionOutcome {
-                    await _machine.execute(invocation, requestID: requestID)
-                }
-            """,
+            """
         ] + typedExecute + [
             """
                 public enum CurrentResult: Sendable, Equatable {
@@ -91,17 +88,51 @@ extension MacroExpander {
                         }
                     }
                 }
-            """,
+            """
         ] + outcomeType).joined(separator: "\n\n")
 
         return [
             DeclSyntax(stringLiteral: """
-            public static func decodeState(_ projection: TLAStateProjection) throws {
-                _ = try State(projection: projection)
+            private static func _liveDriver(_ runtime: SpecRuntime) -> TLALiveMachineTransitionDriver {
+                let actions = Dictionary(uniqueKeysWithValues: runtime.spec.actions.map { ($0.name, $0) })
+                let identityRouted = _identityRoutedActionNames
+                return TLALiveMachineTransitionDriver(
+                    successors: { state, invocation in
+                        try runtime.successors(invocation, from: state)
+                    },
+                    availableInvocations: { state in
+                        try runtime.availableInvocations(in: state).filter { !identityRouted.contains($0.name) }
+                    },
+                    validateInvocation: { invocation in
+                        guard let action = actions[invocation.name] else { return .unknownAction }
+                        guard action.bindings.count == invocation.arguments.count else { return .invalidArity }
+                        for (binding, argument) in zip(action.bindings, invocation.arguments)
+                        where !binding.values.contains(argument) {
+                            return .actionArgumentOutOfDomain
+                        }
+                        return identityRouted.contains(invocation.name)
+                            ? .identityRoutedActionRequiresID
+                            : nil
+                    },
+                    decodeState: { state in
+                        _ = try State(projection: state)
+                    }
+                )
             }
             """),
             DeclSyntax(stringLiteral: """
-            public static let identityRoutedActionNames: Set<String> = [\(identityRoutedNames)]
+            public static func makeLiveOwner() throws -> TLALiveMachineOwner {
+                let runtime = try _runtime()
+                guard let initial = try runtime.initialStateProjections().first else {
+                    throw GeneratedMachineError.noInitialState
+                }
+                _ = try State(projection: initial)
+                return TLALiveMachineOwner.create(
+                    schema: machineSchema,
+                    initial: initial,
+                    driver: _liveDriver(runtime)
+                )
+            }
             """),
             DeclSyntax(stringLiteral: """
             public struct Live: Sendable {

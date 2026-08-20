@@ -35,15 +35,10 @@ extension MacroExpander {
         var declarations = commonAdapterAliases(model: model)
         declarations += [
             DeclSyntax(stringLiteral: "private let _live: Live"),
-            DeclSyntax(stringLiteral: "public init(handle: TLALiveMachine) async throws { _ = try await TLALiveMachineAdapterBinding(handle: handle, for: CanonicalModel.self); _live = try Live(handle: handle) }"),
-            DeclSyntax(stringLiteral: "public var handle: TLALiveMachine { _live.handle }"),
+            DeclSyntax(stringLiteral: "public init(handle: TLALiveMachine) throws { _live = try Live(handle: handle) }"),
+            DeclSyntax(stringLiteral: "public var handle: TLALiveMachine { _live._handle }"),
             DeclSyntax(stringLiteral: "public var identity: TLALiveMachineIdentity { _live.identity }"),
-            DeclSyntax(stringLiteral: "public func current() async -> Live.CurrentResult { await _live.current() }"),
-            DeclSyntax(stringLiteral: """
-            public func execute(_ invocation: TLAActionInvocation, requestID: Foundation.UUID = Foundation.UUID()) async -> TLALiveActionOutcome {
-                await _live.execute(invocation, requestID: requestID)
-            }
-            """)
+            DeclSyntax(stringLiteral: "public func current() async throws -> Live.CurrentResult { try await _live.current() }")
         ]
         declarations += typedAdapterActions(model: model, receiver: "_live")
         return declarations
@@ -58,7 +53,6 @@ extension MacroExpander {
             DeclSyntax(stringLiteral: "private var _observationTask: Task<Void, Never>?"),
             DeclSyntax(stringLiteral: """
             @MainActor public init(handle: TLALiveMachine) async throws {
-                _ = try TLALiveMachineAdapterBinding(handle: handle, for: CanonicalModel.self)
                 _live = try Live(handle: handle)
                 _reducer = TLALiveMachineObservableReducer(
                     identity: handle.identity,
@@ -67,7 +61,7 @@ extension MacroExpander {
                 )
                 switch await handle.observe() {
                 case .attached(let subscription): _subscription = subscription
-                case .unavailable(let reason): throw TLALiveMachineAdapterBindingError.runtimeUnavailable(reason)
+                case .unavailable(let reason): throw GeneratedMachineError.liveMachineUnavailable(reason)
                 }
                 _observationTask = Task { [weak self, subscription = _subscription] in
                     var iterator = subscription.makeAsyncIterator()
@@ -79,7 +73,7 @@ extension MacroExpander {
             }
             """),
             DeclSyntax(stringLiteral: "deinit { _observationTask?.cancel() }"),
-            DeclSyntax(stringLiteral: "public var handle: TLALiveMachine { _live.handle }"),
+            DeclSyntax(stringLiteral: "public var handle: TLALiveMachine { _live._handle }"),
             DeclSyntax(stringLiteral: "public var identity: TLALiveMachineIdentity { _live.identity }"),
             DeclSyntax(stringLiteral: "public var status: TLALiveMachineAdapterStatus { _reducer.status }"),
             DeclSyntax(stringLiteral: "public var current: TLALiveMachineAdapterSnapshot<State>? { _reducer.current }"),
@@ -88,11 +82,6 @@ extension MacroExpander {
             public func cancelObservation() async {
                 _observationTask?.cancel()
                 await _subscription.cancel()
-            }
-            """),
-            DeclSyntax(stringLiteral: """
-            public func execute(_ invocation: TLAActionInvocation, requestID: Foundation.UUID = Foundation.UUID()) async -> TLALiveActionOutcome {
-                await _live.execute(invocation, requestID: requestID)
             }
             """),
             DeclSyntax(stringLiteral: observableReducerMethod(model: model))
@@ -110,8 +99,8 @@ extension MacroExpander {
                 ? "requestID: Foundation.UUID = Foundation.UUID()"
                 : "\(parameters), requestID: Foundation.UUID = Foundation.UUID()"
             return DeclSyntax(stringLiteral: """
-            public func _\(action.swiftIdentifier)(\(signature)) async -> Outcome {
-                await \(receiver).execute(\(label), requestID: requestID)
+            public func _\(action.swiftIdentifier)(\(signature)) async throws -> Outcome {
+                try await \(receiver).execute(\(label), requestID: requestID)
             }
             """)
         }

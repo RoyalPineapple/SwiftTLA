@@ -10,10 +10,10 @@ import SwiftTLA
 /// Generates a typed model machine from the declaration's `TLASpec`.
 ///
 /// The generated surface includes `State`, `ActionLabel`, `TransitionResult`,
-/// execution methods, bounded verification helpers, and a typed `Live` facade
-/// bound to the common live runtime.
+/// execution methods, bounded verification helpers, and typed live-machine
+/// members when the model contains a nested live adapter.
 @attached(member, names: arbitrary)
-@attached(extension, conformances: TLAModelType, TLAMachineExecuting, TLAMachineSchemaProviding, TLAGeneratedLiveModel, names: arbitrary)
+@attached(extension, conformances: TLAModelType, TLAMachineExecuting, TLAMachineSchemaProviding, names: arbitrary)
 public macro TLAModel() = #externalMacro(module: "SwiftTLAPlugin", type: "ModelMacro")
 
 /// Requires a nested actor and generates an adapter for its enclosing `@TLAModel`.

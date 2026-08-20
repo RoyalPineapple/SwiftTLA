@@ -39,12 +39,12 @@ struct CounterScreenModel {
 
 @MainActor
 func runObservable() async throws {
-    let owner = try TLALiveMachineOwner.create(for: CounterScreenModel.self)
+    let owner = try CounterScreenModel.makeLiveOwner()
     let observable = try await CounterScreenModel.Observable(handle: owner.handle)
     observable.onAdvance = { before, after in
         assert(before.value == 0)
         assert(after.value == 1)
     }
-    let result = await observable.execute(CounterScreenModel.Observable.ActionLabel.advance.toInvocation())
+    let result = try await observable._advance()
     guard case .committed = result else { return }
 }
