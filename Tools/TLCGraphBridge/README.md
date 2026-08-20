@@ -2,7 +2,7 @@
 
 `LosslessStateWriter` is a version-bound transport adapter for TLC v1.8.0. It
 records the complete `IStateWriter` callback surface as append-only
-`TLCGraphEventV1` JSONL. It does not evaluate expressions, infer successors,
+`TLCGraphEvent` JSONL. It does not evaluate expressions, infer successors,
 canonicalize values, or compare graphs.
 
 The supported schema is `swifttla.tlc.graph-events` version 1. It has a

@@ -1,1 +1,1 @@
-{"schema":"PublicWorkflowParserBuilderNotApplicableV1","reason":"This parser-builder comparison executes SwiftTLA and SwiftSyntax only; TLC, Java, and a separately-built bridge binary are not inputs."}
+{"schema":"PublicWorkflowParserBuilderNotApplicable","reason":"This parser-builder comparison executes SwiftTLA and SwiftSyntax only; TLC, Java, and a separately-built bridge binary are not inputs."}

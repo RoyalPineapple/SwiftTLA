@@ -1,45 +1,45 @@
 import Foundation
 import SwiftTLA
 
-public enum CanonicalSchemaErrorV1: Error, Equatable, Sendable {
+public enum CanonicalSchemaError: Error, Equatable, Sendable {
     case unknownSchema(String)
 }
 
-public enum CanonicalSchemaV1: String, Hashable, Sendable {
-    case exactFiniteTLCGraphV1
+public enum CanonicalSchema: String, Hashable, Sendable {
+    case exactFiniteTLCGraph
 
     public init(validating rawValue: String) throws {
         guard let schema = Self(rawValue: rawValue) else {
-            throw CanonicalSchemaErrorV1.unknownSchema(rawValue)
+            throw CanonicalSchemaError.unknownSchema(rawValue)
         }
         self = schema
     }
 }
 
-public enum CanonicalValueV1: Hashable, Sendable {
+public enum CanonicalValue: Hashable, Sendable {
     case integer(Int)
     case boolean(Bool)
     case string(String)
     case constant(String)
-    case orderedSet([CanonicalValueV1])
-    case orderedTuple([CanonicalValueV1])
-    case orderedRecord([CanonicalRecordFieldV1])
-    case orderedFunction([CanonicalFunctionEntryV1])
+    case orderedSet([CanonicalValue])
+    case orderedTuple([CanonicalValue])
+    case orderedRecord([CanonicalRecordField])
+    case orderedFunction([CanonicalFunctionEntry])
 
-    public static func set(_ values: [CanonicalValueV1]) -> CanonicalValueV1 {
+    public static func set(_ values: [CanonicalValue]) -> CanonicalValue {
         .orderedSet(values.sorted { canonicalBytes($0.canonicalEncoding, $1.canonicalEncoding) })
     }
 
-    public static func tuple(_ values: [CanonicalValueV1]) -> CanonicalValueV1 {
+    public static func tuple(_ values: [CanonicalValue]) -> CanonicalValue {
         .orderedTuple(values)
     }
 
-    public static func record(_ fields: [String: CanonicalValueV1]) -> CanonicalValueV1 {
-        .orderedRecord(fields.map { CanonicalRecordFieldV1(name: $0.key, value: $0.value) }
+    public static func record(_ fields: [String: CanonicalValue]) -> CanonicalValue {
+        .orderedRecord(fields.map { CanonicalRecordField(name: $0.key, value: $0.value) }
             .sorted { canonicalBytes($0.name, $1.name) })
     }
 
-    public static func function(_ entries: [CanonicalFunctionEntryV1]) -> CanonicalValueV1 {
+    public static func function(_ entries: [CanonicalFunctionEntry]) -> CanonicalValue {
         let ordered = entries.sorted { canonicalBytes($0.key.canonicalEncoding, $1.key.canonicalEncoding) }
         precondition(
             Set(ordered.map(\.key)).count == ordered.count,
@@ -58,7 +58,7 @@ public enum CanonicalValueV1: Hashable, Sendable {
         case .tuple(let values): self = .tuple(values.map(Self.init))
         case .record(let fields): self = .record(fields.mapValues(Self.init))
         case .function(let entries):
-            self = .function(entries.map { CanonicalFunctionEntryV1(key: Self($0.key), value: Self($0.value)) })
+            self = .function(entries.map { CanonicalFunctionEntry(key: Self($0.key), value: Self($0.value)) })
         }
     }
 
@@ -80,27 +80,27 @@ public enum CanonicalValueV1: Hashable, Sendable {
     }
 }
 
-public struct CanonicalRecordFieldV1: Hashable, Sendable {
+public struct CanonicalRecordField: Hashable, Sendable {
     public let name: String
-    public let value: CanonicalValueV1
+    public let value: CanonicalValue
 
-    public init(name: String, value: CanonicalValueV1) {
+    public init(name: String, value: CanonicalValue) {
         self.name = name
         self.value = value
     }
 }
 
-public struct CanonicalFunctionEntryV1: Hashable, Sendable {
-    public let key: CanonicalValueV1
-    public let value: CanonicalValueV1
+public struct CanonicalFunctionEntry: Hashable, Sendable {
+    public let key: CanonicalValue
+    public let value: CanonicalValue
 
-    public init(key: CanonicalValueV1, value: CanonicalValueV1) {
+    public init(key: CanonicalValue, value: CanonicalValue) {
         self.key = key
         self.value = value
     }
 }
 
-public struct CanonicalStateKeyV1: Hashable, Sendable, Comparable, CustomStringConvertible {
+public struct CanonicalStateKey: Hashable, Sendable, Comparable, CustomStringConvertible {
     public let canonicalEncoding: String
 
     public init(canonicalEncoding: String) {
@@ -114,28 +114,28 @@ public struct CanonicalStateKeyV1: Hashable, Sendable, Comparable, CustomStringC
     }
 }
 
-public struct CanonicalStateV1: Hashable, Sendable {
-    public let bindings: [String: CanonicalValueV1]
+public struct CanonicalState: Hashable, Sendable {
+    public let bindings: [String: CanonicalValue]
 
-    public init(bindings: [String: CanonicalValueV1]) {
+    public init(bindings: [String: CanonicalValue]) {
         self.bindings = bindings
     }
 
-    public var key: CanonicalStateKeyV1 {
+    public var key: CanonicalStateKey {
         let fields = bindings.sorted { canonicalBytes($0.key, $1.key) }
             .map { "\(encodedBytes($0.key))=\($0.value.canonicalEncoding)" }
             .joined(separator: ",")
-        return CanonicalStateKeyV1(canonicalEncoding: "state:[\(fields)]")
+        return CanonicalStateKey(canonicalEncoding: "state:[\(fields)]")
     }
 }
 
-public struct CanonicalEdgeV1: Hashable, Sendable, Comparable {
-  public let source: CanonicalStateKeyV1
+public struct CanonicalEdge: Hashable, Sendable, Comparable {
+  public let source: CanonicalStateKey
   public let action: String
-  public let target: CanonicalStateKeyV1
+  public let target: CanonicalStateKey
   public let canonicalEncoding: String
 
-  public init(source: CanonicalStateKeyV1, action: String, target: CanonicalStateKeyV1) {
+  public init(source: CanonicalStateKey, action: String, target: CanonicalStateKey) {
     self.source = source
     self.action = action
     self.target = target
@@ -148,7 +148,7 @@ public struct CanonicalEdgeV1: Hashable, Sendable, Comparable {
 
 }
 
-public struct CanonicalStateObservationV1: Hashable, Sendable {
+public struct CanonicalStateObservation: Hashable, Sendable {
     public let enabledActions: Set<String>
     public let isTerminal: Bool
 
@@ -158,26 +158,26 @@ public struct CanonicalStateObservationV1: Hashable, Sendable {
     }
 }
 
-public enum CanonicalGraphErrorV1: Error, Equatable, Sendable {
+public enum CanonicalGraphError: Error, Equatable, Sendable {
     case inconsistentStateBindings(expected: Set<String>, actual: Set<String>)
-    case initialStateMissing(CanonicalStateKeyV1)
-    case edgeStateMissing(CanonicalStateKeyV1)
+    case initialStateMissing(CanonicalStateKey)
+    case edgeStateMissing(CanonicalStateKey)
 }
 
-public struct CanonicalGraphV1: Equatable, Sendable {
-    public let initialStateKeys: Set<CanonicalStateKeyV1>
-    public let states: [CanonicalStateKeyV1: CanonicalStateV1]
-    public let edgeOccurrences: [CanonicalEdgeV1: Int]
+public struct CanonicalGraph: Equatable, Sendable {
+    public let initialStateKeys: Set<CanonicalStateKey>
+    public let states: [CanonicalStateKey: CanonicalState]
+    public let edgeOccurrences: [CanonicalEdge: Int]
 
     public init(
-        initialStates: [CanonicalStateV1],
-        states: [CanonicalStateV1],
-        edges: some Sequence<CanonicalEdgeV1>
+        initialStates: [CanonicalState],
+        states: [CanonicalState],
+        edges: some Sequence<CanonicalEdge>
     ) throws {
         let stateTable = Dictionary(uniqueKeysWithValues: states.map { ($0.key, $0) })
         let expectedBindings = stateTable.values.first.map { Set($0.bindings.keys) } ?? []
         for state in stateTable.values where Set(state.bindings.keys) != expectedBindings {
-            throw CanonicalGraphErrorV1.inconsistentStateBindings(
+            throw CanonicalGraphError.inconsistentStateBindings(
                 expected: expectedBindings,
                 actual: Set(state.bindings.keys)
             )
@@ -185,16 +185,16 @@ public struct CanonicalGraphV1: Equatable, Sendable {
 
         let initialKeys = Set(initialStates.map(\.key))
         for key in initialKeys where stateTable[key] == nil {
-            throw CanonicalGraphErrorV1.initialStateMissing(key)
+            throw CanonicalGraphError.initialStateMissing(key)
         }
 
-        var occurrences: [CanonicalEdgeV1: Int] = [:]
+        var occurrences: [CanonicalEdge: Int] = [:]
         for edge in edges {
             guard stateTable[edge.source] != nil else {
-                throw CanonicalGraphErrorV1.edgeStateMissing(edge.source)
+                throw CanonicalGraphError.edgeStateMissing(edge.source)
             }
             guard stateTable[edge.target] != nil else {
-                throw CanonicalGraphErrorV1.edgeStateMissing(edge.target)
+                throw CanonicalGraphError.edgeStateMissing(edge.target)
             }
             occurrences[edge, default: 0] += 1
         }
@@ -208,13 +208,13 @@ public struct CanonicalGraphV1: Equatable, Sendable {
         states.values.first.map { Set($0.bindings.keys) } ?? []
     }
 
-    public var observations: [CanonicalStateKeyV1: CanonicalStateObservationV1] {
-        let enabledByState = edgeOccurrences.keys.reduce(into: [CanonicalStateKeyV1: Set<String>]()) { result, edge in
+    public var observations: [CanonicalStateKey: CanonicalStateObservation] {
+        let enabledByState = edgeOccurrences.keys.reduce(into: [CanonicalStateKey: Set<String>]()) { result, edge in
             result[edge.source, default: []].insert(edge.action)
         }
         return Dictionary(uniqueKeysWithValues: states.keys.map { key in
             let enabledActions = enabledByState[key, default: []]
-            return (key, CanonicalStateObservationV1(
+            return (key, CanonicalStateObservation(
                 enabledActions: enabledActions,
                 isTerminal: enabledActions.isEmpty
             ))
@@ -222,10 +222,10 @@ public struct CanonicalGraphV1: Equatable, Sendable {
     }
 }
 
-public enum CanonicalOutcomeV1: Hashable, Sendable {
+public enum CanonicalOutcome: Hashable, Sendable {
     case exhaustiveSuccess
     case invariantViolation(String)
-    case deadlock(CanonicalStateKeyV1)
+    case deadlock(CanonicalStateKey)
     case incomplete(reason: String)
     case executionError(String)
 
@@ -235,7 +235,7 @@ public enum CanonicalOutcomeV1: Hashable, Sendable {
     }
 }
 
-public struct CanonicalDiagnosticV1: Hashable, Sendable {
+public struct CanonicalDiagnostic: Hashable, Sendable {
     public let code: String
     public let message: String
 
@@ -245,62 +245,62 @@ public struct CanonicalDiagnosticV1: Hashable, Sendable {
     }
 }
 
-public struct CanonicalTraceStepV1: Hashable, Sendable {
-    public let state: CanonicalStateKeyV1
+public struct CanonicalTraceStep: Hashable, Sendable {
+    public let state: CanonicalStateKey
     public let action: String
 
-    public init(state: CanonicalStateKeyV1, action: String) {
+    public init(state: CanonicalStateKey, action: String) {
         self.state = state
         self.action = action
     }
 }
 
-public struct CanonicalTraceV1: Hashable, Sendable {
+public struct CanonicalTrace: Hashable, Sendable {
     public let id: String
-    public let steps: [CanonicalTraceStepV1]
+    public let steps: [CanonicalTraceStep]
 
-    public init(id: String, steps: [CanonicalTraceStepV1]) {
+    public init(id: String, steps: [CanonicalTraceStep]) {
         self.id = id
         self.steps = steps
     }
 }
 
-public enum CanonicalRunErrorV1: Error, Equatable, Sendable {
+public enum CanonicalRunError: Error, Equatable, Sendable {
     case duplicateTraceID(String)
     case graphActionUndeclared(String)
-    case deadlockStateMissing(CanonicalStateKeyV1)
-    case traceStateMissing(CanonicalStateKeyV1)
+    case deadlockStateMissing(CanonicalStateKey)
+    case traceStateMissing(CanonicalStateKey)
 }
 
-public struct CanonicalRunV1: Equatable, Sendable {
-    public let schema: CanonicalSchemaV1
-    public let graph: CanonicalGraphV1
+public struct CanonicalRun: Equatable, Sendable {
+    public let schema: CanonicalSchema
+    public let graph: CanonicalGraph
     public let observableActions: Set<String>
-    public let outcome: CanonicalOutcomeV1
-    public let errors: [CanonicalDiagnosticV1]
-    public let traces: [CanonicalTraceV1]
+    public let outcome: CanonicalOutcome
+    public let errors: [CanonicalDiagnostic]
+    public let traces: [CanonicalTrace]
 
     public init(
-        schema: CanonicalSchemaV1 = .exactFiniteTLCGraphV1,
-        graph: CanonicalGraphV1,
+        schema: CanonicalSchema = .exactFiniteTLCGraph,
+        graph: CanonicalGraph,
         observableActions: Set<String>,
-        outcome: CanonicalOutcomeV1,
-        errors: [CanonicalDiagnosticV1] = [],
-        traces: [CanonicalTraceV1] = []
+        outcome: CanonicalOutcome,
+        errors: [CanonicalDiagnostic] = [],
+        traces: [CanonicalTrace] = []
     ) throws {
         let traceIDs = traces.map(\.id)
         guard Set(traceIDs).count == traceIDs.count else {
-            throw CanonicalRunErrorV1.duplicateTraceID(traceIDs.sorted().first ?? "")
+            throw CanonicalRunError.duplicateTraceID(traceIDs.sorted().first ?? "")
         }
         for edge in graph.edgeOccurrences.keys where !observableActions.contains(edge.action) {
-            throw CanonicalRunErrorV1.graphActionUndeclared(edge.action)
+            throw CanonicalRunError.graphActionUndeclared(edge.action)
         }
         if case .deadlock(let state) = outcome, graph.states[state] == nil {
-            throw CanonicalRunErrorV1.deadlockStateMissing(state)
+            throw CanonicalRunError.deadlockStateMissing(state)
         }
         for trace in traces {
             for step in trace.steps where graph.states[step.state] == nil {
-                throw CanonicalRunErrorV1.traceStateMissing(step.state)
+                throw CanonicalRunError.traceStateMissing(step.state)
             }
         }
 

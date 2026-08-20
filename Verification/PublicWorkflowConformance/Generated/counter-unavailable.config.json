@@ -1,1 +1,1 @@
-{"schema":"PublicWorkflowGeneratedFixtureConfigurationV1","fixtureID":"p4-generated-counter-evaluation-unavailable","maxStates":2,"actionNames":["advance"],"expectedOutcome":"difference"}
+{"schema":"PublicWorkflowGeneratedFixtureConfiguration","fixtureID":"p4-generated-counter-evaluation-unavailable","maxStates":2,"actionNames":["advance"],"expectedOutcome":"difference"}

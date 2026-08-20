@@ -42,7 +42,7 @@ The current requested entries are limited to these exact finite cases:
 | HourClock `HCnxt` transitions | `hour-clock` | One integer variable over `1...12`; 12 labeled transitions. |
 | DieHard `TypeOK` safety | `die-hard-type-ok` | Two jug variables, bounded `0...5` and `0...3`; 16 states. |
 
-The graph relation is `exactFiniteTLCGraphV1`: initial states, state bindings,
+The graph relation is `exactFiniteTLCGraph`: initial states, state bindings,
 labeled transitions, and outcome must all agree for the declared case.
 
 The altered HourClock edge and failing DieHard `NotSolved` invariant are
@@ -80,7 +80,7 @@ same gate run.
 
 ## Read a report
 
-`support-admission.json` is `CoreSupportAdmissionV1`. It contains:
+`support-admission.json` is `CoreSupportAdmission`. It contains:
 
 - The gate run ID and the fixed authority statement.
 - One decision for each support entry: `admitted`, `blocked`, or `unsupported`.

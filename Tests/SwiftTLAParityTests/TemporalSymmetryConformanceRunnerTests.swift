@@ -8,13 +8,13 @@ struct TemporalSymmetryConformanceRunnerTests {
   func retainsBoundedSwiftPreparationRecords() throws {
     let root = projectRoot()
     let casesURL = root.appendingPathComponent("Verification/TemporalSymmetryConformance/cases.json")
-    let cases = try JSONDecoder().decode(TemporalSymmetryCasesV1.self, from: Data(contentsOf: casesURL))
+    let cases = try JSONDecoder().decode(TemporalSymmetryCases.self, from: Data(contentsOf: casesURL))
     let output = root.appendingPathComponent(".build/temporal-symmetry-runner-test-\(UUID().uuidString)")
     defer { try? FileManager.default.removeItem(at: output) }
 
     let gateRunID = UUID()
-    let records = try TemporalSymmetryConformanceRunnerV1().run(
-      TemporalSymmetryConformanceRunnerInputV1(
+    let records = try TemporalSymmetryConformanceRunner().run(
+      TemporalSymmetryConformanceRunnerInput(
         cases: cases, gateRunID: gateRunID, projectRoot: root, outputDirectory: output))
 
     #expect(records.count == cases.cases.count)
@@ -28,7 +28,7 @@ struct TemporalSymmetryConformanceRunnerTests {
     for record in records {
       let retained = output.appendingPathComponent(record.caseID).appendingPathComponent("case-run.json")
       #expect(FileManager.default.fileExists(atPath: retained.path))
-      #expect(try JSONDecoder().decode(TemporalSymmetryCaseRunV1.self, from: Data(contentsOf: retained)) == record)
+      #expect(try JSONDecoder().decode(TemporalSymmetryCaseRun.self, from: Data(contentsOf: retained)) == record)
     }
   }
 
@@ -45,7 +45,7 @@ struct TemporalSymmetryConformanceRunnerTests {
       "temporal-strong-fairness-boundary": false
     ]
     for declaredCase in cases.cases where declaredCase.kind == .temporal {
-      let model = try #require(TemporalSymmetryModelCatalogV1.model(for: declaredCase))
+      let model = try #require(TemporalSymmetryModelCatalog.model(for: declaredCase))
       let result = try ModelChecker(spec: model.spec, maxStates: model.maxStates).checkLiveness()
       let isSatisfied: Bool
       if case .ok = result.underlyingOutcome { isSatisfied = true } else { isSatisfied = false }
@@ -62,8 +62,8 @@ struct TemporalSymmetryConformanceRunnerTests {
 
     #expect(!FileManager.default.fileExists(atPath: output.path))
     let cases = try registeredCases()
-    let records = try TemporalSymmetryConformanceRunnerV1().run(
-      TemporalSymmetryConformanceRunnerInputV1(
+    let records = try TemporalSymmetryConformanceRunner().run(
+      TemporalSymmetryConformanceRunnerInput(
         cases: cases, gateRunID: UUID(), projectRoot: projectRoot, outputDirectory: output))
     #expect(records.count == cases.cases.count)
     #expect(FileManager.default.fileExists(atPath: output.path))
@@ -71,9 +71,9 @@ struct TemporalSymmetryConformanceRunnerTests {
       atPath: output.appendingPathComponent(records[0].caseID).appendingPathComponent("case-run.json").path))
 
     let outside = URL(fileURLWithPath: "/private/tmp/\(UUID().uuidString)/evidence", isDirectory: true)
-    #expect(throws: TemporalSymmetryConformanceRunnerErrorV1.sourceOutsideProject(outside.path)) {
-      try TemporalSymmetryConformanceRunnerV1().run(
-        TemporalSymmetryConformanceRunnerInputV1(
+    #expect(throws: TemporalSymmetryConformanceRunnerError.sourceOutsideProject(outside.path)) {
+      try TemporalSymmetryConformanceRunner().run(
+        TemporalSymmetryConformanceRunnerInput(
           cases: cases, gateRunID: UUID(), projectRoot: projectRoot, outputDirectory: outside))
     }
     #expect(!FileManager.default.fileExists(atPath: outside.path))
@@ -102,9 +102,9 @@ struct TemporalSymmetryConformanceRunnerTests {
     #expect(!result.output.contains("evidence must be retained inside the project"))
   }
 
-  private func registeredCases() throws -> TemporalSymmetryCasesV1 {
+  private func registeredCases() throws -> TemporalSymmetryCases {
     try JSONDecoder().decode(
-      TemporalSymmetryCasesV1.self,
+      TemporalSymmetryCases.self,
       from: Data(contentsOf: projectRoot().appendingPathComponent("Verification/TemporalSymmetryConformance/cases.json")))
   }
 

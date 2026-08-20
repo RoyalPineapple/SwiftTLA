@@ -1,15 +1,15 @@
 import Foundation
 
 struct Correlations {
-  let swift: CoreConformanceCorrelationV1
-  let tlc: CoreConformanceCorrelationV1
-  let runner: CoreConformanceCorrelationV1
+  let swift: CoreConformanceCorrelation
+  let tlc: CoreConformanceCorrelation
+  let runner: CoreConformanceCorrelation
   init(caseID: String, runID: UUID) {
-    swift = CoreConformanceCorrelationV1(caseID: caseID, runID: runID, engine: .swift)
-    tlc = CoreConformanceCorrelationV1(caseID: caseID, runID: runID, engine: .tlc)
-    runner = CoreConformanceCorrelationV1(caseID: caseID, runID: runID, engine: .runner)
+    swift = CoreConformanceCorrelation(caseID: caseID, runID: runID, engine: .swift)
+    tlc = CoreConformanceCorrelation(caseID: caseID, runID: runID, engine: .tlc)
+    runner = CoreConformanceCorrelation(caseID: caseID, runID: runID, engine: .runner)
   }
-  subscript(engine: CoreConformanceEngineV1) -> CoreConformanceCorrelationV1 {
+  subscript(engine: CoreConformanceEngine) -> CoreConformanceCorrelation {
     switch engine {
     case .swift: swift
     case .tlc: tlc
@@ -33,7 +33,7 @@ struct Correlations {
     ]
   }
 }
-enum TLCInvocationPhaseV1: String, Hashable {
+enum TLCInvocationPhase: String, Hashable {
   case primary
   case trace
   case replay

@@ -1,5 +1,5 @@
 {
-  "schema": "TemporalSymmetryBaselineManifestV1",
+  "schema": "TemporalSymmetryBaselineManifest",
   "role": "declared-input-baseline",
   "currentEvidenceRequired": true,
   "cases": "Verification/TemporalSymmetryConformance/cases.json",

@@ -84,7 +84,7 @@ The report and the evidence for one immutable run are below:
 .build/public-workflow-support-gate/runs/<run-id>/
 ```
 
-Despite its filename, the current `PublicWorkflowDiagnosticReportV1` records
+Despite its filename, the current `PublicWorkflowDiagnosticReport` records
 `claimStatus` as `diagnosticOnly` or `candidateEvidence`; consumers must read
 that field and `authority`, not infer admission from the path or an exit code.
 Each check references its retained manifests, observations, results, stdout,

@@ -99,8 +99,8 @@ struct PublicWorkflowGeneratedBehaviorTests {
     }
     defer { try? FileManager.default.removeItem(at: manifestURL) }
 
-    #expect(throws: PublicWorkflowGovernanceErrorV1.self) {
-      _ = try PublicWorkflowGeneratedBehaviorAdapterV1().run(
+    #expect(throws: PublicWorkflowGovernanceError.self) {
+      _ = try PublicWorkflowGeneratedBehaviorAdapter().run(
         manifestURL: manifestURL,
         projectRoot: fixture.repository,
         outputDirectory: fixture.outputDirectory(),
@@ -117,7 +117,7 @@ struct PublicWorkflowGeneratedBehaviorTests {
     let output = equivalentRoot.appending(path: "Tests/Fixtures/PublicWorkflowConformance/Generated/.test-output-\(UUID().uuidString)")
     defer { try? FileManager.default.removeItem(at: output) }
 
-    let run = try PublicWorkflowGeneratedBehaviorAdapterV1().run(
+    let run = try PublicWorkflowGeneratedBehaviorAdapter().run(
       manifestURL: fixture.manifestURL,
       projectRoot: fixture.repository,
       outputDirectory: output,
@@ -146,12 +146,12 @@ struct PublicWorkflowGeneratedBehaviorTests {
         .resolvingSymlinksInPath()
         .standardizedFileURL
       manifestURL = repository.appending(path: "Verification/PublicWorkflowConformance/generated-behavior.json")
-      _ = try PublicWorkflowGeneratedBehaviorManifestV1.load(Data(contentsOf: manifestURL))
+      _ = try PublicWorkflowGeneratedBehaviorManifest.load(Data(contentsOf: manifestURL))
     }
 
-    func run(id: String) throws -> (PublicWorkflowGeneratedBehaviorRunV1, URL) {
+    func run(id: String) throws -> (PublicWorkflowGeneratedBehaviorRun, URL) {
       let output = outputDirectory()
-      let run = try PublicWorkflowGeneratedBehaviorAdapterV1().run(
+      let run = try PublicWorkflowGeneratedBehaviorAdapter().run(
         manifestURL: manifestURL,
         projectRoot: repository,
         outputDirectory: output,
@@ -159,17 +159,17 @@ struct PublicWorkflowGeneratedBehaviorTests {
       return (run, output)
     }
 
-    func correlation(for id: String) throws -> PublicWorkflowCaseRunCorrelationV1 {
-      try PublicWorkflowCaseRunCorrelationV1(
+    func correlation(for id: String) throws -> PublicWorkflowCaseRunCorrelation {
+      try PublicWorkflowCaseRunCorrelation(
         caseID: id,
         gateRunID: UUID(),
         fixtureRunID: UUID(),
         comparisonRunID: UUID())
     }
 
-    func observation(_ reference: CoreEvidenceReferenceV1) throws -> PublicWorkflowCanonicalObservationV1 {
+    func observation(_ reference: CoreEvidenceReference) throws -> PublicWorkflowCanonicalObservation {
       try JSONDecoder().decode(
-        PublicWorkflowCanonicalObservationV1.self,
+        PublicWorkflowCanonicalObservation.self,
         from: Data(contentsOf: repository.appending(path: reference.path)))
     }
 

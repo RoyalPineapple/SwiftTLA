@@ -3,18 +3,18 @@ import Testing
 import UpstreamParity
 
 private struct EvidenceFailure {
-  let evidence: TemporalSymmetryCaseEvidenceV1?
+  let evidence: TemporalSymmetryCaseEvidence?
   let gateRunID: UUID
   let manifest: String
   let toolchain: String
-  let reason: TemporalSymmetryReasonCodeV1
+  let reason: TemporalSymmetryReasonCode
 }
 
 struct TemporalSymmetrySupportGateTests {
   @Test("complete current exact temporal evidence admits only declared bounds")
   func admitsCurrentExactTemporalEvidence() throws {
     let fixture = try Fixture()
-    let report = TemporalSymmetrySupportGateV1().evaluate(try fixture.input())
+    let report = TemporalSymmetrySupportGate().evaluate(try fixture.input())
 
     #expect(report.finalExitClass == .success)
     #expect(report.entries.map(\.decision) == [.admitted])
@@ -39,7 +39,7 @@ struct TemporalSymmetrySupportGateTests {
             reason: .manifestDigestMismatch)
     ]
     for failure in failures {
-      let report = TemporalSymmetrySupportGateV1().evaluate(try fixture.input(
+      let report = TemporalSymmetrySupportGate().evaluate(try fixture.input(
         gateRunID: failure.gateRunID,
         evidence: failure.evidence.map { [$0] } ?? [],
         manifestSHA256: failure.manifest,
@@ -52,7 +52,7 @@ struct TemporalSymmetrySupportGateTests {
   @Test("a violated property without attributable lassos is unavailable")
   func missingTemporalWitnessIsUnavailable() throws {
     let fixture = try Fixture()
-    let report = TemporalSymmetrySupportGateV1().evaluate(try fixture.input(
+    let report = TemporalSymmetrySupportGate().evaluate(try fixture.input(
       evidence: [try fixture.evidence(comparison: try fixture.comparison(violatedWithoutLasso: true))]))
 
     #expect(report.finalExitClass == .unavailable)
@@ -62,7 +62,7 @@ struct TemporalSymmetrySupportGateTests {
   @Test("a current difference without a matching permanent fingerprint is unexplained")
   func unledgeredDifferenceBlocksTheClaim() throws {
     let fixture = try Fixture(expectedOutcome: .difference)
-    let report = TemporalSymmetrySupportGateV1().evaluate(try fixture.input(
+    let report = TemporalSymmetrySupportGate().evaluate(try fixture.input(
       evidence: [try fixture.evidence(comparison: try fixture.comparison(difference: true), fingerprint: "new-difference")]))
 
     #expect(report.finalExitClass == .blocked)
@@ -74,7 +74,7 @@ struct TemporalSymmetrySupportGateTests {
   @Test("linked divergences must be resolved with exact current evidence")
   func unresolvedLinkedDivergenceBlocksTheClaim() throws {
     let fixture = try Fixture(includeOpenDivergence: true)
-    let report = TemporalSymmetrySupportGateV1().evaluate(try fixture.input())
+    let report = TemporalSymmetrySupportGate().evaluate(try fixture.input())
 
     #expect(report.finalExitClass == .blocked)
     #expect(report.entries[0].reasonCodes.contains(.unresolvedDivergence))
@@ -83,7 +83,7 @@ struct TemporalSymmetrySupportGateTests {
   @Test("one unexplained case in a two-case entry is counted once and blocks admission")
   func twoCasesOneEntryCountsUnexplainedDifferenceOnce() throws {
     let fixture = try Fixture(caseIDs: ["first", "second"], supportCases: [["first", "second"]])
-    let report = TemporalSymmetrySupportGateV1().evaluate(try fixture.input(evidence: [
+    let report = TemporalSymmetrySupportGate().evaluate(try fixture.input(evidence: [
       try fixture.evidence(caseID: "first"),
       try fixture.evidence(caseID: "second", comparison: try fixture.comparison(caseID: "second", difference: true), fingerprint: "new-difference")
     ]))
@@ -98,7 +98,7 @@ struct TemporalSymmetrySupportGateTests {
   @Test("one unexplained mandatory case is counted once even when entries share it")
   func sharedUnexplainedCaseIsCountedOnce() throws {
     let fixture = try Fixture(caseIDs: ["shared"], supportCases: [["shared"], ["shared"]])
-    let report = TemporalSymmetrySupportGateV1().evaluate(try fixture.input(evidence: [
+    let report = TemporalSymmetrySupportGate().evaluate(try fixture.input(evidence: [
       try fixture.evidence(caseID: "shared", comparison: try fixture.comparison(caseID: "shared", difference: true), fingerprint: "new-difference")
     ]))
 
@@ -110,7 +110,7 @@ struct TemporalSymmetrySupportGateTests {
   @Test("an unledgered difference outside a requested entry blocks the whole requested surface")
   func unrelatedUnexplainedCaseBlocksAdmission() throws {
     let fixture = try Fixture(caseIDs: ["requested", "outside"], supportCases: [["requested"]])
-    let report = TemporalSymmetrySupportGateV1().evaluate(try fixture.input(evidence: [
+    let report = TemporalSymmetrySupportGate().evaluate(try fixture.input(evidence: [
       try fixture.evidence(caseID: "requested"),
       try fixture.evidence(caseID: "outside", comparison: try fixture.comparison(caseID: "outside", difference: true), fingerprint: "new-difference")
     ]))
@@ -123,23 +123,23 @@ struct TemporalSymmetrySupportGateTests {
   @Test("core admission must be current, correlated, and digest-bound")
   func invalidCoreAdmissionBlocksAsUnavailable() throws {
     let fixture = try Fixture()
-    let core = try TemporalSymmetryCoreAdmissionReferenceV1(
+    let core = try TemporalSymmetryCoreAdmissionReference(
       reportID: UUID(), gateRunID: UUID(), report: try fixture.reference("core-admission.json"))
-    let stale = try TemporalSymmetryCoreAdmissionContextV1(
+    let stale = try TemporalSymmetryCoreAdmissionContext(
       temporalSymmetryGateRunID: fixture.gateRunID, reportID: UUID(), coreGateRunID: core.gateRunID,
       reportPath: core.report.path, reportSHA256: core.report.sha256)
-    let foreign = try TemporalSymmetryCoreAdmissionContextV1(
+    let foreign = try TemporalSymmetryCoreAdmissionContext(
       temporalSymmetryGateRunID: UUID(), reportID: core.reportID, coreGateRunID: core.gateRunID,
       reportPath: core.report.path, reportSHA256: core.report.sha256)
-    let digestMismatch = try TemporalSymmetryCoreAdmissionContextV1(
+    let digestMismatch = try TemporalSymmetryCoreAdmissionContext(
       temporalSymmetryGateRunID: fixture.gateRunID, reportID: core.reportID, coreGateRunID: core.gateRunID,
       reportPath: core.report.path, reportSHA256: String(repeating: "b", count: 64))
     for (context, reason) in [
-      (stale, TemporalSymmetryReasonCodeV1.missingPrerequisite),
+      (stale, TemporalSymmetryReasonCode.missingPrerequisite),
       (foreign, .foreignRun),
       (digestMismatch, .manifestDigestMismatch)
     ] {
-      let report = TemporalSymmetrySupportGateV1().evaluate(try fixture.input(
+      let report = TemporalSymmetrySupportGate().evaluate(try fixture.input(
         coreAdmission: core, coreAdmissionContext: context))
       #expect(report.finalExitClass == .unavailable)
       #expect(report.entries[0].reasonCodes.contains(reason))
@@ -149,19 +149,19 @@ struct TemporalSymmetrySupportGateTests {
   private struct Fixture {
     let digest = String(repeating: "a", count: 64)
     let gateRunID = UUID()
-    let bounds: CoreFiniteBoundsV1
-    let cases: TemporalSymmetryCasesV1
-    let ledger: TemporalSymmetryDivergenceLedgerV1
-    let surface: TemporalSymmetrySupportSurfaceV1
+    let bounds: CoreFiniteBounds
+    let cases: TemporalSymmetryCases
+    let ledger: TemporalSymmetryDivergenceLedger
+    let surface: TemporalSymmetrySupportSurface
 
     init(
-      expectedOutcome: TemporalSymmetryExpectedOutcomeV1 = .exact,
+      expectedOutcome: TemporalSymmetryExpectedOutcome = .exact,
       includeOpenDivergence: Bool = false,
       caseIDs: [String] = ["temporal"],
       supportCases: [[String]]? = nil
     ) throws {
       let digest = String(repeating: "a", count: 64)
-      let bounds = try CoreFiniteBoundsV1(summary: "three states", limits: ["states": 3])
+      let bounds = try CoreFiniteBounds(summary: "three states", limits: ["states": 3])
       let source = try Self.makeCase(id: caseIDs[0], expectedOutcome: expectedOutcome, bounds: bounds, digest: digest)
       let regression = try Self.makeCase(id: "temporal-regression", expectedOutcome: .difference, bounds: bounds, digest: digest)
       self.bounds = bounds
@@ -173,17 +173,17 @@ struct TemporalSymmetrySupportGateTests {
           digest: digest
         )
       }
-      cases = try TemporalSymmetryCasesV1(cases: includeOpenDivergence ? declaredCases + [regression] : declaredCases)
+      cases = try TemporalSymmetryCases(cases: includeOpenDivergence ? declaredCases + [regression] : declaredCases)
       let supportCases = supportCases ?? [[source.id]]
       if includeOpenDivergence {
         let record = try Self.makeDivergence(source: source, regression: regression, bounds: bounds, digest: digest)
-        ledger = try TemporalSymmetryDivergenceLedgerV1(records: [record])
-        surface = try TemporalSymmetrySupportSurfaceV1(entries: try supportCases.enumerated().map {
+        ledger = try TemporalSymmetryDivergenceLedger(records: [record])
+        surface = try TemporalSymmetrySupportSurface(entries: try supportCases.enumerated().map {
           try Self.makeSurface(id: "temporal-scope-\($0.offset)", bounds: bounds, caseIDs: $0.element, linkedDivergences: [record.id])
         })
       } else {
-        ledger = try TemporalSymmetryDivergenceLedgerV1(records: [])
-        surface = try TemporalSymmetrySupportSurfaceV1(entries: try supportCases.enumerated().map {
+        ledger = try TemporalSymmetryDivergenceLedger(records: [])
+        surface = try TemporalSymmetrySupportSurface(entries: try supportCases.enumerated().map {
           try Self.makeSurface(id: "temporal-scope-\($0.offset)", bounds: bounds, caseIDs: $0.element)
         })
       }
@@ -191,22 +191,22 @@ struct TemporalSymmetrySupportGateTests {
 
     func input(
       gateRunID: UUID? = nil,
-      evidence: [TemporalSymmetryCaseEvidenceV1]? = nil,
+      evidence: [TemporalSymmetryCaseEvidence]? = nil,
       manifestSHA256: String? = nil,
       toolchainSHA256: String? = nil,
-      coreAdmission suppliedCoreAdmission: TemporalSymmetryCoreAdmissionReferenceV1? = nil,
-      coreAdmissionContext suppliedCoreAdmissionContext: TemporalSymmetryCoreAdmissionContextV1? = nil
-    ) throws -> TemporalSymmetryGateInputV1 {
+      coreAdmission suppliedCoreAdmission: TemporalSymmetryCoreAdmissionReference? = nil,
+      coreAdmissionContext suppliedCoreAdmissionContext: TemporalSymmetryCoreAdmissionContext? = nil
+    ) throws -> TemporalSymmetryGateInput {
       let currentGateRunID = gateRunID ?? self.gateRunID
-      let coreAdmission = try suppliedCoreAdmission ?? TemporalSymmetryCoreAdmissionReferenceV1(
+      let coreAdmission = try suppliedCoreAdmission ?? TemporalSymmetryCoreAdmissionReference(
         reportID: UUID(), gateRunID: UUID(), report: try reference("core-admission.json"))
-      let coreAdmissionContext = try suppliedCoreAdmissionContext ?? TemporalSymmetryCoreAdmissionContextV1(
+      let coreAdmissionContext = try suppliedCoreAdmissionContext ?? TemporalSymmetryCoreAdmissionContext(
         temporalSymmetryGateRunID: currentGateRunID,
         reportID: coreAdmission.reportID,
         coreGateRunID: coreAdmission.gateRunID,
         reportPath: coreAdmission.report.path,
         reportSHA256: coreAdmission.report.sha256)
-      return try TemporalSymmetryGateInputV1(
+      return try TemporalSymmetryGateInput(
         gateRunID: currentGateRunID,
         coreAdmission: coreAdmission,
         coreAdmissionContext: coreAdmissionContext,
@@ -216,48 +216,48 @@ struct TemporalSymmetrySupportGateTests {
 
     func evidence(
       caseID: String = "temporal",
-      status: TemporalSymmetryEvidenceStatusV1 = .complete,
-      correlation: TemporalSymmetryCaseRunCorrelationV1? = nil,
-      comparison: TemporalComparisonV1? = nil,
+      status: TemporalSymmetryEvidenceStatus = .complete,
+      correlation: TemporalSymmetryCaseRunCorrelation? = nil,
+      comparison: TemporalComparison? = nil,
       fingerprint: String? = nil
-    ) throws -> TemporalSymmetryCaseEvidenceV1 {
+    ) throws -> TemporalSymmetryCaseEvidence {
       let comparison = try comparison ?? self.comparison(caseID: caseID, correlation: correlation)
-      return try TemporalSymmetryCaseEvidenceV1(
+      return try TemporalSymmetryCaseEvidence(
         comparison: .temporal(comparison), comparisonEvidence: try reference("temporal-comparison.json"),
         manifestSHA256: digest, toolchainSHA256: digest, status: status, normalizedDifferenceFingerprint: fingerprint)
     }
 
-    func correlation(caseID: String = "temporal", gateRunID: UUID) throws -> TemporalSymmetryCaseRunCorrelationV1 {
-      try TemporalSymmetryCaseRunCorrelationV1(
+    func correlation(caseID: String = "temporal", gateRunID: UUID) throws -> TemporalSymmetryCaseRunCorrelation {
+      try TemporalSymmetryCaseRunCorrelation(
         caseID: caseID, gateRunID: gateRunID, swiftRunID: UUID(), tlcRunID: UUID(), comparisonRunID: UUID())
     }
 
     func comparison(
       caseID: String = "temporal",
-      correlation: TemporalSymmetryCaseRunCorrelationV1? = nil,
+      correlation: TemporalSymmetryCaseRunCorrelation? = nil,
       difference: Bool = false,
       violatedWithoutLasso: Bool = false
-    ) throws -> TemporalComparisonV1 {
+    ) throws -> TemporalComparison {
       let correlation = try correlation ?? self.correlation(caseID: caseID, gateRunID: gateRunID)
-      let swift: TemporalPropertyResultV1
-      let tlc: TemporalPropertyResultV1
+      let swift: TemporalPropertyResult
+      let tlc: TemporalPropertyResult
       if violatedWithoutLasso {
-        swift = try TemporalPropertyResultV1(
+        swift = try TemporalPropertyResult(
           availability: .evaluated, outcome: .violated, graphID: "graph", initialStateIDs: ["i"],
           traceAvailability: .unavailable)
         tlc = swift
       } else {
-        swift = try TemporalPropertyResultV1(
+        swift = try TemporalPropertyResult(
           availability: .evaluated, outcome: .satisfied, graphID: "graph", initialStateIDs: ["i"],
           traceAvailability: .notApplicable)
         tlc = difference
-          ? try TemporalPropertyResultV1(
+          ? try TemporalPropertyResult(
             availability: .evaluated, outcome: .violated, graphID: "graph", initialStateIDs: ["i"],
             traceAvailability: .available, traceEvidence: try reference("tlc-lasso.json"),
-            lasso: try TemporalLassoWitnessV1(prefixStateIDs: ["i"], cycleStateIDs: ["i", "i"]))
+            lasso: try TemporalLassoWitness(prefixStateIDs: ["i"], cycleStateIDs: ["i", "i"]))
           : swift
       }
-      return try TemporalComparisonV1(
+      return try TemporalComparison(
         caseID: caseID, configuration: try Self.configuration(), correlation: correlation,
         outcome: difference ? .difference : .exact, swiftResult: swift, tlcResult: tlc,
         swiftEvidence: try reference("swift.json"), tlcEvidence: try reference("tlc.json"),
@@ -266,52 +266,52 @@ struct TemporalSymmetrySupportGateTests {
     }
 
     private static func makeCase(
-      id: String, expectedOutcome: TemporalSymmetryExpectedOutcomeV1, bounds: CoreFiniteBoundsV1, digest: String
-    ) throws -> TemporalSymmetryCaseV1 {
-      try TemporalSymmetryCaseV1(
+      id: String, expectedOutcome: TemporalSymmetryExpectedOutcome, bounds: CoreFiniteBounds, digest: String
+    ) throws -> TemporalSymmetryCase {
+      try TemporalSymmetryCase(
         id: id, kind: .temporal, swiftSpec: "TemporalFixture", provenance: try provenance(caseID: id, digest: digest),
         finiteBounds: bounds, semanticCitations: ["TLA+ temporal logic"], sourceInput: try reference("\(id).tla", digest: digest),
         configuration: try configuration(), expectedOutcome: expectedOutcome)
     }
 
     private static func makeSurface(
-      id: String, bounds: CoreFiniteBoundsV1, caseIDs: [String], linkedDivergences: [String] = []
-    ) throws -> TemporalSymmetrySupportSurfaceEntryV1 {
-      try TemporalSymmetrySupportSurfaceEntryV1(
+      id: String, bounds: CoreFiniteBounds, caseIDs: [String], linkedDivergences: [String] = []
+    ) throws -> TemporalSymmetrySupportSurfaceEntry {
+      try TemporalSymmetrySupportSurfaceEntry(
         id: id, behavior: "bounded temporal", kind: .temporal, finiteBounds: bounds,
         configuration: try configuration(), mandatoryCaseIDs: caseIDs, requestedStatus: .requested,
         linkedDivergenceIDs: linkedDivergences)
     }
 
     private static func makeDivergence(
-      source: TemporalSymmetryCaseV1, regression: TemporalSymmetryCaseV1, bounds: CoreFiniteBoundsV1, digest: String
-    ) throws -> TemporalSymmetryDivergenceRecordV1 {
-      try TemporalSymmetryDivergenceRecordV1(
+      source: TemporalSymmetryCase, regression: TemporalSymmetryCase, bounds: CoreFiniteBounds, digest: String
+    ) throws -> TemporalSymmetryDivergenceRecord {
+      try TemporalSymmetryDivergenceRecord(
         id: "known-difference", kind: .temporal, provenance: try provenance(caseID: source.id, digest: digest),
         semanticCitations: ["TLA+ temporal logic"], reproducer: bounds, originalEvidence: try reference("original.json", digest: digest),
         permanentRegressionCaseID: regression.id, classification: .swiftTLADefect, disposition: .open,
         normalizedDifferenceFingerprint: "known-difference",
-        latestComparison: try TemporalSymmetryDivergenceComparisonV1(
+        latestComparison: try TemporalSymmetryDivergenceComparison(
           evidence: try reference("latest.json", digest: digest), outcome: .difference, normalizedDifferenceFingerprint: "known-difference"))
     }
 
-    private static func provenance(caseID: String, digest: String) throws -> CoreDivergenceProvenanceV1 {
-      try CoreDivergenceProvenanceV1(
+    private static func provenance(caseID: String, digest: String) throws -> CoreDivergenceProvenance {
+      try CoreDivergenceProvenance(
         caseID: caseID, moduleSHA256: digest, cfgSHA256: digest, argumentsSHA256: digest,
         tlcTag: "v1.8.0", tlcCommit: "commit", tlcJarSHA256: digest, javaDistribution: "Temurin",
         javaVersion: "17", javaArchiveSHA256: digest, bridgeClass: "bridge", bridgeSourceSHA256: digest,
         bridgeBinarySHA256: digest)
     }
 
-    private static func configuration() throws -> TemporalSymmetryConfigurationV1 {
-      try TemporalSymmetryConfigurationV1(property: "[] P", fairness: TemporalFairnessModeV1.none)
+    private static func configuration() throws -> TemporalSymmetryConfiguration {
+      try TemporalSymmetryConfiguration(property: "[] P", fairness: TemporalFairnessMode.none)
     }
 
-    private static func reference(_ path: String, digest: String) throws -> CoreEvidenceReferenceV1 {
-      try CoreEvidenceReferenceV1(path: "Verification/TemporalSymmetryConformance/\(path)", sha256: digest)
+    private static func reference(_ path: String, digest: String) throws -> CoreEvidenceReference {
+      try CoreEvidenceReference(path: "Verification/TemporalSymmetryConformance/\(path)", sha256: digest)
     }
 
-    func reference(_ path: String) throws -> CoreEvidenceReferenceV1 {
+    func reference(_ path: String) throws -> CoreEvidenceReference {
       try Self.reference(path, digest: digest)
     }
   }

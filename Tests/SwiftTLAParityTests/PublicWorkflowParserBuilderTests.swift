@@ -9,10 +9,10 @@ struct PublicWorkflowParserBuilderTests {
     if let relativeOutput = ProcessInfo.processInfo.environment["PUBLIC_WORKFLOW_PARSER_BUILDER_OUTPUT"] {
       let root = try throwingPackageRoot()
       let output = root.appendingPathComponent(relativeOutput)
-      let run = try PublicWorkflowParserBuilderAdapterV1().run(
+      let run = try PublicWorkflowParserBuilderAdapter().run(
         manifestURL: root.appendingPathComponent("Tests/Fixtures/PublicWorkflowConformance/ParserBuilder/manifest.json"),
         projectRoot: root, outputDirectory: output,
-        correlation: try PublicWorkflowCaseRunCorrelationV1(caseID: "parser-builder-bounded-counter", gateRunID: UUID(), fixtureRunID: UUID(), comparisonRunID: UUID()))
+        correlation: try PublicWorkflowCaseRunCorrelation(caseID: "parser-builder-bounded-counter", gateRunID: UUID(), fixtureRunID: UUID(), comparisonRunID: UUID()))
       #expect(run.comparison.outcome == .exact)
       return
     }
@@ -32,10 +32,10 @@ struct PublicWorkflowParserBuilderTests {
   func portableManifestRetainsMismatch() throws {
     if let relativeOutput = ProcessInfo.processInfo.environment["PUBLIC_WORKFLOW_PARSER_BUILDER_MISMATCH_OUTPUT"] {
       let root = try throwingPackageRoot()
-      let run = try PublicWorkflowParserBuilderAdapterV1().run(
+      let run = try PublicWorkflowParserBuilderAdapter().run(
         manifestURL: root.appendingPathComponent("Tests/Fixtures/PublicWorkflowConformance/ParserBuilder/Mismatch/manifest.json"),
         projectRoot: root, outputDirectory: root.appendingPathComponent(relativeOutput),
-        correlation: try PublicWorkflowCaseRunCorrelationV1(caseID: "parser-builder-bounded-counter-mismatch", gateRunID: UUID(), fixtureRunID: UUID(), comparisonRunID: UUID()))
+        correlation: try PublicWorkflowCaseRunCorrelation(caseID: "parser-builder-bounded-counter-mismatch", gateRunID: UUID(), fixtureRunID: UUID(), comparisonRunID: UUID()))
       #expect(run.comparison.outcome == .difference)
       #expect(run.comparison.diagnosticCode == .observationDifference)
       return
@@ -53,7 +53,7 @@ struct PublicWorkflowParserBuilderTests {
       let fixture = try Fixture()
       defer { fixture.remove() }
       try fixture.apply(attack)
-      #expect(throws: PublicWorkflowGovernanceErrorV1.self) { try fixture.run() }
+      #expect(throws: PublicWorkflowGovernanceError.self) { try fixture.run() }
     }
   }
 
@@ -66,11 +66,11 @@ struct PublicWorkflowParserBuilderTests {
     let output = equivalentRoot.appendingPathComponent(".build/PublicWorkflowParserBuilderTests-\(UUID())")
     defer { try? FileManager.default.removeItem(at: output) }
 
-    let run = try PublicWorkflowParserBuilderAdapterV1().run(
+    let run = try PublicWorkflowParserBuilderAdapter().run(
       manifestURL: root.appendingPathComponent("Tests/Fixtures/PublicWorkflowConformance/ParserBuilder/manifest.json"),
       projectRoot: root,
       outputDirectory: output,
-      correlation: try PublicWorkflowCaseRunCorrelationV1(
+      correlation: try PublicWorkflowCaseRunCorrelation(
         caseID: "parser-builder-bounded-counter", gateRunID: UUID(), fixtureRunID: UUID(), comparisonRunID: UUID()))
 
     #expect(run.comparison.outcome == .exact)
@@ -111,10 +111,10 @@ struct PublicWorkflowParserBuilderTests {
 
     func remove() { try? FileManager.default.removeItem(at: root) }
 
-    func run(caseID: String = "parser-builder-bounded-counter") throws -> PublicWorkflowParserBuilderRunV1 {
-      try PublicWorkflowParserBuilderAdapterV1().run(
+    func run(caseID: String = "parser-builder-bounded-counter") throws -> PublicWorkflowParserBuilderRun {
+      try PublicWorkflowParserBuilderAdapter().run(
         manifestURL: manifest, projectRoot: root, outputDirectory: root.appendingPathComponent(".build/parser-builder-output"),
-        correlation: try PublicWorkflowCaseRunCorrelationV1(caseID: caseID, gateRunID: UUID(), fixtureRunID: UUID(), comparisonRunID: UUID()))
+        correlation: try PublicWorkflowCaseRunCorrelation(caseID: caseID, gateRunID: UUID(), fixtureRunID: UUID(), comparisonRunID: UUID()))
     }
 
     func apply(_ attack: Attack) throws {
@@ -131,17 +131,17 @@ struct PublicWorkflowParserBuilderTests {
       case .sourcePin:
         try replaceFirst("\"source\": { \"path\": \"Tests/Fixtures/PublicWorkflowConformance/ParserBuilder/fixture.swift\", \"sha256\": \"903c5ff1b0fd5751795310860054fbf781e311e04a37a6cefc808b2cfe576bb9\" }", with: "\"source\": { \"path\": \"Tests/Fixtures/PublicWorkflowConformance/ParserBuilder/fixture.swift\", \"sha256\": \"\(String(repeating: "0", count: 64))\" }")
       case .provenanceMismatch:
-        try replace("\"argumentsSHA256\": \"9de2e20ebe1e330215662de0ee944d24217fe293ca14ead441b8c9a83905c1ac\"", with: "\"argumentsSHA256\": \"\(String(repeating: "0", count: 64))\"")
+        try replace("\"argumentsSHA256\": \"5619a935660498c6aa59ebe9c6b6889eb28103aad7f383c9c070aa6f7816cffa\"", with: "\"argumentsSHA256\": \"\(String(repeating: "0", count: 64))\"")
       case .swiftSyntaxPin:
         try replaceFirst("\"sha256\": \"cfdc69e87cdcea8681bfa8b117d599eef34e6f986fe23d9ad5eb4a320a1a18d7\"", with: "\"sha256\": \"\(String(repeating: "0", count: 64))\"")
       case .swiftTLAPackagePin:
         try replaceFirst("\"sha256\": \"9dd427098bbacebacb55a8d16d23853352a4af7dc41a78c3f771db6e2a896442\"", with: "\"sha256\": \"\(String(repeating: "0", count: 64))\"")
       case .bridgeSourcePin:
-        try replaceFirst("\"bridgeSourceSHA256\": \"3626e246c966e654372fd000088f5e8706286d38ff50ba3b57eee09294e61db9\"", with: "\"bridgeSourceSHA256\": \"\(String(repeating: "0", count: 64))\"")
+        try replaceFirst("\"bridgeSourceSHA256\": \"0d78df1a490150176110482fd2fa28478b712318ce32caef782030697cbdfce7\"", with: "\"bridgeSourceSHA256\": \"\(String(repeating: "0", count: 64))\"")
       case .adapterSourceEvidencePin:
-        try replaceFirst("\"adapterSource\", \"evidence\": { \"path\": \"Sources/UpstreamParity/Conformance/PublicWorkflowParserBuilderAdapter.swift\", \"sha256\": \"3626e246c966e654372fd000088f5e8706286d38ff50ba3b57eee09294e61db9\"", with: "\"adapterSource\", \"evidence\": { \"path\": \"Sources/UpstreamParity/Conformance/PublicWorkflowParserBuilderAdapter.swift\", \"sha256\": \"\(String(repeating: "0", count: 64))\"")
+        try replaceFirst("\"adapterSource\", \"evidence\": { \"path\": \"Sources/UpstreamParity/Conformance/PublicWorkflowParserBuilderAdapter.swift\", \"sha256\": \"0d78df1a490150176110482fd2fa28478b712318ce32caef782030697cbdfce7\"", with: "\"adapterSource\", \"evidence\": { \"path\": \"Sources/UpstreamParity/Conformance/PublicWorkflowParserBuilderAdapter.swift\", \"sha256\": \"\(String(repeating: "0", count: 64))\"")
       case .nonApplicablePin:
-        try replaceFirst("\"tlcJarSHA256\": \"95f89bf42ce10922c7a60ed4e026ac0a2dc8550fae2a518e8d842f5836518a75\"", with: "\"tlcJarSHA256\": \"\(String(repeating: "0", count: 64))\"")
+        try replaceFirst("\"tlcJarSHA256\": \"c48f50b940bbd4852e3fa720a3db565a7c4231a31c84ceb84a34b38706e6940e\"", with: "\"tlcJarSHA256\": \"\(String(repeating: "0", count: 64))\"")
       case .pathEscape:
         try replace("Tests/Fixtures/PublicWorkflowConformance/ParserBuilder/fixture.swift", with: "../outside.swift")
       }
@@ -155,7 +155,7 @@ struct PublicWorkflowParserBuilderTests {
     private func replaceFirst(_ target: String, with replacement: String) throws {
       let body = try String(contentsOf: manifest)
       if target.contains("9dd427098bbacebacb55a8d16d23853352a4af7dc41a78c3f771db6e2a896442") {
-        let currentPackagePin = "cb18ec5ad761cd1f63315a0c09ebfed5c62c018346908a0a8a19a521f66b6ec4"
+        let currentPackagePin = "b0b438a2d9202d9dd84ab6b9b4c25411690ae4018753802ea148cd481df4beec"
         guard let range = body.range(of: currentPackagePin) else { throw CocoaError(.fileNoSuchFile) }
         try body.replacingCharacters(in: range, with: String(repeating: "0", count: 64)).write(to: manifest, atomically: true, encoding: .utf8)
         return

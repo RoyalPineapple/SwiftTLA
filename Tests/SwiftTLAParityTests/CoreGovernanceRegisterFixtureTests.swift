@@ -11,9 +11,9 @@ struct CoreGovernanceRegisterFixtureTests {
 
   @Test("governance registers retain seeded divergences and bounded support")
   func retainsSeededDivergencesAndBoundedSupport() throws {
-    let manifest = try decode(CoreConformanceCasesManifestV1.self, at: "cases.json")
-    let ledger = try decode(CoreDivergenceLedgerV1.self, at: "divergences.json")
-    let surface = try decode(CoreSupportSurfaceV1.self, at: "support-surface.json")
+    let manifest = try decode(CoreConformanceCasesManifest.self, at: "cases.json")
+    let ledger = try decode(CoreDivergenceLedger.self, at: "divergences.json")
+    let surface = try decode(CoreSupportSurface.self, at: "support-surface.json")
 
     try manifest.validate(ledger: ledger)
     try surface.validate(caseIDs: Set(manifest.cases.map(\.id)), ledger: ledger)
@@ -42,7 +42,7 @@ struct CoreGovernanceRegisterFixtureTests {
       #expect(retained.correlation.caseID == record.permanentRegressionCaseID)
       #expect(retained.correlation.engine == "runner")
       #expect(!retained.differences.isEmpty)
-      let fingerprint = try CoreDivergenceLedgerV1.normalizedDifferenceFingerprint(
+      let fingerprint = try CoreDivergenceLedger.normalizedDifferenceFingerprint(
         from: Data(contentsOf: projectURL(record.latestComparison.evidence.path)))
       #expect(record.normalizedDifferenceFingerprint == fingerprint)
       #expect(retainedFingerprintByCaseID[record.id] == fingerprint)
@@ -64,8 +64,8 @@ struct CoreGovernanceRegisterFixtureTests {
 
   @Test("ledger provenance must match the current retained TLC reference pin")
   func rejectsLedgerPinThatDiffersFromRetainedEvidence() throws {
-    let manifest = try decode(CoreConformanceCasesManifestV1.self, at: "cases.json")
-    let ledger = try decode(CoreDivergenceLedgerV1.self, at: "divergences.json")
+    let manifest = try decode(CoreConformanceCasesManifest.self, at: "cases.json")
+    let ledger = try decode(CoreDivergenceLedger.self, at: "divergences.json")
 
     for record in ledger.records {
       let toolchainPath = record.latestComparison.evidence.path
@@ -83,7 +83,7 @@ struct CoreGovernanceRegisterFixtureTests {
     }
 
     let alteredRecord = try #require(ledger.records.first)
-    let alteredProvenance = try CoreDivergenceProvenanceV1(
+    let alteredProvenance = try CoreDivergenceProvenance(
       caseID: alteredRecord.provenance.caseID,
       moduleSHA256: alteredRecord.provenance.moduleSHA256,
       cfgSHA256: alteredRecord.provenance.cfgSHA256,
@@ -97,9 +97,9 @@ struct CoreGovernanceRegisterFixtureTests {
       bridgeClass: alteredRecord.provenance.bridgeClass,
       bridgeSourceSHA256: alteredRecord.provenance.bridgeSourceSHA256,
       bridgeBinarySHA256: alteredRecord.provenance.bridgeBinarySHA256)
-    let alteredLedger = try CoreDivergenceLedgerV1(records: ledger.records.map { record in
+    let alteredLedger = try CoreDivergenceLedger(records: ledger.records.map { record in
       guard record.id == alteredRecord.id else { return record }
-      return try CoreDivergenceRecordV1(
+      return try CoreDivergenceRecord(
         id: record.id, provenance: alteredProvenance, semanticCitations: record.semanticCitations,
         reproducer: record.reproducer, originalEvidence: record.originalEvidence,
         permanentRegressionCaseID: record.permanentRegressionCaseID,
@@ -108,7 +108,7 @@ struct CoreGovernanceRegisterFixtureTests {
         latestComparison: record.latestComparison)
     })
 
-    #expect(throws: CoreGovernanceErrorV1.invalidField(
+    #expect(throws: CoreGovernanceError.invalidField(
       record: alteredRecord.id, field: "TLC reference pin")) {
       try manifest.validate(ledger: alteredLedger)
     }
@@ -122,8 +122,8 @@ struct CoreGovernanceRegisterFixtureTests {
     try JSONDecoder().decode(type, from: Data(contentsOf: projectURL(path)))
   }
 
-  private func verify(_ evidence: CoreEvidenceReferenceV1) throws {
-    #expect(SHA256V1.hex(try Data(contentsOf: projectURL(evidence.path))) == evidence.sha256)
+  private func verify(_ evidence: CoreEvidenceReference) throws {
+    #expect(SHA256.hex(try Data(contentsOf: projectURL(evidence.path))) == evidence.sha256)
   }
 
   private func fingerprintWithDrift(from path: String) throws -> String {
@@ -135,7 +135,7 @@ struct CoreGovernanceRegisterFixtureTests {
     differences[0] = firstDifference
     comparison["differences"] = differences
     let data = try JSONSerialization.data(withJSONObject: comparison, options: [.sortedKeys])
-    return try CoreDivergenceLedgerV1.normalizedDifferenceFingerprint(from: data)
+    return try CoreDivergenceLedger.normalizedDifferenceFingerprint(from: data)
   }
 
   private func fixtureData(_ path: String) throws -> Data {

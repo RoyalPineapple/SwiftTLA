@@ -10,10 +10,10 @@ struct PublicWorkflowConformanceRunnerTests {
     let output = root.appending(path: ".build/PublicWorkflowConformanceRunnerTests-\(UUID())")
     defer { try? FileManager.default.removeItem(at: output) }
 
-    let result = try PublicWorkflowConformanceRunnerV1().run(.init(
+    let result = try PublicWorkflowConformanceRunner().run(.init(
       projectRoot: root, outputRoot: output, hostedCI: false, runFixtures: false, runPlatformMatrix: false))
 
-    #expect(result.report.schema == PublicWorkflowDiagnosticReportV1.schema)
+    #expect(result.report.schema == PublicWorkflowDiagnosticReport.schema)
     if case .diagnostic = result.report.authority {} else { Issue.record("report must be diagnostic locally") }
     #expect(result.report.claimStatus == "diagnosticOnly")
     let diagnostic = result.report.checks.compactMap(\.diagnostic).joined(separator: "\n")
@@ -21,9 +21,9 @@ struct PublicWorkflowConformanceRunnerTests {
     #expect(result.report.checks.allSatisfy { $0.status == .matched })
     if case .success = result.report.finalExitClass {} else { Issue.record("matched corpus must succeed") }
     #expect(FileManager.default.fileExists(atPath: result.reportURL.path))
-    let persisted = try JSONDecoder().decode(PublicWorkflowDiagnosticReportV1.self, from: Data(contentsOf: result.reportURL))
+    let persisted = try JSONDecoder().decode(PublicWorkflowDiagnosticReport.self, from: Data(contentsOf: result.reportURL))
     #expect(persisted.checks.map(\.id) == result.report.checks.map(\.id))
-    let current = try JSONDecoder().decode(PublicWorkflowDiagnosticReportV1.self, from: Data(contentsOf: output.appending(path: "support-admission.json")))
+    let current = try JSONDecoder().decode(PublicWorkflowDiagnosticReport.self, from: Data(contentsOf: output.appending(path: "support-admission.json")))
     #expect(current.runID == persisted.runID)
   }
 
@@ -34,7 +34,7 @@ struct PublicWorkflowConformanceRunnerTests {
     defer { try? FileManager.default.removeItem(at: root) }
     try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
 
-    let result = try PublicWorkflowConformanceRunnerV1().run(.init(
+    let result = try PublicWorkflowConformanceRunner().run(.init(
       projectRoot: root, outputRoot: output, hostedCI: false, runFixtures: false, runPlatformMatrix: false))
 
     #expect(result.report.checks.count == 1)
@@ -45,9 +45,9 @@ struct PublicWorkflowConformanceRunnerTests {
 
   @Test("completed disagreement maps to the blocked exit class")
   func completedDifferenceIsBlocked() {
-    let report = PublicWorkflowDiagnosticReportV1(
+    let report = PublicWorkflowDiagnosticReport(
       runID: UUID(), authority: .diagnostic,
-      checks: [PublicWorkflowDiagnosticCheckV1(
+      checks: [PublicWorkflowDiagnosticCheck(
         id: "difference", command: "fixture", status: .differed,
         expectedOutcome: .exact, actualOutcome: .difference, evidence: [], diagnostic: "observations differ")])
 
@@ -71,11 +71,11 @@ struct PublicWorkflowConformanceRunnerTests {
         "PUBLIC_WORKFLOW_FAKE_MODE": mode
       ])
       #expect(result == exitCode)
-      let report = try JSONDecoder().decode(PublicWorkflowDiagnosticReportV1.self, from: Data(contentsOf: output.appending(path: "support-admission.json")))
+      let report = try JSONDecoder().decode(PublicWorkflowDiagnosticReport.self, from: Data(contentsOf: output.appending(path: "support-admission.json")))
       #expect(report.checks.contains(where: { $0.id == "annotation-fixtures" }))
       #expect(report.checks.contains(where: { $0.id == "public-library-platform-matrix" }))
       #expect(report.finalExitClass.rawValue == expectedExit)
-      let retained = try JSONDecoder().decode(PublicWorkflowDiagnosticReportV1.self, from: Data(contentsOf: output.appending(path: "runs/\(report.runID.uuidString.lowercased())/support-admission.json")))
+      let retained = try JSONDecoder().decode(PublicWorkflowDiagnosticReport.self, from: Data(contentsOf: output.appending(path: "runs/\(report.runID.uuidString.lowercased())/support-admission.json")))
       #expect(retained.runID == report.runID)
       #expect(retained.finalExitClass.rawValue == expectedExit)
 
@@ -97,7 +97,7 @@ struct PublicWorkflowConformanceRunnerTests {
       ]
       let canonical = try JSONSerialization.data(
         withJSONObject: commands, options: [.sortedKeys, .withoutEscapingSlashes])
-      #expect(provenance["argumentsSHA256"] as? String == SHA256V1.hex(canonical))
+      #expect(provenance["argumentsSHA256"] as? String == SHA256.hex(canonical))
     }
   }
 
@@ -116,12 +116,12 @@ struct PublicWorkflowConformanceRunnerTests {
       ])
     #expect(exit == 0)
 
-    let report = try JSONDecoder().decode(PublicWorkflowDiagnosticReportV1.self,
+    let report = try JSONDecoder().decode(PublicWorkflowDiagnosticReport.self,
       from: Data(contentsOf: temporary.appending(path: "evidence/support-admission.json")))
     #expect(report.authority == .diagnostic)
     #expect(report.claimStatus == "diagnosticOnly")
     #expect(report.finalExitClass == .success)
-    let expected: [String: PublicWorkflowExpectedOutcomeV1] = [
+    let expected: [String: PublicWorkflowExpectedOutcome] = [
       "parser-builder-bounded-counter": .exact,
       "parser-builder-bounded-counter-mismatch": .difference,
       "p4-generated-counter": .exact,
@@ -136,7 +136,7 @@ struct PublicWorkflowConformanceRunnerTests {
     let annotation = try #require(report.checks.first(where: { $0.id == "annotation-fixtures" }))
     let validFixtureLog = try #require(annotation.evidence.first(where: { $0.path.hasSuffix("TLAModel-valid/stdout.log") }))
     #expect(try String(contentsOf: root.appending(path: validFixtureLog.path), encoding: .utf8).contains("SWIFT_SUPPRESS_WARNINGS=NO"))
-    let retained = try JSONDecoder().decode(PublicWorkflowDiagnosticReportV1.self,
+    let retained = try JSONDecoder().decode(PublicWorkflowDiagnosticReport.self,
       from: Data(contentsOf: temporary.appending(path: "evidence/runs/\(report.runID.uuidString.lowercased())/support-admission.json")))
     #expect(retained.runID == report.runID)
   }
@@ -149,7 +149,7 @@ struct PublicWorkflowConformanceRunnerTests {
     try FileManager.default.createDirectory(at: temporary, withIntermediateDirectories: true)
     let xcodebuild = try fakeXcodebuild(at: temporary)
 
-    for (mode, expectedExit, expectedClass) in [("matched", 0, PublicWorkflowAdmissionExitClassV1.success), ("platform-failure", 1, .blocked), ("unavailable", 2, .unavailable)] {
+    for (mode, expectedExit, expectedClass) in [("matched", 0, PublicWorkflowAdmissionExitClass.success), ("platform-failure", 1, .blocked), ("unavailable", 2, .unavailable)] {
       let output = temporary.appending(path: mode)
       let exit = try run(URL(fileURLWithPath: "/bin/bash"), from: root,
         arguments: ["scripts/run_public_workflow_support_gate.sh", "--output", output.path],
@@ -160,10 +160,10 @@ struct PublicWorkflowConformanceRunnerTests {
         ])
       #expect(exit == expectedExit)
 
-      let report = try JSONDecoder().decode(PublicWorkflowDiagnosticReportV1.self,
+      let report = try JSONDecoder().decode(PublicWorkflowDiagnosticReport.self,
         from: Data(contentsOf: output.appending(path: "support-admission.json")))
       #expect(report.finalExitClass == expectedClass)
-      let retained = try JSONDecoder().decode(PublicWorkflowDiagnosticReportV1.self,
+      let retained = try JSONDecoder().decode(PublicWorkflowDiagnosticReport.self,
         from: Data(contentsOf: output.appending(path: "runs/\(report.runID.uuidString.lowercased())/support-admission.json")))
       #expect(retained.runID == report.runID)
       #expect(retained.finalExitClass == expectedClass)
@@ -183,17 +183,17 @@ struct PublicWorkflowConformanceRunnerTests {
       let manifest = verification.appending(path: "\(name).json")
       if let body { try body.write(to: manifest, atomically: true, encoding: .utf8) }
       let register = """
-      {"schema":"PublicWorkflowRunnerRegisterV1","parserBuilder":[{"id":"\(name)","manifest":{"path":"Verification/PublicWorkflowConformance/\(name).json","sha256":"\(String(repeating: "a", count: 64))"},"expectedOutcome":"exact"}],"generatedBehavior":{"path":"Verification/PublicWorkflowConformance/unused.json","sha256":"\(String(repeating: "a", count: 64))"}}
+      {"schema":"PublicWorkflowRunnerRegister","parserBuilder":[{"id":"\(name)","manifest":{"path":"Verification/PublicWorkflowConformance/\(name).json","sha256":"\(String(repeating: "a", count: 64))"},"expectedOutcome":"exact"}],"generatedBehavior":{"path":"Verification/PublicWorkflowConformance/unused.json","sha256":"\(String(repeating: "a", count: 64))"}}
       """
       try register.write(to: verification.appending(path: "runner.json"), atomically: true, encoding: .utf8)
       let output = root.appending(path: "output-\(name)")
-      let result = try PublicWorkflowConformanceRunnerV1().run(.init(
+      let result = try PublicWorkflowConformanceRunner().run(.init(
         projectRoot: root, outputRoot: output, hostedCI: false, runFixtures: false, runPlatformMatrix: false))
       #expect(result.report.finalExitClass == .unavailable)
       #expect(result.report.checks.count == 1)
       #expect(result.report.checks[0].status == .unavailable)
       #expect(result.report.checks[0].diagnostic?.contains(expectedDiagnostic) == true)
-      let persisted = try JSONDecoder().decode(PublicWorkflowDiagnosticReportV1.self,
+      let persisted = try JSONDecoder().decode(PublicWorkflowDiagnosticReport.self,
         from: Data(contentsOf: output.appending(path: "support-admission.json")))
       #expect(persisted.finalExitClass == .unavailable)
     }
@@ -219,7 +219,7 @@ struct PublicWorkflowConformanceRunnerTests {
         "GITHUB_RUN_ID", "GITHUB_RUN_ATTEMPT", "GITHUB_JOB", "GITHUB_SERVER_URL",
       ])
     #expect(exit == 0)
-    let report = try JSONDecoder().decode(PublicWorkflowDiagnosticReportV1.self,
+    let report = try JSONDecoder().decode(PublicWorkflowDiagnosticReport.self,
       from: Data(contentsOf: output.appending(path: "support-admission.json")))
     #expect(report.authority == .diagnostic)
     #expect(report.claimStatus == "diagnosticOnly")

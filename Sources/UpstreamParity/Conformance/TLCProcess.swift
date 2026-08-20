@@ -3,24 +3,24 @@ import Foundation
 import os
 import SwiftTLA
 
-public enum TLCTraceModeV1: Equatable, Sendable {
+public enum TLCTraceMode: Equatable, Sendable {
   case none
   case dumpJSON
   case loadJSON
 }
 
-public enum TLCReplayPolicyV1: Equatable, Sendable {
+public enum TLCReplayPolicy: Equatable, Sendable {
   case none
   case required
 }
 
-public struct TLCProcessExecutionFailureV1: Equatable, Sendable {
+public struct TLCProcessExecutionFailure: Equatable, Sendable {
   public let message: String
   public let partialStdout: String?
   public let partialStderr: String?
 
   public init(_ error: Error) {
-    if case TLCProcessErrorV1.timedOut(let stdout, let stderr) = error {
+    if case TLCProcessError.timedOut(let stdout, let stderr) = error {
       message = String(describing: error)
       partialStdout = stdout
       partialStderr = stderr
@@ -36,7 +36,7 @@ public struct TLCProcessExecutionFailureV1: Equatable, Sendable {
 ///
 /// TLA+ reports this only after TLC starts. SwiftTLA validates it before launch
 /// so a user sees the importing source line and the missing file directly.
-public enum TLCModuleBundleErrorV1: Error, Equatable, Sendable {
+public enum TLCModuleBundleError: Error, Equatable, Sendable {
   case missingRootModule(path: String)
   case unreadableModule(path: String, reason: String)
   case missingImportedModule(
@@ -47,17 +47,17 @@ public enum TLCModuleBundleErrorV1: Error, Equatable, Sendable {
   )
 }
 
-public indirect enum TLCProcessErrorV1: Error, Equatable, Sendable {
+public indirect enum TLCProcessError: Error, Equatable, Sendable {
   case timedOut(partialStdout: String, partialStderr: String)
   case failedToStart(String)
-  case invalidModuleBundle(TLCModuleBundleErrorV1)
-  case requiredReplayFailed(completed: TLCProcessRunV1, failed: TLCProcessResultV1)
-  case traceCaptureFailed(completed: TLCProcessRunV1, failed: TLCProcessResultV1)
-  case requiredReplayExecutionFailed(completed: TLCProcessRunV1, error: TLCProcessExecutionFailureV1)
-  case traceCaptureExecutionFailed(completed: TLCProcessRunV1, error: TLCProcessExecutionFailureV1)
+  case invalidModuleBundle(TLCModuleBundleError)
+  case requiredReplayFailed(completed: TLCProcessRun, failed: TLCProcessResult)
+  case traceCaptureFailed(completed: TLCProcessRun, failed: TLCProcessResult)
+  case requiredReplayExecutionFailed(completed: TLCProcessRun, error: TLCProcessExecutionFailure)
+  case traceCaptureExecutionFailed(completed: TLCProcessRun, error: TLCProcessExecutionFailure)
 }
 
-public struct TLCProcessRequestV1: Equatable, Sendable {
+public struct TLCProcessRequest: Equatable, Sendable {
   public let javaExecutable: URL
   public let jar: URL
   public let bridgeClasses: URL
@@ -68,12 +68,12 @@ public struct TLCProcessRequestV1: Equatable, Sendable {
   public let replayInput: URL
   public let workingDirectory: URL
   public let arguments: [String]
-  public let expectedCase: CoreConformanceCaseV1
+  public let expectedCase: CoreConformanceCase
   public let runID: UUID
   public let timeout: TimeInterval
-  public let traceMode: TLCTraceModeV1
-  public let referencePin: TLCReferencePinV1?
-  public let referenceArtifacts: TLCReferenceArtifactsV1?
+  public let traceMode: TLCTraceMode
+  public let referencePin: TLCReferencePin?
+  public let referenceArtifacts: TLCReferenceArtifacts?
 
   public init(
     javaExecutable: URL,
@@ -86,12 +86,12 @@ public struct TLCProcessRequestV1: Equatable, Sendable {
     replayInput: URL,
     workingDirectory: URL,
     arguments: [String],
-    expectedCase: CoreConformanceCaseV1,
+    expectedCase: CoreConformanceCase,
     runID: UUID,
     timeout: TimeInterval = 60,
-    traceMode: TLCTraceModeV1 = .none,
-    referencePin: TLCReferencePinV1? = nil,
-    referenceArtifacts: TLCReferenceArtifactsV1? = nil
+    traceMode: TLCTraceMode = .none,
+    referencePin: TLCReferencePin? = nil,
+    referenceArtifacts: TLCReferenceArtifacts? = nil
   ) {
     self.javaExecutable = javaExecutable
     self.jar = jar
@@ -115,7 +115,7 @@ public struct TLCProcessRequestV1: Equatable, Sendable {
 
   public var effectiveEnvironment: [String: String] { expectedCase.environment }
 
-  public func commandArguments(traceMode: TLCTraceModeV1? = nil) throws -> [String] {
+  public func commandArguments(traceMode: TLCTraceMode? = nil) throws -> [String] {
     let mode = traceMode ?? self.traceMode
     return [
       "-Dswifttla.tlc.graph.path=\(graphEvents.path)",
@@ -139,7 +139,7 @@ public struct TLCProcessRequestV1: Equatable, Sendable {
   /// not resolve imports or provide compiler-linking diagnostics.
   public func validateRenderedBundleIntegrity() throws {
     guard FileManager.default.fileExists(atPath: module.path) else {
-      throw TLCProcessErrorV1.invalidModuleBundle(.missingRootModule(path: module.path))
+      throw TLCProcessError.invalidModuleBundle(.missingRootModule(path: module.path))
     }
     do {
       let directory = module.deletingLastPathComponent()
@@ -161,33 +161,33 @@ public struct TLCProcessRequestV1: Equatable, Sendable {
       )
     } catch {
       if case TLAModuleBundleIntegrityError.missingModule(let dependency, let importedBy, let line) = error {
-        throw TLCProcessErrorV1.invalidModuleBundle(.missingImportedModule(
+        throw TLCProcessError.invalidModuleBundle(.missingImportedModule(
           module: dependency,
           importedBy: module.deletingLastPathComponent().appendingPathComponent("\(importedBy).tla").path,
           line: line,
           expectedFile: module.deletingLastPathComponent().appendingPathComponent("\(dependency).tla").path
         ))
       }
-      throw TLCProcessErrorV1.invalidModuleBundle(.unreadableModule(
+      throw TLCProcessError.invalidModuleBundle(.unreadableModule(
         path: module.path, reason: sanitized(error.localizedDescription)
       ))
     }
   }
 
-  public func validateReferenceBinding(pin: TLCReferencePinV1, artifacts: TLCReferenceArtifactsV1)
+  public func validateReferenceBinding(pin: TLCReferencePin, artifacts: TLCReferenceArtifacts)
     throws {
     guard expectedCase.pin == pin else {
-      throw CoreConformanceCaseErrorV1.pinMismatch("declared case reference pin")
+      throw CoreConformanceCaseError.pinMismatch("declared case reference pin")
     }
     guard sameFile(jar, artifacts.jar) else {
-      throw CoreConformanceCaseErrorV1.pinMismatch("execution TLC JAR")
+      throw CoreConformanceCaseError.pinMismatch("execution TLC JAR")
     }
     let bridgeClassFile =
       bridgeClasses
       .appendingPathComponent(pin.bridgeClass.replacingOccurrences(of: ".", with: "/"))
       .appendingPathExtension("class")
     guard sameFile(bridgeClassFile, artifacts.bridgeBinary) else {
-      throw CoreConformanceCaseErrorV1.pinMismatch("execution bridge class")
+      throw CoreConformanceCaseError.pinMismatch("execution bridge class")
     }
   }
 
@@ -208,7 +208,7 @@ public struct TLCProcessRequestV1: Equatable, Sendable {
     return String(decoding: data, as: UTF8.self)
   }
 
-  private func traceArguments(_ mode: TLCTraceModeV1) -> [String] {
+  private func traceArguments(_ mode: TLCTraceMode) -> [String] {
     switch mode {
     case .none: []
     case .dumpJSON: ["-dumpTrace", "json", traceOutput.path]
@@ -232,11 +232,11 @@ public struct TLCProcessRequestV1: Equatable, Sendable {
     replayInput: URL(fileURLWithPath: "/tmp/counterexample.json"),
     workingDirectory: URL(fileURLWithPath: "/tmp"),
     arguments: ["-workers", "1", "-fp", "1"],
-    expectedCase: try! CoreConformanceCaseV1(
+    expectedCase: try! CoreConformanceCase(
       id: "fixture", moduleSHA256: String(repeating: "c", count: 64),
       cfgSHA256: String(repeating: "d", count: 64),
       arguments: ["-workers", "1", "-fp", "1"],
-      argumentsSHA256: CoreConformanceCaseV1.argumentsDigest(["-workers", "1", "-fp", "1"]),
+      argumentsSHA256: CoreConformanceCase.argumentsDigest(["-workers", "1", "-fp", "1"]),
       workers: 1, fingerprintPolynomial: 1, deadlock: false, operatingSystem: "macos",
       architecture: "arm64", environment: [:], pin: .fixture
     ),
@@ -244,7 +244,7 @@ public struct TLCProcessRequestV1: Equatable, Sendable {
   )
 }
 
-public struct TLCProcessResultV1: Equatable, Sendable {
+public struct TLCProcessResult: Equatable, Sendable {
   public let status: Int32
   public let stdout: String
   public let stderr: String
@@ -268,26 +268,26 @@ public struct TLCProcessResultV1: Equatable, Sendable {
 }
 
 public protocol TLCProcessExecuting: Sendable {
-  func execute(_ request: TLCProcessRequestV1) throws -> TLCProcessResultV1
+  func execute(_ request: TLCProcessRequest) throws -> TLCProcessResult
 }
 
-public struct SystemTLCProcessExecutorV1: TLCProcessExecuting {
+public struct SystemTLCProcessExecutor: TLCProcessExecuting {
   private let validatesReferences: Bool
 
   public init(validatesReferences: Bool = true) {
     self.validatesReferences = validatesReferences
   }
 
-  public func execute(_ request: TLCProcessRequestV1) throws -> TLCProcessResultV1 {
+  public func execute(_ request: TLCProcessRequest) throws -> TLCProcessResult {
     try request.validateLaunchBinding()
     try request.validateRenderedBundleIntegrity()
     if validatesReferences {
       guard let pin = request.referencePin, let artifacts = request.referenceArtifacts else {
-        throw CoreConformanceCaseErrorV1.missingArtifact("reference pin and artifacts")
+        throw CoreConformanceCaseError.missingArtifact("reference pin and artifacts")
       }
       try request.validateReferenceBinding(pin: pin, artifacts: artifacts)
       try pin.validate(
-        TLCReferenceInspectorV1.inspect(
+        TLCReferenceInspector.inspect(
           artifacts: artifacts, javaExecutable: request.javaExecutable,
           directory: request.workingDirectory
         ))
@@ -304,61 +304,61 @@ public struct SystemTLCProcessExecutorV1: TLCProcessExecuting {
   }
 }
 
-public struct TLCProcessRunV1: Equatable, Sendable {
-  public let primary: TLCProcessResultV1
-  public let trace: TLCProcessResultV1?
-  public let replay: TLCProcessResultV1?
+public struct TLCProcessRun: Equatable, Sendable {
+  public let primary: TLCProcessResult
+  public let trace: TLCProcessResult?
+  public let replay: TLCProcessResult?
 }
 
-public struct TLCProcessAdapterV1: Sendable {
+public struct TLCProcessAdapter: Sendable {
   private let executor: any TLCProcessExecuting
 
-  public init(executor: any TLCProcessExecuting = SystemTLCProcessExecutorV1()) {
+  public init(executor: any TLCProcessExecuting = SystemTLCProcessExecutor()) {
     self.executor = executor
   }
 
-  public func run(_ request: TLCProcessRequestV1, replay: TLCReplayPolicyV1) throws
-    -> TLCProcessRunV1 {
+  public func run(_ request: TLCProcessRequest, replay: TLCReplayPolicy) throws
+    -> TLCProcessRun {
     let primary = try executor.execute(request)
     guard primary.isViolation else {
-      return TLCProcessRunV1(primary: primary, trace: nil, replay: nil)
+      return TLCProcessRun(primary: primary, trace: nil, replay: nil)
     }
 
-    let trace: TLCProcessResultV1
+    let trace: TLCProcessResult
     do {
       trace = try executor.execute(updating(request, traceMode: .dumpJSON))
     } catch {
-      throw TLCProcessErrorV1.traceCaptureExecutionFailed(
-        completed: TLCProcessRunV1(primary: primary, trace: nil, replay: nil),
-        error: TLCProcessExecutionFailureV1(error))
+      throw TLCProcessError.traceCaptureExecutionFailed(
+        completed: TLCProcessRun(primary: primary, trace: nil, replay: nil),
+        error: TLCProcessExecutionFailure(error))
     }
     guard trace.isViolation || trace.status == 0 else {
-      throw TLCProcessErrorV1.traceCaptureFailed(
-        completed: TLCProcessRunV1(primary: primary, trace: nil, replay: nil), failed: trace)
+      throw TLCProcessError.traceCaptureFailed(
+        completed: TLCProcessRun(primary: primary, trace: nil, replay: nil), failed: trace)
     }
     guard replay == .required else {
-      return TLCProcessRunV1(primary: primary, trace: trace, replay: nil)
+      return TLCProcessRun(primary: primary, trace: trace, replay: nil)
     }
 
-    let replayResult: TLCProcessResultV1
+    let replayResult: TLCProcessResult
     do {
       replayResult = try executor.execute(updating(request, traceMode: .loadJSON))
     } catch {
-      throw TLCProcessErrorV1.requiredReplayExecutionFailed(
-        completed: TLCProcessRunV1(primary: primary, trace: trace, replay: nil),
-        error: TLCProcessExecutionFailureV1(error))
+      throw TLCProcessError.requiredReplayExecutionFailed(
+        completed: TLCProcessRun(primary: primary, trace: trace, replay: nil),
+        error: TLCProcessExecutionFailure(error))
     }
     guard replayResult.faithfullyReproduces(primary) else {
-      throw TLCProcessErrorV1.requiredReplayFailed(
-        completed: TLCProcessRunV1(primary: primary, trace: trace, replay: nil), failed: replayResult
+      throw TLCProcessError.requiredReplayFailed(
+        completed: TLCProcessRun(primary: primary, trace: trace, replay: nil), failed: replayResult
       )
     }
-    return TLCProcessRunV1(primary: primary, trace: trace, replay: replayResult)
+    return TLCProcessRun(primary: primary, trace: trace, replay: replayResult)
   }
 
-  private func updating(_ request: TLCProcessRequestV1, traceMode: TLCTraceModeV1)
-    -> TLCProcessRequestV1 {
-    TLCProcessRequestV1(
+  private func updating(_ request: TLCProcessRequest, traceMode: TLCTraceMode)
+    -> TLCProcessRequest {
+    TLCProcessRequest(
       javaExecutable: request.javaExecutable, jar: request.jar,
       bridgeClasses: request.bridgeClasses,
       module: request.module, configuration: request.configuration,
@@ -371,55 +371,55 @@ public struct TLCProcessAdapterV1: Sendable {
     )
   }
 
-  private func graphEvents(for primary: URL, mode: TLCTraceModeV1) -> URL {
+  private func graphEvents(for primary: URL, mode: TLCTraceMode) -> URL {
     guard mode != .none else { return primary }
     let suffix = mode == .dumpJSON ? "trace" : "replay"
     return primary.deletingPathExtension().appendingPathExtension("\(suffix).jsonl")
   }
 }
 
-extension TLCProcessResultV1 {
-  fileprivate func faithfullyReproduces(_ primary: TLCProcessResultV1) -> Bool {
+extension TLCProcessResult {
+  fileprivate func faithfullyReproduces(_ primary: TLCProcessResult) -> Bool {
     primary.isViolation && status == primary.status && isViolation
   }
 }
 
-public enum TLCReferenceInspectorV1 {
+public enum TLCReferenceInspector {
   public static func inspect(
-    artifacts: TLCReferenceArtifactsV1,
+    artifacts: TLCReferenceArtifacts,
     javaExecutable: URL,
     directory: URL
   )
-    throws -> TLCReferenceArtifactsV1 {
+    throws -> TLCReferenceArtifacts {
     let manifest = try executeProcess(
       executable: URL(fileURLWithPath: "/usr/bin/unzip"),
       arguments: ["-p", artifacts.jar.path, "META-INF/MANIFEST.MF"], directory: directory,
       timeout: 10
     )
     guard manifest.status == 0 else {
-      throw CoreConformanceCaseErrorV1.pinMismatch("TLC JAR manifest")
+      throw CoreConformanceCaseError.pinMismatch("TLC JAR manifest")
     }
     let runtime = try executeProcess(
       executable: javaExecutable, arguments: ["-XshowSettings:properties", "-version"],
       directory: directory, timeout: 10
     )
-    guard runtime.status == 0 else { throw CoreConformanceCaseErrorV1.pinMismatch("Java runtime") }
+    guard runtime.status == 0 else { throw CoreConformanceCaseError.pinMismatch("Java runtime") }
     let properties = parseProperties(runtime.stdout + "\n" + runtime.stderr)
     let architecture: String
     switch properties["os.arch"] {
     case "aarch64", "arm64": architecture = "arm64"
     case "amd64", "x86_64": architecture = "x86_64"
-    default: throw CoreConformanceCaseErrorV1.pinMismatch("Java architecture")
+    default: throw CoreConformanceCaseError.pinMismatch("Java architecture")
     }
     guard let version = properties["java.runtime.version"], let vendor = properties["java.vendor"]
     else {
-      throw CoreConformanceCaseErrorV1.pinMismatch("Java runtime properties")
+      throw CoreConformanceCaseError.pinMismatch("Java runtime properties")
     }
-    return TLCReferenceArtifactsV1(
+    return TLCReferenceArtifacts(
       jar: artifacts.jar, javaArchive: artifacts.javaArchive, bridgeSource: artifacts.bridgeSource,
       bridgeBinary: artifacts.bridgeBinary,
       jarManifest: manifest.stdout,
-      runtime: TLCJavaRuntimeIdentityV1(
+      runtime: TLCJavaRuntimeIdentity(
         version: version, vendor: vendor, architecture: architecture, properties: properties)
     )
   }
@@ -440,7 +440,7 @@ private func executeProcess(
   directory: URL,
   timeout: TimeInterval,
   environment: [String: String]? = nil
-) throws -> TLCProcessResultV1 {
+) throws -> TLCProcessResult {
   let process = Process()
   process.executableURL = executable
   process.currentDirectoryURL = directory
@@ -451,7 +451,7 @@ private func executeProcess(
   process.standardOutput = stdoutPipe
   process.standardError = stderrPipe
   let outputGroup = DispatchGroup()
-  let output = ProcessOutputBuffersV1()
+  let output = ProcessOutputBuffers()
   outputGroup.enter()
   DispatchQueue.global().async {
     drain(stdoutPipe.fileHandleForReading, into: output.appendStdout)
@@ -467,7 +467,7 @@ private func executeProcess(
   do {
     try process.run()
   } catch {
-    throw TLCProcessErrorV1.failedToStart(error.localizedDescription)
+    throw TLCProcessError.failedToStart(error.localizedDescription)
   }
   if termination.wait(timeout: .now() + timeout) == .timedOut {
     process.terminate()
@@ -478,7 +478,7 @@ private func executeProcess(
     try? stdoutPipe.fileHandleForReading.close()
     try? stderrPipe.fileHandleForReading.close()
     _ = outputGroup.wait(timeout: .now() + 0.5)
-    throw TLCProcessErrorV1.timedOut(
+    throw TLCProcessError.timedOut(
       partialStdout: String(data: output.stdout, encoding: .utf8) ?? "<non-UTF-8 output>",
       partialStderr: String(data: output.stderr, encoding: .utf8) ?? "<non-UTF-8 output>"
     )
@@ -486,7 +486,7 @@ private func executeProcess(
   try? stdoutPipe.fileHandleForWriting.close()
   try? stderrPipe.fileHandleForWriting.close()
   _ = outputGroup.wait(timeout: .now() + 10)
-  return TLCProcessResultV1(
+  return TLCProcessResult(
     status: process.terminationStatus,
     stdout: String(data: output.stdout, encoding: .utf8) ?? "<non-UTF-8 output>",
     stderr: String(data: output.stderr, encoding: .utf8) ?? "<non-UTF-8 output>"
@@ -501,7 +501,7 @@ private func drain(_ handle: FileHandle, into append: (Data) -> Void) {
   }
 }
 
-private final class ProcessOutputBuffersV1: Sendable {
+private final class ProcessOutputBuffers: Sendable {
   private let stdoutBuffer = OSAllocatedUnfairLock(initialState: Data())
   private let stderrBuffer = OSAllocatedUnfairLock(initialState: Data())
 

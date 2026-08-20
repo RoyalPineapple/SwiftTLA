@@ -1,5 +1,5 @@
 {
-  "schema": "PublicWorkflowGeneratedFixtureConfigurationV1",
+  "schema": "PublicWorkflowGeneratedFixtureConfiguration",
   "fixtureID": "p4-generated-counter-intentional-mismatch",
   "maxStates": 2,
   "actionNames": ["advance"],

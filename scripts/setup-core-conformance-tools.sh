@@ -41,7 +41,7 @@ fixtures_root = os.path.join(project_root, "Verification", "CoreConformance", "f
 
 with open(cases_path, encoding="utf-8") as source:
     manifest = json.load(source)
-if manifest.get("schema") != "CoreConformanceCasesV1":
+if manifest.get("schema") != "CoreConformanceCases":
     raise SystemExit("unsupported core-conformance cases schema")
 
 def relative_path(value, field, case_id):
@@ -96,7 +96,7 @@ import json
 import sys
 
 expected = {
-    "schema": "TLCReferencePinV1",
+    "schema": "TLCReferencePin",
     "tlc.tag": "v1.8.0",
     "tlc.commit": "0894c3407f4717fec7cc18bde3bf3c857fa47333",
     "tlc.jar.sha256": "ab323b79802aedc3203b3f9af37c6aca3ed43f4e0225b36f2aa77b26de46c05f",
@@ -233,7 +233,7 @@ import sys
 cases_path, input_root = sys.argv[1:]
 with open(cases_path, encoding="utf-8") as source:
     manifest = json.load(source)
-if manifest.get("schema") != "CoreConformanceCasesV1":
+if manifest.get("schema") != "CoreConformanceCases":
     raise SystemExit("unsupported core-conformance cases schema")
 for case in manifest.get("cases", []):
     upstream = case.get("upstream")

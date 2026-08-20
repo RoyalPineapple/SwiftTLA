@@ -1,6 +1,6 @@
 import Foundation
 
-public enum PublicWorkflowGovernanceErrorV1: Error, Equatable, Sendable {
+public enum PublicWorkflowGovernanceError: Error, Equatable, Sendable {
   case invalidSchema(String)
   case duplicateID(kind: String, id: String)
   case invalidField(record: String, field: String)
@@ -9,7 +9,7 @@ public enum PublicWorkflowGovernanceErrorV1: Error, Equatable, Sendable {
   case inconsistentReference(record: String, field: String)
 }
 
-private struct PublicWorkflowAnyCodingKeyV1: CodingKey {
+private struct PublicWorkflowAnyCodingKey: CodingKey {
   let stringValue: String
   let intValue: Int?
 
@@ -24,22 +24,22 @@ private struct PublicWorkflowAnyCodingKeyV1: CodingKey {
   }
 }
 
-enum PublicWorkflowDecodingV1 {
+enum PublicWorkflowDecoding {
   static func container<Key>(
     _ decoder: Decoder, keyedBy keyType: Key.Type
   ) throws -> KeyedDecodingContainer<Key> where Key: CodingKey & CaseIterable {
-    let actual = try decoder.container(keyedBy: PublicWorkflowAnyCodingKeyV1.self)
+    let actual = try decoder.container(keyedBy: PublicWorkflowAnyCodingKey.self)
     let known = Set(Key.allCases.map(\.stringValue))
     let unknown = Set(actual.allKeys.map(\.stringValue)).subtracting(known)
     guard unknown.isEmpty else {
-      throw PublicWorkflowGovernanceErrorV1.invalidField(
+      throw PublicWorkflowGovernanceError.invalidField(
         record: "decode", field: "unknown field \(unknown.sorted().joined(separator: ","))")
     }
     return try decoder.container(keyedBy: keyType)
   }
 }
 
-public enum PublicWorkflowCaseCategoryV1: String, Codable, Sendable {
+public enum PublicWorkflowCaseCategory: String, Codable, Sendable {
   case annotation
   case parserBuilder
   case generatedBehavior
@@ -47,25 +47,25 @@ public enum PublicWorkflowCaseCategoryV1: String, Codable, Sendable {
   case platform
 }
 
-public enum PublicWorkflowExpectedOutcomeV1: String, Codable, Sendable {
+public enum PublicWorkflowExpectedOutcome: String, Codable, Sendable {
   case exact
   case difference
   case unavailable
 }
 
-public enum PublicWorkflowAuthorityBoundaryV1: String, Codable, Sendable {
+public enum PublicWorkflowAuthorityBoundary: String, Codable, Sendable {
   case publishedSemantics
   case executableReference
   case diagnosticSource
 }
 
-public enum PublicWorkflowEvidenceStatusV1: String, Codable, Sendable {
+public enum PublicWorkflowEvidenceStatus: String, Codable, Sendable {
   case complete
   case partial
   case unavailable
 }
 
-public enum PublicWorkflowDiagnosticCodeV1: String, Codable, Sendable {
+public enum PublicWorkflowDiagnosticCode: String, Codable, Sendable {
   case exactAgreement
   case observationDifference
   case invalidFixtureAccepted
@@ -75,29 +75,29 @@ public enum PublicWorkflowDiagnosticCodeV1: String, Codable, Sendable {
   case evidenceUnavailable
 }
 
-public struct PublicWorkflowConformanceCaseV1: Equatable, Codable, Sendable {
+public struct PublicWorkflowConformanceCase: Equatable, Codable, Sendable {
   public let id: String
-  public let category: PublicWorkflowCaseCategoryV1
+  public let category: PublicWorkflowCaseCategory
   public let publicName: String
-  public let finiteBounds: CoreFiniteBoundsV1
+  public let finiteBounds: CoreFiniteBounds
   public let semanticCitations: [String]
-  public let provenance: CoreDivergenceProvenanceV1
-  public let sourceInput: CoreEvidenceReferenceV1
-  public let configuration: CoreEvidenceReferenceV1
-  public let expectedOutcome: PublicWorkflowExpectedOutcomeV1
-  public let authorityBoundary: PublicWorkflowAuthorityBoundaryV1
+  public let provenance: CoreDivergenceProvenance
+  public let sourceInput: CoreEvidenceReference
+  public let configuration: CoreEvidenceReference
+  public let expectedOutcome: PublicWorkflowExpectedOutcome
+  public let authorityBoundary: PublicWorkflowAuthorityBoundary
 
   public init(
     id: String,
-    category: PublicWorkflowCaseCategoryV1,
+    category: PublicWorkflowCaseCategory,
     publicName: String,
-    finiteBounds: CoreFiniteBoundsV1,
+    finiteBounds: CoreFiniteBounds,
     semanticCitations: [String],
-    provenance: CoreDivergenceProvenanceV1,
-    sourceInput: CoreEvidenceReferenceV1,
-    configuration: CoreEvidenceReferenceV1,
-    expectedOutcome: PublicWorkflowExpectedOutcomeV1,
-    authorityBoundary: PublicWorkflowAuthorityBoundaryV1
+    provenance: CoreDivergenceProvenance,
+    sourceInput: CoreEvidenceReference,
+    configuration: CoreEvidenceReference,
+    expectedOutcome: PublicWorkflowExpectedOutcome,
+    authorityBoundary: PublicWorkflowAuthorityBoundary
   ) throws {
     self.id = id
     self.category = category
@@ -120,7 +120,7 @@ public struct PublicWorkflowConformanceCaseV1: Equatable, Codable, Sendable {
     guard !id.isEmpty, !publicName.isEmpty, provenance.caseID == id,
           !semanticCitations.isEmpty, semanticCitations.allSatisfy({ !$0.isEmpty }),
           authorityBoundary == .publishedSemantics else {
-      throw PublicWorkflowGovernanceErrorV1.invalidField(record: id, field: "case declaration")
+      throw PublicWorkflowGovernanceError.invalidField(record: id, field: "case declaration")
     }
   }
 
@@ -130,35 +130,35 @@ public struct PublicWorkflowConformanceCaseV1: Equatable, Codable, Sendable {
   }
 
   public init(from decoder: Decoder) throws {
-    let container = try PublicWorkflowDecodingV1.container(decoder, keyedBy: CodingKeys.self)
+    let container = try PublicWorkflowDecoding.container(decoder, keyedBy: CodingKeys.self)
     try self.init(
       id: try container.decode(String.self, forKey: .id),
-      category: try container.decode(PublicWorkflowCaseCategoryV1.self, forKey: .category),
+      category: try container.decode(PublicWorkflowCaseCategory.self, forKey: .category),
       publicName: try container.decode(String.self, forKey: .publicName),
-      finiteBounds: try container.decode(CoreFiniteBoundsV1.self, forKey: .finiteBounds),
+      finiteBounds: try container.decode(CoreFiniteBounds.self, forKey: .finiteBounds),
       semanticCitations: try container.decode([String].self, forKey: .semanticCitations),
-      provenance: try container.decode(CoreDivergenceProvenanceV1.self, forKey: .provenance),
-      sourceInput: try container.decode(CoreEvidenceReferenceV1.self, forKey: .sourceInput),
-      configuration: try container.decode(CoreEvidenceReferenceV1.self, forKey: .configuration),
-      expectedOutcome: try container.decode(PublicWorkflowExpectedOutcomeV1.self, forKey: .expectedOutcome),
-      authorityBoundary: try container.decode(PublicWorkflowAuthorityBoundaryV1.self, forKey: .authorityBoundary))
+      provenance: try container.decode(CoreDivergenceProvenance.self, forKey: .provenance),
+      sourceInput: try container.decode(CoreEvidenceReference.self, forKey: .sourceInput),
+      configuration: try container.decode(CoreEvidenceReference.self, forKey: .configuration),
+      expectedOutcome: try container.decode(PublicWorkflowExpectedOutcome.self, forKey: .expectedOutcome),
+      authorityBoundary: try container.decode(PublicWorkflowAuthorityBoundary.self, forKey: .authorityBoundary))
   }
 }
 
-public struct PublicWorkflowCasesV1: Equatable, Codable, Sendable {
-  public static let schema = "PublicWorkflowCasesV1"
+public struct PublicWorkflowCases: Equatable, Codable, Sendable {
+  public static let schema = "PublicWorkflowCases"
   public let schema: String
-  public let cases: [PublicWorkflowConformanceCaseV1]
+  public let cases: [PublicWorkflowConformanceCase]
 
-  public init(cases: [PublicWorkflowConformanceCaseV1]) throws { try self.init(schema: Self.schema, cases: cases) }
+  public init(cases: [PublicWorkflowConformanceCase]) throws { try self.init(schema: Self.schema, cases: cases) }
 
-  public init(schema: String, cases: [PublicWorkflowConformanceCaseV1]) throws {
-    guard schema == Self.schema else { throw PublicWorkflowGovernanceErrorV1.invalidSchema(schema) }
+  public init(schema: String, cases: [PublicWorkflowConformanceCase]) throws {
+    guard schema == Self.schema else { throw PublicWorkflowGovernanceError.invalidSchema(schema) }
     var ids = Set<String>()
     for record in cases {
       try record.validate()
       guard ids.insert(record.id).inserted else {
-        throw PublicWorkflowGovernanceErrorV1.duplicateID(kind: "case", id: record.id)
+        throw PublicWorkflowGovernanceError.duplicateID(kind: "case", id: record.id)
       }
     }
     self.schema = schema
@@ -168,12 +168,12 @@ public struct PublicWorkflowCasesV1: Equatable, Codable, Sendable {
   private enum CodingKeys: String, CodingKey, CaseIterable { case schema, cases }
 
   public init(from decoder: Decoder) throws {
-    let container = try PublicWorkflowDecodingV1.container(decoder, keyedBy: CodingKeys.self)
-    try self.init(schema: try container.decode(String.self, forKey: .schema), cases: try container.decode([PublicWorkflowConformanceCaseV1].self, forKey: .cases))
+    let container = try PublicWorkflowDecoding.container(decoder, keyedBy: CodingKeys.self)
+    try self.init(schema: try container.decode(String.self, forKey: .schema), cases: try container.decode([PublicWorkflowConformanceCase].self, forKey: .cases))
   }
 }
 
-public struct PublicWorkflowCaseRunCorrelationV1: Equatable, Codable, Sendable {
+public struct PublicWorkflowCaseRunCorrelation: Equatable, Codable, Sendable {
   public let caseID: String
   public let gateRunID: UUID
   public let fixtureRunID: UUID
@@ -181,7 +181,7 @@ public struct PublicWorkflowCaseRunCorrelationV1: Equatable, Codable, Sendable {
 
   public init(caseID: String, gateRunID: UUID, fixtureRunID: UUID, comparisonRunID: UUID) throws {
     guard !caseID.isEmpty, Set([gateRunID, fixtureRunID, comparisonRunID]).count == 3 else {
-      throw PublicWorkflowGovernanceErrorV1.invalidField(record: "correlation", field: "caseID or run IDs")
+      throw PublicWorkflowGovernanceError.invalidField(record: "correlation", field: "caseID or run IDs")
     }
     self.caseID = caseID
     self.gateRunID = gateRunID
@@ -192,24 +192,24 @@ public struct PublicWorkflowCaseRunCorrelationV1: Equatable, Codable, Sendable {
   private enum CodingKeys: String, CodingKey, CaseIterable { case caseID, gateRunID, fixtureRunID, comparisonRunID }
 
   public init(from decoder: Decoder) throws {
-    let container = try PublicWorkflowDecodingV1.container(decoder, keyedBy: CodingKeys.self)
+    let container = try PublicWorkflowDecoding.container(decoder, keyedBy: CodingKeys.self)
     try self.init(caseID: try container.decode(String.self, forKey: .caseID), gateRunID: try container.decode(UUID.self, forKey: .gateRunID), fixtureRunID: try container.decode(UUID.self, forKey: .fixtureRunID), comparisonRunID: try container.decode(UUID.self, forKey: .comparisonRunID))
   }
 }
 
-public struct PublicWorkflowEvidenceBindingV1: Equatable, Codable, Sendable {
+public struct PublicWorkflowEvidenceBinding: Equatable, Codable, Sendable {
   public let caseID: String
   public let gateRunID: UUID
   public let evidenceRunID: UUID
-  public let sourceInput: CoreEvidenceReferenceV1
-  public let configuration: CoreEvidenceReferenceV1
-  public let provenance: CoreDivergenceProvenanceV1
-  public let evidence: CoreEvidenceReferenceV1
+  public let sourceInput: CoreEvidenceReference
+  public let configuration: CoreEvidenceReference
+  public let provenance: CoreDivergenceProvenance
+  public let evidence: CoreEvidenceReference
 
   public init(
-    caseID: String, gateRunID: UUID, evidenceRunID: UUID, sourceInput: CoreEvidenceReferenceV1,
-    configuration: CoreEvidenceReferenceV1, provenance: CoreDivergenceProvenanceV1,
-    evidence: CoreEvidenceReferenceV1
+    caseID: String, gateRunID: UUID, evidenceRunID: UUID, sourceInput: CoreEvidenceReference,
+    configuration: CoreEvidenceReference, provenance: CoreDivergenceProvenance,
+    evidence: CoreEvidenceReference
   ) throws {
     self.caseID = caseID
     self.gateRunID = gateRunID
@@ -227,13 +227,13 @@ public struct PublicWorkflowEvidenceBindingV1: Equatable, Codable, Sendable {
     try provenance.validate()
     try evidence.validate()
     guard !caseID.isEmpty, provenance.caseID == caseID else {
-      throw PublicWorkflowGovernanceErrorV1.inconsistentReference(record: caseID, field: "evidence binding")
+      throw PublicWorkflowGovernanceError.inconsistentReference(record: caseID, field: "evidence binding")
     }
   }
 
   func matches(
-    _ declaration: PublicWorkflowConformanceCaseV1, gateRunID: UUID,
-    expectedRunID: UUID, evidence: CoreEvidenceReferenceV1
+    _ declaration: PublicWorkflowConformanceCase, gateRunID: UUID,
+    expectedRunID: UUID, evidence: CoreEvidenceReference
   ) -> Bool {
     caseID == declaration.id && self.gateRunID == gateRunID && evidenceRunID == expectedRunID
       && sourceInput == declaration.sourceInput && configuration == declaration.configuration
@@ -245,39 +245,39 @@ public struct PublicWorkflowEvidenceBindingV1: Equatable, Codable, Sendable {
   }
 
   public init(from decoder: Decoder) throws {
-    let container = try PublicWorkflowDecodingV1.container(decoder, keyedBy: CodingKeys.self)
+    let container = try PublicWorkflowDecoding.container(decoder, keyedBy: CodingKeys.self)
     try self.init(
       caseID: try container.decode(String.self, forKey: .caseID),
       gateRunID: try container.decode(UUID.self, forKey: .gateRunID),
       evidenceRunID: try container.decode(UUID.self, forKey: .evidenceRunID),
-      sourceInput: try container.decode(CoreEvidenceReferenceV1.self, forKey: .sourceInput),
-      configuration: try container.decode(CoreEvidenceReferenceV1.self, forKey: .configuration),
-      provenance: try container.decode(CoreDivergenceProvenanceV1.self, forKey: .provenance),
-      evidence: try container.decode(CoreEvidenceReferenceV1.self, forKey: .evidence))
+      sourceInput: try container.decode(CoreEvidenceReference.self, forKey: .sourceInput),
+      configuration: try container.decode(CoreEvidenceReference.self, forKey: .configuration),
+      provenance: try container.decode(CoreDivergenceProvenance.self, forKey: .provenance),
+      evidence: try container.decode(CoreEvidenceReference.self, forKey: .evidence))
   }
 }
 
-public struct PublicWorkflowCaseEvidenceV1: Equatable, Codable, Sendable {
+public struct PublicWorkflowCaseEvidence: Equatable, Codable, Sendable {
   public let caseID: String
-  public let correlation: PublicWorkflowCaseRunCorrelationV1
-  public let status: PublicWorkflowEvidenceStatusV1
-  public let fixture: CoreEvidenceReferenceV1
-  public let comparison: CoreEvidenceReferenceV1
-  public let provenance: CoreEvidenceReferenceV1
-  public let fixtureBinding: PublicWorkflowEvidenceBindingV1
-  public let comparisonBinding: PublicWorkflowEvidenceBindingV1
-  public let provenanceBinding: PublicWorkflowEvidenceBindingV1
-  public let outcome: PublicWorkflowExpectedOutcomeV1
-  public let diagnosticCode: PublicWorkflowDiagnosticCodeV1
-  public let execution: PublicWorkflowCIExecutionV1
+  public let correlation: PublicWorkflowCaseRunCorrelation
+  public let status: PublicWorkflowEvidenceStatus
+  public let fixture: CoreEvidenceReference
+  public let comparison: CoreEvidenceReference
+  public let provenance: CoreEvidenceReference
+  public let fixtureBinding: PublicWorkflowEvidenceBinding
+  public let comparisonBinding: PublicWorkflowEvidenceBinding
+  public let provenanceBinding: PublicWorkflowEvidenceBinding
+  public let outcome: PublicWorkflowExpectedOutcome
+  public let diagnosticCode: PublicWorkflowDiagnosticCode
+  public let execution: PublicWorkflowCIExecution
 
   public init(
-    caseID: String, correlation: PublicWorkflowCaseRunCorrelationV1, status: PublicWorkflowEvidenceStatusV1,
-    fixture: CoreEvidenceReferenceV1, comparison: CoreEvidenceReferenceV1, provenance: CoreEvidenceReferenceV1,
-    fixtureBinding: PublicWorkflowEvidenceBindingV1, comparisonBinding: PublicWorkflowEvidenceBindingV1,
-    provenanceBinding: PublicWorkflowEvidenceBindingV1,
-    outcome: PublicWorkflowExpectedOutcomeV1, diagnosticCode: PublicWorkflowDiagnosticCodeV1,
-    execution: PublicWorkflowCIExecutionV1
+    caseID: String, correlation: PublicWorkflowCaseRunCorrelation, status: PublicWorkflowEvidenceStatus,
+    fixture: CoreEvidenceReference, comparison: CoreEvidenceReference, provenance: CoreEvidenceReference,
+    fixtureBinding: PublicWorkflowEvidenceBinding, comparisonBinding: PublicWorkflowEvidenceBinding,
+    provenanceBinding: PublicWorkflowEvidenceBinding,
+    outcome: PublicWorkflowExpectedOutcome, diagnosticCode: PublicWorkflowDiagnosticCode,
+    execution: PublicWorkflowCIExecution
   ) throws {
     self.caseID = caseID
     self.correlation = correlation
@@ -303,10 +303,10 @@ public struct PublicWorkflowCaseEvidenceV1: Equatable, Codable, Sendable {
     try provenanceBinding.validate()
     try execution.validate()
     guard !caseID.isEmpty, correlation.caseID == caseID else {
-      throw PublicWorkflowGovernanceErrorV1.inconsistentReference(record: caseID, field: "correlation")
+      throw PublicWorkflowGovernanceError.inconsistentReference(record: caseID, field: "correlation")
     }
     guard status == .complete ? outcome != .unavailable && diagnosticCode != .evidenceUnavailable : outcome == .unavailable && diagnosticCode == .evidenceUnavailable else {
-      throw PublicWorkflowGovernanceErrorV1.invalidField(record: caseID, field: "evidence status")
+      throw PublicWorkflowGovernanceError.invalidField(record: caseID, field: "evidence status")
     }
   }
 
@@ -316,26 +316,26 @@ public struct PublicWorkflowCaseEvidenceV1: Equatable, Codable, Sendable {
   }
 
   public init(from decoder: Decoder) throws {
-    let container = try PublicWorkflowDecodingV1.container(decoder, keyedBy: CodingKeys.self)
-    try self.init(caseID: try container.decode(String.self, forKey: .caseID), correlation: try container.decode(PublicWorkflowCaseRunCorrelationV1.self, forKey: .correlation), status: try container.decode(PublicWorkflowEvidenceStatusV1.self, forKey: .status), fixture: try container.decode(CoreEvidenceReferenceV1.self, forKey: .fixture), comparison: try container.decode(CoreEvidenceReferenceV1.self, forKey: .comparison), provenance: try container.decode(CoreEvidenceReferenceV1.self, forKey: .provenance), fixtureBinding: try container.decode(PublicWorkflowEvidenceBindingV1.self, forKey: .fixtureBinding), comparisonBinding: try container.decode(PublicWorkflowEvidenceBindingV1.self, forKey: .comparisonBinding), provenanceBinding: try container.decode(PublicWorkflowEvidenceBindingV1.self, forKey: .provenanceBinding), outcome: try container.decode(PublicWorkflowExpectedOutcomeV1.self, forKey: .outcome), diagnosticCode: try container.decode(PublicWorkflowDiagnosticCodeV1.self, forKey: .diagnosticCode), execution: try container.decode(PublicWorkflowCIExecutionV1.self, forKey: .execution))
+    let container = try PublicWorkflowDecoding.container(decoder, keyedBy: CodingKeys.self)
+    try self.init(caseID: try container.decode(String.self, forKey: .caseID), correlation: try container.decode(PublicWorkflowCaseRunCorrelation.self, forKey: .correlation), status: try container.decode(PublicWorkflowEvidenceStatus.self, forKey: .status), fixture: try container.decode(CoreEvidenceReference.self, forKey: .fixture), comparison: try container.decode(CoreEvidenceReference.self, forKey: .comparison), provenance: try container.decode(CoreEvidenceReference.self, forKey: .provenance), fixtureBinding: try container.decode(PublicWorkflowEvidenceBinding.self, forKey: .fixtureBinding), comparisonBinding: try container.decode(PublicWorkflowEvidenceBinding.self, forKey: .comparisonBinding), provenanceBinding: try container.decode(PublicWorkflowEvidenceBinding.self, forKey: .provenanceBinding), outcome: try container.decode(PublicWorkflowExpectedOutcome.self, forKey: .outcome), diagnosticCode: try container.decode(PublicWorkflowDiagnosticCode.self, forKey: .diagnosticCode), execution: try container.decode(PublicWorkflowCIExecution.self, forKey: .execution))
   }
 }
 
-public enum PublicWorkflowFixtureOutcomeV1: String, Codable, Sendable { case succeeded, failed }
+public enum PublicWorkflowFixtureOutcome: String, Codable, Sendable { case succeeded, failed }
 
-public struct PublicWorkflowFixtureResultV1: Equatable, Codable, Sendable {
+public struct PublicWorkflowFixtureResult: Equatable, Codable, Sendable {
   public let caseID: String
   public let runID: UUID
-  public let fixture: CoreEvidenceReferenceV1
+  public let fixture: CoreEvidenceReference
   public let command: String
-  public let expectedOutcome: PublicWorkflowFixtureOutcomeV1
-  public let actualOutcome: PublicWorkflowFixtureOutcomeV1
+  public let expectedOutcome: PublicWorkflowFixtureOutcome
+  public let actualOutcome: PublicWorkflowFixtureOutcome
   public let diagnosticCode: String?
-  public let stdout: CoreEvidenceReferenceV1
-  public let stderr: CoreEvidenceReferenceV1
-  public let binding: PublicWorkflowEvidenceBindingV1
+  public let stdout: CoreEvidenceReference
+  public let stderr: CoreEvidenceReference
+  public let binding: PublicWorkflowEvidenceBinding
 
-  public init(caseID: String, runID: UUID, fixture: CoreEvidenceReferenceV1, command: String, expectedOutcome: PublicWorkflowFixtureOutcomeV1, actualOutcome: PublicWorkflowFixtureOutcomeV1, diagnosticCode: String?, stdout: CoreEvidenceReferenceV1, stderr: CoreEvidenceReferenceV1, binding: PublicWorkflowEvidenceBindingV1) throws {
+  public init(caseID: String, runID: UUID, fixture: CoreEvidenceReference, command: String, expectedOutcome: PublicWorkflowFixtureOutcome, actualOutcome: PublicWorkflowFixtureOutcome, diagnosticCode: String?, stdout: CoreEvidenceReference, stderr: CoreEvidenceReference, binding: PublicWorkflowEvidenceBinding) throws {
     self.caseID = caseID
     self.runID = runID
     self.fixture = fixture
@@ -357,19 +357,19 @@ public struct PublicWorkflowFixtureResultV1: Equatable, Codable, Sendable {
     guard !caseID.isEmpty, !command.isEmpty,
           binding.caseID == caseID, binding.evidenceRunID == runID, binding.evidence == fixture,
           actualOutcome == .succeeded || diagnosticCode?.isEmpty == false else {
-      throw PublicWorkflowGovernanceErrorV1.invalidField(record: caseID, field: "fixture result")
+      throw PublicWorkflowGovernanceError.invalidField(record: caseID, field: "fixture result")
     }
   }
 
   private enum CodingKeys: String, CodingKey, CaseIterable { case caseID, runID, fixture, command, expectedOutcome, actualOutcome, diagnosticCode, stdout, stderr, binding }
 
   public init(from decoder: Decoder) throws {
-    let container = try PublicWorkflowDecodingV1.container(decoder, keyedBy: CodingKeys.self)
-    try self.init(caseID: try container.decode(String.self, forKey: .caseID), runID: try container.decode(UUID.self, forKey: .runID), fixture: try container.decode(CoreEvidenceReferenceV1.self, forKey: .fixture), command: try container.decode(String.self, forKey: .command), expectedOutcome: try container.decode(PublicWorkflowFixtureOutcomeV1.self, forKey: .expectedOutcome), actualOutcome: try container.decode(PublicWorkflowFixtureOutcomeV1.self, forKey: .actualOutcome), diagnosticCode: try container.decodeIfPresent(String.self, forKey: .diagnosticCode), stdout: try container.decode(CoreEvidenceReferenceV1.self, forKey: .stdout), stderr: try container.decode(CoreEvidenceReferenceV1.self, forKey: .stderr), binding: try container.decode(PublicWorkflowEvidenceBindingV1.self, forKey: .binding))
+    let container = try PublicWorkflowDecoding.container(decoder, keyedBy: CodingKeys.self)
+    try self.init(caseID: try container.decode(String.self, forKey: .caseID), runID: try container.decode(UUID.self, forKey: .runID), fixture: try container.decode(CoreEvidenceReference.self, forKey: .fixture), command: try container.decode(String.self, forKey: .command), expectedOutcome: try container.decode(PublicWorkflowFixtureOutcome.self, forKey: .expectedOutcome), actualOutcome: try container.decode(PublicWorkflowFixtureOutcome.self, forKey: .actualOutcome), diagnosticCode: try container.decodeIfPresent(String.self, forKey: .diagnosticCode), stdout: try container.decode(CoreEvidenceReference.self, forKey: .stdout), stderr: try container.decode(CoreEvidenceReference.self, forKey: .stderr), binding: try container.decode(PublicWorkflowEvidenceBinding.self, forKey: .binding))
   }
 }
 
-public struct PublicWorkflowCanonicalObservationV1: Equatable, Codable, Sendable {
+public struct PublicWorkflowCanonicalObservation: Equatable, Codable, Sendable {
   public let initialStates: [String]
   public let reachableStates: [String]
   public let labeledTransitions: [String]
@@ -396,29 +396,29 @@ public struct PublicWorkflowCanonicalObservationV1: Equatable, Codable, Sendable
   public func validate() throws {
     let collections = [initialStates, reachableStates, labeledTransitions, enabledTransitions, properties, deadlocks, failures, diagnostics]
     guard !initialStates.isEmpty, collections.allSatisfy({ $0.allSatisfy { !$0.isEmpty } }), trace?.allSatisfy({ !$0.isEmpty }) != false else {
-      throw PublicWorkflowGovernanceErrorV1.invalidField(record: "observation", field: "canonical fields")
+      throw PublicWorkflowGovernanceError.invalidField(record: "observation", field: "canonical fields")
     }
   }
 
   private enum CodingKeys: String, CodingKey, CaseIterable { case initialStates, reachableStates, labeledTransitions, enabledTransitions, properties, deadlocks, failures, diagnostics, trace }
 
   public init(from decoder: Decoder) throws {
-    let container = try PublicWorkflowDecodingV1.container(decoder, keyedBy: CodingKeys.self)
+    let container = try PublicWorkflowDecoding.container(decoder, keyedBy: CodingKeys.self)
     try self.init(initialStates: try container.decode([String].self, forKey: .initialStates), reachableStates: try container.decode([String].self, forKey: .reachableStates), labeledTransitions: try container.decode([String].self, forKey: .labeledTransitions), enabledTransitions: try container.decode([String].self, forKey: .enabledTransitions), properties: try container.decode([String].self, forKey: .properties), deadlocks: try container.decode([String].self, forKey: .deadlocks), failures: try container.decode([String].self, forKey: .failures), diagnostics: try container.decode([String].self, forKey: .diagnostics), trace: try container.decodeIfPresent([String].self, forKey: .trace))
   }
 }
 
-public struct PublicWorkflowComparisonV1: Equatable, Codable, Sendable {
+public struct PublicWorkflowComparison: Equatable, Codable, Sendable {
   public let caseID: String
-  public let correlation: PublicWorkflowCaseRunCorrelationV1
-  public let left: PublicWorkflowCanonicalObservationV1
-  public let right: PublicWorkflowCanonicalObservationV1
-  public let outcome: PublicWorkflowExpectedOutcomeV1
-  public let diagnosticCode: PublicWorkflowDiagnosticCodeV1
-  public let leftBinding: PublicWorkflowEvidenceBindingV1
-  public let rightBinding: PublicWorkflowEvidenceBindingV1
+  public let correlation: PublicWorkflowCaseRunCorrelation
+  public let left: PublicWorkflowCanonicalObservation
+  public let right: PublicWorkflowCanonicalObservation
+  public let outcome: PublicWorkflowExpectedOutcome
+  public let diagnosticCode: PublicWorkflowDiagnosticCode
+  public let leftBinding: PublicWorkflowEvidenceBinding
+  public let rightBinding: PublicWorkflowEvidenceBinding
 
-  public init(caseID: String, correlation: PublicWorkflowCaseRunCorrelationV1, left: PublicWorkflowCanonicalObservationV1, right: PublicWorkflowCanonicalObservationV1, outcome: PublicWorkflowExpectedOutcomeV1, diagnosticCode: PublicWorkflowDiagnosticCodeV1, leftBinding: PublicWorkflowEvidenceBindingV1, rightBinding: PublicWorkflowEvidenceBindingV1) throws {
+  public init(caseID: String, correlation: PublicWorkflowCaseRunCorrelation, left: PublicWorkflowCanonicalObservation, right: PublicWorkflowCanonicalObservation, outcome: PublicWorkflowExpectedOutcome, diagnosticCode: PublicWorkflowDiagnosticCode, leftBinding: PublicWorkflowEvidenceBinding, rightBinding: PublicWorkflowEvidenceBinding) throws {
     self.caseID = caseID
     self.correlation = correlation
     self.left = left
@@ -439,30 +439,30 @@ public struct PublicWorkflowComparisonV1: Equatable, Codable, Sendable {
           leftBinding.gateRunID == correlation.gateRunID, rightBinding.gateRunID == correlation.gateRunID,
           leftBinding.evidenceRunID == correlation.comparisonRunID,
           rightBinding.evidenceRunID == correlation.comparisonRunID, outcome != .unavailable else {
-      throw PublicWorkflowGovernanceErrorV1.invalidField(record: caseID, field: "comparison correlation")
+      throw PublicWorkflowGovernanceError.invalidField(record: caseID, field: "comparison correlation")
     }
     let matches = left == right
     guard (outcome == .exact && matches && diagnosticCode == .exactAgreement) || (outcome == .difference && !matches && diagnosticCode == .observationDifference) else {
-      throw PublicWorkflowGovernanceErrorV1.invalidField(record: caseID, field: "comparison outcome")
+      throw PublicWorkflowGovernanceError.invalidField(record: caseID, field: "comparison outcome")
     }
   }
 
   private enum CodingKeys: String, CodingKey, CaseIterable { case caseID, correlation, left, right, outcome, diagnosticCode, leftBinding, rightBinding }
 
   public init(from decoder: Decoder) throws {
-    let container = try PublicWorkflowDecodingV1.container(decoder, keyedBy: CodingKeys.self)
-    try self.init(caseID: try container.decode(String.self, forKey: .caseID), correlation: try container.decode(PublicWorkflowCaseRunCorrelationV1.self, forKey: .correlation), left: try container.decode(PublicWorkflowCanonicalObservationV1.self, forKey: .left), right: try container.decode(PublicWorkflowCanonicalObservationV1.self, forKey: .right), outcome: try container.decode(PublicWorkflowExpectedOutcomeV1.self, forKey: .outcome), diagnosticCode: try container.decode(PublicWorkflowDiagnosticCodeV1.self, forKey: .diagnosticCode), leftBinding: try container.decode(PublicWorkflowEvidenceBindingV1.self, forKey: .leftBinding), rightBinding: try container.decode(PublicWorkflowEvidenceBindingV1.self, forKey: .rightBinding))
+    let container = try PublicWorkflowDecoding.container(decoder, keyedBy: CodingKeys.self)
+    try self.init(caseID: try container.decode(String.self, forKey: .caseID), correlation: try container.decode(PublicWorkflowCaseRunCorrelation.self, forKey: .correlation), left: try container.decode(PublicWorkflowCanonicalObservation.self, forKey: .left), right: try container.decode(PublicWorkflowCanonicalObservation.self, forKey: .right), outcome: try container.decode(PublicWorkflowExpectedOutcome.self, forKey: .outcome), diagnosticCode: try container.decode(PublicWorkflowDiagnosticCode.self, forKey: .diagnosticCode), leftBinding: try container.decode(PublicWorkflowEvidenceBinding.self, forKey: .leftBinding), rightBinding: try container.decode(PublicWorkflowEvidenceBinding.self, forKey: .rightBinding))
   }
 }
 
-public enum PublicWorkflowPlatformStatusV1: String, Codable, Sendable { case succeeded, failed, unavailable }
+public enum PublicWorkflowPlatformStatus: String, Codable, Sendable { case succeeded, failed, unavailable }
 
 /// Execution metadata is diagnostic or a hosted-workflow candidate; public admission is external to this product.
-public enum PublicWorkflowEvidenceAuthorityV1: String, Codable, Sendable { case candidate, diagnostic }
+public enum PublicWorkflowEvidenceAuthority: String, Codable, Sendable { case candidate, diagnostic }
 
 /// Immutable execution metadata retained with every platform result.
-public struct PublicWorkflowCIExecutionV1: Equatable, Codable, Sendable {
-  public let authority: PublicWorkflowEvidenceAuthorityV1
+public struct PublicWorkflowCIExecution: Equatable, Codable, Sendable {
+  public let authority: PublicWorkflowEvidenceAuthority
   public let gitSHA: String?
   public let repository: String?
   public let workflow: String?
@@ -471,11 +471,11 @@ public struct PublicWorkflowCIExecutionV1: Equatable, Codable, Sendable {
   public let runAttempt: Int?
   public let job: String?
   public let serverURL: String?
-  public let metadata: CoreEvidenceReferenceV1
+  public let metadata: CoreEvidenceReference
 
-  public init(authority: PublicWorkflowEvidenceAuthorityV1, gitSHA: String? = nil, repository: String? = nil,
+  public init(authority: PublicWorkflowEvidenceAuthority, gitSHA: String? = nil, repository: String? = nil,
               workflow: String? = nil, ref: String? = nil, runID: String? = nil, runAttempt: Int? = nil, job: String? = nil,
-              serverURL: String? = nil, metadata: CoreEvidenceReferenceV1) throws {
+              serverURL: String? = nil, metadata: CoreEvidenceReference) throws {
     self.authority = authority
     self.gitSHA = gitSHA
     self.repository = repository
@@ -494,27 +494,27 @@ public struct PublicWorkflowCIExecutionV1: Equatable, Codable, Sendable {
     switch authority {
     case .diagnostic:
       guard gitSHA == nil, repository == nil, workflow == nil, ref == nil, runID == nil, runAttempt == nil, job == nil, serverURL == nil else {
-        throw PublicWorkflowGovernanceErrorV1.invalidField(record: "diagnostic execution", field: "hosted identity")
+        throw PublicWorkflowGovernanceError.invalidField(record: "diagnostic execution", field: "hosted identity")
       }
     case .candidate:
       let isSHA = gitSHA?.range(of: "^[0-9a-f]{40}$", options: .regularExpression) != nil
       guard isSHA, repository?.isEmpty == false, workflow?.isEmpty == false, ref?.isEmpty == false, runID?.isEmpty == false,
             (runAttempt ?? 0) > 0, job?.isEmpty == false, serverURL?.isEmpty == false else {
-        throw PublicWorkflowGovernanceErrorV1.invalidField(record: "CI execution", field: "identity")
+        throw PublicWorkflowGovernanceError.invalidField(record: "CI execution", field: "identity")
       }
     }
   }
 
 }
 
-public struct PublicWorkflowPlatformRunCorrelationV1: Equatable, Codable, Sendable {
+public struct PublicWorkflowPlatformRunCorrelation: Equatable, Codable, Sendable {
   public let caseID: String
   public let gateRunID: UUID
   public let platformRunID: UUID
 
   public init(caseID: String, gateRunID: UUID, platformRunID: UUID) throws {
     guard !caseID.isEmpty else {
-      throw PublicWorkflowGovernanceErrorV1.invalidField(record: "platform correlation", field: "caseID")
+      throw PublicWorkflowGovernanceError.invalidField(record: "platform correlation", field: "caseID")
     }
     self.caseID = caseID
     self.gateRunID = gateRunID
@@ -524,31 +524,31 @@ public struct PublicWorkflowPlatformRunCorrelationV1: Equatable, Codable, Sendab
   private enum CodingKeys: String, CodingKey, CaseIterable { case caseID, gateRunID, platformRunID }
 
   public init(from decoder: Decoder) throws {
-    let container = try PublicWorkflowDecodingV1.container(decoder, keyedBy: CodingKeys.self)
+    let container = try PublicWorkflowDecoding.container(decoder, keyedBy: CodingKeys.self)
     try self.init(caseID: try container.decode(String.self, forKey: .caseID),
                   gateRunID: try container.decode(UUID.self, forKey: .gateRunID),
                   platformRunID: try container.decode(UUID.self, forKey: .platformRunID))
   }
 }
 
-public struct PublicWorkflowPlatformEvidenceV1: Equatable, Codable, Sendable {
+public struct PublicWorkflowPlatformEvidence: Equatable, Codable, Sendable {
   public let platform: String
   public let command: String
   public let sdk: String
   public let destination: String
   public let xcodeVersion: String
-  public let fixture: CoreEvidenceReferenceV1
-  public let status: PublicWorkflowPlatformStatusV1
+  public let fixture: CoreEvidenceReference
+  public let status: PublicWorkflowPlatformStatus
   public let exitCode: Int?
-  public let stdout: CoreEvidenceReferenceV1
-  public let stderr: CoreEvidenceReferenceV1
-  public let correlation: PublicWorkflowPlatformRunCorrelationV1
-  public let fixtureBinding: PublicWorkflowEvidenceBindingV1
-  public let stdoutBinding: PublicWorkflowEvidenceBindingV1
-  public let stderrBinding: PublicWorkflowEvidenceBindingV1
-  public let execution: PublicWorkflowCIExecutionV1
+  public let stdout: CoreEvidenceReference
+  public let stderr: CoreEvidenceReference
+  public let correlation: PublicWorkflowPlatformRunCorrelation
+  public let fixtureBinding: PublicWorkflowEvidenceBinding
+  public let stdoutBinding: PublicWorkflowEvidenceBinding
+  public let stderrBinding: PublicWorkflowEvidenceBinding
+  public let execution: PublicWorkflowCIExecution
 
-  public init(platform: String, command: String, sdk: String, destination: String, xcodeVersion: String, fixture: CoreEvidenceReferenceV1, status: PublicWorkflowPlatformStatusV1, exitCode: Int?, stdout: CoreEvidenceReferenceV1, stderr: CoreEvidenceReferenceV1, correlation: PublicWorkflowPlatformRunCorrelationV1, fixtureBinding: PublicWorkflowEvidenceBindingV1, stdoutBinding: PublicWorkflowEvidenceBindingV1, stderrBinding: PublicWorkflowEvidenceBindingV1, execution: PublicWorkflowCIExecutionV1) throws {
+  public init(platform: String, command: String, sdk: String, destination: String, xcodeVersion: String, fixture: CoreEvidenceReference, status: PublicWorkflowPlatformStatus, exitCode: Int?, stdout: CoreEvidenceReference, stderr: CoreEvidenceReference, correlation: PublicWorkflowPlatformRunCorrelation, fixtureBinding: PublicWorkflowEvidenceBinding, stdoutBinding: PublicWorkflowEvidenceBinding, stderrBinding: PublicWorkflowEvidenceBinding, execution: PublicWorkflowCIExecution) throws {
     self.platform = platform
     self.command = command
     self.sdk = sdk
@@ -576,28 +576,28 @@ public struct PublicWorkflowPlatformEvidenceV1: Equatable, Codable, Sendable {
     try stderrBinding.validate()
     try execution.validate()
     guard !platform.isEmpty, !command.isEmpty, !sdk.isEmpty, !destination.isEmpty, !xcodeVersion.isEmpty else {
-      throw PublicWorkflowGovernanceErrorV1.invalidField(record: "platform", field: "identity")
+      throw PublicWorkflowGovernanceError.invalidField(record: "platform", field: "identity")
     }
     guard [fixtureBinding, stdoutBinding, stderrBinding].allSatisfy({
       $0.caseID == correlation.caseID && $0.gateRunID == correlation.gateRunID
         && $0.evidenceRunID == correlation.platformRunID
     }), fixtureBinding.evidence == fixture, stdoutBinding.evidence == stdout, stderrBinding.evidence == stderr else {
-      throw PublicWorkflowGovernanceErrorV1.inconsistentReference(record: platform, field: "platform artifacts")
+      throw PublicWorkflowGovernanceError.inconsistentReference(record: platform, field: "platform artifacts")
     }
     switch status {
     case .succeeded:
-      guard exitCode == 0 else { throw PublicWorkflowGovernanceErrorV1.invalidField(record: platform, field: "exitCode") }
+      guard exitCode == 0 else { throw PublicWorkflowGovernanceError.invalidField(record: platform, field: "exitCode") }
     case .failed:
-      guard let exitCode, exitCode != 0 else { throw PublicWorkflowGovernanceErrorV1.invalidField(record: platform, field: "exitCode") }
+      guard let exitCode, exitCode != 0 else { throw PublicWorkflowGovernanceError.invalidField(record: platform, field: "exitCode") }
     case .unavailable:
-      guard exitCode == nil else { throw PublicWorkflowGovernanceErrorV1.invalidField(record: platform, field: "exitCode") }
+      guard exitCode == nil else { throw PublicWorkflowGovernanceError.invalidField(record: platform, field: "exitCode") }
     }
   }
 
   private enum CodingKeys: String, CodingKey, CaseIterable { case platform, command, sdk, destination, xcodeVersion, fixture, status, exitCode, stdout, stderr, correlation, fixtureBinding, stdoutBinding, stderrBinding, execution }
 
   public init(from decoder: Decoder) throws {
-    let container = try PublicWorkflowDecodingV1.container(decoder, keyedBy: CodingKeys.self)
-    try self.init(platform: try container.decode(String.self, forKey: .platform), command: try container.decode(String.self, forKey: .command), sdk: try container.decode(String.self, forKey: .sdk), destination: try container.decode(String.self, forKey: .destination), xcodeVersion: try container.decode(String.self, forKey: .xcodeVersion), fixture: try container.decode(CoreEvidenceReferenceV1.self, forKey: .fixture), status: try container.decode(PublicWorkflowPlatformStatusV1.self, forKey: .status), exitCode: try container.decodeIfPresent(Int.self, forKey: .exitCode), stdout: try container.decode(CoreEvidenceReferenceV1.self, forKey: .stdout), stderr: try container.decode(CoreEvidenceReferenceV1.self, forKey: .stderr), correlation: try container.decode(PublicWorkflowPlatformRunCorrelationV1.self, forKey: .correlation), fixtureBinding: try container.decode(PublicWorkflowEvidenceBindingV1.self, forKey: .fixtureBinding), stdoutBinding: try container.decode(PublicWorkflowEvidenceBindingV1.self, forKey: .stdoutBinding), stderrBinding: try container.decode(PublicWorkflowEvidenceBindingV1.self, forKey: .stderrBinding), execution: try container.decode(PublicWorkflowCIExecutionV1.self, forKey: .execution))
+    let container = try PublicWorkflowDecoding.container(decoder, keyedBy: CodingKeys.self)
+    try self.init(platform: try container.decode(String.self, forKey: .platform), command: try container.decode(String.self, forKey: .command), sdk: try container.decode(String.self, forKey: .sdk), destination: try container.decode(String.self, forKey: .destination), xcodeVersion: try container.decode(String.self, forKey: .xcodeVersion), fixture: try container.decode(CoreEvidenceReference.self, forKey: .fixture), status: try container.decode(PublicWorkflowPlatformStatus.self, forKey: .status), exitCode: try container.decodeIfPresent(Int.self, forKey: .exitCode), stdout: try container.decode(CoreEvidenceReference.self, forKey: .stdout), stderr: try container.decode(CoreEvidenceReference.self, forKey: .stderr), correlation: try container.decode(PublicWorkflowPlatformRunCorrelation.self, forKey: .correlation), fixtureBinding: try container.decode(PublicWorkflowEvidenceBinding.self, forKey: .fixtureBinding), stdoutBinding: try container.decode(PublicWorkflowEvidenceBinding.self, forKey: .stdoutBinding), stderrBinding: try container.decode(PublicWorkflowEvidenceBinding.self, forKey: .stderrBinding), execution: try container.decode(PublicWorkflowCIExecution.self, forKey: .execution))
   }
 }

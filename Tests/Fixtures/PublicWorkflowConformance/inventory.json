@@ -1,5 +1,5 @@
 {
-  "schema": "PublicWorkflowAnnotationInventoryV1",
+  "schema": "PublicWorkflowAnnotationInventory",
   "annotations": [
     {
       "name": "@TLAModel",

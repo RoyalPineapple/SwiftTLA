@@ -11,9 +11,9 @@ struct CoreConformanceRunnerTests {
     defer { try? fileManager.removeItem(at: root) }
     try fileManager.createDirectory(at: root, withIntermediateDirectories: true)
     let request = temporaryRequest(in: root)
-    let executor = FixtureTLCExecutorV1(
+    let executor = FixtureTLCExecutor(
       stream: try graphStream(for: request.expectedCase, runID: request.runID))
-    let runner = CoreConformanceRunnerV1(tlcAdapter: TLCProcessAdapterV1(executor: executor))
+    let runner = CoreConformanceRunner(tlcAdapter: TLCProcessAdapter(executor: executor))
     let output = root.appendingPathComponent("evidence")
     let result = runner.run(
       case: request.expectedCase,
@@ -61,8 +61,8 @@ struct CoreConformanceRunnerTests {
     defer { try? fileManager.removeItem(at: root) }
     try fileManager.createDirectory(at: root, withIntermediateDirectories: true)
     let request = temporaryRequest(in: root)
-    let runner = CoreConformanceRunnerV1(
-      tlcAdapter: TLCProcessAdapterV1(executor: FailingTLCExecutorV1()))
+    let runner = CoreConformanceRunner(
+      tlcAdapter: TLCProcessAdapter(executor: FailingTLCExecutor()))
     let output = root.appendingPathComponent("failed-evidence")
     let result = runner.run(
       case: request.expectedCase,
@@ -109,10 +109,10 @@ struct CoreConformanceRunnerTests {
     try fileManager.createDirectory(at: root, withIntermediateDirectories: true)
     let request = temporaryRequest(in: root)
     let output = root.appendingPathComponent("wrong-swift-case")
-    let result = CoreConformanceRunnerV1().run(
+    let result = CoreConformanceRunner().run(
       case: request.expectedCase,
       swiftExploration: {
-        SwiftExplorationEvidenceV1(caseID: "other-case", exploration: swiftExploration())
+        SwiftExplorationEvidence(caseID: "other-case", exploration: swiftExploration())
       },
       tlcRequest: request,
       replay: .none,
@@ -137,14 +137,14 @@ struct CoreConformanceRunnerTests {
     try Data("stale".utf8).write(to: stale.appendingPathComponent("contamination.txt"))
     try Data("trace".utf8).write(to: request.traceOutput)
     try Data("replay".utf8).write(to: request.replayInput)
-    let executor = FixtureTLCExecutorV1(
+    let executor = FixtureTLCExecutor(
       stream: try graphStream(for: request.expectedCase, runID: request.runID),
       status: 12,
       stdout: "Invariant violation"
     )
     let output = root.appendingPathComponent("trace-replay-evidence")
-    let result = CoreConformanceRunnerV1(
-      tlcAdapter: TLCProcessAdapterV1(executor: executor)
+    let result = CoreConformanceRunner(
+      tlcAdapter: TLCProcessAdapter(executor: executor)
     ).run(
       case: request.expectedCase,
       swiftExploration: { swiftEvidence(for: request.expectedCase) },
@@ -174,9 +174,9 @@ struct CoreConformanceRunnerTests {
     try fileManager.createDirectory(at: root, withIntermediateDirectories: true)
     let request = temporaryRequest(in: root)
     let otherRun = UUID(uuidString: "00000000-0000-4000-8000-000000000006")!
-    let runner = CoreConformanceRunnerV1(
-      tlcAdapter: TLCProcessAdapterV1(
-        executor: FixtureTLCExecutorV1(
+    let runner = CoreConformanceRunner(
+      tlcAdapter: TLCProcessAdapter(
+        executor: FixtureTLCExecutor(
           stream: try graphStream(for: request.expectedCase, runID: otherRun))))
     let output = root.appendingPathComponent("wrong-tlc-run")
     let result = runner.run(
@@ -202,12 +202,12 @@ struct CoreConformanceRunnerTests {
     try Data("stale graph stream".utf8).write(to: request.graphEvents)
     let stream = try graphStream(for: request.expectedCase, runID: request.runID)
     let output = root.appendingPathComponent("exact-evidence")
-    let result = CoreConformanceRunnerV1(
-      tlcAdapter: TLCProcessAdapterV1(executor: FixtureTLCExecutorV1(stream: stream))
+    let result = CoreConformanceRunner(
+      tlcAdapter: TLCProcessAdapter(executor: FixtureTLCExecutor(stream: stream))
     ).run(
       case: request.expectedCase,
       swiftExploration: {
-        SwiftExplorationEvidenceV1(
+        SwiftExplorationEvidence(
           caseID: request.expectedCase.id, exploration: swiftExploration(action: "Next"))
       },
       tlcRequest: request,
@@ -232,12 +232,12 @@ extension CoreConformanceRunnerTests {
     defer { try? fileManager.removeItem(at: root) }
     try fileManager.createDirectory(at: root, withIntermediateDirectories: true)
     let request = temporaryRequest(in: root)
-    let violation = TLCProcessResultV1(status: 12, stdout: "Error: invariant", stderr: "")
-    let replayFailure = TLCProcessResultV1(status: 1, stdout: "replay output", stderr: "replay error")
+    let violation = TLCProcessResult(status: 12, stdout: "Error: invariant", stderr: "")
+    let replayFailure = TLCProcessResult(status: 1, stdout: "replay output", stderr: "replay error")
     let output = root.appendingPathComponent("replay-failure")
-    let result = CoreConformanceRunnerV1(
-      tlcAdapter: TLCProcessAdapterV1(
-        executor: SequencedTLCExecutorV1(
+    let result = CoreConformanceRunner(
+      tlcAdapter: TLCProcessAdapter(
+        executor: SequencedTLCExecutor(
           stream: try graphStream(for: request.expectedCase, runID: request.runID),
           results: [violation, violation, replayFailure])))
       .run(
@@ -264,9 +264,9 @@ extension CoreConformanceRunnerTests {
     try fileManager.createDirectory(at: root, withIntermediateDirectories: true)
     let request = temporaryRequest(in: root)
     let output = root.appendingPathComponent("trace-execution-failure")
-    let runner = CoreConformanceRunnerV1(
-      tlcAdapter: TLCProcessAdapterV1(
-        executor: ThrowingFollowupTLCExecutorV1(
+    let runner = CoreConformanceRunner(
+      tlcAdapter: TLCProcessAdapter(
+        executor: ThrowingFollowupTLCExecutor(
           stream: try graphStream(for: request.expectedCase, runID: request.runID),
           failure: .trace
         )
@@ -300,9 +300,9 @@ extension CoreConformanceRunnerTests {
     try fileManager.createDirectory(at: root, withIntermediateDirectories: true)
     let request = temporaryRequest(in: root)
     let output = root.appendingPathComponent("replay-execution-failure")
-    let runner = CoreConformanceRunnerV1(
-      tlcAdapter: TLCProcessAdapterV1(
-        executor: ThrowingFollowupTLCExecutorV1(
+    let runner = CoreConformanceRunner(
+      tlcAdapter: TLCProcessAdapter(
+        executor: ThrowingFollowupTLCExecutor(
           stream: try graphStream(for: request.expectedCase, runID: request.runID),
           failure: .replay
         )
@@ -335,9 +335,9 @@ extension CoreConformanceRunnerTests {
     try fileManager.createDirectory(at: root, withIntermediateDirectories: true)
     let request = temporaryRequest(in: root)
     let output = root.appendingPathComponent("arbitrary-trace-execution-failure")
-    let result = CoreConformanceRunnerV1(
-      tlcAdapter: TLCProcessAdapterV1(
-        executor: ArbitraryFollowupFailureTLCExecutorV1(
+    let result = CoreConformanceRunner(
+      tlcAdapter: TLCProcessAdapter(
+        executor: ArbitraryFollowupFailureTLCExecutor(
           stream: try graphStream(for: request.expectedCase, runID: request.runID),
           failure: .trace
         )
@@ -365,9 +365,9 @@ extension CoreConformanceRunnerTests {
     try fileManager.createDirectory(at: root, withIntermediateDirectories: true)
     let request = temporaryRequest(in: root)
     let output = root.appendingPathComponent("arbitrary-replay-execution-failure")
-    let result = CoreConformanceRunnerV1(
-      tlcAdapter: TLCProcessAdapterV1(
-        executor: ArbitraryFollowupFailureTLCExecutorV1(
+    let result = CoreConformanceRunner(
+      tlcAdapter: TLCProcessAdapter(
+        executor: ArbitraryFollowupFailureTLCExecutor(
           stream: try graphStream(for: request.expectedCase, runID: request.runID),
           failure: .replay
         )
@@ -401,7 +401,7 @@ extension CoreConformanceRunnerTests {
     let secondaryStream = request.graphEvents.deletingPathExtension().appendingPathExtension("trace.jsonl")
     try Data("primary".utf8).write(to: request.graphEvents)
     try Data("trace".utf8).write(to: secondaryStream)
-    let result = CoreConformanceRunnerV1().run(
+    let result = CoreConformanceRunner().run(
       case: request.expectedCase,
       swiftExploration: { swiftEvidence(for: request.expectedCase) },
       tlcRequest: request,
@@ -429,18 +429,18 @@ extension CoreConformanceRunnerTests {
     try fileManager.createDirectory(at: root, withIntermediateDirectories: true)
     let request = temporaryRequest(in: root)
     let stream = try graphStream(for: request.expectedCase, runID: request.runID)
-    let barrier = PublicationRaceBarrierV1(parties: 2)
-    let runner = CoreConformanceRunnerV1(
-      tlcAdapter: TLCProcessAdapterV1(
-        executor: BarrierTLCExecutorV1(stream: stream, barrier: barrier)))
+    let barrier = PublicationRaceBarrier(parties: 2)
+    let runner = CoreConformanceRunner(
+      tlcAdapter: TLCProcessAdapter(
+        executor: BarrierTLCExecutor(stream: stream, barrier: barrier)))
     let output = root.appendingPathComponent("shared-evidence")
-    let results = ResultBoxV1()
+    let results = ResultBox()
     DispatchQueue.concurrentPerform(iterations: 2) { _ in
       results.append(
         runner.run(
           case: request.expectedCase,
           swiftExploration: {
-            SwiftExplorationEvidenceV1(
+            SwiftExplorationEvidence(
               caseID: request.expectedCase.id, exploration: exactSwiftExploration())
           },
           tlcRequest: request,
@@ -478,10 +478,10 @@ extension CoreConformanceRunnerTests {
     #expect(fileManager.fileExists(atPath: output.appendingPathComponent("run.json").path))
     let run = try json(at: output.appendingPathComponent("run.json"))
     let exitCode = try #require(run["exitCode"] as? Int)
-    #expect(exitCode == CoreConformanceExitCodeV1.semanticDifference.rawValue)
+    #expect(exitCode == CoreConformanceExitCode.semanticDifference.rawValue)
   }
-  private func swiftEvidence(for declaredCase: CoreConformanceCaseV1) -> SwiftExplorationEvidenceV1 {
-    SwiftExplorationEvidenceV1(caseID: declaredCase.id, exploration: swiftExploration())
+  private func swiftEvidence(for declaredCase: CoreConformanceCase) -> SwiftExplorationEvidence {
+    SwiftExplorationEvidence(caseID: declaredCase.id, exploration: swiftExploration())
   }
   private func swiftExploration(action: String = "SwiftNext") -> ModelExplorationResult {
     let first = StateGraph.StateID(0)
@@ -497,17 +497,17 @@ extension CoreConformanceRunnerTests {
       result: .ok(statesCount: 2)
     )
   }
-  private func temporaryRequest(in root: URL) -> TLCProcessRequestV1 {
+  private func temporaryRequest(in root: URL) -> TLCProcessRequest {
     let module = root.appendingPathComponent("Fixture.tla")
     let configuration = root.appendingPathComponent("Fixture.cfg")
     try! Data().write(to: module)
     try! Data().write(to: configuration)
-    let declaredCase = try! CoreConformanceCaseV1(
+    let declaredCase = try! CoreConformanceCase(
       id: "fixture",
       moduleSHA256: String(repeating: "c", count: 64),
       cfgSHA256: String(repeating: "d", count: 64),
       arguments: ["-workers", "1"],
-      argumentsSHA256: CoreConformanceCaseV1.argumentsDigest(["-workers", "1"]),
+      argumentsSHA256: CoreConformanceCase.argumentsDigest(["-workers", "1"]),
       workers: 1,
       fingerprintPolynomial: 1,
       deadlock: false,
@@ -516,7 +516,7 @@ extension CoreConformanceRunnerTests {
       environment: [:],
       pin: .fixture
     )
-    return TLCProcessRequestV1(
+    return TLCProcessRequest(
       javaExecutable: URL(fileURLWithPath: "/usr/bin/java"),
       jar: root.appendingPathComponent("tla2tools.jar"),
       bridgeClasses: root.appendingPathComponent("bridge"),
@@ -532,7 +532,7 @@ extension CoreConformanceRunnerTests {
     )
   }
 }
-private struct FixtureTLCExecutorV1: TLCProcessExecuting {
+private struct FixtureTLCExecutor: TLCProcessExecuting {
   let stream: Data
   let status: Int32
   let stdout: String
@@ -544,16 +544,16 @@ private struct FixtureTLCExecutorV1: TLCProcessExecuting {
     self.status = status
     self.stdout = stdout
   }
-  func execute(_ request: TLCProcessRequestV1) throws -> TLCProcessResultV1 {
+  func execute(_ request: TLCProcessRequest) throws -> TLCProcessResult {
     try stream.write(to: request.graphEvents)
-    return TLCProcessResultV1(
+    return TLCProcessResult(
       status: status,
       stdout: stdout,
       stderr: ""
     )
   }
 }
-private final class PublicationRaceBarrierV1: Sendable {
+private final class PublicationRaceBarrier: Sendable {
   private let arrivals = OSAllocatedUnfairLock(initialState: 0)
   private let release = DispatchSemaphore(value: 0)
   private let parties: Int
@@ -574,10 +574,10 @@ private final class PublicationRaceBarrierV1: Sendable {
     }
   }
 }
-private struct BarrierTLCExecutorV1: TLCProcessExecuting {
+private struct BarrierTLCExecutor: TLCProcessExecuting {
   let stream: Data
-  let barrier: PublicationRaceBarrierV1
-  func execute(_ request: TLCProcessRequestV1) throws -> TLCProcessResultV1 {
+  let barrier: PublicationRaceBarrier
+  func execute(_ request: TLCProcessRequest) throws -> TLCProcessResult {
     try stream.write(to: request.graphEvents)
     if request.traceMode == .none {
       barrier.waitForAll()
@@ -588,88 +588,88 @@ private struct BarrierTLCExecutorV1: TLCProcessExecuting {
     case .dumpJSON: phase = "trace"
     case .loadJSON: phase = "replay"
     }
-    return TLCProcessResultV1(
+    return TLCProcessResult(
       status: 12,
       stdout: "Error: violation from \(phase) invocation",
       stderr: ""
     )
   }
 }
-private struct FailingTLCExecutorV1: TLCProcessExecuting {
-  func execute(_ request: TLCProcessRequestV1) throws -> TLCProcessResultV1 {
-    throw TLCProcessErrorV1.timedOut(
+private struct FailingTLCExecutor: TLCProcessExecuting {
+  func execute(_ request: TLCProcessRequest) throws -> TLCProcessResult {
+    throw TLCProcessError.timedOut(
       partialStdout: "partial stdout TOKEN=secret", partialStderr: "partial stderr")
   }
 }
-private final class SequencedTLCExecutorV1: TLCProcessExecuting, Sendable {
+private final class SequencedTLCExecutor: TLCProcessExecuting, Sendable {
   let stream: Data
-  private let results: OSAllocatedUnfairLock<[TLCProcessResultV1]>
-  init(stream: Data, results: [TLCProcessResultV1]) {
+  private let results: OSAllocatedUnfairLock<[TLCProcessResult]>
+  init(stream: Data, results: [TLCProcessResult]) {
     self.stream = stream
     self.results = OSAllocatedUnfairLock(initialState: results)
   }
-  func execute(_ request: TLCProcessRequestV1) throws -> TLCProcessResultV1 {
+  func execute(_ request: TLCProcessRequest) throws -> TLCProcessResult {
     try stream.write(to: request.graphEvents)
     return results.withLock { $0.removeFirst() }
   }
 }
-private enum FollowupFailureV1: Sendable {
+private enum FollowupFailure: Sendable {
   case trace
   case replay
 }
-private final class ThrowingFollowupTLCExecutorV1: TLCProcessExecuting, Sendable {
+private final class ThrowingFollowupTLCExecutor: TLCProcessExecuting, Sendable {
   let stream: Data
-  let failure: FollowupFailureV1
-  init(stream: Data, failure: FollowupFailureV1) {
+  let failure: FollowupFailure
+  init(stream: Data, failure: FollowupFailure) {
     self.stream = stream
     self.failure = failure
   }
-  func execute(_ request: TLCProcessRequestV1) throws -> TLCProcessResultV1 {
+  func execute(_ request: TLCProcessRequest) throws -> TLCProcessResult {
     try stream.write(to: request.graphEvents)
     switch request.traceMode {
     case .none:
-      return TLCProcessResultV1(status: 12, stdout: "Error: primary stdout TOKEN=primary-secret", stderr: "")
+      return TLCProcessResult(status: 12, stdout: "Error: primary stdout TOKEN=primary-secret", stderr: "")
     case .dumpJSON where failure == .trace:
-      throw TLCProcessErrorV1.timedOut(
+      throw TLCProcessError.timedOut(
         partialStdout: "trace partial stdout TOKEN=trace-secret", partialStderr: "trace partial stderr")
     case .dumpJSON:
-      return TLCProcessResultV1(status: 12, stdout: "Error: trace stdout", stderr: "")
+      return TLCProcessResult(status: 12, stdout: "Error: trace stdout", stderr: "")
     case .loadJSON:
-      throw TLCProcessErrorV1.timedOut(
+      throw TLCProcessError.timedOut(
         partialStdout: "replay partial stdout TOKEN=replay-secret", partialStderr: "replay partial stderr")
     }
   }
 }
-private enum ArbitraryTLCExecutorFailureV1: Error, Sendable {
+private enum ArbitraryTLCExecutorFailure: Error, Sendable {
   case launchValidation
 }
-private final class ArbitraryFollowupFailureTLCExecutorV1: TLCProcessExecuting, Sendable {
+private final class ArbitraryFollowupFailureTLCExecutor: TLCProcessExecuting, Sendable {
   let stream: Data
-  let failure: FollowupFailureV1
-  init(stream: Data, failure: FollowupFailureV1) {
+  let failure: FollowupFailure
+  init(stream: Data, failure: FollowupFailure) {
     self.stream = stream
     self.failure = failure
   }
-  func execute(_ request: TLCProcessRequestV1) throws -> TLCProcessResultV1 {
+  func execute(_ request: TLCProcessRequest) throws -> TLCProcessResult {
     try stream.write(to: request.graphEvents)
     switch request.traceMode {
     case .none:
-      return TLCProcessResultV1(status: 12, stdout: "Error: primary stdout", stderr: "")
+      return TLCProcessResult(status: 12, stdout: "Error: primary stdout", stderr: "")
     case .dumpJSON where failure == .trace:
-      throw ArbitraryTLCExecutorFailureV1.launchValidation
+      throw ArbitraryTLCExecutorFailure.launchValidation
     case .dumpJSON:
-      return TLCProcessResultV1(status: 12, stdout: "Error: trace stdout", stderr: "")
+      return TLCProcessResult(status: 12, stdout: "Error: trace stdout", stderr: "")
     case .loadJSON:
-      throw ArbitraryTLCExecutorFailureV1.launchValidation
+      throw ArbitraryTLCExecutorFailure.launchValidation
     }
   }
 }
-private final class ResultBoxV1: Sendable {
-  private let storage = OSAllocatedUnfairLock(initialState: [CoreConformanceRunResultV1]())
-  var values: [CoreConformanceRunResultV1] {
+private final class ResultBox: Sendable {
+  private let storage = OSAllocatedUnfairLock(initialState: [CoreConformanceRunResult]())
+  var values: [CoreConformanceRunResult] {
     storage.withLock { $0 }
   }
-  func append(_ value: CoreConformanceRunResultV1) {
+  func append(_ value: CoreConformanceRunResult) {
     storage.withLock { $0.append(value) }
   }
 }
@@ -693,7 +693,7 @@ private func json(at url: URL) throws -> [String: Any] {
 private func correlation(in object: [String: Any]) -> [String: Any] {
   object["correlation"] as? [String: Any] ?? [:]
 }
-private func graphStream(for declaredCase: CoreConformanceCaseV1, runID: UUID) throws -> Data {
+private func graphStream(for declaredCase: CoreConformanceCase, runID: UUID) throws -> Data {
   let first = state(fingerprint: "1", value: "1")
   let second = state(fingerprint: "2", value: "2")
   let provenance: [String: Any] = [
@@ -743,7 +743,7 @@ private func graphStream(for declaredCase: CoreConformanceCaseV1, runID: UUID) t
   let footer = common.merging([
     "type": "footer", "callback": "writer.footer", "seq": 3, "status": "closed",
     "counts": ["header": 1, "initial": 1, "transition": 1], "lastBodySeq": 2,
-    "bodySha256": SHA256V1.hex(body)
+    "bodySha256": SHA256.hex(body)
   ]) { $1 }
   let footerData = try JSONSerialization.data(withJSONObject: footer, options: [.sortedKeys])
   return body + footerData + Data([10])
@@ -757,7 +757,7 @@ private func state(fingerprint: String, value: String) -> [String: Any] {
         "ordinal": 0,
         "name": "x",
         "tla": value,
-        "tlaSha256": SHA256V1.hex(Data(value.utf8))
+        "tlaSha256": SHA256.hex(Data(value.utf8))
       ]
     ]
   ]

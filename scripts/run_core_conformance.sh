@@ -29,7 +29,7 @@ import sys
 
 with open(sys.argv[1], encoding="utf-8") as source:
     manifest = json.load(source)
-if manifest.get("schema") != "CoreConformanceCasesV1":
+if manifest.get("schema") != "CoreConformanceCases":
     raise SystemExit("core-conformance: unsupported cases manifest schema")
 ids = [entry.get("id") for entry in manifest.get("cases", [])]
 if sys.argv[2] != "all" and sys.argv[2] not in ids:

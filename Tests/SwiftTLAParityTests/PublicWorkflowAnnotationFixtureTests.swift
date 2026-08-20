@@ -70,7 +70,7 @@ struct PublicWorkflowAnnotationFixtureTests {
     let input = root.appendingPathComponent("fixture.swift")
     let original = Data("original".utf8)
     try original.write(to: input)
-    let reference = SourceInput(path: "fixture.swift", sha256: SHA256V1.hex(original))
+    let reference = SourceInput(path: "fixture.swift", sha256: SHA256.hex(original))
     try Data("changed".utf8).write(to: input)
 
     #expect(throws: InventoryError.digestMismatch("fixture.swift")) {
@@ -133,13 +133,13 @@ struct PublicWorkflowAnnotationFixtureTests {
       .sorted { $0.path < $1.path }
       .map { "\($0.path) \($0.sha256)\n" }
       .joined()
-    guard SHA256V1.hex(Data(canonical.utf8)) == annotation.sourceInputsSHA256 else {
+    guard SHA256.hex(Data(canonical.utf8)) == annotation.sourceInputsSHA256 else {
       throw InventoryError.aggregateMismatch(annotation.name)
     }
   }
 
   private func validateSourceInput(_ reference: SourceInput, root: URL) throws {
-    let actual = SHA256V1.hex(try Data(contentsOf: root.appendingPathComponent(reference.path)))
+    let actual = SHA256.hex(try Data(contentsOf: root.appendingPathComponent(reference.path)))
     guard actual == reference.sha256 else {
       throw InventoryError.digestMismatch(reference.path)
     }
@@ -160,7 +160,7 @@ struct PublicWorkflowAnnotationFixtureTests {
   private func loadInventory() throws -> Inventory {
     let data = try Data(contentsOf: fixtureRoot.appendingPathComponent("inventory.json"))
     let inventory = try JSONDecoder().decode(Inventory.self, from: data)
-    #expect(inventory.schema == "PublicWorkflowAnnotationInventoryV1")
+    #expect(inventory.schema == "PublicWorkflowAnnotationInventory")
     return inventory
   }
 

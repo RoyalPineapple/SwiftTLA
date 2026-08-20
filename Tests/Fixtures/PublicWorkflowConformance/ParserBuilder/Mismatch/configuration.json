@@ -1,1 +1,1 @@
-{"initialValue":0,"model":"boundedCounterV1","nextValue":2,"schema":"PublicWorkflowBoundedCounterConfigurationV1","specificationName":"Counter","upperBound":2,"variable":"x"}
+{"initialValue":0,"model":"boundedCounter","nextValue":2,"schema":"PublicWorkflowBoundedCounterConfiguration","specificationName":"Counter","upperBound":2,"variable":"x"}

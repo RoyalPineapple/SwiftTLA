@@ -19,7 +19,7 @@ expect_failure() {
 }
 
 cat >"$TMP/cases.json" <<'JSON'
-{"schema":"CoreConformanceCasesV1","cases":[{"id":"hour-clock"}]}
+{"schema":"CoreConformanceCases","cases":[{"id":"hour-clock"}]}
 JSON
 
 expect_failure "unknown core-conformance case" \
@@ -60,7 +60,7 @@ printf '%s\n' '---- MODULE LocalFixture ----' '====' >"$TMP/project/Verification
 printf '%s\n' 'SPECIFICATION Spec' >"$TMP/project/Verification/CoreConformance/fixtures/local/LocalFixture.cfg"
 cat >"$TMP/local-fixtures.json" <<JSON
 {
-  "schema": "CoreConformanceCasesV1",
+  "schema": "CoreConformanceCases",
   "cases": [{
     "id": "local-fixture",
     "module": "fixtures/local/LocalFixture.tla",

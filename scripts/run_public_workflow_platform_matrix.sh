@@ -370,7 +370,7 @@ import sys
 output, run_id, root = sys.argv[1:]
 results = [json.loads(path.read_text(encoding="utf-8")) for path in sorted(pathlib.Path(root).glob("*/result.json"))]
 value = {
-    "schema": "PublicWorkflowPlatformMatrixV1",
+    "schema": "PublicWorkflowPlatformMatrix",
     "runID": run_id,
     "results": results,
     "admittedPlatforms": [result["platform"] for result in results if result["status"] == "succeeded"],

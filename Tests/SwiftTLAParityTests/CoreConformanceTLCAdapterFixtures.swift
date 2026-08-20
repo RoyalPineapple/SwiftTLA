@@ -4,7 +4,7 @@ import os
 import Testing
 import UpstreamParity
 
-func completeGraphStream(_ expectedCase: CoreConformanceCaseV1) -> Data {
+func completeGraphStream(_ expectedCase: CoreConformanceCase) -> Data {
   let runID = "00000000-0000-4000-8000-000000000001"
   let state0: [String: Any] = ["fingerprint": "1", "level": 1, "bindings": [binding(0, "x", "0")]]
   let state1: [String: Any] = ["fingerprint": "2", "level": 2, "bindings": [binding(0, "x", "1")]]
@@ -28,11 +28,11 @@ func completeGraphStream(_ expectedCase: CoreConformanceCaseV1) -> Data {
     [
       "callback": "writer.close", "status": "closed",
       "counts": ["header": 1, "initial": 1, "transition": 1],
-      "lastBodySeq": 2, "bodySha256": SHA256V1.hex(body)
+      "lastBodySeq": 2, "bodySha256": SHA256.hex(body)
     ])
   return body + jsonLine(footer) + Data([10])
 }
-func completeGraphStreamWithStutteringObservation(_ expectedCase: CoreConformanceCaseV1) -> Data {
+func completeGraphStreamWithStutteringObservation(_ expectedCase: CoreConformanceCase) -> Data {
   let runID = "00000000-0000-4000-8000-000000000001"
   let lines = String(decoding: completeGraphStream(expectedCase), as: UTF8.self)
     .split(separator: "\n", omittingEmptySubsequences: true).map(String.init)
@@ -49,12 +49,12 @@ func completeGraphStreamWithStutteringObservation(_ expectedCase: CoreConformanc
     [
       "callback": "writer.close", "status": "closed",
       "counts": ["header": 1, "initial": 1, "transition": 1, "unsupported": 1],
-      "lastBodySeq": 3, "bodySha256": SHA256V1.hex(body)
+      "lastBodySeq": 3, "bodySha256": SHA256.hex(body)
     ]
   )) + Data([10])
   return body + footer
 }
-func completeGraphStreamWithExcludedPredicateObservation(_ expectedCase: CoreConformanceCaseV1) -> Data {
+func completeGraphStreamWithExcludedPredicateObservation(_ expectedCase: CoreConformanceCase) -> Data {
   let runID = "00000000-0000-4000-8000-000000000001"
   let lines = String(decoding: completeGraphStream(expectedCase), as: UTF8.self)
     .split(separator: "\n", omittingEmptySubsequences: true).map(String.init)
@@ -76,13 +76,13 @@ func completeGraphStreamWithExcludedPredicateObservation(_ expectedCase: CoreCon
     [
       "callback": "writer.close", "status": "closed",
       "counts": ["header": 1, "initial": 1, "transition": 2],
-      "lastBodySeq": 3, "bodySha256": SHA256V1.hex(body)
+      "lastBodySeq": 3, "bodySha256": SHA256.hex(body)
     ]
   )) + Data([10])
   return body + footer
 }
 func fingerprintAliasGraphStream(
-  _ expectedCase: CoreConformanceCaseV1, aliasSeen: Bool, aliasFingerprint: String = "2"
+  _ expectedCase: CoreConformanceCase, aliasSeen: Bool, aliasFingerprint: String = "2"
 ) -> Data {
   let runID = "00000000-0000-4000-8000-000000000001"
   let state0: [String: Any] = ["fingerprint": "1", "level": 1, "bindings": [binding(0, "x", "0")]]
@@ -116,13 +116,13 @@ func fingerprintAliasGraphStream(
     [
       "callback": "writer.close", "status": "closed",
       "counts": ["header": 1, "initial": 1, "transition": 2],
-      "lastBodySeq": 3, "bodySha256": SHA256V1.hex(body)
+      "lastBodySeq": 3, "bodySha256": SHA256.hex(body)
     ]
   )) + Data([10])
   return body + footer
 }
 func binding(_ ordinal: Int, _ name: String, _ tla: String) -> [String: Any] {
-  ["ordinal": ordinal, "name": name, "tla": tla, "tlaSha256": SHA256V1.hex(Data(tla.utf8))]
+  ["ordinal": ordinal, "name": name, "tla": tla, "tlaSha256": SHA256.hex(Data(tla.utf8))]
 }
 func record(
   _ type: String, _ sequence: Int, _ runID: String, _ caseID: String, _ fields: [String: Any]
@@ -136,16 +136,16 @@ func jsonLine(_ object: [String: Any]) -> Data {
   try! JSONSerialization.data(withJSONObject: object, options: [.sortedKeys])
 }
 func fixtureCase(
-  _ pin: TLCReferencePinV1,
+  _ pin: TLCReferencePin,
   arguments: [String] = [],
-  invocationMappings: [CoreConformanceInvocationMappingV1] = [],
-  valueNormalizations: [CoreConformanceValueNormalizationV1] = []
+  invocationMappings: [CoreConformanceInvocationMapping] = [],
+  valueNormalizations: [CoreConformanceValueNormalization] = []
 )
-  -> CoreConformanceCaseV1 {
-  try! CoreConformanceCaseV1(
+  -> CoreConformanceCase {
+  try! CoreConformanceCase(
     id: "fixture", moduleSHA256: String(repeating: "c", count: 64),
     cfgSHA256: String(repeating: "d", count: 64),
-    arguments: arguments, argumentsSHA256: CoreConformanceCaseV1.argumentsDigest(arguments),
+    arguments: arguments, argumentsSHA256: CoreConformanceCase.argumentsDigest(arguments),
     workers: 1,
     fingerprintPolynomial: 1, deadlock: false, operatingSystem: "macos", architecture: "arm64",
     environment: [:], pin: pin, invocationMappings: invocationMappings,
@@ -153,7 +153,7 @@ func fixtureCase(
   )
 }
 func functionRecordNormalizationStream(
-  _ expectedCase: CoreConformanceCaseV1,
+  _ expectedCase: CoreConformanceCase,
   actionLocation: String
 ) -> Data {
   let runID = "00000000-0000-4000-8000-000000000001"
@@ -185,7 +185,7 @@ func functionRecordNormalizationStream(
     [
       "callback": "writer.close", "status": "closed",
       "counts": ["header": 1, "initial": 1, "transition": 1],
-      "lastBodySeq": 2, "bodySha256": SHA256V1.hex(body)
+      "lastBodySeq": 2, "bodySha256": SHA256.hex(body)
     ])
   return body + jsonLine(footer) + Data([10])
 }
@@ -199,7 +199,7 @@ func replacingFunctionKey(in stream: Data, from: String, to: String) -> Data {
     var binding = bindings[0]
     let value = (binding["tla"] as! String).replacingOccurrences(of: from, with: to)
     binding["tla"] = value
-    binding["tlaSha256"] = SHA256V1.hex(Data(value.utf8))
+    binding["tlaSha256"] = SHA256.hex(Data(value.utf8))
     bindings[0] = binding
     state["bindings"] = bindings
     records[index][index == 1 ? "state" : "source"] = state
@@ -209,7 +209,7 @@ func replacingFunctionKey(in stream: Data, from: String, to: String) -> Data {
   var targetBinding = targetBindings[0]
   let targetValue = (targetBinding["tla"] as! String).replacingOccurrences(of: from, with: to)
   targetBinding["tla"] = targetValue
-  targetBinding["tlaSha256"] = SHA256V1.hex(Data(targetValue.utf8))
+  targetBinding["tlaSha256"] = SHA256.hex(Data(targetValue.utf8))
   targetBindings[0] = targetBinding
   target["bindings"] = targetBindings
   records[2]["target"] = target
@@ -218,25 +218,25 @@ func replacingFunctionKey(in stream: Data, from: String, to: String) -> Data {
     result.append(10)
   }
   var footer = try! JSONSerialization.jsonObject(with: Data(lines.last!.utf8)) as! [String: Any]
-  footer["bodySha256"] = SHA256V1.hex(body)
+  footer["bodySha256"] = SHA256.hex(body)
   return body + jsonLine(footer) + Data([10])
 }
-func frozenCase(_ url: URL) throws -> CoreConformanceCaseV1 {
+func frozenCase(_ url: URL) throws -> CoreConformanceCase {
   let object = try #require(JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any])
   let arguments = try #require(object["arguments"] as? [String])
   let invocationMappings = try #require(object["invocationMappings"] as? [[String: Any]]).map { mapping in
-    try CoreConformanceInvocationMappingV1(
+    try CoreConformanceInvocationMapping(
       wrapper: try #require(mapping["wrapper"] as? String),
       action: try #require(mapping["action"] as? String),
       arguments: try #require(mapping["arguments"] as? [String]),
       indices: try #require(mapping["indices"] as? [Int]))
   }
   let valueNormalizations = try #require(object["valueNormalizations"] as? [[String: Any]]).map { normalization in
-    try CoreConformanceValueNormalizationV1(
+    try CoreConformanceValueNormalization(
       binding: try #require(normalization["binding"] as? String),
       functionKeys: try #require(normalization["functionKeys"] as? [String: String]))
   }
-  return try CoreConformanceCaseV1(
+  return try CoreConformanceCase(
     id: try #require(object["id"] as? String),
     moduleSHA256: try #require(object["moduleSHA256"] as? String),
     cfgSHA256: try #require(object["cfgSHA256"] as? String),
@@ -251,7 +251,7 @@ func frozenCase(_ url: URL) throws -> CoreConformanceCaseV1 {
     invocationMappings: invocationMappings, valueNormalizations: valueNormalizations)
 }
 func mutatedCompleteGraphStream(
-  _ expectedCase: CoreConformanceCaseV1, mutation: (String) -> String
+  _ expectedCase: CoreConformanceCase, mutation: (String) -> String
 ) -> Data {
   var lines = String(decoding: completeGraphStream(expectedCase), as: UTF8.self)
     .split(separator: "\n", omittingEmptySubsequences: true).map(String.init)
@@ -261,7 +261,7 @@ func mutatedCompleteGraphStream(
   let body = Data((lines.dropLast().joined(separator: "\n") + "\n").utf8)
   var footer =
     try! JSONSerialization.jsonObject(with: Data(mutation(lines[3]).utf8)) as! [String: Any]
-  footer["bodySha256"] = SHA256V1.hex(body)
+  footer["bodySha256"] = SHA256.hex(body)
   return body + jsonLine(footer) + Data([10])
 }
 func refreshedFooterDigest(_ stream: Data) -> Data {
@@ -269,7 +269,7 @@ func refreshedFooterDigest(_ stream: Data) -> Data {
     .split(separator: "\n", omittingEmptySubsequences: true).map(String.init)
   let body = Data((lines.dropLast().joined(separator: "\n") + "\n").utf8)
   var footer = try! JSONSerialization.jsonObject(with: Data(lines.last!.utf8)) as! [String: Any]
-  footer["bodySha256"] = SHA256V1.hex(body)
+  footer["bodySha256"] = SHA256.hex(body)
   return body + jsonLine(footer) + Data([10])
 }
 func caseForFiles(
@@ -279,11 +279,11 @@ func caseForFiles(
   arguments: [String],
   environment: [String: String] = [:]
 )
-  -> CoreConformanceCaseV1 {
-  try! CoreConformanceCaseV1(
-    id: id, moduleSHA256: SHA256V1.hex(try! Data(contentsOf: module)),
-    cfgSHA256: SHA256V1.hex(try! Data(contentsOf: configuration)),
-    arguments: arguments, argumentsSHA256: CoreConformanceCaseV1.argumentsDigest(arguments),
+  -> CoreConformanceCase {
+  try! CoreConformanceCase(
+    id: id, moduleSHA256: SHA256.hex(try! Data(contentsOf: module)),
+    cfgSHA256: SHA256.hex(try! Data(contentsOf: configuration)),
+    arguments: arguments, argumentsSHA256: CoreConformanceCase.argumentsDigest(arguments),
     workers: 1,
     fingerprintPolynomial: 1, deadlock: false, operatingSystem: "macos", architecture: "arm64",
     environment: environment, pin: .fixture
@@ -298,12 +298,12 @@ func helperProcessRequest(
   executable: URL,
   in directory: URL,
   environment: [String: String]
-) throws -> TLCProcessRequestV1 {
+) throws -> TLCProcessRequest {
   let module = directory.appendingPathComponent("Module.tla")
   let configuration = directory.appendingPathComponent("Module.cfg")
   try "---- MODULE Module ----\n====\n".write(to: module, atomically: true, encoding: .utf8)
   try "SPECIFICATION Spec\n".write(to: configuration, atomically: true, encoding: .utf8)
-  return TLCProcessRequestV1(
+  return TLCProcessRequest(
     javaExecutable: executable,
     jar: URL(fileURLWithPath: "/tmp/jar"),
     bridgeClasses: directory,
@@ -322,9 +322,9 @@ func helperProcessRequest(
   )
 }
 func launchRequest(
-  expectedCase: CoreConformanceCaseV1, module: URL, configuration: URL, arguments: [String]
-) -> TLCProcessRequestV1 {
-  TLCProcessRequestV1(
+  expectedCase: CoreConformanceCase, module: URL, configuration: URL, arguments: [String]
+) -> TLCProcessRequest {
+  TLCProcessRequest(
     javaExecutable: URL(fileURLWithPath: "/usr/bin/java"),
     jar: URL(fileURLWithPath: "/tmp/tla2tools.jar"),
     bridgeClasses: URL(fileURLWithPath: "/tmp/bridge-classes"), module: module,
@@ -339,9 +339,9 @@ func launchRequest(
 func requestWithReferenceArtifacts(
   jar: URL,
   bridgeClasses: URL,
-  artifacts: TLCReferenceArtifactsV1
-) -> TLCProcessRequestV1 {
-  TLCProcessRequestV1(
+  artifacts: TLCReferenceArtifacts
+) -> TLCProcessRequest {
+  TLCProcessRequest(
     javaExecutable: URL(fileURLWithPath: "/usr/bin/java"), jar: jar, bridgeClasses: bridgeClasses,
     module: URL(fileURLWithPath: "/tmp/Fixture.tla"),
     configuration: URL(fileURLWithPath: "/tmp/Fixture.cfg"),
@@ -354,22 +354,22 @@ func requestWithReferenceArtifacts(
     runID: UUID(), referencePin: .fixture, referenceArtifacts: artifacts
   )
 }
-func retainedBridgeCase() -> CoreConformanceCaseV1 {
+func retainedBridgeCase() -> CoreConformanceCase {
   let root = URL(fileURLWithPath: #filePath)
     .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
   let module = root.appendingPathComponent("Tools/TLCGraphBridge/spike/BridgeGraph.tla")
   let configuration = root.appendingPathComponent("Tools/TLCGraphBridge/spike/BridgeGraph.cfg")
   let arguments = ["-workers", "1", "-fp", "1", "-seed", "1", "-deadlock"]
-  return try! CoreConformanceCaseV1(
-    id: "adversarial-core-graph-v1", moduleSHA256: SHA256V1.hex(try! Data(contentsOf: module)),
-    cfgSHA256: SHA256V1.hex(try! Data(contentsOf: configuration)), arguments: arguments,
-    argumentsSHA256: CoreConformanceCaseV1.argumentsDigest(arguments), workers: 1,
+  return try! CoreConformanceCase(
+    id: "adversarial-core-graph-v1", moduleSHA256: SHA256.hex(try! Data(contentsOf: module)),
+    cfgSHA256: SHA256.hex(try! Data(contentsOf: configuration)), arguments: arguments,
+    argumentsSHA256: CoreConformanceCase.argumentsDigest(arguments), workers: 1,
     fingerprintPolynomial: 1,
     deadlock: false, operatingSystem: "macos", architecture: "arm64", environment: [:],
     pin: .fixture
   )
 }
-func header(_ expectedCase: CoreConformanceCaseV1) -> String {
+func header(_ expectedCase: CoreConformanceCase) -> String {
   let pin = expectedCase.pin
   let record: [String: Any] = [
     "schema": "swifttla.tlc.graph-events", "version": 1, "type": "header",
@@ -392,15 +392,15 @@ func header(_ expectedCase: CoreConformanceCaseV1) -> String {
   ]
   return String(data: try! JSONSerialization.data(withJSONObject: record), encoding: .utf8)!
 }
-final class RecordingTLCExecutorV1: TLCProcessExecuting, Sendable {
-  private let storage: OSAllocatedUnfairLock<(pending: [TLCProcessResultV1], requests: [TLCProcessRequestV1])>
-  init(results: [TLCProcessResultV1]) {
+final class RecordingTLCExecutor: TLCProcessExecuting, Sendable {
+  private let storage: OSAllocatedUnfairLock<(pending: [TLCProcessResult], requests: [TLCProcessRequest])>
+  init(results: [TLCProcessResult]) {
     storage = OSAllocatedUnfairLock(initialState: (pending: results, requests: []))
   }
-  var requests: [TLCProcessRequestV1] {
+  var requests: [TLCProcessRequest] {
     storage.withLock { $0.requests }
   }
-  func execute(_ request: TLCProcessRequestV1) throws -> TLCProcessResultV1 {
+  func execute(_ request: TLCProcessRequest) throws -> TLCProcessResult {
     storage.withLock {
       $0.requests.append(request)
       return $0.pending.removeFirst()

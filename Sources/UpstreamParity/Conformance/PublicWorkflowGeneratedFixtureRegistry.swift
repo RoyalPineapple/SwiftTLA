@@ -3,23 +3,23 @@ import SwiftTLAMacros
 
 /// The compiled fixture registry is deliberately small: a manifest selects a
 /// named fixture, never an arbitrary in-process specification or closure.
-struct PublicWorkflowGeneratedFixtureV1 {
+struct PublicWorkflowGeneratedFixture {
   let builderSpec: TLASpec
-  let machine: PublicWorkflowGeneratedMachineHarnessV1
+  let machine: PublicWorkflowGeneratedMachineHarness
 
-  init(builderSpec: TLASpec, machine: PublicWorkflowGeneratedMachineHarnessV1) {
+  init(builderSpec: TLASpec, machine: PublicWorkflowGeneratedMachineHarness) {
     self.builderSpec = builderSpec
     self.machine = machine
   }
 }
 
-enum PublicWorkflowGeneratedFixtureRegistryV1 {
-  static func fixture(id: String) throws -> PublicWorkflowGeneratedFixtureV1 {
+enum PublicWorkflowGeneratedFixtureRegistry {
+  static func fixture(id: String) throws -> PublicWorkflowGeneratedFixture {
     switch id {
     case "p4-generated-counter":
-      return PublicWorkflowGeneratedFixtureV1(
+      return PublicWorkflowGeneratedFixture(
         builderSpec: P4GeneratedCounterFixture.spec,
-        machine: PublicWorkflowGeneratedMachineHarnessV1(
+        machine: PublicWorkflowGeneratedMachineHarness(
           initialStates: P4GeneratedCounterFixture.runtime.initialStates(),
           actionNames: ["advance"],
           apply: { state, actionName in
@@ -27,9 +27,9 @@ enum PublicWorkflowGeneratedFixtureRegistryV1 {
           },
           propertyOutcomes: P4GeneratedCounterFixture.runtime.propertyOutcomes(in:)))
     case "p4-generated-counter-intentional-mismatch":
-      return PublicWorkflowGeneratedFixtureV1(
+      return PublicWorkflowGeneratedFixture(
         builderSpec: P4GeneratedCounterMismatchFixture.spec,
-        machine: PublicWorkflowGeneratedMachineHarnessV1(
+        machine: PublicWorkflowGeneratedMachineHarness(
           initialStates: P4GeneratedCounterMismatchFixture.runtime.initialStates(),
           actionNames: ["advance"],
           apply: { state, actionName in
@@ -37,9 +37,9 @@ enum PublicWorkflowGeneratedFixtureRegistryV1 {
           },
           propertyOutcomes: P4GeneratedCounterMismatchFixture.runtime.propertyOutcomes(in:)))
     case "p4-generated-counter-evaluation-failed":
-      return PublicWorkflowGeneratedFixtureV1(
+      return PublicWorkflowGeneratedFixture(
         builderSpec: P4GeneratedCounterFixture.spec,
-        machine: PublicWorkflowGeneratedMachineHarnessV1(
+        machine: PublicWorkflowGeneratedMachineHarness(
           initialStates: P4GeneratedCounterFixture.runtime.initialStates(),
           actionNames: ["advance"],
           apply: { _, actionName in
@@ -49,9 +49,9 @@ enum PublicWorkflowGeneratedFixtureRegistryV1 {
           },
           propertyOutcomes: P4GeneratedCounterFixture.runtime.propertyOutcomes(in:)))
     case "p4-generated-counter-evaluation-unavailable":
-      return PublicWorkflowGeneratedFixtureV1(
+      return PublicWorkflowGeneratedFixture(
         builderSpec: P4GeneratedCounterFixture.spec,
-        machine: PublicWorkflowGeneratedMachineHarnessV1(
+        machine: PublicWorkflowGeneratedMachineHarness(
           initialStates: P4GeneratedCounterFixture.runtime.initialStates(),
           actionNames: ["advance"],
           apply: { _, actionName in
@@ -61,7 +61,7 @@ enum PublicWorkflowGeneratedFixtureRegistryV1 {
           },
           propertyOutcomes: P4GeneratedCounterFixture.runtime.propertyOutcomes(in:)))
     default:
-      throw PublicWorkflowGovernanceErrorV1.invalidField(
+      throw PublicWorkflowGovernanceError.invalidField(
         record: id, field: "compiled generated fixture registry")
     }
   }

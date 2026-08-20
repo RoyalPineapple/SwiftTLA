@@ -1,5 +1,5 @@
 {
-  "schema": "CoreDivergenceLedgerV1",
+  "schema": "CoreDivergenceLedger",
   "records": [
     {
       "id": "hour-clock-edge-mismatch",
