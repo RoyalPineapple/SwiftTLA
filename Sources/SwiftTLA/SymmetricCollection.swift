@@ -257,7 +257,7 @@ public extension TLASpec {
     var collectionNames = Set<String>()
     var generatedSymbols = Set<String>()
     var reservedSymbols = Set(variables.map(\.name))
-    reservedSymbols.formUnion(constants.keys)
+    reservedSymbols.formUnion(constants.map(\.name))
     reservedSymbols.formUnion(actions.map(\.name))
     reservedSymbols.formUnion(invariants.map(\.name))
     reservedSymbols.formUnion(temporalProperties.map(\.name))

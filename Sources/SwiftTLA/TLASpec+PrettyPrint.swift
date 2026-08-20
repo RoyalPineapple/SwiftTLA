@@ -43,11 +43,11 @@ extension TLASpec {
         let formalVariableSymbols = formalParameters
             .filter { $0.kind == .variable }
             .map(\.name)
-        let allConstantSymbols = (constants.keys + formalConstantSymbols + generatedMemberSymbols).sorted()
+        let allConstantSymbols = (constants.map(\.name) + formalConstantSymbols + generatedMemberSymbols).sorted()
         if !allConstantSymbols.isEmpty {
             lines.append("CONSTANTS \(allConstantSymbols.joined(separator: ", "))")
-            for (name, value) in constants.sorted(by: { $0.key < $1.key }) {
-                lines.append("ASSUME \(name) = \(value)")
+            for constant in constants.sorted(by: { $0.name < $1.name }) {
+                lines.append("ASSUME \(constant.name) = \(constant.value)")
             }
             lines.append("")
         }
@@ -251,8 +251,8 @@ extension TLASpec {
         } else {
             lines.append("CHECK_DEADLOCK FALSE")
         }
-        for (name, value) in constants.sorted(by: { $0.key < $1.key }) {
-            lines.append("CONSTANT \(name) = \(value)")
+        for constant in constants.sorted(by: { $0.name < $1.name }) {
+            lines.append("CONSTANT \(constant.name) = \(constant.value)")
         }
         for configuration in importConfigurations {
             for replacement in configuration.replacements {

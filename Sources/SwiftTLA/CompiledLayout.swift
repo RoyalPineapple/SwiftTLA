@@ -327,7 +327,7 @@ struct CompiledBindingTable: Sendable {
 struct BindingValidator {
     private let layout: CompiledLayout
     private let closure: FormalModuleClosure
-    private let constants: [String: TLAValue]
+    private let constants: [ConstantDecl]
     private var operators: [String: OperatorID]
     private var nextBinderOrdinal = 0
     private var nextOperatorOrdinal = 0
@@ -619,7 +619,7 @@ struct BindingValidator {
             references[path] = .variable(id)
             return
         }
-        if let value = constants[name] {
+        if let value = constants.value(named: name) {
             references[path] = .constant(value)
             return
         }

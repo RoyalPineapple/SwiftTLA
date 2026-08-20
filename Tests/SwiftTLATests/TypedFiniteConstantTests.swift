@@ -49,7 +49,7 @@ struct TypedFiniteConstantTests {
             Variable(count, 0)
         }
 
-        #expect(spec.constants == ["Value": .set([.int(1), .int(2)])])
+        #expect(spec.constants == [ConstantDecl("Value", .set([.int(1), .int(2)])])
         #expect(try spec.compile().renderedTLAModuleBundle().tla.contains("ASSUME Value = {1, 2}"))
     }
 
@@ -64,22 +64,22 @@ struct TypedFiniteConstantTests {
         let parsed = SpecParser.parseSpecClosure(closure)
 
         #expect(parsed.diagnostics.isEmpty)
-        #expect(parsed.constants == ["Value": .set([.int(1), .int(2)])])
+        #expect(parsed.constants == [ConstantDecl("Value", .set([.int(1), .int(2)])])
     }
 
     @Test func generatedModelRetainsTheTypedFiniteSet() throws {
-        #expect(TypedFiniteConstantGeneratedModel.spec.constants == ["Value": .set([.int(1), .int(2)])])
+        #expect(TypedFiniteConstantGeneratedModel.spec.constants == [ConstantDecl("Value", .set([.int(1), .int(2)])])
         #expect(try TypedFiniteConstantGeneratedModel.spec.compile().renderedTLAModuleBundle().tla.contains("ASSUME Value = {1, 2}"))
     }
 
     @Test func generatedModelRetainsVoteProofShapedFiniteEnumConstants() throws {
         #expect(VoteProofShapedConstantGeneratedModel.spec.constants == [
-            "Value": .set([.string("v1"), .string("v2")]),
-            "Acceptor": .set([.string("a1"), .string("a2"), .string("a3")]),
-            "Quorum": .set([
+            ConstantDecl("Value", .set([.string("v1"), .string("v2")])),
+            ConstantDecl("Acceptor", .set([.string("a1"), .string("a2"), .string("a3")])),
+            ConstantDecl("Quorum", .set([
                 .set([.string("a1"), .string("a2")]),
                 .set([.string("a2"), .string("a3")])
-            ])
+            ]))
         ])
         #expect(try VoteProofShapedConstantGeneratedModel.spec.compile().renderedTLAModuleBundle().tla.contains("ASSUME Value = {\"v1\", \"v2\"}"))
         #expect(try VoteProofShapedConstantGeneratedModel.spec.compile().renderedTLAModuleBundle().tla.contains("ASSUME Quorum = {{\"a1\", \"a2\"}, {\"a2\", \"a3\"}}"))

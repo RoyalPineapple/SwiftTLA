@@ -26,14 +26,12 @@ extension ParserSession {
 
         var components: [AlgorithmComponentModel] = []
         var macros: [String: AlgorithmMacroDefinition] = [:]
-        var lexicalValues: [String: TLAValue] = [:]
+        let outerConstants = constants
         let outerTupleVariables = algorithmTupleVariables
         algorithmTupleVariables = []
         defer {
             algorithmTupleVariables = outerTupleVariables
-            for name in lexicalValues.keys {
-                constants.removeValue(forKey: name)
-            }
+            constants = outerConstants
         }
         for statement in closure.statements {
             if case .decl(let declaration) = statement.item,
@@ -60,8 +58,8 @@ extension ParserSession {
             if case .decl(let declaration) = statement.item,
                let variable = declaration.as(VariableDeclSyntax.self),
                let value = parseAlgorithmLexicalValue(variable) {
-                lexicalValues[value.name] = value.value
-                constants[value.name] = value.value
+                let constant = ConstantDecl(value.name, value.value)
+                constants.append(constant)
                 continue
             }
             guard case .expr(let expression) = statement.item else {
