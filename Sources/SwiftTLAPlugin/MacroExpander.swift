@@ -113,8 +113,7 @@ enum MacroExpander {
         decls.append(DeclSyntax(stringLiteral: """
         public static func makeMachine() throws -> Self {
             let compilation = try compiledSpecification()
-            let runtime = SpecRuntime(compilation: compilation)
-            guard let projection = try runtime.initialStateProjections().first else {
+            guard let projection = try compilation.initialStateProjections().first else {
                 throw GeneratedMachineError.noInitialState
             }
             let initial = try State(projection: projection)
@@ -124,11 +123,6 @@ enum MacroExpander {
                 projectionForSnapshot: { try $0.formalProjection() },
                 snapshotFromProjection: { try State(projection: $0) }
             ))
-        }
-        """))
-        decls.append(DeclSyntax(stringLiteral: """
-        private static func _runtime() throws -> SpecRuntime {
-            try SpecRuntime(compilation: compiledSpecification())
         }
         """))
         decls.append(contentsOf: generateSpecTest())
@@ -149,7 +143,7 @@ enum MacroExpander {
             behaviorSource = """
             private static let _generatedMachineBehavior = GeneratedMachineBehavior(
                 initialStates: {
-                    try Self._runtime().initialStateProjections().map { projection in
+                    try Self.compiledSpecification().initialStateProjections().map { projection in
                         _ = try State(projection: projection)
                         return projection
                     }
@@ -162,7 +156,7 @@ enum MacroExpander {
             behaviorSource = """
             private static let _generatedMachineBehavior = GeneratedMachineBehavior(
                 initialStates: {
-                    try Self._runtime().initialStateProjections().map { projection in
+                    try Self.compiledSpecification().initialStateProjections().map { projection in
                         _ = try State(projection: projection)
                         return projection
                     }
@@ -202,7 +196,7 @@ enum MacroExpander {
         public static let generatedMachineMetadata = _machineSurfacePlan.metadata
         private static func _initialState() -> State {
             do {
-                guard let projection = try Self._runtime().initialStateProjections().first else {
+                guard let projection = try Self.compiledSpecification().initialStateProjections().first else {
                     fatalError("The compiled model has no initial state.")
                 }
                 return try State(projection: projection)

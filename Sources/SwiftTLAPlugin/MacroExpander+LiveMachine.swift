@@ -132,9 +132,9 @@ extension MacroExpander {
         return [
             DeclSyntax(stringLiteral: liveDriver),
             DeclSyntax(stringLiteral: """
-            private static func _makeLiveOwner() throws -> TLALiveMachineOwner<\(actionType)> {
-                let runtime = try _runtime()
-                guard let initial = try runtime.initialStateProjections().first else {
+                private static func _makeLiveOwner() throws -> TLALiveMachineOwner<\(actionType)> {
+                    let compilation = try compiledSpecification()
+                    guard let initial = try compilation.initialStateProjections().first else {
                     throw GeneratedMachineError.noInitialState
                 }
                 _ = try State(projection: initial)
