@@ -627,13 +627,6 @@ extension SpecParser {
         case "Value":
             if let name = extractStringArg(call, index: 0),
                parseNamedValueConstant(call, name: name, into: &result) { }
-        case "UseSpec":
-            if let name = extractStringArg(call, index: 0),
-               let spec = SpecRegistry.lookup(name) {
-                result.variables += spec.variables.map { .init(formal: $0) }
-                result.invariants += spec.invariants.map { (name: $0.name, body: $0.body) }
-                result.actions += spec.actions.map { ParsedAction(name: $0.name, body: $0.body, bindings: $0.bindings) }
-            }
         case "Import":
             guard let argument = call.arguments.first?.expression else { return }
             let reference = argument.description.trimmingCharacters(in: .whitespacesAndNewlines)

@@ -12,28 +12,10 @@ Core graph conformance is the stronger, bounded relation for the cases in
 states, state bindings, and the complete labeled transition multiset from an
 independent Swift BFS run and a pinned TLC run.
 
-Run exact finite graph conformance with:
-
-```sh
-make core-conformance
-```
-
-Run the support-admission gate with:
-
-```sh
-make core-support-gate
-```
-
-Run the release qualification, including the temporal/symmetry and
-public-workflow gates, with:
-
-```sh
-make ci-release-qualification
-```
-
-The release qualification creates fresh temporal/symmetry and public-workflow
-admission evidence below `.build/`. Run `make core-conformance` and
-`make core-support-gate` directly when refreshing core graph evidence.
+GitHub Actions runs exact finite graph conformance, support admission, and
+release qualification. It creates fresh temporal/symmetry and public-workflow
+admission evidence below `.build/`. Local broad conformance commands require
+explicit authorization; a local result is diagnostic-only.
 Committed passing baselines are under `Verification/CoreConformance/baselines`.
 The same-count edge-mismatch and violation fixtures are deliberate negative
 controls; their expected failures show that the comparison does not accept
@@ -84,15 +66,9 @@ against its emitted module bundle.
 
 ## Temporal and symmetry executable reference
 
-The temporal and symmetry gate is a third, separate bounded check. Run it
-locally with:
-
-```sh
-make temporal-symmetry-release-check
-```
-
-The gate reads the declared P3 cases, divergence ledger, and support surface
-from `Verification/TemporalSymmetryConformance/`. It requires a current core
+The hosted temporal and symmetry gate is a third, separate bounded check. It
+reads the declared P3 cases, divergence ledger, and support surface from
+`Verification/TemporalSymmetryConformance/`. It requires a current core
 admission and writes a retained P3 admission report under
 `.build/temporal-symmetry-support-gate/`.
 

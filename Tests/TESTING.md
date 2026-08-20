@@ -25,5 +25,6 @@ core-governance, temporal/symmetry, and public-workflow checks:
 ./scripts/local-validation.sh swiftpm-test "UpstreamParityTests"
 ```
 
-The fast PR path (`make ci-pr`) runs the smoke suite through the same
-wrapper; use `scripts/run_pr_smoke_tests.sh` to run it directly.
+GitHub Actions runs the broad PR smoke suite. Do not invoke its underlying
+script directly on a local machine; use the approved wrapper for focused
+diagnosis.

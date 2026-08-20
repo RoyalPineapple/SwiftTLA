@@ -439,18 +439,6 @@ public func Operator(
 ) -> OpDecl {
   OpDecl(name, [param.name], body())
 }
-/// Spec registry for composition via UseSpec().
-public enum SpecRegistry {
-  nonisolated(unsafe) private static var store: [String: TLASpec] = [:]
-  public static func register(_ spec: TLASpec) { store[spec.name] = spec }
-  public static func lookup(_ name: String) -> TLASpec? { store[name] }
-}
-/// Compose a registered spec by name.  Parser handles this at compile time.
-public struct UseSpecDecl: SpecComponent {
-  public let name: String
-  init(_ n: String) { name = n }
-}
-public func UseSpec(_ name: String) -> UseSpecDecl { UseSpecDecl(name) }
 public struct OpUse: SpecComponent {
   public let op: String
   public let param: String
@@ -668,7 +656,6 @@ public enum SpecBuilder {
   public static func buildExpression(_ expr: UseDecl) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: ImportDecl) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: FormalModuleInstance) -> [SpecComponent] { [expr] }
-  public static func buildExpression(_ expr: UseSpecDecl) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: DeadlockDecl) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: ConstraintDecl) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: RecursiveDecl) -> [SpecComponent] { [expr] }

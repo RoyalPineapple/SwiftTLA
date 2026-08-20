@@ -129,17 +129,13 @@ enum TLASpecVerifier {
             specificationName: source.name,
             additionalInvariants: allInvariants.dropFirst(parsed.invariants.count).map { $0 }
         )
-        let spec = compilation.spec
-
         let hasComplexType = parsed.symmetricCollections.isEmpty && parsed.variables.contains { v in
             let typeName = v.swiftTypeName ?? MacroExpander.swiftType(for: v.initial)
             return !["Int", "Bool", "String"].contains(typeName)
                 && !enumInfos.contains(where: { $0.typeName == typeName })
         }
 
-        if hasComplexType {
-            SpecRegistry.register(spec)
-        } else {
+        if !hasComplexType {
             let result = try ModelChecker(compilation: compilation, maxStates: 1_000_000).check()
             switch result {
             case .invariantViolated(let inv, _, let trace):
@@ -148,12 +144,11 @@ enum TLASpecVerifier {
             case .deadlocked(let s): throw SimpleError("Deadlock at: \(s)")
             case .depthExceeded(let c, let l): throw SimpleError("Depth exceeded: \(c)/\(l)")
             case .livenessViolated(let msg): throw SimpleError("Liveness violated: \(msg)")
-            case .ok: SpecRegistry.register(spec)
+            case .ok: break
             case .bounded(_, let outcome):
                 guard case .ok = outcome else {
                     throw SimpleError("Checker error: \(outcome)")
                 }
-                SpecRegistry.register(spec)
             }
         }
 
