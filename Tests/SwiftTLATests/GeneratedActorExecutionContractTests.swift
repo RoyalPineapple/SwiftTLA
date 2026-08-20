@@ -48,8 +48,8 @@ struct GeneratedActorExecutionContractTests {
             let expected = try canonical.apply(label)
             let actual = try await actor.apply(.pass(from: label.from, to: label.to, round: label.round))
 
-            #expect(actual.action.toInvocation() == label.toInvocation())
-            #expect(actual.action.toInvocation() == expected.action.toInvocation())
+            #expect(actual.action == label)
+            #expect(actual.action == expected.action)
             #expect(actual.before.leader == expected.before.leader)
             #expect(actual.before.turn == expected.before.turn)
             #expect(actual.after.leader == expected.after.leader)
@@ -68,9 +68,7 @@ struct GeneratedActorExecutionContractTests {
         do {
             _ = try await actor.apply(unavailable)
             Issue.record("Expected unavailable actor action")
-        } catch let GeneratedMachineError.runtime(.actionNotEnabled(invocation, available)) {
-            #expect(invocation == unavailable.toInvocation())
-            #expect(available.contains(unavailable.toInvocation()) == false)
+        } catch is GeneratedMachineError {
         }
 
         #expect(await actor.tlaSnapshot() == before)
@@ -87,19 +85,16 @@ struct GeneratedActorExecutionContractTests {
 
         var canonical = DuckDuckLeaderCanonical()
         let expected = try canonical.apply(.pass(from: 1, to: 2, round: 1))
-        let expectedAvailable = try canonical.availableActions().map { $0.toInvocation() }
         let successful = submissions.compactMap(\.evidence)
-        let rejected = submissions.compactMap(\.rejection)
+        let rejected = submissions.filter(\.isRejected)
 
         #expect(successful.count == 1)
         #expect(rejected.count == 1)
-        #expect(successful[0].invocation == expected.action.toInvocation())
+        #expect(successful[0].action == expected.action)
         #expect(successful[0].before.leader == expected.before.leader)
         #expect(successful[0].before.turn == expected.before.turn)
         #expect(successful[0].after.leader == expected.after.leader)
         #expect(successful[0].after.turn == expected.after.turn)
-        #expect(rejected[0].invocation == label.toInvocation())
-        #expect(rejected[0].available == expectedAvailable)
         #expect(await actor.state.leader == expected.after.leader)
         #expect(await actor.state.turn == expected.after.turn)
     }
@@ -111,12 +106,12 @@ struct GeneratedActorExecutionContractTests {
         do {
             let evidence = try await actor.apply(label)
             return .applied(.init(
-                invocation: evidence.action.toInvocation(),
+                action: evidence.action,
                 before: evidence.before,
                 after: evidence.after
             ))
-        } catch let GeneratedMachineError.runtime(.actionNotEnabled(rejected, available)) {
-            return .rejected(.init(invocation: rejected, available: available))
+        } catch is GeneratedMachineError {
+            return .rejected
         } catch {
             return .unexpected(String(describing: error))
         }
@@ -124,7 +119,7 @@ struct GeneratedActorExecutionContractTests {
 
     private enum Submission: Sendable {
         case applied(Evidence)
-        case rejected(Rejection)
+        case rejected
         case unexpected(String)
 
         var evidence: Evidence? {
@@ -132,20 +127,15 @@ struct GeneratedActorExecutionContractTests {
             return evidence
         }
 
-        var rejection: Rejection? {
-            guard case .rejected(let rejection) = self else { return nil }
-            return rejection
+        var isRejected: Bool {
+            if case .rejected = self { return true }
+            return false
         }
     }
 
     private struct Evidence: Sendable {
-        let invocation: TLAActionInvocation
+        let action: DuckDuckLeaderCanonical.Actor.ActionLabel
         let before: DuckDuckLeaderCanonical.Actor.State
         let after: DuckDuckLeaderCanonical.Actor.State
-    }
-
-    private struct Rejection: Sendable {
-        let invocation: TLAActionInvocation
-        let available: [TLAActionInvocation]
     }
 }

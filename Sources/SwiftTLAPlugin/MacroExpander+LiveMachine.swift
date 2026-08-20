@@ -9,7 +9,7 @@ extension MacroExpander {
         let typedExecute: [String] = hasActions ? [
             """
                 public func execute(_ action: ActionLabel, requestID: Foundation.UUID = Foundation.UUID()) async throws -> Outcome {
-                    switch await _handle.execute(action.toInvocation(), requestID: requestID) {
+                    switch await _handle.execute(\(typeName)._actionInvocation(for: action), requestID: requestID) {
                     case .committed(let commit):
                         return .committed(TransitionResult(
                             action: action,

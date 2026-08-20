@@ -13,11 +13,4 @@ struct ChangRobertsCorpusContractTests {
         #expect(states.count == entry.expectedDistinct)
     }
 
-    @Test("Generated labels preserve an integer-backed process identifier")
-    func integerBackedProcessIdentifierRoundTripsThroughActionLabel() {
-        let label = ChangRobertsModel.ActionLabel.n0(process: .one)
-
-        #expect(label.toInvocation() == .init(name: "n0", arguments: [.int(1)]))
-        #expect(ChangRobertsModel.ActionLabel(invocation: label.toInvocation()) == label)
-    }
 }

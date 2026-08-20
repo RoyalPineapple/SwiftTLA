@@ -156,9 +156,7 @@ private struct DuckDuckLeaderView: View {
         defer { isDelivering = false }
         do {
             let runningActor = actor
-            let result = try await runningActor.execute(
-                ChangRoberts.Actor.ActionLabel.deliver(process: node).toInvocation()
-            )
+            let result = try await runningActor.apply(.deliver(process: node))
             guard runID == simulationID else { return false }
             let forwarded = result.after.messages.elements.first {
                 $0[ChangRoberts.MessageSchema.candidate] == message[ChangRoberts.MessageSchema.candidate] &&

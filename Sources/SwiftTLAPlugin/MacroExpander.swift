@@ -76,7 +76,7 @@ enum MacroExpander {
 
         decls.append(DeclSyntax(generateVariablesEnum(variables: plan.variables)))
         if !plan.actions.isEmpty {
-            decls.append(DeclSyntax(generateActionLabel(actions: plan.actions)))
+            decls.append(contentsOf: generateActionLabel(actions: plan.actions))
         }
         decls.append(DeclSyntax(generateStateStruct(variables: plan.variables, enumInfos: model.enumInfos)))
         decls.append(DeclSyntax(stringLiteral: generateMachineSchema(model: model)))
@@ -178,8 +178,8 @@ enum MacroExpander {
                     }
                 },
                 successors: { projection, invocation in
-                    guard let label = ActionLabel(invocation: invocation),
-                          label.toInvocation() == invocation else {
+                    guard let label = Self._actionLabel(for: invocation),
+                          Self._actionInvocation(for: label) == invocation else {
                         throw GeneratedMachineContractDiagnostic(
                             code: .actionLabelRoundTripMismatch,
                             path: "generatedBehavior.actionLabel",
@@ -189,7 +189,7 @@ enum MacroExpander {
                         )
                     }
                     _ = try State(projection: projection)
-                    return try Self._runtime().successors(label.toInvocation(), from: projection).map { target in
+                    return try Self._runtime().successors(Self._actionInvocation(for: label), from: projection).map { target in
                         _ = try State(projection: target)
                         return target
                     }
@@ -477,7 +477,7 @@ enum MacroExpander {
         )
     }
 
-    static func generateActionLabel(actions: [MachineSurfacePlan.Action]) -> DeclSyntax {
+    static func generateActionLabel(actions: [MachineSurfacePlan.Action]) -> [DeclSyntax] {
         func argumentConstructor(for binding: MachineSurfacePlan.Binding) -> String {
             switch binding.swiftType {
             case "Int": return ".int(\(binding.formalName))"
@@ -527,7 +527,7 @@ enum MacroExpander {
         let fromInvocationCases = actions.map { action in
             let publicBindings = action.bindings.filter(\.isPublic)
             if action.bindings.isEmpty {
-                return "case \"\(action.formalName)\" where invocation.arguments.isEmpty: self = .\(action.swiftIdentifier)"
+                return "case \"\(action.formalName)\" where invocation.arguments.isEmpty: return .\(action.swiftIdentifier)"
             }
             let patterns = action.bindings.enumerated().map { index, binding -> String in
                 if binding.isPublic {
@@ -537,27 +537,31 @@ enum MacroExpander {
             }.joined(separator: ", ")
             let arguments = publicBindings.map { "\($0.formalName): \($0.formalName)" }.joined(separator: ", ")
             return "case \"\(action.formalName)\" where invocation.arguments.count == \(action.bindings.count): "
-                + "guard \(patterns) else { return nil }; self = .\(action.swiftIdentifier)\(arguments.isEmpty ? "" : "(\(arguments))")"
+                + "guard \(patterns) else { return nil }; return .\(action.swiftIdentifier)\(arguments.isEmpty ? "" : "(\(arguments))")"
         }.joined(separator: "\n        ")
 
-        return DeclSyntax(stringLiteral: """
+        return [
+            DeclSyntax(stringLiteral: """
         public enum ActionLabel: Hashable, Sendable {
             \(cases)
-
-            public func toInvocation() -> TLAActionInvocation {
-                switch self {
-                \(toInvocationCases)
-                }
+        }
+        """),
+            DeclSyntax(stringLiteral: """
+        private static func _actionInvocation(for action: ActionLabel) -> TLAActionInvocation {
+            switch action {
+            \(toInvocationCases)
             }
-
-            public init?(invocation: TLAActionInvocation) {
-                switch invocation.name {
-                \(fromInvocationCases)
-                default: return nil
-                }
+        }
+        """),
+            DeclSyntax(stringLiteral: """
+        private static func _actionLabel(for invocation: TLAActionInvocation) -> ActionLabel? {
+            switch invocation.name {
+            \(fromInvocationCases)
+            default: return nil
             }
         }
         """)
+        ]
     }
 
 }

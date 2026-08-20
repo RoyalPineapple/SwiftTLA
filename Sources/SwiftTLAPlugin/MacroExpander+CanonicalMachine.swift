@@ -11,7 +11,7 @@ extension MacroExpander {
         let modifier = isActor ? "" : "mutating "
         let labelField = hasActions ? "public let label: ActionLabel" : ""
         let labelValidation = hasActions ? """
-                guard let label = ActionLabel(invocation: invocation) else {
+                guard let label = Self._actionLabel(for: invocation) else {
                     throw GeneratedMachineError.unrepresentableActionLabel(invocation)
                 }
         """ : ""
@@ -29,13 +29,13 @@ extension MacroExpander {
             """
         let typedApply = hasActions ? """
             public \(modifier)func apply(_ action: ActionLabel) throws -> TransitionResult {
-                try _apply(action.toInvocation())
+                try _apply(Self._actionInvocation(for: action))
             }
             """ : ""
         let availableActions = hasActions ? """
             public func availableActions() throws -> [ActionLabel] {
                 try _machine.availableInvocations(in: _stateWithLiveCollections())\(invocationFilter).map { invocation in
-                    guard let label = ActionLabel(invocation: invocation) else {
+                    guard let label = Self._actionLabel(for: invocation) else {
                         throw GeneratedMachineError.unrepresentableActionLabel(invocation)
                     }
                     return label
