@@ -6,6 +6,32 @@ import SwiftTLAModels
 import Testing
 import UpstreamParity
 
+private func compiledSuccessors(
+  for action: ActionExpr,
+  from values: [String: TLAValue]
+) throws -> (CompiledSpecification, [FormalState]) {
+  let spec = TLASpec(
+    name: "ActionExpressionFixture",
+    variables: values.sorted { $0.key < $1.key }.map { NamedVar(name: $0.key, initial: $0.value) },
+    actions: [NamedAction(name: "step", body: action)],
+    invariants: []
+  )
+  let compilation = try spec.compile()
+  let initial = try #require(try CompiledRuntime(compilation: compilation).initialStates().first)
+  let step = try #require(compilation.layout.actionID(named: "step"))
+  let states = try CompiledRuntime(compilation: compilation).successors(for: step, from: initial).map(\.state)
+  return (compilation, states)
+}
+
+private func value(
+  named name: String,
+  in state: FormalState,
+  compilation: CompiledSpecification
+) throws -> TLAValue {
+  let variable = try #require(compilation.layout.variableID(named: name))
+  return try state.value(for: variable).rendered(using: compilation.layout)
+}
+
 // MARK: - TLA+ module: section coverage
 
 @Suite(.serialized) struct TLAModuleMatrix {
@@ -215,13 +241,14 @@ import UpstreamParity
       .chooseAction("x", .setLiteral([.value(.int(1)), .value(.int(2))])),
       .chooseAction("y", .setLiteral([.value(.int(10)), .value(.int(20))]))
     )
-    let states = try ActionEnumerator.enumerate(
-      action,
-      from: ["x": .int(0), "y": .int(0)],
-      varNames: ["x", "y"]
+    let (compilation, states) = try compiledSuccessors(
+      for: action,
+      from: ["x": .int(0), "y": .int(0)]
     )
     #expect(states.count == 4)
-    let pairs = Set(states.map { "\($0["x"]!)-\($0["y"]!)" })
+    let pairs = try Set(states.map {
+      "\(try value(named: "x", in: $0, compilation: compilation))-\(try value(named: "y", in: $0, compilation: compilation))"
+    })
     #expect(pairs == Set(["1-10", "1-20", "2-10", "2-20"]))
   }
 }
@@ -600,9 +627,11 @@ import UpstreamParity
         .or(.assign("y", .value(.int(2))), .assign("y", .value(.int(3)))),
         .assign("y", .value(.int(4))))
     )
-    let s: [String: TLAValue] = ["x": .int(0), "y": .int(0), "z": .int(0)]
-    let r = try ActionEnumerator.enumerate(a, from: s, varNames: ["x", "y", "z"])
-    #expect(r.count == 3)
+    let (_, successors) = try compiledSuccessors(
+      for: a,
+      from: ["x": .int(0), "y": .int(0), "z": .int(0)]
+    )
+    #expect(successors.count == 3)
   }
 
   @Test("Deadlock when guard fails at init")
@@ -700,17 +729,15 @@ import UpstreamParity
     let unchanged: ActionExpr = .unchanged("sent")
     let action = ActionExpr.and(
       chosenProcess, ActionExpr.and(readState, ActionExpr.and(updateState, unchanged)))
-    let state: [String: TLAValue] = [
+    let (compilation, successors) = try compiledSuccessors(for: action, from: [
       "programCounter": .function([.int(1): "initial", .int(2): "initial"]),
       "sent": .set([]),
       "process": .int(0)
-    ]
-    let successors = try ActionEnumerator.enumerate(
-      action, from: state, varNames: ["programCounter", "sent", "process"])
+    ])
     #expect(successors.count == 2)
     for s in successors {
-      let pc = s["programCounter"]
-      let proc = s["process"]
+      let pc = try value(named: "programCounter", in: s, compilation: compilation)
+      let proc = try value(named: "process", in: s, compilation: compilation)
       guard case .function(let mapping) = pc else {
         #expect(Bool(false))
         return
