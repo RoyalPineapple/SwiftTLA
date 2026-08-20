@@ -11,17 +11,6 @@ extension Algorithm {
     }
 }
 
-enum AlgorithmLoweringError: Error, CustomStringConvertible {
-    case nonStaticInitialValue(name: String, underlying: Error)
-
-    var description: String {
-        switch self {
-        case .nonStaticInitialValue(let name, let underlying):
-            return "Algorithm variable '\(name)' needs a closed formal initial expression: \(underlying)"
-        }
-    }
-}
-
 enum AlgorithmLowerer {
     private static let controlVariable = "pc"
     private static let stackVariable = "stack"
@@ -99,14 +88,12 @@ enum AlgorithmLowerer {
         }
 
         var variables = shared.map { state in
-            if let initial = try? state.initial.evaluate(
-                in: [:],
-                formalOperatorDefinitions: resolvedFormalOperators
-            ) {
-                NamedVar(name: state.root, initial: initial, initialSet: state.initialSet)
-            } else {
-                NamedVar(name: state.root, initial: .int(0), initExpr: state.initial)
-            }
+            NamedVar(
+                name: state.root,
+                initial: .int(0),
+                initialSet: state.initialSet,
+                initExpr: state.initialSet == nil ? state.initial : nil
+            )
         }
         for process in processes {
             for local in process.components {
@@ -114,11 +101,8 @@ enum AlgorithmLowerer {
                 variables.append(
                     NamedVar(
                         name: state.root,
-                        initial: try staticInitialValue(
-                            constantFunction(domain: process.domain, value: state.initial),
-                            named: state.root,
-                            formalOperatorDefinitions: resolvedFormalOperators
-                        )
+                        initial: .int(0),
+                        initExpr: constantFunction(domain: process.domain, value: state.initial)
                     ))
             }
         }
@@ -157,20 +141,14 @@ enum AlgorithmLowerer {
             for slot in procedureSlots(procedures) {
                 variables.append(NamedVar(
                     name: slot.root,
-                    initial: try staticInitialValue(
-                        constantFunction(domain: controlDomainValues(processes), value: slot.initial),
-                        named: slot.root,
-                        formalOperatorDefinitions: resolvedFormalOperators
-                    )
+                    initial: .int(0),
+                    initExpr: constantFunction(domain: controlDomainValues(processes), value: slot.initial)
                 ))
             }
             variables.append(NamedVar(
                 name: stackVariable,
-                initial: try staticInitialValue(
-                        constantFunction(domain: controlDomainValues(processes), value: .tupleLiteral([])),
-                        named: stackVariable,
-                        formalOperatorDefinitions: resolvedFormalOperators
-                )
+                initial: .int(0),
+                initExpr: constantFunction(domain: controlDomainValues(processes), value: .tupleLiteral([]))
             ))
         }
 
@@ -383,35 +361,27 @@ enum AlgorithmLowerer {
         }
 
         let sharedVariables = shared.map { state in
-            if let initial = try? state.initial.evaluate(
-                in: [:],
-                formalOperatorDefinitions: formalOperatorDefinitions
-            ) {
-                NamedVar(name: state.root, initial: initial, initialSet: state.initialSet)
-            } else {
-                NamedVar(name: state.root, initial: .int(0), initExpr: state.initial)
-            }
+            NamedVar(
+                name: state.root,
+                initial: .int(0),
+                initialSet: state.initialSet,
+                initExpr: state.initialSet == nil ? state.initial : nil
+            )
         }
         var procedureVariables: [NamedVar] = []
         for procedure in procedures {
             for parameter in procedure.parameters {
                 procedureVariables.append(NamedVar(
                     name: parameter.root,
-                    initial: try staticInitialValue(
-                        parameter.initial,
-                        named: parameter.root,
-                        formalOperatorDefinitions: formalOperatorDefinitions
-                    )
+                    initial: .int(0),
+                    initExpr: parameter.initial
                 ))
             }
             for local in procedure.locals {
                 procedureVariables.append(NamedVar(
                     name: local.root,
-                    initial: try staticInitialValue(
-                        local.initial,
-                        named: local.root,
-                        formalOperatorDefinitions: formalOperatorDefinitions
-                    )
+                    initial: .int(0),
+                    initExpr: local.initial
                 ))
             }
         }
@@ -780,23 +750,6 @@ enum AlgorithmLowerer {
                     }
             case .await, .set, .goto, .call, .return, .stop, .skip: return []
             }
-        }
-    }
-
-    /// Algorithm declarations are finite initial values. Keep the initial
-    /// state concrete so the checker, parser tree, and generated State agree.
-    private static func staticInitialValue(
-        _ expression: StateExpr,
-        named name: String,
-        formalOperatorDefinitions: [FormalOperatorDefinition]
-    ) throws -> TLAValue {
-        do {
-            return try expression.evaluate(
-                in: [:],
-                formalOperatorDefinitions: formalOperatorDefinitions
-            )
-        } catch {
-            throw AlgorithmLoweringError.nonStaticInitialValue(name: name, underlying: error)
         }
     }
 

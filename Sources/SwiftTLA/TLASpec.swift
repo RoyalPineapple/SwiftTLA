@@ -699,58 +699,6 @@ public func Variable<T>(_ ref: Var<T>, in values: some Sequence<some TLAValueCon
 public func Variable(from name: String, _ range: StateExpr) -> VarDecl {
   VarDecl(name, lazySet: range)
 }
-// MARK: - Shared initial state computation
-package func computeInitialStates(_ spec: TLASpec) throws -> [[String: TLAValue]] {
-  computeInitialStates(try spec.compile())
-}
-
-package func computeInitialStates(_ compilation: CompiledSpecification) -> [[String: TLAValue]] {
-  computeInitialStates(
-    compilation.spec,
-    formalModuleClosure: compilation.formalModuleClosure,
-    evaluationContext: StateExprEvaluationContext()
-  )
-}
-
-func computeInitialStates(
-  _ spec: TLASpec,
-  formalModuleClosure: FormalModuleClosure,
-  evaluationContext: StateExprEvaluationContext
-) -> [[String: TLAValue]] {
-  let substituted = substituteConstants(spec)
-  let base = Dictionary(uniqueKeysWithValues: substituted.variables.map { ($0.name, $0.initial) })
-  let nondeterministic = substituted.variables.filter { $0.initialSet != nil || $0.lazySet != nil }
-  var states = nondeterministic.reduce(into: [base]) { states, variable in
-    states = states.flatMap { state -> [[String: TLAValue]] in
-      let expression = variable.lazySet ?? variable.initialSet
-      guard let expression,
-        case .set(let values) = try? expression.evaluate(
-          in: state,
-          runtimeFuncs: substituted.runtimeFuncs,
-          recursiveFuncs: formalModuleClosure.resolvedRecursiveFuncs,
-          evaluationContext: evaluationContext
-        )
-      else { return [] }
-      return TLAValue.sorted(values).map {
-        state.merging([variable.name: $0]) { _, new in new }
-      }
-    }
-  }
-  for variable in substituted.variables where variable.initExpr != nil {
-    states = states.compactMap { state in
-      guard let val = try? variable.initExpr!.evaluate(
-        in: state,
-        runtimeFuncs: substituted.runtimeFuncs,
-        recursiveFuncs: formalModuleClosure.resolvedRecursiveFuncs,
-        evaluationContext: evaluationContext
-      ) else { return nil }
-      var s = state
-      s[variable.name] = val
-      return s
-    }
-  }
-  return states
-}
 @discardableResult
 public func Action(_ name: String, @ActionBuilder _ body: () -> ActionExpr) -> ActionDecl {
   ActionDecl(name, body())

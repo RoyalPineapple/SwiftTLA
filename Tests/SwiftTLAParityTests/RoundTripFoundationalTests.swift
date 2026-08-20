@@ -102,7 +102,7 @@ private func compiledValue(
   }
 
   @Test(
-    "ActionEnumerator variants",
+    "Compiled action variants",
     arguments: [
       ("simpleAssign", 1),
       ("guardTrue", 1),
@@ -127,7 +127,7 @@ private func compiledValue(
     #expect(r.count == expected)
   }
 
-  @Test("Action assignment extraction accepts wide lowered simultaneous updates")
+  @Test("Compiled action execution accepts wide lowered simultaneous updates")
   func wideAssignmentsPreserveOneCommitment() throws {
     // This is deliberately large enough to exercise a lowered atomic block,
     // while keeping the recursive value-type teardown itself bounded.
@@ -137,9 +137,14 @@ private func compiledValue(
       .and(partial, assignment)
     }
 
-    let result = try ActionEnumerator.extractAssignments(action)
-    #expect(result.assignments == ["x": .value(.int(1))])
-    #expect(result.guards.isEmpty)
+    let successors = try compiledSuccessors(
+      action,
+      from: ["x": .int(0)],
+      variables: ["x"]
+    )
+    let x = try #require(TLAStateProjection.Token(validating: "x"))
+    #expect(successors.count == 1)
+    #expect(successors.first?.value(for: x) == .int(1))
   }
 
   @Test(

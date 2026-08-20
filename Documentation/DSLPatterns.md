@@ -185,8 +185,8 @@ exercised by at least one port. No feature without an oracle.
 | `ActionExpr.swift` | Action AST | 8 cases, overloading operators |
 | `TLAValue.swift` | Runtime value | 8 cases, Comparable, ExpressibleBy*
 | `Var.swift` | Variable refs | Type-safe, operators, @dynamicMemberLookup |
-| `Evaluator.swift` | Expression eval | Every StateExpr case handled |
-| `ActionEnumerator.swift` | Action expansion | distOr + processDisjunct phases |
+| `CompiledEvaluator.swift` | Expression eval | Every compiled expression case handled |
+| `CompiledActionEnumerator.swift` | Action expansion | Evaluates compiled actions into slot-backed successors |
 | `ModelChecker.swift` | BFS verification | BFS + invariants + constraints |
 | `CompiledRuntime.swift` | Compiled execution | Evaluates compiled states and actions |
 | `TLASpec.swift` | Spec container | Builder init, global builder fns, component types |

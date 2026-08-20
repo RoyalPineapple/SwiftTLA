@@ -71,7 +71,7 @@ struct SymmetricCollectionPredicateTests {
       == direct.symmetricCollections.map(\.metadata))
     #expect(normalized(parsed.invariants.map(\.body.description))
       == normalized(direct.invariants.map(\.body.description)))
-    #expect(try computeInitialStates(parsedSpec) == computeInitialStates(direct))
+    #expect(try parsedSpec.compile().initialStateProjections() == direct.compile().initialStateProjections())
     #expect(try ModelChecker(spec: parsedSpec).check().description
       == ModelChecker(spec: direct).check().description)
   }
@@ -83,7 +83,7 @@ struct SymmetricCollectionPredicateTests {
 
     #expect(generated.symmetricCollections.map(\.metadata) == direct.symmetricCollections.map(\.metadata))
     #expect(normalized(generated.invariants.map(\.description)) == normalized(direct.invariants.map(\.description)))
-    #expect(try computeInitialStates(generated) == computeInitialStates(direct))
+    #expect(try generated.compile().initialStateProjections() == direct.compile().initialStateProjections())
     #expect(try ModelChecker(spec: generated).check().description
       == ModelChecker(spec: direct).check().description)
     #expect(!generated.invariants.description.contains("PredicateMacroDevice"))

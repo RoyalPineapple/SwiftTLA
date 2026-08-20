@@ -1,6 +1,6 @@
 import SwiftParser
 import SwiftSyntax
-import SwiftTLA
+@testable import SwiftTLA
 import SwiftTLAMacros
 import Testing
 
@@ -135,6 +135,20 @@ public struct GeneratedContainsPredicateRuntime {
 
 @Suite(.serialized)
 struct SymmetricCollectionMacroRuntimeTests {
+  private func compiledSuccessors(
+    of spec: TLASpec,
+    from projection: TLAStateProjection
+  ) throws -> [TLAStateProjection] {
+    let compilation = try spec.compile()
+    let state = try FormalState(
+      projection: projection,
+      compilation: compilation
+    )
+    return try CompiledRuntime(compilation: compilation)
+      .successors(from: state)
+      .map { try $0.state.projection(using: compilation.layout) }
+  }
+
   private struct Device: Identifiable {
     let id: Int
   }
@@ -188,12 +202,17 @@ struct SymmetricCollectionMacroRuntimeTests {
       }
     }
 
-    #expect(parsed.diagnostics.isEmpty)
-    #expect(
-      try ActionEnumerator.enumerate(parsed.actions[0].body, from: initial, varNames: ["devices"])
-        == ActionEnumerator.enumerate(runtimeBuilt.actions[0].body, from: initial, varNames: ["devices"])
+    let parsedSpec = TLASpec(
+      name: "ParsedCollectionAction",
+      variables: parsed.variables.map { .init(name: $0.name, initial: $0.initial, initialSet: $0.initialSet) },
+      actions: parsed.actions.map { .init(name: $0.name, body: $0.body) },
+      invariants: []
     )
-    #expect(try ActionEnumerator.enumerate(parsed.actions[0].body, from: advanced, varNames: ["devices"]).isEmpty)
+
+    #expect(parsed.diagnostics.isEmpty)
+    #expect(try compiledSuccessors(of: parsedSpec, from: .init(formalValues: initial))
+      == compiledSuccessors(of: runtimeBuilt, from: .init(formalValues: initial)))
+    #expect(try compiledSuccessors(of: parsedSpec, from: .init(formalValues: advanced)).isEmpty)
   }
 
   @Test("Parser rejects observable, escaping, and cross-collection member identities")
@@ -378,17 +397,17 @@ struct SymmetricCollectionMacroRuntimeTests {
         .constant("DevicesMember1"): .int(1)
       ])
     ]
-    let boundedSuccessors = try ActionEnumerator.enumerate(
-      GeneratedMultiStatementSymmetricRuntime.spec.actions[0].body,
-      from: boundedState,
-      varNames: ["devices"]
+    let boundedSuccessors = try compiledSuccessors(
+      of: GeneratedMultiStatementSymmetricRuntime.spec,
+      from: .init(formalValues: boundedState)
     )
-    #expect(boundedSuccessors == [[
-      "devices": .function([
+    let devices = try #require(TLAStateProjection.Token(validating: "devices"))
+    #expect(boundedSuccessors.map { $0.value(for: devices) } == [
+      .function([
         .constant("DevicesMember0"): .int(0),
         .constant("DevicesMember1"): .int(11)
       ])
-    ]])
+    ])
 
     var model = GeneratedMultiStatementSymmetricRuntime()
     let rejected = StringMacroDevice(id: "rejected")
@@ -417,17 +436,17 @@ struct SymmetricCollectionMacroRuntimeTests {
         .constant("DevicesMember1"): .int(1)
       ])
     ]
-    let boundedSuccessors = try ActionEnumerator.enumerate(
-      GeneratedDisjunctiveSymmetricRuntime.spec.actions[0].body,
-      from: boundedState,
-      varNames: ["devices"]
+    let boundedSuccessors = try compiledSuccessors(
+      of: GeneratedDisjunctiveSymmetricRuntime.spec,
+      from: .init(formalValues: boundedState)
     )
-    #expect(boundedSuccessors == [[
-      "devices": .function([
+    let devices = try #require(TLAStateProjection.Token(validating: "devices"))
+    #expect(boundedSuccessors.map { $0.value(for: devices) } == [
+      .function([
         .constant("DevicesMember0"): .int(22),
         .constant("DevicesMember1"): .int(1)
       ])
-    ]])
+    ])
 
     var model = GeneratedDisjunctiveSymmetricRuntime()
     let selected = StringMacroDevice(id: "selected")

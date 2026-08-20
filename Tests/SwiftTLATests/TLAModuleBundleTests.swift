@@ -227,7 +227,7 @@ struct TLAModuleBundleTests {
       Import(ZSequences.module, configuring: ZSequences.boundedNaturalNumbers(0...2))
       Variable(from: corpus.name, ZSequences.sequences(over: SetExpr<Int>.literal(0, 1)).raw)
     }
-    #expect(try computeInitialStates(initialized).count == 7)
+    #expect(try initialized.compile().initialStateProjections().count == 7)
   }
 
   @Test("an import remains a source dependency and resolves its operators at runtime")
