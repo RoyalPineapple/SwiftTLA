@@ -24,7 +24,7 @@ struct CompiledActionEnumerator {
             return try selections.flatMap { selection in
                 let evaluationState = try state.updating(selection)
                 return try execute(action.body, state: evaluationState, bindings: binding.values).map { delta in
-                    .init(
+                    CompiledActionResult(
                         state: try state.updating(selection).updating(delta.assignments),
                         arguments: binding.arguments
                     )

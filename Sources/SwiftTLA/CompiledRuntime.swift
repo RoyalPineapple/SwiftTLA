@@ -84,8 +84,10 @@ struct CompiledRuntime {
         return model.symmetrySets.reduce(base) { current, symmetry in
             let present = TLAValue.sorted(symmetry.values).filter(current.contains)
             guard let canonical = present.first else { return current }
-            let mapping = Dictionary(uniqueKeysWithValues: present.map { ($0, canonical) })
-            return current.transformingValues { applyMapping($0, mapping: mapping) }
+            let mapping: [TLAValue: TLAValue] = Dictionary(
+                uniqueKeysWithValues: present.map { ($0, canonical) }
+            )
+            return current.transformingValues { applyMapping($0, mapping) }
         }
     }
 
