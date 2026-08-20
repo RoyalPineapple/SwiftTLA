@@ -112,6 +112,7 @@ enum MacroExpander {
             symmetricCollections: plan.symmetricCollections,
             identityRoutedActions: Set(plan.collectionActions.keys)
         ))
+        decls.append(contentsOf: generateLiveMachineMembers(model: model))
         decls.append(contentsOf: generateCollectionRuntimeMembers(plan.symmetricCollections))
         let symmetricCollectionNames = Set(plan.symmetricCollections.map(\.formalName))
         let ordinaryVariables = plan.variables.filter { !symmetricCollectionNames.contains($0.formalName) }
@@ -589,7 +590,7 @@ enum MacroExpander {
         }.joined(separator: "\n        ")
 
         return DeclSyntax(stringLiteral: """
-        public enum ActionLabel: Hashable, Sendable {
+        public enum ActionLabel: Hashable, Sendable, TLALiveActionLabel {
             \(cases)
 
             public func toInvocation() -> TLAActionInvocation {

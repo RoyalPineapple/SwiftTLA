@@ -562,7 +562,7 @@ public struct ModelMacro: MemberMacro, ExtensionMacro {
             return []
         }
         guard let ext = ("""
-            extension \(type.trimmed): TLAModelType, TLAMachineExecuting, TLAMachineAdapterCanonicalModel, TLAMachineSchemaProviding {}
+            extension \(type.trimmed): TLAModelType, TLAMachineExecuting, TLAMachineAdapterCanonicalModel, TLAMachineSchemaProviding, TLAGeneratedLiveModel {}
             """ as DeclSyntax).as(ExtensionDeclSyntax.self) else { return [] }
         return [ext]
     }
