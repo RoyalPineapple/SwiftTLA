@@ -555,8 +555,8 @@ extension CoreConformanceRunnerTests {
         variableNames: ["x"],
         transitions: [first: [.init(label: .init(.init(name: action)), target: second)]],
         states: [
-          first: fixtureProjection(["x": .int(1)]),
-          second: fixtureProjection(["x": .int(2)])
+          first: try fixtureProjection([("x", .int(1))]),
+          second: try fixtureProjection([("x", .int(2))])
         ]
       ),
       initialStateIDs: [first],
@@ -747,8 +747,8 @@ private func exactSwiftExploration() -> ModelExplorationResult {
       variableNames: ["x"],
       transitions: [first: [.init(label: .init(.init(name: "Next")), target: second)]],
       states: [
-        first: fixtureProjection(["x": .int(1)]),
-        second: fixtureProjection(["x": .int(2)])
+        first: try fixtureProjection([("x", .int(1))]),
+        second: try fixtureProjection([("x", .int(2))])
       ]
     ),
     initialStateIDs: [first],
@@ -759,12 +759,8 @@ private func json(at url: URL) throws -> [String: Any] {
   try #require(JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any])
 }
 
-private func fixtureProjection(_ formalValues: [String: TLAValue]) -> TLAStateProjection {
-  do {
-    return try .init(formalValues: formalValues)
-  } catch {
-    preconditionFailure(String(describing: error))
-  }
+private func fixtureProjection(_ entries: [(String, TLAValue)]) throws -> TLAStateProjection {
+  try projection(entries)
 }
 private func correlation(in object: [String: Any]) -> [String: Any] {
   object["correlation"] as? [String: Any] ?? [:]

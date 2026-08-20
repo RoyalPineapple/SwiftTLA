@@ -294,7 +294,7 @@ struct GeneratedIntegerChoiceAlgorithmTests {
         GeneratedIntegerChoiceAlgorithm._checkParserTree()
         let spec = GeneratedIntegerChoiceAlgorithm.spec
         let graph = try ModelChecker(spec: spec).exploreGraph()
-        #expect(Set(graph.states.values.compactMap { $0.formalValues["selected"] }) == [.int(0), .int(1), .int(2), .int(3)])
+        #expect(try Set(graph.states.values.compactMap { try value("selected", in: $0) }) == [.int(0), .int(1), .int(2), .int(3)])
     }
 }
 
@@ -320,7 +320,7 @@ struct GeneratedAlgorithmStateConstraintTests {
         #expect(GeneratedAlgorithmStateConstraint.spec.constraint
             == .lessThan(.variable("count"), .value(.int(2))))
         let graph = try ModelChecker(spec: GeneratedAlgorithmStateConstraint.spec).exploreGraph()
-        #expect(Set(graph.states.values.compactMap { $0.formalValues["count"] }) == [.int(0), .int(1)])
+        #expect(try Set(graph.states.values.compactMap { try value("count", in: $0) }) == [.int(0), .int(1)])
     }
 }
 

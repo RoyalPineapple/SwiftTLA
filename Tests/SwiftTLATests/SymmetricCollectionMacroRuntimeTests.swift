@@ -190,9 +190,9 @@ struct SymmetricCollectionMacroRuntimeTests {
     """
     let closure = Parser.parse(source: source).statements.first!.item.as(ClosureExprSyntax.self)!
     let parsed = SpecParser.parseSpecClosure(closure)
-    let initial = parsed.variables.reduce(into: [String: TLAValue]()) { $0[$1.name] = $1.initial }
-    let advanced: [String: TLAValue] = [
-      "devices": .function([TLAValue.constant("DevicesMember0"): TLAValue.int(1)])
+    let initial = parsed.variables.map { ($0.name, $0.initial) }
+    let advanced: [(String, TLAValue)] = [
+      ("devices", .function([TLAValue.constant("DevicesMember0"): TLAValue.int(1)]))
     ]
     let devices = SymmetricCollectionVar<Device, Int>("devices")
     let runtimeBuilt = TLASpec("RuntimeBuiltParity") {
@@ -210,9 +210,9 @@ struct SymmetricCollectionMacroRuntimeTests {
     )
 
     #expect(parsed.diagnostics.isEmpty)
-    #expect(try compiledSuccessors(of: parsedSpec, from: .init(formalValues: initial))
-      == compiledSuccessors(of: runtimeBuilt, from: .init(formalValues: initial)))
-    #expect(try compiledSuccessors(of: parsedSpec, from: .init(formalValues: advanced)).isEmpty)
+    #expect(try compiledSuccessors(of: parsedSpec, from: projection(initial))
+      == compiledSuccessors(of: runtimeBuilt, from: projection(initial)))
+    #expect(try compiledSuccessors(of: parsedSpec, from: projection(advanced)).isEmpty)
   }
 
   @Test("Parser rejects observable, escaping, and cross-collection member identities")
@@ -391,15 +391,15 @@ struct SymmetricCollectionMacroRuntimeTests {
 
   @Test("Generated routing preserves ActionBuilder statement precedence")
   func macroPreservesMultiStatementActionPrecedence() throws {
-    let boundedState: [String: TLAValue] = [
-      "devices": .function([
+    let boundedState: [(String, TLAValue)] = [
+      ("devices", .function([
         .constant("DevicesMember0"): .int(0),
         .constant("DevicesMember1"): .int(1)
-      ])
+      ]))
     ]
     let boundedSuccessors = try compiledSuccessors(
       of: GeneratedMultiStatementSymmetricRuntime.spec,
-      from: .init(formalValues: boundedState)
+      from: projection(boundedState)
     )
     let devices = try #require(TLAStateProjection.Token(validating: "devices"))
     #expect(boundedSuccessors.map { $0.value(for: devices) } == [
@@ -430,15 +430,15 @@ struct SymmetricCollectionMacroRuntimeTests {
 
   @Test("Generated routing applies the update from the enabled disjunct only")
   func macroPreservesBranchSpecificCollectionUpdates() throws {
-    let boundedState: [String: TLAValue] = [
-      "devices": .function([
+    let boundedState: [(String, TLAValue)] = [
+      ("devices", .function([
         .constant("DevicesMember0"): .int(2),
         .constant("DevicesMember1"): .int(1)
-      ])
+      ]))
     ]
     let boundedSuccessors = try compiledSuccessors(
       of: GeneratedDisjunctiveSymmetricRuntime.spec,
-      from: .init(formalValues: boundedState)
+      from: projection(boundedState)
     )
     let devices = try #require(TLAStateProjection.Token(validating: "devices"))
     #expect(boundedSuccessors.map { $0.value(for: devices) } == [

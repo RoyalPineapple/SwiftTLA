@@ -128,7 +128,7 @@ struct FormalOperatorTests {
     )
 
     #expect(
-      try compiledValue(expression, values: ["value": .int(99)], formalOperators: [identity]) == .int(4)
+      try compiledValue(expression, values: [("value", .int(99))], formalOperators: [identity]) == .int(4)
     )
   }
 
