@@ -218,6 +218,8 @@ struct GeneratedMachineContractTests {
         let report = GeneratedContractSurfaceModel.verifyGeneratedMachineContract()
 
         #expect(GeneratedContractSurfaceModel.generatedMachineMetadata == plan.metadata)
+        #expect(plan.variables.map(\.formalName) == compilation.layout.variables.map(\.declaration.name))
+        #expect(plan.actions.map(\.formalName) == compilation.layout.actions.map(\.declaration.name))
         let label = try #require(GeneratedContractSurfaceModel.ActionLabel(
             invocation: .init(name: "advance")
         ))

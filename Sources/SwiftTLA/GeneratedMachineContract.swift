@@ -228,18 +228,25 @@ public struct MachineSurfacePlan: Sendable, Equatable {
             }
         }
 
-        let variables = spec.variables.map { variable in
-            Variable(
-                formalName: variable.name,
-                swiftType: swiftFacts.variableTypes[variable.name] ?? Self.defaultSwiftType(for: variable.initial),
+        let variablesByName = Dictionary(uniqueKeysWithValues: spec.variables.map { ($0.name, $0) })
+        let variables = try compilation.layout.variables.map { layout in
+            guard let variable = variablesByName[layout.declaration.name] else {
+                throw Self.unknownFact("compiledLayout.variables.\(layout.declaration.name)")
+            }
+            return Variable(
+                formalName: layout.declaration.name,
+                swiftType: swiftFacts.variableTypes[layout.declaration.name] ?? Self.defaultSwiftType(for: variable.initial),
                 valueShape: .init(variable.initial),
                 collectionType: variable.collectionType
             )
         }
-        let actionIdentifiers = Self.generatedActionIdentifiers(spec.actions.map(\.name))
-        let actions = zip(spec.actions, actionIdentifiers).map { action, identifier in
-            Action(
-                formalName: action.name,
+        let actionIdentifiers = Self.generatedActionIdentifiers(compilation.layout.actions.map(\.declaration.name))
+        let actions = try zip(compilation.layout.actions, actionIdentifiers).map { layout, identifier in
+            guard let action = actionsByName[layout.declaration.name] else {
+                throw Self.unknownFact("compiledLayout.actions.\(layout.declaration.name)")
+            }
+            return Action(
+                formalName: layout.declaration.name,
                 swiftIdentifier: identifier,
                 bindings: action.bindings.map { binding in
                     Binding(
