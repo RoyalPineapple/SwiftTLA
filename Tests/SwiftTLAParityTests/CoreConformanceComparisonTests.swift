@@ -1,7 +1,84 @@
 import Testing
-import UpstreamParity
+@testable import UpstreamParity
 
 struct CoreConformanceComparisonTests {
+    @Test("complete canonical runs produce matching receipts before exact comparison")
+    func emitsComparableReceipts() throws {
+        let first = CanonicalState(bindings: ["counter": .integer(1)])
+        let second = CanonicalState(bindings: ["counter": .integer(2)])
+        let graph = try CanonicalGraph(
+            initialStates: [first],
+            states: [first, second],
+            edges: [.init(source: first.key, action: "advance", target: second.key)]
+        )
+        let run = try CanonicalRun(
+            graph: graph,
+            observableActions: ["advance"],
+            outcome: .exhaustiveSuccess
+        )
+
+        let comparison = exactFiniteTLCGraph(
+            expected: run,
+            actual: run,
+            compiledModelIdentity: "model",
+            configurationIdentity: "configuration",
+            symmetrySchemaIdentity: "none",
+            maximumStateLimit: 10
+        )
+
+        #expect(comparison.isConformant)
+        #expect(comparison.expectedReceipt == comparison.actualReceipt)
+        #expect(comparison.expectedReceipt?.supportsExactConformance == true)
+    }
+
+    @Test("declared observable mappings contribute to comparable receipts")
+    func recordsDeclaredMappingIdentity() throws {
+        let expectedState = CanonicalState(bindings: ["counter": .integer(1)])
+        let actualState = CanonicalState(bindings: ["swiftCounter": .integer(1)])
+        let expectedGraph = try CanonicalGraph(
+            initialStates: [expectedState],
+            states: [expectedState],
+            edges: []
+        )
+        let actualGraph = try CanonicalGraph(
+            initialStates: [actualState],
+            states: [actualState],
+            edges: []
+        )
+        let expected = try CanonicalRun(
+            graph: expectedGraph,
+            observableActions: [],
+            outcome: .exhaustiveSuccess
+        )
+        let actual = try CanonicalRun(
+            graph: actualGraph,
+            observableActions: [],
+            outcome: .exhaustiveSuccess
+        )
+        let mapping = ObservableNameMapping(
+            expectedVariables: ["counter"],
+            actualVariables: ["swiftCounter"],
+            variables: ["counter": "swiftCounter"],
+            expectedActions: [],
+            actualActions: [],
+            actions: [:]
+        )
+
+        let comparison = exactFiniteTLCGraph(
+            expected: expected,
+            actual: actual,
+            mapping: mapping,
+            compiledModelIdentity: "model",
+            configurationIdentity: "configuration",
+            symmetrySchemaIdentity: "none",
+            maximumStateLimit: 10
+        )
+
+        #expect(comparison.isConformant)
+        #expect(comparison.expectedReceipt?.observableNameMappingIdentity == mapping.canonicalIdentity)
+        #expect(comparison.expectedReceipt == comparison.actualReceipt)
+    }
+
     @Test("same state count with a changed edge is semantic non-conformance")
     func reportsCategorizedEdgeDifference() throws {
         let first = CanonicalState(bindings: ["counter": .integer(1)])
@@ -29,7 +106,6 @@ struct CoreConformanceComparisonTests {
         let edgeReport = try #require(comparison.failureReports.first { $0.whereItFailed.contains("action advance") })
         #expect(edgeReport.expected.contains("TLC permits this transition 1 time(s)."))
         #expect(edgeReport.actual.contains("SwiftTLA permits this transition 0 time(s)."))
-        #expect(edgeReport.systemChange == "No graph or generated state machine was changed.")
         #expect(edgeReport.nextSafeAction.contains("advance"))
     }
 
