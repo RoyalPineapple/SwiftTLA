@@ -79,7 +79,7 @@ struct SymmetricCollectionPredicateTests {
   @Test("Macro expansion retains collection predicate invariants and runtime parity")
   func macroRuntimeMatchesDirectCollectionPredicateBehavior() throws {
     let direct = directPredicateSpec()
-    let generated = GeneratedPredicateRuntime.runtime.spec
+    let generated = GeneratedPredicateRuntime.spec
 
     #expect(generated.symmetricCollections.map(\.metadata) == direct.symmetricCollections.map(\.metadata))
     #expect(normalized(generated.invariants.map(\.description)) == normalized(direct.invariants.map(\.description)))
@@ -121,7 +121,7 @@ struct SymmetricCollectionPredicateTests {
 
   @Test("Macro expansion accepts shorthand collection predicates")
   func macroExpansionAcceptsShorthandCollectionPredicates() throws {
-    let generated = GeneratedShorthandPredicateRuntime.runtime.spec
+    let generated = GeneratedShorthandPredicateRuntime.spec
 
     #expect(generated.actions.count == 2)
     #expect(generated.invariants.count == 2)

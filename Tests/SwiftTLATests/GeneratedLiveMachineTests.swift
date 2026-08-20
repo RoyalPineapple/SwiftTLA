@@ -16,6 +16,9 @@ private struct LiveMachineEquivalenceCounter {
             }
         }
     }
+
+    @TLAActor
+    actor Actor {}
 }
 
 @TLAModel
@@ -27,6 +30,9 @@ private struct ForeignLiveMachineModel {
             Action("raise") { level.becomes(level + 1).when(level < 1) }
         }
     }
+
+    @TLAActor
+    actor Actor {}
 }
 
 @Suite("Generated live machine")

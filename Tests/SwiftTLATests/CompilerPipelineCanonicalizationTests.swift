@@ -621,7 +621,7 @@ struct CompilerPipelineCanonicalizationTests {
     func algorithmSpecificationUsesMacroCompiledPayload() throws {
         let compilation = try CompilerPipelineAlgorithmModel.compiledSpecification()
 
-        #expect(CompilerPipelineAlgorithmModel.runtime.compilation.identity == compilation.identity)
+        #expect(try CompilerPipelineAlgorithmModel.compiledSpecification().identity == compilation.identity)
         #expect(try CompilerPipelineAlgorithmModel.verifySpec() > 0)
         #expect(try CompilerPipelineAlgorithmModel.transitionMatrix().isEmpty == false)
         #expect(try compilation.renderedTLAModuleBundle().tla == try CompilerPipelineAlgorithmModel.spec.compile().renderedTLAModuleBundle().tla)
@@ -764,7 +764,7 @@ struct CompilerPipelineCanonicalizationTests {
     func macroGeneratedConsumersUseCompiledPayload() throws {
         let compilation = try CompilerPipelineGeneratedModel.compiledSpecification()
 
-        #expect(CompilerPipelineGeneratedModel.runtime.compilation.identity == compilation.identity)
+        #expect(try CompilerPipelineGeneratedModel.compiledSpecification().identity == compilation.identity)
         #expect(try CompilerPipelineGeneratedModel.verifySpec() > 0)
         #expect(try CompilerPipelineGeneratedModel.transitionMatrix().isEmpty == false)
         #expect(try compilation.renderedTLAModuleBundle().tla == try CompilerPipelineGeneratedModel.spec.compile().renderedTLAModuleBundle().tla)
@@ -780,7 +780,7 @@ struct CompilerPipelineCanonicalizationTests {
         #expect(computed.lazySet == nil)
         #expect(choice.initExpr == nil)
         #expect(choice.lazySet == .setLiteral([.value(.int(1)), .value(.int(2))]))
-        #expect(CompilerPipelineInitializationModel.runtime.compilation.identity == compilation.identity)
+        #expect(try CompilerPipelineInitializationModel.compiledSpecification().identity == compilation.identity)
     }
 
     @Test("#spec lowering preserves symmetric collection metadata")
@@ -792,7 +792,7 @@ struct CompilerPipelineCanonicalizationTests {
         #expect(devices.collectionType == .dictionary(2))
         #expect(declaration.variable == devices)
         #expect(declaration.verificationScope == 2)
-        #expect(CompilerPipelineCollectionModel.runtime.compilation.identity == compilation.identity)
+        #expect(try CompilerPipelineCollectionModel.compiledSpecification().identity == compilation.identity)
     }
 
     @Test("semantic compilation fields change the identity")

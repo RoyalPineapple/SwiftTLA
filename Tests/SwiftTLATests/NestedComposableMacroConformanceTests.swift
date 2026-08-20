@@ -59,9 +59,10 @@ struct NestedComposableMacroConformanceTests {
     func threeParameterIdentityRemainsDistinctAcrossNestedSurfaces() async throws {
         let first = TLAActionInvocation(name: "board", arguments: [.int(1), .int(10), .int(100)])
         let selected = TLAActionInvocation(name: "board", arguments: [.int(2), .int(20), .int(200)])
-        let runtime = EndToEndThreeParameterActionMachine.runtime
-        let initial = try #require(runtime.initialStateProjections().first)
-        let available = try runtime.availableInvocations(in: initial)
+        let matrix = try EndToEndThreeParameterActionMachine.transitionMatrix()
+        let available = matrix
+            .filter { $0.from.floor == 0 }
+            .map(\.invocation)
         let observable = ThreeParameterActionMachine.Observable()
         let actor = ThreeParameterActionMachine.Actor()
 
@@ -69,9 +70,9 @@ struct NestedComposableMacroConformanceTests {
         #expect(Set(available).count == 8)
         #expect(available.contains(first))
         #expect(available.contains(selected))
-        let floor = try #require(TLAStateProjection.Token(validating: "floor"))
-        let successor = try #require(try runtime.successors(selected, from: initial).first)
-        #expect(successor.value(for: floor) == .int(222))
+        var machine = try EndToEndThreeParameterActionMachine.makeMachine()
+        let result = try machine.apply(.board(person: 2, elevator: 20, direction: 200))
+        #expect(result.after.floor == 222)
         #expect(try await observable.execute(selected).action == .board(person: 2, elevator: 20, direction: 200))
         #expect(try await actor.execute(selected).action == .board(person: 2, elevator: 20, direction: 200))
     }
