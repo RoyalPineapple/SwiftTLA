@@ -33,6 +33,7 @@ guard let name = args.first else {
 fputs("tlc-validate: unknown command \(name)\n", stderr)
 exit(1)
 private typealias CoreConformanceManifest = CoreConformanceCasesManifest
+private let coreConformanceMaximumStateLimit = 100_000
 
 private struct PublicWorkflowOptions {
     let output: String
@@ -179,7 +180,10 @@ private func runCoreConformance(arguments: [String]) -> Never {
             (entry.id, try swiftSpec(entry.swiftSpec))
         })
         let invocationMappings = try Dictionary(uniqueKeysWithValues: selected.map { entry in
-            (entry.id, try validateMappings(entry, for: swiftSpecs[entry.id]!))
+            guard let spec = swiftSpecs[entry.id] else {
+                throw CoreConformanceCLIError.invalidManifest("missing Swift specification for \(entry.id)")
+            }
+            return (entry.id, try validateMappings(entry, for: spec))
         })
         let toolRoot = try requiredEnvironment("CORE_CONFORMANCE_TOOL_ROOT", environment)
         let inputRoot = try requiredEnvironment("CORE_CONFORMANCE_INPUT_ROOT", environment)
@@ -246,6 +250,12 @@ private func runCoreConformance(arguments: [String]) -> Never {
         }
         var exitCode: Int32 = CoreConformanceExitCode.exact.rawValue
         for entry in selected {
+            guard let swiftSpec = swiftSpecs[entry.id] else {
+                throw CoreConformanceCLIError.invalidManifest("missing Swift specification for \(entry.id)")
+            }
+            guard let actionNames = invocationMappings[entry.id] else {
+                throw CoreConformanceCLIError.invalidManifest("missing invocation mapping for \(entry.id)")
+            }
             let expectedExit = Int32(entry.expectedExit ?? Int(CoreConformanceExitCode.exact.rawValue))
             guard expectedExit == CoreConformanceExitCode.exact.rawValue ||
                 expectedExit == CoreConformanceExitCode.semanticDifference.rawValue
@@ -280,15 +290,21 @@ private func runCoreConformance(arguments: [String]) -> Never {
             let result = CoreConformanceRunner().run(
                 case: caseDefinition,
                 swiftExploration: {
+                    let compilation = try swiftSpec.compile()
                     SwiftExplorationEvidence(
                         caseID: caseDefinition.id,
-                        exploration: try ModelChecker(compilation: try swiftSpec(entry.swiftSpec).compile()).explore()
+                        exploration: try ModelChecker(
+                            compilation: compilation,
+                            maxStates: coreConformanceMaximumStateLimit
+                        ).explore(),
+                        compiledModelIdentity: compilation.identity.value,
+                        maximumStateLimit: coreConformanceMaximumStateLimit
                     )
                 },
                 tlcRequest: request,
                 replay: try replayPolicy(entry.replay),
                 outputDirectory: caseOutput,
-                swiftActionNames: invocationMappings[entry.id]!
+                swiftActionNames: actionNames
             )
             let label = expectedExit == CoreConformanceExitCode.semanticDifference.rawValue
                 ? "core-conformance negative control \(entry.id)"
@@ -299,14 +315,12 @@ private func runCoreConformance(arguments: [String]) -> Never {
                 fputs("  where: \(report.whereItFailed)\n", stderr)
                 fputs("  expected: \(report.expected)\n", stderr)
                 fputs("  actual: \(report.actual)\n", stderr)
-              fputs("  changed: \(report.systemChange)\n", stderr)
               fputs("  next: \(report.nextSafeAction)\n", stderr)
             } else if let report = result.comparison?.failureReports.first {
                 fputs("\(label): \(report.whatFailed)\n", stderr)
                 fputs("  where: \(report.whereItFailed)\n", stderr)
                 fputs("  expected: \(report.expected)\n", stderr)
                 fputs("  actual: \(report.actual)\n", stderr)
-                fputs("  changed: \(report.systemChange)\n", stderr)
                 fputs("  next: \(report.nextSafeAction)\n", stderr)
             } else {
                 print("\(label): \(result.exitCode.rawValue) \(result.evidenceDirectory?.path ?? "")")

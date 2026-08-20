@@ -153,8 +153,9 @@ public struct CoreConformanceRunner: Sendable {
         throw RunnerError.tlcCaseMismatch
       }
       phase = .swiftAdaptation
+      let swiftEvidence = try swiftExploration()
       let swiftRun = try swiftAdapter.adapt(
-        try swiftExploration(), for: declaredCase, actionNames: swiftActionNames)
+        swiftEvidence, for: declaredCase, actionNames: swiftActionNames)
       try writeCanonicalRun(
         swiftRun, named: "swift.json", correlation: correlations.swift, to: createdStaging)
       phase = .tlcExecution
@@ -172,7 +173,15 @@ public struct CoreConformanceRunner: Sendable {
       try writeCanonicalRun(
         tlcRun, named: "tlc.json", correlation: correlations.tlc, to: createdStaging)
       phase = .comparison
-      let comparison = exactFiniteTLCGraph(expected: tlcRun, actual: swiftRun)
+      let comparison = exactFiniteTLCGraph(
+        expected: tlcRun,
+        actual: swiftRun,
+        compiledModelIdentity: swiftEvidence.compiledModelIdentity,
+        configurationIdentity: declaredCase.cfgSHA256,
+        symmetrySchemaIdentity: "none",
+        maximumStateLimit: swiftEvidence.maximumStateLimit,
+        observableNameMappingIdentity: actionMappingReceiptIdentity(swiftActionNames)
+      )
       let exitCode: CoreConformanceExitCode =
         comparison.isConformant ? .exact : .semanticDifference
       try writeComparison(comparison, correlation: correlations.runner, to: createdStaging)
@@ -536,12 +545,18 @@ extension CoreConformanceRunner {
     correlation: CoreConformanceCorrelation,
     to directory: URL
   ) throws {
-    try writeJSON(
-      [
-        "correlation": correlationJSON(correlation),
-        "conformant": comparison.isConformant,
-        "differences": comparison.differences.map(differenceJSON)
-      ], to: directory.appendingPathComponent("comparison.json"))
+    var record: [String: Any] = [
+      "correlation": correlationJSON(correlation),
+      "conformant": comparison.isConformant,
+      "differences": comparison.differences.map(differenceJSON)
+    ]
+    if let expectedReceipt = comparison.expectedReceipt {
+      record["expectedReceipt"] = receiptJSON(expectedReceipt)
+    }
+    if let actualReceipt = comparison.actualReceipt {
+      record["actualReceipt"] = receiptJSON(actualReceipt)
+    }
+    try writeJSON(record, to: directory.appendingPathComponent("comparison.json"))
     if !comparison.isConformant {
       try writeJSON(
         ["reports": comparison.failureReports.map(failureReportJSON)],
@@ -601,7 +616,6 @@ extension CoreConformanceRunner {
         whereItFailed: "\(phase.rawValue) for case \(request.caseID)",
         expected: expectedWork(for: phase),
         actual: sanitized(String(describing: error)),
-        systemChange: "No successful conformance claim was published; retained evidence records the completed work.",
         nextSafeAction: nextSafeAction(for: phase),
         evidence: [
           .init(role: "TLA+ module", location: request.moduleFileName),
@@ -710,6 +724,34 @@ extension CoreConformanceRunner {
     case .executionError(let reason): ["kind": "executionError", "message": reason]
     }
   }
+  private func receiptJSON(_ receipt: CanonicalGraphReceipt) -> [String: Any] {
+    var object: [String: Any] = [
+      "formatVersion": receipt.formatVersion,
+      "compiledModelIdentity": receipt.compiledModelIdentity,
+      "configurationIdentity": receipt.configurationIdentity,
+      "symmetrySchemaIdentity": receipt.symmetrySchemaIdentity,
+      "explorationStatus": receipt.explorationStatus.rawValue,
+      "maximumStateLimit": receipt.maximumStateLimit,
+      "initialStateCount": receipt.initialStateCount,
+      "stateCount": receipt.stateCount,
+      "edgeCount": receipt.edgeCount,
+      "initialStatesDigest": receipt.initialStatesDigest,
+      "statesDigest": receipt.statesDigest,
+      "edgesDigest": receipt.edgesDigest,
+      "graphDigest": receipt.graphDigest
+    ]
+    if let mappingIdentity = receipt.observableNameMappingIdentity {
+      object["observableNameMappingIdentity"] = mappingIdentity
+    }
+    return object
+  }
+  private func actionMappingReceiptIdentity(_ mapping: [String: String]) -> String? {
+    guard !mapping.isEmpty else { return nil }
+    let records = mapping.sorted { canonicalBytes($0.key, $1.key) }.map {
+      "action:\(encodedBytes($0.key))->\(encodedBytes($0.value))"
+    }
+    return SHA256.hex(Data(records.joined(separator: "\n").utf8))
+  }
   private func traceJSON(_ trace: CanonicalTrace) -> [String: Any] {
     [
       "id": trace.id,
@@ -718,6 +760,12 @@ extension CoreConformanceRunner {
   }
   private func differenceJSON(_ difference: ConformanceDifference) -> [String: Any] {
     switch difference {
+    case .receipt(let expectedDigest, let actualDigest):
+      [
+        "category": difference.category.rawValue,
+        "expected": expectedDigest,
+        "actual": actualDigest
+      ]
     case .mapping(let messages):
       ["category": difference.category.rawValue, "expected": [], "actual": [], "details": messages]
     case .initialStates(let expected, let actual), .states(let expected, let actual):
@@ -762,7 +810,6 @@ extension CoreConformanceRunner {
       "whereItFailed": report.whereItFailed,
       "expected": report.expected,
       "actual": report.actual,
-      "systemChange": report.systemChange,
       "nextSafeAction": report.nextSafeAction,
       "evidence": report.evidence.map { ["role": $0.role, "location": $0.location] },
       "toolOutput": report.toolOutput.map { ["stream": $0.stream, "content": $0.content] }

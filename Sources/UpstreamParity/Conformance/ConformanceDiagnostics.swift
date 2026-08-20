@@ -36,7 +36,6 @@ public struct ConformanceFailureReport: Equatable, Sendable {
   public let whereItFailed: String
   public let expected: String
   public let actual: String
-  public let systemChange: String
   public let nextSafeAction: String
   public let evidence: [ConformanceEvidenceLocation]
   public let toolOutput: [ConformanceToolOutput]
@@ -46,7 +45,6 @@ public struct ConformanceFailureReport: Equatable, Sendable {
     whereItFailed: String,
     expected: String,
     actual: String,
-    systemChange: String,
     nextSafeAction: String,
     evidence: [ConformanceEvidenceLocation] = [],
     toolOutput: [ConformanceToolOutput] = []
@@ -55,7 +53,6 @@ public struct ConformanceFailureReport: Equatable, Sendable {
     self.whereItFailed = whereItFailed
     self.expected = expected
     self.actual = actual
-    self.systemChange = systemChange
     self.nextSafeAction = nextSafeAction
     self.evidence = evidence
     self.toolOutput = toolOutput
@@ -71,13 +68,20 @@ extension ConformanceDifference {
   /// "graph differs".
   public var failureReport: ConformanceFailureReport {
     switch self {
+    case .receipt(let expectedDigest, let actualDigest):
+      return .init(
+        whatFailed: "The canonical graph receipts differ.",
+        whereItFailed: "finite graph receipt",
+        expected: "TLC receipt: \(expectedDigest)",
+        actual: "SwiftTLA receipt: \(actualDigest)",
+        nextSafeAction: "Read the first exact graph difference."
+      )
     case .mapping(let messages):
       return .init(
         whatFailed: "The declared observable-name mapping is not a total bijection.",
         whereItFailed: "observable variable or action mapping",
         expected: "Every TLC observable name maps to exactly one SwiftTLA name, and vice versa.",
         actual: messages.joined(separator: "; "),
-        systemChange: "No graph or generated state machine was changed.",
         nextSafeAction: "Correct the declared mapping, then rerun the finite TLC comparison."
       )
     case .initialStates(let expected, let actual):
@@ -106,7 +110,6 @@ extension ConformanceDifference {
         whereItFailed: "finite conformance outcome",
         expected: "TLC outcome: \(describe(expected))",
         actual: "SwiftTLA outcome: \(describe(actual))",
-        systemChange: "No graph or generated state machine was changed.",
         nextSafeAction: "Inspect tlc.json and swift.json outcomes and their retained traces before changing the model."
       )
     case .errors(let expected, let actual):
@@ -115,7 +118,6 @@ extension ConformanceDifference {
         whereItFailed: "canonical diagnostic list",
         expected: describe(expected),
         actual: describe(actual),
-        systemChange: "No graph or generated state machine was changed.",
         nextSafeAction: "Inspect the named diagnostic and its source input before changing the model."
       )
     case .traces(let expected, let actual):
@@ -124,7 +126,6 @@ extension ConformanceDifference {
         whereItFailed: "canonical trace evidence",
         expected: describe(expected),
         actual: describe(actual),
-        systemChange: "No graph or generated state machine was changed.",
         nextSafeAction: "Inspect the first differing trace step in tlc.json and swift.json before changing the model."
       )
     }
@@ -153,7 +154,6 @@ extension TLCProcessError {
         whereItFailed: "TLC primary invocation for case \(request.caseID)",
         expected: "TLC completes within \(request.timeout) seconds and writes a complete graph event stream.",
         actual: "The process exceeded \(request.timeout) seconds and was terminated.",
-        systemChange: "No comparison was published; partial output was retained.",
         nextSafeAction: "Inspect the retained stdout and stderr, then reduce the declared finite bounds or raise the case timeout deliberately.",
         evidence: evidence,
         toolOutput: [.init(stream: "stdout", content: sanitized(stdout)), .init(stream: "stderr", content: sanitized(stderr))]
@@ -164,7 +164,6 @@ extension TLCProcessError {
         whereItFailed: "TLC primary invocation for case \(request.caseID)",
         expected: "The configured Java executable and TLC class path launch TLC.",
         actual: sanitized(message),
-        systemChange: "No comparison was published and no model state was changed.",
         nextSafeAction: "Verify the Java executable, TLC JAR, bridge classes, and working directory in the retained invocation snapshot.",
         evidence: evidence
       )
@@ -176,7 +175,6 @@ extension TLCProcessError {
           whereItFailed: "module bundle source \(path)",
           expected: "The emitted .tla source is readable as UTF-8 before TLC starts.",
           actual: reason,
-          systemChange: "TLC was not launched and no comparison was published.",
           nextSafeAction: "Check the emitted module file permissions and encoding, then write a fresh bundle before retrying.",
           evidence: evidence
         )
@@ -186,7 +184,6 @@ extension TLCProcessError {
           whereItFailed: "\(importedBy):\(line), which imports \(module)",
           expected: "\(module).tla exists beside the root module at \(expectedFile).",
           actual: "The emitted bundle has no \(module).tla file.",
-          systemChange: "TLC was not launched and no comparison was published.",
           nextSafeAction: "Emit \(module).tla with its transitive imports beside the root module, then rerun TLC.",
           evidence: evidence + [.init(role: "missing imported module", location: expectedFile)]
         )
@@ -232,7 +229,6 @@ private func setDifferenceReport(
     whereItFailed: location,
     expected: onlyExpected.map { "TLC includes \($0.canonicalEncoding)." } ?? "TLC has no additional state at the first difference.",
     actual: onlyActual.map { "SwiftTLA includes \($0.canonicalEncoding)." } ?? "SwiftTLA has no additional state at the first difference.",
-    systemChange: "No graph or generated state machine was changed.",
     nextSafeAction: next
   )
 }
@@ -246,7 +242,6 @@ private func edgeDifferenceReport(
       whatFailed: "The labeled transition multisets differ.", whereItFailed: "canonical transition relation",
       expected: "TLC and SwiftTLA retain the same transition occurrences.",
       actual: "The occurrence counts differ, but no stable witness was available.",
-      systemChange: "No graph or generated state machine was changed.",
       nextSafeAction: "Inspect the retained edges in tlc.json and swift.json."
     )
   }
@@ -255,7 +250,6 @@ private func edgeDifferenceReport(
     whereItFailed: "action \(witness.action) from \(witness.source.canonicalEncoding) to \(witness.target.canonicalEncoding)",
     expected: "TLC permits this transition \(expected[witness, default: 0]) time(s).",
     actual: "SwiftTLA permits this transition \(actual[witness, default: 0]) time(s).",
-    systemChange: "No graph or generated state machine was changed.",
     nextSafeAction: "Compare the \(witness.action) guard and update at the named source state in tlc.json and swift.json."
   )
 }
@@ -272,7 +266,6 @@ private func observationDifferenceReport(
     whereItFailed: witness.map { "canonical state \($0.canonicalEncoding)" } ?? "canonical state observations",
     expected: describe(expectedObservation),
     actual: describe(actualObservation),
-    systemChange: "No graph or generated state machine was changed.",
     nextSafeAction: "Compare the enabled action guards at the named state in tlc.json and swift.json."
   )
 }
@@ -284,7 +277,6 @@ private func processFailureReport(
   .init(
     whatFailed: what, whereItFailed: "TLC \(phase) invocation for case \(request.caseID)",
     expected: expected, actual: actual,
-    systemChange: "No comparison was published; the completed primary run and failed \(phase) output were retained.",
     nextSafeAction: "Inspect the retained TLC \(phase) stdout and stderr, then correct the trace configuration or the emitted module bundle.",
     evidence: toolEvidence(for: request),
     toolOutput: [.init(stream: "stdout", content: sanitized(outputs.stdout)), .init(stream: "stderr", content: sanitized(outputs.stderr))]
@@ -298,7 +290,6 @@ private func executionFailureReport(
   .init(
     whatFailed: what, whereItFailed: "TLC \(phase) invocation for case \(request.caseID)",
     expected: expected, actual: sanitized(error.message),
-    systemChange: "No comparison was published; retained output contains the available process evidence.",
     nextSafeAction: "Inspect the retained invocation snapshot and TLC output before retrying.",
     evidence: toolEvidence(for: request),
     toolOutput: [

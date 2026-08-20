@@ -38,6 +38,16 @@ struct CoreConformanceRunnerTests {
     #expect(correlation(in: swift)["engine"] as? String == "swift")
     #expect(correlation(in: tlc)["engine"] as? String == "tlc")
     #expect(correlation(in: comparison)["engine"] as? String == "runner")
+    let expectedReceipt = try #require(comparison["expectedReceipt"] as? [String: Any])
+    let actualReceipt = try #require(comparison["actualReceipt"] as? [String: Any])
+    #expect(expectedReceipt["compiledModelIdentity"] as? String == "fixture-model")
+    #expect(actualReceipt["compiledModelIdentity"] as? String == "fixture-model")
+    #expect(expectedReceipt["maximumStateLimit"] as? Int == 10)
+    #expect(actualReceipt["maximumStateLimit"] as? Int == 10)
+    #expect(
+      (expectedReceipt["graphDigest"] as? String) != (actualReceipt["graphDigest"] as? String)
+    )
+    #expect((comparison["differences"] as? [[String: Any]])?.first?["category"] as? String == "receipt")
     let edgeDifference = try #require(
       (comparison["differences"] as? [[String: Any]])?.first {
         $0["category"] as? String == "edges"
@@ -51,7 +61,6 @@ struct CoreConformanceRunnerTests {
     #expect(report["whatFailed"] as? String == "The labeled transition multisets differ.")
     #expect((report["expected"] as? String)?.contains("TLC permits") == true)
     #expect((report["actual"] as? String)?.contains("SwiftTLA permits") == true)
-    #expect(report["systemChange"] as? String == "No graph or generated state machine was changed.")
     #expect((report["nextSafeAction"] as? String)?.contains("guard") == true)
   }
   @Test("runner publishes partial evidence and a diagnostic after TLC capture failure")
@@ -112,7 +121,12 @@ struct CoreConformanceRunnerTests {
     let result = CoreConformanceRunner().run(
       case: request.expectedCase,
       swiftExploration: {
-        SwiftExplorationEvidence(caseID: "other-case", exploration: swiftExploration())
+        SwiftExplorationEvidence(
+          caseID: "other-case",
+          exploration: swiftExploration(),
+          compiledModelIdentity: "fixture-model",
+          maximumStateLimit: 10
+        )
       },
       tlcRequest: request,
       replay: .none,
@@ -208,7 +222,11 @@ struct CoreConformanceRunnerTests {
       case: request.expectedCase,
       swiftExploration: {
         SwiftExplorationEvidence(
-          caseID: request.expectedCase.id, exploration: swiftExploration(action: "Next"))
+          caseID: request.expectedCase.id,
+          exploration: swiftExploration(action: "Next"),
+          compiledModelIdentity: "fixture-model",
+          maximumStateLimit: 10
+        )
       },
       tlcRequest: request,
       replay: .none,
@@ -441,7 +459,11 @@ extension CoreConformanceRunnerTests {
           case: request.expectedCase,
           swiftExploration: {
             SwiftExplorationEvidence(
-              caseID: request.expectedCase.id, exploration: exactSwiftExploration())
+              caseID: request.expectedCase.id,
+              exploration: exactSwiftExploration(),
+              compiledModelIdentity: "fixture-model",
+              maximumStateLimit: 10
+            )
           },
           tlcRequest: request,
           replay: .required,
@@ -481,7 +503,12 @@ extension CoreConformanceRunnerTests {
     #expect(exitCode == CoreConformanceExitCode.semanticDifference.rawValue)
   }
   private func swiftEvidence(for declaredCase: CoreConformanceCase) -> SwiftExplorationEvidence {
-    SwiftExplorationEvidence(caseID: declaredCase.id, exploration: swiftExploration())
+    SwiftExplorationEvidence(
+      caseID: declaredCase.id,
+      exploration: swiftExploration(),
+      compiledModelIdentity: "fixture-model",
+      maximumStateLimit: 10
+    )
   }
   private func swiftExploration(action: String = "SwiftNext") -> ModelExplorationResult {
     let first = StateGraph.StateID(0)

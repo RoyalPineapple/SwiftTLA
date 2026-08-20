@@ -64,7 +64,6 @@ struct CoreConformanceTLCAdapterTests { @Test("frozen graph stream becomes compl
       #expect(report.whereItFailed == "Functions.tla:2, which imports Folds")
       #expect(report.expected.contains("Folds.tla"))
       #expect(report.actual == "The emitted bundle has no Folds.tla file.")
-      #expect(report.systemChange == "TLC was not launched and no comparison was published.")
       #expect(report.nextSafeAction.contains("transitive imports"))
     }
   }
