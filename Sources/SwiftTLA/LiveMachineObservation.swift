@@ -103,7 +103,7 @@ public final class TLALiveMachineObservationSubscription: AsyncSequence, Sendabl
 
         public mutating func next() async -> TLALiveMachineObservationEvent? {
             let observation = subscription
-            await withTaskCancellationHandler {
+            return await withTaskCancellationHandler {
                 await observation.next()
             } onCancel: {
                 Task { await observation.cancel() }
