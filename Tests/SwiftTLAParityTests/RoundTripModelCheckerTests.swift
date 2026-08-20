@@ -504,11 +504,15 @@ import UpstreamParity
 
   @Test("BFSChecker @TLAModel exposes SpecRuntime")
   func bfsCheckerRuntime() throws {
-    let rt = BFSChecker.runtime
-    let state = try #require(rt.initialStateProjections().first)
+    let graph = try ModelChecker(spec: BFSChecker.spec, maxStates: 20).exploreGraph()
+    let initial = try #require(graph.initialStateIDs.first)
+    let state = try #require(graph.states[initial])
     let phase = try #require(TLAStateProjection.Token(validating: "phase"))
     #expect(state.value(for: phase) == .int(0))
-    let next = try #require(try rt.successors(.init(name: "StepDiscover"), from: state).first)
+    let transition = try #require(graph.transitions[initial]?.first(where: {
+      $0.label.invocation.name == "StepDiscover"
+    }))
+    let next = try #require(graph.states[transition.target])
     let processed = try #require(TLAStateProjection.Token(validating: "processed"))
     #expect(next.value(for: processed) == .int(1))
   }

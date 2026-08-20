@@ -298,7 +298,7 @@ struct SymmetricCollectionMacroRuntimeTests {
     #expect(GeneratedSymmetricRuntime.symmetricCollectionScopes == [
       SymmetricCollectionScope(collectionName: "devices", verificationScope: 1)
     ])
-    #expect(!GeneratedSymmetricRuntime.runtime.spec.actions.description.contains("42"))
+    #expect(GeneratedSymmetricRuntime.spec.actions.description.contains("42") == false)
     #expect(throws: GeneratedMachineError.self) {
       try model.begin(id: 99)
     }
@@ -353,9 +353,9 @@ struct SymmetricCollectionMacroRuntimeTests {
     for device in devices {
       #expect(model.devices[device.id] == 1)
     }
-    #expect(!GeneratedScopedSymmetricRuntime.runtime.spec.actions.description.contains("first"))
-    #expect(!GeneratedScopedSymmetricRuntime.runtime.spec.actions.description.contains("second"))
-    #expect(!GeneratedScopedSymmetricRuntime.runtime.spec.actions.description.contains("third"))
+    #expect(GeneratedScopedSymmetricRuntime.spec.actions.description.contains("first") == false)
+    #expect(GeneratedScopedSymmetricRuntime.spec.actions.description.contains("second") == false)
+    #expect(GeneratedScopedSymmetricRuntime.spec.actions.description.contains("third") == false)
   }
 
   @Test("Generated routing evaluates shared authored guards before its update")
@@ -379,7 +379,7 @@ struct SymmetricCollectionMacroRuntimeTests {
       ])
     ]
     let boundedSuccessors = try ActionEnumerator.enumerate(
-      GeneratedMultiStatementSymmetricRuntime.runtime.spec.actions[0].body,
+      GeneratedMultiStatementSymmetricRuntime.spec.actions[0].body,
       from: boundedState,
       varNames: ["devices"]
     )
@@ -418,7 +418,7 @@ struct SymmetricCollectionMacroRuntimeTests {
       ])
     ]
     let boundedSuccessors = try ActionEnumerator.enumerate(
-      GeneratedDisjunctiveSymmetricRuntime.runtime.spec.actions[0].body,
+      GeneratedDisjunctiveSymmetricRuntime.spec.actions[0].body,
       from: boundedState,
       varNames: ["devices"]
     )

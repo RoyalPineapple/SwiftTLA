@@ -77,7 +77,7 @@ extension MacroExpander {
                     verified[candidate] = true
                     return matrix[candidate].to
                 }
-                var actual = try Self.runtime.successors(invocation, from: from)
+                var actual = try Self._runtime().successors(invocation, from: from)
                 guard actual.count == expected.count else {
                     throw VerificationError("\\(invocation): expected \\(expected.count) successors, got \\(actual.count)")
                 }
@@ -95,7 +95,7 @@ extension MacroExpander {
         [DeclSyntax(stringLiteral: """
         public static func verifyInvariants() throws {
             let matrix = try Self._formalTransitionMatrix()
-            let runtime = Self.runtime
+            let runtime = try Self._runtime()
             for (_, invocation, successor) in matrix {
                 for outcome in runtime.invariantOutcomes(in: successor) {
                     switch outcome {

@@ -13,4 +13,4 @@ struct ValidModel {
   }
 }
 
-_ = ValidModel.runtime
+_ = try ValidModel.makeMachine()

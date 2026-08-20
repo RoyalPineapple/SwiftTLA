@@ -102,7 +102,9 @@ enum MacroExpander {
             symmetricCollections: plan.symmetricCollections,
             identityRoutedActions: Set(plan.collectionActions.keys)
         ))
-        decls.append(contentsOf: generateLiveMachineMembers(model: model))
+        if model.hasNestedLiveAdapter {
+            decls.append(contentsOf: generateLiveMachineMembers(model: model))
+        }
         decls.append(contentsOf: generateCollectionRuntimeMembers(plan.symmetricCollections))
         let symmetricCollectionNames = Set(plan.symmetricCollections.map(\.formalName))
         let ordinaryVariables = plan.variables.filter { !symmetricCollectionNames.contains($0.formalName) }
@@ -119,7 +121,7 @@ enum MacroExpander {
         decls.append(contentsOf: generateCompilationIdentityCheck(model: model))
         decls.append(DeclSyntax(stringLiteral: """
         public static func makeMachine() throws -> Self {
-            let runtime = try SpecRuntime(compilation: compiledSpecification())
+            let runtime = try _runtime()
             guard let projection = try runtime.initialStateProjections().first else {
                 throw GeneratedMachineError.noInitialState
             }
@@ -132,38 +134,28 @@ enum MacroExpander {
             ))
         }
         """))
-        decls.append(DeclSyntax(
-            VariableDeclSyntax(
-                modifiers: [DeclModifierSyntax(name: .keyword(.public)), DeclModifierSyntax(name: .keyword(.static))],
-                bindingSpecifier: .keyword(.var),
-                bindings: [PatternBindingSyntax(
-                    pattern: IdentifierPatternSyntax(identifier: "runtime"),
-                    typeAnnotation: TypeAnnotationSyntax(type: IdentifierTypeSyntax(name: "SpecRuntime")),
-                    accessorBlock: AccessorBlockSyntax(accessors: .getter(
-                        CodeBlockItemListSyntax { ExprSyntax(stringLiteral: "do { return try SpecRuntime(compilation: compiledSpecification()) } catch { fatalError(String(describing: error)) }") }
-                    ))
-                )]
-            )
-        ))
+        decls.append(DeclSyntax(stringLiteral: """
+        private static func _runtime() throws -> SpecRuntime {
+            try SpecRuntime(compilation: compiledSpecification())
+        }
+        """))
+        if model.hasNestedLiveAdapter {
+            decls.append(DeclSyntax(
+                VariableDeclSyntax(
+                    modifiers: [DeclModifierSyntax(name: .keyword(.public)), DeclModifierSyntax(name: .keyword(.static))],
+                    bindingSpecifier: .keyword(.var),
+                    bindings: [PatternBindingSyntax(
+                        pattern: IdentifierPatternSyntax(identifier: "runtime"),
+                        typeAnnotation: TypeAnnotationSyntax(type: IdentifierTypeSyntax(name: "SpecRuntime")),
+                        accessorBlock: AccessorBlockSyntax(accessors: .getter(
+                            CodeBlockItemListSyntax { ExprSyntax(stringLiteral: "do { return try _runtime() } catch { fatalError(String(describing: error)) }") }
+                        ))
+                    )]
+                )
+            ))
+        }
 
         decls.append(contentsOf: generateSpecTest())
-        if !isActor {
-            decls.append(DeclSyntax(stringLiteral: """
-            public static func generatedActionReport(
-                actionName: String,
-                in state: State
-            ) throws -> SpecRuntime.RuntimeActionReport {
-                Self.runtime.actionReport(named: actionName, in: try state.formalProjection())
-            }
-            """))
-            decls.append(DeclSyntax(stringLiteral: """
-            public static func generatedPropertyOutcomes(
-                in state: State
-            ) throws -> [SpecRuntime.RuntimePropertyOutcome] {
-                Self.runtime.propertyOutcomes(in: try state.formalProjection())
-            }
-            """))
-        }
         if !plan.actions.isEmpty {
             decls.append(contentsOf: generateTransitionMatrix())
         }
@@ -184,7 +176,7 @@ enum MacroExpander {
             behaviorSource = """
             private static let _generatedMachineBehavior = GeneratedMachineBehavior(
                 initialStates: {
-                    try Self.runtime.initialStateProjections().map { projection in
+                    try Self._runtime().initialStateProjections().map { projection in
                         _ = try State(projection: projection)
                         return projection
                     }
@@ -196,7 +188,7 @@ enum MacroExpander {
             behaviorSource = """
             private static let _generatedMachineBehavior = GeneratedMachineBehavior(
                 initialStates: {
-                    try Self.runtime.initialStateProjections().map { projection in
+                    try Self._runtime().initialStateProjections().map { projection in
                         _ = try State(projection: projection)
                         return projection
                     }
@@ -213,7 +205,7 @@ enum MacroExpander {
                         )
                     }
                     _ = try State(projection: projection)
-                    return try Self.runtime.successors(label.toInvocation(), from: projection).map { target in
+                    return try Self._runtime().successors(label.toInvocation(), from: projection).map { target in
                         _ = try State(projection: target)
                         return target
                     }
@@ -234,7 +226,7 @@ enum MacroExpander {
         public static let generatedMachineMetadata = _machineSurfacePlan.metadata
         private static func _initialState() -> State {
             do {
-                guard let projection = try Self.runtime.initialStateProjections().first else {
+                guard let projection = try Self._runtime().initialStateProjections().first else {
                     fatalError("The compiled model has no initial state.")
                 }
                 return try State(projection: projection)

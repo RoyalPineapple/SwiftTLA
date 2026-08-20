@@ -31,6 +31,7 @@ struct MacroCompilation {
     let machineSurface: MachineSurfacePlan
     let swiftFacts: MachineSurfaceSwiftFacts
     let enumInfos: [ParsedEnumInfo]
+    let hasNestedLiveAdapter: Bool
 
     var hasInvariants: Bool { !compilation.spec.invariants.isEmpty }
 }
@@ -173,7 +174,8 @@ enum TLASpecVerifier {
             compilation: compilation,
             machineSurface: try MachineSurfacePlan(compilation: compilation, swiftFacts: swiftFacts),
             swiftFacts: swiftFacts,
-            enumInfos: enumInfos
+            enumInfos: enumInfos,
+            hasNestedLiveAdapter: hasNestedLiveAdapter(in: memberList)
         )
     }
 
@@ -529,8 +531,11 @@ public struct ModelMacro: MemberMacro, ExtensionMacro {
         guard diagnoseStoredInstanceState(in: declaration, context: context) == false else {
             return []
         }
+        let conformances = hasNestedLiveAdapter(in: declaration)
+            ? "TLAModelType, TLAMachineExecuting, TLAMachineSchemaProviding, TLAGeneratedLiveModel"
+            : "TLAModelType, TLAMachineExecuting, TLAMachineSchemaProviding"
         guard let ext = ("""
-            extension \(type.trimmed): TLAModelType, TLAMachineExecuting, TLAMachineSchemaProviding, TLAGeneratedLiveModel {}
+            extension \(type.trimmed): \(raw: conformances) {}
             """ as DeclSyntax).as(ExtensionDeclSyntax.self) else { return [] }
         return [ext]
     }
@@ -709,6 +714,40 @@ private func hasTLAModelAttribute(_ attributes: AttributeListSyntax) -> Bool {
     attributes.contains { element in
         guard let attribute = element.as(AttributeSyntax.self) else { return false }
         return attribute.attributeName.trimmedDescription == "TLAModel"
+    }
+}
+
+private func hasNestedLiveAdapter(in declaration: some DeclGroupSyntax) -> Bool {
+    let members: MemberBlockItemListSyntax
+    if let value = declaration.as(StructDeclSyntax.self) {
+        members = value.memberBlock.members
+    } else if let value = declaration.as(ClassDeclSyntax.self) {
+        members = value.memberBlock.members
+    } else if let value = declaration.as(ActorDeclSyntax.self) {
+        members = value.memberBlock.members
+    } else {
+        return false
+    }
+    return hasNestedLiveAdapter(in: members)
+}
+
+private func hasNestedLiveAdapter(in members: MemberBlockItemListSyntax) -> Bool {
+    members.contains { member in
+        let attributes: AttributeListSyntax?
+        if let value = member.decl.as(StructDeclSyntax.self) {
+            attributes = value.attributes
+        } else if let value = member.decl.as(ClassDeclSyntax.self) {
+            attributes = value.attributes
+        } else if let value = member.decl.as(ActorDeclSyntax.self) {
+            attributes = value.attributes
+        } else {
+            attributes = nil
+        }
+        return attributes?.contains { element in
+            guard let attribute = element.as(AttributeSyntax.self) else { return false }
+            let name = attribute.attributeName.trimmedDescription
+            return name == "TLAActor" || name == "TLAObservable"
+        } == true
     }
 }
 

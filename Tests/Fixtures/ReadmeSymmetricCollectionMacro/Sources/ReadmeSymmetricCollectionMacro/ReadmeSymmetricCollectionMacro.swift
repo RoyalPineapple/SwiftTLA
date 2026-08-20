@@ -43,7 +43,7 @@ else {
     fatalError("Generated state projection was unavailable")
 }
 
-let generatedSpec = DeviceContract.runtime.spec
+let generatedSpec = DeviceContract.spec
 precondition(generatedSpec.invariants.count == 1)
 guard case .forAll = generatedSpec.invariants[0].body else {
     fatalError("README collection-wide invariant was not retained")

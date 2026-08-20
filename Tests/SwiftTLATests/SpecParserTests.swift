@@ -1878,7 +1878,7 @@ private struct DefinitionFidelityMacro {
 @Suite(.serialized) struct DefinitionFidelityMacroTests {
     @Test func generatedModelRetainsLiteralDefinition() {
         #expect(DefinitionFidelityMacro.spec.definitions == [.init(text: "Refines == TRUE")])
-        _ = DefinitionFidelityMacro.runtime
+        _ = try DefinitionFidelityMacro.compiledSpecification()
     }
 }
 
