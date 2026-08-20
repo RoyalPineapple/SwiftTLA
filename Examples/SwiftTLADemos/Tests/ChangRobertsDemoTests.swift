@@ -26,9 +26,7 @@ struct ChangRobertsDemoTests {
     @Test("Chang–Roberts actor serializes a formal delivery")
     func actorExecutesTypedDelivery() async throws {
         let actor = ChangRoberts.Actor()
-        _ = try await actor.execute(
-            ChangRoberts.Actor.ActionLabel.deliver(process: .six).toInvocation()
-        )
+        _ = try await actor.apply(.deliver(process: .six))
 
         let state = await actor.state
         let forwarded = try #require(state.messages.elements.first {

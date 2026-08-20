@@ -16,14 +16,13 @@ struct PublicWorkflowGeneratedBehaviorTests {
   @Test("public workflow fixture executes through nested generated adapters")
   @MainActor
   func nestedFixtureAdaptersMatchTheCanonicalCounter() async throws {
-    let invocation = TLAActionInvocation(name: "advance")
     var model = try P4GeneratedCounter.makeMachine()
     let observable = P4GeneratedCounter.Observable()
     let actor = P4GeneratedCounter.Actor()
 
-    let modelEvidence = try await model.execute(invocation)
-    let observableEvidence = try await observable.execute(invocation)
-    let actorEvidence = try await actor.execute(invocation)
+    let modelEvidence = try model.apply(.advance)
+    let observableEvidence = try observable.apply(.advance)
+    let actorEvidence = try await actor.apply(.advance)
 
     #expect(modelEvidence.action == .advance)
     #expect(observableEvidence.action == .advance)
