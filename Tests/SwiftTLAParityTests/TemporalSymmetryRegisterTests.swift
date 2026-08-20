@@ -106,7 +106,7 @@ struct TemporalSymmetryRegisterTests {
       let configurationPath = try #require(control["configuration"])
       let module = try String(contentsOf: root.appendingPathComponent(modulePath))
       let configuration = try String(contentsOf: root.appendingPathComponent(configurationPath))
-      #expect(module.contains("Symmetry") || module.contains("LegacySymmetryGroup"))
+      #expect(module.contains("Symmetry"))
       #expect(configuration.contains("SYMMETRY"))
       #expect(try SHA256.hex(Data(contentsOf: root.appendingPathComponent(modulePath))) == control["moduleSHA256"])
       #expect(try SHA256.hex(Data(contentsOf: root.appendingPathComponent(configurationPath))) == control["configurationSHA256"])

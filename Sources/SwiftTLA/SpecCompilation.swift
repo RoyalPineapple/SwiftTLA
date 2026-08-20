@@ -509,10 +509,6 @@ private struct CanonicalSpecificationEncoder {
             node("symmetry-set", [set.variableName, canonicalList(set.values.map(canonicalValue).sorted())])
         }
         list("symmetrySets", symmetrySets) { $0 }
-        let symmetryGroups = spec.symmetryGroups.map {
-            node("symmetry-group", [canonicalList($0.names)])
-        }
-        list("symmetryGroups", symmetryGroups) { $0 }
         let symmetricCollections = spec.symmetricCollections.map {
             node("symmetric-collection", [$0.name, String($0.verificationScope), canonicalValue($0.initial)])
         }

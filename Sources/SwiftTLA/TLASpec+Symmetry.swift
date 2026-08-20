@@ -52,23 +52,3 @@ public func Symmetry(_ variableName: String, _ values: Set<some TLAValueConverti
   -> SymmetrySetDecl {
   SymmetrySetDecl(variableName, Set(values.map(\.tlaValue)))
 }
-public struct SymmetryVariableGroup: Hashable, Sendable {
-  public let names: [String]
-  init(_ n: [String]) { names = n }
-  func canonicalize(_ state: [String: TLAValue]) -> [String: TLAValue] {
-    guard names.count > 1 else { return state }
-    var vals = names.compactMap { state[$0] }
-    guard vals.count == names.count else { return state }
-    vals.sort(by: { $0.description < $1.description })
-    var result = state
-    for (i, name) in names.enumerated() { result[name] = vals[i] }
-    return result
-  }
-}
-public struct SymmetryVariableGroupDecl: SpecComponent {
-  public let names: [String]
-  init(_ n: [String]) { names = n }
-}
-public func SymmetryGroup(_ names: String...) -> SymmetryVariableGroupDecl {
-  SymmetryVariableGroupDecl(names)
-}

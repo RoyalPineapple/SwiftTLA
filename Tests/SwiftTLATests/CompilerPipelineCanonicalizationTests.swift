@@ -170,7 +170,6 @@ struct CompilerPipelineCanonicalizationTests {
             TLASpec(name: "Fingerprint", variables: base.variables, actions: base.actions, invariants: [], theorems: ["Safety == TRUE"]),
             TLASpec(name: "Fingerprint", variables: base.variables, actions: base.actions, invariants: [], recursiveDefs: ["CountDown(_)"]),
             TLASpec(name: "Fingerprint", variables: base.variables, actions: base.actions, invariants: [], recursiveFuncs: [.init(name: "CountDown", params: ["n"], body: .variable("n"))]),
-            TLASpec(name: "Fingerprint", variables: base.variables, actions: base.actions, invariants: [], symmetryGroups: [.init(["value"])]),
             TLASpec(name: "Fingerprint", variables: base.variables, actions: base.actions, invariants: [], symmetricCollections: [.init(name: "members", verificationScope: 1, initial: .int(0))]),
             TLASpec(name: "Fingerprint", variables: base.variables, actions: base.actions, invariants: [], extendsModules: "Naturals")
         ]

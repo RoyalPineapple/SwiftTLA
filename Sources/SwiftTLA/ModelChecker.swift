@@ -145,7 +145,6 @@ public struct ModelChecker {
             specificationName: substituted.name,
             maxStates: self.maxStates,
             symmetrySets: substituted.symmetrySets,
-            symmetryGroups: substituted.symmetryGroups,
             symmetricCollections: substituted.symmetricCollections
         )
         return ModelExplorationResult(
@@ -261,7 +260,6 @@ private func bfs(
     specificationName: String,
     maxStates: Int,
     symmetrySets: [SymmetrySet] = [],
-    symmetryGroups: [SymmetryVariableGroup] = [],
     symmetricCollections: [SymmetricCollectionDecl] = []
 ) throws -> ModelExplorationResult {
     let symmetricCollectionGroups = symmetricCollections.map {
@@ -276,7 +274,7 @@ private func bfs(
             }
         }
         let canonical = candidates.min { symmetricStateEncoding($0) < symmetricStateEncoding($1) } ?? state
-        return symmetryGroups.reduce(symmetrySets.reduce(canonical) { $1.canonicalize($0) }) { $1.canonicalize($0) }
+        return symmetrySets.reduce(canonical) { $1.canonicalize($0) }
     }
 
     var queue: [State] = []

@@ -84,8 +84,9 @@ pins and a fresh run. The gate rejects stale or mixed pin evidence.
 The requested P3 entries are the declared three-state temporal cases and one
 binary-valued symmetric collection at scopes 2, 3, and 4. The report alone
 states which entries are admitted in a current run. It does not support
-arbitrary scopes, combined temporal and symmetry reduction, multiple or
-legacy symmetry declarations, nested member values, or unbounded formulas.
+arbitrary scopes, combined temporal and symmetry reduction, multiple
+collections, direct symmetry declarations, nested member values, or unbounded
+formulas.
 
 See [temporal and symmetry conformance](TemporalSymmetryConformance.md) for
 the complete local command, exit classes, retained evidence, and diagnosis
