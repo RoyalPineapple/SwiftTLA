@@ -37,7 +37,6 @@ private struct CorpusCase {
 private enum ExportError: Error, CustomStringConvertible {
     case usage
     case outputExists(String)
-    case invalidAlgorithmCount(id: String, actual: Int)
     case moduleFetch(name: String, url: String)
     case moduleDigest(name: String, expected: String, actual: String)
 
@@ -47,8 +46,6 @@ private enum ExportError: Error, CustomStringConvertible {
             return "Usage: canonical-corpus-export --output <directory> --swift-tla-sha <sha>"
         case .outputExists(let path):
             return "Output directory already exists: \(path)"
-        case .invalidAlgorithmCount(let id, let actual):
-            return "Canonical corpus case \(id) has \(actual) authored Algorithms; expected exactly one."
         case .moduleFetch(let name, let url):
             return "Canonical corpus module \(name) could not be fetched from \(url)."
         case .moduleDigest(let name, let expected, let actual):
@@ -160,14 +157,7 @@ do {
             TLAModuleFile(name: input.name, tla: String(decoding: data, as: UTF8.self))
         }
         let bundle = try compilation.renderedTLAModuleBundle(additionalImports: externalImports)
-        let plusCalModules = try compilation.renderedAuthoredPlusCalModules(additionalImports: externalImports)
-        guard plusCalModules.count == 1 else {
-            throw ExportError.invalidAlgorithmCount(id: item.id, actual: plusCalModules.count)
-        }
-        try TLAModuleBundle.untrusted(
-            root: TLAModuleFile(name: bundle.root.name, tla: plusCalModules[0]),
-            imports: bundle.imports
-        ).validateRenderedBundleIntegrity()
+        let plusCalBundle = try compilation.authoredPlusCalBundle(additionalImports: externalImports)
 
         var files = [Manifest.Case.File]()
         files.append(try write(bundle.root.tla, relativePath: "\(item.id)/swift/\(bundle.root.name).tla", under: options.output))
@@ -176,7 +166,7 @@ do {
         for imported in bundle.imports where !externalNames.contains(imported.name) {
             files.append(try write(imported.tla, relativePath: "\(item.id)/imports/\(imported.name).tla", under: options.output))
         }
-        files.append(try write(plusCalModules[0], relativePath: "\(item.id)/pluscal/\(bundle.root.name).tla", under: options.output))
+        files.append(try write(plusCalBundle.root.tla, relativePath: "\(item.id)/pluscal/\(plusCalBundle.root.name).tla", under: options.output))
         files.append(try write(item.plusCalConfiguration, relativePath: "\(item.id)/pluscal/\(bundle.root.name).cfg", under: options.output))
         for (input, data) in externalInputs {
             let source = Manifest.Case.File.Source(

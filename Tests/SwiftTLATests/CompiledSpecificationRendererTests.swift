@@ -92,7 +92,9 @@ struct CompiledSpecificationRendererTests {
 
     @Test("authored PlusCal presentation also requires the compiled source identity")
     func authoredPlusCalUsesCompiledBoundary() throws {
+        let support = TLASpec(name: "Support", variables: [], actions: [], invariants: [])
         let specification = TLASpec("Authored") {
+            Import(support)
             Algorithm("Authored") {
                 let value = SharedVar(initial: 0)
                 Do("stay") { Assign(value, to: value.expr) }
@@ -100,8 +102,14 @@ struct CompiledSpecificationRendererTests {
         }
         let compilation = try specification.compile()
 
-        let module = try #require(compilation.renderedAuthoredPlusCalModules().first)
-        #expect(module.contains("--algorithm Authored"))
+        let bundle = try compilation.authoredPlusCalBundle()
+        #expect(bundle.root.tla.contains("--algorithm Authored"))
+        #expect(bundle.root.cfg == try compilation.renderedTLAModuleBundle().root.cfg)
+        #expect(bundle.imports.map(\.name) == ["Support"])
+        guard case .compiled = bundle.provenance else {
+            Issue.record("A compiled authored PlusCal bundle lost its provenance.")
+            return
+        }
 
         let stale = CompiledSpecification(
             spec: compilation.spec,
@@ -110,7 +118,18 @@ struct CompiledSpecificationRendererTests {
             directModuleSections: compilation.directModuleSections
         )
         #expect(throws: CompilationDiagnostic.self) {
-            try stale.renderedAuthoredPlusCalModules()
+            try stale.authoredPlusCalBundle()
+        }
+    }
+
+    @Test("authored PlusCal export requires one canonical Algorithm root")
+    func authoredPlusCalRejectsNonAlgorithmRoot() throws {
+        let compilation = try TLASpec(
+            name: "DirectOnly", variables: [], actions: [], invariants: []
+        ).compile()
+
+        #expect(throws: AlgorithmPlusCalRenderDiagnostic.self) {
+            try compilation.authoredPlusCalBundle()
         }
     }
 

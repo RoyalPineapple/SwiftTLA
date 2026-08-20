@@ -178,12 +178,33 @@ public struct CompiledSpecification: Sendable {
         try data.write(to: directory.appendingPathComponent("bundle-manifest.json"), options: .atomic)
     }
 
-    /// The authored PlusCal presentation of this validated compilation.
-    public func renderedAuthoredPlusCalModules(
+    /// Renders the one source-faithful PlusCal module from this compilation.
+    ///
+    /// The bundle keeps the same linked imports and configuration as direct
+    /// TLA+ export. It is the only supported PlusCal export path: callers do
+    /// not reconstruct a second bundle around renderer strings.
+    public func authoredPlusCalBundle(
         additionalImports: [TLAModuleFile] = []
-    ) throws -> [String] {
-        _ = try renderedTLAModuleBundle(additionalImports: additionalImports)
-        return try spec.renderAuthoredPlusCalModules()
+    ) throws -> TLAModuleBundle {
+        let directBundle = try renderedTLAModuleBundle(additionalImports: additionalImports)
+        let root = TLAModuleFile(
+            name: directBundle.root.name,
+            tla: try spec.renderAuthoredPlusCalModule(),
+            cfg: directBundle.root.cfg
+        )
+        let bundle: TLAModuleBundle
+        switch directBundle.provenance {
+        case .compiled(let identity, let ownership):
+            bundle = TLAModuleBundle(
+                root: root,
+                imports: directBundle.imports,
+                provenance: .compiled(identity: identity, ownership: ownership)
+            )
+        case .untrusted:
+            bundle = .untrusted(root: root, imports: directBundle.imports)
+        }
+        try bundle.validateRenderedBundleIntegrity()
+        return bundle
     }
 }
 
