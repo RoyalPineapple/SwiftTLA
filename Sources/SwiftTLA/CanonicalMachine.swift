@@ -114,11 +114,11 @@ public struct TLAStateProjection: Sendable, Equatable, CustomStringConvertible {
                 try validate(value, at: "\(path)[\(index)]")
             }
         case .record(let fields):
-            for (name, value) in fields {
-                guard Token(validating: name) != nil else {
-                    throw TLAStateProjectionDiagnostic.invalidKey(path: "\(path).\(name)")
+            for field in fields.fields {
+                guard Token(validating: field.name) != nil else {
+                    throw TLAStateProjectionDiagnostic.invalidKey(path: "\(path).\(field.name)")
                 }
-                try validate(value, at: "\(path).\(name)")
+                try validate(field.value, at: "\(path).\(field.name)")
             }
         case .function(let mapping):
             for (key, value) in mapping {

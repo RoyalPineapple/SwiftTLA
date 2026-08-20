@@ -794,7 +794,8 @@ private extension TLAValue {
     case .constant(let value): self = .constant(value)
     case .orderedSet(let values): self = .set(Set(values.map(TLAValue.init)))
     case .orderedTuple(let values): self = .tuple(values.map(TLAValue.init))
-    case .orderedRecord(let fields): self = .record(Dictionary(uniqueKeysWithValues: fields.map { ($0.name, TLAValue($0.value)) }))
+    case .orderedRecord(let fields):
+      self = .record(TLARecord(fields.map { .init($0.name, TLAValue($0.value)) }))
     case .orderedFunction(let entries):
       self = .function(Dictionary(uniqueKeysWithValues: entries.map { (TLAValue($0.key), TLAValue($0.value)) }))
     }

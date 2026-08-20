@@ -64,6 +64,15 @@ extension TLAValue: TLAValueType {
   public init?(formalValue: TLAValue) { self = formalValue }
 }
 
+extension TLARecord: TLAValueType {
+  public static var defaultValue: TLARecord { TLARecord([]) }
+  public init?(formalValue: TLAValue) {
+    guard case .record(let value) = formalValue else { return nil }
+    self = value
+  }
+  public var tlaValue: TLAValue { .record(self) }
+}
+
 extension StateExprConvertible where Self: TLAValueType {
   public var stateExpr: StateExpr { .value(tlaValue) }
 }

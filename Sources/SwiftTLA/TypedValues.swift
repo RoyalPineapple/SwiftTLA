@@ -70,7 +70,7 @@ public struct TLARecordEntry<Schema: TLARecordSchema>: Sendable {
 }
 
 public struct Record<Schema: TLARecordSchema>: TLAValueType, Hashable, Sendable {
-  private let values: [String: TLAValue]
+  private let values: TLARecord
 
   public init() {
     guard let value = Self(formalValue: Schema.defaultRecord) else {
@@ -81,7 +81,7 @@ public struct Record<Schema: TLARecordSchema>: TLAValueType, Hashable, Sendable 
 
   public init?(formalValue: TLAValue) {
     guard case .record(let values) = formalValue,
-          Set(values.keys) == Schema.fieldNames
+          Set(values.fields.map(\.name)) == Schema.fieldNames
     else { return nil }
     self.values = values
   }
@@ -90,7 +90,7 @@ public struct Record<Schema: TLARecordSchema>: TLAValueType, Hashable, Sendable 
   public static var defaultValue: Self { Self() }
 
   public subscript<Value: TLAValueType>(_ field: TLAField<Schema, Value>) -> Value {
-    guard let raw = values[field.name], let value = Value(formalValue: raw) else {
+    guard let raw = values.value(named: field.name), let value = Value(formalValue: raw) else {
       preconditionFailure("Formal record '\(Schema.self)' contains an invalid '\(field.name)' field")
     }
     return value

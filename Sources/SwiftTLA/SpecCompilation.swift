@@ -907,8 +907,8 @@ private struct CanonicalSpecificationEncoder {
         case .set(let values): return node("set", [canonicalList(values.map(canonicalValue).sorted())])
         case .tuple(let values): return node("tuple", [canonicalList(values.map(canonicalValue))])
         case .record(let values):
-            return node("record", [canonicalList(values.keys.sorted().map {
-                node("record-entry", [$0, canonicalValue(values[$0]!)])
+            return node("record", [canonicalList(values.fields.map {
+                node("record-entry", [$0.name, canonicalValue($0.value)])
             })])
         case .function(let values):
             return node("function", [canonicalList(values.map {

@@ -1,3 +1,30 @@
+struct CompiledRecord: Hashable, Sendable {
+    struct Field: Hashable, Sendable {
+        let name: String
+        let value: CompiledValue
+    }
+
+    let fields: [Field]
+
+    init(_ fields: [Field]) {
+        self.fields = fields.sorted { $0.name < $1.name }
+    }
+
+    func value(named name: String) -> CompiledValue? {
+        fields.first { $0.name == name }?.value
+    }
+
+    func replacing(_ value: CompiledValue, for name: String) -> CompiledRecord {
+        var replaced = false
+        let updated = fields.map { field -> Field in
+            guard field.name == name else { return field }
+            replaced = true
+            return .init(name: name, value: value)
+        }
+        return CompiledRecord(replaced ? updated : updated + [.init(name: name, value: value)])
+    }
+}
+
 indirect enum CompiledValue: Hashable, Sendable {
     case integer(Int)
     case boolean(Bool)
@@ -5,7 +32,7 @@ indirect enum CompiledValue: Hashable, Sendable {
     case controlLabel(ControlLabelID)
     case set(Set<CompiledValue>)
     case tuple([CompiledValue])
-    case record([String: CompiledValue])
+    case record(CompiledRecord)
     case function([CompiledValue: CompiledValue])
     case constant(String)
 
@@ -22,7 +49,9 @@ indirect enum CompiledValue: Hashable, Sendable {
         case .tuple(let values):
             self = .tuple(values.map { Self(formal: $0) })
         case .record(let values):
-            self = .record(values.mapValues { Self(formal: $0) })
+            self = .record(CompiledRecord(values.map {
+                .init(name: $0.key, value: Self(formal: $0.value))
+            }))
         case .function(let values):
             self = .function(Dictionary(uniqueKeysWithValues: values.map {
                 (Self(formal: $0.key), Self(formal: $0.value))
@@ -50,9 +79,9 @@ indirect enum CompiledValue: Hashable, Sendable {
         case .tuple(let values):
             return .tuple(try values.map { try $0.rendered(using: layout) })
         case .record(let values):
-            return .record(try values.reduce(into: [String: TLAValue]()) { result, field in
-                result[field.key] = try field.value.rendered(using: layout)
-            })
+            return .record(TLARecord(try values.fields.map {
+                .init($0.name, try $0.value.rendered(using: layout))
+            }))
         case .function(let values):
             return .function(try values.reduce(into: [TLAValue: TLAValue]()) { result, entry in
                 result[try entry.key.rendered(using: layout)] = try entry.value.rendered(using: layout)
@@ -71,7 +100,9 @@ indirect enum CompiledValue: Hashable, Sendable {
         case .tuple(let values):
             return .tuple(values.map { $0.transformingFormalValues(transform) })
         case .record(let values):
-            return .record(values.mapValues { $0.transformingFormalValues(transform) })
+            return .record(CompiledRecord(values.fields.map {
+                .init(name: $0.name, value: $0.value.transformingFormalValues(transform))
+            }))
         case .function(let values):
             return .function(Dictionary(uniqueKeysWithValues: values.map {
                 ($0.key.transformingFormalValues(transform), $0.value.transformingFormalValues(transform))
@@ -94,7 +125,7 @@ indirect enum CompiledValue: Hashable, Sendable {
         case .tuple(let values):
             return values.contains { $0.contains(value) }
         case .record(let values):
-            return values.values.contains { $0.contains(value) }
+            return values.fields.contains { $0.value.contains(value) }
         case .function(let values):
             return values.contains { $0.key.contains(value) || $0.value.contains(value) }
         case .constant(let current):
@@ -121,7 +152,7 @@ indirect enum CompiledValue: Hashable, Sendable {
         case .tuple(let values):
             return "tuple:[\(values.map(\.canonicalEncoding).joined(separator: ","))]"
         case .record(let values):
-            return "record:[\(values.keys.sorted().map { "\($0):\(values[$0]?.canonicalEncoding ?? "")" }.joined(separator: ","))]"
+            return "record:[\(values.fields.map { "\($0.name):\($0.value.canonicalEncoding)" }.joined(separator: ","))]"
         case .function(let values):
             return "function:[\(values.keys.sorted { $0.canonicalEncoding < $1.canonicalEncoding }.map { "\($0.canonicalEncoding):\(values[$0]?.canonicalEncoding ?? "")" }.joined(separator: ","))]"
         case .constant(let value):

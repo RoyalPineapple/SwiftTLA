@@ -30,8 +30,6 @@ extension ParserSession {
         /// the ordinary parsed specification tree.
         public var algorithmFidelityTokens: [AlgorithmFidelityToken] = []
         public var constants: [ConstantDecl] = []
-        /// Local named values (from NamedValue declarations, resolved in expressions)
-        public var localConstants: [String: TLAValue] = [:]
     }
 
     public struct ParsedVariable: Sendable, Equatable {

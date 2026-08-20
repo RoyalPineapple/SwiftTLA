@@ -12,7 +12,7 @@ extension TLAValue {
     case .tuple(let t): return "StateExpr.tuple([\(t.map(\.swiftLiteral).joined(separator: ", "))])"
     case .record(let r):
       return
-        "StateExpr.record([\(r.sorted(by: { $0.key<$1.key }).map { "\"\($0.key)\": \($0.value.swiftLiteral)" }.joined(separator: ", "))])"
+        "StateExpr.record([\(r.fields.map { "\"\($0.name)\": \($0.value.swiftLiteral)" }.joined(separator: ", "))])"
     case .function: return "StateExpr.function(domain: StateExpr.set([]), 0)"  // placeholder
     case .constant(let n): return "TLAValue.constant(\"\(n)\")"
     }
