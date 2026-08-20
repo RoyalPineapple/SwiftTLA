@@ -46,9 +46,9 @@ struct CompiledRuntime {
             throw CompiledEvaluationError.unresolvedOperator
         }
         return try CompiledActionEnumerator(state: state, model: model)
-            .enumerate(action)
-            .filter { successor in try constraintHolds(in: successor) }
-            .map { .init(action: actionID, state: $0) }
+            .enumerateResults(action)
+            .filter { successor in try constraintHolds(in: successor.state) }
+            .map { .init(action: actionID, arguments: $0.arguments, state: $0.state) }
     }
 
     func assumeHolds(in state: FormalState) throws -> Bool {
@@ -95,5 +95,6 @@ struct CompiledRuntime {
 
 struct CompiledSuccessor: Sendable {
     let action: ActionID
+    let arguments: [TLAValue]
     let state: FormalState
 }

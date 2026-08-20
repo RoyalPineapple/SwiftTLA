@@ -3,13 +3,20 @@ struct CompiledActionEnumerator {
     let model: CompiledModel
 
     func enumerate(_ action: CompiledAction) throws -> [FormalState] {
+        try enumerateResults(action).map(\.state)
+    }
+
+    func enumerateResults(_ action: CompiledAction) throws -> [CompiledActionResult] {
         let choices = chooseActions(in: action.body)
-        return try actionBindings(action.bindings).flatMap { bindings in
-            let selections = try selectChoices(choices, bindings: bindings)
+        return try actionBindings(action.bindings).flatMap { binding in
+            let selections = try selectChoices(choices, bindings: binding.values)
             return try selections.flatMap { selection in
                 let evaluationState = try state.updating(selection)
-                return try execute(action.body, state: evaluationState, bindings: bindings).map { delta in
-                    try state.updating(selection).updating(delta.assignments)
+                return try execute(action.body, state: evaluationState, bindings: binding.values).map { delta in
+                    .init(
+                        state: try state.updating(selection).updating(delta.assignments),
+                        arguments: binding.arguments
+                    )
                 }
             }
         }
@@ -64,10 +71,15 @@ struct CompiledActionEnumerator {
         }
     }
 
-    private func actionBindings(_ bindings: [CompiledActionBinding]) -> [CompiledBindings] {
-        bindings.reduce([.init()]) { partial, binding in
-            partial.flatMap { values in
-                binding.values.map { values.binding($0, to: binding.binder) }
+    private func actionBindings(_ bindings: [CompiledActionBinding]) -> [CompiledActionBindingValues] {
+        bindings.reduce([.init(values: .init(), arguments: [])]) { partial, binding in
+            partial.flatMap { current in
+                binding.values.map { value in
+                    .init(
+                        values: current.values.binding(value, to: binding.binder),
+                        arguments: current.arguments + [value]
+                    )
+                }
             }
         }
     }
@@ -102,6 +114,16 @@ struct CompiledActionEnumerator {
             return []
         }
     }
+}
+
+struct CompiledActionResult: Sendable {
+    let state: FormalState
+    let arguments: [TLAValue]
+}
+
+private struct CompiledActionBindingValues {
+    let values: CompiledBindings
+    let arguments: [TLAValue]
 }
 
 private struct CompiledActionDelta {
