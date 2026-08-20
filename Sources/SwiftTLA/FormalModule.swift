@@ -185,7 +185,6 @@ public struct TLAModuleBundle: Sendable, Equatable {
 
 /// Imports a named TLA+ module as a source dependency.
 ///
-/// Unlike `Use(spec:)`, this does not merge declarations into the consumer.
 /// The exporter writes the module separately and the consumer emits an
 /// `EXTENDS` relationship, matching TLA+ module semantics.
 public struct FormalModuleReplacement: Sendable, Equatable {
