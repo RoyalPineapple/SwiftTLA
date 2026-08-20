@@ -60,6 +60,26 @@ struct CompiledRuntime {
         try boolean(invariant.body, in: state)
     }
 
+    func canonicalState(_ state: FormalState) -> FormalState {
+        let groups = model.symmetricCollections.map {
+            SymmetricCollectionPermutationGroup(members: $0.members)
+        }
+        let candidates = groups.reduce([state]) { candidates, group in
+            candidates.flatMap { candidate in
+                group.mappings.map { mapping in
+                    candidate.transformingValues { applySymmetricMemberPermutation($0, mapping: mapping) }
+                }
+            }
+        }
+        let base = candidates.min { $0.canonicalEncoding < $1.canonicalEncoding } ?? state
+        return model.symmetrySets.reduce(base) { current, symmetry in
+            let present = TLAValue.sorted(symmetry.values).filter(current.contains)
+            guard let canonical = present.first else { return current }
+            let mapping = Dictionary(uniqueKeysWithValues: present.map { ($0, canonical) })
+            return current.transformingValues { applyMapping($0, mapping: mapping) }
+        }
+    }
+
     private func constraintHolds(in state: FormalState) throws -> Bool {
         guard let constraint = model.constraint else { return true }
         return try boolean(constraint, in: state)

@@ -35,6 +35,30 @@ struct FormalState: Hashable, Sendable {
         return updated
     }
 
+    func transformingValues(_ transform: (TLAValue) -> TLAValue) -> FormalState {
+        FormalState(validatedValues: values.map(transform))
+    }
+
+    func contains(_ value: TLAValue) -> Bool {
+        values.contains { valueContains($0, value) }
+    }
+
+    func projected(using layout: CompiledLayout) throws -> [String: TLAValue] {
+        guard values.count == layout.variables.count else {
+            throw CompiledEvaluationError.invalidStateLayout(
+                expected: layout.variables.count,
+                actual: values.count
+            )
+        }
+        return Dictionary(uniqueKeysWithValues: layout.variables.map { variable in
+            (variable.declaration.name, values[variable.id.ordinal])
+        })
+    }
+
+    var canonicalEncoding: String {
+        values.map(symmetricValueEncoding).joined(separator: "|")
+    }
+
     private init(validatedValues: [TLAValue]) {
         values = validatedValues
     }

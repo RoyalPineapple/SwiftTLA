@@ -185,7 +185,7 @@ func symmetricStateEncoding(_ state: [String: TLAValue]) -> String {
     .joined(separator: "|")
 }
 
-private func symmetricValueEncoding(_ value: TLAValue) -> String {
+func symmetricValueEncoding(_ value: TLAValue) -> String {
   switch value {
   case .int(let integer): return "int:\(integer)"
   case .bool(let boolean): return "bool:\(boolean)"
