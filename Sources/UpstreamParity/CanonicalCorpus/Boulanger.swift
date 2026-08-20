@@ -5,6 +5,13 @@ import SwiftTLAMacros
 /// corpus. The bound and state constraint match MCBoulanger.
 @TLAModel
 public struct BoulangerModel: Sendable {
+    public static let corpusEntry = CanonicalCorpusEntry(
+        id: "boulanger-upstream-port",
+        specification: { BoulangerModel.spec },
+        swiftConfiguration: "SPECIFICATION Spec\nCONSTRAINT StateConstraint\n",
+        plusCalConfiguration: "SPECIFICATION Spec\nCONSTRAINT StateConstraint\n"
+    )
+
     public enum Process: Int, FiniteDomainKey {
         case one = 1
         case two = 2

@@ -9,6 +9,33 @@ import SwiftTLAMacros
 /// the complete generated local function through `Range(ops)`.
 @TLAModel
 public struct KVsnapModel: Sendable {
+    public static let corpusEntry = CanonicalCorpusEntry(
+        id: "kvsnap-upstream-port",
+        specification: { KVsnapModel.spec },
+        swiftConfiguration: """
+        SPECIFICATION Spec
+        INVARIANTS TypeOK SnapshotIsolation
+        PROPERTIES Termination
+        CONSTANT k1 = k1
+        CONSTANT k2 = k2
+        CONSTANT t1 = t1
+        CONSTANT t2 = t2
+        CONSTANT t3 = t3
+        CONSTANT NoVal = NoVal
+        """,
+        plusCalConfiguration: """
+        SPECIFICATION Spec
+        INVARIANTS TypeOK SnapshotIsolation
+        PROPERTIES Termination
+        CONSTANT k1 = k1
+        CONSTANT k2 = k2
+        CONSTANT t1 = t1
+        CONSTANT t2 = t2
+        CONSTANT t3 = t3
+        CONSTANT NoVal = NoVal
+        """
+    )
+
     public enum Key: String, FiniteDomainKey {
         case k1, k2
 
