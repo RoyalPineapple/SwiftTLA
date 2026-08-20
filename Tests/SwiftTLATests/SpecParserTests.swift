@@ -1561,6 +1561,21 @@ private let cameraModePhases: [String: [String: TLAValue]] = [
 ]
 
 @Suite(.serialized) struct EnumPhaseParsingTests {
+    @Test func enumFactsDoNotLeakFromOneParseIntoTheNextDecoderCall() {
+        let closure = Parser.parse(source: """
+        {
+            Invariant("idleOnly") { mode == CameraMode.idle }
+        }
+        """).statements.first!.item.as(ClosureExprSyntax.self)!
+
+        let parsed = SpecParser.parseSpecClosure(closure, enumPhases: cameraModePhases)
+        #expect(parsed.invariants.first?.body == .equal(.variable("mode"), .value(.string("idle"))))
+        #expect(
+            SpecParser.decodeStateExpr(parseExpression("CameraMode.idle"))
+                == .recordAccess(.variable("CameraMode"), "idle")
+        )
+    }
+
     @Test func parseQualifiedEnumCaseInInvariant() {
         let source = """
         {

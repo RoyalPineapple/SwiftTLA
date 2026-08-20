@@ -6,27 +6,31 @@ import Foundation
 /// Parses SwiftSyntax AST nodes into DSL types (StateExpr, ActionExpr, etc.).
 /// Every AST pattern maps deterministically to a DSL value.
 /// Tests live in SpecParserTests.
-public enum SpecParser {
-
-    /// Local constants collected during parsing (for `Value` / `let` bindings).
-    nonisolated(unsafe) static var _constants: [String: TLAValue] = [:]
-
-    /// Enum phase map (typeName → caseName → TLAValue) set per-parse by the macro.
-    nonisolated(unsafe) static var _enumPhases: [String: [String: TLAValue]] = [:]
-
-    nonisolated(unsafe) static var _enumDomains: [String: [TLAValue]] = [:]
+public final class ParserSession {
+    /// Facts that exist for one syntax tree only. They never escape into a
+    /// later parse or another macro expansion.
+    var constants: [String: TLAValue] = [:]
+    let enumPhases: [String: [String: TLAValue]]
+    let enumDomains: [String: [TLAValue]]
     /// Tuple-shaped algorithm state currently in scope. This lets the parser
     /// distinguish `sequence[index]` from a finite-function lookup without
     /// exposing raw type maps to authors.
-    nonisolated(unsafe) static var _algorithmTupleVariables: Set<String> = []
-    nonisolated(unsafe) static var algorithmParseFailure: String?
+    var algorithmTupleVariables: Set<String> = []
+    var algorithmParseFailure: String?
 
-    /// The parser carries enum information while it decodes one macro body.
-    /// Macro expansion is concurrent, so one parse must not overwrite another
-    /// parse's enum context.
-    static let parseContextLock = NSLock()
+    init(
+        enumPhases: [String: [String: TLAValue]] = [:],
+        enumDomains: [String: [TLAValue]] = [:]
+    ) {
+        self.enumPhases = enumPhases
+        self.enumDomains = enumDomains.isEmpty
+            ? enumPhases.mapValues { phases in
+                phases.keys.sorted().compactMap { phases[$0] }
+            }
+            : enumDomains
+    }
 
-    private static func decodeLocalRecursion(
+    private func decodeLocalRecursion(
         _ expression: ExprSyntax,
         substitutions: [String: StateExpr]
     ) -> StateExpr? {
@@ -82,7 +86,7 @@ public enum SpecParser {
         )], renameVar(bodyParameters[0], to: name, in: decodedBody))
     }
 
-    static func isMetatype(_ expression: ExprSyntax) -> Bool {
+    func isMetatype(_ expression: ExprSyntax) -> Bool {
         guard let member = expression.as(MemberAccessExprSyntax.self),
               member.declName.baseName.text == "self",
               member.base != nil
@@ -92,7 +96,7 @@ public enum SpecParser {
 
     // MARK: - Compact expression decoder
 
-    public static func decodeStateExpr(_ expression: ExprSyntax) -> StateExpr? {
+    func decodeStateExpr(_ expression: ExprSyntax) -> StateExpr? {
         if let precedingMembers = decodePrecedingFormalMembers(expression) {
             return precedingMembers
         }
@@ -184,12 +188,12 @@ public enum SpecParser {
         }
         if let ref = expression.as(DeclReferenceExprSyntax.self) {
             let name = ref.baseName.text
-            if let resolved = _constants[name] { return .value(resolved) }
+            if let resolved = constants[name] { return .value(resolved) }
             return .variable(name)
         }
         if let memberAccess = expression.as(MemberAccessExprSyntax.self),
            let baseRef = memberAccess.base?.as(DeclReferenceExprSyntax.self),
-           let cases = _enumPhases[baseRef.baseName.text] {
+           let cases = enumPhases[baseRef.baseName.text] {
             return cases[memberAccess.declName.baseName.text].map { .value($0) }
         }
         if let memberAccess = expression.as(MemberAccessExprSyntax.self),
@@ -247,7 +251,7 @@ public enum SpecParser {
     /// Parses `Domain.all.members(before: process)`, the typed formal set of
     /// members declared before a process. This stays finite and explicit; it
     /// is not a Swift collection operation.
-    private static func decodePrecedingFormalMembers(_ expression: ExprSyntax) -> StateExpr? {
+    private func decodePrecedingFormalMembers(_ expression: ExprSyntax) -> StateExpr? {
         guard let call = expression.as(FunctionCallExprSyntax.self),
               call.calledExpression.as(MemberAccessExprSyntax.self)?.declName.baseName.text == "members",
               let base = call.calledExpression.as(MemberAccessExprSyntax.self)?.base,
@@ -269,7 +273,7 @@ public enum SpecParser {
 
     /// Parses `At(Label.name, process)`, keeping the lowered `pc` variable
     /// private to the builder and macro implementation.
-    private static func decodeControlLocation(_ expression: ExprSyntax) -> StateExpr? {
+    private func decodeControlLocation(_ expression: ExprSyntax) -> StateExpr? {
         guard let call = expression.as(FunctionCallExprSyntax.self),
               call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "At",
               call.arguments.count == 2,
@@ -286,7 +290,7 @@ public enum SpecParser {
     /// `Finished(process)` for an `Each` process family. The public DSL keeps
     /// the generated program counter private; both spellings lower to its
     /// canonical formal representation here.
-    private static func decodeFinishedControlLocation(_ expression: ExprSyntax) -> StateExpr? {
+    private func decodeFinishedControlLocation(_ expression: ExprSyntax) -> StateExpr? {
         guard let call = expression.as(FunctionCallExprSyntax.self),
               call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "Finished"
         else { return nil }
@@ -303,14 +307,14 @@ public enum SpecParser {
         )
     }
 
-    private static func controlLabel(_ expression: ExprSyntax?) -> String? {
+    private func controlLabel(_ expression: ExprSyntax?) -> String? {
         guard let expression else { return nil }
         if let literal = expression.as(StringLiteralExprSyntax.self) {
             return literal.segments.compactMap { $0.as(StringSegmentSyntax.self)?.content.text }.joined()
         }
         guard let access = expression.as(MemberAccessExprSyntax.self) else { return nil }
         if let type = access.base?.as(DeclReferenceExprSyntax.self)?.baseName.text,
-           case .string(let label) = _enumPhases[type]?[access.declName.baseName.text] {
+           case .string(let label) = enumPhases[type]?[access.declName.baseName.text] {
             return label
         }
         return access.declName.baseName.text
@@ -319,7 +323,7 @@ public enum SpecParser {
     /// Independently expands the bounded `Sequences(of:lengths:)` spelling
     /// used by the algorithm builder. This is the finite model-checking form
     /// of TLA+ `Seq(S)`, not a Swift array literal.
-    private static func decodeBoundedSequenceDomain(_ expression: ExprSyntax) -> StateExpr? {
+    private func decodeBoundedSequenceDomain(_ expression: ExprSyntax) -> StateExpr? {
         guard let call = expression.as(FunctionCallExprSyntax.self),
               let name = call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text,
               name == "Sequences" || name == "SortedSequences" || name == "ZeroBasedSequences",
@@ -342,7 +346,7 @@ public enum SpecParser {
 
     /// Parses `ZeroBasedSequence<Element>.filled(length:with:)` into the
     /// TLA+ function literal used by the runtime builder.
-    private static func decodeZeroBasedSequenceFill(_ expression: ExprSyntax) -> StateExpr? {
+    private func decodeZeroBasedSequenceFill(_ expression: ExprSyntax) -> StateExpr? {
         guard let call = expression.as(FunctionCallExprSyntax.self),
               let access = call.calledExpression.as(MemberAccessExprSyntax.self),
               access.declName.baseName.text == "filled",
@@ -360,7 +364,7 @@ public enum SpecParser {
         )
     }
 
-    private static func decodeBoundedSubsetDomain(_ expression: ExprSyntax) -> StateExpr? {
+    private func decodeBoundedSubsetDomain(_ expression: ExprSyntax) -> StateExpr? {
         guard let call = expression.as(FunctionCallExprSyntax.self),
               let name = call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text,
               name == "Subsets" || name == "NonEmptySubsets"
@@ -376,7 +380,7 @@ public enum SpecParser {
         return .setDifference(subsets, .setLiteral([.setLiteral([])]))
     }
 
-    private static func decodeBoundedFunctionDomain(_ expression: ExprSyntax) -> StateExpr? {
+    private func decodeBoundedFunctionDomain(_ expression: ExprSyntax) -> StateExpr? {
         guard let call = expression.as(FunctionCallExprSyntax.self),
               call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "Functions"
         else { return nil }
@@ -395,7 +399,7 @@ public enum SpecParser {
         return .functionSet(.setLiteral(domain.values.map(StateExpr.value)), range)
     }
 
-    private static func decodeStaticFormalChoice(_ expression: ExprSyntax) -> StateExpr? {
+    private func decodeStaticFormalChoice(_ expression: ExprSyntax) -> StateExpr? {
         guard let call = expression.as(FunctionCallExprSyntax.self),
               call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "Select",
               let candidatesSyntax = call.arguments.first(where: { $0.label?.text == "from" })?.expression,
@@ -419,7 +423,7 @@ public enum SpecParser {
         )
     }
 
-    private static func decodeBoundedFilteredDomain(_ expression: ExprSyntax) -> StateExpr? {
+    private func decodeBoundedFilteredDomain(_ expression: ExprSyntax) -> StateExpr? {
         guard let call = expression.as(FunctionCallExprSyntax.self),
               call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "Where"
         else { return nil }
@@ -450,7 +454,7 @@ public enum SpecParser {
         )
     }
 
-    static func decodeAlgorithmDomainQuantifier(_ expression: ExprSyntax) -> StateExpr? {
+    func decodeAlgorithmDomainQuantifier(_ expression: ExprSyntax) -> StateExpr? {
         guard let call = expression.as(FunctionCallExprSyntax.self),
               let name = call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text,
               name == "All",
@@ -483,7 +487,7 @@ public enum SpecParser {
         return .forAll(values, parameter, predicate)
     }
 
-    static func decodeTypedFacadeExpr(
+    func decodeTypedFacadeExpr(
         _ expression: ExprSyntax,
         substitutions: [String: StateExpr]
     ) -> StateExpr? {
@@ -714,7 +718,7 @@ public enum SpecParser {
             }
             guard let index = decodeTypedFacadeValue(selector, substitutions: substitutions) else { return nil }
             if let reference = subscriptCall.calledExpression.as(DeclReferenceExprSyntax.self),
-               _algorithmTupleVariables.contains(reference.baseName.text) {
+               algorithmTupleVariables.contains(reference.baseName.text) {
                 return .tupleDynamicAccess(base, index)
             }
             return .functionApply(base, index)
@@ -811,7 +815,7 @@ public enum SpecParser {
            let literalType = typedLiteralType(access.base),
            literalType.name == "Function",
            let domainType = literalType.arguments.first,
-           let domain = _enumDomains[domainType],
+           let domain = enumDomains[domainType],
            let closure = call.trailingClosure,
            let parameter = closureParameterNames(in: closure).first,
            closure.statements.count == 1,
@@ -934,7 +938,7 @@ public enum SpecParser {
         return .except(base, selector, value)
     }
 
-    static func decodeTypedFacadeValue(
+    func decodeTypedFacadeValue(
         _ expression: ExprSyntax,
         substitutions: [String: StateExpr]
     ) -> StateExpr? {
@@ -943,7 +947,7 @@ public enum SpecParser {
         // facade treats member access as a record field or a property.
         if let member = expression.as(MemberAccessExprSyntax.self),
            let type = member.base?.as(DeclReferenceExprSyntax.self)?.baseName.text,
-           let value = _enumPhases[type]?[member.declName.baseName.text] {
+           let value = enumPhases[type]?[member.declName.baseName.text] {
             return .value(value)
         }
         if let decoded = decodeTypedFacadeExpr(expression, substitutions: substitutions) {
@@ -964,7 +968,7 @@ public enum SpecParser {
         }
     }
 
-    static func typedUpdateSelector(
+    func typedUpdateSelector(
         _ expression: ExprSyntax,
         substitutions: [String: StateExpr]
     ) -> StateExpr? {
@@ -974,7 +978,7 @@ public enum SpecParser {
         return decodeTypedFacadeValue(expression, substitutions: substitutions)
     }
 
-    static func typedSelectedValue(
+    func typedSelectedValue(
         _ base: StateExpr,
         selector: ExprSyntax,
         substitutions: [String: StateExpr]
@@ -986,11 +990,11 @@ public enum SpecParser {
         return .functionApply(base, index)
     }
 
-    static func typedFieldName(_ expression: ExprSyntax) -> String? {
+    func typedFieldName(_ expression: ExprSyntax) -> String? {
         guard let member = expression.as(MemberAccessExprSyntax.self),
               member.declName.baseName.text != "finiteValues"
         else { return nil }
-        if let typeName = terminalTypeName(in: member.base), _enumPhases[typeName] != nil {
+        if let typeName = terminalTypeName(in: member.base), enumPhases[typeName] != nil {
             return nil
         }
         return member.declName.baseName.text
@@ -999,7 +1003,7 @@ public enum SpecParser {
     /// A record field may be qualified by its enclosing model type, while an
     /// enum case must remain a formal enum value. Reduce either spelling to
     /// its terminal type name before consulting the enum namespace.
-    static func terminalTypeName(in expression: ExprSyntax?) -> String? {
+    func terminalTypeName(in expression: ExprSyntax?) -> String? {
         if let reference = expression?.as(DeclReferenceExprSyntax.self) {
             return reference.baseName.text
         }
@@ -1009,7 +1013,7 @@ public enum SpecParser {
         return nil
     }
 
-    static func typedLiteralType(_ expression: ExprSyntax?) -> (name: String, arguments: [String])? {
+    func typedLiteralType(_ expression: ExprSyntax?) -> (name: String, arguments: [String])? {
         guard let generic = expression?.as(GenericSpecializationExprSyntax.self),
               let base = generic.expression.as(DeclReferenceExprSyntax.self)
         else { return nil }
@@ -1026,7 +1030,7 @@ public enum SpecParser {
         case literal
     }
 
-    private static func pairCallKind(_ call: FunctionCallExprSyntax) -> PairCallKind? {
+    private func pairCallKind(_ call: FunctionCallExprSyntax) -> PairCallKind? {
         if call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "Pair" {
             return .initializer
         }
@@ -1039,7 +1043,7 @@ public enum SpecParser {
 
     /// Decodes a typed value whose Swift spelling omits its generic arguments
     /// because the surrounding expression already supplies them.
-    static func decodeTypedDefaultValue(_ expression: ExprSyntax, expectedType: String?) -> StateExpr? {
+    func decodeTypedDefaultValue(_ expression: ExprSyntax, expectedType: String?) -> StateExpr? {
         guard expectedType?.hasPrefix("SetExpr<") == true,
               let call = expression.as(FunctionCallExprSyntax.self),
               call.arguments.isEmpty,
@@ -1049,7 +1053,7 @@ public enum SpecParser {
         return .setLiteral([])
     }
 
-    static func decodeTypedRecordLiteral(
+    func decodeTypedRecordLiteral(
         _ call: FunctionCallExprSyntax,
         substitutions: [String: StateExpr]
     ) -> StateExpr? {
@@ -1074,14 +1078,14 @@ public enum SpecParser {
     /// A record literal can omit an enum type when the field's Swift context
     /// supplies it. The syntax parser has no type checker, so accept that
     /// spelling only when its formal enum value is globally unambiguous.
-    static func decodeUniqueUnqualifiedEnumCase(_ expression: ExprSyntax) -> StateExpr? {
+    func decodeUniqueUnqualifiedEnumCase(_ expression: ExprSyntax) -> StateExpr? {
         guard let member = expression.as(MemberAccessExprSyntax.self), member.base == nil else { return nil }
-        let matches = _enumPhases.values.compactMap { $0[member.declName.baseName.text] }
+        let matches = enumPhases.values.compactMap { $0[member.declName.baseName.text] }
         guard matches.count == 1, let value = matches.first else { return nil }
         return .value(value)
     }
 
-    static func decodeTypedSetLiteral(
+    func decodeTypedSetLiteral(
         _ call: FunctionCallExprSyntax,
         elementType: String?,
         substitutions: [String: StateExpr]
@@ -1090,7 +1094,7 @@ public enum SpecParser {
             if let member = element.expression.as(MemberAccessExprSyntax.self),
                member.base == nil,
                let elementType,
-               let value = _enumPhases[elementType]?[member.declName.baseName.text] {
+               let value = enumPhases[elementType]?[member.declName.baseName.text] {
                 return StateExpr.value(value)
             }
             return decodeTypedFacadeValue(element.expression, substitutions: substitutions)
@@ -1099,13 +1103,13 @@ public enum SpecParser {
         return .setLiteral(elements)
     }
 
-    static func decodeTypedFunctionLiteral(
+    func decodeTypedFunctionLiteral(
         _ call: FunctionCallExprSyntax,
         domainType: String?,
         substitutions: [String: StateExpr]
     ) -> StateExpr? {
         guard let domainType,
-              let domain = _enumDomains[domainType],
+              let domain = enumDomains[domainType],
               !domain.isEmpty
         else { return nil }
         var pairs: [StateExpr] = []
@@ -1124,7 +1128,7 @@ public enum SpecParser {
         )
     }
 
-    static func decodeMethodCall(_ memberAccess: MemberAccessExprSyntax, _ call: FunctionCallExprSyntax) -> StateExpr? {
+    func decodeMethodCall(_ memberAccess: MemberAccessExprSyntax, _ call: FunctionCallExprSyntax) -> StateExpr? {
         let methodName = memberAccess.declName.baseName.text
         let args = Array(call.arguments)
         let base = memberAccess.base
@@ -1318,7 +1322,7 @@ public enum SpecParser {
         }
     }
 
-    private static func decodeLocalOperator(_ expression: ExprSyntax) -> LocalOperator? {
+    private func decodeLocalOperator(_ expression: ExprSyntax) -> LocalOperator? {
         guard let call = expression.as(FunctionCallExprSyntax.self),
               call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "LocalOperator",
               let nameSyntax = call.arguments.first?.expression.as(StringLiteralExprSyntax.self)
@@ -1346,7 +1350,7 @@ public enum SpecParser {
 
     /// Decodes formal operators as syntax, rather than Swift closures. This is
     /// the source-side half of higher-order operator fidelity.
-    private static func decodeFormalOperator(_ expression: ExprSyntax) -> FormalOperator? {
+    private func decodeFormalOperator(_ expression: ExprSyntax) -> FormalOperator? {
         guard let call = expression.as(FunctionCallExprSyntax.self),
               let member = call.calledExpression.as(MemberAccessExprSyntax.self)
         else { return nil }
@@ -1370,7 +1374,7 @@ public enum SpecParser {
         }
     }
 
-    private static func decodeFormalLambda(_ expression: ExprSyntax) -> FormalLambda? {
+    private func decodeFormalLambda(_ expression: ExprSyntax) -> FormalLambda? {
         guard let call = expression.as(FunctionCallExprSyntax.self),
               call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "FormalLambda",
               let parameterArray = call.arguments.first(where: { $0.label?.text == "parameters" })?
@@ -1390,7 +1394,7 @@ public enum SpecParser {
         return FormalLambda(parameters: parameters, body: body)
     }
 
-    private static func decodeFormalCallArgument(_ expression: ExprSyntax) -> FormalCallArgument? {
+    private func decodeFormalCallArgument(_ expression: ExprSyntax) -> FormalCallArgument? {
         guard let call = expression.as(FunctionCallExprSyntax.self),
               let member = call.calledExpression.as(MemberAccessExprSyntax.self),
               let argument = call.arguments.first?.expression
@@ -1406,11 +1410,11 @@ public enum SpecParser {
         }
     }
 
-    static func decodeInfixExpr(_ elements: [ExprSyntax]) -> StateExpr? {
+    func decodeInfixExpr(_ elements: [ExprSyntax]) -> StateExpr? {
         decodeInfixExpr(elements, decoding: decodeStateExpr)
     }
 
-    static func decodeInfixExpr(
+    func decodeInfixExpr(
         _ elements: [ExprSyntax],
         decoding decodeOperand: (ExprSyntax) -> StateExpr?
     ) -> StateExpr? {
@@ -1454,7 +1458,7 @@ public enum SpecParser {
         return applyInfixOp(split.1, lhs, rhs)
     }
 
-    static func applyInfixOp(_ op: String, _ lhs: StateExpr, _ rhs: StateExpr) -> StateExpr? {
+    func applyInfixOp(_ op: String, _ lhs: StateExpr, _ rhs: StateExpr) -> StateExpr? {
         switch op {
         case "+": return .add(lhs, rhs)
         case "-": return .subtract(lhs, rhs)
@@ -1478,8 +1482,50 @@ public enum SpecParser {
 
 }
 
-extension SpecParser {
+/// Stateless public parser entry points. Every call owns a fresh parser
+/// session, while a full specification parse creates one session explicitly.
+public enum SpecParser {
+    public typealias ParsedSpecComponents = ParserSession.ParsedSpecComponents
+    public typealias SymmetricCollectionParseDiagnostic = ParserSession.SymmetricCollectionParseDiagnostic
+
+    public static func parseSpecClosure(
+        _ closure: ClosureExprSyntax,
+        enumPhases: [String: [String: TLAValue]] = [:],
+        enumDomains: [String: [TLAValue]] = [:]
+    ) -> ParsedSpecComponents {
+        ParserSession(enumPhases: enumPhases, enumDomains: enumDomains).parseSpecClosure(closure)
+    }
+
+    public static func decodeStateExpr(_ expression: ExprSyntax) -> StateExpr? {
+        ParserSession().decodeStateExpr(expression)
+    }
+
+    public static func decodeTypedFacadeValue(
+        _ expression: ExprSyntax,
+        substitutions: [String: StateExpr] = [:]
+    ) -> StateExpr? {
+        ParserSession().decodeTypedFacadeValue(expression, substitutions: substitutions)
+    }
+
     public static func decodeActionExpr(_ expression: ExprSyntax) -> ActionExpr? {
+        ParserSession().decodeActionExpr(expression)
+    }
+
+    public static func decodeActionFromClosure(_ closure: ClosureExprSyntax) -> ActionExpr? {
+        ParserSession().decodeActionFromClosure(closure)
+    }
+
+    public static func decodeTemporal(_ call: FunctionCallExprSyntax) -> TemporalExpr? {
+        ParserSession().decodeTemporal(call)
+    }
+
+    public static func decodeFairness(_ call: FunctionCallExprSyntax) -> FairnessCondition? {
+        ParserSession().decodeFairness(call)
+    }
+}
+
+extension ParserSession {
+    func decodeActionExpr(_ expression: ExprSyntax) -> ActionExpr? {
         if let call = expression.as(FunctionCallExprSyntax.self),
            let access = call.calledExpression.as(MemberAccessExprSyntax.self),
            access.declName.baseName.text == "becomes",
@@ -1570,7 +1616,7 @@ extension SpecParser {
         return nil
     }
 
-    static func decodeActionSequence(_ elements: [ExprSyntax]) -> ActionExpr? {
+    func decodeActionSequence(_ elements: [ExprSyntax]) -> ActionExpr? {
         guard elements.count >= 1 else { return nil }
         if elements.count == 1 { return decodeActionExpr(elements[0]) }
         if let orIdx = stride(from: 1, to: elements.count, by: 2).first(where: {
@@ -1601,7 +1647,7 @@ extension SpecParser {
         return nil
     }
 
-    static func unwrapSingleElementTuple(_ expression: ExprSyntax) -> ExprSyntax {
+    func unwrapSingleElementTuple(_ expression: ExprSyntax) -> ExprSyntax {
         if let tuple = expression.as(TupleExprSyntax.self),
            tuple.elements.count == 1,
            let nested = tuple.elements.first?.expression {
@@ -1610,7 +1656,7 @@ extension SpecParser {
         return expression
     }
 
-    public static func decodeActionFromClosure(_ closure: ClosureExprSyntax) -> ActionExpr? {
+    func decodeActionFromClosure(_ closure: ClosureExprSyntax) -> ActionExpr? {
         var actions: [ActionExpr] = []
         for statement in closure.statements {
             guard case .expr(let expression) = statement.item else { continue }
@@ -1621,13 +1667,13 @@ extension SpecParser {
         return actions.dropFirst().reduce(first) { .and($0, $1) }
     }
 
-    static func decodeCollectionPredicate(_ call: FunctionCallExprSyntax) -> StateExpr? {
+    func decodeCollectionPredicate(_ call: FunctionCallExprSyntax) -> StateExpr? {
         guard let access = call.calledExpression.as(MemberAccessExprSyntax.self),
               let collection = access.base?.as(DeclReferenceExprSyntax.self)?.baseName.text,
               let method = CollectionPredicateKind(rawValue: access.declName.baseName.text),
               let closure = call.trailingClosure
                 ?? call.arguments.first?.expression.as(ClosureExprSyntax.self),
-              let parameter = collectionPredicateParameter(in: closure)
+              let parameter = Self.collectionPredicateParameter(in: closure)
         else { return nil }
         let member = FreshVarName.fresh()
         let rewrittenStatements = closure.statements.map { statement in
@@ -1648,7 +1694,7 @@ extension SpecParser {
         }
     }
 
-    public static func decodeTemporal(_ call: FunctionCallExprSyntax) -> TemporalExpr? {
+    func decodeTemporal(_ call: FunctionCallExprSyntax) -> TemporalExpr? {
         guard let ref = call.calledExpression.as(MemberAccessExprSyntax.self) else { return nil }
         let name = ref.declName.baseName.text
         let firstArg = call.arguments.first.flatMap { decodeStateExpr($0.expression) }
@@ -1664,7 +1710,7 @@ extension SpecParser {
         }
     }
 
-    public static func decodeFairness(_ call: FunctionCallExprSyntax) -> FairnessCondition? {
+    func decodeFairness(_ call: FunctionCallExprSyntax) -> FairnessCondition? {
         let name: String
         if let ref = call.calledExpression.as(MemberAccessExprSyntax.self) {
             name = ref.declName.baseName.text

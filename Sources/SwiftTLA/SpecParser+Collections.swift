@@ -2,8 +2,8 @@ import SwiftSyntax
 import SwiftParser
 import SwiftBasicFormat
 
-extension SpecParser {
-    static func collectSymmetricCollectionTypes(
+extension ParserSession {
+    func collectSymmetricCollectionTypes(
         in closure: ClosureExprSyntax
     ) -> [String: (element: String, value: String)] {
         var types: [String: (element: String, value: String)] = [:]
@@ -28,7 +28,7 @@ extension SpecParser {
         return types
     }
 
-    static func parseSymmetricCollectionDecl(
+    func parseSymmetricCollectionDecl(
         _ call: FunctionCallExprSyntax,
         into result: inout ParsedSpecComponents,
         collectionTypes: [String: (element: String, value: String)]
@@ -62,7 +62,7 @@ extension SpecParser {
         result.variables.append(.init(formal: declaration.variable))
     }
 
-    static func parseCollectionAction(
+    func parseCollectionAction(
         _ call: FunctionCallExprSyntax,
         into result: inout ParsedSpecComponents
     ) {
@@ -115,7 +115,7 @@ extension SpecParser {
         )))
     }
 
-    static func collectionActionMemberName(in closure: ClosureExprSyntax) -> String? {
+    func collectionActionMemberName(in closure: ClosureExprSyntax) -> String? {
         guard let parameters = closure.signature?.parameterClause else { return nil }
         switch parameters {
         case .simpleInput(let list):
@@ -126,7 +126,7 @@ extension SpecParser {
         }
     }
 
-    static func validateMemberUses(
+    func validateMemberUses(
         _ member: String,
         in closure: ClosureExprSyntax,
         owning collection: String,
@@ -143,7 +143,7 @@ extension SpecParser {
         }
     }
 
-    static func identityDiagnostic(
+    func identityDiagnostic(
         collection: String,
         action: String,
         source: String,
@@ -157,7 +157,7 @@ extension SpecParser {
         )
     }
 
-    static func parseCollectionActionBody(
+    func parseCollectionActionBody(
         _ closure: ClosureExprSyntax,
         collection: String,
         member: String,
@@ -176,7 +176,7 @@ extension SpecParser {
         return actions.dropFirst().reduce(actions[0]) { .and($0, $1) }
     }
 
-    static func parseCollectionActionExpression(
+    func parseCollectionActionExpression(
         _ expression: ExprSyntax,
         collection: String,
         member: String,
@@ -232,7 +232,7 @@ extension SpecParser {
         return decodeStateExpr(rewritten).map(ActionExpr.guard_)
     }
 
-    static func collectionActionSequenceSplit(
+    func collectionActionSequenceSplit(
         _ elements: [ExprSyntax]
     ) -> (left: ExprSyntax, operatorText: String, right: ExprSyntax)? {
         guard elements.count >= 3, elements.count % 2 == 1 else { return nil }
@@ -250,12 +250,12 @@ extension SpecParser {
         return (left, operatorText, right)
     }
 
-    static func parseExpression(_ elements: ArraySlice<ExprSyntax>) -> ExprSyntax? {
+    func parseExpression(_ elements: ArraySlice<ExprSyntax>) -> ExprSyntax? {
         let source = elements.map(\.description).joined()
         return SwiftParser.Parser.parse(source: source).statements.first?.item.as(ExprSyntax.self)
     }
 
-    static func collectionUpdate(
+    func collectionUpdate(
         _ expression: ExprSyntax,
         collection: String,
         member: String
@@ -387,7 +387,7 @@ extension SpecParser {
         }
     }
 
-    static func parseLiteralValue(_ expression: ExprSyntax) -> TLAValue? {
+    func parseLiteralValue(_ expression: ExprSyntax) -> TLAValue? {
         if let integer = expression.as(IntegerLiteralExprSyntax.self) {
             return Int(integer.literal.text).map(TLAValue.int)
         }
@@ -400,7 +400,7 @@ extension SpecParser {
         return nil
     }
 
-    static func extractStringArg(
+    func extractStringArg(
         _ call: FunctionCallExprSyntax,
         index: Int,
         loopVar: String? = nil,
@@ -426,7 +426,7 @@ extension SpecParser {
         return result
     }
 
-    static func parseVariableDecl(_ call: FunctionCallExprSyntax, into result: inout ParsedSpecComponents) {
+    func parseVariableDecl(_ call: FunctionCallExprSyntax, into result: inout ParsedSpecComponents) {
         let args = Array(call.arguments)
         if args.first?.label?.text == "from",
            args.count >= 2,
@@ -496,7 +496,7 @@ extension SpecParser {
         }
     }
 
-    static func parsedVariableName(_ expression: ExprSyntax) -> String? {
+    func parsedVariableName(_ expression: ExprSyntax) -> String? {
         if let literal = expression.as(StringLiteralExprSyntax.self) {
             return literal.segments.description.replacingOccurrences(of: "\"", with: "")
         }
@@ -511,7 +511,7 @@ extension SpecParser {
         return nil
     }
 
-    static func parseTLAValueConstructor(name: String, call: FunctionCallExprSyntax) -> TLAValue? {
+    func parseTLAValueConstructor(name: String, call: FunctionCallExprSyntax) -> TLAValue? {
         switch name {
         case "set":     return .set([])
         case "tuple":   return .tuple([])
@@ -521,7 +521,7 @@ extension SpecParser {
         }
     }
 
-    static func parseConstantDecl(_ call: FunctionCallExprSyntax, into result: inout ParsedSpecComponents) {
+    func parseConstantDecl(_ call: FunctionCallExprSyntax, into result: inout ParsedSpecComponents) {
         let args = Array(call.arguments)
         guard args.count >= 2,
               let name = extractStringArg(call, index: 0)
@@ -548,7 +548,7 @@ extension SpecParser {
         result.constants[name] = value
     }
 
-    private static func staticConstantValue(_ expression: StateExpr) -> TLAValue? {
+    private func staticConstantValue(_ expression: StateExpr) -> TLAValue? {
         switch expression {
         case .value(let value):
             return value
@@ -562,7 +562,7 @@ extension SpecParser {
     }
 
     /// Parse `NamedValue("poweredOn", 5)` → register in localConstants
-    static func parseNamedValueConstant(_ call: FunctionCallExprSyntax, name: String, into result: inout ParsedSpecComponents) -> Bool {
+    func parseNamedValueConstant(_ call: FunctionCallExprSyntax, name: String, into result: inout ParsedSpecComponents) -> Bool {
         let args = Array(call.arguments)
         guard args.count >= 2 else { return false }
         if let intVal = args[1].expression.as(IntegerLiteralExprSyntax.self), let v = Int(intVal.literal.text) {

@@ -240,12 +240,7 @@ enum TLASpecVerifier {
         for item in closure.statements {
             newStatements.append(rewriteVarBinding(in: item))
         }
-        let nameInjected = closure.with(\.statements, CodeBlockItemListSyntax(newStatements))
-        let bindings = scanVarBindings(in: nameInjected)
-        guard !bindings.isEmpty else { return nameInjected }
-        let rebinder = ClosureRebinder(bindings: bindings)
-        let rebound = rebinder.rewrite(Syntax(nameInjected))
-        return rebound.as(ClosureExprSyntax.self) ?? nameInjected
+        return closure.with(\.statements, CodeBlockItemListSyntax(newStatements))
     }
 
     static func rewriteVarBinding(in item: CodeBlockItemSyntax) -> CodeBlockItemSyntax {
@@ -331,57 +326,6 @@ enum TLASpecVerifier {
         guard bindingsChanged else { return item }
         let newDecl = varDecl.with(\.bindings, PatternBindingListSyntax(newBindings))
         return item.with(\.item, .decl(DeclSyntax(newDecl)))
-    }
-
-    // MARK: - Closure re-binding
-
-    private final class ClosureRebinder: SyntaxRewriter {
-        let bindingMap: [String: VarBinding]
-        private let bindingNames: Set<String>
-
-        init(bindings: [VarBinding]) {
-            self.bindingMap = Dictionary(uniqueKeysWithValues: bindings.map { ($0.name, $0) })
-            self.bindingNames = Set(bindings.map(\.name))
-        }
-
-        override func visit(_ node: FunctionCallExprSyntax) -> ExprSyntax {
-            guard let callName = node.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text,
-                  callName == "Action" || callName == "Invariant",
-                  let closure = node.trailingClosure
-            else { return super.visit(node) }
-
-            let scanner = ReferencedVarScanner(bindingNames: bindingNames)
-            scanner.walk(closure)
-            guard !scanner.referencedNames.isEmpty else { return super.visit(node) }
-
-            var rebindStatements: [CodeBlockItemSyntax] = []
-            for name in scanner.referencedNames.sorted() {
-                guard let binding = bindingMap[name] else { continue }
-                let source = "let \(name) = Var<\(binding.typeName)>(\"\(name)\")"
-                let parsed = Parser.parse(source: source)
-                rebindStatements.append(contentsOf: parsed.statements)
-            }
-
-            let newBody = CodeBlockItemListSyntax(rebindStatements + Array(closure.statements))
-            let newClosure = closure.with(\.statements, newBody)
-            return ExprSyntax(node.with(\.trailingClosure, newClosure))
-        }
-    }
-
-    private final class ReferencedVarScanner: SyntaxVisitor {
-        let bindingNames: Set<String>
-        var referencedNames = Set<String>()
-
-        init(bindingNames: Set<String>) {
-            self.bindingNames = bindingNames
-            super.init(viewMode: .sourceAccurate)
-        }
-
-        override func visit(_ node: DeclReferenceExprSyntax) -> SyntaxVisitorContinueKind {
-            let name = node.baseName.text
-            if bindingNames.contains(name) { referencedNames.insert(name) }
-            return .visitChildren
-        }
     }
 
     // MARK: - Helpers

@@ -1,8 +1,8 @@
-extension SpecParser {
+extension ParserSession {
     /// A Swift `let` is an authoring alias. Substitute it before constructing
     /// the algorithm model so the parser and runtime builder describe the
     /// same formal action.
-    static func substituteAlgorithmVariable(
+    func substituteAlgorithmVariable(
         _ statement: AlgorithmStatementModel,
         from name: String,
         with replacement: StateExpr
