@@ -83,11 +83,30 @@ struct TemporalSymmetryRegisterTests {
       ])
     let predicate: StateExpr = .equal(.variable("x"), .value(.int(2)))
     let actions = ["A", "B", "C", "Stay"].map { NamedAction(name: $0, body: .guard_(true)) }
-    let checker = LivenessChecker(graph: graph)
-    let weakResult = checker.analyze(
-      .alwaysEventually(predicate), fairness: [.weakFairness("A")], actions: actions, initialStateIDs: [start])
-    let strongResult = checker.analyze(
-      .alwaysEventually(predicate), fairness: [.strongFairness("A")], actions: actions, initialStateIDs: [start])
+    let weakSpec = TLASpec(
+      name: graph.specName,
+      variables: [NamedVar(name: "x", initial: .int(0))],
+      actions: actions,
+      invariants: [],
+      temporalProperties: [NamedTemporal(name: "AlwaysEventuallyP", expr: .alwaysEventually(predicate))],
+      fairness: [.weakFairness("A")]
+    )
+    let strongSpec = TLASpec(
+      name: graph.specName,
+      variables: [NamedVar(name: "x", initial: .int(0))],
+      actions: actions,
+      invariants: [],
+      temporalProperties: [NamedTemporal(name: "AlwaysEventuallyP", expr: .alwaysEventually(predicate))],
+      fairness: [.strongFairness("A")]
+    )
+    let weakResult = try #require(
+      LivenessChecker(compilation: try weakSpec.compile(), graph: graph)
+        .analyze(initialStateIDs: [start]).first
+    )
+    let strongResult = try #require(
+      LivenessChecker(compilation: try strongSpec.compile(), graph: graph)
+        .analyze(initialStateIDs: [start]).first
+    )
     #expect(weakResult.status == .violated)
     #expect(weakResult.witness?.cycle == [start, alternate, start])
     #expect(weakResult.enabledActions["A"]?[start] == true)

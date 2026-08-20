@@ -71,23 +71,17 @@ public struct TemporalAnalysisResult: Equatable, Sendable {
 /// explicit, state-changing named-action transitions.
 public struct LivenessChecker {
     public let graph: StateGraph
-    private let compilation: CompiledSpecification?
+    private let compilation: CompiledSpecification
 
     public init(compilation: CompiledSpecification, graph: StateGraph) {
         self.graph = graph
         self.compilation = compilation
     }
 
-    init(graph: StateGraph) {
-        self.graph = graph
-        compilation = nil
-    }
-
     public func analyze(
         initialStateIDs: [StateGraph.StateID],
         isComplete: Bool = true
     ) -> [TemporalAnalysisResult] {
-        guard let compilation else { return [] }
         return compilation.model.temporalProperties.map {
             analyze(
                 $0.expression,
@@ -147,12 +141,6 @@ public struct LivenessChecker {
         )
     }
 
-    public enum TemporalResult: Equatable {
-        case satisfied
-        case violated(String, trace: [StateGraph.StateID])
-        case unavailable(String)
-    }
-
     public func computeSCCs() -> [Set<StateGraph.StateID>] {
         stronglyConnectedComponents(in: Set(graph.states.keys))
     }
@@ -166,114 +154,6 @@ public struct LivenessChecker {
                 explicitEdges(from: state).contains { edge in nodeToSCC[edge.target] != nodeToSCC[state] }
             }
         }
-    }
-
-    func fairTerminalSCCs(
-        _ terminalSCCs: [Set<StateGraph.StateID>],
-        fairness: [FairnessCondition],
-        actions: [NamedAction]
-    ) -> [Set<StateGraph.StateID>] {
-        let enabled = enabledness(for: actions)
-        return terminalSCCs.filter { component in
-            fairness.allSatisfy { isFair($0, in: component, enabled: enabled) }
-        }
-    }
-
-    func checkAlways(_ predicate: StateExpr, fairSCCs: [Set<StateGraph.StateID>]) throws -> TemporalResult {
-        for component in fairSCCs {
-            for state in component {
-                guard let projection = graph.states[state] else { continue }
-                if try !predicate.evaluateBool(in: projection.formalValues) {
-                    return .violated("[]P: predicate failed in state \(state)", trace: [state])
-                }
-            }
-        }
-        return .satisfied
-    }
-
-    func checkEventually(_ predicate: StateExpr, fairSCCs: [Set<StateGraph.StateID>]) throws -> TemporalResult {
-        for component in fairSCCs {
-            let holds = try component.contains { state in
-                try predicate.evaluateBool(in: graph.states[state]?.formalValues ?? [:])
-            }
-            if !holds, let first = component.sorted(by: stateOrder).first {
-                return .violated("<>P: no state in SCC satisfies predicate", trace: [first])
-            }
-        }
-        return .satisfied
-    }
-
-    func checkLeadsTo(_ from: StateExpr, _ to: StateExpr, fairSCCs: [Set<StateGraph.StateID>]) throws -> TemporalResult {
-        for component in fairSCCs {
-            let hasFrom = try component.contains { try from.evaluateBool(in: graph.states[$0]?.formalValues ?? [:]) }
-            let hasTo = try component.contains { try to.evaluateBool(in: graph.states[$0]?.formalValues ?? [:]) }
-            if hasFrom, !hasTo, let first = component.sorted(by: stateOrder).first {
-                return .violated("~>: 'from' holds but 'to' never reached in SCC", trace: [first])
-            }
-        }
-        return .satisfied
-    }
-
-    func checkAlwaysEventually(_ predicate: StateExpr, fairSCCs: [Set<StateGraph.StateID>]) throws -> TemporalResult {
-        try checkEventually(predicate, fairSCCs: fairSCCs)
-    }
-
-    func checkEventuallyAlways(_ predicate: StateExpr, fairSCCs: [Set<StateGraph.StateID>]) throws -> TemporalResult {
-        try checkAlways(predicate, fairSCCs: fairSCCs)
-    }
-
-    func checkAll(
-        _ properties: [NamedTemporal],
-        fairness: [FairnessCondition],
-        actions: [NamedAction]
-    ) throws -> [TemporalResult] {
-        let initialStates = graph.states.keys.sorted(by: stateOrder)
-        return properties.map { property in
-            let result = analyze(property.expr, fairness: fairness, actions: actions, initialStateIDs: initialStates)
-            switch result.status {
-            case .satisfied: return .satisfied
-            case .violated:
-                return .violated("\(property.expr): fair lasso", trace: result.witness?.prefix ?? [])
-            case .unavailable: return .unavailable(result.reason.rawValue)
-            }
-        }
-    }
-
-    func analyze(
-        _ property: TemporalExpr,
-        fairness: [FairnessCondition],
-        actions: [NamedAction],
-        initialStateIDs: [StateGraph.StateID],
-        isComplete: Bool = true
-    ) -> TemporalAnalysisResult {
-        let form: TemporalForm
-        let predicate: StateExpr
-        let trigger: StateExpr?
-        switch property {
-        case .always(let value): form = .always; predicate = value; trigger = nil
-        case .eventually(let value): form = .eventually; predicate = value; trigger = nil
-        case .alwaysEventually(let value): form = .alwaysEventually; predicate = value; trigger = nil
-        case .eventuallyAlways(let value): form = .eventuallyAlways; predicate = value; trigger = nil
-        case .leadsTo(let from, let to): form = .leadsTo; predicate = to; trigger = from
-        }
-        return analyze(
-            form: form,
-            fairness: fairness,
-            actions: actions,
-            initialStateIDs: initialStateIDs,
-            isComplete: isComplete,
-            predicate: { state in
-                guard let projection = graph.states[state] else { return false }
-                return try predicate.evaluateBool(in: projection.formalValues)
-            },
-            trigger: trigger.map { trigger in
-                { state in
-                    guard let projection = graph.states[state] else { return false }
-                    return try trigger.evaluateBool(in: projection.formalValues)
-                        && !predicate.evaluateBool(in: projection.formalValues)
-                }
-            }
-        )
     }
 
     private enum TemporalForm {
