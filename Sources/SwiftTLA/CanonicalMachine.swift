@@ -169,14 +169,13 @@ public enum TLAStateProjectionResult: Sendable, Equatable {
     }
 }
 
-/// An internal generic transition record for canonical machine implementations.
-public struct CanonicalTransitionEvidence<Snapshot: Equatable & Sendable>: Equatable, Sendable {
-    public let invocation: TLAActionInvocation
+public struct CanonicalTransitionEvidence<Snapshot: Equatable & Sendable, Action: Equatable & Sendable>: Equatable, Sendable {
+    public let action: Action
     public let before: Snapshot
     public let after: Snapshot
 
-    public init(invocation: TLAActionInvocation, before: Snapshot, after: Snapshot) {
-        self.invocation = invocation
+    public init(action: Action, before: Snapshot, after: Snapshot) {
+        self.action = action
         self.before = before
         self.after = after
     }
@@ -195,7 +194,7 @@ public enum GeneratedMachineError: Error {
     case unrepresentableActionLabel(TLAActionInvocation)
     /// This action selects a live identified collection member and must use
     /// the generated `action(id:)` API rather than generic execution.
-    case identityRoutedActionRequiresID(TLAActionInvocation)
+    case identityRoutedActionRequiresID
 }
 
 /// Explains why a machine cannot report its currently available actions.
@@ -396,28 +395,32 @@ public struct CanonicalMachine<Snapshot: Equatable & Sendable>: Sendable {
         }
     }
 
-    public mutating func apply(_ invocation: TLAActionInvocation) throws -> CanonicalTransitionEvidence<Snapshot> {
-        try apply(invocation, from: tlaSnapshot()) { _ in true }
-    }
-
-    public mutating func apply(
-        _ invocation: TLAActionInvocation,
+    public mutating func apply<Label>(
+        _ action: Label,
+        using executor: CompiledActionExecutor<Label>,
         from state: TLAStateProjection,
         selecting successor: (TLAStateProjection) -> Bool
-    ) throws -> CanonicalTransitionEvidence<Snapshot> {
+    ) throws -> CanonicalTransitionEvidence<Snapshot, Label>
+    where Label: Hashable & Sendable {
+        let successors = try executor.successors(for: action, from: state)
+        return try apply(
+            successors,
+            action: action,
+            from: state,
+            selecting: successor
+        )
+    }
+
+    private mutating func apply<Action>(
+        _ successors: [TLAStateProjection],
+        action: Action,
+        from state: TLAStateProjection,
+        selecting successor: (TLAStateProjection) -> Bool
+    ) throws -> CanonicalTransitionEvidence<Snapshot, Action>
+    where Action: Equatable & Sendable {
         let before: Snapshot
         do {
             before = try snapshotFromProjection(state)
-        } catch {
-            throw GeneratedMachineError.unexpected(error)
-        }
-        let successors: [TLAStateProjection]
-        do {
-            successors = try runtime.successors(invocation, from: state)
-        } catch let diagnostic as TLAStateProjectionDiagnostic {
-            throw GeneratedMachineError.stateDecodingFailed(diagnostic)
-        } catch let error as SpecRuntime.RuntimeError {
-            throw GeneratedMachineError.runtime(error)
         } catch {
             throw GeneratedMachineError.unexpected(error)
         }
@@ -432,10 +435,9 @@ public struct CanonicalMachine<Snapshot: Equatable & Sendable>: Sendable {
                 throw GeneratedMachineError.unexpected(error)
             }
             snapshot = after
-            return CanonicalTransitionEvidence(invocation: invocation, before: before, after: after)
+            return CanonicalTransitionEvidence(action: action, before: before, after: after)
         }
-        let available = try availableInvocations(in: state)
-        throw GeneratedMachineError.runtime(.actionNotEnabled(invocation, available: available))
+        throw GeneratedMachineError.unexpected(SpecRuntime.RuntimeError.evaluationUnavailable("The selected action has no matching successor."))
     }
 
 }
@@ -476,11 +478,4 @@ public final class CanonicalMachineStorage<Snapshot: Equatable & Sendable>: Send
         try storage.withLock { try $0.availableInvocations(in: state) }
     }
 
-    public func apply(
-        _ invocation: TLAActionInvocation,
-        from state: TLAStateProjection,
-        selecting successor: @Sendable (TLAStateProjection) -> Bool
-    ) throws -> CanonicalTransitionEvidence<Snapshot> {
-        try storage.withLock { try $0.apply(invocation, from: state, selecting: successor) }
-    }
 }

@@ -9,7 +9,7 @@ extension MacroExpander {
         let typedExecute: [String] = hasActions ? [
             """
                 public func execute(_ action: ActionLabel, requestID: Foundation.UUID = Foundation.UUID()) async throws -> Outcome {
-                    switch await _handle.execute(\(typeName)._actionInvocation(for: action), requestID: requestID) {
+                    switch await _handle.execute(\(typeName)._liveInvocation(for: action), requestID: requestID) {
                     case .committed(let commit):
                         return .committed(TransitionResult(
                             action: action,
@@ -100,22 +100,28 @@ extension MacroExpander {
             DeclSyntax(stringLiteral: """
             private static func _liveDriver(_ runtime: SpecRuntime) -> TLALiveMachineTransitionDriver {
                 let actions = Dictionary(uniqueKeysWithValues: runtime.spec.actions.map { ($0.name, $0) })
-                let identityRouted = _identityRoutedActionNames
+                let identityRouted = _identityRoutedActionOrdinals
+                let actionOrdinal = { invocation in
+                    _machineSurfacePlan.actions.firstIndex(where: { $0.formalName == invocation.name })
+                }
                 return TLALiveMachineTransitionDriver(
                     successors: { state, invocation in
                         try runtime.successors(invocation, from: state)
                     },
                     availableInvocations: { state in
-                        try runtime.availableInvocations(in: state).filter { identityRouted.contains($0.name) == false }
+                        try runtime.availableInvocations(in: state).filter { invocation in
+                            actionOrdinal(invocation).map { identityRouted.contains($0) } == false
+                        }
                     },
                     validateInvocation: { invocation in
-                        guard let action = actions[invocation.name] else { return .unknownAction }
+                        guard let ordinal = actionOrdinal(invocation),
+                              let action = actions[invocation.name] else { return .unknownAction }
                         guard action.bindings.count == invocation.arguments.count else { return .invalidArity }
                         for (binding, argument) in zip(action.bindings, invocation.arguments)
                         where binding.values.contains(argument) == false {
                             return .actionArgumentOutOfDomain
                         }
-                        return identityRouted.contains(invocation.name)
+                        return identityRouted.contains(ordinal)
                             ? .identityRoutedActionRequiresID
                             : nil
                     },
