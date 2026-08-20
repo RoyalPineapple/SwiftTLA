@@ -3,7 +3,7 @@ struct CompiledEvaluator {
     let model: CompiledModel
     let bindings: CompiledBindings
     let enabledActions: Set<ActionID>
-    let localOperators: [String: CompiledLocalOperator]
+    let localOperators: [OperatorID: CompiledLocalOperator]
     let remainingRecursionDepth: Int
 
     init(
@@ -11,7 +11,7 @@ struct CompiledEvaluator {
         model: CompiledModel,
         bindings: CompiledBindings = .init(),
         enabledActions: Set<ActionID> = [],
-        localOperators: [String: CompiledLocalOperator] = [:],
+        localOperators: [OperatorID: CompiledLocalOperator] = [:],
         remainingRecursionDepth: Int = 1_000
     ) {
         self.state = state
@@ -53,11 +53,8 @@ struct CompiledEvaluator {
             return try state.value(for: variable)
         case .boundValue(let binder):
             return try bindings.value(for: binder)
-        case .symbol(let name):
-            guard let value = model.constants[name] else {
-                throw CompiledEvaluationError.unresolvedOperator
-            }
-            return value
+        case .operatorReference:
+            throw EvalError.typeMismatch("Expected a value")
         case .add(let lhs, let rhs):
             return .int(try integer(lhs) + integer(rhs))
         case .subtract(let lhs, let rhs):
@@ -242,6 +239,9 @@ struct CompiledEvaluator {
                 result[element] = try evaluate(body, bindings: bindings.binding(element, to: binder))
             })
         case .functionApply(let function, let argument):
+            if case .operatorReference(let id) = function {
+                return try evaluate(.recursiveCall(id, [argument]), bindings: bindings)
+            }
             let key = try value(argument)
             switch try value(function) {
             case .function(let values):
@@ -390,8 +390,8 @@ struct CompiledEvaluator {
                     localOperators: localOperators,
                     remainingRecursionDepth: remainingRecursionDepth - 1
                 ).evaluate(lambda.body)
-            case .reference(let name, let arity):
-                guard let definition = model.formalOperatorDefinitions.first(where: { $0.name == name }) else {
+            case .reference(let id, let arity):
+                guard let definition = model.formalOperatorDefinitions.first(where: { $0.id == id }) else {
                     throw CompiledEvaluationError.unresolvedOperator
                 }
                 guard definition.parameters.count == arity, definition.parameters.count == arguments.count else {
@@ -418,7 +418,7 @@ struct CompiledEvaluator {
         case .letIn(let operators, let body):
             var nested = localOperators
             for operation in operators {
-                nested[operation.name] = operation
+                nested[operation.id] = operation
             }
             return try CompiledEvaluator(
                 state: state,
@@ -428,11 +428,11 @@ struct CompiledEvaluator {
                 localOperators: nested,
                 remainingRecursionDepth: remainingRecursionDepth
             ).evaluate(body)
-        case .recursiveCall(let name, let arguments):
+        case .recursiveCall(let id, let arguments):
             guard remainingRecursionDepth > 0 else {
                 throw EvalError.typeMismatch("Recursive operator depth exceeded")
             }
-            if let operation = localOperators[name] {
+            if let operation = localOperators[id] {
                 guard operation.parameters.count == arguments.count else {
                     throw EvalError.typeMismatch("Recursive operator argument count differs")
                 }
@@ -459,7 +459,7 @@ struct CompiledEvaluator {
                     remainingRecursionDepth: remainingRecursionDepth - 1
                 ).evaluate(operation.body)
             }
-            if let function = model.recursiveFunctions.first(where: { $0.name == name }) {
+            if let function = model.recursiveFunctions.first(where: { $0.id == id }) {
                 guard function.parameters.count == arguments.count else {
                     throw EvalError.typeMismatch("Recursive operator argument count differs")
                 }

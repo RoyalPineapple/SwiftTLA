@@ -2,7 +2,7 @@ indirect enum CompiledStateExpr: Sendable {
     case value(TLAValue)
     case stateVariable(VariableID)
     case boundValue(BinderID)
-    case symbol(String)
+    case operatorReference(OperatorID)
 
     case add(CompiledStateExpr, CompiledStateExpr)
     case subtract(CompiledStateExpr, CompiledStateExpr)
@@ -61,7 +61,7 @@ indirect enum CompiledStateExpr: Sendable {
     case functionSet(CompiledStateExpr, CompiledStateExpr)
     case foldFunction(CompiledFormalLambda, initial: CompiledStateExpr, sequence: CompiledStateExpr)
     case operatorApplication(CompiledFormalOperator, [CompiledFormalCallArgument])
-    case recursiveCall(String, [CompiledStateExpr])
+    case recursiveCall(OperatorID, [CompiledStateExpr])
     case letValue(BinderID, CompiledStateExpr, CompiledStateExpr)
     case letIn([CompiledLocalOperator], CompiledStateExpr)
 }
@@ -73,7 +73,7 @@ struct CompiledFormalLambda: Sendable {
 
 enum CompiledFormalOperator: Sendable {
     case lambda(CompiledFormalLambda)
-    case reference(String, arity: Int)
+    case reference(OperatorID, arity: Int)
 }
 
 indirect enum CompiledFormalCallArgument: Sendable {
@@ -82,7 +82,7 @@ indirect enum CompiledFormalCallArgument: Sendable {
 }
 
 struct CompiledLocalOperator: Sendable {
-    let name: String
+    let id: OperatorID
     let parameters: [BinderID]
     let domain: CompiledStateExpr?
     let body: CompiledStateExpr
@@ -117,13 +117,13 @@ struct CompiledInvariant: Sendable {
 }
 
 struct CompiledFormalOperatorDefinition: Sendable {
-    let name: String
+    let id: OperatorID
     let parameters: [BinderID]
     let body: CompiledStateExpr
 }
 
 struct CompiledRecursiveFunction: Sendable {
-    let name: String
+    let id: OperatorID
     let parameters: [BinderID]
     let body: CompiledStateExpr
 }
@@ -135,7 +135,6 @@ struct CompiledVariableInitializer: Sendable {
 }
 
 struct CompiledModel: Sendable {
-    let constants: [String: TLAValue]
     let variableInitializers: [VariableID: CompiledVariableInitializer]
     let actions: [CompiledAction]
     let invariants: [CompiledInvariant]
