@@ -7,25 +7,11 @@ Published TLA+ semantics are authoritative. TLC is a pinned executable
 reference. TLC source and tests are white-box diagnostic evidence. They do
 not define a hidden oracle.
 
-## Run the local gate
+## Run the hosted gate
 
-Run the release check locally:
-
-```sh
-make temporal-symmetry-release-check
-```
-
-Run the complete release qualification with:
-
-```sh
-make ci-release-qualification
-```
-
-Both commands run locally. They do not require GitHub Actions or a paid
-runner.
-
-The release check validates the checked-in registers. It then creates a
-current core admission and a current P3 run. The latest report is:
+GitHub Actions validates the checked-in registers, then creates a current core
+admission and a current P3 run. Local broad gate execution requires explicit
+authorization and is diagnostic-only. The latest report is:
 
 ```text
 .build/temporal-symmetry-support-gate/support-admission.json
@@ -51,7 +37,7 @@ The report has one entry for every support-surface entry. An entry is
 | `1` | A complete evaluation blocks a requested entry. | Read `reasonCodes` and resolve the reported mismatch or divergence. |
 | `2` | The evaluation is unavailable or unsafe. | Restore the missing, stale, partial, foreign, or invalid evidence. |
 
-The local script and the GitHub workflow preserve all three exit values.
+The hosted workflow preserves all three exit values.
 An unavailable result never becomes a passing result.
 
 The report can admit only a requested entry with current, complete, exact

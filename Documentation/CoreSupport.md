@@ -20,16 +20,10 @@ The P3 source registers are under
 only the exact requested temporal and symmetry entries named there. Its report
 is at `.build/temporal-symmetry-support-gate/support-admission.json`.
 
-Run the required local check with:
-
-```sh
-make temporal-symmetry-release-check
-```
-
-Exit `0` means all requested P3 entries are admitted. Exit `1` means complete
-evidence blocks a requested entry. Exit `2` means the evaluation is
-unavailable or unsafe. The command always retains a report and never converts
-exit `1` or `2` into success.
+GitHub Actions runs the required P3 qualification. Its report uses exit `0`
+for admission, `1` for a complete blocking result, and `2` when evidence is
+unavailable or unsafe. It always retains a report and never converts `1` or
+`2` into success.
 
 P3 currently evaluates only declared temporal matrix cases and one
 binary-valued `SymmetricCollection` at exact scopes 2, 3, and 4. It explicitly
@@ -57,15 +51,11 @@ finite core behavior outside the two declared exact graphs is also explicitly
 unsupported. This does not claim temporal, liveness, fairness, symmetry,
 parser, annotation, generated-behavior, platform, or arbitrary-bound support.
 
-## Run the gate
+## Read the gate
 
-```sh
-make core-support-gate
-```
-
-The command validates pinned prerequisites, creates one gate run ID, runs the
-declared cases, and writes an admission report even when setup or execution
-fails. It needs no hosted GitHub runner.
+The hosted gate validates pinned prerequisites, creates one gate run ID, runs
+the declared cases, and writes an admission report even when setup or
+execution fails. Local broad gate execution requires explicit authorization.
 
 The latest report is:
 

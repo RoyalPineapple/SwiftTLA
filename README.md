@@ -120,47 +120,28 @@ behavior and bounds named in its register. See [core graph
 conformance](Documentation/CoreGraphConformance.md) and [core
 support](Documentation/CoreSupport.md).
 
-Run the core-support gate directly with:
-
-```bash
-make core-support-gate
-```
-
-Exit `0` means all requested support entries were admitted from one current
-run. Exit `1` means the evidence was complete but requested support was
-blocked. Exit `2` means setup, execution, governance, or evidence validation
-failed. The command retains its current report at
+GitHub Actions runs the core-support gate. Exit `0` means all requested
+support entries were admitted from one current run. Exit `1` means the
+evidence was complete but requested support was blocked. Exit `2` means setup,
+execution, governance, or evidence validation failed. The gate retains its
+current report at
 `.build/core-support-gate/support-admission.json` and each run below
 `.build/core-support-gate/runs/`.
 
-Run the fast local PR validation with:
-
-```bash
-make ci-pr
-```
-
-It validates the release code-check contract, runs advisory SwiftLint, tests
-once, and builds the package and macro plugin. It does not run coverage or the
-release qualification gates. Use `make ci-release-qualification` before a
-release. These commands run locally; they do not require a hosted or paid
-GitHub runner.
+Use `scripts/local-validation.sh` only for local, focused diagnosis. It does
+not create admission evidence. GitHub Actions owns broad validation and
+release qualification.
 
 ### Temporal and symmetry support
 
 Temporal and symmetry support is report-derived. Do not advertise a requested
 entry unless the current P3 admission report marks it `admitted`.
 
-Run the mandatory local P3 check with:
-
-```bash
-make temporal-symmetry-release-check
-```
-
-The command creates `.build/temporal-symmetry-support-gate/support-admission.json`.
-It exits `0` only when every requested entry is admitted. Exit `1` means a
-complete evaluation blocks a claim. Exit `2` means the evaluation is
-unavailable or unsafe. Both nonzero results remain failures in local and
-hosted workflows.
+GitHub Actions creates
+`.build/temporal-symmetry-support-gate/support-admission.json`. It exits `0`
+only when every requested entry is admitted. Exit `1` means a complete
+evaluation blocks a claim. Exit `2` means the evaluation is unavailable or
+unsafe. Both nonzero results remain failures.
 
 The declared entries are finite temporal cases and one binary-valued
 `SymmetricCollection` at exact scopes 2, 3, and 4. The report does not claim
@@ -170,13 +151,8 @@ or nested member values. See [temporal and symmetry conformance](Documentation/T
 
 ### Public workflow validation
 
-Run the aggregate P4 diagnostic with:
-
-```bash
-make public-workflow-release-check
-```
-
-It checks the declared parser-builder and generated two-state counters, the
+The hosted aggregate P4 diagnostic checks the declared parser-builder and
+generated two-state counters, the
 valid/invalid `@TLAModel`, `@TLAActor`, and `@TLAObservable` fixtures, and the
 `SwiftTLA-Package` public-library build for the declared macOS destination.
 It makes no cross-platform or demo-product claim. Exit `0` means those exact bounded checks matched;
@@ -192,29 +168,17 @@ See [public workflow conformance](Documentation/PublicWorkflowConformance.md)
 for fixture identities, report fields, workflow artifact locations, authority
 labels, and limits.
 
-State counts alone do not establish behavioral equivalence. A successful bounded check does not prove arbitrary population sizes, liveness, or unsupported TLA+ constructs. Exact finite graph comparison runs through `make core-conformance` with the pinned toolchain; see [core graph conformance](Documentation/CoreGraphConformance.md).
+State counts alone do not establish behavioral equivalence. A successful
+bounded check does not prove arbitrary population sizes, liveness, or
+unsupported TLA+ constructs. GitHub Actions runs exact finite graph comparison
+with the pinned toolchain; see [core graph conformance](Documentation/CoreGraphConformance.md).
 
 ## Local validation
 
-Use the fast PR command during normal development:
-
-```bash
-make ci-pr
-```
-
-It validates the release code-check contract, runs advisory SwiftLint, tests the
-package once, and builds the package and macro plugin.
-
-Before release, run the complete qualification command:
-
-```bash
-make ci-release-qualification
-```
-
-It includes the PR validation checks, coverage, the core-conformance and
-temporal-symmetry workflow contracts, temporal/symmetry conformance, and
-public-workflow qualification. These gates are intentionally excluded from the
-fast PR path. Release qualification fails instead of skipping a required gate.
+Use `scripts/local-validation.sh static` or a focused wrapper test during
+normal development. GitHub Actions runs the broad PR and release qualification
+workflows, including coverage and external conformance gates. Local broad
+validation requires explicit authorization.
 
 ## Requirements
 

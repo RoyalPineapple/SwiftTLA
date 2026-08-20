@@ -149,11 +149,6 @@ extension TLASpec {
         symmetrySets.append(SymmetrySet(variableName: s.variableName, values: s.values))
       } else if comp is OpDecl {
         // collected in pass 1
-      } else if let u = comp as? UseSpecDecl {
-        if let spec = SpecRegistry.lookup(u.name) {
-          variables += spec.variables
-          invariants += spec.invariants
-        }
       } else if let u = comp as? OpUse {
         if let op = operators[u.op] {
           let body: ActionExpr

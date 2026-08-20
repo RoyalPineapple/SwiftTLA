@@ -9,40 +9,11 @@ Published TLA+ semantics are authoritative. TLC is a pinned executable
 reference; its source and tests are diagnostic evidence. SwiftTLA does not
 claim a hidden checker or oracle.
 
-The authority is the declared semantic source and the evidence the command
-writes, not this document.
-Run the selected cases with:
-
-```bash
-make core-conformance
-```
-
-`make core-conformance` writes a fresh graph-comparison run. It does not by
-itself admit a support claim. Use the core-support gate for that decision:
-
-```sh
-make core-support-gate
-```
-
-Run the fast local PR validation on a local Mac:
-
-```bash
-make ci-pr
-```
-
-This command validates the local CI command contract, runs advisory SwiftLint,
-tests once, and builds the package and macro plugin. It does not run coverage
-or core conformance.
-
-For the complete release qualification, run:
-
-```bash
-make ci-release-qualification
-```
-
-That command runs coverage, validates the core-conformance and temporal-symmetry
-workflow contracts, and runs temporal/symmetry plus public-workflow
-qualification. It fails if a required gate is unavailable.
+The authority is the declared semantic source and retained hosted evidence,
+not this document. GitHub Actions runs core conformance and support admission.
+Local use is diagnostic-only: use the approved narrow validation wrapper, or
+obtain explicit authorization for a broader command. Do not treat a local run
+as admission evidence.
 
 ## What is pinned
 
@@ -124,8 +95,8 @@ Use this checklist when a declared core comparison differs:
    result must be the retained exact result or the retained difference.
 4. Link the record from `support-surface.json`. Do not enlarge requested
    support merely because a related case runs.
-5. Run `make core-support-gate`. Read its new report and the evidence stored
-   under its matching gate-run ID; do not use evidence from another run.
+5. Inspect the hosted support-gate report and the evidence stored under its
+   matching gate-run ID; do not use evidence from another run.
 6. When a defect is fixed, keep the ledger record and regression. Update its
    latest comparison to the new exact evidence, then set its disposition to
    `resolved`.

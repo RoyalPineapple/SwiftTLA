@@ -11,7 +11,7 @@ if args.first == "temporal-symmetry" {
 if args.first == "public-workflow" {
     runPublicWorkflow(arguments: Array(args.dropFirst()))
 }
-if args.first == "symmetric-collections" || args.first == "symmetric-oracle" {
+if args.first == "symmetric-collections" {
     do {
         try runSymmetricCollectionOracle()
         exit(0)
@@ -26,7 +26,7 @@ guard let name = args.first else {
       core-conformance run|gate ...
       temporal-symmetry run|gate ...
       public-workflow ...
-      symmetric-collections (alias: symmetric-oracle)
+      symmetric-collections
     """, stderr)
     exit(1)
 }
