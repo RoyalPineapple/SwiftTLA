@@ -519,7 +519,7 @@ actor TLALiveMachineStorage {
     }
 
     func cancel(_ subscriptionID: UUID) {
-        guard var subscription = subscriptions[subscriptionID] else { return }
+        guard let subscription = subscriptions[subscriptionID] else { return }
         // Owner shutdown won the race: preserve its already-queued terminal.
         guard !subscription.isClosed else { return }
         subscriptions.removeValue(forKey: subscriptionID)
