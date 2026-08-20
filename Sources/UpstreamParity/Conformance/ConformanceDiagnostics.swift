@@ -142,8 +142,8 @@ extension TLCProcessError {
   /// A structured tool failure with source inputs and any captured output.
   public func failureReport(for request: TLCProcessRequest) -> ConformanceFailureReport {
     let evidence = [
-      ConformanceEvidenceLocation(role: "TLA+ module", location: request.module.path),
-      ConformanceEvidenceLocation(role: "TLC configuration", location: request.configuration.path),
+      ConformanceEvidenceLocation(role: "TLA+ module", location: request.moduleFileName),
+      ConformanceEvidenceLocation(role: "TLC configuration", location: request.configurationFileName),
       ConformanceEvidenceLocation(role: "TLC graph event output", location: request.graphEvents.path)
     ]
     switch self {
@@ -170,16 +170,6 @@ extension TLCProcessError {
       )
     case .invalidModuleBundle(let error):
       switch error {
-      case .missingRootModule(let path):
-        return .init(
-          whatFailed: "The TLC root module is missing.",
-          whereItFailed: "module bundle root \(path)",
-          expected: "A root .tla file exists before TLC starts.",
-          actual: "No file exists at \(path).",
-          systemChange: "TLC was not launched and no comparison was published.",
-          nextSafeAction: "Write the complete module bundle to a fresh directory, then rerun TLC.",
-          evidence: evidence
-        )
       case .unreadableModule(let path, let reason):
         return .init(
           whatFailed: "The emitted TLC module could not be read.",
@@ -320,8 +310,8 @@ private func executionFailureReport(
 
 private func toolEvidence(for request: TLCProcessRequest) -> [ConformanceEvidenceLocation] {
   [
-    .init(role: "TLA+ module", location: request.module.path),
-    .init(role: "TLC configuration", location: request.configuration.path),
+    .init(role: "TLA+ module", location: request.moduleFileName),
+    .init(role: "TLC configuration", location: request.configurationFileName),
     .init(role: "TLC graph event output", location: request.graphEvents.path)
   ]
 }

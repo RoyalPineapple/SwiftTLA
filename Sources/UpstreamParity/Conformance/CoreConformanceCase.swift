@@ -314,6 +314,7 @@ public struct CoreConformanceCasesManifest: Decodable, Sendable {
         public let swiftSpec: String
         public let module: String
         public let configuration: String
+        public let imports: [String]
         public let moduleSHA256: String
         public let cfgSHA256: String
         public let arguments: [String]
@@ -333,7 +334,7 @@ public struct CoreConformanceCasesManifest: Decodable, Sendable {
         public let expectedArtifacts: String
 
         private enum CodingKeys: String, CodingKey, CaseIterable {
-            case id, swiftSpec, module, configuration, moduleSHA256, cfgSHA256
+            case id, swiftSpec, module, configuration, imports, moduleSHA256, cfgSHA256
             case arguments, argumentsSHA256, workers, fingerprintPolynomial, deadlock, replay
             case expectedExit, upstream, fixtures, identityMapping, invocationMappings, valueNormalizations, semanticCitations, governance
             case expectedArtifacts
@@ -345,6 +346,7 @@ public struct CoreConformanceCasesManifest: Decodable, Sendable {
             swiftSpec = try container.decode(String.self, forKey: .swiftSpec)
             module = try container.decode(String.self, forKey: .module)
             configuration = try container.decode(String.self, forKey: .configuration)
+            imports = try container.decode([String].self, forKey: .imports)
             moduleSHA256 = try container.decode(String.self, forKey: .moduleSHA256)
             cfgSHA256 = try container.decode(String.self, forKey: .cfgSHA256)
             arguments = try container.decode([String].self, forKey: .arguments)
@@ -367,6 +369,7 @@ public struct CoreConformanceCasesManifest: Decodable, Sendable {
 
         public func validate() throws {
             guard !id.isEmpty, !swiftSpec.isEmpty, !module.isEmpty, !configuration.isEmpty,
+                  Set(imports).count == imports.count, imports.allSatisfy({ !$0.isEmpty }),
                   !replay.isEmpty, !expectedArtifacts.isEmpty, !upstream.repository.isEmpty,
                   !upstream.commit.isEmpty, !fixtures.module.isEmpty, !fixtures.configuration.isEmpty,
                   !semanticCitations.isEmpty, semanticCitations.allSatisfy({ !$0.isEmpty }) else {

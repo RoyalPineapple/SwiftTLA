@@ -78,6 +78,22 @@ for case in manifest.get("cases", []):
         destination = staged_path(destination_path, field, case_id)
         os.makedirs(os.path.dirname(destination), exist_ok=True)
         shutil.copy2(source, destination)
+    imports = case.get("imports")
+    if not isinstance(imports, list) or not all(isinstance(value, str) and value for value in imports):
+        raise SystemExit(f"case {case_id} imports must be an array of non-empty strings")
+    for index, destination_path in enumerate(imports):
+        field = f"imports[{index}]"
+        source_path = destination_path
+        if not destination_path.startswith("fixtures/"):
+            raise SystemExit(f"case {case_id} {field} must name a retained fixture")
+        source = os.path.realpath(os.path.join(project_root, "Verification", "CoreConformance", source_path))
+        if os.path.commonpath((fixtures_root, source)) != fixtures_root:
+            raise SystemExit(f"case {case_id} {field} fixture is outside retained fixtures")
+        if not os.path.isfile(source):
+            raise SystemExit(f"case {case_id} {field} fixture is missing: {source_path}")
+        destination = staged_path(destination_path, field, case_id)
+        os.makedirs(os.path.dirname(destination), exist_ok=True)
+        shutil.copy2(source, destination)
 PY
 }
 

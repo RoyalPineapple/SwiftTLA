@@ -30,12 +30,17 @@ struct CoreConformanceTLCAdapterTests { @Test("frozen graph stream becomes compl
       to: root, atomically: true, encoding: .utf8)
     try "---- MODULE Functions ----\nEXTENDS Folds\n====\n".write(
       to: functions, atomically: true, encoding: .utf8)
+    try "SPECIFICATION Spec\n".write(
+      to: directory.appendingPathComponent("UsesFunctions.cfg"), atomically: true, encoding: .utf8)
     let request = TLCProcessRequest(
       javaExecutable: URL(fileURLWithPath: "/usr/bin/java"),
       jar: directory.appendingPathComponent("tla2tools.jar"),
       bridgeClasses: directory.appendingPathComponent("bridge"),
-      module: root,
-      configuration: directory.appendingPathComponent("UsesFunctions.cfg"),
+      bundle: try TLCProcessRequest.declaredBundle(
+        root: root,
+        configuration: directory.appendingPathComponent("UsesFunctions.cfg"),
+        imports: [functions]
+      ),
       graphEvents: directory.appendingPathComponent("events.jsonl"),
       traceOutput: directory.appendingPathComponent("trace.json"),
       replayInput: directory.appendingPathComponent("replay.json"),
@@ -50,18 +55,50 @@ struct CoreConformanceTLCAdapterTests { @Test("frozen graph stream becomes compl
       Issue.record("Module-bundle validation accepted a missing Folds.tla dependency.")
     } catch let error as TLCProcessError {
       let expected = TLCProcessError.invalidModuleBundle(.missingImportedModule(
-        module: "Folds", importedBy: functions.path, line: 2,
-        expectedFile: directory.appendingPathComponent("Folds.tla").path
+        module: "Folds", importedBy: "Functions.tla", line: 2,
+        expectedFile: "Folds.tla"
       ))
       #expect(error == expected)
       let report = error.failureReport(for: request)
       #expect(report.whatFailed == "The emitted module bundle is missing an imported formal module.")
-      #expect(report.whereItFailed == "\(functions.path):2, which imports Folds")
+      #expect(report.whereItFailed == "Functions.tla:2, which imports Folds")
       #expect(report.expected.contains("Folds.tla"))
       #expect(report.actual == "The emitted bundle has no Folds.tla file.")
       #expect(report.systemChange == "TLC was not launched and no comparison was published.")
       #expect(report.nextSafeAction.contains("transitive imports"))
     }
+  }
+
+  @Test("TLC stages only the declared bundle, never sibling TLA files")
+  func stagesOnlyDeclaredBundle() throws {
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    let root = directory.appendingPathComponent("OnlyThis.tla")
+    let cfg = directory.appendingPathComponent("OnlyThis.cfg")
+    try "---- MODULE OnlyThis ----\n====\n".write(to: root, atomically: true, encoding: .utf8)
+    try "SPECIFICATION Spec\n".write(to: cfg, atomically: true, encoding: .utf8)
+    try "---- MODULE StaleSibling ----\n====\n".write(
+      to: directory.appendingPathComponent("StaleSibling.tla"), atomically: true, encoding: .utf8)
+    let request = TLCProcessRequest(
+      javaExecutable: URL(fileURLWithPath: "/usr/bin/java"),
+      jar: directory.appendingPathComponent("tla2tools.jar"),
+      bridgeClasses: directory.appendingPathComponent("bridge"),
+      bundle: try TLCProcessRequest.declaredBundle(root: root, configuration: cfg),
+      graphEvents: directory.appendingPathComponent("events.jsonl"),
+      traceOutput: directory.appendingPathComponent("trace.json"),
+      replayInput: directory.appendingPathComponent("replay.json"),
+      workingDirectory: directory.appendingPathComponent("work"),
+      arguments: [],
+      expectedCase: fixtureCase(.fixture),
+      runID: UUID()
+    )
+
+    let staged = try request.stageDeclaredBundle()
+    let names = try FileManager.default.contentsOfDirectory(
+      at: staged.module.deletingLastPathComponent(), includingPropertiesForKeys: nil
+    ).map(\.lastPathComponent).sorted()
+    #expect(names == ["OnlyThis.cfg", "OnlyThis.tla"])
   }
 
   @Test("TLC bundle validation uses the pinned toolchain inventory")
@@ -81,13 +118,17 @@ struct CoreConformanceTLCAdapterTests { @Test("frozen graph stream becomes compl
     ====
     """.write(
       to: module, atomically: true, encoding: .utf8)
+    try "SPECIFICATION Spec\n".write(
+      to: directory.appendingPathComponent("Trace.cfg"), atomically: true, encoding: .utf8)
     let fixture = TLCProcessRequest.fixture
     let request = TLCProcessRequest(
       javaExecutable: fixture.javaExecutable,
       jar: fixture.jar,
       bridgeClasses: fixture.bridgeClasses,
-      module: module,
-      configuration: directory.appendingPathComponent("Trace.cfg"),
+      bundle: try TLCProcessRequest.declaredBundle(
+        root: module,
+        configuration: directory.appendingPathComponent("Trace.cfg")
+      ),
       graphEvents: directory.appendingPathComponent("events.jsonl"),
       traceOutput: directory.appendingPathComponent("trace.json"),
       replayInput: directory.appendingPathComponent("replay.json"),
@@ -267,8 +308,7 @@ struct CoreConformanceTLCAdapterTests { @Test("frozen graph stream becomes compl
       javaExecutable: URL(fileURLWithPath: "/usr/bin/java"),
       jar: URL(fileURLWithPath: "/tmp/tla2tools.jar"),
       bridgeClasses: URL(fileURLWithPath: "/tmp/bridge-classes"),
-      module: URL(fileURLWithPath: "/tmp/Fixture.tla"),
-      configuration: URL(fileURLWithPath: "/tmp/Fixture.cfg"),
+      bundle: .fixture.bundle,
       graphEvents: URL(fileURLWithPath: "/tmp/events.jsonl"),
       traceOutput: URL(fileURLWithPath: "/tmp/trace.json"),
       replayInput: URL(fileURLWithPath: "/tmp/replay.json"),
@@ -277,7 +317,11 @@ struct CoreConformanceTLCAdapterTests { @Test("frozen graph stream becomes compl
       expectedCase: fixtureCase(.fixture, arguments: ["-workers", "1"]),
       runID: UUID(uuidString: "00000000-0000-4000-8000-000000000001")!,
     )
-    let command = try request.commandArguments(traceMode: .dumpJSON)
+    let command = try request.commandArguments(
+      module: URL(fileURLWithPath: "/tmp/Fixture.tla"),
+      configuration: URL(fileURLWithPath: "/tmp/Fixture.cfg"),
+      traceMode: .dumpJSON
+    )
     #expect(command.contains("-Dswifttla.tlc.graph.path=/tmp/events.jsonl"))
     #expect(
       command.contains(where: {
@@ -365,7 +409,7 @@ extension CoreConformanceTLCAdapterTests {
     try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: executable.path)
     let request = TLCProcessRequest(
       javaExecutable: executable, jar: URL(fileURLWithPath: "/tmp/jar"), bridgeClasses: directory,
-      module: module, configuration: configuration,
+      bundle: try TLCProcessRequest.declaredBundle(root: module, configuration: configuration),
       graphEvents: directory.appendingPathComponent("events.jsonl"),
       traceOutput: directory.appendingPathComponent("trace.json"),
       replayInput: directory.appendingPathComponent("replay.json"), workingDirectory: directory,
@@ -588,30 +632,48 @@ extension CoreConformanceTLCAdapterTests {
     try "cfg bytes".write(to: configuration, atomically: true, encoding: .utf8)
     let expectedCase = caseForFiles(
       id: "bound", module: module, configuration: configuration, arguments: ["-workers", "1"])
-    let valid = launchRequest(
+    let valid = try launchRequest(
       expectedCase: expectedCase, module: module, configuration: configuration,
       arguments: ["-workers", "1"])
-    try valid.validateLaunchBinding()
-    let command = try valid.commandArguments()
+    let staged = try valid.stageDeclaredBundle()
+    try valid.validateLaunchBinding(module: staged.module, configuration: staged.configuration)
+    let command = try valid.commandArguments(module: staged.module, configuration: staged.configuration)
     #expect(
       command.contains(where: {
         $0.contains(expectedCase.moduleSHA256) && $0.contains(expectedCase.argumentsSHA256)
       }))
-    try "wrong module".write(to: module, atomically: true, encoding: .utf8)
+    let wrongModule = TLAModuleBundle.untrusted(
+      root: TLAModuleFile(name: "Module", tla: "wrong module", cfg: "cfg bytes")
+    )
+    let wrongModuleRequest = TLCProcessRequest(
+      javaExecutable: valid.javaExecutable, jar: valid.jar, bridgeClasses: valid.bridgeClasses,
+      bundle: wrongModule, graphEvents: valid.graphEvents, traceOutput: valid.traceOutput,
+      replayInput: valid.replayInput, workingDirectory: directory.appendingPathComponent("wrong-module"),
+      arguments: valid.arguments, expectedCase: expectedCase, runID: UUID()
+    )
     #expect(throws: CoreConformanceCaseError.moduleDigestMismatch) {
-      try valid.validateLaunchBinding()
+      let wrongStaged = try wrongModuleRequest.stageDeclaredBundle()
+      try wrongModuleRequest.validateLaunchBinding(module: wrongStaged.module, configuration: wrongStaged.configuration)
     }
-    try "module bytes".write(to: module, atomically: true, encoding: .utf8)
-    try "wrong cfg".write(to: configuration, atomically: true, encoding: .utf8)
+    let wrongConfiguration = TLAModuleBundle.untrusted(
+      root: TLAModuleFile(name: "Module", tla: "module bytes", cfg: "wrong cfg")
+    )
+    let wrongConfigurationRequest = TLCProcessRequest(
+      javaExecutable: valid.javaExecutable, jar: valid.jar, bridgeClasses: valid.bridgeClasses,
+      bundle: wrongConfiguration, graphEvents: valid.graphEvents, traceOutput: valid.traceOutput,
+      replayInput: valid.replayInput, workingDirectory: directory.appendingPathComponent("wrong-configuration"),
+      arguments: valid.arguments, expectedCase: expectedCase, runID: UUID()
+    )
     #expect(throws: CoreConformanceCaseError.cfgDigestMismatch) {
-      try valid.validateLaunchBinding()
+      let wrongStaged = try wrongConfigurationRequest.stageDeclaredBundle()
+      try wrongConfigurationRequest.validateLaunchBinding(module: wrongStaged.module, configuration: wrongStaged.configuration)
     }
-    try "cfg bytes".write(to: configuration, atomically: true, encoding: .utf8)
-    let wrongArguments = launchRequest(
+    let wrongArguments = try launchRequest(
       expectedCase: expectedCase, module: module, configuration: configuration,
       arguments: ["-workers", "2"])
     #expect(throws: CoreConformanceCaseError.executionArgumentsMismatch) {
-      try wrongArguments.validateLaunchBinding()
+      let wrongStaged = try wrongArguments.stageDeclaredBundle()
+      try wrongArguments.validateLaunchBinding(module: wrongStaged.module, configuration: wrongStaged.configuration)
     }
   }
 }
