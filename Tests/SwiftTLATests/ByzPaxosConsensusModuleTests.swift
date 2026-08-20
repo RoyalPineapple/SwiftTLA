@@ -43,12 +43,27 @@ struct ByzPaxosConsensusModuleTests {
   }
 
   @Test("direct module dependencies can name executable formal operators")
-  func acceptsFormalOperatorDependency() throws {
+  func rendersFormalOperatorDependencyBeforeItsUse() throws {
     let consumer = TLASpec("FormalDependency") {
       FormalDefinition("SafeAt", taking: Int.self) { _ in true }
       Definition("TypeOK == SafeAt(1)", named: "TypeOK", dependsOn: ["SafeAt"])
     }
 
-    _ = try consumer.compile()
+    let source = try consumer.compile().renderedTLAModuleBundle().tla
+    let operatorRange = try #require(source.range(of: "SafeAt(value0) == TRUE"))
+    let useRange = try #require(source.range(of: "TypeOK == SafeAt(1)"))
+    #expect(operatorRange.lowerBound < useRange.lowerBound)
+  }
+
+  @Test("direct module declaration cycles fail before rendering")
+  func rejectsCyclicDirectModuleDependencies() {
+    let consumer = TLASpec("CyclicDependencies") {
+      Definition("First == Second", named: "First", dependsOn: ["Second"])
+      Definition("Second == First", named: "Second", dependsOn: ["First"])
+    }
+
+    #expect(throws: CompilationDiagnostic.self) {
+      try consumer.compile()
+    }
   }
 }
