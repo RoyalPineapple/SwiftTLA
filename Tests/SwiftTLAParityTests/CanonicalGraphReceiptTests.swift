@@ -79,6 +79,22 @@ struct CanonicalGraphReceiptTests {
     #expect(complete != failed)
   }
 
+  @Test("canonical graph receipt chunks large record sets deterministically")
+  func chunksLargeGraphs() throws {
+    let states = (0...CanonicalGraphReceipt.recordsPerChunk).map {
+      state(counter: $0, values: [.integer($0)])
+    }
+    guard let initial = states.first else {
+      throw ChunkFixtureError.missingInitialState
+    }
+    let forward = try CanonicalGraph(initialStates: [initial], states: states, edges: [])
+    let reverse = try CanonicalGraph(initialStates: [initial], states: Array(states.reversed()), edges: [])
+
+    let forwardReceipt = receipt(forward)
+    #expect(forwardReceipt.graphChunkDigests.count == 2)
+    #expect(forwardReceipt == receipt(reverse))
+  }
+
   private func state(counter: Int, values: [CanonicalValue]) -> CanonicalState {
     CanonicalState(bindings: [
       "counter": .integer(counter),
@@ -113,5 +129,9 @@ struct CanonicalGraphReceiptTests {
       outcome: outcome,
       diagnostics: diagnostics
     )
+  }
+
+  private enum ChunkFixtureError: Error {
+    case missingInitialState
   }
 }

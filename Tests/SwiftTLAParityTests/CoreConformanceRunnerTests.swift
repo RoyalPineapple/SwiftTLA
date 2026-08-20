@@ -240,6 +240,42 @@ struct CoreConformanceRunnerTests {
     #expect(observations.contains { ($0["enabledActions"] as? [String]) == ["Next"] })
     #expect(observations.contains { ($0["isTerminal"] as? Bool) == true })
   }
+
+  @Test("routine matching evidence retains receipts instead of canonical graph copies")
+  func retainsRoutineReceiptOnly() throws {
+    let fileManager = FileManager.default
+    let root = fileManager.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? fileManager.removeItem(at: root) }
+    try fileManager.createDirectory(at: root, withIntermediateDirectories: true)
+    let request = temporaryRequest(in: root)
+    let output = root.appendingPathComponent("routine-evidence")
+    let result = CoreConformanceRunner(
+      tlcAdapter: TLCProcessAdapter(
+        executor: FixtureTLCExecutor(stream: try graphStream(for: request.expectedCase, runID: request.runID))
+    ).run(
+      case: request.expectedCase,
+      swiftExploration: {
+        SwiftExplorationEvidence(
+          caseID: request.expectedCase.id,
+          exploration: swiftExploration(action: "Next"),
+          compiledModelIdentity: "fixture-model",
+          maximumStateLimit: 10
+        )
+      },
+      tlcRequest: request,
+      replay: .none,
+      outputDirectory: output,
+      retention: .routine
+    )
+
+    #expect(result.exitCode == .exact)
+    #expect(fileManager.fileExists(atPath: output.appendingPathComponent("receipts.json").path))
+    #expect(fileManager.fileExists(atPath: output.appendingPathComponent("case.json").path))
+    #expect(fileManager.fileExists(atPath: output.appendingPathComponent("arguments.json").path))
+    #expect(!fileManager.fileExists(atPath: output.appendingPathComponent("swift.json").path))
+    #expect(!fileManager.fileExists(atPath: output.appendingPathComponent("tlc.json").path))
+    #expect(!fileManager.fileExists(atPath: output.appendingPathComponent("comparison.json").path))
+  }
 }
 
 extension CoreConformanceRunnerTests {
