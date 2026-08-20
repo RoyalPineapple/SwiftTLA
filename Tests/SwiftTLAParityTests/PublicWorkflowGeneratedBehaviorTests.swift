@@ -17,7 +17,7 @@ struct PublicWorkflowGeneratedBehaviorTests {
   @MainActor
   func nestedFixtureAdaptersMatchTheCanonicalCounter() async throws {
     let invocation = TLAActionInvocation(name: "advance")
-    var model = P4GeneratedCounter()
+    var model = try P4GeneratedCounter.makeMachine()
     let observable = P4GeneratedCounter.Observable()
     let actor = P4GeneratedCounter.Actor()
 

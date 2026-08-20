@@ -524,13 +524,6 @@ struct SimpleError: Error, CustomStringConvertible {
 
 // MARK: - Macros
 
-private func hasZeroArgumentInitializer(in declaration: some DeclGroupSyntax) -> Bool {
-    declaration.memberBlock.members.contains { member in
-        guard let initializer = member.decl.as(InitializerDeclSyntax.self) else { return false }
-        return initializer.signature.parameterClause.parameters.isEmpty
-    }
-}
-
 public struct ModelMacro: MemberMacro, ExtensionMacro {
     public static func expansion(of node: AttributeSyntax, attachedTo declaration: some DeclGroupSyntax, providingExtensionsOf type: some TypeSyntaxProtocol, conformingTo protocols: [TypeSyntax], in context: some MacroExpansionContext) throws -> [ExtensionDeclSyntax] {
         guard diagnoseStoredInstanceState(in: declaration, context: context) == false else {
@@ -554,11 +547,7 @@ public struct ModelMacro: MemberMacro, ExtensionMacro {
             return []
         }
         NestedAdapterModelRegistry.record(parsed)
-        return MacroExpander.generate(
-            mode: .model,
-            model: parsed,
-            needsPublicInitializer: !hasZeroArgumentInitializer(in: declaration)
-        )
+        return MacroExpander.generate(mode: .model, model: parsed)
     }
 }
 
@@ -587,8 +576,7 @@ public struct TLAActorMacro: MemberMacro, ExtensionMacro {
             }
             return MacroExpander.generateNestedAdapterMembers(
                 kind: .actor,
-                canonicalModel: parsed,
-                needsPublicInitializer: !hasZeroArgumentInitializer(in: declaration)
+                canonicalModel: parsed
             )
         case .invalid:
             return []
@@ -621,8 +609,7 @@ public struct TLAObservableMacro: MemberMacro, ExtensionMacro {
             }
             return MacroExpander.generateNestedAdapterMembers(
                 kind: .observable,
-                canonicalModel: parsed,
-                needsPublicInitializer: !hasZeroArgumentInitializer(in: declaration)
+                canonicalModel: parsed
             )
         case .invalid:
             return []

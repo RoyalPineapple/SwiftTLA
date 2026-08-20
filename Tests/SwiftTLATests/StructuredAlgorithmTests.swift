@@ -78,7 +78,7 @@ struct StructuredAlgorithmTests {
     func generatedStateRetainsNestedTypedRecordUpdate() throws {
         StructuredCarModel._checkParserTree()
 
-        var model = StructuredCarModel()
+        var model = try StructuredCarModel.makeMachine()
         let result = try model.apply(.open(process: .north))
 
         #expect(result.before.cars[.north][StructuredCarModel.CarRecord.door] == .closed)

@@ -55,7 +55,7 @@ struct FormalOperatorTests {
   func generatedHigherOrderFormalDefinitionPreservesParserFidelity() throws {
     GeneratedHigherOrderFormalModel._checkParserTree()
 
-    var model = GeneratedHigherOrderFormalModel()
+    var model = try GeneratedHigherOrderFormalModel.makeMachine()
     let result = try model.apply(.advance)
     #expect(result.after.counter == 1)
   }

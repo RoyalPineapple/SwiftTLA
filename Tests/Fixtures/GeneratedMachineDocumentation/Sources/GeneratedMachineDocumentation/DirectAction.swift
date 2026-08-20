@@ -3,7 +3,7 @@
 import SwiftTLA
 
 func runDirectAction() throws {
-    var machine = BoundedCounter()
+    var machine = try BoundedCounter.makeMachine()
     let actions = try machine.availableActions()
     let result = try machine.apply(.advance)
 

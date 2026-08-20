@@ -41,7 +41,7 @@ struct NestedComposableMacroConformanceTests {
     @MainActor
     func nestedSurfacesShareCanonicalExecution() async throws {
         let invocation = TLAActionInvocation(name: "advance")
-        var model = NestedComposedCounter()
+        var model = try NestedComposedCounter.makeMachine()
         var observable = NestedComposedCounter.Observable()
         var actor = NestedComposedCounter.Actor()
 
