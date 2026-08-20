@@ -1,6 +1,17 @@
 struct CompiledActionEnumerator {
     let state: FormalState
     let model: CompiledModel
+    let enabledActions: Set<ActionID>
+
+    init(
+        state: FormalState,
+        model: CompiledModel,
+        enabledActions: Set<ActionID> = []
+    ) {
+        self.state = state
+        self.model = model
+        self.enabledActions = enabledActions
+    }
 
     func enumerate(_ action: CompiledAction) throws -> [FormalState] {
         try enumerateResults(action).map(\.state)
@@ -27,7 +38,12 @@ struct CompiledActionEnumerator {
         state: FormalState,
         bindings: CompiledBindings
     ) throws -> [CompiledActionDelta] {
-        let evaluator = CompiledEvaluator(state: state, model: model, bindings: bindings)
+        let evaluator = CompiledEvaluator(
+            state: state,
+            model: model,
+            bindings: bindings,
+            enabledActions: enabledActions
+        )
         switch action {
         case .assign(let variable, let expression):
             return [.init(assignments: [variable: try evaluator.evaluate(expression)])]
@@ -91,7 +107,12 @@ struct CompiledActionEnumerator {
         try choices.reduce([[:]]) { selections, choice in
             try selections.flatMap { selection in
                 let selectionState = try state.updating(selection)
-                let evaluator = CompiledEvaluator(state: selectionState, model: model, bindings: bindings)
+                let evaluator = CompiledEvaluator(
+                    state: selectionState,
+                    model: model,
+                    bindings: bindings,
+                    enabledActions: enabledActions
+                )
                 guard case .set(let values) = try evaluator.evaluate(choice.1) else {
                     throw EvalError.typeMismatch("CHOOSE requires a set")
                 }

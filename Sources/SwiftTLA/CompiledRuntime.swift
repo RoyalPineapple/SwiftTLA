@@ -36,16 +36,25 @@ struct CompiledRuntime {
     }
 
     func successors(from state: FormalState) throws -> [CompiledSuccessor] {
-        try model.actions.flatMap { action in
-            try successors(for: action.id, from: state)
+        let enabledActions = try enabledActions(in: state)
+        return try model.actions.flatMap { action in
+            try successors(for: action.id, from: state, enabledActions: enabledActions)
         }
     }
 
     func successors(for actionID: ActionID, from state: FormalState) throws -> [CompiledSuccessor] {
+        return try successors(for: actionID, from: state, enabledActions: try enabledActions(in: state))
+    }
+
+    private func successors(
+        for actionID: ActionID,
+        from state: FormalState,
+        enabledActions: Set<ActionID>
+    ) throws -> [CompiledSuccessor] {
         guard let action = model.actions.first(where: { $0.id == actionID }) else {
             throw CompiledEvaluationError.unresolvedOperator
         }
-        return try CompiledActionEnumerator(state: state, model: model)
+        return try CompiledActionEnumerator(state: state, model: model, enabledActions: enabledActions)
             .enumerateResults(action)
             .filter { successor in try constraintHolds(in: successor.state) }
             .map { .init(action: actionID, arguments: $0.arguments, state: $0.state) }
@@ -57,7 +66,7 @@ struct CompiledRuntime {
     }
 
     func invariantHolds(_ invariant: CompiledInvariant, in state: FormalState) throws -> Bool {
-        try boolean(invariant.body, in: state)
+        return try boolean(invariant.body, in: state, enabledActions: try enabledActions(in: state))
     }
 
     func canonicalState(_ state: FormalState) -> FormalState {
@@ -85,8 +94,26 @@ struct CompiledRuntime {
         return try boolean(constraint, in: state)
     }
 
-    private func boolean(_ expression: CompiledStateExpr, in state: FormalState) throws -> Bool {
-        guard case .bool(let result) = try CompiledEvaluator(state: state, model: model).evaluate(expression) else {
+    private func enabledActions(in state: FormalState) throws -> Set<ActionID> {
+        var result = Set<ActionID>()
+        for action in model.actions {
+            if try !CompiledActionEnumerator(state: state, model: model).enumerate(action).isEmpty {
+                result.insert(action.id)
+            }
+        }
+        return result
+    }
+
+    private func boolean(
+        _ expression: CompiledStateExpr,
+        in state: FormalState,
+        enabledActions: Set<ActionID> = []
+    ) throws -> Bool {
+        guard case .bool(let result) = try CompiledEvaluator(
+            state: state,
+            model: model,
+            enabledActions: enabledActions
+        ).evaluate(expression) else {
             throw EvalError.typeMismatch("Expected a boolean")
         }
         return result
