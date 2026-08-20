@@ -323,10 +323,6 @@ For an action problem, collect these public values:
 - the returned `TransitionResult`, when execution succeeds
 - the `GeneratedMachineError`, when execution fails
 
-`TLAMachineAvailabilityDiagnostic` has `evaluationFailed` and
-`stateProjectionFailed` codes. An unavailable observation does not make a raw
-state map public. An execution failure does not commit a successor state.
-
 For a macro expansion problem, collect the macro diagnostic and model source.
 When the macro provides the invariant name and trace, record them. Record the explored
 state count, limit, Swift toolchain, and platform context.
