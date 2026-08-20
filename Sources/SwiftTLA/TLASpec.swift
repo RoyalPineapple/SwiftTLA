@@ -597,11 +597,6 @@ public struct ExtendsDecl: SpecComponent, Equatable {
   public let modules: String
   init(_ modules: String) { self.modules = modules }
 }
-public struct UseDecl: SpecComponent {
-  public let spec: TLASpec
-  init(_ spec: TLASpec) { self.spec = spec }
-}
-
 public struct ConstraintDecl: SpecComponent, Equatable {
   public let body: StateExpr
   init(_ body: StateExpr) { self.body = body }
@@ -659,7 +654,6 @@ public enum SpecBuilder {
   public static func buildExpression(_ expr: TheoremDecl) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: AssumeDecl) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: ExtendsDecl) -> [SpecComponent] { [expr] }
-  public static func buildExpression(_ expr: UseDecl) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: ImportDecl) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: FormalModuleInstance) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: DeadlockDecl) -> [SpecComponent] { [expr] }
@@ -912,9 +906,6 @@ public func Constraint(_ expr: some StateExprConvertible) -> ConstraintDecl {
 }
 public func Recursive(_ tlaText: String) -> RecursiveDecl {
   RecursiveDecl(tlaText)
-}
-public func Use(spec: TLASpec) -> UseDecl {
-  UseDecl(spec)
 }
 public func DefineRecursive(
   _ name: String, params: [String], @InvariantBuilder body: () -> StateExpr

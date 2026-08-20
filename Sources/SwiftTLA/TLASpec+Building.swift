@@ -22,10 +22,9 @@ extension TLASpec {
     var recursiveFuncs: [RecursiveFunc] = []
     var formalOperatorDefinitions: [FormalOperatorDefinition] = []
     let imports = components.compactMap { $0 as? ImportDecl }
-    var importedModules = imports.map(\.module)
-    var importConfigurations = imports.compactMap(\.configuration)
-    var moduleInstances = components.compactMap { $0 as? FormalModuleInstance }
-    var useSpecs: [TLASpec] = []
+    let importedModules = imports.map(\.module)
+    let importConfigurations = imports.compactMap(\.configuration)
+    let moduleInstances = components.compactMap { $0 as? FormalModuleInstance }
     var runtimeFuncCollector: [String: @Sendable ([TLAValue]) -> TLAValue] = [:]
     var runtimeFuncBodiesCollector: [String] = []
     var symmetrySets: [SymmetrySet] = []
@@ -142,8 +141,6 @@ extension TLASpec {
         recursiveDefs.append(r.tlaText)
       } else if let rf = comp as? RecursiveFuncDecl {
         recursiveFuncs.append(rf.funcDef)
-      } else if let u = comp as? UseDecl {
-        useSpecs.append(u.spec)
       } else if let rtf = comp as? RuntimeFuncDecl {
         runtimeFuncCollector[rtf.name] = rtf.implementation
         runtimeFuncBodiesCollector.append(rtf.tlaBody)
@@ -166,32 +163,6 @@ extension TLASpec {
           actions.append(NamedAction(name: name, body: body))
         }
       }
-    }
-
-    // Apply Use(spec) — compose used specs into this one
-    for used in useSpecs {
-      variables += used.variables
-      actions += used.actions
-      invariants += used.invariants
-      constants.merge(used.constants) { $1 }
-      formalParameters += used.formalParameters
-      definitions += used.definitions
-      authoredPlusCalDeclarations += used.authoredPlusCalDeclarations
-      recursiveDefs += used.recursiveDefs
-      recursiveFuncs += used.recursiveFuncs
-      formalOperatorDefinitions += used.formalOperatorDefinitions
-      importedModules += used.imports
-      importConfigurations += used.importConfigurations
-      moduleInstances += used.moduleInstances
-      temporalProperties += used.temporalProperties
-      fairness += used.fairness
-      if let usedAssume = used.assume {
-        assumes = assumes.map { .and($0, usedAssume) } ?? usedAssume
-      }
-      if let c = used.constraint { constraint = constraint.map { .and($0, c) } ?? c }
-      if let a = used.assume { assumes = assumes.map { .and($0, a) } ?? a }
-      symmetrySets += used.symmetrySets
-      symmetricCollections += used.symmetricCollections
     }
 
     // Auto-UNCHANGED: push into OR branches so TLC sees complete assignments

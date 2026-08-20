@@ -12,11 +12,9 @@ struct SymmetryReductionTests { @Test("Symmetry reduces ChangRoberts state count
     let mcNoSym = try ModelChecker(spec: specNoSym, maxStates: 500)
     let graphNoSym = try mcNoSym.exploreGraph()
     #expect(graphNoSym.states.count == 137)
-    let specWithSym = TLASpec("ChangRobertsSym") {
-      Extends("Integers")
-      Use(spec: specNoSym)
+    let specWithSym = specNoSym.extending(TLASpec("ChangRobertsSym") {
       Symmetry("pc", [1, 2, 3] as Set<Int>)
-    }
+    })
     let mcWithSym = try ModelChecker(spec: specWithSym, maxStates: 500)
     let graphWithSym = try mcWithSym.exploreGraph()
     #expect(graphWithSym.states.count < 137)
