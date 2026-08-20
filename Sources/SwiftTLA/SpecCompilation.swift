@@ -33,6 +33,7 @@ public struct CompiledSpecification: Sendable {
     let bindings: CompiledBindingTable
     let model: CompiledModel
     let directModuleSections: DirectModuleSectionPlan
+    let authoredPlusCalModule: AuthoredPlusCalModule?
 
     init(
         spec: TLASpec,
@@ -40,7 +41,8 @@ public struct CompiledSpecification: Sendable {
         identity: CompilationIdentity,
         bindings: CompiledBindingTable,
         model: CompiledModel,
-        directModuleSections: DirectModuleSectionPlan
+        directModuleSections: DirectModuleSectionPlan,
+        authoredPlusCalModule: AuthoredPlusCalModule? = nil
     ) {
         self.spec = spec
         self.formalModuleClosure = formalModuleClosure
@@ -50,6 +52,7 @@ public struct CompiledSpecification: Sendable {
         self.bindings = bindings
         self.model = model
         self.directModuleSections = directModuleSections
+        self.authoredPlusCalModule = authoredPlusCalModule
     }
 
     /// Renders a complete TLA+/CFG bundle from the already-linked closure.
@@ -195,10 +198,19 @@ public struct CompiledSpecification: Sendable {
     public func authoredPlusCalBundle(
         additionalImports: [TLAModuleFile] = []
     ) throws -> TLAModuleBundle {
+        guard let authoredPlusCalModule else {
+            throw AlgorithmPlusCalRenderDiagnostic(
+                failedConcept: "authored PlusCal module root",
+                path: "TLASpec.sourceAlgorithms",
+                expected: "exactly one authored Algorithm",
+                actual: "\(spec.sourceAlgorithms.count) authored Algorithms",
+                nextSafeAction: "Compile one canonical Algorithm model per exported module."
+            )
+        }
         let directBundle = try renderedTLAModuleBundle(additionalImports: additionalImports)
         let root = TLAModuleFile(
             name: directBundle.root.name,
-            tla: try spec.renderAuthoredPlusCalModule(),
+            tla: try AlgorithmPlusCalRenderer(model: authoredPlusCalModule.algorithm).render(authoredPlusCalModule),
             cfg: directBundle.root.cfg
         )
         let bundle: TLAModuleBundle
@@ -367,13 +379,15 @@ public extension TLASpec {
         let bindings = try validator.validate(spec: self)
         let model = try CompiledLowerer(bindings: bindings, closure: closure).lower(spec: self)
         let directModuleSections = try directModuleSectionPlan()
+        let authoredPlusCalModule = try authoredPlusCalModule()
         return CompiledSpecification(
             spec: self,
             formalModuleClosure: closure,
             identity: .init(value: compilationFingerprint),
             bindings: bindings,
             model: model,
-            directModuleSections: directModuleSections
+            directModuleSections: directModuleSections,
+            authoredPlusCalModule: authoredPlusCalModule
         )
     }
 
