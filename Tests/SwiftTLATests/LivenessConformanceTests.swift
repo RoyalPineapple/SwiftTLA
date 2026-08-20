@@ -31,8 +31,31 @@ struct LivenessConformanceTests {
         )
     }
 
+    private func analyze(
+        _ graph: StateGraph,
+        property: TemporalExpr,
+        fairness: [FairnessCondition] = [],
+        actions: [NamedAction] = [],
+        initialStateIDs: [StateGraph.StateID],
+        isComplete: Bool = true
+    ) throws -> TemporalAnalysisResult {
+        let spec = TLASpec(
+            name: graph.specName,
+            variables: [NamedVar(name: "x", initial: .int(0))],
+            actions: actions,
+            invariants: [],
+            temporalProperties: [NamedTemporal(name: "property", expr: property)],
+            fairness: fairness
+        )
+        let checker = LivenessChecker(compilation: try spec.compile(), graph: graph)
+        return try #require(checker.analyze(
+            initialStateIDs: initialStateIDs,
+            isComplete: isComplete
+        ).first)
+    }
+
     @Test("reachable nonterminal avoiding subcycle has a canonical fair-lasso witness")
-    func findsReachableNonterminalAvoidingSubcycle() {
+    func findsReachableNonterminalAvoidingSubcycle() throws {
         let initial = StateGraph.StateID(0)
         let left = StateGraph.StateID(1)
         let right = StateGraph.StateID(2)
@@ -53,7 +76,6 @@ struct LivenessConformanceTests {
                 terminal: fixtureProjection(["x": .int(3)])
             ]
         )
-        let checker = LivenessChecker(graph: graph)
         let property: StateExpr = .or(
             .equal(.variable("x"), .value(.int(0))),
             .equal(.variable("x"), .value(.int(3)))
@@ -66,8 +88,9 @@ struct LivenessConformanceTests {
             NamedAction(name: "done", body: .guard_(true))
         ]
 
-        let result = checker.analyze(
-            .alwaysEventually(property),
+        let result = try analyze(
+            graph,
+            property: .alwaysEventually(property),
             fairness: [],
             actions: actions,
             initialStateIDs: [initial]
@@ -79,9 +102,8 @@ struct LivenessConformanceTests {
     }
 
     @Test("the temporal form matrix returns fair-lasso violations")
-    func temporalFormMatrix() {
+    func temporalFormMatrix() throws {
         let graph = graph(transitions: [:], values: [initial: 0])
-        let checker = LivenessChecker(graph: graph)
         let falsePredicate = predicate(1)
         let truePredicate = predicate(0)
         let cases: [(String, TemporalExpr)] = [
@@ -93,14 +115,14 @@ struct LivenessConformanceTests {
         ]
 
         for (name, property) in cases {
-            let result = checker.analyze(property, fairness: [], actions: [], initialStateIDs: [initial])
+            let result = try analyze(graph, property: property, initialStateIDs: [initial])
             #expect(result.status == .violated, "Expected \(name) to have a stuttering counterexample")
             #expect(result.witness?.cycle == [initial, initial])
         }
     }
 
     @Test("leads-to lasso stays outside Q after its P and not-Q trigger")
-    func leadsToPrefixNeverCrossesQ() {
+    func leadsToPrefixNeverCrossesQ() throws {
         let qState = StateGraph.StateID(1)
         let trigger = StateGraph.StateID(2)
         let safe = StateGraph.StateID(3)
@@ -115,9 +137,9 @@ struct LivenessConformanceTests {
             ],
             values: [initial: 0, qState: 2, trigger: 1, safe: 0, cycle: 0]
         )
-        let checker = LivenessChecker(graph: graph)
-        let result = checker.analyze(
-            .leadsTo(predicate(1), predicate(2)),
+        let result = try analyze(
+            graph,
+            property: .leadsTo(predicate(1), predicate(2)),
             fairness: [.weakFairness("A")],
             actions: [action("trigger"), action("A"), action("B"), action("fromQ"), action("safeCycle"), action("loop")],
             initialStateIDs: [initial]
@@ -138,7 +160,7 @@ struct LivenessConformanceTests {
     }
 
     @Test("canonical witness uses the globally shortest cycle entry")
-    func canonicalWitnessUsesShortestCycleEntry() {
+    func canonicalWitnessUsesShortestCycleEntry() throws {
         let far = StateGraph.StateID(1)
         let near = StateGraph.StateID(2)
         let bridge = StateGraph.StateID(3)
@@ -151,8 +173,9 @@ struct LivenessConformanceTests {
             ],
             values: [initial: 1, far: 0, near: 0, bridge: 1]
         )
-        let result = LivenessChecker(graph: graph).analyze(
-            .alwaysEventually(predicate(1)),
+        let result = try analyze(
+            graph,
+            property: .alwaysEventually(predicate(1)),
             fairness: [],
             actions: [action("bridge"), action("far"), action("near"), action("toNear"), action("toFar")],
             initialStateIDs: [initial]
@@ -163,15 +186,16 @@ struct LivenessConformanceTests {
     }
 
     @Test("eventually is satisfied when P holds in the initial state")
-    func eventuallyDoesNotTreatPostSatisfactionLoopAsAViolation() {
+    func eventuallyDoesNotTreatPostSatisfactionLoopAsAViolation() throws {
         let avoiding = StateGraph.StateID(1)
         let graph = graph(
             transitions: [initial: [.init(label: .init(.init(name: "leave")), target: avoiding)]],
             values: [initial: 1, avoiding: 0]
         )
 
-        let result = LivenessChecker(graph: graph).analyze(
-            .eventually(predicate(1)),
+        let result = try analyze(
+            graph,
+            property: .eventually(predicate(1)),
             fairness: [],
             actions: [action("leave")],
             initialStateIDs: [initial]
@@ -182,7 +206,7 @@ struct LivenessConformanceTests {
     }
 
     @Test("canonical witness chooses the shortest cycle after an equal prefix")
-    func canonicalWitnessPrefersShortestCycleAfterEqualPrefix() {
+    func canonicalWitnessPrefersShortestCycleAfterEqualPrefix() throws {
         let longA = StateGraph.StateID(1)
         let longB = StateGraph.StateID(2)
         let longC = StateGraph.StateID(3)
@@ -200,8 +224,9 @@ struct LivenessConformanceTests {
             values: [initial: 1, longA: 0, longB: 0, longC: 0, shortA: 0, shortB: 0]
         )
 
-        let result = LivenessChecker(graph: graph).analyze(
-            .alwaysEventually(predicate(1)),
+        let result = try analyze(
+            graph,
+            property: .alwaysEventually(predicate(1)),
             fairness: [.weakFairness("A")],
             actions: [action("long"), action("short"), action("A")],
             initialStateIDs: [initial]
@@ -213,7 +238,7 @@ struct LivenessConformanceTests {
     }
 
     @Test("same-SCC fair-cycle search prefers the shorter valid action loop")
-    func sameSCCFairCycleSearchPrefersShortLoop() {
+    func sameSCCFairCycleSearchPrefersShortLoop() throws {
         let longA = StateGraph.StateID(1)
         let longB = StateGraph.StateID(2)
         let longC = StateGraph.StateID(3)
@@ -229,8 +254,9 @@ struct LivenessConformanceTests {
             values: [initial: 0, longA: 0, longB: 0, longC: 0, short: 0]
         )
 
-        let result = LivenessChecker(graph: graph).analyze(
-            .alwaysEventually(predicate(1)),
+        let result = try analyze(
+            graph,
+            property: .alwaysEventually(predicate(1)),
             fairness: [.weakFairness("A")],
             actions: [action("A"), action("loop")],
             initialStateIDs: [initial]
@@ -242,7 +268,7 @@ struct LivenessConformanceTests {
     }
 
     @Test("disabled fairness alternative wins inside an SCC that also contains A")
-    func disabledFairnessAlternativeWinsInsideMixedSCC() {
+    func disabledFairnessAlternativeWinsInsideMixedSCC() throws {
         let enabled = StateGraph.StateID(1)
         let graph = graph(
             transitions: [
@@ -251,12 +277,12 @@ struct LivenessConformanceTests {
             ],
             values: [initial: 0, enabled: 0]
         )
-        let checker = LivenessChecker(graph: graph)
         let actions = [action("A"), action("B")]
 
         for fairness in [[FairnessCondition.weakFairness("A")], [.strongFairness("A")]] {
-            let result = checker.analyze(
-                .alwaysEventually(predicate(1)),
+            let result = try analyze(
+                graph,
+                property: .alwaysEventually(predicate(1)),
                 fairness: fairness,
                 actions: actions,
                 initialStateIDs: [initial]
@@ -269,7 +295,7 @@ struct LivenessConformanceTests {
     }
 
     @Test("enabledness and fairness are reported for changing action availability")
-    func changingEnablednessFairnessMatrix() {
+    func changingEnablednessFairnessMatrix() throws {
         let disabled = StateGraph.StateID(1)
         let graph = graph(
             transitions: [
@@ -279,7 +305,6 @@ struct LivenessConformanceTests {
             ],
             values: [initial: 0, disabled: 0, terminal: 1]
         )
-        let checker = LivenessChecker(graph: graph)
         let actions = [action("A"), action("B"), action("C"), action("done")]
         let property = TemporalExpr.alwaysEventually(predicate(1))
         let cases: [(String, [FairnessCondition])] = [
@@ -289,38 +314,62 @@ struct LivenessConformanceTests {
         ]
 
         for (_, fairness) in cases {
-            let result = checker.analyze(property, fairness: fairness, actions: actions, initialStateIDs: [initial])
+            let result = try analyze(
+                graph,
+                property: property,
+                fairness: fairness,
+                actions: actions,
+                initialStateIDs: [initial]
+            )
             #expect(result.enabledActions["A"]?[initial] == true)
             #expect(result.enabledActions["A"]?[disabled] == false)
             #expect(result.status == .violated)
         }
 
-        let scc = Set([initial, disabled])
-        #expect(checker.fairTerminalSCCs([scc], fairness: [.weakFairness("A")], actions: actions).count == 1)
-        #expect(checker.fairTerminalSCCs([scc], fairness: [.strongFairness("A")], actions: actions).isEmpty)
+        let weak = try analyze(
+            graph,
+            property: property,
+            fairness: [.weakFairness("A")],
+            actions: actions,
+            initialStateIDs: [initial]
+        )
+        let strong = try analyze(
+            graph,
+            property: property,
+            fairness: [.strongFairness("A")],
+            actions: actions,
+            initialStateIDs: [initial]
+        )
+        #expect(weak.fairComponents.contains(Set([initial, disabled])))
+        #expect(strong.rejectedComponents.contains(Set([initial, disabled])))
     }
 
     @Test("unavailable evidence is explicit for unknown actions, evaluation errors, and incomplete exploration")
-    func unavailableEvidenceMatrix() {
-        let graph = graph(
+    func unavailableEvidenceMatrix() throws {
+        let unknownActionGraph = graph(
             transitions: [initial: [.init(label: .init(.init(name: "unknown")), target: initial)]],
             values: [initial: 0]
         )
-        let checker = LivenessChecker(graph: graph)
+        let invalidProjectionGraph = StateGraph(
+            specName: "liveness-conformance",
+            variableNames: ["x"],
+            transitions: [initial: [.init(label: .init(.init(name: "known")), target: initial)]],
+            states: [initial: fixtureProjection(["other": .int(0)])]
+        )
         let unavailable: [(String, TemporalAnalysisResult, TemporalDiagnosticReason)] = [
             (
                 "unknown action",
-                checker.analyze(.eventually(predicate(1)), fairness: [], actions: [action("known")], initialStateIDs: [initial]),
+                try analyze(unknownActionGraph, property: .eventually(predicate(1)), actions: [action("known")], initialStateIDs: [initial]),
                 .unknownAction
             ),
             (
                 "evaluation failure",
-                checker.analyze(.eventually(.variable("missing")), fairness: [], actions: [action("unknown")], initialStateIDs: [initial]),
+                try analyze(invalidProjectionGraph, property: .eventually(predicate(1)), actions: [action("known")], initialStateIDs: [initial]),
                 .evaluationFailed
             ),
             (
                 "incomplete exploration",
-                checker.analyze(.eventually(predicate(1)), fairness: [], actions: [action("unknown")], initialStateIDs: [initial], isComplete: false),
+                try analyze(unknownActionGraph, property: .eventually(predicate(1)), actions: [action("known")], initialStateIDs: [initial], isComplete: false),
                 .incompleteExploration
             )
         ]
