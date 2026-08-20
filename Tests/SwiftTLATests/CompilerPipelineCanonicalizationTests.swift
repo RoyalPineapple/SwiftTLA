@@ -98,6 +98,54 @@ struct CompilerPipelineCanonicalizationTests {
         #expect(try checker.exploreGraph().states.count == 3)
     }
 
+    @Test("compiled layout assigns private IDs in declaration order")
+    func compiledLayoutAssignsDeclarationIDs() throws {
+        let spec = TLASpec(
+            name: "Layout",
+            variables: [
+                .init(name: "first", initial: .int(0)),
+                .init(name: "second", initial: .int(1))
+            ],
+            actions: [
+                .init(name: "advance", body: .unchanged("first")),
+                .init(name: "hold", body: .unchanged("second"))
+            ],
+            invariants: [.init(name: "Safe", body: .value(.bool(true)))]
+        )
+
+        let compilation = try spec.compile()
+
+        #expect(compilation.layout.variableID(named: "first") == .init(ordinal: 0))
+        #expect(compilation.layout.variableID(named: "second") == .init(ordinal: 1))
+        #expect(compilation.layout.actionID(named: "advance") == .init(ordinal: 0))
+        #expect(compilation.layout.actionID(named: "hold") == .init(ordinal: 1))
+        #expect(compilation.layout.declarations.map(\.name) == ["first", "second", "advance", "hold", "Safe"])
+    }
+
+    @Test("declaration order changes the compilation identity")
+    func declarationOrderChangesCompilationIdentity() throws {
+        let first = TLASpec(
+            name: "LayoutIdentity",
+            variables: [
+                .init(name: "first", initial: .int(0)),
+                .init(name: "second", initial: .int(1))
+            ],
+            actions: [],
+            invariants: []
+        )
+        let second = TLASpec(
+            name: "LayoutIdentity",
+            variables: [
+                .init(name: "second", initial: .int(1)),
+                .init(name: "first", initial: .int(0))
+            ],
+            actions: [],
+            invariants: []
+        )
+
+        #expect(try first.compile().identity != second.compile().identity)
+    }
+
     @Test("#spec Algorithm lowering reaches macro-generated consumers through one identity")
     func algorithmSpecificationUsesMacroCompiledPayload() throws {
         let compilation = try CompilerPipelineAlgorithmModel.compiledSpecification()
@@ -120,6 +168,125 @@ struct CompilerPipelineCanonicalizationTests {
         #expect(throws: CompilationDiagnostic.self) {
             try spec.compile()
         }
+    }
+
+    @Test("binding resolves variables and nested binders before execution")
+    func bindingResolvesScopedNames() throws {
+        let quantified = StateExpr.forAll(
+            .setLiteral([.int(1)]),
+            "current",
+            .exists(
+                .setLiteral([.int(2)]),
+                "current",
+                .equal(.variable("current"), .int(2))
+            )
+        )
+        let spec = TLASpec(
+            name: "Binding",
+            variables: [.init(name: "counter", initial: .int(0))],
+            actions: [.init(name: "step", body: .guard_(quantified) && .unchanged("counter"))],
+            invariants: []
+        )
+
+        let compilation = try spec.compile()
+
+        #expect(compilation.bindings.variables["counter"] == .init(ordinal: 0))
+        #expect(compilation.bindings.references.values.contains(.binder(.init(ordinal: 0))))
+        #expect(compilation.bindings.references.values.contains(.binder(.init(ordinal: 1))))
+    }
+
+    @Test("free references fail at the binding gate")
+    func freeReferenceBlocksCompilation() {
+        let spec = TLASpec(
+            name: "FreeReference",
+            variables: [.init(name: "counter", initial: .int(0))],
+            actions: [.init(name: "step", body: .assign("counter", .variable("missing")))],
+            invariants: []
+        )
+
+        do {
+            _ = try spec.compile()
+            Issue.record("Expected a binding diagnostic")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.code == .unknownReference)
+            #expect(diagnostic.stage == .binding)
+        } catch {
+            Issue.record("Expected CompilationDiagnostic, got \(error)")
+        }
+    }
+
+    @Test("assignment to an action binder fails at the binding gate")
+    func assignmentToBinderBlocksCompilation() {
+        let spec = TLASpec(
+            name: "BinderAssignment",
+            variables: [.init(name: "counter", initial: .int(0))],
+            actions: [
+                .init(
+                    name: "step",
+                    body: .existsAction("current", .setLiteral([.int(1)]), .assign("current", .int(1)))
+                )
+            ],
+            invariants: []
+        )
+
+        do {
+            _ = try spec.compile()
+            Issue.record("Expected a binding diagnostic")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.code == .assignmentToBinder)
+            #expect(diagnostic.stage == .binding)
+        } catch {
+            Issue.record("Expected CompilationDiagnostic, got \(error)")
+        }
+    }
+
+    @Test("unlinked formal symbols fail at the binding gate")
+    func unresolvedFormalSymbolBlocksCompilation() {
+        let spec = TLASpec(
+            name: "UnresolvedSymbol",
+            variables: [.init(name: "counter", initial: .int(0))],
+            actions: [
+                .init(
+                    name: "step",
+                    body: .guard_(.operatorApplication(.reference("Missing", arity: 0), []))
+                        && .unchanged("counter")
+                )
+            ],
+            invariants: []
+        )
+
+        do {
+            _ = try spec.compile()
+            Issue.record("Expected a binding diagnostic")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.code == .unresolvedImportedSymbol)
+            #expect(diagnostic.stage == .binding)
+        } catch {
+            Issue.record("Expected CompilationDiagnostic, got \(error)")
+        }
+    }
+
+    @Test("local recursive operators remain visible throughout their LET body")
+    func localRecursiveOperatorRemainsInScope() throws {
+        let recursive = StateExpr.letIn(
+            [
+                .init(
+                    "countDown",
+                    parameters: ["current"],
+                    domain: .integerRange(.int(0), .int(2)),
+                    body: .equal(.variable("current"), .int(0))
+                )
+            ],
+            .functionApply(.variable("countDown"), .int(1))
+        )
+        let spec = TLASpec(
+            name: "LocalRecursion",
+            variables: [.init(name: "counter", initial: .int(0))],
+            actions: [.init(name: "step", body: .guard_(recursive) && .unchanged("counter"))],
+            invariants: []
+        )
+
+        _ = try spec.compile()
     }
 
     @Test("macro-generated consumers and rendering retain the compiled identity")

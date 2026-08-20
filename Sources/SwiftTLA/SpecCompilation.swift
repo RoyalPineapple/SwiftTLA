@@ -29,17 +29,23 @@ public struct CompiledSpecification: Sendable {
     public let spec: TLASpec
     public let formalModuleClosure: FormalModuleClosure
     public let identity: CompilationIdentity
+    let layout: CompiledLayout
+    let bindings: CompiledBindingTable
     let directModuleSections: DirectModuleSectionPlan
 
     init(
         spec: TLASpec,
         formalModuleClosure: FormalModuleClosure,
         identity: CompilationIdentity,
+        bindings: CompiledBindingTable,
         directModuleSections: DirectModuleSectionPlan
     ) {
         self.spec = spec
         self.formalModuleClosure = formalModuleClosure
         self.identity = identity
+        let layout = CompiledLayout(spec: spec)
+        self.layout = layout
+        self.bindings = bindings
         self.directModuleSections = directModuleSections
     }
 
@@ -213,6 +219,7 @@ public struct CompilationDiagnostic: Error, Sendable, Hashable, CustomStringConv
     public enum Stage: String, Sendable, Hashable {
         case validation
         case lowering
+        case binding
         case runtime
         case checking
         case rendering
@@ -241,6 +248,11 @@ public struct CompilationDiagnostic: Error, Sendable, Hashable, CustomStringConv
         case duplicateFormalModuleParameter
         case unresolvedFormalModuleReplacement
         case unresolvedDirectModuleDependency
+        case unknownReference
+        case outOfScopeReference
+        case assignmentToBinder
+        case duplicateBinder
+        case unresolvedImportedSymbol
     }
 
     public enum ChangeStatus: String, Sendable, Hashable {
@@ -347,11 +359,15 @@ public extension TLASpec {
         try validateUnique(actions.map(\.name), code: .duplicateAction, path: "actions")
         try validateUnique(invariants.map(\.name), code: .duplicateInvariant, path: "invariants")
         let closure = try FormalModuleClosure.resolve(root: self)
+        let layout = CompiledLayout(spec: self)
+        var validator = BindingValidator(spec: self, layout: layout, closure: closure)
+        let bindings = try validator.validate(spec: self)
         let directModuleSections = try directModuleSectionPlan()
         return CompiledSpecification(
             spec: self,
             formalModuleClosure: closure,
             identity: .init(value: compilationFingerprint),
+            bindings: bindings,
             directModuleSections: directModuleSections
         )
     }
@@ -439,6 +455,7 @@ private struct CanonicalSpecificationEncoder {
 
     private mutating func specification(_ spec: TLASpec) {
         field("spec.name", spec.name)
+        field("declarationLayout", CompiledLayout(spec: spec).canonicalEncoding)
         list("variables", spec.variables, canonicalVariable)
         let constants = spec.constants.keys.sorted().map { key in
             node("constant", [key, canonicalValue(spec.constants[key]!)])
