@@ -125,8 +125,8 @@ struct ScopedSubstitutionTests {
       left.expr + right.expr <= 4
     }
 
-    #expect(try exists.raw.evaluateBool(in: [:]))
-    #expect(try all.raw.evaluateBool(in: [:]))
-    #expect(try condition.evaluateBool(in: [:]))
+    #expect(try compiledValue(exists.raw) == .bool(true))
+    #expect(try compiledValue(all.raw) == .bool(true))
+    #expect(try compiledValue(condition) == .bool(true))
   }
 }

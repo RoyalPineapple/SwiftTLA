@@ -98,11 +98,11 @@ private struct FoldGeneratedModel {
         let expanded = squares.union(SetExpr<Int>.literal(25))
         let sequence = TupleExpr<Int>.literal(3, 5, 7)
 
-        #expect(try values.raw.evaluate(in: [:]) == TLAValue.set([.int(1), .int(2), .int(3), .int(4)]))
-        #expect(try evenValues.raw.evaluate(in: [:]) == TLAValue.set([.int(2), .int(4)]))
-        #expect(try squares.raw.evaluate(in: [:]) == TLAValue.set([.int(4), .int(16)]))
-        #expect(try expanded.raw.evaluate(in: [:]) == TLAValue.set([.int(4), .int(16), .int(25)]))
-        #expect(try sequence.at(Expr<Int>(.int(2))).raw.evaluate(in: [:]) == .int(5))
+        #expect(try compiledValue(values.raw) == TLAValue.set([.int(1), .int(2), .int(3), .int(4)]))
+        #expect(try compiledValue(evenValues.raw) == TLAValue.set([.int(2), .int(4)]))
+        #expect(try compiledValue(squares.raw) == TLAValue.set([.int(4), .int(16)]))
+        #expect(try compiledValue(expanded.raw) == TLAValue.set([.int(4), .int(16), .int(25)]))
+        #expect(try compiledValue(sequence.at(Expr<Int>(.int(2))).raw) == .int(5))
     }
 
     @Test("source parser preserves typed collection operators")
@@ -167,7 +167,7 @@ private struct FoldGeneratedModel {
         let syntax = Parser.parse(source: source).statements.first!.item.as(ExprSyntax.self)!
         let parsed = try #require(SpecParser.decodeStateExpr(syntax))
 
-        #expect(try runtime.raw.evaluate(in: [:]) == .int(6))
+        #expect(try compiledValue(runtime.raw) == .int(6))
         #expect(runtime.raw.description.contains("FoldFunction(LAMBDA"))
         #expect(_tlaAlphaEquivalent(
             canonicalTestSpec(variables: [], actions: [("fold", .guard_(runtime.raw), [])], invariants: []),
@@ -182,7 +182,7 @@ private struct FoldGeneratedModel {
             initial: .int(4),
             sequence: .tupleLiteral([.int(1), .int(2)])
         )
-        #expect(try ordered.evaluate(in: [:]) == .int(3))
+        #expect(try compiledValue(ordered) == .int(3))
     }
 
     @Test("generated machines preserve formal fold behavior")
@@ -285,14 +285,14 @@ private struct FoldGeneratedModel {
         let parsed = try #require(SpecParser.decodeStateExpr(sequenceSyntax))
         let parsedSorted = try #require(SpecParser.decodeStateExpr(sortedSyntax))
 
-        #expect(try runtime.raw.evaluate(in: [:]) == .set([
+        #expect(try compiledValue(runtime.raw) == .set([
             .tuple([]), .tuple([.int(0)]), .tuple([.int(1)]),
             .tuple([.int(0), .int(0)]), .tuple([.int(0), .int(1)]),
             .tuple([.int(1), .int(0)]), .tuple([.int(1), .int(1)])
         ]))
         #expect(parsed == runtime.raw)
         #expect(parsedSorted == sortedRuntime.raw)
-        #expect(try sortedRuntime.raw.evaluate(in: [:]) == .set([
+        #expect(try compiledValue(sortedRuntime.raw) == .set([
             .tuple([]),
             .tuple([.int(0)]), .tuple([.int(1)]), .tuple([.int(2)]),
             .tuple([.int(0), .int(0)]), .tuple([.int(0), .int(1)]), .tuple([.int(0), .int(2)]),
@@ -309,7 +309,7 @@ private struct FoldGeneratedModel {
         let runtime = ZeroBasedSequences(of: SetExpr<Int>.literal(0, 1), lengths: 1...2)
 
         #expect(parsed == runtime.raw)
-        #expect(try runtime.raw.evaluate(in: [:]) == .set([
+        #expect(try compiledValue(runtime.raw) == .set([
             .function([.int(0): .int(0)]),
             .function([.int(0): .int(1)]),
             .function([.int(0): .int(0), .int(1): .int(0)]),
@@ -333,7 +333,7 @@ private struct FoldGeneratedModel {
         let runtime = NonEmptySubsets(of: SetExpr<Int>.literal(1, 2))
 
         #expect(parsed == runtime.raw)
-        #expect(try runtime.raw.evaluate(in: [:]) == .set([
+        #expect(try compiledValue(runtime.raw) == .set([
             .set([.int(1)]),
             .set([.int(2)]),
             .set([.int(1), .int(2)])
@@ -359,8 +359,8 @@ private struct FoldGeneratedModel {
         let everyPositive = ForAll(in: IntRange(1, through: 4)) { value in
             value.expr > 0
         }
-        #expect(try hasEven.raw.evaluate(in: [:]) == .bool(true))
-        #expect(try everyPositive.raw.evaluate(in: [:]) == .bool(true))
+        #expect(try compiledValue(hasEven.raw) == .bool(true))
+        #expect(try compiledValue(everyPositive.raw) == .bool(true))
 
         TypedQuantifierGeneratedModel._checkParserTree()
         var model = try TypedQuantifierGeneratedModel.makeMachine()

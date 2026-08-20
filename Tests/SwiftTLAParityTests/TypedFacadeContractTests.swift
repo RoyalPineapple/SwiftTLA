@@ -73,7 +73,7 @@ struct TypedFacadeContractTests {
     )
     #expect(update.raw == expected)
 
-    let result = try update.raw.evaluate(in: [
+    let result = try compiledValue(update.raw, values: [
       "cars": .function([
         .string("carA"): .record(["floor": .int(0), "doorsOpen": .bool(false)]),
         .string("carB"): .record(["floor": .int(1), "doorsOpen": .bool(true)])
@@ -116,7 +116,7 @@ struct TypedFacadeContractTests {
       return
     }
     #expect(
-      try cars.raw.evaluate(in: [:])
+      try compiledValue(cars.raw)
         == .function([
           .string("carA"): .record(["floor": .int(0), "doorsOpen": .bool(false)]),
           .string("carB"): .record(["floor": .int(1), "doorsOpen": .bool(true)])

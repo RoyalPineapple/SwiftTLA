@@ -76,9 +76,10 @@ struct CompilerBundleOwnershipTests {
     )
 
     let definitions = try root.compile().formalModuleClosure.resolvedFormalOperatorDefinitions
-    let value = try StateExpr.operatorApplication(
-      .reference("ConfiguredValue", arity: 0), []
-    ).evaluate(in: [:], formalOperatorDefinitions: definitions)
+    let value = try compiledValue(
+      .operatorApplication(.reference("ConfiguredValue", arity: 0), []),
+      formalOperators: definitions
+    )
 
     #expect(value == .int(7))
   }

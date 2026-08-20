@@ -77,7 +77,7 @@ struct LocalOperatorTests {
       recursion(0)
     })
 
-    #expect(try expression.stateExpr.evaluate(in: ["limit": .int(4)]) == .int(0))
+    #expect(try compiledValue(expression.stateExpr, values: ["limit": .int(4)]) == .int(0))
     #expect(expression.stateExpr.description.contains("SumTo["))
   }
 
@@ -187,7 +187,7 @@ struct LocalOperatorTests {
     ], .recursiveCall("OnlyZero", [.int(1)]))
 
     #expect(throws: EvalError.self) {
-      try expression.evaluate(in: [:])
+      try compiledValue(expression)
     }
   }
 
@@ -209,7 +209,7 @@ struct LocalOperatorTests {
       )
     ], .functionApply(.variable("SA"), .int(0)))
 
-    #expect(try expression.evaluate(in: [:]) == .bool(true))
+    #expect(try compiledValue(expression) == .bool(true))
     #expect(expression.description.contains("IF (prior = -1) THEN TRUE ELSE SA[prior]"))
   }
 
@@ -221,7 +221,7 @@ struct LocalOperatorTests {
       LocalOperator("Loop", parameters: ["value"], domain: .setLiteral([.int(0)]), body: .add(.variable("value"), .int(10)))
     ], .functionApply(.variable("Loop"), .int(0))))
 
-    #expect(try expression.evaluate(in: [:]) == .int(10))
+    #expect(try compiledValue(expression) == .int(10))
   }
 
   @Test("bounded LET lowering respects a shadowing value binding")
@@ -234,7 +234,7 @@ struct LocalOperatorTests {
       .functionApply(.variable("Loop"), .int(0))
     ))
 
-    #expect(try expression.evaluate(in: [:]) == .int(20))
+    #expect(try compiledValue(expression) == .int(20))
   }
 
   @Test("malformed typed local recursion is rejected structurally")
@@ -266,7 +266,7 @@ struct LocalOperatorTests {
     )
     let expression: StateExpr = .letIn([sumTo], .recursiveCall("SumTo", [.int(4)]))
 
-    #expect(try expression.evaluate(in: [:]) == .int(10))
+    #expect(try compiledValue(expression) == .int(10))
     #expect(expression.description.contains("LET RECURSIVE SumTo(_)"))
     #expect(expression.description.contains("SumTo(number) =="))
   }
@@ -308,7 +308,7 @@ struct LocalOperatorTests {
     let expression: StateExpr = .letIn([operation], .recursiveCall("Only", []))
 
     #expect(throws: EvalError.self) {
-      try expression.evaluate(in: [:])
+      try compiledValue(expression)
     }
   }
 
@@ -325,8 +325,8 @@ struct LocalOperatorTests {
       in: expression
     )
 
-    #expect(try expression.evaluate(in: ["value": .int(0)]) == .int(5))
-    #expect(try substituted.evaluate(in: ["value": .int(0)]) == .int(5))
+    #expect(try compiledValue(expression, values: ["value": .int(0)]) == .int(5))
+    #expect(try compiledValue(substituted, values: ["value": .int(0)]) == .int(5))
     #expect(expression.description == "LET value == 4 IN (value + 1)")
     #expect(expression.swiftSource.contains("StateExpr.letValue(\"value\", 4,"))
   }
