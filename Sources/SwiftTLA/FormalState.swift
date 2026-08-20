@@ -27,6 +27,14 @@ struct FormalState: Hashable, Sendable {
         return FormalState(validatedValues: updated)
     }
 
+    func updating(_ assignments: [VariableID: TLAValue]) throws -> FormalState {
+        var updated = self
+        for assignment in assignments {
+            updated = try updated.updating(assignment.key, to: assignment.value)
+        }
+        return updated
+    }
+
     private init(validatedValues: [TLAValue]) {
         values = validatedValues
     }

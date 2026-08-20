@@ -3,15 +3,19 @@ struct CompiledActionEnumerator {
     let model: CompiledModel
 
     func enumerate(_ action: CompiledAction) throws -> [FormalState] {
-        try execute(action.body, bindings: .init()).map { delta in
-            try delta.assignments.reduce(state) { next, assignment in
-                try next.updating(assignment.key, to: assignment.value)
+        let choices = chooseActions(in: action.body)
+        let selections = try selectChoices(choices)
+        return try selections.flatMap { selection in
+            let evaluationState = try state.updating(selection)
+            return try execute(action.body, state: evaluationState, bindings: .init()).map { delta in
+                try state.updating(selection).updating(delta.assignments)
             }
         }
     }
 
     private func execute(
         _ action: CompiledActionExpr,
+        state: FormalState,
         bindings: CompiledBindings
     ) throws -> [CompiledActionDelta] {
         let evaluator = CompiledEvaluator(state: state, model: model, bindings: bindings)
@@ -24,29 +28,65 @@ struct CompiledActionEnumerator {
             guard try evaluator.evaluate(expression) == .bool(true) else { return [] }
             return [.init()]
         case .chooseAction(let variable, let set):
-            guard case .set(let values) = try evaluator.evaluate(set) else {
-                throw EvalError.typeMismatch("CHOOSE requires a set")
-            }
-            return values.map { .init(assignments: [variable: $0]) }
+            _ = variable
+            _ = set
+            return [.init()]
         case .existsAction(let binder, let set, let body):
             guard case .set(let values) = try evaluator.evaluate(set) else {
                 throw EvalError.typeMismatch("WITH requires a set")
             }
             return try values.flatMap { value in
-                try execute(body, bindings: bindings.binding(value, to: binder))
+                try execute(body, state: state, bindings: bindings.binding(value, to: binder))
             }
         case .define(let binder, let value, let body):
-            return try execute(body, bindings: bindings.binding(try evaluator.evaluate(value), to: binder))
+            return try execute(
+                body,
+                state: state,
+                bindings: bindings.binding(try evaluator.evaluate(value), to: binder)
+            )
         case .ifElse(let condition, let then, let otherwise):
-            return try execute(try evaluator.evaluate(condition) == .bool(true) ? then : otherwise, bindings: bindings)
+            return try execute(
+                try evaluator.evaluate(condition) == .bool(true) ? then : otherwise,
+                state: state,
+                bindings: bindings
+            )
         case .and(let lhs, let rhs):
-            let left = try execute(lhs, bindings: bindings)
-            let right = try execute(rhs, bindings: bindings)
+            let left = try execute(lhs, state: state, bindings: bindings)
+            let right = try execute(rhs, state: state, bindings: bindings)
             return try left.flatMap { first in
                 try right.map { second in try first.merging(second) }
             }
         case .or(let lhs, let rhs):
-            return try execute(lhs, bindings: bindings) + execute(rhs, bindings: bindings)
+            return try execute(lhs, state: state, bindings: bindings)
+                + execute(rhs, state: state, bindings: bindings)
+        }
+    }
+
+    private func selectChoices(_ choices: [(VariableID, CompiledStateExpr)]) throws -> [[VariableID: TLAValue]] {
+        try choices.reduce([[:]]) { selections, choice in
+            try selections.flatMap { selection in
+                let selectionState = try state.updating(selection)
+                let evaluator = CompiledEvaluator(state: selectionState, model: model, bindings: .init())
+                guard case .set(let values) = try evaluator.evaluate(choice.1) else {
+                    throw EvalError.typeMismatch("CHOOSE requires a set")
+                }
+                return values.map { value in
+                    var selected = selection
+                    selected[choice.0] = value
+                    return selected
+                }
+            }
+        }
+    }
+
+    private func chooseActions(in action: CompiledActionExpr) -> [(VariableID, CompiledStateExpr)] {
+        switch action {
+        case .chooseAction(let variable, let set):
+            return [(variable, set)]
+        case .and(let lhs, let rhs):
+            return chooseActions(in: lhs) + chooseActions(in: rhs)
+        case .assign, .unchanged, .guard_, .existsAction, .ifElse, .define, .or:
+            return []
         }
     }
 }
