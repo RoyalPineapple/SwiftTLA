@@ -30,6 +30,12 @@ struct CompiledLowerer {
         let invariants: [CompiledInvariant] = try spec.invariants.map {
             CompiledInvariant(name: $0.name, body: try lower($0.body, at: "invariants.\($0.name).body"))
         }
+        let temporalProperties = try spec.temporalProperties.map {
+            CompiledTemporal(
+                name: $0.name,
+                expression: try lower($0.expr, at: "temporalProperties.\($0.name)")
+            )
+        }
         let formalOperators: [CompiledFormalOperatorDefinition] = try spec.formalOperatorDefinitions.map { definition in
             CompiledFormalOperatorDefinition(
                 id: try operatorID(at: "formalOperators.\(definition.name).declaration"),
@@ -73,6 +79,7 @@ struct CompiledLowerer {
             variableInitializers: initializers,
             actions: actions,
             invariants: invariants,
+            temporalProperties: temporalProperties,
             constraint: try lowerOptional(spec.constraint, at: "constraint"),
             assume: try lowerOptional(spec.assume, at: "assume"),
             formalOperatorDefinitions: formalOperators + linkedFormalOperators,
@@ -214,6 +221,24 @@ struct CompiledLowerer {
             return try .letIn(
                 operators.map { try lower($0, at: "\(path).\($0.name)") },
                 lower(body, at: "\(path).body")
+            )
+        }
+    }
+
+    private func lower(_ expression: TemporalExpr, at path: String) throws -> CompiledTemporalExpr {
+        switch expression {
+        case .always(let predicate):
+            return .always(try lower(predicate, at: "\(path).body"))
+        case .eventually(let predicate):
+            return .eventually(try lower(predicate, at: "\(path).body"))
+        case .alwaysEventually(let predicate):
+            return .alwaysEventually(try lower(predicate, at: "\(path).body"))
+        case .eventuallyAlways(let predicate):
+            return .eventuallyAlways(try lower(predicate, at: "\(path).body"))
+        case .leadsTo(let from, let to):
+            return .leadsTo(
+                try lower(from, at: "\(path).from"),
+                try lower(to, at: "\(path).to")
             )
         }
     }

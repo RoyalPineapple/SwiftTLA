@@ -255,6 +255,44 @@ struct CompilerPipelineCanonicalizationTests {
         #expect(value == binder)
     }
 
+    @Test("compiled temporal properties use bound variable identities")
+    func compiledTemporalPropertiesUsePrivateIdentities() throws {
+        let spec = TLASpec(
+            name: "CompiledTemporal",
+            variables: [.init(name: "counter", initial: .int(0))],
+            actions: [.init(name: "stay", body: .unchanged("counter"))],
+            invariants: [],
+            temporalProperties: [
+                .init(name: "EventuallyZero", expr: .eventually(.equal(.variable("counter"), .value(.int(0)))))
+            ]
+        )
+
+        let compilation = try spec.compile()
+
+        guard case .eventually(.equal(.stateVariable(let variable), .value(.int(0)))) = compilation.model.temporalProperties[0].expression else {
+            Issue.record("Expected a compiled temporal predicate")
+            return
+        }
+        #expect(variable == .init(ordinal: 0))
+    }
+
+    @Test("compilation rejects an unbound temporal reference")
+    func compilationRejectsUnboundTemporalReference() {
+        let spec = TLASpec(
+            name: "InvalidTemporal",
+            variables: [.init(name: "counter", initial: .int(0))],
+            actions: [.init(name: "stay", body: .unchanged("counter"))],
+            invariants: [],
+            temporalProperties: [
+                .init(name: "Missing", expr: .always(.variable("missing")))
+            ]
+        )
+
+        #expect(throws: CompilationDiagnostic.self) {
+            try spec.compile()
+        }
+    }
+
     @Test("compiled choices are visible to their action guards and updates")
     func compiledChoicesUseSelectedSlotValues() throws {
         let spec = TLASpec(

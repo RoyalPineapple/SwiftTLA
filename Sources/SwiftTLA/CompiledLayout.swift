@@ -366,6 +366,9 @@ struct BindingValidator {
         for invariant in spec.invariants {
             try validateExpression(invariant.body, at: "invariants.\(invariant.name).body", scope: [:])
         }
+        for temporal in spec.temporalProperties {
+            try validate(temporal.expr, at: "temporalProperties.\(temporal.name)")
+        }
         try validateExpression(spec.constraint, at: "constraint", scope: [:])
         try validateExpression(spec.assume, at: "assume", scope: [:])
         for definition in spec.formalOperatorDefinitions {
@@ -407,6 +410,16 @@ struct BindingValidator {
             try validateExpression(function.body, at: "linkedRecursiveFunctions.\(function.name).body", scope: scope)
         }
         return CompiledBindingTable(layout: layout, operators: operators, references: references)
+    }
+
+    private mutating func validate(_ expression: TemporalExpr, at path: String) throws {
+        switch expression {
+        case .always(let predicate), .eventually(let predicate), .alwaysEventually(let predicate), .eventuallyAlways(let predicate):
+            try validateExpression(predicate, at: "\(path).body", scope: [:])
+        case .leadsTo(let from, let to):
+            try validateExpression(from, at: "\(path).from", scope: [:])
+            try validateExpression(to, at: "\(path).to", scope: [:])
+        }
     }
 
     private mutating func validateExpression(
