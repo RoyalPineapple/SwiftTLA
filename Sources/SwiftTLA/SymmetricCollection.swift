@@ -308,10 +308,10 @@ public extension TLASpec {
             Set(initialValues.values) == Set([metadata.initial])
       else { return .invalidDomain(collection: metadata.name) }
 
-      let legacySymbols = (1...metadata.verificationScope).map {
+      let verificationSymbols = (1...metadata.verificationScope).map {
         "__symmetric_\(metadata.name)_member_\($0)"
       }
-      for symbol in metadata.generatedSymbols + legacySymbols {
+      for symbol in metadata.generatedSymbols + verificationSymbols {
         guard !reservedSymbols.contains(symbol), generatedSymbols.insert(symbol).inserted else {
           return .symbolCollision(collection: metadata.name, symbol: symbol)
         }

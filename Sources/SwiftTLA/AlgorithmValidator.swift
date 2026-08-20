@@ -1,5 +1,4 @@
-/// Procedure-specific validation is kept separate until the legacy algorithm
-/// validator is moved out of the builder file.
+/// Procedure-specific validation is kept separate from builder assembly.
 internal enum AlgorithmProcedureValidator {
     static func procedureDiagnostics(for model: AlgorithmModel) -> [AlgorithmDiagnostic] {
         var diagnostics: [AlgorithmDiagnostic] = []

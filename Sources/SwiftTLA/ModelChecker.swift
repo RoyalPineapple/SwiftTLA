@@ -506,8 +506,7 @@ public struct ModelTraceEvidence: Sendable, Equatable, CustomStringConvertible {
 
 /// Inspection-ready evidence for a model-checking failure.
 ///
-/// The legacy `CheckResult` cases remain useful for graph tooling. This
-/// companion is the public diagnostic boundary: it retains the named formal
+/// This companion is the public diagnostic boundary: it retains the named formal
 /// property, the failing state, counterexample trace when there is one, the
 /// expected condition, actual result, mutation outcome, and recovery step.
 public struct ModelCheckingDiagnostic: Sendable, Equatable, CustomStringConvertible {

@@ -7,9 +7,8 @@ public enum TLAStateProjectionDiagnostic: Error, Sendable, Equatable, CustomStri
     case missingValue(path: String)
     case invalidValue(path: String)
     case projectionUnavailable(path: String, reason: String)
-    /// A generated typed state field was absent.  Unlike the legacy
-    /// `missingValue` spelling, this retains the Swift shape that the
-    /// generated machine expected to decode.
+    /// A generated typed state field was absent. This retains the Swift shape
+    /// that the generated machine expected to decode.
     case missingRequiredValue(path: String, expected: String)
     /// A generated typed state field had a formal value of the wrong kind.
     /// The formal value is retained so callers can inspect it without
