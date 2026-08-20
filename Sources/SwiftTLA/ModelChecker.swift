@@ -265,7 +265,11 @@ private func compiledBFS(
             let actionName = layout.actions[successor.action.ordinal].declaration.name
             transitions[currentID, default: []].append(
                 .init(
-                    label: .init(.init(name: actionName, arguments: successor.arguments)),
+                    label: .init(
+                        action: successor.action,
+                        formalName: actionName,
+                        arguments: successor.arguments
+                    ),
                     target: targetID
                 )
             )

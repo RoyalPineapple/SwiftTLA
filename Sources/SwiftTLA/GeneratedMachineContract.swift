@@ -175,19 +175,6 @@ public struct MachineSurfacePlan: Sendable, Equatable {
         }
     }
 
-    /// A value-independent generated action label. Generated Swift enums map
-    /// their associated values through this descriptor rather than inventing a
-    /// separate formal action namespace.
-    public struct ActionLabel: Sendable, Equatable, Hashable {
-        public let swiftIdentifier: String
-        public let publicArguments: [TLAValue]
-
-        public init(swiftIdentifier: String, publicArguments: [TLAValue]) {
-            self.swiftIdentifier = swiftIdentifier
-            self.publicArguments = publicArguments
-        }
-    }
-
     public let compilationIdentity: CompilationIdentity
     public let variables: [Variable]
     public let actions: [Action]
@@ -297,53 +284,19 @@ public struct MachineSurfacePlan: Sendable, Equatable {
         )
     }
 
-    func label(for invocation: TLAActionInvocation) -> ActionLabel? {
-        guard let action = actions.first(where: { $0.formalName == invocation.name }),
-              action.bindings.count == invocation.arguments.count else {
-            return nil
-        }
-        var publicArguments: [TLAValue] = []
-        for (binding, argument) in zip(action.bindings, invocation.arguments) {
-            guard binding.domain.contains(argument) else { return nil }
-            if binding.isPublic {
-                publicArguments.append(argument)
-            } else if binding.domain.first != argument {
-                return nil
-            }
-        }
-        return .init(swiftIdentifier: action.swiftIdentifier, publicArguments: publicArguments)
+    struct ActionInput: Sendable, Equatable {
+        let ordinal: Int
+        let arguments: [TLAValue]
     }
 
-    func invocation(for label: ActionLabel) -> TLAActionInvocation? {
-        guard let action = actions.first(where: { $0.swiftIdentifier == label.swiftIdentifier }) else {
-            return nil
-        }
-        var publicIndex = 0
-        let arguments = action.bindings.compactMap { binding -> TLAValue? in
-            if binding.isPublic {
-                defer { publicIndex += 1 }
-                guard label.publicArguments.indices.contains(publicIndex),
-                      binding.domain.contains(label.publicArguments[publicIndex]) else {
-                    return nil
-                }
-                return label.publicArguments[publicIndex]
-            }
-            return binding.domain.first
-        }
-        guard publicIndex == label.publicArguments.count, arguments.count == action.bindings.count else {
-            return nil
-        }
-        return .init(name: action.formalName, arguments: arguments)
-    }
-
-    var allInvocations: [TLAActionInvocation] {
-        actions.flatMap { action in
+    var actionInputs: [ActionInput] {
+        actions.enumerated().flatMap { ordinal, action in
             let argumentLists = action.bindings.reduce([[]]) { partial, binding in
                 partial.flatMap { arguments in
                     binding.domain.map { arguments + [$0] }
                 }
             }
-            return argumentLists.map { TLAActionInvocation(name: action.formalName, arguments: $0) }
+            return argumentLists.map { ActionInput(ordinal: ordinal, arguments: $0) }
         }
     }
 
@@ -478,29 +431,26 @@ public struct GeneratedMachineMetadata: Sendable, Equatable {
     }
 }
 
-/// A typed behavior witness. It exposes only safe state projections.
 public struct GeneratedMachineBehavior: Sendable {
+    public struct Action: Sendable {
+        public let successors: @Sendable (TLAStateProjection) throws -> [TLAStateProjection]
+
+        public init(
+            successors: @escaping @Sendable (TLAStateProjection) throws -> [TLAStateProjection]
+        ) {
+            self.successors = successors
+        }
+    }
+
     public let initialStates: @Sendable () throws -> [TLAStateProjection]
-    public let successors: @Sendable (TLAStateProjection, TLAActionInvocation) throws -> [TLAStateProjection]
+    public let actions: [Action]
 
     public init(
         initialStates: @escaping @Sendable () throws -> [TLAStateProjection],
-        successors: @escaping @Sendable (TLAStateProjection, TLAActionInvocation) throws -> [TLAStateProjection]
+        actions: [Action]
     ) {
         self.initialStates = initialStates
-        self.successors = successors
-    }
-
-    public static func formalReference(compilation: CompiledSpecification) -> Self {
-        let runtime = SpecRuntime(compilation: compilation)
-        return .init(
-            initialStates: {
-                try runtime.initialStateProjections()
-            },
-            successors: { projection, invocation in
-                try runtime.successors(invocation, from: projection)
-            }
-        )
+        self.actions = actions
     }
 }
 
@@ -515,17 +465,20 @@ public struct GeneratedMachineContractReport: Sendable, Equatable {
     public let status: Status
     public let initialStateCount: Int
     public let transitionCount: Int
+    public let invariantCheckCount: Int
     public let diagnostic: GeneratedMachineContractDiagnostic?
 
     public init(
         status: Status,
         initialStateCount: Int,
         transitionCount: Int,
+        invariantCheckCount: Int = 0,
         diagnostic: GeneratedMachineContractDiagnostic? = nil
     ) {
         self.status = status
         self.initialStateCount = initialStateCount
         self.transitionCount = transitionCount
+        self.invariantCheckCount = invariantCheckCount
         self.diagnostic = diagnostic
     }
 }
@@ -666,6 +619,16 @@ public enum GeneratedMachineContractVerifier {
             )
         }
 
+        let actionInputs = plan.actionInputs
+        guard behavior.actions.count == actionInputs.count else {
+            return difference(
+                code: .actionLabelRoundTripMismatch,
+                path: "generatedBehavior.actions",
+                expected: "\(actionInputs.count) generated actions",
+                actual: "\(behavior.actions.count) generated actions"
+            )
+        }
+
         var transitionCount = 0
         for (fromID, source) in graph.states {
             let sourceProjection: TLAStateProjection
@@ -681,19 +644,14 @@ public enum GeneratedMachineContractVerifier {
                 )
             }
             let transitions = graph.transitions[fromID] ?? []
-            for invocation in plan.allInvocations {
-                guard let label = plan.label(for: invocation), plan.invocation(for: label) == invocation else {
-                    return difference(
-                        code: .actionLabelRoundTripMismatch,
-                        path: "transitions.\(fromID).\(invocation.name)",
-                        expected: "a generated label that round-trips to \(invocation)",
-                        actual: "no matching generated label"
-                    )
-                }
+            for (index, input) in actionInputs.enumerated() {
                 let expectedTargets: [TLAStateProjection]
                 do {
                     expectedTargets = try transitions
-                        .filter { $0.label.invocation == invocation }
+                        .filter {
+                            $0.label.actionOrdinal == input.ordinal
+                                && $0.label.arguments == input.arguments
+                        }
                         .map { transition in
                             guard let target = graph.states[transition.target] else {
                                 throw GeneratedMachineContractDiagnostic(
@@ -713,19 +671,19 @@ public enum GeneratedMachineContractVerifier {
                 } catch {
                     return difference(
                         code: .projectionDecodeMismatch,
-                        path: "transitions.\(fromID).\(invocation.name).target",
+                        path: "transitions.\(fromID).\(input.ordinal).target",
                         expected: "a generated State projection",
                         actual: String(describing: error)
                     )
                 }
                 do {
-                    let actualTargets = try behavior.successors(sourceProjection, invocation)
+                    let actualTargets = try behavior.actions[index].successors(sourceProjection)
                     do {
                         for target in actualTargets { try decodeState(target) }
                     } catch {
                         return difference(
                             code: .projectionDecodeMismatch,
-                            path: "generatedBehavior.\(invocation.name).target",
+                            path: "generatedBehavior.actions.\(index).target",
                             expected: "every generated target to decode as generated State",
                             actual: String(describing: error)
                         )
@@ -733,7 +691,7 @@ public enum GeneratedMachineContractVerifier {
                     guard sameMultiset(actualTargets, expectedTargets) else {
                         return difference(
                             code: .behaviorMismatch,
-                            path: "transitions.\(fromID).\(invocation.name)",
+                            path: "transitions.\(fromID).\(input.ordinal)",
                             expected: "the exact formal labeled target multiset",
                             actual: "a differing generated labeled target multiset"
                         )
@@ -741,7 +699,7 @@ public enum GeneratedMachineContractVerifier {
                 } catch {
                     return unavailable(
                         code: .evaluationUnavailable,
-                        path: "generatedBehavior.\(invocation.name)",
+                        path: "generatedBehavior.actions.\(index)",
                         expected: "a finite generated transition result",
                         actual: String(describing: error)
                     )
@@ -749,7 +707,12 @@ public enum GeneratedMachineContractVerifier {
                 transitionCount += expectedTargets.count
             }
         }
-        return .init(status: .exact, initialStateCount: expectedInitial.count, transitionCount: transitionCount)
+        return .init(
+            status: .exact,
+            initialStateCount: expectedInitial.count,
+            transitionCount: transitionCount,
+            invariantCheckCount: graph.states.count * compilation.model.invariants.count
+        )
     }
 
     private static func sameMultiset(
