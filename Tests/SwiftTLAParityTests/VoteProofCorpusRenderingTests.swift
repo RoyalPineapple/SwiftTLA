@@ -31,7 +31,7 @@ struct VoteProofCorpusRenderingTests {
         #expect(bundle.root.tla.contains("ChosenIn(b, v) =="))
         #expect(bundle.root.tla.contains("Refines == C!Spec"))
 
-        let plusCal = try #require(VoteProofModel.spec.compile().renderedAuthoredPlusCalModules().first)
+        let plusCal = try VoteProofModel.spec.compile().authoredPlusCalBundle().root.tla
         #expect(plusCal.contains("--algorithm Voting"))
         let algorithmRange = try #require(plusCal.range(of: "(*--algorithm Voting"))
         let defineRange = try #require(plusCal.range(of: "define {"))

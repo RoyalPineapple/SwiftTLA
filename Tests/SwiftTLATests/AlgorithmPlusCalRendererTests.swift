@@ -294,12 +294,11 @@ struct AlgorithmPlusCalRendererTests {
             }
         }
 
-        let modules = try spec.renderAuthoredPlusCalModules()
+        let module = try spec.compile().authoredPlusCalBundle().root.tla
 
-        #expect(modules.count == 1)
-        #expect(modules[0].contains("(*--algorithm Retained {"))
-        #expect(modules[0].contains("} *)\nStateConstraint == (count < 2)\n===="))
-        #expect(!modules[0].contains("\\* StateConstraint"))
+        #expect(module.contains("(*--algorithm Retained {"))
+        #expect(module.contains("} *)\nStateConstraint == (count < 2)\n===="))
+        #expect(!module.contains("\\* StateConstraint"))
         #expect(spec.actions.contains(where: { $0.name == "stop" }))
     }
 
@@ -318,7 +317,7 @@ struct AlgorithmPlusCalRendererTests {
             }
         }
 
-        let module = try #require(spec.renderAuthoredPlusCalModules().first)
+        let module = try spec.compile().authoredPlusCalBundle().root.tla
 
         #expect(module.contains("CONSTANTS N"))
         #expect(module.contains("TLC"))

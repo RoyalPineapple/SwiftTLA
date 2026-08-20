@@ -6,7 +6,7 @@ struct BoulangerCorpusRenderingTests {
     func parserBuilderFidelity() throws {
         BoulangerModel._checkParserTree()
 
-        let module = try #require(BoulangerModel.spec.compile().renderedAuthoredPlusCalModules().first)
+        let module = try BoulangerModel.spec.compile().authoredPlusCalBundle().root.tla
         #expect(module.contains("fair process"))
         #expect(module.contains("StateConstraint =="))
         #expect(module.contains("MutualExclusion =="))

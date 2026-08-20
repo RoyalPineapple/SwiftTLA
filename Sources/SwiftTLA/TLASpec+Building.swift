@@ -235,19 +235,28 @@ extension TLASpec {
 }
 
 extension TLASpec {
-  /// Renders each Algorithm authored in this builder as an independent
-  /// PlusCal module. Direct TLA+ specifications have no Algorithm source and
-  /// therefore return an empty array instead of inventing a reverse lowering.
-  func renderAuthoredPlusCalModules() throws -> [String] {
-    try sourceAlgorithms.map { algorithm in
-      let renderer = AlgorithmPlusCalRenderer(model: algorithm.model)
-      let sourceProperties = try renderer.sourcePropertyDefinitions()
-      let sourcePropertyNames = sourceProperties.map(\.name)
-      let loweredPropertyNames = invariants.map(\.name) + temporalProperties.map(\.name)
-      guard Set(sourcePropertyNames).count == sourcePropertyNames.count,
-            Set(loweredPropertyNames).count == loweredPropertyNames.count,
-            Set(sourcePropertyNames).union(renderer.translatorOwnedPropertyNames()) == Set(loweredPropertyNames)
-      else {
+  /// Renders the sole Algorithm authored in this builder as a PlusCal module.
+  /// Direct TLA+ specifications and multi-algorithm source are not silently
+  /// split into ad-hoc exports; callers must use a source model with one
+  /// compiler-owned root module.
+  func renderAuthoredPlusCalModule() throws -> String {
+    guard sourceAlgorithms.count == 1, let algorithm = sourceAlgorithms.first else {
+      throw AlgorithmPlusCalRenderDiagnostic(
+        failedConcept: "authored PlusCal module root",
+        path: "TLASpec.sourceAlgorithms",
+        expected: "exactly one authored Algorithm",
+        actual: "\(sourceAlgorithms.count) authored Algorithms",
+        nextSafeAction: "Compile one canonical Algorithm model per exported module."
+      )
+    }
+    let renderer = AlgorithmPlusCalRenderer(model: algorithm.model)
+    let sourceProperties = try renderer.sourcePropertyDefinitions()
+    let sourcePropertyNames = sourceProperties.map(\.name)
+    let loweredPropertyNames = invariants.map(\.name) + temporalProperties.map(\.name)
+    guard Set(sourcePropertyNames).count == sourcePropertyNames.count,
+          Set(loweredPropertyNames).count == loweredPropertyNames.count,
+          Set(sourcePropertyNames).union(renderer.translatorOwnedPropertyNames()) == Set(loweredPropertyNames)
+    else {
         throw AlgorithmPlusCalRenderDiagnostic(
           failedConcept: "authored PlusCal property export",
           path: "TLASpec.properties",
@@ -255,22 +264,21 @@ extension TLASpec {
           actual: "source properties \(sourcePropertyNames); lowered properties \(loweredPropertyNames)",
           nextSafeAction: "Declare properties inside Algorithm, or add a source-level renderer for the top-level declaration before exporting PlusCal."
         )
-      }
-      let declarationSections = try authoredPlusCalDeclarationSections()
-      let module = AuthoredPlusCalModule(
-        name: name.replacingOccurrences(of: " ", with: ""),
-        extendsModules: authoredPlusCalExtends,
-        constants: authoredPlusCalPrelude,
-        definitionsBeforeInstances: declarationSections.prelude,
-        instances: [],
-        definitionsAfterInstances: [],
-        algorithm: algorithm.model,
-        defineDeclarations: declarationSections.define,
-        postTranslationDeclarations: sourceProperties.map(\.definition)
-          + authoredPlusCalSymmetry
-      )
-      return try AlgorithmPlusCalRenderer(model: algorithm.model).render(module)
     }
+    let declarationSections = try authoredPlusCalDeclarationSections()
+    let module = AuthoredPlusCalModule(
+      name: name.replacingOccurrences(of: " ", with: ""),
+      extendsModules: authoredPlusCalExtends,
+      constants: authoredPlusCalPrelude,
+      definitionsBeforeInstances: declarationSections.prelude,
+      instances: [],
+      definitionsAfterInstances: [],
+      algorithm: algorithm.model,
+      defineDeclarations: declarationSections.define,
+      postTranslationDeclarations: sourceProperties.map(\.definition)
+        + authoredPlusCalSymmetry
+    )
+    return try AlgorithmPlusCalRenderer(model: algorithm.model).render(module)
   }
 
   private var authoredPlusCalExtends: [String] {

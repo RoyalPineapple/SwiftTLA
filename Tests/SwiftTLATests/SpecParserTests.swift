@@ -1841,7 +1841,7 @@ private struct DefinePhaseGeneratedModel {
 @Suite(.serialized) struct DefinePhaseGeneratedModelTests {
     @Test("generated models retain definitions in the authored PlusCal define section")
     func keepsDefinePhaseDeclaration() throws {
-        let plusCal = try #require(DefinePhaseGeneratedModel.spec.compile().renderedAuthoredPlusCalModules().first)
+        let plusCal = try DefinePhaseGeneratedModel.spec.compile().authoredPlusCalBundle().root.tla
         let define = try #require(plusCal.range(of: "define {"))
         let visible = try #require(plusCal.range(of: "Visible == TRUE"))
         #expect(define.lowerBound < visible.lowerBound)
