@@ -159,8 +159,10 @@ struct BindingValidator {
                 throw diagnostic(code: .unknownReference, path: "formalOperators.\(definition.name)", expected: "a declared operator", actual: "no operator identity")
             }
             references["formalOperators.\(definition.name).declaration"] = .operator(id)
-            let scope = try bind(definition.parameters.map(\.name), at: "formalOperators.\(definition.name).parameters", scope: [:])
+            let outerOperators = operators
+            let scope = try bindFormalParameters(definition.parameters, at: "formalOperators.\(definition.name).parameters", scope: [:])
             try validateExpression(definition.body, at: "formalOperators.\(definition.name).body", scope: scope)
+            operators = outerOperators
         }
         for function in spec.recursiveFuncs {
             guard let id = operators[function.name] else {
@@ -176,8 +178,10 @@ struct BindingValidator {
                 throw diagnostic(code: .unknownReference, path: "linkedFormalOperators.\(definition.name)", expected: "a declared operator", actual: "no operator identity")
             }
             references["linkedFormalOperators.\(definition.name).declaration"] = .operator(id)
-            let scope = try bind(definition.parameters.map(\.name), at: "linkedFormalOperators.\(definition.name).parameters", scope: [:])
+            let outerOperators = operators
+            let scope = try bindFormalParameters(definition.parameters, at: "linkedFormalOperators.\(definition.name).parameters", scope: [:])
             try validateExpression(definition.body, at: "linkedFormalOperators.\(definition.name).body", scope: scope)
+            operators = outerOperators
         }
         let localRecursiveNames = Set(spec.recursiveFuncs.map(\.name))
         for function in closure.resolvedRecursiveFuncs where !localRecursiveNames.contains(function.name) {
@@ -424,6 +428,31 @@ struct BindingValidator {
             knownBinderNames.insert(name)
             nested[name] = id
             references["\(path).\(name)"] = .binder(id)
+        }
+        return nested
+    }
+
+    private mutating func bindFormalParameters(
+        _ parameters: [FormalParameter],
+        at path: String,
+        scope: [String: BinderID]
+    ) throws -> [String: BinderID] {
+        try duplicate(parameters.map(\.name), at: path)
+        var nested = scope
+        for parameter in parameters {
+            switch parameter {
+            case .value(let name):
+                let id = BinderID(ordinal: nextBinderOrdinal)
+                nextBinderOrdinal += 1
+                knownBinderNames.insert(name)
+                nested[name] = id
+                references["\(path).\(name)"] = .binder(id)
+            case .operator(let name, _):
+                let id = OperatorID(ordinal: nextOperatorOrdinal)
+                nextOperatorOrdinal += 1
+                operators[name] = id
+                references["\(path).\(name)"] = .operator(id)
+            }
         }
         return nested
     }

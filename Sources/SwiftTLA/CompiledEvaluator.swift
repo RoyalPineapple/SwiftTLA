@@ -4,6 +4,7 @@ struct CompiledEvaluator {
     let bindings: CompiledBindings
     let enabledActions: Set<ActionID>
     let localOperators: [OperatorID: CompiledLocalOperator]
+    let operatorBindings: [OperatorID: CompiledFormalOperator]
     let remainingRecursionDepth: Int
 
     init(
@@ -12,6 +13,7 @@ struct CompiledEvaluator {
         bindings: CompiledBindings = .init(),
         enabledActions: Set<ActionID> = [],
         localOperators: [OperatorID: CompiledLocalOperator] = [:],
+        operatorBindings: [OperatorID: CompiledFormalOperator] = [:],
         remainingRecursionDepth: Int = 1_000
     ) {
         self.state = state
@@ -19,6 +21,7 @@ struct CompiledEvaluator {
         self.bindings = bindings
         self.enabledActions = enabledActions
         self.localOperators = localOperators
+        self.operatorBindings = operatorBindings
         self.remainingRecursionDepth = remainingRecursionDepth
     }
 
@@ -388,9 +391,16 @@ struct CompiledEvaluator {
                     bindings: callBindings,
                     enabledActions: enabledActions,
                     localOperators: localOperators,
+                    operatorBindings: operatorBindings,
                     remainingRecursionDepth: remainingRecursionDepth - 1
                 ).evaluate(lambda.body)
             case .reference(let id, let arity):
+                if let supplied = operatorBindings[id] {
+                    guard supplied.arity == arity else {
+                        throw EvalError.typeMismatch("Formal operator argument count differs")
+                    }
+                    return try evaluate(.operatorApplication(supplied, arguments), bindings: bindings)
+                }
                 guard let definition = model.formalOperatorDefinitions.first(where: { $0.id == id }) else {
                     throw CompiledEvaluationError.unresolvedOperator
                 }
@@ -398,11 +408,19 @@ struct CompiledEvaluator {
                     throw EvalError.typeMismatch("Formal operator argument count differs")
                 }
                 var callBindings = bindings
+                var callOperatorBindings = operatorBindings
                 for (parameter, argument) in zip(definition.parameters, arguments) {
-                    guard case .value(let argumentExpression) = argument else {
+                    switch (parameter, argument) {
+                    case (.value(let binder), .value(let argumentExpression)):
+                        callBindings = callBindings.binding(try value(argumentExpression), to: binder)
+                    case (.operator(let id, let arity), .operator(let operation)):
+                        guard operation.arity == arity else {
+                            throw EvalError.typeMismatch("Formal operator argument count differs")
+                        }
+                        callOperatorBindings[id] = operation
+                    default:
                         throw EvalError.typeMismatch("Expected a formal value argument")
                     }
-                    callBindings = callBindings.binding(try value(argumentExpression), to: parameter)
                 }
                 return try CompiledEvaluator(
                     state: state,
@@ -410,6 +428,7 @@ struct CompiledEvaluator {
                     bindings: callBindings,
                     enabledActions: enabledActions,
                     localOperators: localOperators,
+                    operatorBindings: callOperatorBindings,
                     remainingRecursionDepth: remainingRecursionDepth - 1
                 ).evaluate(definition.body)
             }
@@ -426,6 +445,7 @@ struct CompiledEvaluator {
                 bindings: bindings,
                 enabledActions: enabledActions,
                 localOperators: nested,
+                operatorBindings: operatorBindings,
                 remainingRecursionDepth: remainingRecursionDepth
             ).evaluate(body)
         case .recursiveCall(let id, let arguments):
@@ -446,6 +466,7 @@ struct CompiledEvaluator {
                     bindings: callBindings,
                     enabledActions: enabledActions,
                     localOperators: localOperators,
+                    operatorBindings: operatorBindings,
                     remainingRecursionDepth: remainingRecursionDepth - 1
                 ).evaluate(.in(.boundValue(operation.parameters[0]), domain)) {
                     throw EvalError.typeMismatch("Recursive operator argument is outside its domain")
@@ -456,6 +477,7 @@ struct CompiledEvaluator {
                     bindings: callBindings,
                     enabledActions: enabledActions,
                     localOperators: localOperators,
+                    operatorBindings: operatorBindings,
                     remainingRecursionDepth: remainingRecursionDepth - 1
                 ).evaluate(operation.body)
             }
@@ -473,6 +495,7 @@ struct CompiledEvaluator {
                     bindings: callBindings,
                     enabledActions: enabledActions,
                     localOperators: localOperators,
+                    operatorBindings: operatorBindings,
                     remainingRecursionDepth: remainingRecursionDepth - 1
                 ).evaluate(function.body)
             }

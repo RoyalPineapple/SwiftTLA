@@ -182,7 +182,7 @@ struct CompilerPipelineCanonicalizationTests {
     func compiledFormalCallsUseOperatorIDs() throws {
         let double = FormalOperatorDefinition(
             name: "Double",
-            parameters: [.init(name: "value")],
+            parameters: [.value("value")],
             body: .multiply(.variable("value"), .int(2))
         )
         let spec = TLASpec(

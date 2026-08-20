@@ -21,9 +21,7 @@ struct CompiledLowerer {
         let formalOperators: [CompiledFormalOperatorDefinition] = try spec.formalOperatorDefinitions.map { definition in
             CompiledFormalOperatorDefinition(
                 id: try operatorID(at: "formalOperators.\(definition.name).declaration"),
-                parameters: try definition.parameters.map {
-                    try binder(at: "formalOperators.\(definition.name).parameters.\($0.name)")
-                },
+                parameters: try lower(definition.parameters, at: "formalOperators.\(definition.name).parameters"),
                 body: try lower(definition.body, at: "formalOperators.\(definition.name).body")
             )
         }
@@ -42,9 +40,7 @@ struct CompiledLowerer {
             .map { definition in
                 CompiledFormalOperatorDefinition(
                     id: try operatorID(at: "linkedFormalOperators.\(definition.name).declaration"),
-                    parameters: try definition.parameters.map {
-                        try binder(at: "linkedFormalOperators.\(definition.name).parameters.\($0.name)")
-                    },
+                    parameters: try lower(definition.parameters, at: "linkedFormalOperators.\(definition.name).parameters"),
                     body: try lower(definition.body, at: "linkedFormalOperators.\(definition.name).body")
                 )
             }
@@ -234,6 +230,20 @@ struct CompiledLowerer {
             domain: try lowerOptional(operation.domain, at: "\(path).domain"),
             body: try lower(operation.body, at: "\(path).body")
         )
+    }
+
+    private func lower(
+        _ parameters: [FormalParameter],
+        at path: String
+    ) throws -> [CompiledFormalParameter] {
+        try parameters.map { parameter in
+            switch parameter {
+            case .value(let name):
+                return .value(try binder(at: "\(path).\(name)"))
+            case .operator(let name, let arity):
+                return .operator(try operatorID(at: "\(path).\(name)"), arity: arity)
+            }
+        }
     }
 
     private func lower(_ lambda: FormalLambda, at path: String) throws -> CompiledFormalLambda {

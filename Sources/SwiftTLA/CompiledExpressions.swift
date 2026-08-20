@@ -74,6 +74,13 @@ struct CompiledFormalLambda: Sendable {
 enum CompiledFormalOperator: Sendable {
     case lambda(CompiledFormalLambda)
     case reference(OperatorID, arity: Int)
+
+    var arity: Int {
+        switch self {
+        case .lambda(let lambda): return lambda.parameters.count
+        case .reference(_, let arity): return arity
+        }
+    }
 }
 
 indirect enum CompiledFormalCallArgument: Sendable {
@@ -118,8 +125,13 @@ struct CompiledInvariant: Sendable {
 
 struct CompiledFormalOperatorDefinition: Sendable {
     let id: OperatorID
-    let parameters: [BinderID]
+    let parameters: [CompiledFormalParameter]
     let body: CompiledStateExpr
+}
+
+enum CompiledFormalParameter: Sendable {
+    case value(BinderID)
+    case `operator`(OperatorID, arity: Int)
 }
 
 struct CompiledRecursiveFunction: Sendable {
