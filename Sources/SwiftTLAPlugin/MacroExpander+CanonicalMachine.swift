@@ -5,31 +5,27 @@ extension MacroExpander {
     static func generateCanonicalMachineMembers(
         isActor: Bool,
         hasActions: Bool,
+        actions: [MachineSurfacePlan.Action],
         symmetricCollections: [MachineSurfacePlan.SymmetricCollection] = [],
         identityRoutedActions: Set<String> = []
     ) -> [DeclSyntax] {
         let modifier = isActor ? "" : "mutating "
         let labelField = hasActions ? "public let label: ActionLabel" : ""
-        let labelValidation = hasActions ? """
-                guard let label = Self._actionLabel(for: invocation) else {
-                    throw GeneratedMachineError.unrepresentableActionLabel(invocation)
-                }
-        """ : ""
-        let labelArgument = hasActions ? "label: label," : ""
-        let identityRoutedNames = identityRoutedActions.sorted().map { "\"\($0)\"" }.joined(separator: ", ")
-        let invocationFilter = identityRoutedActions.isEmpty
+        let identityRoutedOrdinals = identityRoutedActions.isEmpty
             ? ""
-            : ".filter { !_identityRoutedActionNames.contains($0.name) }"
-        let invocationGuard = identityRoutedActions.isEmpty
+            : identityRoutedActions.sorted().compactMap { name in
+                actions.firstIndex { $0.formalName == name }.map(String.init)
+            }.joined(separator: ", ")
+        let identityRoutedGuard = identityRoutedActions.isEmpty
             ? ""
             : """
-                guard !_identityRoutedActionNames.contains(invocation.name) else {
-                    throw GeneratedMachineError.identityRoutedActionRequiresID(invocation)
+                guard !Self._identityRoutedActionOrdinals.contains(Self._actionOrdinal(for: action)) else {
+                    throw GeneratedMachineError.identityRoutedActionRequiresID
                 }
             """
         let typedApply = hasActions ? """
             public \(modifier)func apply(_ action: ActionLabel) throws -> TransitionResult {
-                try _apply(Self._actionInvocation(for: action))
+                try _apply(action)
             }
             """ : ""
         let observation = hasActions ? """
@@ -40,11 +36,8 @@ extension MacroExpander {
             """ : ""
         let availableActions = hasActions ? """
             public func availableActions() throws -> [ActionLabel] {
-                try _machine.availableInvocations(in: _stateWithLiveCollections())\(invocationFilter).map { invocation in
-                    guard let label = Self._actionLabel(for: invocation) else {
-                        throw GeneratedMachineError.unrepresentableActionLabel(invocation)
-                    }
-                    return label
+                try _actionExecutor().availableLabels(in: _stateWithLiveCollections()).filter {
+                    !Self._identityRoutedActionOrdinals.contains(Self._actionOrdinal(for: $0))
                 }
             }
             """ : ""
@@ -77,7 +70,7 @@ extension MacroExpander {
                 _machine.snapshot
             }
             """),
-            DeclSyntax(stringLiteral: "private static let _identityRoutedActionNames: Set<String> = [\(identityRoutedNames)]"),
+            DeclSyntax(stringLiteral: "private static let _identityRoutedActionOrdinals: Set<Int> = [\(identityRoutedOrdinals)]"),
             DeclSyntax(stringLiteral: """
             private func _stateWithLiveCollections() throws -> TLAStateProjection {
                 \(stateWithLiveCollections)
@@ -86,12 +79,15 @@ extension MacroExpander {
             DeclSyntax(stringLiteral: availableActions),
             DeclSyntax(stringLiteral: typedApply),
             DeclSyntax(stringLiteral: """
-            private \(modifier)func _apply(_ invocation: TLAActionInvocation) throws -> TransitionResult {
-                \(invocationGuard)
-                \(labelValidation)
-                let evidence = try _machine.apply(invocation, from: _stateWithLiveCollections()) { _ in true }
+            private \(modifier)func _apply(_ action: ActionLabel) throws -> TransitionResult {
+                \(identityRoutedGuard)
+                let evidence = try _machine.apply(
+                    action,
+                    using: _actionExecutor(),
+                    from: _stateWithLiveCollections()
+                ) { _ in true }
                 return TransitionResult(
-                    \(labelArgument.replacingOccurrences(of: "label:", with: "action:"))
+                    action: evidence.action,
                     before: evidence.before,
                     after: evidence.after
                 )

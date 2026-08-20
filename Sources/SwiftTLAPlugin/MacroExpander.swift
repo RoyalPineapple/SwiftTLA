@@ -76,12 +76,31 @@ enum MacroExpander {
 
         if !plan.actions.isEmpty {
             decls.append(contentsOf: generateActionLabel(actions: plan.actions))
+            decls.append(DeclSyntax(stringLiteral: """
+            private func _actionExecutor() -> CompiledActionExecutor<ActionLabel> {
+                .init(
+                    runtime: _machine.runtime,
+                    actionOrdinal: { Self._actionOrdinal(for: $0) },
+                    arguments: { Self._actionArguments(for: $0) },
+                    label: { Self._actionLabel(actionAt: $0, arguments: $1) }
+                )
+            }
+            """))
+            decls.append(DeclSyntax(stringLiteral: """
+            private static func _liveInvocation(for action: ActionLabel) -> TLAActionInvocation {
+                .init(
+                    name: _machineSurfacePlan.actions[_actionOrdinal(for: action)].formalName,
+                    arguments: _actionArguments(for: action)
+                )
+            }
+            """))
         }
         decls.append(DeclSyntax(generateStateStruct(variables: plan.variables, enumInfos: model.enumInfos)))
         decls.append(DeclSyntax(stringLiteral: generateMachineSchema(model: model)))
         decls.append(contentsOf: generateCanonicalMachineMembers(
             isActor: isActor,
             hasActions: !plan.actions.isEmpty,
+            actions: plan.actions,
             symmetricCollections: plan.symmetricCollections,
             identityRoutedActions: Set(plan.collectionActions.keys)
         ))
@@ -161,8 +180,8 @@ enum MacroExpander {
                     }
                 },
                 successors: { projection, invocation in
-                    guard let label = Self._actionLabel(for: invocation),
-                          Self._actionInvocation(for: label) == invocation else {
+                    guard let ordinal = Self._machineSurfacePlan.actions.firstIndex(where: { $0.formalName == invocation.name }),
+                          let label = Self._actionLabel(actionAt: ordinal, arguments: invocation.arguments) else {
                         throw GeneratedMachineContractDiagnostic(
                             code: .actionLabelRoundTripMismatch,
                             path: "generatedBehavior.actionLabel",
@@ -172,7 +191,14 @@ enum MacroExpander {
                         )
                     }
                     _ = try State(projection: projection)
-                    return try Self._runtime().successors(Self._actionInvocation(for: label), from: projection).map { target in
+                    let runtime = try Self._runtime()
+                    let executor = CompiledActionExecutor(
+                        runtime: runtime,
+                        actionOrdinal: { Self._actionOrdinal(for: $0) },
+                        arguments: { Self._actionArguments(for: $0) },
+                        label: { Self._actionLabel(actionAt: $0, arguments: $1) }
+                    )
+                    return try executor.successors(for: label, from: projection).map { target in
                         _ = try State(projection: target)
                         return target
                     }
@@ -475,7 +501,11 @@ enum MacroExpander {
             return "case \(action.swiftIdentifier)(\(parameters))"
         }.joined(separator: "\n    ")
 
-        let toInvocationCases = actions.map { action in
+        let actionOrdinalCases = actions.enumerated().map { ordinal, action in
+            "case .\(action.swiftIdentifier): return \(ordinal)"
+        }.joined(separator: "\n        ")
+
+        let actionArgumentCases = actions.map { action in
             let publicBindings = action.bindings.filter(\.isPublic)
             let arguments = action.bindings.map { binding in
                 binding.isPublic
@@ -485,22 +515,23 @@ enum MacroExpander {
             let pattern = publicBindings.isEmpty
                 ? ".\(action.swiftIdentifier)"
                 : ".\(action.swiftIdentifier)(\(publicBindings.map { "let \($0.formalName)" }.joined(separator: ", ")))"
-            return "case \(pattern): return .init(name: \"\(action.formalName)\", arguments: [\(arguments)])"
+            return "case \(pattern): return [\(arguments)]"
         }.joined(separator: "\n        ")
 
-        let fromInvocationCases = actions.map { action in
+        let labelCases = actions.enumerated().map { ordinal, action in
             let publicBindings = action.bindings.filter(\.isPublic)
             if action.bindings.isEmpty {
-                return "case \"\(action.formalName)\" where invocation.arguments.isEmpty: return .\(action.swiftIdentifier)"
+                return "case \(ordinal) where arguments.isEmpty: return .\(action.swiftIdentifier)"
             }
             let patterns = action.bindings.enumerated().map { index, binding -> String in
                 if binding.isPublic {
                     return invocationPattern(for: binding, index: index)
+                        .replacingOccurrences(of: "invocation.arguments", with: "arguments")
                 }
-                return "\(codegenTLAValue(binding.domain[0])) == invocation.arguments[\(index)]"
+                return "\(codegenTLAValue(binding.domain[0])) == arguments[\(index)]"
             }.joined(separator: ", ")
             let arguments = publicBindings.map { "\($0.formalName): \($0.formalName)" }.joined(separator: ", ")
-            return "case \"\(action.formalName)\" where invocation.arguments.count == \(action.bindings.count): "
+            return "case \(ordinal) where arguments.count == \(action.bindings.count): "
                 + "guard \(patterns) else { return nil }; return .\(action.swiftIdentifier)\(arguments.isEmpty ? "" : "(\(arguments))")"
         }.joined(separator: "\n        ")
 
@@ -511,16 +542,23 @@ enum MacroExpander {
         }
         """),
             DeclSyntax(stringLiteral: """
-        private static func _actionInvocation(for action: ActionLabel) -> TLAActionInvocation {
+        private static func _actionOrdinal(for action: ActionLabel) -> Int {
             switch action {
-            \(toInvocationCases)
+            \(actionOrdinalCases)
             }
         }
         """),
             DeclSyntax(stringLiteral: """
-        private static func _actionLabel(for invocation: TLAActionInvocation) -> ActionLabel? {
-            switch invocation.name {
-            \(fromInvocationCases)
+        private static func _actionArguments(for action: ActionLabel) -> [TLAValue] {
+            switch action {
+            \(actionArgumentCases)
+            }
+        }
+        """),
+            DeclSyntax(stringLiteral: """
+        private static func _actionLabel(actionAt ordinal: Int, arguments: [TLAValue]) -> ActionLabel? {
+            switch ordinal {
+            \(labelCases)
             default: return nil
             }
         }
@@ -752,7 +790,11 @@ extension MacroExpander {
                             expected: "a formal collection function"
                         ))
                     }
-                    let evidence = try _machine.apply(.init(name: "\(action.formalName)"), from: formalState) { candidate in
+                    let evidence = try _machine.apply(
+                        .\(action.swiftIdentifier),
+                        using: _actionExecutor(),
+                        from: formalState
+                    ) { candidate in
                         guard case .function(let candidateValues) = candidate.value(for: token),
                               candidateValues[targetKey] != nil else { return false }
                         return candidateValues.allSatisfy { key, value in

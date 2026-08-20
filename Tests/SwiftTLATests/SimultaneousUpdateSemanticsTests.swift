@@ -80,18 +80,10 @@ struct SimultaneousUpdateSemanticsTests {
             .init(token: try #require(TLAStateProjection.Token(validating: "left")), value: .int(1)),
             .init(token: try #require(TLAStateProjection.Token(validating: "right")), value: .int(2))
         ])
-        var machine = CanonicalMachine(
-            runtime: runtime,
-            initial: initial,
-            projectionForSnapshot: { $0 },
-            snapshotFromProjection: { $0 }
-        )
-        let before = machine.snapshot
-
         do {
-            _ = try machine.apply(.init(name: "reject"))
+            _ = try runtime.successors(.init(name: "reject"), from: initial)
             Issue.record("Expected the undefined right-hand side to reject the transition")
-        } catch let GeneratedMachineError.runtime(error) {
+        } catch let error as SpecRuntime.RuntimeError {
             guard case .enumerationFailed(let requested, let evaluated, let underlying) = error else {
                 Issue.record("Expected action evaluation evidence, found \(error)")
                 return
@@ -104,8 +96,7 @@ struct SimultaneousUpdateSemanticsTests {
             }
         }
 
-        #expect(machine.snapshot == before)
-        let report = runtime.actionReport(named: "reject", in: before)
+        let report = runtime.actionReport(named: "reject", in: initial)
         #expect(report.stateCommitted == false)
         #expect(report.status == SpecRuntime.RuntimeActionReport.Status.evaluationFailed(.init(
             code: .evaluationError,

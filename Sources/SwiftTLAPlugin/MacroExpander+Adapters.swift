@@ -126,7 +126,8 @@ extension MacroExpander {
             let contiguousCommit = _reducer.reduce(event)
             if case .loss = event { _ = await subscription.resynchronize() }
             guard let commit = contiguousCommit,
-                  let action = \(model.typeName)._actionLabel(for: commit.invocation),
+                  let ordinal = \(model.typeName)._machineSurfacePlan.actions.firstIndex(where: { $0.formalName == commit.invocation.name }),
+                  let action = ordinal.flatMap({ \(model.typeName)._actionLabel(actionAt: $0, arguments: commit.invocation.arguments) }),
                   let before = try? State(projection: commit.before.state),
                   let after = try? State(projection: commit.after.state) else { return }
             switch action {

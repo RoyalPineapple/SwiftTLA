@@ -80,6 +80,42 @@ public struct SpecRuntime: Sendable {
         )
     }
 
+    func successors(
+        actionAt declarationOrder: Int,
+        arguments: [TLAValue],
+        from state: TLAStateProjection
+    ) throws -> [TLAStateProjection] {
+        let formalState = try FormalState(projection: state, compilation: compilation)
+        let request = try compiledActionRequest(
+            actionAt: declarationOrder,
+            arguments: arguments,
+            in: formalState
+        )
+        do {
+            return try runtime.successors(for: request.action, from: formalState)
+                .filter { $0.arguments.map(CompiledValue.init(formal:)) == request.arguments }
+                .map { try $0.state.projection(using: layout) }
+        } catch {
+            throw RuntimeError.evaluationUnavailable("The compiled action could not be evaluated.")
+        }
+    }
+
+    func availableActionResults(
+        in state: TLAStateProjection
+    ) throws -> [(action: Int, arguments: [TLAValue])] {
+        let formalState = try FormalState(projection: state, compilation: compilation)
+        do {
+            return try runtime.successors(from: formalState).reduce(into: []) { available, successor in
+                let result = (action: successor.action.ordinal, arguments: successor.arguments)
+                if available.last?.action != result.action || available.last?.arguments != result.arguments {
+                    available.append(result)
+                }
+            }
+        } catch {
+            throw RuntimeError.evaluationUnavailable("The compiled action results could not be enumerated.")
+        }
+    }
+
     private func availableInvocations(
         in formalState: FormalState,
         requested: TLAActionInvocation?
@@ -101,6 +137,26 @@ public struct SpecRuntime: Sendable {
                 underlying: error
             )
         }
+    }
+
+    private func compiledActionRequest(
+        actionAt declarationOrder: Int,
+        arguments: [TLAValue],
+        in formalState: FormalState
+    ) throws -> CompiledActionRequest {
+        guard layout.actions.indices.contains(declarationOrder) else {
+            throw RuntimeError.evaluationUnavailable("The compiled action reference is outside this model's action layout.")
+        }
+        let action = layout.actions[declarationOrder].id
+        let request = CompiledActionRequest(
+            compilation: compilation.identity,
+            action: action,
+            arguments: arguments.map(CompiledValue.init(formal:))
+        )
+        guard argumentSets(for: action).contains(request.arguments) else {
+            throw RuntimeError.evaluationUnavailable("The generated action arguments are outside the compiled action domain.")
+        }
+        return request
     }
 
     public func actionReport(named actionName: String, in state: TLAStateProjection) -> RuntimeActionReport {
