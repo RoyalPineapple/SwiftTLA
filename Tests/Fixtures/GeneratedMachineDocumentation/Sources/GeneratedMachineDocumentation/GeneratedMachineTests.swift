@@ -3,7 +3,7 @@
 import SwiftTLA
 
 func runGeneratedMachineTesting() async throws {
-    var machine = BoundedCounter()
+    var machine = try BoundedCounter.makeMachine()
     let initial = await machine.machineObservation()
     let result = try machine.apply(.advance)
     let beforeFailure = machine.state

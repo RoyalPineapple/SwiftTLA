@@ -80,7 +80,7 @@ struct GeneratedAlgorithmMachineTests {
 
     @Test("a bounded Algorithm generates the ordinary typed state machine")
     func generatedAlgorithmUsesTheSharedLowering() throws {
-        var model = GeneratedAlgorithmCounter()
+        var model = try GeneratedAlgorithmCounter.makeMachine()
         #expect(model.state.count == 0)
         let left = GeneratedAlgorithmCounter.ActionLabel.increment(process: .left)
         let result = try model.apply(left)
@@ -156,7 +156,7 @@ struct GeneratedSequentialMachineTests {
     func generatedSequentialAlgorithmPreservesScalarPC() throws {
         GeneratedSequentialCounter._checkParserTree()
 
-        var model = GeneratedSequentialCounter()
+        var model = try GeneratedSequentialCounter.makeMachine()
         let result = try model.apply(.increment)
         #expect(result.after.count == 1)
         #expect(result.after.pc == "finish")
@@ -462,7 +462,7 @@ struct NestedAdapterConcurrencyTests {
         let actorVariable: NestedComposedCounter.Actor.Variables = .count
         let observableLabel: NestedComposedCounter.Observable.ActionLabel = .advance
         let actorLabel: NestedComposedCounter.Actor.ActionLabel = .advance
-        var model = NestedComposedCounter()
+        var model = try NestedComposedCounter.makeMachine()
         let observable = NestedComposedCounter.Observable()
         let actor = NestedComposedCounter.Actor()
         let callbackRecorder = NestedCallbackRecorder()
@@ -723,21 +723,21 @@ struct GeneratedStateMachineTests {
 
     @Test("Model macro generates a parameterized action method")
     func modelParameterizedAction() throws {
-        var elevator = TwoCarElevatorMachine()
+        var elevator = try TwoCarElevatorMachine.makeMachine()
         _ = try elevator.applymoveElevator(id: 1)
         #expect(elevator.floor == 1)
     }
 
     @Test("Model macro forwards every list parameter to the runtime invocation")
     func modelMacroForwardsEveryVariadicParameter() throws {
-        var enabled = ThreeParameterActionMachine()
+        var enabled = try ThreeParameterActionMachine.makeMachine()
         _ = try enabled.applyboard(person: 2, elevator: 20, direction: 200)
         #expect(enabled.floor == 1)
         #expect(ThreeParameterActionMachine.spec.actions[0].bindings.map(\.name) == [
             "person", "elevator", "direction"
         ])
 
-        var invalidMiddleParameter = ThreeParameterActionMachine()
+        var invalidMiddleParameter = try ThreeParameterActionMachine.makeMachine()
         let before = invalidMiddleParameter.tlaSnapshot()
         #expect(throws: GeneratedMachineError.self) {
             try invalidMiddleParameter.apply(.board(person: 2, elevator: 30, direction: 200))
@@ -820,7 +820,7 @@ struct GeneratedStateMachineTests {
         }
         #expect(initial["floor"] == .int(0))
 
-        var machine = EndToEndThreeParameterActionMachine()
+        var machine = try EndToEndThreeParameterActionMachine.makeMachine()
         let before = machine.tlaSnapshot()
         let evidence = try machine.apply(.board(person: 2, elevator: 20, direction: 200))
         #expect(evidence.action.toInvocation() == invocation)
@@ -835,7 +835,7 @@ struct GeneratedStateMachineTests {
 
     @Test("Canonical generated machine preserves typed labels, evidence, and failed snapshots")
     func canonicalGeneratedMachineUsesCheckedThreeArgumentInvocations() throws {
-        var machine = ThreeParameterActionMachine()
+        var machine = try ThreeParameterActionMachine.makeMachine()
         let label = ThreeParameterActionMachine.ActionLabel.board(person: 2, elevator: 20, direction: 200)
         let evidence = try machine.apply(label)
 
@@ -887,7 +887,7 @@ struct GeneratedStateMachineTests {
 
     @Test("Canonical generated execution preserves the complete parameterized invocation")
     func canonicalGeneratedExecutionPreservesParameterizedInvocationEvidence() async throws {
-        var machine = EndToEndThreeParameterActionMachine()
+        var machine = try EndToEndThreeParameterActionMachine.makeMachine()
         let invocation = TLAActionInvocation(
             name: "board",
             arguments: [.int(2), .int(20), .int(200)]
@@ -923,7 +923,7 @@ struct GeneratedStateMachineTests {
     @Test("Observable and actor adapters return the canonical three-argument transition evidence")
     @MainActor
     func observableAndActorMatchCanonicalThreeArgumentEvidence() async throws {
-        var model = ThreeParameterActionMachine()
+        var model = try ThreeParameterActionMachine.makeMachine()
         let expected = try model.apply(.board(person: 2, elevator: 20, direction: 200))
 
         let observable = ThreeParameterActionMachine.Observable()
@@ -965,7 +965,7 @@ struct GeneratedStateMachineTests {
             arguments: [.int(2), .int(30), .int(200)]
         )
 
-        var model = ThreeParameterActionMachine()
+        var model = try ThreeParameterActionMachine.makeMachine()
         let modelBefore = model.tlaSnapshot()
         do {
             _ = try model.apply(.board(person: 2, elevator: 30, direction: 200))

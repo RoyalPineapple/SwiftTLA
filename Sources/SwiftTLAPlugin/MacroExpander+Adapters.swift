@@ -7,8 +7,7 @@ enum NestedAdapterKind { case actor, observable }
 extension MacroExpander {
     static func generateNestedAdapterMembers(
         kind: NestedAdapterKind,
-        canonicalModel: MacroCompilation,
-        needsPublicInitializer _: Bool
+        canonicalModel: MacroCompilation
     ) -> [DeclSyntax] {
         switch kind {
         case .actor: return generateNestedActorMembers(model: canonicalModel)

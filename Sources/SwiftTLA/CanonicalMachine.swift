@@ -184,6 +184,7 @@ public struct CanonicalTransitionEvidence<Snapshot: Equatable & Sendable>: Equat
 
 /// Reports a generated-machine execution failure.
 public enum GeneratedMachineError: Error {
+    case noInitialState
     case runtime(SpecRuntime.RuntimeError)
     /// The formal successor could not be decoded into the generated Swift
     /// state. The canonical snapshot remains unchanged.

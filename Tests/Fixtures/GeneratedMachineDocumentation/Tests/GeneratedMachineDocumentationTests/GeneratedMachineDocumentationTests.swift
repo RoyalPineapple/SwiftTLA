@@ -5,7 +5,7 @@ import SwiftTLA
 struct GeneratedMachineDocumentationTests {
     @Test("bounded model preserves state when a disabled action is rejected")
     func disabledActionRetainsSnapshot() async throws {
-        var machine = BoundedCounter()
+        var machine = try BoundedCounter.makeMachine()
         let initial = await machine.machineObservation()
         let result = try machine.apply(.advance)
         let beforeFailure = machine.state

@@ -54,15 +54,13 @@ enum MacroExpander {
 
     static func generate(
         mode: GenerationMode,
-        model: MacroCompilation,
-        needsPublicInitializer: Bool = true
+        model: MacroCompilation
     ) -> [DeclSyntax] {
         switch mode {
         case .model, .actor:
             return generateStateMachineMembers(
                 isActor: mode == .actor,
-                model: model,
-                needsPublicInitializer: needsPublicInitializer
+                model: model
             )
         case .observable:
             return generateObservableMembers(
@@ -77,28 +75,18 @@ enum MacroExpander {
 
     static func generateStateMachineMembers(
         isActor: Bool,
-        model: MacroCompilation,
-        needsPublicInitializer: Bool
+        model: MacroCompilation
     ) -> [DeclSyntax] {
         var decls: [DeclSyntax] = []
         let plan = model.machineSurface
 
-        // A generated machine is a public value surface. Swift only
-        // synthesizes an internal memberwise initializer for a public type,
-        // so emit the zero-argument construction API explicitly.
-        if needsPublicInitializer {
-            decls.append(DeclSyntax(stringLiteral: "public init() {}"))
-        }
-
         decls.append(DeclSyntax(stringLiteral: "public typealias Simulation = Self"))
 
+        decls.append(DeclSyntax(stringLiteral: "private var _machine: CanonicalMachine<State>"))
         decls.append(DeclSyntax(stringLiteral: """
-        private var _machine = CanonicalMachine(
-            runtime: \(model.typeName).runtime,
-            initial: Self._initialState(),
-            projectionForSnapshot: { try $0.formalProjection() },
-            snapshotFromProjection: { try State(projection: $0) }
-        )
+        private init(machine: CanonicalMachine<State>) {
+            _machine = machine
+        }
         """))
 
         decls.append(DeclSyntax(generateVariablesEnum(variables: plan.variables)))
@@ -129,6 +117,21 @@ enum MacroExpander {
             symmetricCollections: Dictionary(uniqueKeysWithValues: plan.symmetricCollections.map { ($0.formalName, $0) })
         ).map(DeclSyntax.init))
         decls.append(contentsOf: generateCompilationIdentityCheck(model: model))
+        decls.append(DeclSyntax(stringLiteral: """
+        public static func makeMachine() throws -> Self {
+            let runtime = try SpecRuntime(compilation: compiledSpecification())
+            guard let projection = try runtime.initialStateProjections().first else {
+                throw GeneratedMachineError.noInitialState
+            }
+            let initial = try State(projection: projection)
+            return Self(machine: CanonicalMachine(
+                runtime: runtime,
+                initial: initial,
+                projectionForSnapshot: { try $0.formalProjection() },
+                snapshotFromProjection: { try State(projection: $0) }
+            ))
+        }
+        """))
         decls.append(DeclSyntax(
             VariableDeclSyntax(
                 modifiers: [DeclModifierSyntax(name: .keyword(.public)), DeclModifierSyntax(name: .keyword(.static))],

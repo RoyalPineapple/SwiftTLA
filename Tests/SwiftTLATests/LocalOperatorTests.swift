@@ -88,7 +88,7 @@ struct LocalOperatorTests {
     #expect(body.description.contains("Count[number \\in 0..4]"))
     #expect(body.description.contains("IN Count[4]"))
 
-    var model = GeneratedTypedLocalRecursionModel()
+    var model = try GeneratedTypedLocalRecursionModel.makeMachine()
     #expect(try model.apply(.advance).after.counter == 1)
   }
 
@@ -115,7 +115,7 @@ struct LocalOperatorTests {
     #expect(definition.body.description.contains("0..bound"))
     #expect(definition.body.description.contains("SA[value0]"))
 
-    var model = GeneratedTopLevelTypedFormalDefinitionModel()
+    var model = try GeneratedTopLevelTypedFormalDefinitionModel.makeMachine()
     #expect(try model.apply(.advance).after.counter == 1)
   }
 
