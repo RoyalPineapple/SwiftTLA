@@ -78,6 +78,11 @@ struct CompiledRuntime {
         return try boolean(invariant.body, in: state, enabledActions: try enabledActions(in: state))
     }
 
+    func predicateHolds(_ predicate: CompiledStateExpr, in state: FormalState) throws -> Bool {
+        try state.requireIdentity(compilation.identity)
+        return try boolean(predicate, in: state, enabledActions: try enabledActions(in: state))
+    }
+
     func canonicalState(_ state: FormalState) throws -> FormalState {
         try state.requireIdentity(compilation.identity)
         let groups = model.symmetricCollections.map {

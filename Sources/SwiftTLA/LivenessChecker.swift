@@ -71,8 +71,81 @@ public struct TemporalAnalysisResult: Equatable, Sendable {
 /// explicit, state-changing named-action transitions.
 public struct LivenessChecker {
     public let graph: StateGraph
+    private let compilation: CompiledSpecification?
 
-    public init(graph: StateGraph) { self.graph = graph }
+    public init(compilation: CompiledSpecification, graph: StateGraph) {
+        self.graph = graph
+        self.compilation = compilation
+    }
+
+    init(graph: StateGraph) {
+        self.graph = graph
+        compilation = nil
+    }
+
+    public func analyze(
+        initialStateIDs: [StateGraph.StateID],
+        isComplete: Bool = true
+    ) -> [TemporalAnalysisResult] {
+        guard let compilation else { return [] }
+        return compilation.model.temporalProperties.map {
+            analyze(
+                $0.expression,
+                fairness: compilation.spec.fairness,
+                actions: compilation.spec.actions,
+                initialStateIDs: initialStateIDs,
+                isComplete: isComplete,
+                compilation: compilation
+            )
+        }
+    }
+
+    private func analyze(
+        _ property: CompiledTemporalExpr,
+        fairness: [FairnessCondition],
+        actions: [NamedAction],
+        initialStateIDs: [StateGraph.StateID],
+        isComplete: Bool,
+        compilation: CompiledSpecification
+    ) -> TemporalAnalysisResult {
+        let form: TemporalForm
+        let predicate: CompiledStateExpr
+        let trigger: CompiledStateExpr?
+        switch property {
+        case .always(let value): form = .always; predicate = value; trigger = nil
+        case .eventually(let value): form = .eventually; predicate = value; trigger = nil
+        case .alwaysEventually(let value): form = .alwaysEventually; predicate = value; trigger = nil
+        case .eventuallyAlways(let value): form = .eventuallyAlways; predicate = value; trigger = nil
+        case .leadsTo(let from, let to): form = .leadsTo; predicate = to; trigger = from
+        }
+        return analyze(
+            form: form,
+            fairness: fairness,
+            actions: actions,
+            initialStateIDs: initialStateIDs,
+            isComplete: isComplete,
+            predicate: { state in
+                guard let projection = graph.states[state] else {
+                    throw CompilationDiagnostic(
+                        code: .compilationIdentityMismatch,
+                        stage: .validation,
+                        path: "liveness.graph.state",
+                        expected: "a state projection",
+                        actual: "no projection",
+                        nextSafeAction: "Explore the compiled model again before checking liveness."
+                    )
+                }
+                return try predicateHolds(predicate, in: projection, compilation: compilation)
+            },
+            trigger: trigger.map { trigger in
+                { state in
+                    guard let projection = graph.states[state] else { return false }
+                    return try predicateHolds(trigger, in: projection, compilation: compilation)
+                        && !predicateHolds(predicate, in: projection, compilation: compilation)
+                }
+            }
+        )
+    }
 
     public enum TemporalResult: Equatable {
         case satisfied
@@ -95,7 +168,7 @@ public struct LivenessChecker {
         }
     }
 
-    public func fairTerminalSCCs(
+    func fairTerminalSCCs(
         _ terminalSCCs: [Set<StateGraph.StateID>],
         fairness: [FairnessCondition],
         actions: [NamedAction]
@@ -106,7 +179,7 @@ public struct LivenessChecker {
         }
     }
 
-    public func checkAlways(_ predicate: StateExpr, fairSCCs: [Set<StateGraph.StateID>]) throws -> TemporalResult {
+    func checkAlways(_ predicate: StateExpr, fairSCCs: [Set<StateGraph.StateID>]) throws -> TemporalResult {
         for component in fairSCCs {
             for state in component {
                 guard let projection = graph.states[state] else { continue }
@@ -118,7 +191,7 @@ public struct LivenessChecker {
         return .satisfied
     }
 
-    public func checkEventually(_ predicate: StateExpr, fairSCCs: [Set<StateGraph.StateID>]) throws -> TemporalResult {
+    func checkEventually(_ predicate: StateExpr, fairSCCs: [Set<StateGraph.StateID>]) throws -> TemporalResult {
         for component in fairSCCs {
             let holds = try component.contains { state in
                 try predicate.evaluateBool(in: graph.states[state]?.formalValues ?? [:])
@@ -130,7 +203,7 @@ public struct LivenessChecker {
         return .satisfied
     }
 
-    public func checkLeadsTo(_ from: StateExpr, _ to: StateExpr, fairSCCs: [Set<StateGraph.StateID>]) throws -> TemporalResult {
+    func checkLeadsTo(_ from: StateExpr, _ to: StateExpr, fairSCCs: [Set<StateGraph.StateID>]) throws -> TemporalResult {
         for component in fairSCCs {
             let hasFrom = try component.contains { try from.evaluateBool(in: graph.states[$0]?.formalValues ?? [:]) }
             let hasTo = try component.contains { try to.evaluateBool(in: graph.states[$0]?.formalValues ?? [:]) }
@@ -141,15 +214,15 @@ public struct LivenessChecker {
         return .satisfied
     }
 
-    public func checkAlwaysEventually(_ predicate: StateExpr, fairSCCs: [Set<StateGraph.StateID>]) throws -> TemporalResult {
+    func checkAlwaysEventually(_ predicate: StateExpr, fairSCCs: [Set<StateGraph.StateID>]) throws -> TemporalResult {
         try checkEventually(predicate, fairSCCs: fairSCCs)
     }
 
-    public func checkEventuallyAlways(_ predicate: StateExpr, fairSCCs: [Set<StateGraph.StateID>]) throws -> TemporalResult {
+    func checkEventuallyAlways(_ predicate: StateExpr, fairSCCs: [Set<StateGraph.StateID>]) throws -> TemporalResult {
         try checkAlways(predicate, fairSCCs: fairSCCs)
     }
 
-    public func checkAll(
+    func checkAll(
         _ properties: [NamedTemporal],
         fairness: [FairnessCondition],
         actions: [NamedAction]
@@ -166,12 +239,59 @@ public struct LivenessChecker {
         }
     }
 
-    public func analyze(
+    func analyze(
         _ property: TemporalExpr,
         fairness: [FairnessCondition],
         actions: [NamedAction],
         initialStateIDs: [StateGraph.StateID],
         isComplete: Bool = true
+    ) -> TemporalAnalysisResult {
+        let form: TemporalForm
+        let predicate: StateExpr
+        let trigger: StateExpr?
+        switch property {
+        case .always(let value): form = .always; predicate = value; trigger = nil
+        case .eventually(let value): form = .eventually; predicate = value; trigger = nil
+        case .alwaysEventually(let value): form = .alwaysEventually; predicate = value; trigger = nil
+        case .eventuallyAlways(let value): form = .eventuallyAlways; predicate = value; trigger = nil
+        case .leadsTo(let from, let to): form = .leadsTo; predicate = to; trigger = from
+        }
+        return analyze(
+            form: form,
+            fairness: fairness,
+            actions: actions,
+            initialStateIDs: initialStateIDs,
+            isComplete: isComplete,
+            predicate: { state in
+                guard let projection = graph.states[state] else { return false }
+                return try predicate.evaluateBool(in: projection.formalValues)
+            },
+            trigger: trigger.map { trigger in
+                { state in
+                    guard let projection = graph.states[state] else { return false }
+                    return try trigger.evaluateBool(in: projection.formalValues)
+                        && !predicate.evaluateBool(in: projection.formalValues)
+                }
+            }
+        )
+    }
+
+    private enum TemporalForm {
+        case always
+        case eventually
+        case alwaysEventually
+        case eventuallyAlways
+        case leadsTo
+    }
+
+    private func analyze(
+        form: TemporalForm,
+        fairness: [FairnessCondition],
+        actions: [NamedAction],
+        initialStateIDs: [StateGraph.StateID],
+        isComplete: Bool,
+        predicate: (StateGraph.StateID) throws -> Bool,
+        trigger: ((StateGraph.StateID) throws -> Bool)?
     ) -> TemporalAnalysisResult {
         guard isComplete else {
             return .init(status: .unavailable, reason: .incompleteExploration)
@@ -191,7 +311,9 @@ public struct LivenessChecker {
 
         let values: [StateGraph.StateID: Bool]
         do {
-            values = try evaluate(property)
+            values = try Dictionary(uniqueKeysWithValues: graph.states.keys.map { state in
+                (state, try predicate(state))
+            })
         } catch {
             return .init(status: .unavailable, reason: .evaluationFailed, diagnostic: String(describing: error))
         }
@@ -200,36 +322,28 @@ public struct LivenessChecker {
         let negative = Set(values.compactMap { $0.value ? nil : $0.key })
         let search: LassoSearch
 
-        switch property {
+        switch form {
         case .always:
             search = .init(cycleStates: allStates, prefixStates: negative, cycleRequiredStates: [])
         case .eventually:
-            search = .init(
-                cycleStates: negative,
-                prefixStates: [],
-                prefixContinuationStates: negative,
-                cycleRequiredStates: []
-            )
+            search = .init(cycleStates: negative, prefixStates: [], prefixContinuationStates: negative, cycleRequiredStates: [])
         case .alwaysEventually:
             search = .init(cycleStates: negative, prefixStates: [], cycleRequiredStates: [])
         case .eventuallyAlways:
             search = .init(cycleStates: allStates, prefixStates: [], cycleRequiredStates: negative)
-        case .leadsTo(let from, _):
+        case .leadsTo:
+            guard let trigger else {
+                return .init(status: .unavailable, reason: .evaluationFailed, diagnostic: "Missing leads-to trigger")
+            }
             let triggers: Set<StateGraph.StateID>
             do {
-                triggers = Set(try graph.states.compactMap { state, projection in
-                    try from.evaluateBool(in: projection.formalValues)
-                        && !(selfValue(projection.formalValues, for: property)) ? state : nil
+                triggers = Set(try graph.states.keys.compactMap { state in
+                    try trigger(state) ? state : nil
                 })
             } catch {
                 return .init(status: .unavailable, reason: .evaluationFailed, diagnostic: String(describing: error))
             }
-            search = .init(
-                cycleStates: negative,
-                prefixStates: triggers,
-                prefixContinuationStates: negative,
-                cycleRequiredStates: []
-            )
+            search = .init(cycleStates: negative, prefixStates: triggers, prefixContinuationStates: negative, cycleRequiredStates: [])
         }
 
         let components = fairComponents(in: search.cycleStates, fairness: fairness, enabled: enabled)
@@ -253,22 +367,13 @@ public struct LivenessChecker {
         )
     }
 
-    private func selfValue(_ values: [String: TLAValue], for property: TemporalExpr) -> Bool {
-        switch property {
-        case .leadsTo(_, let to): return (try? to.evaluateBool(in: values)) ?? false
-        default: return false
-        }
-    }
-
-    private func evaluate(_ property: TemporalExpr) throws -> [StateGraph.StateID: Bool] {
-        try Dictionary(uniqueKeysWithValues: graph.states.map { state, projection in
-            let predicate: StateExpr
-            switch property {
-            case .always(let value), .eventually(let value), .alwaysEventually(let value), .eventuallyAlways(let value): predicate = value
-            case .leadsTo(_, let value): predicate = value
-            }
-            return (state, try predicate.evaluateBool(in: projection.formalValues))
-        })
+    private func predicateHolds(
+        _ predicate: CompiledStateExpr,
+        in projection: TLAStateProjection,
+        compilation: CompiledSpecification
+    ) throws -> Bool {
+        let state = try FormalState(projection: projection, compilation: compilation)
+        return try CompiledRuntime(compilation: compilation).predicateHolds(predicate, in: state)
     }
 
     private func graphHasOnlyKnownActions(_ names: Set<String>) -> Bool {
