@@ -6,7 +6,7 @@ struct CoreConformanceFixtureContractTests {
   @Test("bounded elevator wrapper provenance is ordered and declares its only value normalization")
   func declaresOrderedElevatorInvocationMappings() throws {
     let manifest = try JSONDecoder().decode(
-      CoreConformanceCasesManifestV1.self,
+      CoreConformanceCasesManifest.self,
       from: fixtureData("cases.json"))
     let elevator = try #require(manifest.cases.first { $0.id == "multicar-elevator" })
 
@@ -27,11 +27,11 @@ struct CoreConformanceFixtureContractTests {
   func preservesAdversarialGraphContract() throws {
     let expectedCase = adversarialFixtureCase()
     let data = try fixtureData("spike/run-1/events.jsonl")
-    let parser = TLCGraphEventParserV1(expectedCase: expectedCase)
+    let parser = TLCGraphEventParser(expectedCase: expectedCase)
     let stream = try parser.parse(data)
     let run = try parser.parseCanonicalRun(
       data,
-      result: TLCProcessResultV1(
+      result: TLCProcessResult(
         status: 0,
         stdout: "Model checking completed. No error has been found.",
         stderr: ""
@@ -62,32 +62,32 @@ struct CoreConformanceFixtureContractTests {
     var changedEdges = expectedEdges
     let changedIndex = try #require(changedEdges.firstIndex { $0.action == "SelfLoop" })
     let original = changedEdges[changedIndex]
-    changedEdges[changedIndex] = CanonicalEdgeV1(
+    changedEdges[changedIndex] = CanonicalEdge(
       source: original.source,
       action: "WrongSelfLoop",
       target: original.target
     )
     let states = Array(run.graph.states.values)
     let initialStates = run.graph.initialStateKeys.compactMap { run.graph.states[$0] }
-    let changedGraph = try CanonicalGraphV1(
+    let changedGraph = try CanonicalGraph(
       initialStates: initialStates,
       states: states,
       edges: changedEdges
     )
-    let changedRun = try CanonicalRunV1(
+    let changedRun = try CanonicalRun(
       graph: changedGraph,
       observableActions: Set(changedEdges.map(\.action)),
       outcome: .exhaustiveSuccess
     )
 
-    let comparison = exactFiniteTLCGraphV1(expected: run, actual: changedRun)
+    let comparison = exactFiniteTLCGraph(expected: run, actual: changedRun)
     #expect(!comparison.isConformant)
     #expect(comparison.differences.contains { $0.category == .edges })
   }
 
   @Test("retained corrupt graph fixtures fail closed")
   func rejectsRetainedCorruptFixtures() throws {
-    let parser = TLCGraphEventParserV1(expectedCase: adversarialFixtureCase())
+    let parser = TLCGraphEventParser(expectedCase: adversarialFixtureCase())
     let corruptFixtures = [
       "altered-payload",
       "altered-provenance",
@@ -102,7 +102,7 @@ struct CoreConformanceFixtureContractTests {
     ]
 
     for name in corruptFixtures {
-      #expect(throws: TLCGraphEventErrorV1.self) {
+      #expect(throws: TLCGraphEventError.self) {
         try parser.parse(fixtureData("spike/corrupt/\(name).jsonl"))
       }
     }
@@ -116,37 +116,37 @@ struct CoreConformanceFixtureContractTests {
     let footerDigest = try #require(
       footer.split(separator: "\"bodySha256\":\"").dropFirst().first?.split(separator: "\"").first
     )
-    #expect(SHA256V1.hex(body) == footerDigest)
+    #expect(SHA256.hex(body) == footerDigest)
   }
 
   @Test("DOT, traces, and graph streams cannot substitute for each other")
   func rejectsCrossFormatEvidence() throws {
-    let graphParser = TLCGraphEventParserV1(expectedCase: adversarialFixtureCase())
-    let traceParser = TLCTraceParserV1()
+    let graphParser = TLCGraphEventParser(expectedCase: adversarialFixtureCase())
+    let traceParser = TLCTraceParser()
     let graph = try fixtureData("spike/run-1/events.jsonl")
     let dot = try fixtureData("spike/run-1/graph.dot")
     let trace = try fixtureData("spike/violation/counterexample.json")
 
-    #expect(throws: TLCGraphEventErrorV1.self) { try graphParser.parse(dot) }
-    #expect(throws: TLCGraphEventErrorV1.self) { try graphParser.parse(trace) }
-    #expect(throws: TLCTraceErrorV1.self) { try traceParser.parseCounterexample(graph) }
-    #expect(throws: TLCTraceErrorV1.self) { try traceParser.parseCounterexample(dot) }
+    #expect(throws: TLCGraphEventError.self) { try graphParser.parse(dot) }
+    #expect(throws: TLCGraphEventError.self) { try graphParser.parse(trace) }
+    #expect(throws: TLCTraceError.self) { try traceParser.parseCounterexample(graph) }
+    #expect(throws: TLCTraceError.self) { try traceParser.parseCounterexample(dot) }
   }
 
-  private func xValue(_ state: TLCGraphStateV1) -> String? {
+  private func xValue(_ state: TLCGraphState) -> String? {
     state.bindings.first { $0.name == "x" }?.tla
   }
 
-  private func adversarialFixtureCase() -> CoreConformanceCaseV1 {
+  private func adversarialFixtureCase() -> CoreConformanceCase {
     let module = fixtureURL("Tools/TLCGraphBridge/spike/BridgeGraph.tla")
     let configuration = fixtureURL("Tools/TLCGraphBridge/spike/BridgeGraph.cfg")
     let arguments = ["-workers", "1", "-fp", "1", "-seed", "1", "-deadlock"]
-    return try! CoreConformanceCaseV1(
+    return try! CoreConformanceCase(
       id: "adversarial-core-graph-v1",
-      moduleSHA256: SHA256V1.hex(try! Data(contentsOf: module)),
-      cfgSHA256: SHA256V1.hex(try! Data(contentsOf: configuration)),
+      moduleSHA256: SHA256.hex(try! Data(contentsOf: module)),
+      cfgSHA256: SHA256.hex(try! Data(contentsOf: configuration)),
       arguments: arguments,
-      argumentsSHA256: CoreConformanceCaseV1.argumentsDigest(arguments),
+      argumentsSHA256: CoreConformanceCase.argumentsDigest(arguments),
       workers: 1,
       fingerprintPolynomial: 1,
       deadlock: false,

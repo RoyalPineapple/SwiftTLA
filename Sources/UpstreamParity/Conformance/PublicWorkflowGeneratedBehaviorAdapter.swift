@@ -1,33 +1,33 @@
 import Foundation
 import SwiftTLA
 
-public enum PublicWorkflowGeneratedBehaviorAuthorityV1: String, Codable, Sendable {
+public enum PublicWorkflowGeneratedBehaviorAuthority: String, Codable, Sendable {
   case diagnosticOnly
 }
 
-public struct PublicWorkflowGeneratedFixtureManifestV1: Equatable, Codable, Sendable {
+public struct PublicWorkflowGeneratedFixtureManifest: Equatable, Codable, Sendable {
   public let id: String
-  public let sourceInput: CoreEvidenceReferenceV1
-  public let configuration: CoreEvidenceReferenceV1
+  public let sourceInput: CoreEvidenceReference
+  public let configuration: CoreEvidenceReference
   public let semanticCitations: [String]
-  public let provenance: CoreDivergenceProvenanceV1
-  public let builderEvidence: CoreEvidenceReferenceV1
-  public let generatedEvidence: CoreEvidenceReferenceV1
+  public let provenance: CoreDivergenceProvenance
+  public let builderEvidence: CoreEvidenceReference
+  public let generatedEvidence: CoreEvidenceReference
   public let actionNames: [String]
   public let maxStates: Int
-  public let expectedOutcome: PublicWorkflowExpectedOutcomeV1
+  public let expectedOutcome: PublicWorkflowExpectedOutcome
 
   public init(
     id: String,
-    sourceInput: CoreEvidenceReferenceV1,
-    configuration: CoreEvidenceReferenceV1,
+    sourceInput: CoreEvidenceReference,
+    configuration: CoreEvidenceReference,
     semanticCitations: [String],
-    provenance: CoreDivergenceProvenanceV1,
-    builderEvidence: CoreEvidenceReferenceV1,
-    generatedEvidence: CoreEvidenceReferenceV1,
+    provenance: CoreDivergenceProvenance,
+    builderEvidence: CoreEvidenceReference,
+    generatedEvidence: CoreEvidenceReference,
     actionNames: [String],
     maxStates: Int,
-    expectedOutcome: PublicWorkflowExpectedOutcomeV1
+    expectedOutcome: PublicWorkflowExpectedOutcome
   ) throws {
     self.id = id
     self.sourceInput = sourceInput
@@ -52,7 +52,7 @@ public struct PublicWorkflowGeneratedFixtureManifestV1: Equatable, Codable, Send
           semanticCitations.allSatisfy({ !$0.isEmpty }), !actionNames.isEmpty,
           actionNames.allSatisfy({ !$0.isEmpty }), Set(actionNames).count == actionNames.count,
           maxStates > 0 else {
-      throw PublicWorkflowGovernanceErrorV1.invalidField(record: id, field: "generated fixture manifest")
+      throw PublicWorkflowGovernanceError.invalidField(record: id, field: "generated fixture manifest")
     }
   }
 
@@ -64,19 +64,19 @@ public struct PublicWorkflowGeneratedFixtureManifestV1: Equatable, Codable, Send
     guard provenance.moduleSHA256 == sourceInput.sha256,
           provenance.cfgSHA256 == self.configuration.sha256,
           provenance.argumentsSHA256 == self.configuration.sha256 else {
-      throw PublicWorkflowGovernanceErrorV1.inconsistentReference(
+      throw PublicWorkflowGovernanceError.inconsistentReference(
         record: id, field: "generated fixture provenance binding")
     }
     _ = source
   }
 
-  private func resolved(_ reference: CoreEvidenceReferenceV1, relativeTo root: URL) throws -> URL {
+  private func resolved(_ reference: CoreEvidenceReference, relativeTo root: URL) throws -> URL {
     let canonicalRoot = root.standardizedFileURL.resolvingSymlinksInPath()
     let candidate = canonicalRoot.appendingPathComponent(reference.path).standardizedFileURL.resolvingSymlinksInPath()
     guard candidate.path.hasPrefix(canonicalRoot.path + "/"),
           FileManager.default.fileExists(atPath: candidate.path),
-          SHA256V1.hex(try Data(contentsOf: candidate)) == reference.sha256 else {
-      throw PublicWorkflowGovernanceErrorV1.inconsistentReference(
+          SHA256.hex(try Data(contentsOf: candidate)) == reference.sha256 else {
+      throw PublicWorkflowGovernanceError.inconsistentReference(
         record: id, field: "generated fixture artifact \(reference.path)")
     }
     return candidate
@@ -88,51 +88,51 @@ public struct PublicWorkflowGeneratedFixtureManifestV1: Equatable, Codable, Send
   }
 
   public init(from decoder: Decoder) throws {
-    let container = try PublicWorkflowDecodingV1.container(decoder, keyedBy: CodingKeys.self)
+    let container = try PublicWorkflowDecoding.container(decoder, keyedBy: CodingKeys.self)
     try self.init(
       id: try container.decode(String.self, forKey: .id),
-      sourceInput: try container.decode(CoreEvidenceReferenceV1.self, forKey: .sourceInput),
-      configuration: try container.decode(CoreEvidenceReferenceV1.self, forKey: .configuration),
+      sourceInput: try container.decode(CoreEvidenceReference.self, forKey: .sourceInput),
+      configuration: try container.decode(CoreEvidenceReference.self, forKey: .configuration),
       semanticCitations: try container.decode([String].self, forKey: .semanticCitations),
-      provenance: try container.decode(CoreDivergenceProvenanceV1.self, forKey: .provenance),
-      builderEvidence: try container.decode(CoreEvidenceReferenceV1.self, forKey: .builderEvidence),
-      generatedEvidence: try container.decode(CoreEvidenceReferenceV1.self, forKey: .generatedEvidence),
+      provenance: try container.decode(CoreDivergenceProvenance.self, forKey: .provenance),
+      builderEvidence: try container.decode(CoreEvidenceReference.self, forKey: .builderEvidence),
+      generatedEvidence: try container.decode(CoreEvidenceReference.self, forKey: .generatedEvidence),
       actionNames: try container.decode([String].self, forKey: .actionNames),
       maxStates: try container.decode(Int.self, forKey: .maxStates),
-      expectedOutcome: try container.decode(PublicWorkflowExpectedOutcomeV1.self, forKey: .expectedOutcome))
+      expectedOutcome: try container.decode(PublicWorkflowExpectedOutcome.self, forKey: .expectedOutcome))
   }
 }
 
-public struct PublicWorkflowGeneratedBehaviorManifestV1: Equatable, Codable, Sendable {
-  public static let schema = "PublicWorkflowGeneratedBehaviorManifestV1"
+public struct PublicWorkflowGeneratedBehaviorManifest: Equatable, Codable, Sendable {
+  public static let schema = "PublicWorkflowGeneratedBehaviorManifest"
   public let schema: String
-  public let authority: PublicWorkflowGeneratedBehaviorAuthorityV1
-  public let fixtures: [PublicWorkflowGeneratedFixtureManifestV1]
-  public let toolchain: PublicWorkflowGeneratedBehaviorToolchainV1
+  public let authority: PublicWorkflowGeneratedBehaviorAuthority
+  public let fixtures: [PublicWorkflowGeneratedFixtureManifest]
+  public let toolchain: PublicWorkflowGeneratedBehaviorToolchain
 
   public init(
-    authority: PublicWorkflowGeneratedBehaviorAuthorityV1,
-    fixtures: [PublicWorkflowGeneratedFixtureManifestV1],
-    toolchain: PublicWorkflowGeneratedBehaviorToolchainV1
+    authority: PublicWorkflowGeneratedBehaviorAuthority,
+    fixtures: [PublicWorkflowGeneratedFixtureManifest],
+    toolchain: PublicWorkflowGeneratedBehaviorToolchain
   ) throws {
     try self.init(schema: Self.schema, authority: authority, fixtures: fixtures, toolchain: toolchain)
   }
 
   public init(
     schema: String,
-    authority: PublicWorkflowGeneratedBehaviorAuthorityV1,
-    fixtures: [PublicWorkflowGeneratedFixtureManifestV1],
-    toolchain: PublicWorkflowGeneratedBehaviorToolchainV1
+    authority: PublicWorkflowGeneratedBehaviorAuthority,
+    fixtures: [PublicWorkflowGeneratedFixtureManifest],
+    toolchain: PublicWorkflowGeneratedBehaviorToolchain
   ) throws {
     guard schema == Self.schema, authority == .diagnosticOnly, !fixtures.isEmpty else {
-      throw PublicWorkflowGovernanceErrorV1.invalidSchema(schema)
+      throw PublicWorkflowGovernanceError.invalidSchema(schema)
     }
     try toolchain.validate()
     var ids = Set<String>()
     for fixture in fixtures {
       try fixture.validate()
       guard ids.insert(fixture.id).inserted else {
-        throw PublicWorkflowGovernanceErrorV1.duplicateID(kind: "generated fixture", id: fixture.id)
+        throw PublicWorkflowGovernanceError.duplicateID(kind: "generated fixture", id: fixture.id)
       }
     }
     self.schema = schema
@@ -154,33 +154,33 @@ public struct PublicWorkflowGeneratedBehaviorManifestV1: Equatable, Codable, Sen
   private enum CodingKeys: String, CodingKey, CaseIterable { case schema, authority, fixtures, toolchain }
 
   public init(from decoder: Decoder) throws {
-    let container = try PublicWorkflowDecodingV1.container(decoder, keyedBy: CodingKeys.self)
+    let container = try PublicWorkflowDecoding.container(decoder, keyedBy: CodingKeys.self)
     try self.init(
       schema: try container.decode(String.self, forKey: .schema),
-      authority: try container.decode(PublicWorkflowGeneratedBehaviorAuthorityV1.self, forKey: .authority),
-      fixtures: try container.decode([PublicWorkflowGeneratedFixtureManifestV1].self, forKey: .fixtures),
-      toolchain: try container.decode(PublicWorkflowGeneratedBehaviorToolchainV1.self, forKey: .toolchain))
+      authority: try container.decode(PublicWorkflowGeneratedBehaviorAuthority.self, forKey: .authority),
+      fixtures: try container.decode([PublicWorkflowGeneratedFixtureManifest].self, forKey: .fixtures),
+      toolchain: try container.decode(PublicWorkflowGeneratedBehaviorToolchain.self, forKey: .toolchain))
   }
 }
 
-public struct PublicWorkflowGeneratedBehaviorToolchainV1: Equatable, Codable, Sendable {
-  public static let schema = "PublicWorkflowGeneratedBehaviorToolchainV1"
+public struct PublicWorkflowGeneratedBehaviorToolchain: Equatable, Codable, Sendable {
+  public static let schema = "PublicWorkflowGeneratedBehaviorToolchain"
 
   public struct Entry: Equatable, Codable, Sendable {
     public let id: String
-    public let evidence: CoreEvidenceReferenceV1
+    public let evidence: CoreEvidenceReference
 
     private enum CodingKeys: String, CodingKey, CaseIterable { case id, evidence }
 
-    public init(id: String, evidence: CoreEvidenceReferenceV1) throws {
+    public init(id: String, evidence: CoreEvidenceReference) throws {
       self.id = id
       self.evidence = evidence
       try evidence.validate()
     }
 
     public init(from decoder: Decoder) throws {
-      let container = try PublicWorkflowDecodingV1.container(decoder, keyedBy: CodingKeys.self)
-      try self.init(id: try container.decode(String.self, forKey: .id), evidence: try container.decode(CoreEvidenceReferenceV1.self, forKey: .evidence))
+      let container = try PublicWorkflowDecoding.container(decoder, keyedBy: CodingKeys.self)
+      try self.init(id: try container.decode(String.self, forKey: .id), evidence: try container.decode(CoreEvidenceReference.self, forKey: .evidence))
     }
   }
 
@@ -198,7 +198,7 @@ public struct PublicWorkflowGeneratedBehaviorToolchainV1: Equatable, Codable, Se
   }
 
   public init(from decoder: Decoder) throws {
-    let container = try PublicWorkflowDecodingV1.container(decoder, keyedBy: CodingKeys.self)
+    let container = try PublicWorkflowDecoding.container(decoder, keyedBy: CodingKeys.self)
     try self.init(
       schema: try container.decode(String.self, forKey: .schema),
       dependencies: try container.decode([Entry].self, forKey: .dependencies),
@@ -211,20 +211,20 @@ public struct PublicWorkflowGeneratedBehaviorToolchainV1: Equatable, Codable, Se
           dependencies.count == 4,
           Set(notApplicable.map(\.id)) == ["bridge", "java", "tlc"],
           notApplicable.count == 3 else {
-      throw PublicWorkflowGovernanceErrorV1.invalidField(record: "generated behavior toolchain", field: "identity coverage")
+      throw PublicWorkflowGovernanceError.invalidField(record: "generated behavior toolchain", field: "identity coverage")
     }
   }
 
-  func dependency(_ id: String) -> CoreEvidenceReferenceV1 {
+  func dependency(_ id: String) -> CoreEvidenceReference {
     dependencies.first(where: { $0.id == id })!.evidence
   }
 
-  func nonApplicable(_ id: String) -> CoreEvidenceReferenceV1 {
+  func nonApplicable(_ id: String) -> CoreEvidenceReference {
     notApplicable.first(where: { $0.id == id })!.evidence
   }
 }
 
-struct PublicWorkflowGeneratedMachineHarnessV1 {
+struct PublicWorkflowGeneratedMachineHarness {
   let initialStates: [[String: TLAValue]]
   let actionNames: [String]
   let apply: ([String: TLAValue], String) -> GeneratedActionResult
@@ -254,46 +254,46 @@ enum GeneratedActionResult: Equatable, Sendable {
   case evaluationUnavailable(actionName: String, diagnostic: SpecRuntime.ActionEvaluationDiagnostic)
 }
 
-public struct PublicWorkflowGeneratedFixtureConfigurationV1: Codable, Sendable {
-  public static let schema = "PublicWorkflowGeneratedFixtureConfigurationV1"
+public struct PublicWorkflowGeneratedFixtureConfiguration: Codable, Sendable {
+  public static let schema = "PublicWorkflowGeneratedFixtureConfiguration"
   public let schema: String
   public let fixtureID: String
   public let maxStates: Int
   public let actionNames: [String]
-  public let expectedOutcome: PublicWorkflowExpectedOutcomeV1
+  public let expectedOutcome: PublicWorkflowExpectedOutcome
 
   private enum CodingKeys: String, CodingKey, CaseIterable {
     case schema, fixtureID, maxStates, actionNames, expectedOutcome
   }
 
   public init(from decoder: Decoder) throws {
-    let container = try PublicWorkflowDecodingV1.container(decoder, keyedBy: CodingKeys.self)
+    let container = try PublicWorkflowDecoding.container(decoder, keyedBy: CodingKeys.self)
     schema = try container.decode(String.self, forKey: .schema)
     fixtureID = try container.decode(String.self, forKey: .fixtureID)
     maxStates = try container.decode(Int.self, forKey: .maxStates)
     actionNames = try container.decode([String].self, forKey: .actionNames)
-    expectedOutcome = try container.decode(PublicWorkflowExpectedOutcomeV1.self, forKey: .expectedOutcome)
+    expectedOutcome = try container.decode(PublicWorkflowExpectedOutcome.self, forKey: .expectedOutcome)
     guard schema == Self.schema, !fixtureID.isEmpty, maxStates > 0,
           !actionNames.isEmpty, Set(actionNames).count == actionNames.count else {
-      throw PublicWorkflowGovernanceErrorV1.invalidField(record: fixtureID, field: "generated fixture configuration")
+      throw PublicWorkflowGovernanceError.invalidField(record: fixtureID, field: "generated fixture configuration")
     }
   }
 }
 
-public struct PublicWorkflowGeneratedBehaviorRunV1: Codable, Sendable {
-  public static let schema = "PublicWorkflowGeneratedBehaviorRunV1"
+public struct PublicWorkflowGeneratedBehaviorRun: Codable, Sendable {
+  public static let schema = "PublicWorkflowGeneratedBehaviorRun"
   public let schema: String
-  public let manifest: CoreEvidenceReferenceV1
-  public let comparison: PublicWorkflowComparisonV1
-  public let builderObservation: CoreEvidenceReferenceV1
-  public let generatedObservation: CoreEvidenceReferenceV1
+  public let manifest: CoreEvidenceReference
+  public let comparison: PublicWorkflowComparison
+  public let builderObservation: CoreEvidenceReference
+  public let generatedObservation: CoreEvidenceReference
   public let mismatchFingerprint: String?
 
   public init(
-    manifest: CoreEvidenceReferenceV1,
-    comparison: PublicWorkflowComparisonV1,
-    builderObservation: CoreEvidenceReferenceV1,
-    generatedObservation: CoreEvidenceReferenceV1,
+    manifest: CoreEvidenceReference,
+    comparison: PublicWorkflowComparison,
+    builderObservation: CoreEvidenceReference,
+    generatedObservation: CoreEvidenceReference,
     mismatchFingerprint: String?
   ) {
     self.schema = Self.schema
@@ -305,7 +305,7 @@ public struct PublicWorkflowGeneratedBehaviorRunV1: Codable, Sendable {
   }
 }
 
-public struct PublicWorkflowGeneratedBehaviorAdapterV1: Sendable {
+public struct PublicWorkflowGeneratedBehaviorAdapter: Sendable {
   public init() {}
 
   @discardableResult
@@ -313,14 +313,14 @@ public struct PublicWorkflowGeneratedBehaviorAdapterV1: Sendable {
     manifestURL: URL,
     projectRoot: URL,
     outputDirectory: URL,
-    correlation: PublicWorkflowCaseRunCorrelationV1
-  ) throws -> PublicWorkflowGeneratedBehaviorRunV1 {
+    correlation: PublicWorkflowCaseRunCorrelation
+  ) throws -> PublicWorkflowGeneratedBehaviorRun {
     let root = try validatedDirectory(projectRoot)
     let manifestURL = try resolved(manifestURL, beneath: root)
     let manifestData = try Data(contentsOf: manifestURL)
-    let manifest = try PublicWorkflowGeneratedBehaviorManifestV1.load(manifestData)
+    let manifest = try PublicWorkflowGeneratedBehaviorManifest.load(manifestData)
     guard let fixture = manifest.fixtures.first(where: { $0.id == correlation.caseID }) else {
-      throw PublicWorkflowGovernanceErrorV1.inconsistentReference(record: correlation.caseID, field: "generated fixture selection")
+      throw PublicWorkflowGovernanceError.inconsistentReference(record: correlation.caseID, field: "generated fixture selection")
     }
 
     let sourceData = try verifiedData(for: fixture.sourceInput, beneath: root)
@@ -329,34 +329,34 @@ public struct PublicWorkflowGeneratedBehaviorAdapterV1: Sendable {
     let expectedGeneratedData = try verifiedData(for: fixture.generatedEvidence, beneath: root)
     try validateToolchain(manifest.toolchain, provenance: fixture.provenance, beneath: root)
     try validateProvenance(fixture.provenance, source: sourceData, configuration: configurationData, toolchain: manifest.toolchain)
-    let configuration = try JSONDecoder().decode(PublicWorkflowGeneratedFixtureConfigurationV1.self, from: configurationData)
+    let configuration = try JSONDecoder().decode(PublicWorkflowGeneratedFixtureConfiguration.self, from: configurationData)
     guard configuration.fixtureID == fixture.id,
           configuration.maxStates == fixture.maxStates,
           configuration.actionNames.sorted() == fixture.actionNames.sorted(),
           configuration.expectedOutcome == fixture.expectedOutcome else {
-      throw PublicWorkflowGovernanceErrorV1.inconsistentReference(record: fixture.id, field: "generated fixture configuration")
+      throw PublicWorkflowGovernanceError.inconsistentReference(record: fixture.id, field: "generated fixture configuration")
     }
 
-    let compiledFixture = try PublicWorkflowGeneratedFixtureRegistryV1.fixture(id: fixture.id)
+    let compiledFixture = try PublicWorkflowGeneratedFixtureRegistry.fixture(id: fixture.id)
     guard compiledFixture.machine.actionNames.sorted() == fixture.actionNames.sorted(),
           !compiledFixture.machine.initialStates.isEmpty else {
-      throw PublicWorkflowGovernanceErrorV1.inconsistentReference(record: fixture.id, field: "compiled generated fixture")
+      throw PublicWorkflowGovernanceError.inconsistentReference(record: fixture.id, field: "compiled generated fixture")
     }
     let declaredCase = try declaredCase(for: fixture)
     let builder = try observeBuilder(spec: compiledFixture.builderSpec, maxStates: fixture.maxStates)
     let generated = try observeGenerated(machine: compiledFixture.machine, maxStates: fixture.maxStates)
     try verifyObservation(builder, equals: expectedBuilderData, reference: fixture.builderEvidence)
     try verifyObservation(generated, equals: expectedGeneratedData, reference: fixture.generatedEvidence)
-    let outcome: PublicWorkflowExpectedOutcomeV1 = generated == builder ? .exact : .difference
+    let outcome: PublicWorkflowExpectedOutcome = generated == builder ? .exact : .difference
     guard outcome == fixture.expectedOutcome else {
-      throw PublicWorkflowGovernanceErrorV1.inconsistentReference(record: fixture.id, field: "generated behavior expected outcome")
+      throw PublicWorkflowGovernanceError.inconsistentReference(record: fixture.id, field: "generated behavior expected outcome")
     }
-    let diagnosticCode: PublicWorkflowDiagnosticCodeV1 = outcome == .exact ? .exactAgreement : .observationDifference
+    let diagnosticCode: PublicWorkflowDiagnosticCode = outcome == .exact ? .exactAgreement : .observationDifference
     let builderBinding = try binding(
       case: declaredCase, correlation: correlation, evidence: fixture.builderEvidence)
     let generatedBinding = try binding(
       case: declaredCase, correlation: correlation, evidence: fixture.generatedEvidence)
-    let comparison = try PublicWorkflowComparisonV1(
+    let comparison = try PublicWorkflowComparison(
       caseID: declaredCase.id,
       correlation: correlation,
       left: generated,
@@ -373,7 +373,7 @@ public struct PublicWorkflowGeneratedBehaviorAdapterV1: Sendable {
     try writeCanonical(generated, to: generatedURL)
     try writeCanonical(comparison, to: comparisonURL)
     let fingerprint = outcome == .difference ? try stableMismatchFingerprint(generated: generated, builder: builder) : nil
-    let run = PublicWorkflowGeneratedBehaviorRunV1(
+    let run = PublicWorkflowGeneratedBehaviorRun(
       manifest: try reference(for: manifestURL, beneath: root, data: manifestData),
       comparison: comparison,
       builderObservation: try reference(for: builderURL, beneath: root),
@@ -384,11 +384,11 @@ public struct PublicWorkflowGeneratedBehaviorAdapterV1: Sendable {
   }
 
   private func binding(
-    case declaredCase: PublicWorkflowConformanceCaseV1,
-    correlation: PublicWorkflowCaseRunCorrelationV1,
-    evidence: CoreEvidenceReferenceV1
-  ) throws -> PublicWorkflowEvidenceBindingV1 {
-    try PublicWorkflowEvidenceBindingV1(
+    case declaredCase: PublicWorkflowConformanceCase,
+    correlation: PublicWorkflowCaseRunCorrelation,
+    evidence: CoreEvidenceReference
+  ) throws -> PublicWorkflowEvidenceBinding {
+    try PublicWorkflowEvidenceBinding(
       caseID: declaredCase.id,
       gateRunID: correlation.gateRunID,
       evidenceRunID: correlation.comparisonRunID,
@@ -398,12 +398,12 @@ public struct PublicWorkflowGeneratedBehaviorAdapterV1: Sendable {
       evidence: evidence)
   }
 
-  private func declaredCase(for fixture: PublicWorkflowGeneratedFixtureManifestV1) throws -> PublicWorkflowConformanceCaseV1 {
-    try PublicWorkflowConformanceCaseV1(
+  private func declaredCase(for fixture: PublicWorkflowGeneratedFixtureManifest) throws -> PublicWorkflowConformanceCase {
+    try PublicWorkflowConformanceCase(
       id: fixture.id,
       category: .generatedBehavior,
       publicName: "bounded generated fixture \(fixture.id)",
-      finiteBounds: try CoreFiniteBoundsV1(summary: "generated fixture bound", limits: ["states": fixture.maxStates]),
+      finiteBounds: try CoreFiniteBounds(summary: "generated fixture bound", limits: ["states": fixture.maxStates]),
       semanticCitations: fixture.semanticCitations,
       provenance: fixture.provenance,
       sourceInput: fixture.sourceInput,
@@ -413,59 +413,59 @@ public struct PublicWorkflowGeneratedBehaviorAdapterV1: Sendable {
   }
 
   private func validateProvenance(
-    _ provenance: CoreDivergenceProvenanceV1,
+    _ provenance: CoreDivergenceProvenance,
     source: Data,
     configuration: Data,
-    toolchain: PublicWorkflowGeneratedBehaviorToolchainV1
+    toolchain: PublicWorkflowGeneratedBehaviorToolchain
   ) throws {
-    guard provenance.moduleSHA256 == SHA256V1.hex(source),
-          provenance.cfgSHA256 == SHA256V1.hex(configuration),
-          provenance.argumentsSHA256 == SHA256V1.hex(configuration),
-          provenance.tlcTag == "not-applicable-generated-behavior-v1",
-          provenance.tlcCommit == "not-applicable-generated-behavior-v1",
+    guard provenance.moduleSHA256 == SHA256.hex(source),
+          provenance.cfgSHA256 == SHA256.hex(configuration),
+          provenance.argumentsSHA256 == SHA256.hex(configuration),
+          provenance.tlcTag == "not-applicable-generated-behavior",
+          provenance.tlcCommit == "not-applicable-generated-behavior",
           provenance.tlcJarSHA256 == toolchain.nonApplicable("tlc").sha256,
-          provenance.javaDistribution == "not-applicable-generated-behavior-v1",
-          provenance.javaVersion == "not-applicable-generated-behavior-v1",
+          provenance.javaDistribution == "not-applicable-generated-behavior",
+          provenance.javaVersion == "not-applicable-generated-behavior",
           provenance.javaArchiveSHA256 == toolchain.nonApplicable("java").sha256,
-          provenance.bridgeClass == "SwiftTLA.PublicWorkflowGeneratedFixtureRegistryV1",
+          provenance.bridgeClass == "SwiftTLA.PublicWorkflowGeneratedFixtureRegistry",
           provenance.bridgeSourceSHA256 == fixtureRegistryDigest(from: source),
           provenance.bridgeBinarySHA256 == toolchain.nonApplicable("bridge").sha256 else {
-      throw PublicWorkflowGovernanceErrorV1.inconsistentReference(record: provenance.caseID, field: "generated source/configuration provenance")
+      throw PublicWorkflowGovernanceError.inconsistentReference(record: provenance.caseID, field: "generated source/configuration provenance")
     }
   }
 
   private func fixtureRegistryDigest(from source: Data) -> String {
-    SHA256V1.hex(source)
+    SHA256.hex(source)
   }
 
   private func validateToolchain(
-    _ toolchain: PublicWorkflowGeneratedBehaviorToolchainV1,
-    provenance: CoreDivergenceProvenanceV1,
+    _ toolchain: PublicWorkflowGeneratedBehaviorToolchain,
+    provenance: CoreDivergenceProvenance,
     beneath root: URL
   ) throws {
     for dependency in toolchain.dependencies { _ = try verifiedData(for: dependency.evidence, beneath: root) }
     for reason in toolchain.notApplicable { _ = try verifiedData(for: reason.evidence, beneath: root) }
-    guard provenance.bridgeClass == "SwiftTLA.PublicWorkflowGeneratedFixtureRegistryV1" else {
-      throw PublicWorkflowGovernanceErrorV1.inconsistentReference(record: provenance.caseID, field: "compiled fixture registry identity")
+    guard provenance.bridgeClass == "SwiftTLA.PublicWorkflowGeneratedFixtureRegistry" else {
+      throw PublicWorkflowGovernanceError.inconsistentReference(record: provenance.caseID, field: "compiled fixture registry identity")
     }
   }
 
   private func verifyObservation(
-    _ observation: PublicWorkflowCanonicalObservationV1,
+    _ observation: PublicWorkflowCanonicalObservation,
     equals expected: Data,
-    reference: CoreEvidenceReferenceV1
+    reference: CoreEvidenceReference
   ) throws {
-    let retained = try JSONDecoder().decode(PublicWorkflowCanonicalObservationV1.self, from: expected)
+    let retained = try JSONDecoder().decode(PublicWorkflowCanonicalObservation.self, from: expected)
     guard observation == retained else {
-      throw PublicWorkflowGovernanceErrorV1.inconsistentReference(record: reference.path, field: "computed canonical observation")
+      throw PublicWorkflowGovernanceError.inconsistentReference(record: reference.path, field: "computed canonical observation")
     }
   }
 
-  private func verifiedData(for reference: CoreEvidenceReferenceV1, beneath root: URL) throws -> Data {
+  private func verifiedData(for reference: CoreEvidenceReference, beneath root: URL) throws -> Data {
     let url = try resolved(root.appendingPathComponent(reference.path), beneath: root)
     let data = try Data(contentsOf: url)
-    guard SHA256V1.hex(data) == reference.sha256 else {
-      throw PublicWorkflowGovernanceErrorV1.inconsistentReference(record: reference.path, field: "SHA-256")
+    guard SHA256.hex(data) == reference.sha256 else {
+      throw PublicWorkflowGovernanceError.inconsistentReference(record: reference.path, field: "SHA-256")
     }
     return data
   }
@@ -474,7 +474,7 @@ public struct PublicWorkflowGeneratedBehaviorAdapterV1: Sendable {
     let resolved = url.resolvingSymlinksInPath().standardizedFileURL
     var isDirectory: ObjCBool = false
     guard FileManager.default.fileExists(atPath: resolved.path, isDirectory: &isDirectory), isDirectory.boolValue else {
-      throw PublicWorkflowGovernanceErrorV1.invalidField(record: url.path, field: "project root")
+      throw PublicWorkflowGovernanceError.invalidField(record: url.path, field: "project root")
     }
     return resolved
   }
@@ -494,7 +494,7 @@ public struct PublicWorkflowGeneratedBehaviorAdapterV1: Sendable {
     }.standardizedFileURL
     guard resolved.path == root.path || resolved.path.hasPrefix(root.path + "/") else {
       let field = url.path.hasPrefix("/") ? "path outside project root" : "path escape"
-      throw PublicWorkflowGovernanceErrorV1.invalidField(record: url.path, field: field)
+      throw PublicWorkflowGovernanceError.invalidField(record: url.path, field: field)
     }
     return resolved
   }
@@ -502,7 +502,7 @@ public struct PublicWorkflowGeneratedBehaviorAdapterV1: Sendable {
   private func writableOutputDirectory(_ output: URL, beneath root: URL) throws -> URL {
     let path = try resolved(output, beneath: root)
     guard !FileManager.default.fileExists(atPath: path.path) else {
-      throw PublicWorkflowGovernanceErrorV1.invalidField(record: path.path, field: "output already exists")
+      throw PublicWorkflowGovernanceError.invalidField(record: path.path, field: "output already exists")
     }
     try FileManager.default.createDirectory(at: path, withIntermediateDirectories: true)
     return path
@@ -515,34 +515,34 @@ public struct PublicWorkflowGeneratedBehaviorAdapterV1: Sendable {
   }
 
   private func stableMismatchFingerprint(
-    generated: PublicWorkflowCanonicalObservationV1,
-    builder: PublicWorkflowCanonicalObservationV1
+    generated: PublicWorkflowCanonicalObservation,
+    builder: PublicWorkflowCanonicalObservation
   ) throws -> String {
     struct Difference: Encodable {
-      let generated: PublicWorkflowCanonicalObservationV1
-      let builder: PublicWorkflowCanonicalObservationV1
+      let generated: PublicWorkflowCanonicalObservation
+      let builder: PublicWorkflowCanonicalObservation
     }
-    return SHA256V1.hex(try canonicalData(Difference(generated: generated, builder: builder)))
+    return SHA256.hex(try canonicalData(Difference(generated: generated, builder: builder)))
   }
 
   private func writeCanonical<T: Encodable>(_ value: T, to url: URL) throws {
     try canonicalData(value).write(to: url, options: .atomic)
   }
 
-  private func reference(for url: URL, beneath root: URL, data: Data? = nil) throws -> CoreEvidenceReferenceV1 {
+  private func reference(for url: URL, beneath root: URL, data: Data? = nil) throws -> CoreEvidenceReference {
     let resolved = try resolved(url, beneath: root)
     let retained = try data ?? Data(contentsOf: resolved)
     let prefix = root.path + "/"
     guard resolved.path.hasPrefix(prefix) else {
-      throw PublicWorkflowGovernanceErrorV1.invalidField(record: resolved.path, field: "project-relative evidence")
+      throw PublicWorkflowGovernanceError.invalidField(record: resolved.path, field: "project-relative evidence")
     }
-    return try CoreEvidenceReferenceV1(path: String(resolved.path.dropFirst(prefix.count)), sha256: SHA256V1.hex(retained))
+    return try CoreEvidenceReference(path: String(resolved.path.dropFirst(prefix.count)), sha256: SHA256.hex(retained))
   }
 
-  private func observeBuilder(spec: TLASpec, maxStates: Int) throws -> PublicWorkflowCanonicalObservationV1 {
+  private func observeBuilder(spec: TLASpec, maxStates: Int) throws -> PublicWorkflowCanonicalObservation {
     do {
       let compilation = try spec.compile()
-      let run = try SwiftGraphAdapterV1().adapt(ModelChecker(compilation: compilation, maxStates: maxStates).explore())
+      let run = try SwiftGraphAdapter().adapt(ModelChecker(compilation: compilation, maxStates: maxStates).explore())
       return try observation(
         graph: run.graph,
         outcome: run.outcome,
@@ -555,21 +555,21 @@ public struct PublicWorkflowGeneratedBehaviorAdapterV1: Sendable {
   }
 
   private func observeGenerated(
-    machine: PublicWorkflowGeneratedMachineHarnessV1,
+    machine: PublicWorkflowGeneratedMachineHarness,
     maxStates: Int
-  ) throws -> PublicWorkflowCanonicalObservationV1 {
+  ) throws -> PublicWorkflowCanonicalObservation {
     var queue: [[String: TLAValue]] = []
-    var seen = Set<CanonicalStateKeyV1>()
-    var states: [CanonicalStateKeyV1: CanonicalStateV1] = [:]
-    var initial = [CanonicalStateV1]()
-    var edges = [CanonicalEdgeV1]()
-    var predecessors: [CanonicalStateKeyV1: (CanonicalStateKeyV1, String)] = [:]
+    var seen = Set<CanonicalStateKey>()
+    var states: [CanonicalStateKey: CanonicalState] = [:]
+    var initial = [CanonicalState]()
+    var edges = [CanonicalEdge]()
+    var predecessors: [CanonicalStateKey: (CanonicalStateKey, String)] = [:]
     var failures = [String]()
     var diagnostics = [String]()
     var failureTrace: [String]?
 
     for state in machine.initialStates {
-      let canonical = CanonicalStateV1(bindings: state.mapValues(CanonicalValueV1.init))
+      let canonical = CanonicalState(bindings: state.mapValues(CanonicalValue.init))
       guard seen.insert(canonical.key).inserted else { continue }
       initial.append(canonical)
       states[canonical.key] = canonical
@@ -585,13 +585,13 @@ public struct PublicWorkflowGeneratedBehaviorAdapterV1: Sendable {
       }
       let state = queue[index]
       index += 1
-      let source = CanonicalStateV1(bindings: state.mapValues(CanonicalValueV1.init))
+      let source = CanonicalState(bindings: state.mapValues(CanonicalValue.init))
       for actionName in machine.actionNames.sorted() {
         switch machine.apply(state, actionName) {
         case .enabled(_, let successors):
           for successor in successors {
-            let target = CanonicalStateV1(bindings: successor.mapValues(CanonicalValueV1.init))
-            edges.append(CanonicalEdgeV1(source: source.key, action: actionName, target: target.key))
+            let target = CanonicalState(bindings: successor.mapValues(CanonicalValue.init))
+            edges.append(CanonicalEdge(source: source.key, action: actionName, target: target.key))
             if seen.insert(target.key).inserted {
               states[target.key] = target
               predecessors[target.key] = (source.key, actionName)
@@ -616,8 +616,8 @@ public struct PublicWorkflowGeneratedBehaviorAdapterV1: Sendable {
       }
     }
 
-    let graph = try CanonicalGraphV1(initialStates: initial, states: Array(states.values), edges: edges)
-    let outcome: CanonicalOutcomeV1 = failures.isEmpty ? .exhaustiveSuccess : .executionError(failures.sorted().joined(separator: "|"))
+    let graph = try CanonicalGraph(initialStates: initial, states: Array(states.values), edges: edges)
+    let outcome: CanonicalOutcome = failures.isEmpty ? .exhaustiveSuccess : .executionError(failures.sorted().joined(separator: "|"))
     return try observation(
       graph: graph,
       outcome: outcome,
@@ -630,15 +630,15 @@ public struct PublicWorkflowGeneratedBehaviorAdapterV1: Sendable {
   }
 
   private func observation(
-    graph: CanonicalGraphV1,
-    outcome: CanonicalOutcomeV1,
+    graph: CanonicalGraph,
+    outcome: CanonicalOutcome,
     diagnostics: [String],
-    traces: [CanonicalTraceV1],
+    traces: [CanonicalTrace],
     propertyOutcomes: ([String: TLAValue]) -> [SpecRuntime.RuntimePropertyOutcome],
     explicitFailures: [String] = [],
     explicitTrace: [String]? = nil,
-    traceForState: ((CanonicalStateKeyV1) -> [String])? = nil
-  ) throws -> PublicWorkflowCanonicalObservationV1 {
+    traceForState: ((CanonicalStateKey) -> [String])? = nil
+  ) throws -> PublicWorkflowCanonicalObservation {
     let outcomeDetails = describe(outcome)
     let properties = propertyProjection(
       graph: graph,
@@ -653,7 +653,7 @@ public struct PublicWorkflowGeneratedBehaviorAdapterV1: Sendable {
     let traces = traces.flatMap { trace in
       trace.steps.map { "\(trace.id):\($0.state.canonicalEncoding):\($0.action)" }
     }.sorted()
-    return try PublicWorkflowCanonicalObservationV1(
+    return try PublicWorkflowCanonicalObservation(
       initialStates: graph.initialStateKeys.sorted().map(\.canonicalEncoding).ifEmpty("unavailable:no initial state"),
       reachableStates: graph.states.keys.sorted().map(\.canonicalEncoding),
       labeledTransitions: labeledTransitions,
@@ -665,16 +665,16 @@ public struct PublicWorkflowGeneratedBehaviorAdapterV1: Sendable {
       trace: explicitTrace ?? properties.trace ?? traces.nilIfEmpty)
   }
 
-  private func unavailableObservation(_ failure: String) throws -> PublicWorkflowCanonicalObservationV1 {
-    try PublicWorkflowCanonicalObservationV1(
+  private func unavailableObservation(_ failure: String) throws -> PublicWorkflowCanonicalObservation {
+    try PublicWorkflowCanonicalObservation(
       initialStates: ["unavailable"], reachableStates: [], labeledTransitions: [], enabledTransitions: [],
       properties: ["outcome:unavailable"], deadlocks: [], failures: [failure], diagnostics: [failure])
   }
 
   private func propertyProjection(
-    graph: CanonicalGraphV1,
+    graph: CanonicalGraph,
     outcomes: ([String: TLAValue]) -> [SpecRuntime.RuntimePropertyOutcome],
-    traceForState: (CanonicalStateKeyV1) -> [String]
+    traceForState: (CanonicalStateKey) -> [String]
   ) -> (records: [String], failures: [String], diagnostics: [String], trace: [String]?) {
     var records = [String]()
     var failures = [String]()
@@ -707,9 +707,9 @@ public struct PublicWorkflowGeneratedBehaviorAdapterV1: Sendable {
     return (records.sorted(), failures.sorted(), diagnostics.sorted(), trace)
   }
 
-  private func graphTrace(to target: CanonicalStateKeyV1, in graph: CanonicalGraphV1) -> [String] {
+  private func graphTrace(to target: CanonicalStateKey, in graph: CanonicalGraph) -> [String] {
     var queue = graph.initialStateKeys.sorted()
-    var predecessors = [CanonicalStateKeyV1: (CanonicalStateKeyV1, String)]()
+    var predecessors = [CanonicalStateKey: (CanonicalStateKey, String)]()
     var index = 0
     while index < queue.count {
       let state = queue[index]
@@ -723,7 +723,7 @@ public struct PublicWorkflowGeneratedBehaviorAdapterV1: Sendable {
     return ["graph:\(target.canonicalEncoding):unreachable"]
   }
 
-  private func describe(_ outcome: CanonicalOutcomeV1) -> (outcome: String, failure: [String], diagnostics: [String]) {
+  private func describe(_ outcome: CanonicalOutcome) -> (outcome: String, failure: [String], diagnostics: [String]) {
     switch outcome {
     case .exhaustiveSuccess: return ("exhaustiveSuccess", [], [])
     case .invariantViolation(let invariant): return ("invariantViolation", ["invariant:\(invariant)"], ["checker:invariant violation"])
@@ -734,8 +734,8 @@ public struct PublicWorkflowGeneratedBehaviorAdapterV1: Sendable {
   }
 
   private func trace(
-    to state: CanonicalStateKeyV1,
-    predecessors: [CanonicalStateKeyV1: (CanonicalStateKeyV1, String)]
+    to state: CanonicalStateKey,
+    predecessors: [CanonicalStateKey: (CanonicalStateKey, String)]
   ) -> [String] {
     var steps = ["generated:\(state.canonicalEncoding):init"]
     var cursor = state
@@ -753,7 +753,7 @@ private extension Array where Element == String {
 }
 
 private extension TLAValue {
-  init(_ value: CanonicalValueV1) {
+  init(_ value: CanonicalValue) {
     switch value {
     case .integer(let value): self = .int(value)
     case .boolean(let value): self = .bool(value)

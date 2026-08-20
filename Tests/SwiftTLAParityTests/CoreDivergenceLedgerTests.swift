@@ -6,57 +6,57 @@ struct CoreDivergenceLedgerTests {
   @Test("governance registers reject duplicate IDs and broken references")
   func rejectsDuplicateAndUnknownReferences() throws {
     let record = try divergenceRecord()
-    #expect(throws: CoreGovernanceErrorV1.duplicateID(kind: "divergence", id: "edge-mismatch")) {
-      _ = try CoreDivergenceLedgerV1(records: [record, record])
+    #expect(throws: CoreGovernanceError.duplicateID(kind: "divergence", id: "edge-mismatch")) {
+      _ = try CoreDivergenceLedger(records: [record, record])
     }
 
-    let ledger = try CoreDivergenceLedgerV1(records: [record])
-    #expect(throws: CoreGovernanceErrorV1.unknownCaseID("edge-mismatch-regression")) {
+    let ledger = try CoreDivergenceLedger(records: [record])
+    #expect(throws: CoreGovernanceError.unknownCaseID("edge-mismatch-regression")) {
       try ledger.validate(caseIDs: ["edge-mismatch"])
     }
 
     let entry = try supportEntry(linkedDivergences: ["missing-divergence"])
-    let surface = try CoreSupportSurfaceV1(entries: [entry])
-    #expect(throws: CoreGovernanceErrorV1.unknownDivergenceID("missing-divergence")) {
+    let surface = try CoreSupportSurface(entries: [entry])
+    #expect(throws: CoreGovernanceError.unknownDivergenceID("missing-divergence")) {
       try surface.validate(caseIDs: ["edge-mismatch", "edge-mismatch-regression"], ledger: ledger)
     }
   }
 
   @Test("governance rejects incomplete provenance, invalid dispositions, and excluded categories")
   func rejectsInvalidGovernanceDefinitions() throws {
-    #expect(throws: CoreGovernanceErrorV1.invalidField(record: "edge-mismatch", field: "provenance")) {
-      _ = try CoreDivergenceProvenanceV1(
+    #expect(throws: CoreGovernanceError.invalidField(record: "edge-mismatch", field: "provenance")) {
+      _ = try CoreDivergenceProvenance(
         caseID: "edge-mismatch", moduleSHA256: digest, cfgSHA256: digest, argumentsSHA256: digest,
         tlcTag: "", tlcCommit: "commit", tlcJarSHA256: digest, javaDistribution: "Temurin",
         javaVersion: "17", javaArchiveSHA256: digest, bridgeClass: "bridge",
         bridgeSourceSHA256: digest, bridgeBinarySHA256: digest)
     }
-    #expect(throws: CoreGovernanceErrorV1.invalidField(record: "edge-mismatch", field: "latestComparison")) {
-      _ = try CoreDivergenceRecordV1(
+    #expect(throws: CoreGovernanceError.invalidField(record: "edge-mismatch", field: "latestComparison")) {
+      _ = try CoreDivergenceRecord(
         id: "edge-mismatch", provenance: try provenance(), semanticCitations: ["citation"],
         reproducer: try bounds(), originalEvidence: try evidence("original.json"),
         permanentRegressionCaseID: "edge-mismatch-regression", classification: .swiftTLADefect,
         disposition: .resolved, normalizedDifferenceFingerprint: "fingerprint",
-        latestComparison: try CoreDivergenceComparisonV1(
+        latestComparison: try CoreDivergenceComparison(
           evidence: try evidence("latest.json"), outcome: .difference,
           normalizedDifferenceFingerprint: "changed"))
     }
-    #expect(throws: CoreGovernanceErrorV1.unsupportedCategory("temporal")) {
-      _ = try CoreSupportSurfaceEntryV1(
+    #expect(throws: CoreGovernanceError.unsupportedCategory("temporal")) {
+      _ = try CoreSupportSurfaceEntry(
         id: "temporal", behavior: "eventually", category: .temporal, finiteBounds: try bounds(),
-        mandatoryCaseIDs: ["edge-mismatch"], requestedStatus: .unsupported, reason: "outside V1")
+        mandatoryCaseIDs: ["edge-mismatch"], requestedStatus: .unsupported, reason: "outside declared support")
     }
   }
 
   @Test("resolved divergences retain an exact latest comparison")
   func rejectsResolvedDifferenceEvenWhenFingerprintMatches() throws {
-    #expect(throws: CoreGovernanceErrorV1.invalidField(record: "edge-mismatch", field: "latestComparison")) {
-      _ = try CoreDivergenceRecordV1(
+    #expect(throws: CoreGovernanceError.invalidField(record: "edge-mismatch", field: "latestComparison")) {
+      _ = try CoreDivergenceRecord(
         id: "edge-mismatch", provenance: try provenance(), semanticCitations: ["citation"],
         reproducer: try bounds(), originalEvidence: try evidence("original.json"),
         permanentRegressionCaseID: "edge-mismatch-regression", classification: .swiftTLADefect,
         disposition: .resolved, normalizedDifferenceFingerprint: "fingerprint",
-        latestComparison: try CoreDivergenceComparisonV1(
+        latestComparison: try CoreDivergenceComparison(
           evidence: try evidence("latest.json"), outcome: .difference,
           normalizedDifferenceFingerprint: "fingerprint"))
     }
@@ -64,12 +64,12 @@ struct CoreDivergenceLedgerTests {
 
   @Test("governance JSON rejects unknown fields and invalid enum values")
   func rejectsMalformedGovernanceJSON() throws {
-    let data = try JSONEncoder().encode(try CoreDivergenceLedgerV1(records: [try divergenceRecord()]))
+    let data = try JSONEncoder().encode(try CoreDivergenceLedger(records: [try divergenceRecord()]))
     var object = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
     object["misspelledRecords"] = []
     let unknownField = try JSONSerialization.data(withJSONObject: object)
-    #expect(throws: CoreGovernanceErrorV1.invalidField(record: "decode", field: "unknown field misspelledRecords")) {
-      _ = try JSONDecoder().decode(CoreDivergenceLedgerV1.self, from: unknownField)
+    #expect(throws: CoreGovernanceError.invalidField(record: "decode", field: "unknown field misspelledRecords")) {
+      _ = try JSONDecoder().decode(CoreDivergenceLedger.self, from: unknownField)
     }
 
     var invalidEnumObject = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
@@ -78,28 +78,28 @@ struct CoreDivergenceLedgerTests {
     invalidEnumObject["records"] = records
     let invalidEnum = try JSONSerialization.data(withJSONObject: invalidEnumObject)
     #expect(throws: DecodingError.self) {
-      _ = try JSONDecoder().decode(CoreDivergenceLedgerV1.self, from: invalidEnum)
+      _ = try JSONDecoder().decode(CoreDivergenceLedger.self, from: invalidEnum)
     }
   }
 
   @Test("admission contracts retain evidence correlations and complete aggregate counts")
   func validatesAdmissionCompleteness() throws {
     let runID = UUID()
-    let correlation = try CoreSupportCaseRunCorrelationV1(
+    let correlation = try CoreSupportCaseRunCorrelation(
       caseID: "edge-mismatch", gateRunID: runID, swiftRunID: runID, tlcRunID: runID,
       comparisonRunID: runID)
-    let admission = try CoreSupportAdmissionV1(gateRunID: runID, entries: [
-      try CoreSupportAdmissionEntryV1(
+    let admission = try CoreSupportAdmission(gateRunID: runID, entries: [
+      try CoreSupportAdmissionEntry(
         supportID: "clock-transitions", decision: .admitted, reasonCodes: [],
         mandatoryCaseIDs: ["edge-mismatch"], divergenceIDs: [], evidence: [try evidence("comparison.json")],
         caseRunCorrelations: [correlation]),
-      try CoreSupportAdmissionEntryV1(
+      try CoreSupportAdmissionEntry(
         supportID: "missing", decision: .blocked, reasonCodes: [.missingEvidence],
         mandatoryCaseIDs: ["edge-mismatch"], divergenceIDs: []),
-      try CoreSupportAdmissionEntryV1(
+      try CoreSupportAdmissionEntry(
         supportID: "stale", decision: .blocked, reasonCodes: [.foreignRun],
         mandatoryCaseIDs: ["edge-mismatch"], divergenceIDs: []),
-      try CoreSupportAdmissionEntryV1(
+      try CoreSupportAdmissionEntry(
         supportID: "failing", decision: .blocked, reasonCodes: [.executionFailed],
         mandatoryCaseIDs: ["edge-mismatch"], divergenceIDs: [])
     ])
@@ -115,7 +115,7 @@ struct CoreDivergenceLedgerTests {
     var admissionObject = try #require(JSONSerialization.jsonObject(with: encodedAdmission) as? [String: Any])
     #expect(admissionObject["finalExitClass"] as? String == "blocked")
     #expect(admissionObject["authority"] as? String == admission.authority)
-    let decodedAdmission = try JSONDecoder().decode(CoreSupportAdmissionV1.self, from: encodedAdmission)
+    let decodedAdmission = try JSONDecoder().decode(CoreSupportAdmission.self, from: encodedAdmission)
     #expect(decodedAdmission.finalExitClass == .blocked)
     #expect(decodedAdmission.authority == admission.authority)
 
@@ -123,22 +123,22 @@ struct CoreDivergenceLedgerTests {
     invalidExitClassObject["finalExitClass"] = "not-an-exit-class"
     let invalidExitClass = try JSONSerialization.data(withJSONObject: invalidExitClassObject)
     #expect(throws: DecodingError.self) {
-      _ = try JSONDecoder().decode(CoreSupportAdmissionV1.self, from: invalidExitClass)
+      _ = try JSONDecoder().decode(CoreSupportAdmission.self, from: invalidExitClass)
     }
 
     var missingExitClassObject = admissionObject
     missingExitClassObject.removeValue(forKey: "finalExitClass")
     let missingExitClass = try JSONSerialization.data(withJSONObject: missingExitClassObject)
     #expect(throws: DecodingError.self) {
-      _ = try JSONDecoder().decode(CoreSupportAdmissionV1.self, from: missingExitClass)
+      _ = try JSONDecoder().decode(CoreSupportAdmission.self, from: missingExitClass)
     }
 
     var incompleteAuthorityObject = admissionObject
     incompleteAuthorityObject["authority"] =
       "Published TLA+ semantics are authoritative; TLC is a pinned executable reference."
     let incompleteAuthority = try JSONSerialization.data(withJSONObject: incompleteAuthorityObject)
-    #expect(throws: CoreGovernanceErrorV1.invalidSchema(CoreSupportAdmissionV1.schema)) {
-      _ = try JSONDecoder().decode(CoreSupportAdmissionV1.self, from: incompleteAuthority)
+    #expect(throws: CoreGovernanceError.invalidSchema(CoreSupportAdmission.schema)) {
+      _ = try JSONDecoder().decode(CoreSupportAdmission.self, from: incompleteAuthority)
     }
 
     var admissionEntries = try #require(admissionObject["entries"] as? [[String: Any]])
@@ -146,12 +146,12 @@ struct CoreDivergenceLedgerTests {
     admissionObject["entries"] = admissionEntries
     let incompleteAdmission = try JSONSerialization.data(withJSONObject: admissionObject)
     #expect(throws: DecodingError.self) {
-      _ = try JSONDecoder().decode(CoreSupportAdmissionV1.self, from: incompleteAdmission)
+      _ = try JSONDecoder().decode(CoreSupportAdmission.self, from: incompleteAdmission)
     }
 
-    #expect(throws: CoreGovernanceErrorV1.invalidField(
+    #expect(throws: CoreGovernanceError.invalidField(
       record: "clock-transitions", field: "evidence or caseRunCorrelations")) {
-      _ = try CoreSupportAdmissionEntryV1(
+      _ = try CoreSupportAdmissionEntry(
         supportID: "clock-transitions", decision: .admitted, reasonCodes: [],
         mandatoryCaseIDs: ["edge-mismatch"], divergenceIDs: [])
     }
@@ -160,15 +160,15 @@ struct CoreDivergenceLedgerTests {
   @Test("admission succeeds when only unrelated support is explicitly unsupported")
   func allowsExplicitlyUnsupportedEntriesAlongsideAdmittedSupport() throws {
     let runID = UUID()
-    let correlation = try CoreSupportCaseRunCorrelationV1(
+    let correlation = try CoreSupportCaseRunCorrelation(
       caseID: "edge-mismatch", gateRunID: runID, swiftRunID: runID, tlcRunID: runID,
       comparisonRunID: runID)
-    let admission = try CoreSupportAdmissionV1(gateRunID: runID, entries: [
-      try CoreSupportAdmissionEntryV1(
+    let admission = try CoreSupportAdmission(gateRunID: runID, entries: [
+      try CoreSupportAdmissionEntry(
         supportID: "clock-transitions", decision: .admitted, reasonCodes: [],
         mandatoryCaseIDs: ["edge-mismatch"], divergenceIDs: [], evidence: [try evidence("comparison.json")],
         caseRunCorrelations: [correlation]),
-      try CoreSupportAdmissionEntryV1(
+      try CoreSupportAdmissionEntry(
         supportID: "unrelated-support", decision: .unsupported,
         reasonCodes: [.explicitlyUnsupported], mandatoryCaseIDs: ["edge-mismatch"],
         divergenceIDs: [])
@@ -183,42 +183,42 @@ struct CoreDivergenceLedgerTests {
     var admissionObject = try #require(JSONSerialization.jsonObject(with: encodedAdmission) as? [String: Any])
     admissionObject["finalExitClass"] = "blocked"
     let inconsistentExitClass = try JSONSerialization.data(withJSONObject: admissionObject)
-    #expect(throws: CoreGovernanceErrorV1.invalidField(record: "admission", field: "finalExitClass")) {
-      _ = try JSONDecoder().decode(CoreSupportAdmissionV1.self, from: inconsistentExitClass)
+    #expect(throws: CoreGovernanceError.invalidField(record: "admission", field: "finalExitClass")) {
+      _ = try JSONDecoder().decode(CoreSupportAdmission.self, from: inconsistentExitClass)
     }
   }
 
   private var digest: String { String(repeating: "a", count: 64) }
 
-  private func bounds() throws -> CoreFiniteBoundsV1 {
-    try CoreFiniteBoundsV1(summary: "12 clock states", limits: ["states": 12])
+  private func bounds() throws -> CoreFiniteBounds {
+    try CoreFiniteBounds(summary: "12 clock states", limits: ["states": 12])
   }
 
-  private func evidence(_ path: String) throws -> CoreEvidenceReferenceV1 {
-    try CoreEvidenceReferenceV1(path: "Verification/CoreConformance/\(path)", sha256: digest)
+  private func evidence(_ path: String) throws -> CoreEvidenceReference {
+    try CoreEvidenceReference(path: "Verification/CoreConformance/\(path)", sha256: digest)
   }
 
-  private func provenance() throws -> CoreDivergenceProvenanceV1 {
-    try CoreDivergenceProvenanceV1(
+  private func provenance() throws -> CoreDivergenceProvenance {
+    try CoreDivergenceProvenance(
       caseID: "edge-mismatch", moduleSHA256: digest, cfgSHA256: digest, argumentsSHA256: digest,
       tlcTag: "v1.8.0", tlcCommit: "commit", tlcJarSHA256: digest,
       javaDistribution: "Eclipse Temurin", javaVersion: "17", javaArchiveSHA256: digest,
       bridgeClass: "bridge", bridgeSourceSHA256: digest, bridgeBinarySHA256: digest)
   }
 
-  private func divergenceRecord() throws -> CoreDivergenceRecordV1 {
-    try CoreDivergenceRecordV1(
+  private func divergenceRecord() throws -> CoreDivergenceRecord {
+    try CoreDivergenceRecord(
       id: "edge-mismatch", provenance: try provenance(), semanticCitations: ["citation"],
       reproducer: try bounds(), originalEvidence: try evidence("original.json"),
       permanentRegressionCaseID: "edge-mismatch-regression", classification: .swiftTLADefect,
       disposition: .open, normalizedDifferenceFingerprint: "fingerprint",
-      latestComparison: try CoreDivergenceComparisonV1(
+      latestComparison: try CoreDivergenceComparison(
         evidence: try evidence("latest.json"), outcome: .difference,
         normalizedDifferenceFingerprint: "fingerprint"))
   }
 
-  private func supportEntry(linkedDivergences: [String]) throws -> CoreSupportSurfaceEntryV1 {
-    try CoreSupportSurfaceEntryV1(
+  private func supportEntry(linkedDivergences: [String]) throws -> CoreSupportSurfaceEntry {
+    try CoreSupportSurfaceEntry(
       id: "clock-transitions", behavior: "hour clock transitions", category: .transitionRelation,
       finiteBounds: try bounds(), mandatoryCaseIDs: ["edge-mismatch"], requestedStatus: .requested,
       linkedDivergenceIDs: linkedDivergences)

@@ -4,8 +4,8 @@ import Testing
 
 @Suite(.serialized)
 struct PublicWorkflowPlatformMatrixTests {
-  @Test("platform matrix emits V1-decodable succeeded, failed, and unavailable evidence")
-  func emittedPlatformEvidenceMatchesV1Contract() throws {
+  @Test("platform matrix emits decodable succeeded, failed, and unavailable evidence")
+  func emittedPlatformEvidenceMatchesContract() throws {
     let root = try throwingPackageRoot()
     let scratch = FileManager.default.temporaryDirectory.appendingPathComponent("PublicWorkflowPlatformMatrixTests-\(UUID())")
     let outputRoot = root.appendingPathComponent(".build/PublicWorkflowPlatformMatrixTests-\(UUID())")
@@ -52,13 +52,13 @@ struct PublicWorkflowPlatformMatrixTests {
     let root = try throwingPackageRoot()
     let sourcePath = "Tests/Fixtures/PublicWorkflowConformance/Platform/assert_platform_matrix.sh"
     let configurationPath = "Package.swift"
-    let sourceDigest = SHA256V1.hex(try Data(contentsOf: root.appendingPathComponent(sourcePath)))
-    let configurationDigest = SHA256V1.hex(try Data(contentsOf: root.appendingPathComponent(configurationPath)))
-    let source = try CoreEvidenceReferenceV1(path: sourcePath, sha256: sourceDigest)
-    let configuration = try CoreEvidenceReferenceV1(path: configurationPath, sha256: configurationDigest)
-    let provenance = try CoreDivergenceProvenanceV1(
+    let sourceDigest = SHA256.hex(try Data(contentsOf: root.appendingPathComponent(sourcePath)))
+    let configurationDigest = SHA256.hex(try Data(contentsOf: root.appendingPathComponent(configurationPath)))
+    let source = try CoreEvidenceReference(path: sourcePath, sha256: sourceDigest)
+    let configuration = try CoreEvidenceReference(path: configurationPath, sha256: configurationDigest)
+    let provenance = try CoreDivergenceProvenance(
       caseID: "public-library-macos", moduleSHA256: sourceDigest, cfgSHA256: configurationDigest,
-      argumentsSHA256: SHA256V1.hex(try JSONEncoder().encode([["xcodebuild", "-scheme", "SwiftTLA-Package", "-target", "SwiftTLA", "-sdk", "macosx", "-destination", "platform=macOS", "build"]])),
+      argumentsSHA256: SHA256.hex(try JSONEncoder().encode([["xcodebuild", "-scheme", "SwiftTLA-Package", "-target", "SwiftTLA", "-sdk", "macosx", "-destination", "platform=macOS", "build"]])),
       tlcTag: "v1.8.0", tlcCommit: "30cc3601321c3fc02e044d0ecb5c58d8921e18df", tlcJarSHA256: digest,
       javaDistribution: "Eclipse Temurin", javaVersion: "17.0.19+10", javaArchiveSHA256: digest,
       bridgeClass: "org.swifttla.conformance.LosslessStateWriter", bridgeSourceSHA256: digest,
@@ -86,7 +86,7 @@ struct PublicWorkflowPlatformMatrixTests {
     return executable
   }
 
-  private func runMatrix(root: URL, output: URL, context: URL, executable: URL, expectedExit: Int32) throws -> PublicWorkflowPlatformEvidenceV1 {
+  private func runMatrix(root: URL, output: URL, context: URL, executable: URL, expectedExit: Int32) throws -> PublicWorkflowPlatformEvidence {
     let process = Process()
     process.executableURL = URL(fileURLWithPath: "/bin/bash")
     process.arguments = [
@@ -108,15 +108,15 @@ struct PublicWorkflowPlatformMatrixTests {
 
     let runDirectory = try #require(try FileManager.default.contentsOfDirectory(at: output.appendingPathComponent("runs"), includingPropertiesForKeys: nil).first)
     return try JSONDecoder().decode(
-      PublicWorkflowPlatformEvidenceV1.self,
+      PublicWorkflowPlatformEvidence.self,
       from: Data(contentsOf: runDirectory.appendingPathComponent("platforms/macos/result.json")))
   }
 
   private struct BindingContext: Encodable {
     let caseID: String
     let gateRunID: UUID
-    let sourceInput: CoreEvidenceReferenceV1
-    let configuration: CoreEvidenceReferenceV1
-    let provenance: CoreDivergenceProvenanceV1
+    let sourceInput: CoreEvidenceReference
+    let configuration: CoreEvidenceReference
+    let provenance: CoreDivergenceProvenance
   }
 }

@@ -1,5 +1,5 @@
 {
-  "schema": "TLCReferencePinV1",
+  "schema": "TLCReferencePin",
   "tlc": {
     "tag": "v1.8.0",
     "commit": "0894c3407f4717fec7cc18bde3bf3c857fa47333",

@@ -5,7 +5,7 @@ import Foundation
 /// `location` is intentionally a path, not an opaque string embedded in a
 /// summary. Callers can open the recorded module, configuration, graph, or log
 /// without having to reconstruct the invocation.
-public struct ConformanceEvidenceLocationV1: Equatable, Sendable {
+public struct ConformanceEvidenceLocation: Equatable, Sendable {
   public let role: String
   public let location: String
 
@@ -16,7 +16,7 @@ public struct ConformanceEvidenceLocationV1: Equatable, Sendable {
 }
 
 /// Captured tool output retained with a failure report.
-public struct ConformanceToolOutputV1: Equatable, Sendable {
+public struct ConformanceToolOutput: Equatable, Sendable {
   public let stream: String
   public let content: String
 
@@ -31,15 +31,15 @@ public struct ConformanceToolOutputV1: Equatable, Sendable {
 /// The fields are deliberately separate: a UI can present them independently,
 /// and automation can retain the tool output and input locations without
 /// scraping a prose error message.
-public struct ConformanceFailureReportV1: Equatable, Sendable {
+public struct ConformanceFailureReport: Equatable, Sendable {
   public let whatFailed: String
   public let whereItFailed: String
   public let expected: String
   public let actual: String
   public let systemChange: String
   public let nextSafeAction: String
-  public let evidence: [ConformanceEvidenceLocationV1]
-  public let toolOutput: [ConformanceToolOutputV1]
+  public let evidence: [ConformanceEvidenceLocation]
+  public let toolOutput: [ConformanceToolOutput]
 
   public init(
     whatFailed: String,
@@ -48,8 +48,8 @@ public struct ConformanceFailureReportV1: Equatable, Sendable {
     actual: String,
     systemChange: String,
     nextSafeAction: String,
-    evidence: [ConformanceEvidenceLocationV1] = [],
-    toolOutput: [ConformanceToolOutputV1] = []
+    evidence: [ConformanceEvidenceLocation] = [],
+    toolOutput: [ConformanceToolOutput] = []
   ) {
     self.whatFailed = whatFailed
     self.whereItFailed = whereItFailed
@@ -62,14 +62,14 @@ public struct ConformanceFailureReportV1: Equatable, Sendable {
   }
 }
 
-extension ConformanceDifferenceV1 {
+extension ConformanceDifference {
   /// A concrete explanation of this exact graph difference.
   ///
   /// In core conformance, `expected` is TLC and `actual` is SwiftTLA. The
   /// complete graph remains in `tlc.json` and `swift.json`; this report points
   /// to the first stable witness instead of flattening the difference into
   /// "graph differs".
-  public var failureReport: ConformanceFailureReportV1 {
+  public var failureReport: ConformanceFailureReport {
     switch self {
     case .mapping(let messages):
       return .init(
@@ -131,20 +131,20 @@ extension ConformanceDifferenceV1 {
   }
 }
 
-extension ExactFiniteTLCComparisonV1 {
+extension ExactFiniteTLCComparison {
   /// One actionable report per detected difference, in comparison order.
-  public var failureReports: [ConformanceFailureReportV1] {
+  public var failureReports: [ConformanceFailureReport] {
     differences.map(\.failureReport)
   }
 }
 
-extension TLCProcessErrorV1 {
+extension TLCProcessError {
   /// A structured tool failure with source inputs and any captured output.
-  public func failureReport(for request: TLCProcessRequestV1) -> ConformanceFailureReportV1 {
+  public func failureReport(for request: TLCProcessRequest) -> ConformanceFailureReport {
     let evidence = [
-      ConformanceEvidenceLocationV1(role: "TLA+ module", location: request.module.path),
-      ConformanceEvidenceLocationV1(role: "TLC configuration", location: request.configuration.path),
-      ConformanceEvidenceLocationV1(role: "TLC graph event output", location: request.graphEvents.path)
+      ConformanceEvidenceLocation(role: "TLA+ module", location: request.module.path),
+      ConformanceEvidenceLocation(role: "TLC configuration", location: request.configuration.path),
+      ConformanceEvidenceLocation(role: "TLC graph event output", location: request.graphEvents.path)
     ]
     switch self {
     case .timedOut(let stdout, let stderr):
@@ -231,10 +231,10 @@ extension TLCProcessErrorV1 {
 private func setDifferenceReport(
   what: String,
   where location: String,
-  expected: Set<CanonicalStateKeyV1>,
-  actual: Set<CanonicalStateKeyV1>,
+  expected: Set<CanonicalStateKey>,
+  actual: Set<CanonicalStateKey>,
   next: String
-) -> ConformanceFailureReportV1 {
+) -> ConformanceFailureReport {
   let onlyExpected = expected.subtracting(actual).sorted().first
   let onlyActual = actual.subtracting(expected).sorted().first
   return .init(
@@ -248,8 +248,8 @@ private func setDifferenceReport(
 }
 
 private func edgeDifferenceReport(
-  expected: [CanonicalEdgeV1: Int], actual: [CanonicalEdgeV1: Int]
-) -> ConformanceFailureReportV1 {
+  expected: [CanonicalEdge: Int], actual: [CanonicalEdge: Int]
+) -> ConformanceFailureReport {
   let witness = Set(expected.keys).union(actual.keys).sorted().first { expected[$0, default: 0] != actual[$0, default: 0] }
   guard let witness else {
     return .init(
@@ -271,9 +271,9 @@ private func edgeDifferenceReport(
 }
 
 private func observationDifferenceReport(
-  expected: [CanonicalStateKeyV1: CanonicalStateObservationV1],
-  actual: [CanonicalStateKeyV1: CanonicalStateObservationV1]
-) -> ConformanceFailureReportV1 {
+  expected: [CanonicalStateKey: CanonicalStateObservation],
+  actual: [CanonicalStateKey: CanonicalStateObservation]
+) -> ConformanceFailureReport {
   let witness = Set(expected.keys).union(actual.keys).sorted().first { expected[$0] != actual[$0] }
   let expectedObservation = witness.flatMap { expected[$0] }
   let actualObservation = witness.flatMap { actual[$0] }
@@ -288,9 +288,9 @@ private func observationDifferenceReport(
 }
 
 private func processFailureReport(
-  what: String, phase: String, request: TLCProcessRequestV1, expected: String, actual: String,
-  outputs: TLCProcessResultV1
-) -> ConformanceFailureReportV1 {
+  what: String, phase: String, request: TLCProcessRequest, expected: String, actual: String,
+  outputs: TLCProcessResult
+) -> ConformanceFailureReport {
   .init(
     whatFailed: what, whereItFailed: "TLC \(phase) invocation for case \(request.caseID)",
     expected: expected, actual: actual,
@@ -302,9 +302,9 @@ private func processFailureReport(
 }
 
 private func executionFailureReport(
-  what: String, phase: String, request: TLCProcessRequestV1, expected: String,
-  error: TLCProcessExecutionFailureV1
-) -> ConformanceFailureReportV1 {
+  what: String, phase: String, request: TLCProcessRequest, expected: String,
+  error: TLCProcessExecutionFailure
+) -> ConformanceFailureReport {
   .init(
     whatFailed: what, whereItFailed: "TLC \(phase) invocation for case \(request.caseID)",
     expected: expected, actual: sanitized(error.message),
@@ -318,7 +318,7 @@ private func executionFailureReport(
   )
 }
 
-private func toolEvidence(for request: TLCProcessRequestV1) -> [ConformanceEvidenceLocationV1] {
+private func toolEvidence(for request: TLCProcessRequest) -> [ConformanceEvidenceLocation] {
   [
     .init(role: "TLA+ module", location: request.module.path),
     .init(role: "TLC configuration", location: request.configuration.path),
@@ -326,7 +326,7 @@ private func toolEvidence(for request: TLCProcessRequestV1) -> [ConformanceEvide
   ]
 }
 
-private func describe(_ value: CanonicalOutcomeV1) -> String {
+private func describe(_ value: CanonicalOutcome) -> String {
   switch value {
   case .exhaustiveSuccess: "exhaustive success"
   case .invariantViolation(let message): "invariant violation: \(message)"
@@ -336,16 +336,16 @@ private func describe(_ value: CanonicalOutcomeV1) -> String {
   }
 }
 
-private func describe(_ observation: CanonicalStateObservationV1?) -> String {
+private func describe(_ observation: CanonicalStateObservation?) -> String {
   guard let observation else { return "no observation retained" }
   return "enabled actions \(observation.enabledActions.sorted()); terminal \(observation.isTerminal)."
 }
 
-private func describe(_ diagnostics: [CanonicalDiagnosticV1]) -> String {
+private func describe(_ diagnostics: [CanonicalDiagnostic]) -> String {
   diagnostics.isEmpty ? "no diagnostics" : diagnostics.map { "\($0.code): \($0.message)" }.joined(separator: "; ")
 }
 
-private func describe(_ traces: [CanonicalTraceV1]) -> String {
+private func describe(_ traces: [CanonicalTrace]) -> String {
   guard let trace = traces.first else { return "no traces" }
   let first = trace.steps.first
   return first.map { "trace \(trace.id) begins at \($0.state.canonicalEncoding) via \($0.action)" }

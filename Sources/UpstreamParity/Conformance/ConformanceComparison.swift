@@ -1,4 +1,4 @@
-public struct ObservableNameMappingV1: Hashable, Sendable {
+public struct ObservableNameMapping: Hashable, Sendable {
     public let expectedVariables: Set<String>
     public let actualVariables: Set<String>
     public let variables: [String: String]
@@ -40,7 +40,7 @@ public struct ObservableNameMappingV1: Hashable, Sendable {
     }
 }
 
-public enum ConformanceDifferenceCategoryV1: String, Hashable, Sendable {
+public enum ConformanceDifferenceCategory: String, Hashable, Sendable {
     case mapping
     case initialStates
     case states
@@ -51,20 +51,20 @@ public enum ConformanceDifferenceCategoryV1: String, Hashable, Sendable {
     case traces
 }
 
-public enum ConformanceDifferenceV1: Equatable, Sendable {
+public enum ConformanceDifference: Equatable, Sendable {
     case mapping([String])
-    case initialStates(expected: Set<CanonicalStateKeyV1>, actual: Set<CanonicalStateKeyV1>)
-    case states(expected: Set<CanonicalStateKeyV1>, actual: Set<CanonicalStateKeyV1>)
-    case edges(expected: [CanonicalEdgeV1: Int], actual: [CanonicalEdgeV1: Int])
+    case initialStates(expected: Set<CanonicalStateKey>, actual: Set<CanonicalStateKey>)
+    case states(expected: Set<CanonicalStateKey>, actual: Set<CanonicalStateKey>)
+    case edges(expected: [CanonicalEdge: Int], actual: [CanonicalEdge: Int])
     case observations(
-        expected: [CanonicalStateKeyV1: CanonicalStateObservationV1],
-        actual: [CanonicalStateKeyV1: CanonicalStateObservationV1]
+        expected: [CanonicalStateKey: CanonicalStateObservation],
+        actual: [CanonicalStateKey: CanonicalStateObservation]
     )
-    case outcome(expected: CanonicalOutcomeV1, actual: CanonicalOutcomeV1)
-    case errors(expected: [CanonicalDiagnosticV1], actual: [CanonicalDiagnosticV1])
-    case traces(expected: [CanonicalTraceV1], actual: [CanonicalTraceV1])
+    case outcome(expected: CanonicalOutcome, actual: CanonicalOutcome)
+    case errors(expected: [CanonicalDiagnostic], actual: [CanonicalDiagnostic])
+    case traces(expected: [CanonicalTrace], actual: [CanonicalTrace])
 
-    public var category: ConformanceDifferenceCategoryV1 {
+    public var category: ConformanceDifferenceCategory {
         switch self {
         case .mapping: .mapping
         case .initialStates: .initialStates
@@ -78,23 +78,23 @@ public enum ConformanceDifferenceV1: Equatable, Sendable {
     }
 }
 
-public struct ExactFiniteTLCComparisonV1: Equatable, Sendable {
-    public let differences: [ConformanceDifferenceV1]
+public struct ExactFiniteTLCComparison: Equatable, Sendable {
+    public let differences: [ConformanceDifference]
 
-    public init(differences: [ConformanceDifferenceV1]) {
+    public init(differences: [ConformanceDifference]) {
         self.differences = differences
     }
 
     public var isConformant: Bool { differences.isEmpty }
 }
 
-public func exactFiniteTLCGraphV1(
-    expected: CanonicalRunV1,
-    actual: CanonicalRunV1,
-    mapping: ObservableNameMappingV1? = nil
-) -> ExactFiniteTLCComparisonV1 {
-    var differences: [ConformanceDifferenceV1] = []
-    let normalizedActual: CanonicalRunV1
+public func exactFiniteTLCGraph(
+    expected: CanonicalRun,
+    actual: CanonicalRun,
+    mapping: ObservableNameMapping? = nil
+) -> ExactFiniteTLCComparison {
+    var differences: [ConformanceDifference] = []
+    let normalizedActual: CanonicalRun
 
     if let mapping {
         let failures = mapping.validationFailures + declaredNameFailures(
@@ -118,10 +118,10 @@ public func exactFiniteTLCGraphV1(
 }
 
 private func compare(
-    expected: CanonicalRunV1,
-    actual: CanonicalRunV1,
-    leadingDifferences: [ConformanceDifferenceV1]
-) -> ExactFiniteTLCComparisonV1 {
+    expected: CanonicalRun,
+    actual: CanonicalRun,
+    leadingDifferences: [ConformanceDifference]
+) -> ExactFiniteTLCComparison {
     var differences = leadingDifferences
     if expected.graph.initialStateKeys != actual.graph.initialStateKeys {
         differences.append(.initialStates(expected: expected.graph.initialStateKeys, actual: actual.graph.initialStateKeys))
@@ -144,13 +144,13 @@ private func compare(
     if expected.traces != actual.traces {
         differences.append(.traces(expected: expected.traces, actual: actual.traces))
     }
-    return ExactFiniteTLCComparisonV1(differences: differences)
+    return ExactFiniteTLCComparison(differences: differences)
 }
 
 private func declaredNameFailures(
-    mapping: ObservableNameMappingV1,
-    expected: CanonicalRunV1,
-    actual: CanonicalRunV1
+    mapping: ObservableNameMapping,
+    expected: CanonicalRun,
+    actual: CanonicalRun
 ) -> [String] {
     var failures: [String] = []
     if mapping.expectedVariables != expected.graph.variableNames || mapping.actualVariables != actual.graph.variableNames {
@@ -162,11 +162,11 @@ private func declaredNameFailures(
     return failures
 }
 
-private func remap(_ run: CanonicalRunV1, with mapping: ObservableNameMappingV1) -> CanonicalRunV1 {
+private func remap(_ run: CanonicalRun, with mapping: ObservableNameMapping) -> CanonicalRun {
     let actualToExpectedVariables = Dictionary(uniqueKeysWithValues: mapping.variables.map { ($0.value, $0.key) })
     let actualToExpectedActions = Dictionary(uniqueKeysWithValues: mapping.actions.map { ($0.value, $0.key) })
     let remappedStates = run.graph.states.values.map { state in
-        CanonicalStateV1(bindings: Dictionary(uniqueKeysWithValues: state.bindings.map {
+        CanonicalState(bindings: Dictionary(uniqueKeysWithValues: state.bindings.map {
             (actualToExpectedVariables[$0.key]!, $0.value)
         }))
     }
@@ -176,17 +176,17 @@ private func remap(_ run: CanonicalRunV1, with mapping: ObservableNameMappingV1)
         return remappedStates.first { $0.key == remappedKey }!
     }
     let remappedEdges = run.graph.edgeOccurrences.flatMap { edge, count in
-        Array(repeating: CanonicalEdgeV1(
+        Array(repeating: CanonicalEdge(
             source: keyMap[edge.source]!,
             action: actualToExpectedActions[edge.action]!,
             target: keyMap[edge.target]!
         ), count: count)
     }
     let remappedTraces = run.traces.map { trace in
-        CanonicalTraceV1(
+        CanonicalTrace(
             id: trace.id,
             steps: trace.steps.map { step in
-                CanonicalTraceStepV1(
+                CanonicalTraceStep(
                     state: keyMap[step.state]!,
                     action: actualToExpectedActions[step.action] ?? step.action
                 )
@@ -195,12 +195,12 @@ private func remap(_ run: CanonicalRunV1, with mapping: ObservableNameMappingV1)
     }
 
     do {
-        let graph = try CanonicalGraphV1(
+        let graph = try CanonicalGraph(
             initialStates: remappedInitialStates,
             states: remappedStates,
             edges: remappedEdges
         )
-        return try CanonicalRunV1(
+        return try CanonicalRun(
             schema: run.schema,
             graph: graph,
             observableActions: Set(run.observableActions.map { actualToExpectedActions[$0]! }),
@@ -214,16 +214,16 @@ private func remap(_ run: CanonicalRunV1, with mapping: ObservableNameMappingV1)
 }
 
 private func remapState(
-    _ state: CanonicalStateV1,
+    _ state: CanonicalState,
     variables: [String: String]
-) -> CanonicalStateV1 {
-    CanonicalStateV1(bindings: Dictionary(uniqueKeysWithValues: state.bindings.map { (variables[$0.key]!, $0.value) }))
+) -> CanonicalState {
+    CanonicalState(bindings: Dictionary(uniqueKeysWithValues: state.bindings.map { (variables[$0.key]!, $0.value) }))
 }
 
 private func remap(
-    _ outcome: CanonicalOutcomeV1,
-    states: [CanonicalStateKeyV1: CanonicalStateKeyV1]
-) -> CanonicalOutcomeV1 {
+    _ outcome: CanonicalOutcome,
+    states: [CanonicalStateKey: CanonicalStateKey]
+) -> CanonicalOutcome {
     switch outcome {
     case .deadlock(let state): return .deadlock(states[state]!)
     default: return outcome

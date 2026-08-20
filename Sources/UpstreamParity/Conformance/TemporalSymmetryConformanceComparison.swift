@@ -1,37 +1,37 @@
 import Foundation
 
-public struct TemporalComparisonV1: Equatable, Codable, Sendable {
-  public static let schema = "TemporalComparisonV1"
+public struct TemporalComparison: Equatable, Codable, Sendable {
+  public static let schema = "TemporalComparison"
 
   public let schema: String
   public let caseID: String
-  public let configuration: TemporalSymmetryConfigurationV1
-  public let correlation: TemporalSymmetryCaseRunCorrelationV1
-  public let outcome: TemporalSymmetryExpectedOutcomeV1
-  public let swiftResult: TemporalPropertyResultV1
-  public let tlcResult: TemporalPropertyResultV1
-  public let swiftEvidence: CoreEvidenceReferenceV1
-  public let tlcEvidence: CoreEvidenceReferenceV1
-  public let completeGraphEvidence: TemporalCompleteGraphEvidenceV1?
-  public let enablednessEvidence: CoreEvidenceReferenceV1
-  public let fairComponents: [TemporalRecurrentComponentV1]
-  public let rejectedComponents: [TemporalRecurrentComponentV1]
-  public let diagnosticCode: TemporalSymmetryDiagnosticCodeV1
+  public let configuration: TemporalSymmetryConfiguration
+  public let correlation: TemporalSymmetryCaseRunCorrelation
+  public let outcome: TemporalSymmetryExpectedOutcome
+  public let swiftResult: TemporalPropertyResult
+  public let tlcResult: TemporalPropertyResult
+  public let swiftEvidence: CoreEvidenceReference
+  public let tlcEvidence: CoreEvidenceReference
+  public let completeGraphEvidence: TemporalCompleteGraphEvidence?
+  public let enablednessEvidence: CoreEvidenceReference
+  public let fairComponents: [TemporalRecurrentComponent]
+  public let rejectedComponents: [TemporalRecurrentComponent]
+  public let diagnosticCode: TemporalSymmetryDiagnosticCode
 
   public init(
     caseID: String,
-    configuration: TemporalSymmetryConfigurationV1,
-    correlation: TemporalSymmetryCaseRunCorrelationV1,
-    outcome: TemporalSymmetryExpectedOutcomeV1,
-    swiftResult: TemporalPropertyResultV1,
-    tlcResult: TemporalPropertyResultV1,
-    swiftEvidence: CoreEvidenceReferenceV1,
-    tlcEvidence: CoreEvidenceReferenceV1,
-    completeGraphEvidence: TemporalCompleteGraphEvidenceV1? = nil,
-    enablednessEvidence: CoreEvidenceReferenceV1,
-    fairComponents: [TemporalRecurrentComponentV1],
-    rejectedComponents: [TemporalRecurrentComponentV1],
-    diagnosticCode: TemporalSymmetryDiagnosticCodeV1
+    configuration: TemporalSymmetryConfiguration,
+    correlation: TemporalSymmetryCaseRunCorrelation,
+    outcome: TemporalSymmetryExpectedOutcome,
+    swiftResult: TemporalPropertyResult,
+    tlcResult: TemporalPropertyResult,
+    swiftEvidence: CoreEvidenceReference,
+    tlcEvidence: CoreEvidenceReference,
+    completeGraphEvidence: TemporalCompleteGraphEvidence? = nil,
+    enablednessEvidence: CoreEvidenceReference,
+    fairComponents: [TemporalRecurrentComponent],
+    rejectedComponents: [TemporalRecurrentComponent],
+    diagnosticCode: TemporalSymmetryDiagnosticCode
   ) throws {
     self.schema = Self.schema
     self.caseID = caseID
@@ -60,15 +60,15 @@ public struct TemporalComparisonV1: Equatable, Codable, Sendable {
     try tlcResult.validate()
     guard !caseID.isEmpty, correlation.caseID == caseID, configuration.property != nil,
           !configuration.symmetryEnabled else {
-      throw TemporalSymmetryGovernanceErrorV1.inconsistentReference(record: caseID, field: "temporal comparison")
+      throw TemporalSymmetryGovernanceError.inconsistentReference(record: caseID, field: "temporal comparison")
     }
     if let declared = configuration.completeGraphPass {
       guard let evidence = completeGraphEvidence,
             evidence.configuration == declared.configuration else {
-        throw TemporalSymmetryGovernanceErrorV1.inconsistentReference(record: caseID, field: "complete graph evidence")
+        throw TemporalSymmetryGovernanceError.inconsistentReference(record: caseID, field: "complete graph evidence")
       }
     } else if completeGraphEvidence != nil {
-      throw TemporalSymmetryGovernanceErrorV1.inconsistentReference(record: caseID, field: "unexpected complete graph evidence")
+      throw TemporalSymmetryGovernanceError.inconsistentReference(record: caseID, field: "unexpected complete graph evidence")
     }
     switch outcome {
     case .exact:
@@ -77,12 +77,12 @@ public struct TemporalComparisonV1: Equatable, Codable, Sendable {
             swiftResult.graphID == tlcResult.graphID,
             swiftResult.initialStateIDs == tlcResult.initialStateIDs,
             diagnosticCode == .exactAgreement else {
-        throw TemporalSymmetryGovernanceErrorV1.invalidField(record: caseID, field: "exact temporal result")
+        throw TemporalSymmetryGovernanceError.invalidField(record: caseID, field: "exact temporal result")
       }
     case .unavailable:
       guard swiftResult.availability == .unavailable || tlcResult.availability == .unavailable,
             diagnosticCode == .temporalEvidenceUnavailable else {
-        throw TemporalSymmetryGovernanceErrorV1.invalidField(record: caseID, field: "unavailable temporal result")
+        throw TemporalSymmetryGovernanceError.invalidField(record: caseID, field: "unavailable temporal result")
       }
     case .difference:
       let different = swiftResult.availability != tlcResult.availability
@@ -91,11 +91,11 @@ public struct TemporalComparisonV1: Equatable, Codable, Sendable {
         || swiftResult.initialStateIDs != tlcResult.initialStateIDs
       guard different, diagnosticCode != .exactAgreement,
             diagnosticCode != .temporalEvidenceUnavailable else {
-        throw TemporalSymmetryGovernanceErrorV1.invalidField(record: caseID, field: "temporal difference diagnostic")
+        throw TemporalSymmetryGovernanceError.invalidField(record: caseID, field: "temporal difference diagnostic")
       }
     }
     guard Set(fairComponents.map(\.stateIDs)).intersection(Set(rejectedComponents.map(\.stateIDs))).isEmpty else {
-      throw TemporalSymmetryGovernanceErrorV1.invalidField(record: caseID, field: "recurrent components")
+      throw TemporalSymmetryGovernanceError.invalidField(record: caseID, field: "recurrent components")
     }
   }
 
@@ -105,28 +105,28 @@ public struct TemporalComparisonV1: Equatable, Codable, Sendable {
   }
 
   public init(from decoder: Decoder) throws {
-    let container = try TemporalSymmetryGovernanceDecodingV1.container(decoder, keyedBy: CodingKeys.self)
+    let container = try TemporalSymmetryGovernanceDecoding.container(decoder, keyedBy: CodingKeys.self)
     guard try container.decode(String.self, forKey: .schema) == Self.schema else {
-      throw TemporalSymmetryGovernanceErrorV1.invalidSchema("TemporalComparisonV1")
+      throw TemporalSymmetryGovernanceError.invalidSchema("TemporalComparison")
     }
     try self.init(
       caseID: container.decode(String.self, forKey: .caseID),
-      configuration: container.decode(TemporalSymmetryConfigurationV1.self, forKey: .configuration),
-      correlation: container.decode(TemporalSymmetryCaseRunCorrelationV1.self, forKey: .correlation),
-      outcome: container.decode(TemporalSymmetryExpectedOutcomeV1.self, forKey: .outcome),
-      swiftResult: container.decode(TemporalPropertyResultV1.self, forKey: .swiftResult),
-      tlcResult: container.decode(TemporalPropertyResultV1.self, forKey: .tlcResult),
-      swiftEvidence: container.decode(CoreEvidenceReferenceV1.self, forKey: .swiftEvidence),
-      tlcEvidence: container.decode(CoreEvidenceReferenceV1.self, forKey: .tlcEvidence),
-      completeGraphEvidence: try container.decodeIfPresent(TemporalCompleteGraphEvidenceV1.self, forKey: .completeGraphEvidence),
-      enablednessEvidence: container.decode(CoreEvidenceReferenceV1.self, forKey: .enablednessEvidence),
-      fairComponents: container.decode([TemporalRecurrentComponentV1].self, forKey: .fairComponents),
-      rejectedComponents: container.decode([TemporalRecurrentComponentV1].self, forKey: .rejectedComponents),
-      diagnosticCode: container.decode(TemporalSymmetryDiagnosticCodeV1.self, forKey: .diagnosticCode))
+      configuration: container.decode(TemporalSymmetryConfiguration.self, forKey: .configuration),
+      correlation: container.decode(TemporalSymmetryCaseRunCorrelation.self, forKey: .correlation),
+      outcome: container.decode(TemporalSymmetryExpectedOutcome.self, forKey: .outcome),
+      swiftResult: container.decode(TemporalPropertyResult.self, forKey: .swiftResult),
+      tlcResult: container.decode(TemporalPropertyResult.self, forKey: .tlcResult),
+      swiftEvidence: container.decode(CoreEvidenceReference.self, forKey: .swiftEvidence),
+      tlcEvidence: container.decode(CoreEvidenceReference.self, forKey: .tlcEvidence),
+      completeGraphEvidence: try container.decodeIfPresent(TemporalCompleteGraphEvidence.self, forKey: .completeGraphEvidence),
+      enablednessEvidence: container.decode(CoreEvidenceReference.self, forKey: .enablednessEvidence),
+      fairComponents: container.decode([TemporalRecurrentComponent].self, forKey: .fairComponents),
+      rejectedComponents: container.decode([TemporalRecurrentComponent].self, forKey: .rejectedComponents),
+      diagnosticCode: container.decode(TemporalSymmetryDiagnosticCode.self, forKey: .diagnosticCode))
   }
 }
 
-public struct SymmetryOrbitV1: Equatable, Codable, Sendable {
+public struct SymmetryOrbit: Equatable, Codable, Sendable {
   public let members: [String]
   public let semanticRepresentative: String
   public let swiftExecutableRepresentative: String
@@ -142,7 +142,7 @@ public struct SymmetryOrbitV1: Equatable, Codable, Sendable {
     guard !members.isEmpty, Set(members).count == members.count, members.allSatisfy({ !$0.isEmpty }),
           semanticRepresentative == members.sorted().first,
           members.contains(swiftExecutableRepresentative), members.contains(tlcExecutableRepresentative) else {
-      throw TemporalSymmetryGovernanceErrorV1.invalidField(record: "orbit", field: "members or representative")
+      throw TemporalSymmetryGovernanceError.invalidField(record: "orbit", field: "members or representative")
     }
     self.members = members.sorted()
     self.semanticRepresentative = semanticRepresentative
@@ -155,7 +155,7 @@ public struct SymmetryOrbitV1: Equatable, Codable, Sendable {
   }
 
   public init(from decoder: Decoder) throws {
-    let container = try TemporalSymmetryGovernanceDecodingV1.container(decoder, keyedBy: CodingKeys.self)
+    let container = try TemporalSymmetryGovernanceDecoding.container(decoder, keyedBy: CodingKeys.self)
     try self.init(
       members: container.decode([String].self, forKey: .members),
       semanticRepresentative: container.decode(String.self, forKey: .semanticRepresentative),
@@ -164,31 +164,31 @@ public struct SymmetryOrbitV1: Equatable, Codable, Sendable {
   }
 }
 
-public struct SymmetryExplorationV1: Equatable, Codable, Sendable {
-  public let engine: SymmetryExplorationEngineV1
+public struct SymmetryExploration: Equatable, Codable, Sendable {
+  public let engine: SymmetryExplorationEngine
   public let reduced: Bool
   public let runID: UUID
   public let graphID: String
   public let initialStateIDs: [String]
   public let stateIDs: [String]
-  public let transitions: [SymmetryRawTransitionWitnessV1]
+  public let transitions: [SymmetryRawTransitionWitness]
   public let declaredConfigurationSHA256: String
-  public let graphEvidence: CoreEvidenceReferenceV1
-  public let invariantOutcome: SymmetryApplicableOutcomeV1
-  public let deadlockOutcome: SymmetryApplicableOutcomeV1
+  public let graphEvidence: CoreEvidenceReference
+  public let invariantOutcome: SymmetryApplicableOutcome
+  public let deadlockOutcome: SymmetryApplicableOutcome
 
   public init(
-    engine: SymmetryExplorationEngineV1,
+    engine: SymmetryExplorationEngine,
     reduced: Bool,
     runID: UUID,
     graphID: String,
     initialStateIDs: [String],
     stateIDs: [String],
-    transitions: [SymmetryRawTransitionWitnessV1],
+    transitions: [SymmetryRawTransitionWitness],
     declaredConfigurationSHA256: String,
-    graphEvidence: CoreEvidenceReferenceV1,
-    invariantOutcome: SymmetryApplicableOutcomeV1,
-    deadlockOutcome: SymmetryApplicableOutcomeV1
+    graphEvidence: CoreEvidenceReference,
+    invariantOutcome: SymmetryApplicableOutcome,
+    deadlockOutcome: SymmetryApplicableOutcome
   ) throws {
     self.engine = engine
     self.reduced = reduced
@@ -206,14 +206,14 @@ public struct SymmetryExplorationV1: Equatable, Codable, Sendable {
 
   public func validate() throws {
     try graphEvidence.validate()
-    guard !graphID.isEmpty, TLCReferencePinV1.isSHA256(declaredConfigurationSHA256), !initialStateIDs.isEmpty,
+    guard !graphID.isEmpty, TLCReferencePin.isSHA256(declaredConfigurationSHA256), !initialStateIDs.isEmpty,
           Set(initialStateIDs).count == initialStateIDs.count,
           initialStateIDs.allSatisfy({ !$0.isEmpty }), !stateIDs.isEmpty,
           Set(stateIDs).count == stateIDs.count, stateIDs.allSatisfy({ !$0.isEmpty }),
           Set(initialStateIDs).isSubset(of: Set(stateIDs)),
           Set(transitions).count == transitions.count,
           transitions.allSatisfy({ $0.engine == engine && stateIDs.contains($0.sourceStateID) && stateIDs.contains($0.targetStateID) }) else {
-      throw TemporalSymmetryGovernanceErrorV1.invalidField(record: "symmetry exploration", field: "graph or initial states")
+      throw TemporalSymmetryGovernanceError.invalidField(record: "symmetry exploration", field: "graph or initial states")
     }
   }
 
@@ -223,31 +223,31 @@ public struct SymmetryExplorationV1: Equatable, Codable, Sendable {
   }
 
   public init(from decoder: Decoder) throws {
-    let container = try TemporalSymmetryGovernanceDecodingV1.container(decoder, keyedBy: CodingKeys.self)
+    let container = try TemporalSymmetryGovernanceDecoding.container(decoder, keyedBy: CodingKeys.self)
     try self.init(
-      engine: container.decode(SymmetryExplorationEngineV1.self, forKey: .engine),
+      engine: container.decode(SymmetryExplorationEngine.self, forKey: .engine),
       reduced: container.decode(Bool.self, forKey: .reduced),
       runID: container.decode(UUID.self, forKey: .runID),
       graphID: container.decode(String.self, forKey: .graphID),
       initialStateIDs: container.decode([String].self, forKey: .initialStateIDs),
       stateIDs: container.decode([String].self, forKey: .stateIDs),
-      transitions: container.decode([SymmetryRawTransitionWitnessV1].self, forKey: .transitions),
+      transitions: container.decode([SymmetryRawTransitionWitness].self, forKey: .transitions),
       declaredConfigurationSHA256: container.decode(String.self, forKey: .declaredConfigurationSHA256),
-      graphEvidence: container.decode(CoreEvidenceReferenceV1.self, forKey: .graphEvidence),
-      invariantOutcome: container.decode(SymmetryApplicableOutcomeV1.self, forKey: .invariantOutcome),
-      deadlockOutcome: container.decode(SymmetryApplicableOutcomeV1.self, forKey: .deadlockOutcome))
+      graphEvidence: container.decode(CoreEvidenceReference.self, forKey: .graphEvidence),
+      invariantOutcome: container.decode(SymmetryApplicableOutcome.self, forKey: .invariantOutcome),
+      deadlockOutcome: container.decode(SymmetryApplicableOutcome.self, forKey: .deadlockOutcome))
   }
 }
 
-public struct SymmetryRawTransitionWitnessV1: Hashable, Codable, Sendable, Comparable {
-  public let engine: SymmetryExplorationEngineV1
+public struct SymmetryRawTransitionWitness: Hashable, Codable, Sendable, Comparable {
+  public let engine: SymmetryExplorationEngine
   public let sourceStateID: String
   public let action: String
   public let targetStateID: String
 
-  public init(engine: SymmetryExplorationEngineV1, sourceStateID: String, action: String, targetStateID: String) throws {
+  public init(engine: SymmetryExplorationEngine, sourceStateID: String, action: String, targetStateID: String) throws {
     guard !sourceStateID.isEmpty, !action.isEmpty, !targetStateID.isEmpty else {
-      throw TemporalSymmetryGovernanceErrorV1.invalidField(record: "raw transition", field: "witness")
+      throw TemporalSymmetryGovernanceError.invalidField(record: "raw transition", field: "witness")
     }
     self.engine = engine
     self.sourceStateID = sourceStateID
@@ -265,23 +265,23 @@ public struct SymmetryRawTransitionWitnessV1: Hashable, Codable, Sendable, Compa
   private enum CodingKeys: String, CodingKey, CaseIterable { case engine, sourceStateID, action, targetStateID }
 
   public init(from decoder: Decoder) throws {
-    let container = try TemporalSymmetryGovernanceDecodingV1.container(decoder, keyedBy: CodingKeys.self)
+    let container = try TemporalSymmetryGovernanceDecoding.container(decoder, keyedBy: CodingKeys.self)
     try self.init(
-      engine: container.decode(SymmetryExplorationEngineV1.self, forKey: .engine),
+      engine: container.decode(SymmetryExplorationEngine.self, forKey: .engine),
       sourceStateID: container.decode(String.self, forKey: .sourceStateID),
       action: container.decode(String.self, forKey: .action),
       targetStateID: container.decode(String.self, forKey: .targetStateID))
   }
 }
 
-public struct SymmetryQuotientTransitionV1: Hashable, Codable, Sendable, Comparable {
+public struct SymmetryQuotientTransition: Hashable, Codable, Sendable, Comparable {
   public let sourceRepresentative: String
   public let action: String
   public let targetRepresentative: String
 
   public init(sourceRepresentative: String, action: String, targetRepresentative: String) throws {
     guard !sourceRepresentative.isEmpty, !action.isEmpty, !targetRepresentative.isEmpty else {
-      throw TemporalSymmetryGovernanceErrorV1.invalidField(record: "quotient transition", field: "transition")
+      throw TemporalSymmetryGovernanceError.invalidField(record: "quotient transition", field: "transition")
     }
     self.sourceRepresentative = sourceRepresentative
     self.action = action
@@ -299,7 +299,7 @@ public struct SymmetryQuotientTransitionV1: Hashable, Codable, Sendable, Compara
   private enum CodingKeys: String, CodingKey, CaseIterable { case sourceRepresentative, action, targetRepresentative }
 
   public init(from decoder: Decoder) throws {
-    let container = try TemporalSymmetryGovernanceDecodingV1.container(decoder, keyedBy: CodingKeys.self)
+    let container = try TemporalSymmetryGovernanceDecoding.container(decoder, keyedBy: CodingKeys.self)
     try self.init(
       sourceRepresentative: container.decode(String.self, forKey: .sourceRepresentative),
       action: container.decode(String.self, forKey: .action),
@@ -307,40 +307,40 @@ public struct SymmetryQuotientTransitionV1: Hashable, Codable, Sendable, Compara
   }
 }
 
-public struct SymmetryOrbitComparisonV1: Equatable, Codable, Sendable {
-  public static let schema = "SymmetryOrbitComparisonV1"
+public struct SymmetryOrbitComparison: Equatable, Codable, Sendable {
+  public static let schema = "SymmetryOrbitComparison"
 
   public let schema: String
   public let caseID: String
-  public let configuration: TemporalSymmetryConfigurationV1
-  public let correlation: TemporalSymmetryCaseRunCorrelationV1
-  public let outcome: TemporalSymmetryExpectedOutcomeV1
-  public let swiftRaw: SymmetryExplorationV1
-  public let swiftReduced: SymmetryExplorationV1
-  public let tlcRaw: SymmetryExplorationV1
-  public let tlcReduced: SymmetryExplorationV1
-  public let configurationEvidence: CoreEvidenceReferenceV1
-  public let quotientEvidence: CoreEvidenceReferenceV1
-  public let orbits: [SymmetryOrbitV1]
-  public let rawTransitionWitnesses: [SymmetryRawTransitionWitnessV1]
-  public let quotientTransitions: [SymmetryQuotientTransitionV1]
-  public let diagnosticCode: TemporalSymmetryDiagnosticCodeV1
+  public let configuration: TemporalSymmetryConfiguration
+  public let correlation: TemporalSymmetryCaseRunCorrelation
+  public let outcome: TemporalSymmetryExpectedOutcome
+  public let swiftRaw: SymmetryExploration
+  public let swiftReduced: SymmetryExploration
+  public let tlcRaw: SymmetryExploration
+  public let tlcReduced: SymmetryExploration
+  public let configurationEvidence: CoreEvidenceReference
+  public let quotientEvidence: CoreEvidenceReference
+  public let orbits: [SymmetryOrbit]
+  public let rawTransitionWitnesses: [SymmetryRawTransitionWitness]
+  public let quotientTransitions: [SymmetryQuotientTransition]
+  public let diagnosticCode: TemporalSymmetryDiagnosticCode
 
   public init(
     caseID: String,
-    configuration: TemporalSymmetryConfigurationV1,
-    correlation: TemporalSymmetryCaseRunCorrelationV1,
-    outcome: TemporalSymmetryExpectedOutcomeV1,
-    swiftRaw: SymmetryExplorationV1,
-    swiftReduced: SymmetryExplorationV1,
-    tlcRaw: SymmetryExplorationV1,
-    tlcReduced: SymmetryExplorationV1,
-    configurationEvidence: CoreEvidenceReferenceV1,
-    quotientEvidence: CoreEvidenceReferenceV1,
-    orbits: [SymmetryOrbitV1],
-    rawTransitionWitnesses: [SymmetryRawTransitionWitnessV1],
-    quotientTransitions: [SymmetryQuotientTransitionV1],
-    diagnosticCode: TemporalSymmetryDiagnosticCodeV1
+    configuration: TemporalSymmetryConfiguration,
+    correlation: TemporalSymmetryCaseRunCorrelation,
+    outcome: TemporalSymmetryExpectedOutcome,
+    swiftRaw: SymmetryExploration,
+    swiftReduced: SymmetryExploration,
+    tlcRaw: SymmetryExploration,
+    tlcReduced: SymmetryExploration,
+    configurationEvidence: CoreEvidenceReference,
+    quotientEvidence: CoreEvidenceReference,
+    orbits: [SymmetryOrbit],
+    rawTransitionWitnesses: [SymmetryRawTransitionWitness],
+    quotientTransitions: [SymmetryQuotientTransition],
+    diagnosticCode: TemporalSymmetryDiagnosticCode
   ) throws {
     self.schema = Self.schema
     self.caseID = caseID
@@ -371,7 +371,7 @@ public struct SymmetryOrbitComparisonV1: Equatable, Codable, Sendable {
     let members = orbits.flatMap(\.members)
     guard !caseID.isEmpty, correlation.caseID == caseID, configuration.property == nil,
           configuration.symmetryEnabled, !orbits.isEmpty, Set(members).count == members.count else {
-      throw TemporalSymmetryGovernanceErrorV1.inconsistentReference(record: caseID, field: "orbit comparison")
+      throw TemporalSymmetryGovernanceError.inconsistentReference(record: caseID, field: "orbit comparison")
     }
     let explorations = [swiftRaw, swiftReduced, tlcRaw, tlcReduced]
     guard Set(explorations.map { "\($0.engine.rawValue):\($0.reduced)" }).count == 4,
@@ -379,7 +379,7 @@ public struct SymmetryOrbitComparisonV1: Equatable, Codable, Sendable {
           swiftReduced.engine == .swift, swiftReduced.reduced,
           tlcRaw.engine == .tlc, !tlcRaw.reduced,
           tlcReduced.engine == .tlc, tlcReduced.reduced else {
-      throw TemporalSymmetryGovernanceErrorV1.invalidField(record: caseID, field: "paired explorations")
+      throw TemporalSymmetryGovernanceError.invalidField(record: caseID, field: "paired explorations")
     }
     guard swiftRaw.runID == correlation.swiftRunID,
           tlcRaw.runID == correlation.tlcRunID,
@@ -387,10 +387,10 @@ public struct SymmetryOrbitComparisonV1: Equatable, Codable, Sendable {
             correlation.gateRunID, correlation.comparisonRunID, swiftRaw.runID,
             swiftReduced.runID, tlcRaw.runID, tlcReduced.runID
           ]).count == 6 else {
-      throw TemporalSymmetryGovernanceErrorV1.invalidField(record: caseID, field: "exploration run correlation")
+      throw TemporalSymmetryGovernanceError.invalidField(record: caseID, field: "exploration run correlation")
     }
     guard Set(explorations.map(\.declaredConfigurationSHA256)).count == 1 else {
-      throw TemporalSymmetryGovernanceErrorV1.invalidField(record: caseID, field: "configuration equivalence")
+      throw TemporalSymmetryGovernanceError.invalidField(record: caseID, field: "configuration equivalence")
     }
     let rawStateIDs = Set(orbits.flatMap(\.members))
     let representatives = Set(orbits.map(\.semanticRepresentative))
@@ -405,7 +405,7 @@ public struct SymmetryOrbitComparisonV1: Equatable, Codable, Sendable {
             orbits.contains { $0.semanticRepresentative == transition.sourceRepresentative }
               && orbits.contains { $0.semanticRepresentative == transition.targetRepresentative }
           }) else {
-      throw TemporalSymmetryGovernanceErrorV1.invalidField(record: caseID, field: "orbit witnesses or quotient")
+      throw TemporalSymmetryGovernanceError.invalidField(record: caseID, field: "orbit witnesses or quotient")
     }
     let quotient = Set(quotientTransitions)
     let quotientMatches = mappedQuotient(swiftRaw.transitions) == quotient
@@ -419,13 +419,13 @@ public struct SymmetryOrbitComparisonV1: Equatable, Codable, Sendable {
     switch outcome {
     case .exact:
       guard orbitPartitionMatches else {
-        throw TemporalSymmetryGovernanceErrorV1.invalidField(record: caseID, field: "complete orbit partition")
+        throw TemporalSymmetryGovernanceError.invalidField(record: caseID, field: "complete orbit partition")
       }
       guard quotientMatches else {
-        throw TemporalSymmetryGovernanceErrorV1.invalidField(record: caseID, field: "quotient completeness")
+        throw TemporalSymmetryGovernanceError.invalidField(record: caseID, field: "quotient completeness")
       }
       guard applicableOutcomesAgree, diagnosticCode == .exactAgreement else {
-        throw TemporalSymmetryGovernanceErrorV1.invalidField(record: caseID, field: "exact applicable outcomes")
+        throw TemporalSymmetryGovernanceError.invalidField(record: caseID, field: "exact applicable outcomes")
       }
     case .difference:
       let diagnosticMatchesDifference: Bool
@@ -440,39 +440,39 @@ public struct SymmetryOrbitComparisonV1: Equatable, Codable, Sendable {
         diagnosticMatchesDifference = false
       }
       guard diagnosticMatchesDifference else {
-        throw TemporalSymmetryGovernanceErrorV1.invalidField(record: caseID, field: "symmetry difference diagnostic")
+        throw TemporalSymmetryGovernanceError.invalidField(record: caseID, field: "symmetry difference diagnostic")
       }
     case .unavailable:
       guard diagnosticCode == .orbitEvidenceUnavailable else {
-        throw TemporalSymmetryGovernanceErrorV1.invalidField(record: caseID, field: "unavailable orbit result")
+        throw TemporalSymmetryGovernanceError.invalidField(record: caseID, field: "unavailable orbit result")
       }
     }
   }
 
   private func mappedQuotient(
-    _ transitions: [SymmetryRawTransitionWitnessV1]
-  ) -> Set<SymmetryQuotientTransitionV1>? {
+    _ transitions: [SymmetryRawTransitionWitness]
+  ) -> Set<SymmetryQuotientTransition>? {
     let orbitByMember = Dictionary(uniqueKeysWithValues: orbits.flatMap { orbit in
       orbit.members.map { ($0, orbit.semanticRepresentative) }
     })
-    let mapped = transitions.compactMap { witness -> SymmetryQuotientTransitionV1? in
+    let mapped = transitions.compactMap { witness -> SymmetryQuotientTransition? in
       guard let source = orbitByMember[witness.sourceStateID], let target = orbitByMember[witness.targetStateID] else {
         return nil
       }
-      return try? SymmetryQuotientTransitionV1(
+      return try? SymmetryQuotientTransition(
         sourceRepresentative: source, action: witness.action, targetRepresentative: target)
     }
     guard mapped.count == transitions.count else { return nil }
     return Set(mapped)
   }
 
-  private func reducedRelation(_ exploration: SymmetryExplorationV1) -> Set<SymmetryQuotientTransitionV1>? {
+  private func reducedRelation(_ exploration: SymmetryExploration) -> Set<SymmetryQuotientTransition>? {
     let representatives = Set(orbits.map(\.semanticRepresentative))
-    let mapped = exploration.transitions.compactMap { transition -> SymmetryQuotientTransitionV1? in
+    let mapped = exploration.transitions.compactMap { transition -> SymmetryQuotientTransition? in
       guard representatives.contains(transition.sourceStateID), representatives.contains(transition.targetStateID) else {
         return nil
       }
-      return try? SymmetryQuotientTransitionV1(
+      return try? SymmetryQuotientTransition(
         sourceRepresentative: transition.sourceStateID, action: transition.action, targetRepresentative: transition.targetStateID)
     }
     guard mapped.count == exploration.transitions.count else { return nil }
@@ -485,24 +485,24 @@ public struct SymmetryOrbitComparisonV1: Equatable, Codable, Sendable {
   }
 
   public init(from decoder: Decoder) throws {
-    let container = try TemporalSymmetryGovernanceDecodingV1.container(decoder, keyedBy: CodingKeys.self)
+    let container = try TemporalSymmetryGovernanceDecoding.container(decoder, keyedBy: CodingKeys.self)
     guard try container.decode(String.self, forKey: .schema) == Self.schema else {
-      throw TemporalSymmetryGovernanceErrorV1.invalidSchema("SymmetryOrbitComparisonV1")
+      throw TemporalSymmetryGovernanceError.invalidSchema("SymmetryOrbitComparison")
     }
     try self.init(
       caseID: container.decode(String.self, forKey: .caseID),
-      configuration: container.decode(TemporalSymmetryConfigurationV1.self, forKey: .configuration),
-      correlation: container.decode(TemporalSymmetryCaseRunCorrelationV1.self, forKey: .correlation),
-      outcome: container.decode(TemporalSymmetryExpectedOutcomeV1.self, forKey: .outcome),
-      swiftRaw: container.decode(SymmetryExplorationV1.self, forKey: .swiftRaw),
-      swiftReduced: container.decode(SymmetryExplorationV1.self, forKey: .swiftReduced),
-      tlcRaw: container.decode(SymmetryExplorationV1.self, forKey: .tlcRaw),
-      tlcReduced: container.decode(SymmetryExplorationV1.self, forKey: .tlcReduced),
-      configurationEvidence: container.decode(CoreEvidenceReferenceV1.self, forKey: .configurationEvidence),
-      quotientEvidence: container.decode(CoreEvidenceReferenceV1.self, forKey: .quotientEvidence),
-      orbits: container.decode([SymmetryOrbitV1].self, forKey: .orbits),
-      rawTransitionWitnesses: container.decode([SymmetryRawTransitionWitnessV1].self, forKey: .rawTransitionWitnesses),
-      quotientTransitions: container.decode([SymmetryQuotientTransitionV1].self, forKey: .quotientTransitions),
-      diagnosticCode: container.decode(TemporalSymmetryDiagnosticCodeV1.self, forKey: .diagnosticCode))
+      configuration: container.decode(TemporalSymmetryConfiguration.self, forKey: .configuration),
+      correlation: container.decode(TemporalSymmetryCaseRunCorrelation.self, forKey: .correlation),
+      outcome: container.decode(TemporalSymmetryExpectedOutcome.self, forKey: .outcome),
+      swiftRaw: container.decode(SymmetryExploration.self, forKey: .swiftRaw),
+      swiftReduced: container.decode(SymmetryExploration.self, forKey: .swiftReduced),
+      tlcRaw: container.decode(SymmetryExploration.self, forKey: .tlcRaw),
+      tlcReduced: container.decode(SymmetryExploration.self, forKey: .tlcReduced),
+      configurationEvidence: container.decode(CoreEvidenceReference.self, forKey: .configurationEvidence),
+      quotientEvidence: container.decode(CoreEvidenceReference.self, forKey: .quotientEvidence),
+      orbits: container.decode([SymmetryOrbit].self, forKey: .orbits),
+      rawTransitionWitnesses: container.decode([SymmetryRawTransitionWitness].self, forKey: .rawTransitionWitnesses),
+      quotientTransitions: container.decode([SymmetryQuotientTransition].self, forKey: .quotientTransitions),
+      diagnosticCode: container.decode(TemporalSymmetryDiagnosticCode.self, forKey: .diagnosticCode))
   }
 }

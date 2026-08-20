@@ -1,6 +1,6 @@
 {
-  "schema": "CoreConformanceCasesV1",
-  "relation": "exactFiniteTLCGraphV1",
+  "schema": "CoreConformanceCases",
+  "relation": "exactFiniteTLCGraph",
   "cases": [
     {
       "id": "simultaneous-swap",

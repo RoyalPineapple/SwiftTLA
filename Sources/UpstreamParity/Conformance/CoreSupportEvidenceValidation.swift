@@ -1,9 +1,9 @@
 import Foundation
 
-extension CoreSupportGateV1 {
+extension CoreSupportGate {
   func caseMatches(
-    _ object: [String: Any], _ declared: CoreConformanceCasesManifestV1.Entry,
-    _ expected: CoreConformanceCaseV1
+    _ object: [String: Any], _ declared: CoreConformanceCasesManifest.Entry,
+    _ expected: CoreConformanceCase
   ) -> Bool {
     object["id"] as? String == declared.id
       && object["moduleSHA256"] as? String == declared.moduleSHA256
@@ -22,11 +22,11 @@ extension CoreSupportGateV1 {
       && valueNormalizationsMatch(object["valueNormalizations"], declared: expected.valueNormalizations)
   }
 
-  func argumentsMatch(_ object: [String: Any], _ declared: CoreConformanceCasesManifestV1.Entry) -> Bool {
+  func argumentsMatch(_ object: [String: Any], _ declared: CoreConformanceCasesManifest.Entry) -> Bool {
     object["arguments"] as? [String] == declared.arguments
   }
 
-  func toolchainMatches(_ object: [String: Any], _ declared: CoreConformanceCasesManifestV1.Entry) -> Bool {
+  func toolchainMatches(_ object: [String: Any], _ declared: CoreConformanceCasesManifest.Entry) -> Bool {
     !declared.governance.semanticCitations.isEmpty
       && pinMatches(object["declaredPin"] as? [String: Any])
       && pinMatches(object["referencePin"] as? [String: Any])
@@ -37,35 +37,35 @@ extension CoreSupportGateV1 {
     guard let pin else { return false }
     return pin["tag"] as? String == "v1.8.0"
       && pin["commit"] as? String == "0894c3407f4717fec7cc18bde3bf3c857fa47333"
-      && pin["jarSHA256"] as? String == TLCReferencePinV1.lockedJarSHA256
-      && pin["javaDistribution"] as? String == TLCReferencePinV1.fixture.javaDistribution
-      && pin["javaVersion"] as? String == TLCReferencePinV1.fixture.javaVersion
-      && pin["bridgeClass"] as? String == TLCReferencePinV1.fixture.bridgeClass
-      && pin["bridgeSourceSHA256"] as? String == TLCReferencePinV1.lockedBridgeSourceSHA256
-      && pin["bridgeBinarySHA256"] as? String == TLCReferencePinV1.lockedBridgeBinarySHA256
-      && TLCReferencePinV1.lockedJavaArchiveSHA256s.values.contains(pin["javaArchiveSHA256"] as? String ?? "")
+      && pin["jarSHA256"] as? String == TLCReferencePin.lockedJarSHA256
+      && pin["javaDistribution"] as? String == TLCReferencePin.fixture.javaDistribution
+      && pin["javaVersion"] as? String == TLCReferencePin.fixture.javaVersion
+      && pin["bridgeClass"] as? String == TLCReferencePin.fixture.bridgeClass
+      && pin["bridgeSourceSHA256"] as? String == TLCReferencePin.lockedBridgeSourceSHA256
+      && pin["bridgeBinarySHA256"] as? String == TLCReferencePin.lockedBridgeBinarySHA256
+      && TLCReferencePin.lockedJavaArchiveSHA256s.values.contains(pin["javaArchiveSHA256"] as? String ?? "")
   }
 
-  func declaredCaseContract(_ declared: CoreConformanceCasesManifestV1.Entry) throws -> CoreConformanceCaseV1 {
-    try CoreConformanceCaseV1(
+  func declaredCaseContract(_ declared: CoreConformanceCasesManifest.Entry) throws -> CoreConformanceCase {
+    try CoreConformanceCase(
       id: declared.id, moduleSHA256: declared.moduleSHA256, cfgSHA256: declared.cfgSHA256,
       arguments: declared.arguments, argumentsSHA256: declared.argumentsSHA256,
       workers: declared.workers, fingerprintPolynomial: declared.fingerprintPolynomial,
       deadlock: declared.deadlock, operatingSystem: "macos", architecture: "arm64", environment: [:],
       pin: .fixture, governance: declared.governance,
       invocationMappings: try declared.invocationMappings.map { mapping in
-        try CoreConformanceInvocationMappingV1(
+        try CoreConformanceInvocationMapping(
           wrapper: mapping.wrapper, action: mapping.action,
           arguments: mapping.arguments, indices: mapping.indices)
       },
       valueNormalizations: try declared.valueNormalizations.map { normalization in
-        try CoreConformanceValueNormalizationV1(
+        try CoreConformanceValueNormalization(
           binding: normalization.binding, functionKeys: normalization.functionKeys)
       })
   }
 
   func invocationMappingsMatch(
-    _ object: Any?, declared: [CoreConformanceInvocationMappingV1]
+    _ object: Any?, declared: [CoreConformanceInvocationMapping]
   ) -> Bool {
     guard let mappings = object as? [[String: Any]], mappings.count == declared.count else {
       return false
@@ -80,7 +80,7 @@ extension CoreSupportGateV1 {
   }
 
   func valueNormalizationsMatch(
-    _ object: Any?, declared: [CoreConformanceValueNormalizationV1]
+    _ object: Any?, declared: [CoreConformanceValueNormalization]
   ) -> Bool {
     guard let normalizations = object as? [[String: Any]], normalizations.count == declared.count else {
       return false
@@ -92,7 +92,7 @@ extension CoreSupportGateV1 {
     }
   }
 
-  func governanceMatches(_ object: [String: Any]?, _ governance: CoreConformanceCaseGovernanceV1) -> Bool {
+  func governanceMatches(_ object: [String: Any]?, _ governance: CoreConformanceCaseGovernance) -> Bool {
     guard let object, object["role"] as? String == governance.role.rawValue,
           object["semanticCitations"] as? [String] == governance.semanticCitations,
           object["expectedRegressionOutcome"] as? String == governance.expectedRegressionOutcome.rawValue,
@@ -113,11 +113,11 @@ extension CoreSupportGateV1 {
           manifest.contains("Implementation-Title: TLA+ Tools"),
           manifest.contains("X-Git-Revision: 0894c3407f4717fec7cc18bde3bf3c857fa47333"),
           let runtime = object["runtime"] as? [String: Any],
-          runtime["version"] as? String == TLCReferencePinV1.fixture.javaVersion,
+          runtime["version"] as? String == TLCReferencePin.fixture.javaVersion,
           (runtime["vendor"] as? String)?.contains("Eclipse Adoptium") == true,
           runtime["architecture"] as? String == "arm64",
           let properties = runtime["properties"] as? [String: String],
-          properties["java.runtime.version"] == TLCReferencePinV1.fixture.javaVersion,
+          properties["java.runtime.version"] == TLCReferencePin.fixture.javaVersion,
           properties["java.vendor"]?.contains("Eclipse Adoptium") == true
     else { return false }
     return true
@@ -131,7 +131,7 @@ extension CoreSupportGateV1 {
       let outcomeIsComplete = requireExhaustiveCompletion
         ? outcome?["kind"] as? String == "exhaustiveSuccess"
         : outcome?["kind"] as? String != nil
-      return graph["schema"] as? String == CanonicalSchemaV1.exactFiniteTLCGraphV1.rawValue
+      return graph["schema"] as? String == CanonicalSchema.exactFiniteTLCGraph.rawValue
         && graph["initialStates"] as? [String] != nil
         && graph["states"] as? [String] != nil
         && graph["edges"] as? [[String: Any]] != nil
@@ -209,22 +209,22 @@ extension CoreSupportGateV1 {
     return true
   }
 
-  func graphEventStreamIsComplete(at url: URL, expectedCase: CoreConformanceCaseV1, gateRunID: UUID) throws -> Bool {
-    let stream = try TLCGraphEventParserV1(expectedCase: expectedCase).parse(Data(contentsOf: url))
+  func graphEventStreamIsComplete(at url: URL, expectedCase: CoreConformanceCase, gateRunID: UUID) throws -> Bool {
+    let stream = try TLCGraphEventParser(expectedCase: expectedCase).parse(Data(contentsOf: url))
     return stream.runID == gateRunID && !stream.initialStates.isEmpty
   }
 
   func graphEventStreamMatchesCanonicalTLCGraph(
-    at url: URL, expectedCase: CoreConformanceCaseV1, gateRunID: UUID, tlc: [String: Any]
+    at url: URL, expectedCase: CoreConformanceCase, gateRunID: UUID, tlc: [String: Any]
   ) throws -> Bool {
     let data = try Data(contentsOf: url)
-    let parser = TLCGraphEventParserV1(expectedCase: expectedCase)
+    let parser = TLCGraphEventParser(expectedCase: expectedCase)
     let stream = try parser.parse(data)
     guard stream.runID == gateRunID, !stream.initialStates.isEmpty else { return false }
 
     // The event stream is the primary TLC graph record. Rebuild its canonical
     // graph and require every graph field in tlc.json to be the same record.
-    let complete = TLCProcessResultV1(
+    let complete = TLCProcessResult(
       status: 0, stdout: "Model checking completed. No error has been found.", stderr: "")
     let run = try parser.parseCanonicalRun(data, result: complete)
     let expected = canonicalGraphProjection(run)
@@ -237,7 +237,7 @@ extension CoreSupportGateV1 {
 
   func rawEvidenceMatchesCanonicalOutcome(
     in directory: URL,
-    expectedCase: CoreConformanceCaseV1,
+    expectedCase: CoreConformanceCase,
     gateRunID: UUID,
     isViolation: Bool,
     tlc: [String: Any]
@@ -267,8 +267,8 @@ extension CoreSupportGateV1 {
             == canonicalValue(canonicalGraphProjection(trace.run))
     else { return false }
 
-    let counterexample = try TLCTraceParserV1().parseCounterexample(Data(contentsOf: counterexampleURL))
-    let replay = try TLCTraceParserV1().parseCounterexample(Data(contentsOf: replayJSONURL))
+    let counterexample = try TLCTraceParser().parseCounterexample(Data(contentsOf: counterexampleURL))
+    let replay = try TLCTraceParser().parseCounterexample(Data(contentsOf: replayJSONURL))
     guard counterexample.states == replay.states,
           counterexample.transitions == replay.transitions,
           traceBelongsToGraph(counterexample, graph: primary.run.graph),
@@ -365,17 +365,17 @@ extension CoreSupportGateV1 {
     zip(values, values.dropFirst()).allSatisfy { $0 < $1 }
   }
 
-  private func canonicalGraph(at url: URL, expectedCase: CoreConformanceCaseV1) throws -> ParsedPhaseGraph {
+  private func canonicalGraph(at url: URL, expectedCase: CoreConformanceCase) throws -> ParsedPhaseGraph {
     let data = try Data(contentsOf: url)
-    let parser = TLCGraphEventParserV1(expectedCase: expectedCase)
+    let parser = TLCGraphEventParser(expectedCase: expectedCase)
     let stream = try parser.parse(data)
-    let result = TLCProcessResultV1(
+    let result = TLCProcessResult(
       status: 0, stdout: "Model checking completed. No error has been found.", stderr: "")
     return ParsedPhaseGraph(runID: stream.runID, run: try parser.parseCanonicalRun(data, result: result))
   }
 
   private func traceBelongsToGraph(
-    _ trace: TLCCounterexampleEvidenceV1, graph: CanonicalGraphV1
+    _ trace: TLCCounterexampleEvidence, graph: CanonicalGraph
   ) -> Bool {
     guard let initialState = trace.states.first,
           graph.initialStateKeys.contains(initialState.key),
@@ -389,7 +389,7 @@ extension CoreSupportGateV1 {
   }
 
   private func replayPhaseTrace(
-    at url: URL, expectedCase: CoreConformanceCaseV1, gateRunID: UUID
+    at url: URL, expectedCase: CoreConformanceCase, gateRunID: UUID
   ) throws -> ReplayPhaseTrace {
     let data = try Data(contentsOf: url)
     guard String(data: data, encoding: .utf8) != nil,
@@ -402,8 +402,8 @@ extension CoreSupportGateV1 {
 
     var body = Data()
     var counts: [String: Int] = [:]
-    var initialState: CanonicalStateV1?
-    var transitions: [CanonicalEdgeV1] = []
+    var initialState: CanonicalState?
+    var transitions: [CanonicalEdge] = []
     for (index, bytes) in lines.dropLast().enumerated() {
       guard let object = try JSONSerialization.jsonObject(with: Data(bytes)) as? [String: Any],
             object["schema"] as? String == "swifttla.tlc.graph-events",
@@ -424,7 +424,7 @@ extension CoreSupportGateV1 {
               callback == "writer.close",
               object["status"] as? String == "closed",
               object["lastBodySeq"] as? Int == index - 1,
-              object["bodySha256"] as? String == SHA256V1.hex(body),
+              object["bodySha256"] as? String == SHA256.hex(body),
               let recordedCounts = object["counts"] as? [String: Int], recordedCounts == counts
         else { throw EvidenceValidationError.invalidCanonicalRecord }
         continue
@@ -466,7 +466,7 @@ extension CoreSupportGateV1 {
           guard object["reachable"] as? String == "reachable",
                 object["visualization"] as? String == "none", object["predicateLocation"] is NSNull
           else { throw EvidenceValidationError.invalidCanonicalRecord }
-          transitions.append(CanonicalEdgeV1(source: source.key, action: actionName, target: target.key))
+          transitions.append(CanonicalEdge(source: source.key, action: actionName, target: target.key))
         } else {
           guard callback == "writeState.actionPredicate",
                 object["reachable"] as? String == "excluded",
@@ -485,7 +485,7 @@ extension CoreSupportGateV1 {
   }
 
   private func replayProvenanceMatches(
-    _ provenance: [String: Any], expectedCase: CoreConformanceCaseV1
+    _ provenance: [String: Any], expectedCase: CoreConformanceCase
   ) -> Bool {
     let keys: Set<String> = [
       "tlcTag", "tlcCommit", "tlcJarSha256", "javaDistribution", "javaVersion", "javaArchiveSha256",
@@ -515,34 +515,34 @@ extension CoreSupportGateV1 {
       && provenance["bridgeBinarySha256"] as? String == expectedCase.pin.bridgeBinarySHA256
   }
 
-  private func parsePhaseState(_ value: Any?) -> CanonicalStateV1? {
+  private func parsePhaseState(_ value: Any?) -> CanonicalState? {
     guard let state = value as? [String: Any], Set(state.keys) == ["fingerprint", "level", "bindings"],
           state["fingerprint"] as? String != nil, state["level"] as? Int != nil,
           let bindings = state["bindings"] as? [[String: Any]], !bindings.isEmpty
     else { return nil }
-    var values: [String: CanonicalValueV1] = [:]
+    var values: [String: CanonicalValue] = [:]
     for (index, binding) in bindings.enumerated() {
       guard Set(binding.keys) == ["ordinal", "name", "tla", "tlaSha256"],
             binding["ordinal"] as? Int == index,
             let name = binding["name"] as? String, !name.isEmpty,
             let tla = binding["tla"] as? String,
-            binding["tlaSha256"] as? String == SHA256V1.hex(Data(tla.utf8)),
+            binding["tlaSha256"] as? String == SHA256.hex(Data(tla.utf8)),
             values[name] == nil,
-            let parsed = try? TLCValueParserV1.parse(tla)
+            let parsed = try? TLCValueParser.parse(tla)
       else { return nil }
       values[name] = parsed
     }
-    return CanonicalStateV1(bindings: values)
+    return CanonicalState(bindings: values)
   }
 
   private struct ParsedPhaseGraph {
     let runID: UUID
-    let run: CanonicalRunV1
+    let run: CanonicalRun
   }
 
   private struct ReplayPhaseTrace {
-    let initialState: CanonicalStateV1
-    let transitions: [CanonicalEdgeV1]
+    let initialState: CanonicalState
+    let transitions: [CanonicalEdge]
   }
 
   func comparisonMatchesCanonicalTruth(
@@ -556,7 +556,7 @@ extension CoreSupportGateV1 {
 
     let isDifference = !(expected["conformant"] as! Bool)
     let fingerprint = isDifference
-      ? try CoreDivergenceLedgerV1.normalizedDifferenceFingerprint(
+      ? try CoreDivergenceLedger.normalizedDifferenceFingerprint(
         from: JSONSerialization.data(withJSONObject: expected, options: [.sortedKeys]))
       : nil
     return (isDifference, fingerprint)
@@ -590,7 +590,7 @@ extension CoreSupportGateV1 {
       "outcome", "errors", "traces"
     ]
     guard Set(graph.keys) == keys,
-          graph["schema"] as? String == CanonicalSchemaV1.exactFiniteTLCGraphV1.rawValue,
+          graph["schema"] as? String == CanonicalSchema.exactFiniteTLCGraph.rawValue,
           let initialStates = graph["initialStates"] as? [String], !initialStates.isEmpty,
           let states = graph["states"] as? [String], !states.isEmpty,
           let edges = graph["edges"] as? [[String: Any]],
@@ -616,7 +616,7 @@ extension CoreSupportGateV1 {
     return graph
   }
 
-  private func canonicalGraphProjection(_ run: CanonicalRunV1) -> [String: Any] {
+  private func canonicalGraphProjection(_ run: CanonicalRun) -> [String: Any] {
     let occurrences = run.graph.edgeOccurrences.map { edge, count in
       (edge.canonicalEncoding, count)
     }.sorted { $0.0 < $1.0 }.map { edge, count in

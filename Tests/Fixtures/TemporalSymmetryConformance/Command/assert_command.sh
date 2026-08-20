@@ -41,11 +41,11 @@ expect_exit 2 swift run tlc-validate temporal-symmetry gate \
     --core-report-id "$(uuidgen | tr '[:upper:]' '[:lower:]')" \
     --prerequisite unavailable
 test -f "$report"
-jq -e '.schema == "TemporalSymmetryAdmissionV1" and .gateRunID == $run and .finalExitClass == "unavailable"' \
+jq -e '.schema == "TemporalSymmetryAdmission" and .gateRunID == $run and .finalExitClass == "unavailable"' \
     --arg run "$run_id" "$report" >/dev/null
 case_run="$TMP/missing-comparisons/temporal-always-none/case-run.json"
 test -f "$case_run"
-jq -e '.schema == "TemporalSymmetryCaseRunV1" and .gateRunID == $run and .status == "prepared" and .diagnosticCode == "awaiting-pinned-tlc-comparison" and .swiftGraphStateCount == 3' \
+jq -e '.schema == "TemporalSymmetryCaseRun" and .gateRunID == $run and .status == "prepared" and .diagnosticCode == "awaiting-pinned-tlc-comparison" and .swiftGraphStateCount == 3' \
     --arg run "$run_id" "$case_run" >/dev/null
 
 run_report="$TMP/temporal-symmetry-run-admission.json"

@@ -144,12 +144,12 @@ private struct JSONParser {
     }
 
     private func error(_ message: String) -> NSError {
-        NSError(domain: "TLCGraphEventV1", code: 1, userInfo: [NSLocalizedDescriptionKey: message])
+        NSError(domain: "TLCGraphEvent", code: 1, userInfo: [NSLocalizedDescriptionKey: message])
     }
 }
 
 private func fail(_ message: String) -> Never {
-    FileHandle.standardError.write(Data("BridgeSpikeVerdictV1: KILL — \(message)\n".utf8))
+    FileHandle.standardError.write(Data("BridgeSpikeVerdict: KILL — \(message)\n".utf8))
     exit(2)
 }
 
@@ -435,4 +435,4 @@ guard footerSeen, counts == ["header": 1, "initial": 2, "transition": 9],
     fail("complete adversarial initial-state or transition multiset does not match the locked fixture")
 }
 validateTLCCompletion(tlcLog)
-print("BridgeSpikeVerdictV1: PASS")
+print("BridgeSpikeVerdict: PASS")

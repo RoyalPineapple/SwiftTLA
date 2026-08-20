@@ -1,17 +1,17 @@
 import Foundation
 
-public enum SymmetryOrbitAdapterErrorV1: Error, Equatable, Sendable {
+public enum SymmetryOrbitAdapterError: Error, Equatable, Sendable {
   case emptyPermutationGroup
   case incompatiblePermutationDomains
   case permutationDoesNotPreserveStateSpace
   case rawStateSetsDiffer
   case incompleteOrbit(String)
-  case reducedStateOutsideOrbit(engine: SymmetryExplorationEngineV1, stateID: String)
-  case multipleReducedRepresentatives(engine: SymmetryExplorationEngineV1, representative: String)
-  case missingReducedRepresentative(engine: SymmetryExplorationEngineV1, representative: String)
+  case reducedStateOutsideOrbit(engine: SymmetryExplorationEngine, stateID: String)
+  case multipleReducedRepresentatives(engine: SymmetryExplorationEngine, representative: String)
+  case missingReducedRepresentative(engine: SymmetryExplorationEngine, representative: String)
 }
 
-public struct SymmetryPermutationV1: Equatable, Sendable {
+public struct SymmetryPermutation: Equatable, Sendable {
   public let constantMapping: [String: String]
 
   public init(constantMapping: [String: String]) throws {
@@ -19,13 +19,13 @@ public struct SymmetryPermutationV1: Equatable, Sendable {
           Set(constantMapping.values).count == constantMapping.count,
           Set(constantMapping.keys) == Set(constantMapping.values),
           constantMapping.allSatisfy({ !$0.key.isEmpty && !$0.value.isEmpty }) else {
-      throw TemporalSymmetryGovernanceErrorV1.invalidField(record: "symmetry permutation", field: "constant mapping")
+      throw TemporalSymmetryGovernanceError.invalidField(record: "symmetry permutation", field: "constant mapping")
     }
     self.constantMapping = constantMapping
   }
 
-  public func apply(_ state: CanonicalStateV1) -> CanonicalStateV1 {
-    CanonicalStateV1(bindings: state.bindings.mapValues(apply))
+  public func apply(_ state: CanonicalState) -> CanonicalState {
+    CanonicalState(bindings: state.bindings.mapValues(apply))
   }
 
   fileprivate static func identity(on domain: Set<String>) throws -> Self {
@@ -42,7 +42,7 @@ public struct SymmetryPermutationV1: Equatable, Sendable {
     constantMapping.keys.sorted().map { "\($0)->\(constantMapping[$0]!)" }.joined(separator: "|")
   }
 
-  private func apply(_ value: CanonicalValueV1) -> CanonicalValueV1 {
+  private func apply(_ value: CanonicalValue) -> CanonicalValue {
     switch value {
     case .constant(let name):
       .constant(constantMapping[name] ?? name)
@@ -53,38 +53,38 @@ public struct SymmetryPermutationV1: Equatable, Sendable {
     case .orderedRecord(let fields):
       .record(Dictionary(uniqueKeysWithValues: fields.map { ($0.name, apply($0.value)) }))
     case .orderedFunction(let entries):
-      .function(entries.map { CanonicalFunctionEntryV1(key: apply($0.key), value: apply($0.value)) })
+      .function(entries.map { CanonicalFunctionEntry(key: apply($0.key), value: apply($0.value)) })
     case .integer, .boolean, .string:
       value
     }
   }
 }
 
-public struct SymmetryOrbitDerivationV1: Equatable, Sendable {
-  public let group: [SymmetryPermutationV1]
-  public let orbits: [[CanonicalStateKeyV1]]
-  public let representativeForState: [CanonicalStateKeyV1: CanonicalStateKeyV1]
+public struct SymmetryOrbitDerivation: Equatable, Sendable {
+  public let group: [SymmetryPermutation]
+  public let orbits: [[CanonicalStateKey]]
+  public let representativeForState: [CanonicalStateKey: CanonicalStateKey]
 
   public init(
-    states: [CanonicalStateV1],
-    permutations: [SymmetryPermutationV1]
+    states: [CanonicalState],
+    permutations: [SymmetryPermutation]
   ) throws {
-    guard !permutations.isEmpty else { throw SymmetryOrbitAdapterErrorV1.emptyPermutationGroup }
+    guard !permutations.isEmpty else { throw SymmetryOrbitAdapterError.emptyPermutationGroup }
     let domain = Set(permutations[0].constantMapping.keys)
     guard permutations.allSatisfy({ Set($0.constantMapping.keys) == domain }) else {
-      throw SymmetryOrbitAdapterErrorV1.incompatiblePermutationDomains
+      throw SymmetryOrbitAdapterError.incompatiblePermutationDomains
     }
     let closure = try Self.closure(generators: permutations, domain: domain)
     let stateTable = Dictionary(uniqueKeysWithValues: states.map { ($0.key, $0) })
     var unseen = Set(stateTable.keys)
-    var derived: [[CanonicalStateKeyV1]] = []
-    var representatives: [CanonicalStateKeyV1: CanonicalStateKeyV1] = [:]
+    var derived: [[CanonicalStateKey]] = []
+    var representatives: [CanonicalStateKey: CanonicalStateKey] = [:]
 
     while let first = unseen.sorted().first {
       guard let state = stateTable[first] else { continue }
       let members = Set(closure.map { $0.apply(state).key })
       guard members.allSatisfy({ stateTable[$0] != nil }) else {
-        throw SymmetryOrbitAdapterErrorV1.permutationDoesNotPreserveStateSpace
+        throw SymmetryOrbitAdapterError.permutationDoesNotPreserveStateSpace
       }
       let ordered = members.sorted()
       let representative = ordered[0]
@@ -98,9 +98,9 @@ public struct SymmetryOrbitDerivationV1: Equatable, Sendable {
   }
 
   private static func closure(
-    generators: [SymmetryPermutationV1], domain: Set<String>
-  ) throws -> [SymmetryPermutationV1] {
-    let identity = try SymmetryPermutationV1.identity(on: domain)
+    generators: [SymmetryPermutation], domain: Set<String>
+  ) throws -> [SymmetryPermutation] {
+    let identity = try SymmetryPermutation.identity(on: domain)
     var known = [identity.key: identity]
     var frontier = [identity]
     while let current = frontier.popLast() {
@@ -116,7 +116,7 @@ public struct SymmetryOrbitDerivationV1: Equatable, Sendable {
   }
 }
 
-public struct PinnedSymmetryTLCCorrelationV1: Equatable, Sendable {
+public struct PinnedSymmetryTLCCorrelation: Equatable, Sendable {
   public let caseID: String
   public let gateRunID: UUID
   public let comparisonRunID: UUID
@@ -132,7 +132,7 @@ public struct PinnedSymmetryTLCCorrelationV1: Equatable, Sendable {
   ) throws {
     guard !caseID.isEmpty,
           Set([gateRunID, comparisonRunID, rawRunID, reducedRunID]).count == 4 else {
-      throw TemporalSymmetryGovernanceErrorV1.invalidField(
+      throw TemporalSymmetryGovernanceError.invalidField(
         record: caseID, field: "TLC raw/reduced run correlation")
     }
     self.caseID = caseID
@@ -143,46 +143,46 @@ public struct PinnedSymmetryTLCCorrelationV1: Equatable, Sendable {
   }
 }
 
-public struct PinnedSymmetryTLCAdapterResultV1: Sendable {
-  public let correlation: PinnedSymmetryTLCCorrelationV1
-  public let raw: CanonicalRunV1
-  public let reduced: CanonicalRunV1
+public struct PinnedSymmetryTLCAdapterResult: Sendable {
+  public let correlation: PinnedSymmetryTLCCorrelation
+  public let raw: CanonicalRun
+  public let reduced: CanonicalRun
 }
 
-public struct PinnedSymmetryTLCAdapterV1: Sendable {
-  private let processAdapter: TLCProcessAdapterV1
+public struct PinnedSymmetryTLCAdapter: Sendable {
+  private let processAdapter: TLCProcessAdapter
 
-  public init(processAdapter: TLCProcessAdapterV1 = TLCProcessAdapterV1()) {
+  public init(processAdapter: TLCProcessAdapter = TLCProcessAdapter()) {
     self.processAdapter = processAdapter
   }
 
   public func run(
-    correlation: PinnedSymmetryTLCCorrelationV1,
-    raw: TLCProcessRequestV1,
-    reduced: TLCProcessRequestV1,
-    replay: TLCReplayPolicyV1 = .required
-  ) throws -> PinnedSymmetryTLCAdapterResultV1 {
+    correlation: PinnedSymmetryTLCCorrelation,
+    raw: TLCProcessRequest,
+    reduced: TLCProcessRequest,
+    replay: TLCReplayPolicy = .required
+  ) throws -> PinnedSymmetryTLCAdapterResult {
     try validatePair(correlation: correlation, raw: raw, reduced: reduced)
     let rawProcess = try processAdapter.run(raw, replay: replay)
     let reducedProcess = try processAdapter.run(reduced, replay: replay)
     let rawEvents = try Data(contentsOf: raw.graphEvents)
     let reducedEvents = try Data(contentsOf: reduced.graphEvents)
-    let rawParser = TLCGraphEventParserV1(expectedCase: raw.expectedCase)
-    let reducedParser = TLCGraphEventParserV1(expectedCase: reduced.expectedCase)
+    let rawParser = TLCGraphEventParser(expectedCase: raw.expectedCase)
+    let reducedParser = TLCGraphEventParser(expectedCase: reduced.expectedCase)
     guard try rawParser.parse(rawEvents).runID == correlation.rawRunID,
           try reducedParser.parse(reducedEvents).runID == correlation.reducedRunID else {
-      throw TemporalSymmetryGovernanceErrorV1.inconsistentReference(
+      throw TemporalSymmetryGovernanceError.inconsistentReference(
         record: correlation.caseID, field: "TLC graph-event run correlation")
     }
     let rawRun = try rawParser.parseCanonicalRun(rawEvents, result: rawProcess.primary)
     let reducedRun = try reducedParser.parseCanonicalRun(reducedEvents, result: reducedProcess.primary)
-    return PinnedSymmetryTLCAdapterResultV1(correlation: correlation, raw: rawRun, reduced: reducedRun)
+    return PinnedSymmetryTLCAdapterResult(correlation: correlation, raw: rawRun, reduced: reducedRun)
   }
 
   private func validatePair(
-    correlation: PinnedSymmetryTLCCorrelationV1,
-    raw: TLCProcessRequestV1,
-    reduced: TLCProcessRequestV1
+    correlation: PinnedSymmetryTLCCorrelation,
+    raw: TLCProcessRequest,
+    reduced: TLCProcessRequest
   ) throws {
     guard raw.caseID == correlation.caseID, reduced.caseID == correlation.caseID,
           raw.runID == correlation.rawRunID, reduced.runID == correlation.reducedRunID,
@@ -190,7 +190,7 @@ public struct PinnedSymmetryTLCAdapterV1: Sendable {
           raw.expectedCase.pin == reduced.expectedCase.pin,
           raw.module.resolvingSymlinksInPath() == reduced.module.resolvingSymlinksInPath(),
           raw.configuration.resolvingSymlinksInPath() != reduced.configuration.resolvingSymlinksInPath() else {
-      throw TemporalSymmetryGovernanceErrorV1.inconsistentReference(
+      throw TemporalSymmetryGovernanceError.inconsistentReference(
         record: raw.caseID, field: "pinned TLC raw/reduced pair")
     }
   }

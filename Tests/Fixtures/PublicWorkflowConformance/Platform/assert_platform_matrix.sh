@@ -62,7 +62,7 @@ assert_result() {
     local expected_status="$2"
     local expected_diagnostic="$3"
     jq -e --arg status "$expected_status" --arg diagnostic "$expected_diagnostic" '
-      .schema == "PublicWorkflowPlatformMatrixV1"
+      .schema == "PublicWorkflowPlatformMatrix"
       and .finalStatus != "success"
       and (.results | length == 1)
       and .results[0].status == $status

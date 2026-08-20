@@ -1,5 +1,5 @@
 {
-  "schema": "PublicWorkflowParserBuilderManifestV1",
+  "schema": "PublicWorkflowParserBuilderManifest",
   "declaredCase": {
     "id": "parser-builder-bounded-counter",
     "category": "parserBuilder",
@@ -9,38 +9,38 @@
     "provenance": {
       "caseID": "parser-builder-bounded-counter",
       "moduleSHA256": "903c5ff1b0fd5751795310860054fbf781e311e04a37a6cefc808b2cfe576bb9",
-      "cfgSHA256": "9de2e20ebe1e330215662de0ee944d24217fe293ca14ead441b8c9a83905c1ac",
-      "argumentsSHA256": "9de2e20ebe1e330215662de0ee944d24217fe293ca14ead441b8c9a83905c1ac",
-      "tlcTag": "not-applicable-parser-builder-v1",
-      "tlcCommit": "not-applicable-parser-builder-v1",
-      "tlcJarSHA256": "95f89bf42ce10922c7a60ed4e026ac0a2dc8550fae2a518e8d842f5836518a75",
-      "javaDistribution": "not-applicable-parser-builder-v1",
-      "javaVersion": "not-applicable-parser-builder-v1",
-      "javaArchiveSHA256": "95f89bf42ce10922c7a60ed4e026ac0a2dc8550fae2a518e8d842f5836518a75",
-      "bridgeClass": "SwiftTLA.PublicWorkflowParserBuilderAdapterV1",
-      "bridgeSourceSHA256": "3626e246c966e654372fd000088f5e8706286d38ff50ba3b57eee09294e61db9",
-      "bridgeBinarySHA256": "95f89bf42ce10922c7a60ed4e026ac0a2dc8550fae2a518e8d842f5836518a75"
+      "cfgSHA256": "5619a935660498c6aa59ebe9c6b6889eb28103aad7f383c9c070aa6f7816cffa",
+      "argumentsSHA256": "5619a935660498c6aa59ebe9c6b6889eb28103aad7f383c9c070aa6f7816cffa",
+      "tlcTag": "not-applicable-parser-builder",
+      "tlcCommit": "not-applicable-parser-builder",
+      "tlcJarSHA256": "c48f50b940bbd4852e3fa720a3db565a7c4231a31c84ceb84a34b38706e6940e",
+      "javaDistribution": "not-applicable-parser-builder",
+      "javaVersion": "not-applicable-parser-builder",
+      "javaArchiveSHA256": "c48f50b940bbd4852e3fa720a3db565a7c4231a31c84ceb84a34b38706e6940e",
+      "bridgeClass": "SwiftTLA.PublicWorkflowParserBuilderAdapter",
+      "bridgeSourceSHA256": "0d78df1a490150176110482fd2fa28478b712318ce32caef782030697cbdfce7",
+      "bridgeBinarySHA256": "c48f50b940bbd4852e3fa720a3db565a7c4231a31c84ceb84a34b38706e6940e"
     },
     "sourceInput": { "path": "Tests/Fixtures/PublicWorkflowConformance/ParserBuilder/fixture.swift", "sha256": "903c5ff1b0fd5751795310860054fbf781e311e04a37a6cefc808b2cfe576bb9" },
-    "configuration": { "path": "Tests/Fixtures/PublicWorkflowConformance/ParserBuilder/configuration.json", "sha256": "9de2e20ebe1e330215662de0ee944d24217fe293ca14ead441b8c9a83905c1ac" },
+    "configuration": { "path": "Tests/Fixtures/PublicWorkflowConformance/ParserBuilder/configuration.json", "sha256": "5619a935660498c6aa59ebe9c6b6889eb28103aad7f383c9c070aa6f7816cffa" },
     "expectedOutcome": "exact",
     "authorityBoundary": "publishedSemantics"
   },
   "source": { "path": "Tests/Fixtures/PublicWorkflowConformance/ParserBuilder/fixture.swift", "sha256": "903c5ff1b0fd5751795310860054fbf781e311e04a37a6cefc808b2cfe576bb9" },
-  "configuration": { "path": "Tests/Fixtures/PublicWorkflowConformance/ParserBuilder/configuration.json", "sha256": "9de2e20ebe1e330215662de0ee944d24217fe293ca14ead441b8c9a83905c1ac" },
+  "configuration": { "path": "Tests/Fixtures/PublicWorkflowConformance/ParserBuilder/configuration.json", "sha256": "5619a935660498c6aa59ebe9c6b6889eb28103aad7f383c9c070aa6f7816cffa" },
   "parserObservation": { "path": "Tests/Fixtures/PublicWorkflowConformance/ParserBuilder/parser-observation.json", "sha256": "40f2827a56a66c898540e00921283c7a90d0de69669333026d8776378fc2bfc1" },
   "builderObservation": { "path": "Tests/Fixtures/PublicWorkflowConformance/ParserBuilder/builder-observation.json", "sha256": "40f2827a56a66c898540e00921283c7a90d0de69669333026d8776378fc2bfc1" }
   ,"toolchain": {
-    "schema": "PublicWorkflowParserBuilderToolchainV1",
+    "schema": "PublicWorkflowParserBuilderToolchain",
     "dependencies": [
       { "id": "swiftSyntaxResolution", "evidence": { "path": "Package.resolved", "sha256": "cfdc69e87cdcea8681bfa8b117d599eef34e6f986fe23d9ad5eb4a320a1a18d7" } },
-      { "id": "swiftTLAPackage", "evidence": { "path": "Package.swift", "sha256": "cb18ec5ad761cd1f63315a0c09ebfed5c62c018346908a0a8a19a521f66b6ec4" } },
-      { "id": "adapterSource", "evidence": { "path": "Sources/UpstreamParity/Conformance/PublicWorkflowParserBuilderAdapter.swift", "sha256": "3626e246c966e654372fd000088f5e8706286d38ff50ba3b57eee09294e61db9" } }
+      { "id": "swiftTLAPackage", "evidence": { "path": "Package.swift", "sha256": "b0b438a2d9202d9dd84ab6b9b4c25411690ae4018753802ea148cd481df4beec" } },
+      { "id": "adapterSource", "evidence": { "path": "Sources/UpstreamParity/Conformance/PublicWorkflowParserBuilderAdapter.swift", "sha256": "0d78df1a490150176110482fd2fa28478b712318ce32caef782030697cbdfce7" } }
     ],
     "notApplicable": [
-      { "id": "tlc", "reason": { "path": "Tests/Fixtures/PublicWorkflowConformance/ParserBuilder/not-applicable.json", "sha256": "95f89bf42ce10922c7a60ed4e026ac0a2dc8550fae2a518e8d842f5836518a75" } },
-      { "id": "java", "reason": { "path": "Tests/Fixtures/PublicWorkflowConformance/ParserBuilder/not-applicable.json", "sha256": "95f89bf42ce10922c7a60ed4e026ac0a2dc8550fae2a518e8d842f5836518a75" } },
-      { "id": "bridgeBinary", "reason": { "path": "Tests/Fixtures/PublicWorkflowConformance/ParserBuilder/not-applicable.json", "sha256": "95f89bf42ce10922c7a60ed4e026ac0a2dc8550fae2a518e8d842f5836518a75" } }
+      { "id": "tlc", "reason": { "path": "Tests/Fixtures/PublicWorkflowConformance/ParserBuilder/not-applicable.json", "sha256": "c48f50b940bbd4852e3fa720a3db565a7c4231a31c84ceb84a34b38706e6940e" } },
+      { "id": "java", "reason": { "path": "Tests/Fixtures/PublicWorkflowConformance/ParserBuilder/not-applicable.json", "sha256": "c48f50b940bbd4852e3fa720a3db565a7c4231a31c84ceb84a34b38706e6940e" } },
+      { "id": "bridgeBinary", "reason": { "path": "Tests/Fixtures/PublicWorkflowConformance/ParserBuilder/not-applicable.json", "sha256": "c48f50b940bbd4852e3fa720a3db565a7c4231a31c84ceb84a34b38706e6940e" } }
     ]
   }
 }

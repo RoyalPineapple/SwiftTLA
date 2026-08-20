@@ -44,7 +44,7 @@ validate_report() {
 case "$status" in
     0)
         validate_report '
-          .schema == "TemporalSymmetryAdmissionV1"
+          .schema == "TemporalSymmetryAdmission"
           and .finalExitClass == "success"
           and .unexplainedDivergenceCount == 0
           and ([.entries[] | select(.decision == "blocked")] | length == 0)
@@ -62,14 +62,14 @@ case "$status" in
         ;;
     1)
         validate_report '
-          .schema == "TemporalSymmetryAdmissionV1"
+          .schema == "TemporalSymmetryAdmission"
           and .finalExitClass == "blocked"
           and any(.entries[]; .decision == "blocked")
         '
         ;;
     2)
         validate_report '
-          .schema == "TemporalSymmetryAdmissionV1"
+          .schema == "TemporalSymmetryAdmission"
           and .finalExitClass == "unavailable"
           and ([.entries[] | select(.decision == "admitted")] | length == 0)
         '

@@ -11,7 +11,7 @@ struct CoreSupportGateOptions {
 }
 
 func validateMappings(
-    _ entry: CoreConformanceCasesManifestV1.Entry,
+    _ entry: CoreConformanceCasesManifest.Entry,
     for spec: TLASpec
 ) throws -> [String: String] {
     let mapping = entry.identityMapping
@@ -50,16 +50,16 @@ func validateMappings(
 
 func invocationMappings(
     for action: NamedAction
-) -> [CoreConformanceCasesManifestV1.Entry.InvocationMapping] {
+) -> [CoreConformanceCasesManifest.Entry.InvocationMapping] {
     func expand(
         _ position: Int,
         _ arguments: [String],
         _ indices: [Int]
-    ) -> [CoreConformanceCasesManifestV1.Entry.InvocationMapping] {
+    ) -> [CoreConformanceCasesManifest.Entry.InvocationMapping] {
         guard position < action.bindings.count else {
             guard !indices.isEmpty else { return [] }
             let wrapper = "\(action.name)__\(indices.map(String.init).joined(separator: "_"))"
-            return [try! CoreConformanceCasesManifestV1.Entry.InvocationMapping(
+            return [try! CoreConformanceCasesManifest.Entry.InvocationMapping(
                 wrapper: wrapper,
                 action: action.name,
                 arguments: arguments,
@@ -124,7 +124,7 @@ func parseCoreSupportGateOptions(_ arguments: [String]) throws -> CoreSupportGat
     var report: String?
     var gateRunID: UUID?
     var prerequisiteAvailable = true
-    var conformanceExitCode = CoreConformanceExitCodeV1.exact.rawValue
+    var conformanceExitCode = CoreConformanceExitCode.exact.rawValue
     var index = 0
     while index < arguments.count {
         let option = arguments[index]
@@ -148,9 +148,9 @@ func parseCoreSupportGateOptions(_ arguments: [String]) throws -> CoreSupportGat
             }
         case "--conformance-exit":
             guard let parsed = Int32(value),
-                  parsed == CoreConformanceExitCodeV1.exact.rawValue
-                    || parsed == CoreConformanceExitCodeV1.semanticDifference.rawValue
-                    || parsed == CoreConformanceExitCodeV1.failure.rawValue
+                  parsed == CoreConformanceExitCode.exact.rawValue
+                    || parsed == CoreConformanceExitCode.semanticDifference.rawValue
+                    || parsed == CoreConformanceExitCode.failure.rawValue
             else { throw CoreConformanceCLIError.invalidPrerequisite(value) }
             conformanceExitCode = parsed
         default:
@@ -198,11 +198,11 @@ func normalizedArchitecture() throws -> String {
 }
 
 func declaredCase(
-    _ entry: CoreConformanceCasesManifestV1.Entry,
-    pin: TLCReferencePinV1,
+    _ entry: CoreConformanceCasesManifest.Entry,
+    pin: TLCReferencePin,
     architecture: String
-) throws -> CoreConformanceCaseV1 {
-    try CoreConformanceCaseV1(
+) throws -> CoreConformanceCase {
+    try CoreConformanceCase(
         id: entry.id,
         moduleSHA256: entry.moduleSHA256,
         cfgSHA256: entry.cfgSHA256,
@@ -217,14 +217,14 @@ func declaredCase(
         pin: pin,
         governance: entry.governance,
         invocationMappings: try entry.invocationMappings.map { mapping in
-            try CoreConformanceInvocationMappingV1(
+            try CoreConformanceInvocationMapping(
                 wrapper: mapping.wrapper,
                 action: mapping.action,
                 arguments: mapping.arguments,
                 indices: mapping.indices)
         },
         valueNormalizations: try entry.valueNormalizations.map { normalization in
-            try CoreConformanceValueNormalizationV1(
+            try CoreConformanceValueNormalization(
                 binding: normalization.binding,
                 functionKeys: normalization.functionKeys)
         }
@@ -266,7 +266,7 @@ private func simultaneousSwapConformanceSpec() -> TLASpec {
     }
 }
 
-func replayPolicy(_ value: String) throws -> TLCReplayPolicyV1 {
+func replayPolicy(_ value: String) throws -> TLCReplayPolicy {
     switch value {
     case "none": return .none
     case "required": return .required

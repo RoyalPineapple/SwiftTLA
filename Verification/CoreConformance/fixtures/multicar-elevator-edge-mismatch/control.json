@@ -1,5 +1,5 @@
 {
-  "schema": "CoreConformanceInvocationEdgeControlV1",
+  "schema": "CoreConformanceInvocationEdgeControl",
   "caseId": "multicar-elevator-edge-mismatch",
   "referenceCaseId": "multicar-elevator",
   "expectedExitCode": 1,

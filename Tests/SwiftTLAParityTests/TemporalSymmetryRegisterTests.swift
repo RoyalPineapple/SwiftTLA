@@ -7,9 +7,9 @@ struct TemporalSymmetryRegisterTests {
   @Test("P3 register declares every temporal form, fairness boundary, and exact symmetry scope")
   func registerIsCompleteAndCrossLinked() throws {
     let root = try throwingPackageRoot()
-    let register = try decode(TemporalSymmetryCasesV1.self, root, "cases.json")
-    let ledger = try decode(TemporalSymmetryDivergenceLedgerV1.self, root, "divergences.json")
-    let support = try decode(TemporalSymmetrySupportSurfaceV1.self, root, "support-surface.json")
+    let register = try decode(TemporalSymmetryCases.self, root, "cases.json")
+    let ledger = try decode(TemporalSymmetryDivergenceLedger.self, root, "divergences.json")
+    let support = try decode(TemporalSymmetrySupportSurface.self, root, "support-surface.json")
     try support.validate(cases: register, ledger: ledger)
 
     let temporal = register.cases.filter { $0.kind == .temporal }
@@ -30,7 +30,7 @@ struct TemporalSymmetryRegisterTests {
   @Test("P3 symmetry scopes use distinct raw and TLC SYMMETRY configurations")
   func symmetryConfigurationsAreExecutablePairs() throws {
     let root = try throwingPackageRoot()
-    let register = try decode(TemporalSymmetryCasesV1.self, root, "cases.json")
+    let register = try decode(TemporalSymmetryCases.self, root, "cases.json")
     let baseline = try baseline(root)
     let configurations = try #require(baseline["configurationFixtures"] as? [String: [String: String]])
     let expectedScopes = Set(2...4)
@@ -48,7 +48,7 @@ struct TemporalSymmetryRegisterTests {
       #expect(reduced.contains("SYMMETRY Symmetry"))
       #expect(!raw.contains("SYMMETRY"))
       #expect(item.provenance.cfgSHA256 == fixture["sha256"])
-      #expect(try SHA256V1.hex(Data(contentsOf: root.appendingPathComponent(rawPath))) == fixture["rawSHA256"])
+      #expect(try SHA256.hex(Data(contentsOf: root.appendingPathComponent(rawPath))) == fixture["rawSHA256"])
       let module = try String(contentsOf: root.appendingPathComponent(item.sourceInput.path))
       #expect(module.contains("Symmetry == Permutations(Members)"))
     }
@@ -57,7 +57,7 @@ struct TemporalSymmetryRegisterTests {
   @Test("P3 fairness boundary rejects the intermittent B/C recurrence only under strong fairness")
   func fairnessBoundaryUsesIntermittentEnabledness() throws {
     let root = try throwingPackageRoot()
-    let register = try decode(TemporalSymmetryCasesV1.self, root, "cases.json")
+    let register = try decode(TemporalSymmetryCases.self, root, "cases.json")
     let weak = try #require(register.cases.first { $0.id == "temporal-weak-fairness-boundary" })
     let strong = try #require(register.cases.first { $0.id == "temporal-strong-fairness-boundary" })
     #expect(weak.configuration.property == "AlwaysEventuallyP")
@@ -108,8 +108,8 @@ struct TemporalSymmetryRegisterTests {
       let configuration = try String(contentsOf: root.appendingPathComponent(configurationPath))
       #expect(module.contains("Symmetry") || module.contains("LegacySymmetryGroup"))
       #expect(configuration.contains("SYMMETRY"))
-      #expect(try SHA256V1.hex(Data(contentsOf: root.appendingPathComponent(modulePath))) == control["moduleSHA256"])
-      #expect(try SHA256V1.hex(Data(contentsOf: root.appendingPathComponent(configurationPath))) == control["configurationSHA256"])
+      #expect(try SHA256.hex(Data(contentsOf: root.appendingPathComponent(modulePath))) == control["moduleSHA256"])
+      #expect(try SHA256.hex(Data(contentsOf: root.appendingPathComponent(configurationPath))) == control["configurationSHA256"])
     }
     let combined = try #require(controls["combined-temporal-symmetry"])
     let combinedConfiguration = try String(contentsOf: root.appendingPathComponent(try #require(combined["configuration"])))
@@ -117,7 +117,7 @@ struct TemporalSymmetryRegisterTests {
     let nested = try #require(controls["nested-members-symmetry"])
     let nestedConfiguration = try String(contentsOf: root.appendingPathComponent(try #require(nested["configuration"])))
     #expect(nestedConfiguration.contains("{{a}, {b}}"))
-    let support = try decode(TemporalSymmetrySupportSurfaceV1.self, root, "support-surface.json")
+    let support = try decode(TemporalSymmetrySupportSurface.self, root, "support-surface.json")
     #expect(support.entries.contains { $0.id == "nested-members-symmetry" && $0.requestedStatus == .unsupported })
     #expect(support.entries.filter { $0.kind == .temporal && $0.requestedStatus == .requested }
       .allSatisfy { $0.finiteBounds.limits["states"] == 3 })
@@ -126,17 +126,17 @@ struct TemporalSymmetryRegisterTests {
   @Test("P3 register pins every declared source input to its checked-in digest")
   func registerSourceDigestsMatchFixtures() throws {
     let root = try throwingPackageRoot()
-    let register = try decode(TemporalSymmetryCasesV1.self, root, "cases.json")
+    let register = try decode(TemporalSymmetryCases.self, root, "cases.json")
     let baseline = try baseline(root)
     let configurations = try #require(baseline["configurationFixtures"] as? [String: [String: String]])
     for item in register.cases {
       let source = root.appendingPathComponent(item.sourceInput.path)
       #expect(FileManager.default.fileExists(atPath: source.path))
-      #expect(try SHA256V1.hex(Data(contentsOf: source)) == item.sourceInput.sha256)
+      #expect(try SHA256.hex(Data(contentsOf: source)) == item.sourceInput.sha256)
       let configuration = try #require(configurations[item.id])
       let path = try #require(configuration["path"])
       let sha256 = try #require(configuration["sha256"])
-      #expect(try SHA256V1.hex(Data(contentsOf: root.appendingPathComponent(path))) == sha256)
+      #expect(try SHA256.hex(Data(contentsOf: root.appendingPathComponent(path))) == sha256)
       #expect(item.provenance.cfgSHA256 == sha256)
     }
   }

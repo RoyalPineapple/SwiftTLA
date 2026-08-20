@@ -156,7 +156,7 @@ do {
         return .init(id: item.id, module: bundle.root.name, files: files.sorted { $0.path < $1.path })
     }
 
-    let manifest = Manifest(schema: "CanonicalCorpusExportV1", swiftTLASHA: options.sha, cases: cases)
+    let manifest = Manifest(schema: "CanonicalCorpusExport", swiftTLASHA: options.sha, cases: cases)
     let encoder = JSONEncoder()
     encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
     let data = try encoder.encode(manifest)

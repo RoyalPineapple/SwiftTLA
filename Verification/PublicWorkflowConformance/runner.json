@@ -1,11 +1,11 @@
 {
-  "schema": "PublicWorkflowRunnerRegisterV1",
+  "schema": "PublicWorkflowRunnerRegister",
   "parserBuilder": [
     {
       "id": "parser-builder-bounded-counter",
       "manifest": {
         "path": "Tests/Fixtures/PublicWorkflowConformance/ParserBuilder/manifest.json",
-        "sha256": "11a1543ff228c2fce592d823208fda7bd0088301c7ccc05753319cf6a7327834"
+        "sha256": "cc5d49efe4d498a15091b70688e654dc174fee441326a0a36d369b0f4d827a69"
       },
       "expectedOutcome": "exact"
     },
@@ -13,13 +13,13 @@
       "id": "parser-builder-bounded-counter-mismatch",
       "manifest": {
         "path": "Tests/Fixtures/PublicWorkflowConformance/ParserBuilder/Mismatch/manifest.json",
-        "sha256": "79e2e2b329d0bbe66e7f2b2ee37f02fd08f2d7c813a31603018ef63b2af24c52"
+        "sha256": "3eba7247a2bc7cbf81dc66ac3ab48746f7645c459785b30fe52d6f21a1cfaff3"
       },
       "expectedOutcome": "difference"
     }
   ],
   "generatedBehavior": {
     "path": "Verification/PublicWorkflowConformance/generated-behavior.json",
-    "sha256": "b0b9feb40302ea1fb23ffb12fccd3b2e76facc568cd2d2fd25340d1bfec2e720"
+    "sha256": "7c015ad421aea187165a330708a6ad706fc09e71f265a0923094472fe1f3a393"
   }
 }

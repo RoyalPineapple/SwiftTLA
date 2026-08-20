@@ -5,10 +5,10 @@ import UpstreamParity
 struct CoreConformanceCanonicalizationTests {
     @Test("canonical graph preserves labels and repeated edge occurrences")
     func preservesParallelLabelsAndMultiplicityAcrossTraversalOrder() throws {
-        let first = CanonicalStateV1(bindings: ["counter": .integer(1)])
-        let second = CanonicalStateV1(bindings: ["counter": .integer(2)])
+        let first = CanonicalState(bindings: ["counter": .integer(1)])
+        let second = CanonicalState(bindings: ["counter": .integer(2)])
 
-        let forward = try CanonicalGraphV1(
+        let forward = try CanonicalGraph(
             initialStates: [first],
             states: [first, second],
             edges: [
@@ -17,7 +17,7 @@ struct CoreConformanceCanonicalizationTests {
                 .init(source: first.key, action: "advance", target: second.key)
             ]
         )
-        let reversed = try CanonicalGraphV1(
+        let reversed = try CanonicalGraph(
             initialStates: [first],
             states: [second, first],
             edges: [
@@ -35,11 +35,11 @@ struct CoreConformanceCanonicalizationTests {
 
     @Test("canonical values are stable across unordered collection insertion")
     func canonicalizesNestedUnorderedValues() {
-        let left = CanonicalValueV1.record([
+        let left = CanonicalValue.record([
             "values": .set([.integer(2), .integer(1)]),
             "mapping": .function([.init(key: .string("b"), value: .boolean(false)), .init(key: .string("a"), value: .boolean(true))])
         ])
-        let right = CanonicalValueV1.record([
+        let right = CanonicalValue.record([
             "mapping": .function([.init(key: .string("a"), value: .boolean(true)), .init(key: .string("b"), value: .boolean(false))]),
             "values": .set([.integer(1), .integer(2)])
         ])
@@ -64,12 +64,12 @@ struct CoreConformanceCanonicalizationTests {
             initialStateIDs: [first],
             result: .ok(statesCount: 2)
         )
-        let declaredCase = try CoreConformanceCaseV1(
+        let declaredCase = try CoreConformanceCase(
             id: "normalized-fixture",
             moduleSHA256: String(repeating: "a", count: 64),
             cfgSHA256: String(repeating: "b", count: 64),
             arguments: [],
-            argumentsSHA256: CoreConformanceCaseV1.argumentsDigest([]),
+            argumentsSHA256: CoreConformanceCase.argumentsDigest([]),
             workers: 1,
             fingerprintPolynomial: 1,
             deadlock: false,
@@ -78,19 +78,19 @@ struct CoreConformanceCanonicalizationTests {
             environment: [:],
             pin: .fixture,
             valueNormalizations: [
-                try CoreConformanceValueNormalizationV1(
+                try CoreConformanceValueNormalization(
                     binding: "cars", functionKeys: ["\"carA\"": "carA", "\"carB\"": "carB"])
             ]
         )
 
-        let run = try SwiftGraphAdapterV1().adapt(
-            SwiftExplorationEvidenceV1(caseID: declaredCase.id, exploration: exploration),
+        let run = try SwiftGraphAdapter().adapt(
+            SwiftExplorationEvidence(caseID: declaredCase.id, exploration: exploration),
             for: declaredCase
         )
-        let expectedFirst = CanonicalStateV1(bindings: [
+        let expectedFirst = CanonicalState(bindings: [
             "cars": .record(["carA": .integer(0), "carB": .integer(1)])
         ])
-        let expectedSecond = CanonicalStateV1(bindings: [
+        let expectedSecond = CanonicalState(bindings: [
             "cars": .record(["carA": .integer(1), "carB": .integer(1)])
         ])
 

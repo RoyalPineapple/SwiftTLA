@@ -1,5 +1,5 @@
 {
-  "schema": "TemporalSymmetryCasesV1",
+  "schema": "TemporalSymmetryCases",
   "cases": [
     {
       "id": "temporal-always-none", "kind": "temporal", "swiftSpec": "TemporalMatrix",

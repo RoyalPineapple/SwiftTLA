@@ -601,7 +601,7 @@
   "outcome" : {
     "kind" : "exhaustiveSuccess"
   },
-  "schema" : "exactFiniteTLCGraphV1",
+  "schema" : "exactFiniteTLCGraph",
   "states" : [
     "state:[626967=integer:0,736d616c6c=integer:0]",
     "state:[626967=integer:0,736d616c6c=integer:1]",
