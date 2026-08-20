@@ -64,7 +64,7 @@ import UpstreamParity
     let spec = TLASpec("Test") {
       Variable(x, 0)
       Action("inc") { x.becomes(x + 1).when(x < 3) }
-      Theorem("Spec => [](x >= 0)")
+      Theorem(name: "Safety", always: x >= 0)
     }
     let tla = try spec.compile().renderedTLAModuleBundle().tla
     #expect(tla.contains("THEOREM"))

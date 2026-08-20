@@ -533,24 +533,15 @@ public func FormalDefinition<First: TLAValueType, Second: TLAValueType>(
   ))
 }
 public struct TheoremDecl: SpecComponent, Equatable {
-  public let tlaText: String
-  public let name: String?
+  public let name: String
   public let temporalBody: TemporalExpr?
   public let stateBody: StateExpr?
-  init(_ tlaText: String) {
-    self.tlaText = tlaText
-    self.name = nil
-    self.temporalBody = nil
-    self.stateBody = nil
-  }
   init(name: String, temporal: TemporalExpr) {
-    self.tlaText = ""
     self.name = name
     self.temporalBody = temporal
     self.stateBody = nil
   }
   init(name: String, state: StateExpr) {
-    self.tlaText = ""
     self.name = name
     self.temporalBody = nil
     self.stateBody = state
@@ -842,9 +833,6 @@ public func Definition(
 }
 public func Definition(_ name: String, @InvariantBuilder _ body: () -> StateExpr) -> DefinitionDecl {
   DefinitionDecl(name: name, body: body())
-}
-public func Theorem(_ tlaText: String) -> TheoremDecl {
-  TheoremDecl(tlaText)
 }
 public func Theorem(name: String, @InvariantBuilder always: () -> StateExpr) -> TheoremDecl {
   TheoremDecl(name: name, state: always())
