@@ -1,11 +1,19 @@
 import SwiftTLA
 
+/// Macro-generated surfaces may name Foundation types (for example
+/// `Foundation.UUID` request identifiers on the generated `Live` facade).
+/// Every `@TLAModel` file imports this module to resolve its macros, so
+/// re-exporting Foundation guarantees expansions resolve without the model
+/// file importing Foundation itself. Attached macros cannot add imports.
+@_exported import Foundation
+
 /// Generates a typed model machine from the declaration's `TLASpec`.
 ///
 /// The generated surface includes `State`, `ActionLabel`, `TransitionResult`,
-/// execution methods, and bounded verification helpers.
+/// execution methods, bounded verification helpers, and a typed `Live` facade
+/// bound to the common live runtime.
 @attached(member, names: arbitrary)
-@attached(extension, conformances: TLAModelType, TLAMachineExecuting, TLAMachineAdapterCanonicalModel, TLAMachineSchemaProviding, names: arbitrary)
+@attached(extension, conformances: TLAModelType, TLAMachineExecuting, TLAMachineAdapterCanonicalModel, TLAMachineSchemaProviding, TLAGeneratedLiveModel, names: arbitrary)
 public macro TLAModel() = #externalMacro(module: "SwiftTLAPlugin", type: "ModelMacro")
 
 /// Requires a nested actor and generates an adapter for its enclosing `@TLAModel`.

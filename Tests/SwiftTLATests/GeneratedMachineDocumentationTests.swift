@@ -267,3 +267,4 @@ struct GeneratedMachineDocumentationTests {
     private func outputTail(_ output: String) -> String {
         String(output.suffix(4_000))
     }
+}
