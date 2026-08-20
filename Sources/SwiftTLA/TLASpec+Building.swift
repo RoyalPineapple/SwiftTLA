@@ -118,12 +118,10 @@ extension TLASpec {
           dependencies: definition.definition.plusCalDependencies
         ))
       } else if let th = comp as? TheoremDecl {
-        if !th.tlaText.isEmpty {
-          theorems.append(th.tlaText)
-        } else if let name = th.name, let body = th.temporalBody {
-          theorems.append("\(name) == Spec => \(body)")
-        } else if let name = th.name, let body = th.stateBody {
-          theorems.append("\(name) == Spec => [](\(body))")
+        if let body = th.temporalBody {
+          theorems.append("\(th.name) == Spec => \(body)")
+        } else if let body = th.stateBody {
+          theorems.append("\(th.name) == Spec => [](\(body))")
         }
       } else if let a = comp as? AssumeDecl {
         assumes = assumes.map { .and($0, a.expr) } ?? a.expr
