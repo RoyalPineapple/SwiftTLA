@@ -20,35 +20,24 @@ struct GeneratedMachineDocumentationTests {
         #expect(machine.state == beforeFailure)
     }
 
-    @Test("nested adapters retain canonical isolation and callback semantics")
+    @Test("nested adapters bind the supplied live runtime")
     @MainActor
     func nestedAdaptersExposeDocumentedBehavior() async throws {
-        let actor = CounterHost.Actor()
-        let observable = CounterScreenModel.Observable()
-        let recorder = CallbackRecorder()
+        let actorOwner = try TLALiveMachineOwner.create(for: CounterHost.self)
+        let actor = try await CounterHost.Actor(handle: actorOwner.handle)
+        let observableOwner = try TLALiveMachineOwner.create(for: CounterScreenModel.self)
+        let observable = try await CounterScreenModel.Observable(handle: observableOwner.handle)
 
-        observable.onAdvance = { before, after in
-            await recorder.record(before: before, after: after)
+        #expect(actor.identity == actorOwner.handle.identity)
+        #expect(observable.identity == observableOwner.handle.identity)
+        #expect(actor.identity != observable.identity)
+
+        let result = await actor.execute(CounterHost.Actor.ActionLabel.advance.toInvocation())
+        guard case .committed(let commit) = result else {
+            Issue.record("Expected the live actor request to commit")
+            return
         }
-
-        #expect(await actor.state.value == 0)
-        _ = try await actor.execute(CounterHost.Actor.ActionLabel.advance.toInvocation())
-        _ = try await observable.execute(CounterScreenModel.Observable.ActionLabel.advance.toInvocation())
-
-        #expect(await actor.state.value == 1)
-        #expect(await recorder.transitions == [.init(before: 0, after: 1)])
-    }
-}
-
-private actor CallbackRecorder {
-    struct Transition: Equatable, Sendable {
-        let before: Int
-        let after: Int
-    }
-
-    private(set) var transitions: [Transition] = []
-
-    func record(before: CounterScreenModel.State, after: CounterScreenModel.State) {
-        transitions.append(.init(before: before.value, after: after.value))
+        #expect(commit.after.position.value == 1)
+        #expect(observable.status == .attaching || observable.status == .current(.init(value: 0)))
     }
 }

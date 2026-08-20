@@ -42,3 +42,4 @@ struct ReadmeSymmetricCollectionTests {
       String(data: output.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
     )
   }
+}

@@ -202,8 +202,8 @@ struct AlgorithmPlusCalRendererTests {
                 fairness: .none,
                 components: [.step(.init(
                     label: .init(name: "advance"),
-                    statements: [.set(.root("pcalProcess1"), .variable("__pcal_self"))]
-                )]
+                    statements: [.set(target: .root("pcalProcess1"), value: .variable("__pcal_self"))]
+                ))]
             ))
         ])
 
@@ -265,7 +265,7 @@ struct AlgorithmPlusCalRendererTests {
                 root: "output",
                 initial: .operatorApplication(
                     .reference("Apply", arity: 1),
-                    [.operator(.lambda(.init(parameters: ["value"], body: .variable("value")))]
+                    [.operator(.lambda(.init(parameters: ["value"], body: .variable("value"))))]
                 )
             ))
         ])

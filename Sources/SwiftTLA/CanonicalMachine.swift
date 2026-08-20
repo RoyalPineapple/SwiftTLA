@@ -307,46 +307,6 @@ public protocol TLAMachineExecuting: TLAMachineObserving {
     mutating func execute(_ invocation: TLAActionInvocation) async throws -> TransitionResult
 }
 
-/// The synchronous canonical model that backs a generated adapter.
-public protocol TLAMachineAdapterCanonicalModel: TLAMachineExecuting, Sendable {
-    func synchronousMachineObservation() -> TLAMachineObservation
-
-    mutating func executeSynchronously(
-        _ invocation: TLAActionInvocation
-    ) throws -> TransitionResult
-}
-
-/// An adapter that provides serialized access to its canonical generated model.
-public protocol TLAMachineAdapterAccess: AnyObject, TLAMachineExecuting {
-    associatedtype CanonicalModel: TLAMachineAdapterCanonicalModel
-
-    func withCanonicalMachine<Result: Sendable>(
-        _ operation: @escaping @Sendable (inout CanonicalModel) throws -> Result
-    ) async rethrows -> Result
-}
-
-public extension TLAMachineAdapterAccess where TransitionResult == CanonicalModel.TransitionResult {
-    func canonicalMachineObservation() async -> TLAMachineObservation {
-        await withCanonicalMachine { canonical in
-            canonical.synchronousMachineObservation()
-        }
-    }
-
-    func executeCanonical(_ invocation: TLAActionInvocation) async throws -> TransitionResult {
-        try await withCanonicalMachine { canonical in
-            try canonical.executeSynchronously(invocation)
-        }
-    }
-
-    func machineObservation() async -> TLAMachineObservation {
-        await canonicalMachineObservation()
-    }
-
-    func execute(_ invocation: TLAActionInvocation) async throws -> TransitionResult {
-        try await executeCanonical(invocation)
-    }
-}
-
 public struct CanonicalMachine<Snapshot: Equatable & Sendable>: Sendable {
     public let runtime: SpecRuntime
     private let stateDictionary: @Sendable (Snapshot) -> [String: TLAValue]

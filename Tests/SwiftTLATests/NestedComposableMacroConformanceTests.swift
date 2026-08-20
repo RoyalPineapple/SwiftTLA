@@ -355,6 +355,7 @@ struct NestedComposableMacroConformanceTests {
             String(data: outputData, encoding: .utf8) ?? ""
         )
     }
+}
 
 
 private final class MacroEmissionStringCollector: SyntaxVisitor {

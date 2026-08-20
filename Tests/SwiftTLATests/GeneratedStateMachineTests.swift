@@ -1059,3 +1059,4 @@ struct GeneratedStateMachineTests {
             String(data: outputData, encoding: .utf8) ?? ""
         )
     }
+}
