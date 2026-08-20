@@ -32,7 +32,6 @@ guard let name = args.first else {
 }
 fputs("tlc-validate: unknown command \(name)\n", stderr)
 exit(1)
-private typealias CoreConformanceManifest = CoreConformanceCasesManifest
 private let coreConformanceMaximumStateLimit = 100_000
 
 private struct PublicWorkflowOptions {
@@ -161,11 +160,11 @@ private func runCoreConformance(arguments: [String]) -> Never {
         let options = try parseCoreConformanceOptions(Array(arguments.dropFirst()))
         let environment = ProcessInfo.processInfo.environment
         let casesPath = try requiredEnvironment("CORE_CONFORMANCE_CASES", environment)
-        let manifest = try decode(CoreConformanceManifest.self, at: URL(fileURLWithPath: casesPath))
+        let manifest = try decode(CoreConformanceCasesManifest.self, at: URL(fileURLWithPath: casesPath))
         guard manifest.schema == CoreConformanceCasesManifest.schema else {
             throw CoreConformanceCLIError.invalidManifest("unsupported schema")
         }
-        let selected: [CoreConformanceManifest.Entry]
+        let selected: [CoreConformanceCasesManifest.Entry]
         if options.caseID == "all" {
             guard !manifest.cases.isEmpty else {
                 throw CoreConformanceCLIError.invalidManifest("contains no cases")
@@ -349,7 +348,7 @@ private func runCoreSupportGate(arguments: [String]) -> Never {
     let requestedSupportIsAdmitted: Bool
     do {
         let casesPath = try requiredEnvironment("CORE_CONFORMANCE_CASES", environment)
-        let manifest = try decode(CoreConformanceManifest.self, at: URL(fileURLWithPath: casesPath))
+        let manifest = try decode(CoreConformanceCasesManifest.self, at: URL(fileURLWithPath: casesPath))
         let ledger = try decode(
             CoreDivergenceLedger.self,
             at: governanceURL(

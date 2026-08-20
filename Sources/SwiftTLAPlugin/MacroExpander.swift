@@ -40,7 +40,7 @@ enum MacroExpander {
     static func swiftType(
         for action: NamedAction,
         binding: ActionBinding,
-        facts: MacroSwiftFacts
+        facts: MachineSurfaceSwiftFacts
     ) -> String {
         facts.actionBindingTypes[action.name]?[binding.name] ?? swiftType(for: binding.values[0])
     }
@@ -314,7 +314,7 @@ enum MacroExpander {
         return [DeclSyntax(stringLiteral: compilationSource)]
     }
 
-    static func machineSurfaceSwiftFactsSource(_ facts: MacroSwiftFacts) -> String {
+    static func machineSurfaceSwiftFactsSource(_ facts: MachineSurfaceSwiftFacts) -> String {
         func quoted(_ value: String) -> String { String(reflecting: value) }
         func dictionary(_ values: [String: String]) -> String {
             guard !values.isEmpty else { return "[:]" }
