@@ -77,7 +77,9 @@ struct TemporalSymmetryRegisterTests {
         accepting: [.init(label: .init(.init(name: "Stay")), target: accepting)]
       ],
       states: [
-        start: ["x": .int(0)], alternate: ["x": .int(1)], accepting: ["x": .int(2)]
+        start: try .init(formalValues: ["x": .int(0)]),
+        alternate: try .init(formalValues: ["x": .int(1)]),
+        accepting: try .init(formalValues: ["x": .int(2)])
       ])
     let predicate: StateExpr = .equal(.variable("x"), .value(.int(2)))
     let actions = ["A", "B", "C", "Stay"].map { NamedAction(name: $0, body: .guard_(true)) }

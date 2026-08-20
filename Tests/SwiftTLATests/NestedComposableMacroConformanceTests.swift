@@ -24,7 +24,7 @@ struct NestedComposableMacroConformanceTests {
         let runtime = try SpecRuntime(spec: spec)
 
         for (sourceID, source) in graph.states {
-            let checked = (graph.transitions[sourceID] ?? []).compactMap { transition -> (TLAActionInvocation, [String: TLAValue])? in
+            let checked = (graph.transitions[sourceID] ?? []).compactMap { transition -> (TLAActionInvocation, TLAStateProjection)? in
                 guard let successor = graph.states[transition.target] else { return nil }
                 return (transition.label.invocation, successor)
             }
@@ -33,7 +33,7 @@ struct NestedComposableMacroConformanceTests {
             }
 
             #expect(multiset(runtimeSuccessors) == multiset(checked))
-            #expect(!runtimeSuccessors.contains { $0.1 == ["value": .int(3)] })
+            #expect(!runtimeSuccessors.contains { $0.1.formalValues == ["value": .int(3)] })
         }
     }
 
@@ -322,7 +322,7 @@ struct NestedComposableMacroConformanceTests {
     }
 
     private func multiset(
-        _ transitions: [(TLAActionInvocation, [String: TLAValue])]
+        _ transitions: [(TLAActionInvocation, TLAStateProjection)]
     ) -> [String: Int] {
         Dictionary(
             transitions.map { ("\($0.0.description) -> \($0.1)", 1) },

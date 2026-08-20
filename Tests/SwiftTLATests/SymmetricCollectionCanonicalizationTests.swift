@@ -25,12 +25,12 @@ struct SymmetricCollectionCanonicalizationTests {
       for edge in edges {
         guard let target = graph.states[edge.target] else { continue }
         transitions.insert(
-          "\(canonicalState(source)) --\(edge.action)--> \(canonicalState(target))"
+          "\(canonicalState(source.formalValues)) --\(edge.action)--> \(canonicalState(target.formalValues))"
         )
       }
     }
     return CanonicalGraph(
-      states: Set(graph.states.values.map(canonicalState)),
+      states: Set(graph.states.values.map { canonicalState($0.formalValues) }),
       transitions: transitions
     )
   }

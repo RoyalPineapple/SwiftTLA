@@ -554,7 +554,10 @@ extension CoreConformanceRunnerTests {
         specName: "Fixture",
         variableNames: ["x"],
         transitions: [first: [.init(label: .init(.init(name: action)), target: second)]],
-        states: [first: ["x": .int(1)], second: ["x": .int(2)]]
+        states: [
+          first: fixtureProjection(["x": .int(1)]),
+          second: fixtureProjection(["x": .int(2)])
+        ]
       ),
       initialStateIDs: [first],
       result: .ok(statesCount: 2)
@@ -743,7 +746,10 @@ private func exactSwiftExploration() -> ModelExplorationResult {
       specName: "Fixture",
       variableNames: ["x"],
       transitions: [first: [.init(label: .init(.init(name: "Next")), target: second)]],
-      states: [first: ["x": .int(1)], second: ["x": .int(2)]]
+      states: [
+        first: fixtureProjection(["x": .int(1)]),
+        second: fixtureProjection(["x": .int(2)])
+      ]
     ),
     initialStateIDs: [first],
     result: .ok(statesCount: 2)
@@ -751,6 +757,14 @@ private func exactSwiftExploration() -> ModelExplorationResult {
 }
 private func json(at url: URL) throws -> [String: Any] {
   try #require(JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any])
+}
+
+private func fixtureProjection(_ formalValues: [String: TLAValue]) -> TLAStateProjection {
+  do {
+    return try .init(formalValues: formalValues)
+  } catch {
+    preconditionFailure(String(describing: error))
+  }
 }
 private func correlation(in object: [String: Any]) -> [String: Any] {
   object["correlation"] as? [String: Any] ?? [:]

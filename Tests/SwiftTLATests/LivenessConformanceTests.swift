@@ -23,7 +23,11 @@ struct LivenessConformanceTests {
             specName: "liveness-conformance",
             variableNames: ["x"],
             transitions: transitions,
-            states: Dictionary(uniqueKeysWithValues: values.map { ($0.key, ["x": .int($0.value)]) })
+            states: Dictionary(
+                uniqueKeysWithValues: values.map { identifier, value in
+                    (identifier, fixtureProjection(["x": .int(value)]))
+                }
+            )
         )
     }
 
@@ -43,10 +47,10 @@ struct LivenessConformanceTests {
                 terminal: [.init(label: .init(.init(name: "done")), target: terminal)]
             ],
             states: [
-                initial: ["x": .int(0)],
-                left: ["x": .int(1)],
-                right: ["x": .int(2)],
-                terminal: ["x": .int(3)]
+                initial: fixtureProjection(["x": .int(0)]),
+                left: fixtureProjection(["x": .int(1)]),
+                right: fixtureProjection(["x": .int(2)]),
+                terminal: fixtureProjection(["x": .int(3)])
             ]
         )
         let checker = LivenessChecker(graph: graph)
@@ -130,7 +134,7 @@ struct LivenessConformanceTests {
             return
         }
         let suffix = witness.prefix[triggerIndex...] + witness.cycle.dropFirst()
-        #expect(suffix.allSatisfy { graph.states[$0]?["x"] != .int(2) })
+        #expect(suffix.allSatisfy { graph.states[$0]?.formalValues["x"] != .int(2) })
     }
 
     @Test("canonical witness uses the globally shortest cycle entry")
@@ -350,5 +354,13 @@ struct LivenessConformanceTests {
         } else {
             Issue.record("Expected depth-exceeded result, got \(incomplete)")
         }
+    }
+}
+
+private func fixtureProjection(_ formalValues: [String: TLAValue]) -> TLAStateProjection {
+    do {
+        return try .init(formalValues: formalValues)
+    } catch {
+        preconditionFailure(String(describing: error))
     }
 }

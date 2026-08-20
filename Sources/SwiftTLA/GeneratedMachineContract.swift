@@ -611,9 +611,6 @@ public enum GeneratedMachineContractVerifier {
         }
 
         let graph = exploration.graph
-        let project: ([String: TLAValue]) throws -> TLAStateProjection = { values in
-            try .init(formalValues: values)
-        }
         let expectedInitial: [TLAStateProjection]
         do {
             expectedInitial = try exploration.initialStateIDs.map { id in
@@ -626,7 +623,7 @@ public enum GeneratedMachineContractVerifier {
                         nextSafeAction: "Re-run the bounded formal exploration."
                     )
                 }
-                return try project(state)
+                return state
             }
             for state in expectedInitial { try decodeState(state) }
         } catch let diagnostic as GeneratedMachineContractDiagnostic {
@@ -673,7 +670,7 @@ public enum GeneratedMachineContractVerifier {
         for (fromID, source) in graph.states {
             let sourceProjection: TLAStateProjection
             do {
-                sourceProjection = try project(source)
+                sourceProjection = source
                 try decodeState(sourceProjection)
             } catch {
                 return difference(
@@ -707,7 +704,7 @@ public enum GeneratedMachineContractVerifier {
                                     nextSafeAction: "Re-run the bounded formal exploration."
                                 )
                             }
-                            let targetProjection = try project(target)
+                            let targetProjection = target
                             try decodeState(targetProjection)
                             return targetProjection
                         }
