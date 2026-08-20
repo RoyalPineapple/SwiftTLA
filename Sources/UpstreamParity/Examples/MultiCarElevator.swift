@@ -80,6 +80,19 @@ public enum MultiCarElevator {
         public static let direction = field(\CallFields.direction)
     }
 
+    private static let initialCarsValue: TLAValue = .function([
+        CarID.carA.tlaValue: .record([
+            "floor": FloorID.ground.tlaValue,
+            "doorsOpen": .bool(false),
+            "rider": .string("none")
+        ]),
+        CarID.carB.tlaValue: .record([
+            "floor": FloorID.top.tlaValue,
+            "doorsOpen": .bool(false),
+            "rider": .string("none")
+        ])
+    ])
+
     public static var builderSpec: TLASpec { makeSpec() }
 
     static func makeSpec() -> TLASpec {
@@ -87,20 +100,6 @@ public enum MultiCarElevator {
         let calls = Var<SetExpr<Record<CallSchema>>>("calls")
         let lastMoveDoorClosed = Var<Bool>("lastMoveDoorClosed")
 
-        let closedGround = Record<CarSchema>.literal(
-            .init(CarSchema.floor, .ground),
-            .init(CarSchema.doorsOpen, false),
-            .init(CarSchema.rider, "none")
-        )
-        let closedTop = Record<CarSchema>.literal(
-            .init(CarSchema.floor, .top),
-            .init(CarSchema.doorsOpen, false),
-            .init(CarSchema.rider, "none")
-        )
-        let initialCars = Function<CarID, Record<CarSchema>>.literal(
-            (.carA, closedGround),
-            (.carB, closedTop)
-        )
         let floorValues = StateExpr.setLiteral(FloorID.tlaValues.map(StateExpr.value))
         let riderValues = StateExpr.setLiteral([
             .value(.string("none")), .value(PersonID.alice.tlaValue), .value(PersonID.bob.tlaValue)
@@ -136,7 +135,7 @@ public enum MultiCarElevator {
         }
 
         return #spec("MultiCarElevator") {
-            Variable(cars, try! initialCars.raw.evaluate(in: [:]))
+            Variable(cars, initialCarsValue)
             Variable(calls, TLAValue.set([]))
             Variable(lastMoveDoorClosed, true)
             Constraint(calls.stateExpr.cardinality <= 1)
@@ -322,26 +321,12 @@ public struct MultiCarElevatorMacroFixture: Sendable {
             let cars: Var<Function<CarID, Record<CarSchema>>> = .init("cars")
             let calls: Var<SetExpr<Record<CallSchema>>> = .init("calls")
             let lastMoveDoorClosed: Var<Bool> = .init("lastMoveDoorClosed")
-            let closedGround = Record<CarSchema>.literal(
-                .init(CarSchema.floor, .ground),
-                .init(CarSchema.doorsOpen, false),
-                .init(CarSchema.rider, "none")
-            )
-            let closedTop = Record<CarSchema>.literal(
-                .init(CarSchema.floor, .top),
-                .init(CarSchema.doorsOpen, false),
-                .init(CarSchema.rider, "none")
-            )
-            let initialCars = Function<CarID, Record<CarSchema>>.literal(
-                (.carA, closedGround),
-                (.carB, closedTop)
-            )
             let floorValues = StateExpr.setLiteral(FloorID.tlaValues.map(StateExpr.value))
             let riderValues = StateExpr.setLiteral([
                 .value(.string("none")), .value(PersonID.alice.tlaValue), .value(PersonID.bob.tlaValue)
             ])
 
-            Variable(cars, try! initialCars.raw.evaluate(in: [:]))
+            Variable(cars, initialCarsValue)
             Variable(calls, TLAValue.set([]))
             Variable(lastMoveDoorClosed, true)
             Constraint(calls.stateExpr.cardinality <= 1)
