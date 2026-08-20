@@ -155,27 +155,35 @@ struct BindingValidator {
         try validateExpression(spec.constraint, at: "constraint", scope: [:])
         try validateExpression(spec.assume, at: "assume", scope: [:])
         for definition in spec.formalOperatorDefinitions {
-            guard let id = operators[definition.name] else { throw diagnostic(path: "formalOperators.\(definition.name)") }
+            guard let id = operators[definition.name] else {
+                throw diagnostic(code: .unknownReference, path: "formalOperators.\(definition.name)", expected: "a declared operator", actual: "no operator identity")
+            }
             references["formalOperators.\(definition.name).declaration"] = .operator(id)
             let scope = try bind(definition.parameters.map(\.name), at: "formalOperators.\(definition.name).parameters", scope: [:])
             try validateExpression(definition.body, at: "formalOperators.\(definition.name).body", scope: scope)
         }
         for function in spec.recursiveFuncs {
-            guard let id = operators[function.name] else { throw diagnostic(path: "recursiveFunctions.\(function.name)") }
+            guard let id = operators[function.name] else {
+                throw diagnostic(code: .unknownReference, path: "recursiveFunctions.\(function.name)", expected: "a declared operator", actual: "no operator identity")
+            }
             references["recursiveFunctions.\(function.name).declaration"] = .operator(id)
             let scope = try bind(function.params, at: "recursiveFunctions.\(function.name).parameters", scope: [:])
             try validateExpression(function.body, at: "recursiveFunctions.\(function.name).body", scope: scope)
         }
         let localFormalNames = Set(spec.formalOperatorDefinitions.map(\.name))
         for definition in closure.resolvedFormalOperatorDefinitions where !localFormalNames.contains(definition.name) {
-            guard let id = operators[definition.name] else { throw diagnostic(path: "linkedFormalOperators.\(definition.name)") }
+            guard let id = operators[definition.name] else {
+                throw diagnostic(code: .unknownReference, path: "linkedFormalOperators.\(definition.name)", expected: "a declared operator", actual: "no operator identity")
+            }
             references["linkedFormalOperators.\(definition.name).declaration"] = .operator(id)
             let scope = try bind(definition.parameters.map(\.name), at: "linkedFormalOperators.\(definition.name).parameters", scope: [:])
             try validateExpression(definition.body, at: "linkedFormalOperators.\(definition.name).body", scope: scope)
         }
         let localRecursiveNames = Set(spec.recursiveFuncs.map(\.name))
         for function in closure.resolvedRecursiveFuncs where !localRecursiveNames.contains(function.name) {
-            guard let id = operators[function.name] else { throw diagnostic(path: "linkedRecursiveFunctions.\(function.name)") }
+            guard let id = operators[function.name] else {
+                throw diagnostic(code: .unknownReference, path: "linkedRecursiveFunctions.\(function.name)", expected: "a declared operator", actual: "no operator identity")
+            }
             references["linkedRecursiveFunctions.\(function.name).declaration"] = .operator(id)
             let scope = try bind(function.params, at: "linkedRecursiveFunctions.\(function.name).parameters", scope: [:])
             try validateExpression(function.body, at: "linkedRecursiveFunctions.\(function.name).body", scope: scope)
@@ -330,7 +338,9 @@ struct BindingValidator {
             try validateExpression(operation.domain, at: "\(path).\(operation.name).domain", scope: scope)
             let bodyScope = try bind(operation.parameters, at: "\(path).\(operation.name).parameters", scope: scope)
             try validateExpression(operation.body, at: "\(path).\(operation.name).body", scope: bodyScope)
-            guard let id = self.operators[operation.name] else { throw diagnostic(path: path) }
+            guard let id = self.operators[operation.name] else {
+                throw diagnostic(code: .unknownReference, path: path, expected: "a declared operator", actual: "no operator identity")
+            }
             references["\(path).\(operation.name).declaration"] = .operator(id)
         }
         for local in localOperators {
