@@ -35,7 +35,7 @@ public actor DiskStore {
         dir = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Pictures/SwiftTLA/\(name)")
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
     }
-    public func write(name: String, data: Data) async throws { _ = try? await machine.execute(DiskStoreModel.Machine.ActionLabel.write.toInvocation()); try data.write(to: dir.appendingPathComponent(name)) }
-    public func delete(name: String) async { _ = try? await machine.execute(DiskStoreModel.Machine.ActionLabel.delete.toInvocation()); try? FileManager.default.removeItem(at: dir.appendingPathComponent(name)) }
-    public func clear() async { _ = try? await machine.execute(DiskStoreModel.Machine.ActionLabel.clear.toInvocation()); try? FileManager.default.removeItem(at: dir); try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true) }
+    public func write(name: String, data: Data) async throws { _ = try? await machine.apply(.write); try data.write(to: dir.appendingPathComponent(name)) }
+    public func delete(name: String) async { _ = try? await machine.apply(.delete); try? FileManager.default.removeItem(at: dir.appendingPathComponent(name)) }
+    public func clear() async { _ = try? await machine.apply(.clear); try? FileManager.default.removeItem(at: dir); try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true) }
 }

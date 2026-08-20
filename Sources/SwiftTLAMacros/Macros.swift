@@ -13,7 +13,7 @@ import SwiftTLA
 /// execution methods, bounded verification helpers, and typed live-machine
 /// members when the model contains a nested live adapter.
 @attached(member, names: arbitrary)
-@attached(extension, conformances: TLAModelType, TLAMachineExecuting, TLAMachineSchemaProviding, names: arbitrary)
+@attached(extension, conformances: TLAModelType, TLAMachineSchemaProviding, names: arbitrary)
 public macro TLAModel() = #externalMacro(module: "SwiftTLAPlugin", type: "ModelMacro")
 
 /// Requires a nested actor and generates an adapter for its enclosing `@TLAModel`.

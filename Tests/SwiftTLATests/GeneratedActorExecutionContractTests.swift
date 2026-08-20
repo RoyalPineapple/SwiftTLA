@@ -36,21 +36,19 @@ struct GeneratedActorExecutionContractTests {
     func actorMatchesCanonicalSchedule() async throws {
         var canonical = DuckDuckLeaderCanonical()
         let actor = DuckDuckLeaderCanonical.Actor()
-        let schedule = [
-            TLAActionInvocation(name: "pass", arguments: [.int(1), .int(2), .int(1)]),
-            TLAActionInvocation(name: "pass", arguments: [.int(2), .int(1), .int(2)]),
-            TLAActionInvocation(name: "pass", arguments: [.int(1), .int(2), .int(3)])
+        let schedule: [DuckDuckLeaderCanonical.ActionLabel] = [
+            .pass(from: 1, to: 2, round: 1),
+            .pass(from: 2, to: 1, round: 2),
+            .pass(from: 1, to: 2, round: 3)
         ]
 
         #expect(await actor.tlaSnapshot() == canonical.tlaSnapshot())
 
-        for invocation in schedule {
-            let canonicalLabel = try #require(DuckDuckLeaderCanonical.ActionLabel(invocation: invocation))
-            let actorLabel = try #require(DuckDuckLeaderCanonical.Actor.ActionLabel(invocation: invocation))
-            let expected = try canonical.apply(canonicalLabel)
-            let actual = try await actor.execute(actorLabel.toInvocation())
+        for label in schedule {
+            let expected = try canonical.apply(label)
+            let actual = try await actor.apply(.pass(from: label.from, to: label.to, round: label.round))
 
-            #expect(actual.action.toInvocation() == invocation)
+            #expect(actual.action.toInvocation() == label.toInvocation())
             #expect(actual.action.toInvocation() == expected.action.toInvocation())
             #expect(actual.before.leader == expected.before.leader)
             #expect(actual.before.turn == expected.before.turn)
@@ -64,15 +62,15 @@ struct GeneratedActorExecutionContractTests {
     @Test("actor rejects unavailable invocations without mutation")
     func unavailableActionPreservesActorSnapshot() async throws {
         let actor = DuckDuckLeaderCanonical.Actor()
-        let unavailable = TLAActionInvocation(name: "pass", arguments: [.int(2), .int(1), .int(1)])
+        let unavailable = DuckDuckLeaderCanonical.Actor.ActionLabel.pass(from: 2, to: 1, round: 1)
         let before = await actor.tlaSnapshot()
 
         do {
-            _ = try await actor.execute(unavailable)
+            _ = try await actor.apply(unavailable)
             Issue.record("Expected unavailable actor action")
         } catch let GeneratedMachineError.runtime(.actionNotEnabled(invocation, available)) {
-            #expect(invocation == unavailable)
-            #expect(available.contains(unavailable) == false)
+            #expect(invocation == unavailable.toInvocation())
+            #expect(available.contains(unavailable.toInvocation()) == false)
         }
 
         #expect(await actor.tlaSnapshot() == before)
@@ -81,15 +79,14 @@ struct GeneratedActorExecutionContractTests {
     @Test("actor serializes concurrent duplicate submissions")
     func concurrentSubmissionsMatchActualCanonicalEvidence() async throws {
         let actor = DuckDuckLeaderCanonical.Actor()
-        let invocation = TLAActionInvocation(name: "pass", arguments: [.int(1), .int(2), .int(1)])
+        let label = DuckDuckLeaderCanonical.Actor.ActionLabel.pass(from: 1, to: 2, round: 1)
 
-        async let first = submit(actor, invocation: invocation)
-        async let second = submit(actor, invocation: invocation)
+        async let first = submit(actor, label: label)
+        async let second = submit(actor, label: label)
         let submissions = await [first, second]
 
         var canonical = DuckDuckLeaderCanonical()
-        let label = try #require(DuckDuckLeaderCanonical.ActionLabel(invocation: invocation))
-        let expected = try canonical.apply(label)
+        let expected = try canonical.apply(.pass(from: 1, to: 2, round: 1))
         let expectedAvailable = try canonical.availableActions().map { $0.toInvocation() }
         let successful = submissions.compactMap(\.evidence)
         let rejected = submissions.compactMap(\.rejection)
@@ -101,7 +98,7 @@ struct GeneratedActorExecutionContractTests {
         #expect(successful[0].before.turn == expected.before.turn)
         #expect(successful[0].after.leader == expected.after.leader)
         #expect(successful[0].after.turn == expected.after.turn)
-        #expect(rejected[0].invocation == invocation)
+        #expect(rejected[0].invocation == label.toInvocation())
         #expect(rejected[0].available == expectedAvailable)
         #expect(await actor.state.leader == expected.after.leader)
         #expect(await actor.state.turn == expected.after.turn)
@@ -109,11 +106,10 @@ struct GeneratedActorExecutionContractTests {
 
     private func submit(
         _ actor: DuckDuckLeaderCanonical.Actor,
-        invocation: TLAActionInvocation
+        label: DuckDuckLeaderCanonical.Actor.ActionLabel
     ) async -> Submission {
         do {
-            let label = try #require(DuckDuckLeaderCanonical.Actor.ActionLabel(invocation: invocation))
-            let evidence = try await actor.execute(label.toInvocation())
+            let evidence = try await actor.apply(label)
             return .applied(.init(
                 invocation: evidence.action.toInvocation(),
                 before: evidence.before,

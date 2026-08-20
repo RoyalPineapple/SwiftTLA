@@ -8,11 +8,9 @@ Each generated model exposes these `Sendable` value types:
 
 - `State`: typed values for declared variables.
 - `Variables`: declared variable names.
-- `Actions`: declared action names when actions exist.
 - `ActionLabel`: a typed action identity and typed parameters.
 - `TransitionResult`: typed action, state before, and state after for direct value-model execution.
 
-`ActionLabel.toInvocation()` converts a typed label to a ``TLAActionInvocation``. `ActionLabel.init?(invocation:)` accepts only a valid invocation for that generated type.
 
 ## Direct value-model execution
 
@@ -30,15 +28,12 @@ let live = try Counter.Live(handle: handle)
 
 The owner is the only shutdown authority. `end()` is explicit and idempotent. Handle copies share the same stable ``TLALiveMachineIdentity`` and actor-owned state. A `Live(handle:)` binding checks the exact generated ``MachineSchema``; an incompatible handle throws ``GeneratedLiveMachineDiagnostic`` rather than creating a substitute runtime.
 
-## Typed and generic control
+## Typed control
 
-Use a generated label with `Live.execute(_:)` or a generic invocation with ``TLALiveMachine/execute(_:requestID:)``. Both reach the same formal transition pipeline.
+Use a generated label with `Live.execute(_:)`.
 
 ```swift
 let typedOutcome = await live.execute(.advance)
-let genericOutcome = await handle.execute(
-    TLAActionInvocation(name: "advance", arguments: [])
-)
 ```
 
 ``TLALiveActionOutcome`` is exhaustive:
@@ -51,7 +46,7 @@ After a request is accepted, execution is non-cancellable. Caller cancellation c
 
 ## Inspect an unknown live machine
 
-``TLALiveMachine`` is the type-unknown common surface. It provides the runtime identity, generated schema, atomic `current()` snapshots, observation, and generic action execution. A snapshot contains a validated ``TLAStateProjection``, never a public `[String: TLAValue]` map.
+``TLALiveMachine`` is the common runtime surface. It provides the runtime identity, generated schema, atomic `current()` snapshots, and observation. A snapshot contains a validated ``TLAStateProjection``.
 
 Positions begin at zero and have meaning only within one runtime identity. The snapshot availability was evaluated for the exact snapshot state.
 

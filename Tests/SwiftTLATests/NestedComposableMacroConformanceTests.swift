@@ -34,24 +34,29 @@ struct NestedComposableMacroConformanceTests {
         }
     }
 
-    @Test("Nested model and adapters expose matching protocol-generic observations")
+    @Test("Nested model and adapters expose matching typed observations")
     @MainActor
     func nestedSurfacesShareCanonicalExecution() async throws {
-        let invocation = TLAActionInvocation(name: "advance")
         var model = try NestedComposedCounter.makeMachine()
         var observable = NestedComposedCounter.Observable()
         var actor = NestedComposedCounter.Actor()
 
-        let modelResult = try await executeAndObserve(&model, invocation: invocation)
-        let observableResult = try await executeAndObserve(&observable, invocation: invocation)
-        let actorResult = try await executeAndObserve(&actor, invocation: invocation)
+        let modelBefore = await model.machineObservation()
+        _ = try model.apply(.advance)
+        let modelAfter = await model.machineObservation()
+        let observableBefore = await observable.machineObservation()
+        _ = try observable.apply(.advance)
+        let observableAfter = await observable.machineObservation()
+        let actorBefore = await actor.machineObservation()
+        _ = try await actor.apply(.advance)
+        let actorAfter = await actor.machineObservation()
 
-        #expect(modelResult.before == observableResult.before)
-        #expect(modelResult.before == actorResult.before)
-        #expect(modelResult.after == observableResult.after)
-        #expect(modelResult.after == actorResult.after)
-        #expect(modelResult.before.availableInvocations == [invocation])
-        #expect(modelResult.after.availableInvocations == [invocation])
+        #expect(modelBefore == observableBefore)
+        #expect(modelBefore == actorBefore)
+        #expect(modelAfter == observableAfter)
+        #expect(modelAfter == actorAfter)
+        #expect(modelBefore.availableInvocations == [.init(name: "advance")])
+        #expect(modelAfter.availableInvocations == [.init(name: "advance")])
     }
 
     @Test("Three-parameter invocation identity survives canonical and nested adapter execution")
@@ -73,8 +78,8 @@ struct NestedComposableMacroConformanceTests {
         var machine = try EndToEndThreeParameterActionMachine.makeMachine()
         let result = try machine.apply(.board(person: 2, elevator: 20, direction: 200))
         #expect(result.after.floor == 222)
-        #expect(try await observable.execute(selected).action == .board(person: 2, elevator: 20, direction: 200))
-        #expect(try await actor.execute(selected).action == .board(person: 2, elevator: 20, direction: 200))
+        #expect(try observable.apply(.board(person: 2, elevator: 20, direction: 200)).action == .board(person: 2, elevator: 20, direction: 200))
+        #expect((try await actor.apply(.board(person: 2, elevator: 20, direction: 200)).action) == .board(person: 2, elevator: 20, direction: 200))
     }
 
     @Test("Invalid nested macro composition emits enclosure diagnostics")
@@ -252,15 +257,6 @@ struct NestedComposableMacroConformanceTests {
             stateDiagnostic: "@TLAActor and @TLAObservable require an enclosing @TLAModel",
             requiresGeneratedSurfaceRejection: false
         )
-    }
-
-    private func executeAndObserve<Machine: TLAMachineExecuting>(
-        _ machine: inout Machine,
-        invocation: TLAActionInvocation
-    ) async throws -> (before: TLAMachineObservation, after: TLAMachineObservation) {
-        let before = await machine.machineObservation()
-        _ = try await machine.execute(invocation)
-        return (before, await machine.machineObservation())
     }
 
     private func requireSendable<Value: Sendable>(_: Value.Type) {}

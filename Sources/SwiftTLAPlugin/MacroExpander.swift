@@ -76,7 +76,6 @@ enum MacroExpander {
 
         decls.append(DeclSyntax(generateVariablesEnum(variables: plan.variables)))
         if !plan.actions.isEmpty {
-            decls.append(DeclSyntax(generateActionsEnum(actions: plan.actions)))
             decls.append(DeclSyntax(generateActionLabel(actions: plan.actions)))
         }
         decls.append(DeclSyntax(generateStateStruct(variables: plan.variables, enumInfos: model.enumInfos)))
@@ -473,29 +472,6 @@ enum MacroExpander {
             memberBlock: MemberBlockSyntax {
                 for v in variables {
                     EnumCaseDeclSyntax { EnumCaseElementSyntax(name: .identifier(v.formalName)) }
-                }
-            }
-        )
-    }
-
-    static func generateActionsEnum(actions: [MachineSurfacePlan.Action]) -> EnumDeclSyntax {
-        EnumDeclSyntax(
-            modifiers: [DeclModifierSyntax(name: .keyword(.public))],
-            name: "Actions",
-            inheritanceClause: InheritanceClauseSyntax {
-                InheritedTypeListSyntax {
-                    InheritedTypeSyntax(type: IdentifierTypeSyntax(name: "String"))
-                    InheritedTypeSyntax(type: IdentifierTypeSyntax(name: "CaseIterable"))
-                }
-            },
-            memberBlock: MemberBlockSyntax {
-                for action in actions {
-                    EnumCaseDeclSyntax {
-                        EnumCaseElementSyntax(
-                            name: .identifier(action.swiftIdentifier),
-                            rawValue: InitializerClauseSyntax(value: StringLiteralExprSyntax(content: action.formalName))
-                        )
-                    }
                 }
             }
         )

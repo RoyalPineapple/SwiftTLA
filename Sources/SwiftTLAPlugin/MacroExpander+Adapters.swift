@@ -40,7 +40,7 @@ extension MacroExpander {
             DeclSyntax(stringLiteral: "public var identity: TLALiveMachineIdentity { _live.identity }"),
             DeclSyntax(stringLiteral: "public func current() async throws -> Live.CurrentResult { try await _live.current() }")
         ]
-        declarations += typedAdapterActions(model: model, receiver: "_live")
+        declarations += typedAdapterExecution(model: model, receiver: "_live")
         return declarations
     }
 
@@ -86,24 +86,17 @@ extension MacroExpander {
             """),
             DeclSyntax(stringLiteral: observableReducerMethod(model: model))
         ]
-        declarations += typedAdapterActions(model: model, receiver: "_live")
+        declarations += typedAdapterExecution(model: model, receiver: "_live")
         return declarations
     }
 
-    static func typedAdapterActions(model: MacroCompilation, receiver: String) -> [DeclSyntax] {
-        model.machineSurface.actions.map { action in
-            let parameters = action.bindings.filter(\.isPublic).map { "\($0.formalName): \($0.swiftType)" }.joined(separator: ", ")
-            let arguments = action.bindings.filter(\.isPublic).map { "\($0.formalName): \($0.formalName)" }.joined(separator: ", ")
-            let label = arguments.isEmpty ? "ActionLabel.\(action.swiftIdentifier)" : "ActionLabel.\(action.swiftIdentifier)(\(arguments))"
-            let signature = parameters.isEmpty
-                ? "requestID: Foundation.UUID = Foundation.UUID()"
-                : "\(parameters), requestID: Foundation.UUID = Foundation.UUID()"
-            return DeclSyntax(stringLiteral: """
-            public func _\(action.swiftIdentifier)(\(signature)) async throws -> Outcome {
-                try await \(receiver).execute(\(label), requestID: requestID)
-            }
-            """)
+    static func typedAdapterExecution(model: MacroCompilation, receiver: String) -> [DeclSyntax] {
+        guard model.machineSurface.actions.isEmpty == false else { return [] }
+        return [DeclSyntax(stringLiteral: """
+        public func apply(_ action: ActionLabel, requestID: Foundation.UUID = Foundation.UUID()) async throws -> Outcome {
+            try await \(receiver).execute(action, requestID: requestID)
         }
+        """)]
     }
 
     static func observableCallbacks(model: MacroCompilation) -> [DeclSyntax] {

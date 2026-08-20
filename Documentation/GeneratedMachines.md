@@ -75,7 +75,7 @@ The fixture is the compilation authority for this example. It uses Swift tools 5
 
 ## Run actions
 
-A generated model has typed `Variables`, `Actions`, `State`, `ActionLabel`, and
+A generated model has typed `Variables`, `State`, `ActionLabel`, and
 `TransitionResult` members. Use `availableActions()` to get typed labels. Use
 `apply(_:)` to execute one label synchronously on a non-actor value model.
 That value has no live-runtime identity or observer connection.
@@ -102,9 +102,7 @@ func runDirectAction() throws {
 ```
 
 `TransitionResult` records the typed action and typed state before and after
-the transition. `ActionLabel.toInvocation()` converts a typed label to a
-`TLAActionInvocation`. `ActionLabel.init?(invocation:)` converts a valid
-invocation back to a typed label.
+the transition.
 
 `apply(_:)` throws `GeneratedMachineError` when it cannot execute an invocation. A rejected invocation does not replace the current snapshot.
 
@@ -136,10 +134,9 @@ case .failed(let failure):
 }
 ```
 
-Generic code uses the same runtime through `handle.identity`, `handle.schema`,
-`current()`, `observe()`, and `execute(_:)`. Typed and generic actions share
-one transition pipeline. Only `committed` changes state. An accepted action is
-non-cancellable: it completes as `committed` or normal `failed`.
+Use `Live.execute(_:)` with the generated `ActionLabel`. Only `committed`
+changes state. An accepted action is non-cancellable: it completes as
+`committed` or normal `failed`.
 
 ## Nest a machine
 
@@ -193,16 +190,16 @@ struct CounterHost {
 func runActorAccess() async throws {
     let owner = try TLALiveMachineOwner.create(for: CounterHost.self)
     let actor = try await CounterHost.Actor(handle: owner.handle)
-    let result = await actor.execute(CounterHost.Actor.ActionLabel.advance.toInvocation())
+    let result = try await actor.apply(.advance)
 
     guard case .committed(let commit) = result else { return }
     assert(commit.after.position.value == 1)
 }
 ```
 
-The nested actor is asynchronous. Call `current()` or
-`execute(_ invocation: TLAActionInvocation)` across its actor boundary. It
-shares identity and state with every handle from the same owner.
+The nested actor is asynchronous. Call `current()` or `apply(_:)` across its
+actor boundary. It shares identity and state with every handle from the same
+owner.
 
 Nested adapters expose the enclosing model's `State`, `ActionLabel`, and
 `TransitionResult` through type aliases.
@@ -269,13 +266,13 @@ func runObservable() async throws {
         assert(before.value == 0)
         assert(after.value == 1)
     }
-    let result = await observable.execute(CounterScreenModel.Observable.ActionLabel.advance.toInvocation())
+    let result = try await observable.apply(.advance)
     guard case .committed = result else { return }
 }
 ```
 
-For a nested observable, `execute(_ invocation: TLAActionInvocation)` submits
-the request to the runtime. The callback occurs only when its subscription
+For a nested observable, `apply(_:)` submits the request to the runtime. The
+callback occurs only when its subscription
 reduces a contiguous committed update. A rejected or failed action does not
 call the callback. On loss, the observable clears its cache and resynchronizes.
 
@@ -326,7 +323,7 @@ For an action problem, collect these public values:
 
 - `TLAMachineObservation.state` and its guarded projection result
 - `TLAMachineObservation.availableInvocations`, or `availabilityDiagnostic`
-- the attempted `TLAActionInvocation`
+- the attempted generated `ActionLabel`
 - the returned `TransitionResult`, when execution succeeds
 - the `GeneratedMachineError`, when execution fails
 
@@ -376,7 +373,7 @@ struct CounterView: View {
             Button("Advance") {
                 Task { @MainActor in
                     guard let machine else { return }
-                    switch await machine.execute(CounterScreenModel.Observable.ActionLabel.advance.toInvocation()) {
+                    switch try await machine.apply(.advance) {
                     case .committed:
                         diagnostic = ""
                     case .rejected(let rejection):
@@ -419,37 +416,31 @@ The following table is the public inventory for this guide. Sources identify the
 | `@TLAActor` | Requires a nested type. Its generated actor binds an existing compatible `TLALiveMachine` handle. | [Macros.swift](../Sources/SwiftTLAMacros/Macros.swift), [MacroExpander+Adapters.swift](../Sources/SwiftTLAPlugin/MacroExpander+Adapters.swift) |
 | `@TLAObservable` | Requires a nested type. Its generated main-actor adapter binds an existing compatible handle and reduces observation events. | [Macros.swift](../Sources/SwiftTLAMacros/Macros.swift), [MacroExpander+Adapters.swift](../Sources/SwiftTLAPlugin/MacroExpander+Adapters.swift) |
 | `TLALiveMachineOwner` | Creates one live runtime, vends its common handle, and is the sole explicit shutdown authority. | [LiveMachine.swift](../Sources/SwiftTLA/LiveMachine.swift) |
-| `TLALiveMachine` | Common handle for type-unknown identity, schema, current snapshot, observation, and action requests. | [LiveMachine.swift](../Sources/SwiftTLA/LiveMachine.swift) |
-| `GeneratedLiveMachine` and generated `Live` | Schema-validated typed façade over an existing live handle. | [GeneratedLiveMachine.swift](../Sources/SwiftTLA/GeneratedLiveMachine.swift), [MacroExpander+LiveMachine.swift](../Sources/SwiftTLAPlugin/MacroExpander+LiveMachine.swift) |
+| `TLALiveMachine` | Common handle for runtime identity, schema, current snapshot, and observation. | [LiveMachine.swift](../Sources/SwiftTLA/LiveMachine.swift) |
+| Generated `Live` | Schema-validated typed façade over an existing live handle. | [MacroExpander+LiveMachine.swift](../Sources/SwiftTLAPlugin/MacroExpander+LiveMachine.swift) |
 | `TLALiveMachineObservationSubscription` | Single-consumer async observation with snapshot, update, explicit loss, recovery, and owner termination. | [LiveMachineObservation.swift](../Sources/SwiftTLA/LiveMachineObservation.swift) |
-| `TLALiveMachineAdapterBinding` | Validates an adapter binding to an existing generated live runtime without creating state. | [LiveMachineAdapter.swift](../Sources/SwiftTLA/LiveMachineAdapter.swift) |
 | Generated `Variables` | `String`, `CaseIterable` enum of declared variables. Each case supplies its raw variable name. | [MacroExpander.swift](../Sources/SwiftTLAPlugin/MacroExpander.swift) |
-| Generated `Actions` | `String`, `CaseIterable` enum of declared action names. Each case supplies its declared action name. | [MacroExpander.swift](../Sources/SwiftTLAPlugin/MacroExpander.swift) |
 | `TLAStateProjection` | Provides guarded token-based access to a formal state. It owns its internal representation. | [CanonicalMachine.swift](../Sources/SwiftTLA/CanonicalMachine.swift) |
 | `TLAStateProjectionResult` | Contains a valid projection or a typed projection diagnostic. | [CanonicalMachine.swift](../Sources/SwiftTLA/CanonicalMachine.swift) |
 | `TLAMachineObservation` | Contains a guarded state projection result and either available invocations or an availability diagnostic. | [CanonicalMachine.swift](../Sources/SwiftTLA/CanonicalMachine.swift) |
 | `TLAMachineAvailabilityDiagnostic` | Reports an `evaluationFailed` or `stateProjectionFailed` code and a message. | [CanonicalMachine.swift](../Sources/SwiftTLA/CanonicalMachine.swift) |
 | `TLAMachineObserving` | Provides async `machineObservation()`. Its extensions provide `machineState()` and `machineAvailability()`. | [CanonicalMachine.swift](../Sources/SwiftTLA/CanonicalMachine.swift) |
-| `TLAMachineExecuting` | Extends observation with async throwing `execute(_ invocation: TLAActionInvocation)`. | [CanonicalMachine.swift](../Sources/SwiftTLA/CanonicalMachine.swift) |
 | `TLAActionInvocation` | Identifies an action by name and declared arguments. It is the untyped invocation form. | [TLASpec.swift](../Sources/SwiftTLA/TLASpec.swift) |
 | `GeneratedMachineError` | Wraps a runtime error, an unexpected error, or an unrepresentable action label. | [CanonicalMachine.swift](../Sources/SwiftTLA/CanonicalMachine.swift) |
 | Generated `VerificationError` | Error type returned by generated verification helpers when the bounded check does not succeed. | [MacroExpander+Generation.swift](../Sources/SwiftTLAPlugin/MacroExpander+Generation.swift) |
-| Generated `runtime` | Static `SpecRuntime` for the declared specification. | [MacroExpander.swift](../Sources/SwiftTLAPlugin/MacroExpander.swift) |
 | Generated `verifySpec()` | Runs the generated bounded specification check and returns its explored-state count; it uses `TLAModelType.verificationStateLimit` (default: `100_000`). | [MacroExpander+Generation.swift](../Sources/SwiftTLAPlugin/MacroExpander+Generation.swift) |
 | Generated `transitionMatrix()` | Returns the explored transitions as source state, invocation, and target state tuples. | [MacroExpander+Generation.swift](../Sources/SwiftTLAPlugin/MacroExpander+Generation.swift) |
 | Generated `verifyTransitions()` | Compares each generated transition with the runtime successors for that source state and invocation. | [MacroExpander+Generation.swift](../Sources/SwiftTLAPlugin/MacroExpander+Generation.swift) |
 | Generated `verifyInvariants()` | Checks declared invariants on explored transition targets when the model has actions and invariants. | [MacroExpander+Generation.swift](../Sources/SwiftTLAPlugin/MacroExpander+Generation.swift) |
 | Generated `State` | Holds model variables with generated Swift types. Application code reads this type through `state`, before, and after. | [MacroExpander.swift](../Sources/SwiftTLAPlugin/MacroExpander.swift) |
-| Generated `ActionLabel` | Represents declared actions with typed parameters. `toInvocation()` writes a `TLAActionInvocation`. `init?(invocation:)` reads a valid one. | [MacroExpander+Generation.swift](../Sources/SwiftTLAPlugin/MacroExpander+Generation.swift) |
+| Generated `ActionLabel` | Represents declared actions with typed parameters. | [MacroExpander+Generation.swift](../Sources/SwiftTLAPlugin/MacroExpander+Generation.swift) |
 | Generated `TransitionResult` | Records the typed action and typed state before and after a successful transition. | [MacroExpander+CanonicalMachine.swift](../Sources/SwiftTLAPlugin/MacroExpander+CanonicalMachine.swift) |
 | Generated `tlaSnapshot()` | Returns `TLAStateProjectionResult` on a generated value model. It is not live-runtime observation. | [MacroExpander+CanonicalMachine.swift](../Sources/SwiftTLAPlugin/MacroExpander+CanonicalMachine.swift) |
 | Generated `availableActions()` | Returns typed available action labels for a model that declares actions. | [MacroExpander+CanonicalMachine.swift](../Sources/SwiftTLAPlugin/MacroExpander+CanonicalMachine.swift) |
-| Generated `availableInvocations()` | Returns runtime `TLAActionInvocation` values on a generated model without declared actions. `TLAMachineObservation` reports runtime availability for every generated machine. | [MacroExpander+CanonicalMachine.swift](../Sources/SwiftTLAPlugin/MacroExpander+CanonicalMachine.swift) |
-| Generated `apply(_:)` | Executes a typed label or `TLAActionInvocation`. It returns `TransitionResult` or throws. | [MacroExpander+CanonicalMachine.swift](../Sources/SwiftTLAPlugin/MacroExpander+CanonicalMachine.swift) |
+| Generated `apply(_:)` | Executes a typed `ActionLabel`. It returns `TransitionResult` or throws. | [MacroExpander+CanonicalMachine.swift](../Sources/SwiftTLAPlugin/MacroExpander+CanonicalMachine.swift) |
 | Generated `machineObservation()` | Returns current state and availability. It retains state if availability evaluation fails. | [MacroExpander+CanonicalMachine.swift](../Sources/SwiftTLAPlugin/MacroExpander+CanonicalMachine.swift) |
-| Generated `Live.execute(_:)` | Executes a typed label or generic invocation through the existing live runtime and returns an explicit live outcome. | [MacroExpander+LiveMachine.swift](../Sources/SwiftTLAPlugin/MacroExpander+LiveMachine.swift) |
+| Generated `Live.execute(_:)` | Executes a typed label through the existing live runtime and returns an explicit live outcome. | [MacroExpander+LiveMachine.swift](../Sources/SwiftTLAPlugin/MacroExpander+LiveMachine.swift) |
 | Generated `synchronousMachineObservation()` | Returns current state and availability without an async boundary on a canonical generated model. | [MacroExpander+CanonicalMachine.swift](../Sources/SwiftTLAPlugin/MacroExpander+CanonicalMachine.swift) |
-| Generated `executeSynchronously(_ invocation: TLAActionInvocation)` | Executes an invocation without an async boundary on a canonical generated model. | [MacroExpander+CanonicalMachine.swift](../Sources/SwiftTLAPlugin/MacroExpander+CanonicalMachine.swift) |
 
 This guide explicitly excludes removed `@TypedVar` and `@TLAValidated`, private
 `_machine` storage, underscored generated helpers such as `_<action>`, and

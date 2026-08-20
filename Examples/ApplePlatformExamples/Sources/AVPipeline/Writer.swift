@@ -48,22 +48,22 @@ extension Media {
         public func start() async throws {
             guard await machine.state.phase == .configured else { throw MediaError.notConfigured }
             writer.startWriting(); writer.startSession(atSourceTime: .zero)
-            _ = try await machine.execute(WriterModel.Machine.ActionLabel.start.toInvocation())
+            _ = try await machine.apply(.start)
         }
         public func append(_ sample: CMSampleBuffer) async -> Bool {
             guard await machine.state.phase == .writing else { return false }
-            _ = try? await machine.execute(WriterModel.Machine.ActionLabel.write.toInvocation())
+            _ = try? await machine.apply(.write)
             return input.append(sample)
         }
         public func drain(_ stream: AsyncStream<CMSampleBuffer>) async { for await sample in stream { if !(await append(sample)) { break } }; do { try await finish() } catch { await cancel() } }
-        public func pause() async { _ = try? await machine.execute(WriterModel.Machine.ActionLabel.pause.toInvocation()) }
-        public func resume() async { _ = try? await machine.execute(WriterModel.Machine.ActionLabel.resume.toInvocation()) }
+        public func pause() async { _ = try? await machine.apply(.pause) }
+        public func resume() async { _ = try? await machine.apply(.resume) }
         public func finish() async throws {
             let phase = await machine.state.phase
             guard phase == .configured || phase == .writing || phase == .paused else { throw MediaError.cannotFinish }
-            input.markAsFinished(); _ = try await machine.execute(WriterModel.Machine.ActionLabel.finish.toInvocation())
+            input.markAsFinished(); _ = try await machine.apply(.finish)
             await withCheckedContinuation { continuation in writer.finishWriting { continuation.resume() } }
         }
-        public func cancel() async { _ = try? await machine.execute(WriterModel.Machine.ActionLabel.cancel.toInvocation()); writer.cancelWriting() }
+        public func cancel() async { _ = try? await machine.apply(.cancel); writer.cancelWriting() }
     }
 }

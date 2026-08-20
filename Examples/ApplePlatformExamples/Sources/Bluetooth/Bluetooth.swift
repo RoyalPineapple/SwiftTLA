@@ -137,7 +137,7 @@ public actor Bluetooth {
 
     public func scan() async throws -> AsyncStream<Device> {
         guard await machine.state.phase == .poweredOn else { throw BleError.notReady }
-        _ = try await machine.execute(BluetoothModel.Machine.ActionLabel.startScan.toInvocation())
+        _ = try await machine.apply(.startScan)
         let stream = AsyncStream<Device>.makeStream()
         scanContinuation = stream.continuation
         central.scanForPeripherals(withServices: nil)
@@ -146,7 +146,7 @@ public actor Bluetooth {
 
     public func stopScanning() async {
         if await machine.state.phase == .scanning {
-            _ = try? await machine.execute(BluetoothModel.Machine.ActionLabel.stopScan.toInvocation())
+            _ = try? await machine.apply(.stopScan)
         }
         central.stopScan()
         scanContinuation?.finish()
@@ -163,7 +163,7 @@ public actor Bluetooth {
         case .unauthorized: action = .unauthorized
         default: action = nil
         }
-        if let action { _ = try? await machine.execute(action.toInvocation()) }
+        if let action { _ = try? await machine.apply(action) }
         if state == .poweredOn, let readyContinuation { readyContinuation.resume(); self.readyContinuation = nil }
         if state != .poweredOn { scanContinuation?.finish(); scanContinuation = nil }
     }

@@ -40,7 +40,7 @@ struct CounterHost {
 func runActorAccess() async throws {
     let owner = try CounterHost.makeLiveOwner()
     let actor = try CounterHost.Actor(handle: owner.handle)
-    let result = try await actor._advance()
+    let result = try await actor.apply(.advance)
 
     guard case .committed(let commit) = result else { return }
     assert(commit.after.position.value == 1)

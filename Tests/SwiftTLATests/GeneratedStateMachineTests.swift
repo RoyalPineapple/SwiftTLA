@@ -63,10 +63,6 @@ struct GeneratedAlgorithmCounter {
 struct GeneratedAlgorithmMachineTests {
     @Test("formal action labels retain raw names behind collision-safe Swift cases")
     func sanitizesGeneratedActionLabels() {
-        #expect(SanitizedActionLabelModel.Actions.procedure_work_enter.rawValue == "procedure.work.enter")
-        #expect(SanitizedActionLabelModel.Actions.procedure_work_enter_2.rawValue == "procedure_work_enter")
-        #expect(SanitizedActionLabelModel.Actions.step_2.rawValue == "step-2")
-
         let dotted = SanitizedActionLabelModel.ActionLabel.procedure_work_enter
         let underscored = SanitizedActionLabelModel.ActionLabel.procedure_work_enter_2
         let dashed = SanitizedActionLabelModel.ActionLabel.step_2

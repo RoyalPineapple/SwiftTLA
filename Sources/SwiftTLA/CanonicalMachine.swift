@@ -302,13 +302,6 @@ public extension TLAMachineObserving {
     }
 }
 
-/// A machine that executes formal action invocations asynchronously.
-public protocol TLAMachineExecuting: TLAMachineObserving {
-    associatedtype TransitionResult: Sendable
-
-    mutating func execute(_ invocation: TLAActionInvocation) async throws -> TransitionResult
-}
-
 public struct CanonicalMachine<Snapshot: Equatable & Sendable>: Sendable {
     public let runtime: SpecRuntime
     private let projectionForSnapshot: @Sendable (Snapshot) throws -> TLAStateProjection
