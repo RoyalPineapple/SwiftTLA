@@ -12,8 +12,8 @@ extension TLASpec {
     func renderTLAModuleSource(sectionPlan: DirectModuleSectionPlan) -> String {
         validateSymmetricCollectionExport()
         let varNames = variables.map(\.name)
-        let controlSymbols = controlExportSymbols(sourceAlgorithms, actions: actions)
-        let emittedActionNames = tlaActionNames(actions, preferredNames: controlSymbols.actionNames)
+        let actions = sectionPlan.actions
+        let emittedActionNames = sectionPlan.emittedActionNames
         let varsTuple = varNames.count == 1 ? varNames[0] : "<<\(varNames.joined(separator: ", "))>>"
         let isLibraryModule = variables.isEmpty && actions.isEmpty
         var lines: [String] = []
@@ -164,7 +164,7 @@ extension TLASpec {
             let parameters = action.bindings.map(\.name).joined(separator: ", ")
             let emittedName = emittedActionNames[action.name] ?? action.name
             let header = parameters.isEmpty ? emittedName : "\(emittedName)(\(parameters))"
-            lines.append("\(header) == \(exportControlStates(in: action.body, using: controlSymbols).tlaModuleSource)")
+            lines.append("\(header) == \(action.body.tlaModuleSource)")
             for variant in actionInvocations(action) where !variant.indices.isEmpty {
                 let suffix = variant.indices.map(String.init).joined(separator: "_")
                 lines.append("\(emittedName)__\(suffix) == \(variant.invocation)")
@@ -196,7 +196,7 @@ extension TLASpec {
         lines.append("  /\\ Init")
         lines.append("  /\\ [][Next]_\(varsTuple)")
         for f in fairness {
-            lines.append("  /\\ \(fairnessForm(f, vars: varsTuple, emittedActionNames: emittedActionNames))")
+            lines.append("  /\\ \(fairnessForm(f, vars: varsTuple, actions: actions, emittedActionNames: emittedActionNames))")
         }
         lines.append("")
 
@@ -217,6 +217,7 @@ extension TLASpec {
     private func fairnessForm(
         _ condition: FairnessCondition,
         vars: String,
+        actions: [NamedAction],
         emittedActionNames: [String: String]
     ) -> String {
         switch condition {
@@ -281,162 +282,6 @@ extension TLASpec {
         if let error = symmetricCollectionValidationError(permutationProductBudget: .max) {
             preconditionFailure("Cannot export symmetric collection specification: \(error)")
         }
-    }
-}
-
-/// Runtime labels retain authored names. TLA+ operator identifiers cannot
-/// contain every character the generated Swift surface may expose, so module
-/// export owns a deterministic, collision-free symbol table.
-private func tlaActionNames(
-    _ actions: [NamedAction],
-    preferredNames: [String: String] = [:]
-) -> [String: String] {
-    var emitted: [String: String] = [:]
-    var used: Set<String> = []
-    for action in actions where emitted[action.name] == nil {
-        let raw = (preferredNames[action.name] ?? action.name).unicodeScalars.map { scalar -> String in
-            switch scalar.value {
-            case 48...57, 65...90, 97...122, 95: String(scalar)
-            default: "_"
-            }
-        }.joined()
-        let stem = raw.first?.isNumber == true ? "_\(raw)" : raw
-        var candidate = stem.isEmpty ? "Action" : stem
-        var suffix = 2
-        while used.contains(candidate) {
-            candidate = "\(stem)__\(suffix)"
-            suffix += 1
-        }
-        emitted[action.name] = candidate
-        used.insert(candidate)
-    }
-    return emitted
-}
-
-/// The generated Swift machine deliberately keeps qualified procedure action
-/// names so application code never loses its source-level context.  PlusCal's
-/// translator, however, emits the procedure label itself as the TLA+ operator
-/// and stores that same label in `pc`.  Keep that distinction at the export
-/// boundary: the executable Swift model remains stable while the independently
-/// translated TLA+ modules expose the same administrative state.
-private struct ControlExportSymbols {
-    let actionNames: [String: String]
-}
-
-private func controlExportSymbols(
-    _ algorithms: [Algorithm],
-    actions: [NamedAction]
-) -> ControlExportSymbols {
-    let actionNames = Set(actions.map(\.name))
-    var candidates: [(qualified: String, label: String)] = []
-    for algorithm in algorithms {
-        for procedure in algorithm.model.procedures {
-            for step in procedure.steps {
-                candidates.append((
-                    qualified: "procedure.\(procedure.name).\(step.label.name)",
-                    label: step.label.name
-                ))
-            }
-        }
-    }
-
-    // A PlusCal label is global.  Do not silently merge two SwiftTLA actions
-    // if an unsupported source program reuses a label across scopes; the
-    // normal renderer/translator path will then report the source problem.
-    let labelCounts = Dictionary(grouping: candidates, by: { $0.label }).mapValues { $0.count }
-    let unqualifiedActions = Set(actions.map(\.name)).subtracting(Set(candidates.map { $0.qualified }))
-    let usable = candidates.filter {
-        actionNames.contains($0.qualified)
-            && labelCounts[$0.label] == 1
-            && !unqualifiedActions.contains($0.label)
-    }
-    let names = Dictionary(uniqueKeysWithValues: usable.map { ($0.qualified, $0.label) })
-    return ControlExportSymbols(actionNames: names)
-}
-
-/// Projects only administrative control-state values for direct TLA+ export.
-/// Procedure action names stay qualified in the executable model so generated
-/// Swift APIs remain unambiguous.  The external PlusCal translator uses the
-/// unqualified labels in `pc`; rewrite those values while they are still AST
-/// nodes, never by searching rendered module text.
-private func exportControlStates(
-    in action: ActionExpr,
-    using symbols: ControlExportSymbols
-) -> ActionExpr {
-    func controlValue(_ expression: StateExpr) -> StateExpr {
-        switch expression {
-        case .value(.string(let value)):
-            return .value(.string(symbols.actionNames[value] ?? value))
-        case .except(let function, let key, let value):
-            return .except(function, key, controlValue(value))
-        case .tupleLiteral(let values):
-            return .tupleLiteral(values.map(controlValue))
-        case .tupleConcatenate(let lhs, let rhs):
-            return .tupleConcatenate(controlValue(lhs), controlValue(rhs))
-        case .recordLiteral(let fields):
-            return .recordLiteral(fields.mapValues(controlValue))
-        default:
-            return expression
-        }
-    }
-
-    func isControlReference(_ expression: StateExpr) -> Bool {
-        switch expression {
-        case .variable("pc"):
-            return true
-        case .functionApply(.variable("pc"), _):
-            return true
-        default:
-            return false
-        }
-    }
-
-    func controlGuard(_ expression: StateExpr) -> StateExpr {
-        switch expression {
-        case .equal(let lhs, let rhs) where isControlReference(lhs):
-            return .equal(lhs, controlValue(rhs))
-        case .equal(let lhs, let rhs) where isControlReference(rhs):
-            return .equal(controlValue(lhs), rhs)
-        case .notEqual(let lhs, let rhs) where isControlReference(lhs):
-            return .notEqual(lhs, controlValue(rhs))
-        case .notEqual(let lhs, let rhs) where isControlReference(rhs):
-            return .notEqual(controlValue(lhs), rhs)
-        default:
-            return expression
-        }
-    }
-
-    switch action {
-    case .assign(let name, let value):
-        // `stack` is compiler-owned procedure-frame state. Its return `pc`
-        // is another control-state value and must use the same projection.
-        return .assign(name, name == "pc" || name == "stack" ? controlValue(value) : value)
-    case .unchanged:
-        return action
-    case .chooseAction:
-        return action
-    case .guard_(let condition):
-        return .guard_(controlGuard(condition))
-    case .existsAction(let name, let set, let body):
-        return .existsAction(name, set, exportControlStates(in: body, using: symbols))
-    case .ifElse(let condition, let then, let otherwise):
-        return .ifElse(
-            controlGuard(condition),
-            exportControlStates(in: then, using: symbols),
-            exportControlStates(in: otherwise, using: symbols)
-        )
-    case .define(let name, let value, let body):
-        return .define(name, value, exportControlStates(in: body, using: symbols))
-    case .and(let lhs, let rhs):
-        return .and(
-            exportControlStates(in: lhs, using: symbols),
-            exportControlStates(in: rhs, using: symbols)
-        )
-    case .or(let lhs, let rhs):
-        return .or(
-            exportControlStates(in: lhs, using: symbols),
-            exportControlStates(in: rhs, using: symbols)
-        )
     }
 }
 
