@@ -3,9 +3,16 @@ public struct StateGraph: Sendable {
     public let variableNames: [String]
     public struct TransitionLabel: Hashable, Sendable, CustomStringConvertible {
         public let invocation: TLAActionInvocation
+        let actionOrdinal: Int?
 
         public init(_ invocation: TLAActionInvocation) {
             self.invocation = invocation
+            self.actionOrdinal = nil
+        }
+
+        init(action: ActionID, formalName: String, arguments: [TLAValue]) {
+            self.invocation = .init(name: formalName, arguments: arguments)
+            self.actionOrdinal = action.ordinal
         }
 
         public var action: String { invocation.name }

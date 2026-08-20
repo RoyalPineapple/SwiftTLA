@@ -41,8 +41,23 @@ struct GeneratedMachineContractTests {
         return try .init(validating: [.init(token: token, value: .int(count))])
     }
 
-    private func behavior(_ compilation: CompiledSpecification) -> GeneratedMachineBehavior {
-        .formalReference(compilation: compilation)
+    private func behavior(
+        _ compilation: CompiledSpecification,
+        plan: MachineSurfacePlan
+    ) -> GeneratedMachineBehavior {
+        let runtime = SpecRuntime(compilation: compilation)
+        return .init(
+            initialStates: { try runtime.initialStateProjections() },
+            actions: plan.actionInputs.map { input in
+                .init(successors: { projection in
+                    try runtime.successors(
+                        actionAt: input.ordinal,
+                        arguments: input.arguments,
+                        from: projection
+                    )
+                })
+            }
+        )
     }
 
     @Test("metadata domains are rejected when they drift from the machine plan")
@@ -71,22 +86,20 @@ struct GeneratedMachineContractTests {
             expectedSchemaIdentifier: plan.schemaIdentifier,
             verificationStateLimit: 4,
             decodeState: { _ in },
-            behavior: behavior(compilation)
+            behavior: behavior(compilation, plan: plan)
         )
 
         #expect(report.status == .difference)
         #expect(report.diagnostic?.code == .metadataDomainMismatch)
     }
 
-    @Test("machine-plan labels round trip every finite action invocation")
-    func actionLabelsRoundTrip() throws {
+    @Test("machine-plan action inputs retain declared action order")
+    func actionInputsRetainDeclaredOrder() throws {
         let plan = try plan(compilation())
-        let invocation = TLAActionInvocation(name: "advance", arguments: [.int(2)])
-        let label = try #require(plan.label(for: invocation))
-
-        #expect(plan.invocation(for: label) == invocation)
-        #expect(plan.label(for: .init(name: "advance", arguments: [.int(3)])) == nil)
-        #expect(plan.invocation(for: .init(swiftIdentifier: "missing", publicArguments: [])) == nil)
+        #expect(plan.actionInputs == [
+            .init(ordinal: 0, arguments: [.int(1)]),
+            .init(ordinal: 0, arguments: [.int(2)])
+        ])
     }
 
     @Test("projection decoding failures are a difference, not unavailable evaluation")
@@ -107,7 +120,7 @@ struct GeneratedMachineContractTests {
                     actual: .int(0)
                 )
             },
-            behavior: behavior(compilation)
+            behavior: behavior(compilation, plan: plan)
         )
 
         #expect(report.status == .difference)
@@ -121,7 +134,7 @@ struct GeneratedMachineContractTests {
         let initial = try projection(0)
         let behavior = GeneratedMachineBehavior(
             initialStates: { [initial] },
-            successors: { _, _ in [] }
+            actions: [.init(successors: { _ in [] }), .init(successors: { _ in [] })]
         )
 
         let report = GeneratedMachineContractVerifier.verify(
@@ -142,12 +155,14 @@ struct GeneratedMachineContractTests {
     func rejectsExtraSuccessorOccurrence() throws {
         let compilation = try compilation()
         let plan = try plan(compilation)
-        let reference = behavior(compilation)
+        let reference = behavior(compilation, plan: plan)
         let behavior = GeneratedMachineBehavior(
             initialStates: reference.initialStates,
-            successors: { source, invocation in
-                let targets = try reference.successors(source, invocation)
-                return targets + targets
+            actions: reference.actions.map { action in
+                .init(successors: { state in
+                    let targets = try action.successors(state)
+                    return targets + targets
+                })
             }
         )
 
@@ -169,13 +184,13 @@ struct GeneratedMachineContractTests {
     func rejectsDuplicateInitialStateOccurrence() throws {
         let compilation = try compilation()
         let plan = try plan(compilation)
-        let reference = behavior(compilation)
+        let reference = behavior(compilation, plan: plan)
         let behavior = GeneratedMachineBehavior(
             initialStates: {
                 let initial = try reference.initialStates()
                 return initial + initial
             },
-            successors: reference.successors
+            actions: reference.actions
         )
 
         let report = GeneratedMachineContractVerifier.verify(
@@ -204,7 +219,7 @@ struct GeneratedMachineContractTests {
             expectedSchemaIdentifier: "different-schema",
             verificationStateLimit: 4,
             decodeState: { _ in },
-            behavior: behavior(compilation)
+            behavior: behavior(compilation, plan: plan)
         )
 
         #expect(report.status == .difference)

@@ -37,78 +37,18 @@ extension MacroExpander {
         }
         """)]
     }
-    static func generateTransitionMatrix() -> [DeclSyntax] {
-        [DeclSyntax(stringLiteral: """
-        private static func _formalTransitionMatrix() throws -> [(from: TLAStateProjection, invocation: TLAActionInvocation, to: TLAStateProjection)] {
-            let graph = try ModelChecker(compilation: Self.compiledSpecification(), maxStates: Self.verificationStateLimit).exploreGraph()
-            var matrix: [(from: TLAStateProjection, invocation: TLAActionInvocation, to: TLAStateProjection)] = []
-            for (fromID, transitions) in graph.transitions {
-                guard let fromState = graph.states[fromID] else { continue }
-                for t in transitions {
-                    guard let toState = graph.states[t.target] else { continue }
-                    matrix.append((
-                        from: fromState,
-                        invocation: t.label.invocation,
-                        to: toState
-                    ))
-                }
-            }
-            return matrix
-        }
-        """)]
-    }
     static func generateTransitionsTest(hasActions: Bool) -> [DeclSyntax] {
         if !hasActions { return [] }
         return [DeclSyntax(stringLiteral: """
-        @discardableResult
         public static func verifyTransitions() throws -> Int {
-            let matrix = try Self._formalTransitionMatrix()
-            var verified = Array(repeating: false, count: matrix.count)
-            for index in matrix.indices where !verified[index] {
-                let (from, invocation, _) = matrix[index]
-                let expected = matrix.indices.compactMap { candidate -> TLAStateProjection? in
-                    guard matrix[candidate].from == from, matrix[candidate].invocation == invocation else {
-                        return nil
-                    }
-                    verified[candidate] = true
-                    return matrix[candidate].to
-                }
-                var actual = try Self._runtime().successors(invocation, from: from)
-                guard actual.count == expected.count else {
-                    throw VerificationError("\\(invocation): expected \\(expected.count) successors, got \\(actual.count)")
-                }
-                for successor in expected {
-                    guard let match = actual.firstIndex(of: successor) else {
-                        throw VerificationError("\\(invocation): missing successor \\(successor)")
-                    }
-                    actual.remove(at: match)
-                }
-            }
-            return matrix.count
+            try Self._verifiedGeneratedMachineContract().transitionCount
         }
         """)]
     }
     static func generateInvariantsTest() -> [DeclSyntax] {
         [DeclSyntax(stringLiteral: """
-        @discardableResult
         public static func verifyInvariants() throws -> Int {
-            let matrix = try Self._formalTransitionMatrix()
-            let runtime = try Self._runtime()
-            var verifiedCount = 0
-            for (_, invocation, successor) in matrix {
-                for outcome in runtime.invariantOutcomes(in: successor) {
-                    switch outcome {
-                    case .satisfied:
-                        verifiedCount += 1
-                        continue
-                    case .violated(let name):
-                        throw VerificationError("\\(name) violated by \\(invocation)")
-                    case .evaluationFailed(let name, let diagnostic), .evaluationUnavailable(let name, let diagnostic):
-                        throw VerificationError("\\(name) could not be evaluated: \\(diagnostic.message)")
-                    }
-                }
-            }
-            return verifiedCount
+            try Self._verifiedGeneratedMachineContract().invariantCheckCount
         }
         """)]
     }

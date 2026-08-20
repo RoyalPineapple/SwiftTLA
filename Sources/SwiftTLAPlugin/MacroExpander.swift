@@ -131,9 +131,6 @@ enum MacroExpander {
         }
         """))
         decls.append(contentsOf: generateSpecTest())
-        if !plan.actions.isEmpty {
-            decls.append(contentsOf: generateTransitionMatrix())
-        }
         decls.append(contentsOf: generateTransitionsTest(hasActions: !plan.actions.isEmpty))
         if model.hasInvariants && !plan.actions.isEmpty {
             decls.append(contentsOf: generateInvariantsTest())
@@ -156,10 +153,11 @@ enum MacroExpander {
                         return projection
                     }
                 },
-                successors: { _, _ in [] }
+                actions: []
             )
             """
         } else {
+            let actionEntries = generatedBehaviorActionEntries(model.machineSurface.actions)
             behaviorSource = """
             private static let _generatedMachineBehavior = GeneratedMachineBehavior(
                 initialStates: {
@@ -168,31 +166,27 @@ enum MacroExpander {
                         return projection
                     }
                 },
-                successors: { projection, invocation in
-                    guard let ordinal = Self._machineSurfacePlan.actions.firstIndex(where: { $0.formalName == invocation.name }),
-                          let label = Self._actionLabel(actionAt: ordinal, arguments: invocation.arguments) else {
-                        throw GeneratedMachineContractDiagnostic(
-                            code: .actionLabelRoundTripMismatch,
-                            path: "generatedBehavior.actionLabel",
-                            expected: invocation.description,
-                            actual: "an unrepresentable generated action label",
-                            nextSafeAction: "Regenerate the generated action labels from the current #spec source."
-                        )
-                    }
-                    _ = try State(projection: projection)
-                    let runtime = try Self._runtime()
-                    let executor = CompiledActionExecutor(
-                        runtime: runtime,
-                        actionOrdinal: { Self._actionOrdinal(for: $0) },
-                        arguments: { Self._actionArguments(for: $0) },
-                        label: { Self._actionLabel(actionAt: $0, arguments: $1) }
-                    )
-                    return try executor.successors(for: label, from: projection).map { target in
-                        _ = try State(projection: target)
-                        return target
-                    }
-                }
+                actions: [
+                    \(actionEntries)
+                ]
             )
+            private static func _generatedSuccessors(
+                for action: ActionLabel,
+                from projection: TLAStateProjection
+            ) throws -> [TLAStateProjection] {
+                _ = try State(projection: projection)
+                let runtime = try Self._runtime()
+                let executor = CompiledActionExecutor(
+                    runtime: runtime,
+                    actionOrdinal: { Self._actionOrdinal(for: $0) },
+                    arguments: { Self._actionArguments(for: $0) },
+                    label: { Self._actionLabel(actionAt: $0, arguments: $1) }
+                )
+                return try executor.successors(for: action, from: projection).map { target in
+                    _ = try State(projection: target)
+                    return target
+                }
+            }
             """
         }
         let compilationSource = """
@@ -276,8 +270,44 @@ enum MacroExpander {
                 )
             }
         }
+        private static func _verifiedGeneratedMachineContract() throws -> GeneratedMachineContractReport {
+            let report = verifyGeneratedMachineContract()
+            guard report.status == .exact else {
+                throw VerificationError(report.diagnostic?.description ?? "Generated-machine verification did not complete.")
+            }
+            return report
+        }
         """
         return [DeclSyntax(stringLiteral: compilationSource)]
+    }
+
+    private static func generatedBehaviorActionEntries(
+        _ actions: [MachineSurfacePlan.Action]
+    ) -> String {
+        actions.enumerated().flatMap { ordinal, action in
+            let argumentLists = action.bindings.reduce([[]]) { partial, binding in
+                partial.flatMap { arguments in
+                    binding.domain.map { arguments + [$0] }
+                }
+            }
+            return argumentLists.map { values in
+                let arguments = values.map(codegenTLAValue).joined(separator: ", ")
+                return """
+                .init(successors: { projection in
+                    guard let action = Self._actionLabel(actionAt: \(ordinal), arguments: [\(arguments)]) else {
+                        throw GeneratedMachineContractDiagnostic(
+                            code: .actionLabelRoundTripMismatch,
+                            path: "generatedBehavior.actions.\(ordinal)",
+                            expected: "a generated action label",
+                            actual: "an action outside the generated label domain",
+                            nextSafeAction: "Regenerate the model from its current source."
+                        )
+                    }
+                    return try Self._generatedSuccessors(for: action, from: projection)
+                })
+                """
+            }
+        }.joined(separator: ",\n                    ")
     }
 
     static func machineSurfaceSwiftFactsSource(_ facts: MachineSurfaceSwiftFacts) -> String {
