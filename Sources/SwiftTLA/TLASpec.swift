@@ -568,10 +568,6 @@ public struct ConstraintDecl: SpecComponent, Equatable {
   public let body: StateExpr
   init(_ body: StateExpr) { self.body = body }
 }
-public struct RecursiveDecl: SpecComponent, Equatable {
-  public let tlaText: String
-  init(_ tlaText: String) { self.tlaText = tlaText }
-}
 public struct RecursiveFunc: Sendable, Equatable {
   public let name: String
   public let params: [String]
@@ -625,7 +621,6 @@ public enum SpecBuilder {
   public static func buildExpression(_ expr: FormalModuleInstance) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: DeadlockDecl) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: ConstraintDecl) -> [SpecComponent] { [expr] }
-  public static func buildExpression(_ expr: RecursiveDecl) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: RecursiveFuncDecl) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: RuntimeFuncDecl) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: SymmetrySetDecl) -> [SpecComponent] { [expr] }
@@ -868,9 +863,6 @@ public func Extends(_ modules: String) -> ExtendsDecl {
 }
 public func Constraint(_ expr: some StateExprConvertible) -> ConstraintDecl {
   ConstraintDecl(expr.stateExpr)
-}
-public func Recursive(_ tlaText: String) -> RecursiveDecl {
-  RecursiveDecl(tlaText)
 }
 public func DefineRecursive(
   _ name: String, params: [String], @InvariantBuilder body: () -> StateExpr

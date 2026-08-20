@@ -18,7 +18,7 @@ extension TLASpec {
     var extendsMods = "Integers"
     var deadlockFlag = false
     var constraint: StateExpr?
-    var recursiveDefs: [String] = []
+    let recursiveDefs: [String] = []
     var recursiveFuncs: [RecursiveFunc] = []
     var formalOperatorDefinitions: [FormalOperatorDefinition] = []
     let imports = components.compactMap { $0 as? ImportDecl }
@@ -133,8 +133,6 @@ extension TLASpec {
         deadlockFlag = true
       } else if let c = comp as? ConstraintDecl {
         constraint = constraint.map { .and($0, c.body) } ?? c.body
-      } else if let r = comp as? RecursiveDecl {
-        recursiveDefs.append(r.tlaText)
       } else if let rf = comp as? RecursiveFuncDecl {
         recursiveFuncs.append(rf.funcDef)
       } else if let rtf = comp as? RuntimeFuncDecl {
