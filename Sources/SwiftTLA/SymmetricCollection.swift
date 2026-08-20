@@ -150,13 +150,6 @@ struct SymmetricCollectionPermutationGroup: Sendable {
 }
 
 func applySymmetricMemberPermutation(
-  _ state: [String: TLAValue],
-  mapping: [TLAValue: TLAValue]
-) -> [String: TLAValue] {
-  state.mapValues { applySymmetricMemberPermutation($0, mapping: mapping) }
-}
-
-func applySymmetricMemberPermutation(
   _ value: TLAValue,
   mapping: [TLAValue: TLAValue]
 ) -> TLAValue {
@@ -178,11 +171,6 @@ func applySymmetricMemberPermutation(
   default:
     return value
   }
-}
-
-func symmetricStateEncoding(_ state: [String: TLAValue]) -> String {
-  state.keys.sorted().map { "\(String(reflecting: $0))=\(symmetricValueEncoding(state[$0]!))" }
-    .joined(separator: "|")
 }
 
 func symmetricValueEncoding(_ value: TLAValue) -> String {

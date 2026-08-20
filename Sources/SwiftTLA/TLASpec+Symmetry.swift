@@ -16,9 +16,6 @@ func valueContains(_ val: TLAValue, _ target: TLAValue) -> Bool {
     return false
   }
 }
-func stateContains(_ state: [String: TLAValue], _ target: TLAValue) -> Bool {
-  state.values.contains(where: { valueContains($0, target) })
-}
 func applyMapping(_ val: TLAValue, _ mapping: [TLAValue: TLAValue]) -> TLAValue {
   if let canonical = mapping[val] { return canonical }
   switch val {
