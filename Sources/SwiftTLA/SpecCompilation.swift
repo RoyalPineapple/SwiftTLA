@@ -263,6 +263,8 @@ public struct CompilationDiagnostic: Error, Sendable, Hashable, CustomStringConv
         case duplicateFormalModuleParameter
         case unresolvedFormalModuleReplacement
         case unresolvedDirectModuleDependency
+        case cyclicDirectModuleDependency
+        case duplicateDirectModuleDefinition
         case unknownReference
         case outOfScopeReference
         case assignmentToBinder
@@ -392,11 +394,27 @@ public extension TLASpec {
     }
 
     func directModuleSectionPlan() throws -> DirectModuleSectionPlan {
+        let explicitDefinitions = definitions
+        let explicitNames = Set(explicitDefinitions.compactMap(\.name))
+        let formalDefinitions = formalOperatorDefinitions
+            .filter { !explicitNames.contains($0.name) }
+            .map {
+                DirectModuleDefinition(
+                    name: $0.name,
+                    text: FormalOperatorDecl($0).tlaText,
+                    dependencies: $0.plusCalDependencies
+                )
+            }
+        let allDefinitions = explicitDefinitions + formalDefinitions
+        try validateUnique(
+            allDefinitions.compactMap(\.name),
+            code: .duplicateDirectModuleDefinition,
+            path: "definitions"
+        )
         let instanceNames = Set(moduleInstances.map(\.name))
         let declaredNames = instanceNames
-            .union(definitions.compactMap(\.name))
-            .union(formalOperatorDefinitions.map(\.name))
-        for definition in definitions {
+            .union(allDefinitions.compactMap(\.name))
+        for definition in allDefinitions {
             for dependency in definition.dependencies where !declaredNames.contains(dependency) {
                 throw CompilationDiagnostic(
                     code: .unresolvedDirectModuleDependency,
@@ -408,14 +426,51 @@ public extension TLASpec {
                 )
             }
         }
+        let definitionsBeforeInstances = allDefinitions.filter {
+            instanceNames.isDisjoint(with: $0.dependencies)
+        }
+        let definitionsAfterInstances = allDefinitions.filter {
+            !instanceNames.isDisjoint(with: $0.dependencies)
+        }
         return DirectModuleSectionPlan(
-            definitionsBeforeInstances: definitions.filter {
-                instanceNames.isDisjoint(with: $0.dependencies)
-            },
-            definitionsAfterInstances: definitions.filter {
-                !instanceNames.isDisjoint(with: $0.dependencies)
-            }
+            definitionsBeforeInstances: try orderDirectDefinitions(
+                definitionsBeforeInstances,
+                declared: []
+            ),
+            definitionsAfterInstances: try orderDirectDefinitions(
+                definitionsAfterInstances,
+                declared: Set(definitionsBeforeInstances.compactMap(\.name)).union(instanceNames)
+            )
         )
+    }
+
+    private func orderDirectDefinitions(
+        _ definitions: [DirectModuleDefinition],
+        declared: Set<String>
+    ) throws -> [DirectModuleDefinition] {
+        var pending = definitions
+        var emitted = declared
+        var ordered: [DirectModuleDefinition] = []
+        while let index = pending.firstIndex(where: { definition in
+            definition.dependencies.allSatisfy(emitted.contains)
+        }) {
+            let definition = pending.remove(at: index)
+            ordered.append(definition)
+            if let name = definition.name {
+                emitted.insert(name)
+            }
+        }
+        guard pending.isEmpty else {
+            throw CompilationDiagnostic(
+                code: .cyclicDirectModuleDependency,
+                stage: .linking,
+                path: "definitions",
+                expected: "an acyclic declaration dependency graph",
+                actual: pending.compactMap(\.name).joined(separator: ", "),
+                nextSafeAction: "Break the declaration cycle, then compile again."
+            )
+        }
+        return ordered
     }
 
     private func validateUnique(
