@@ -1,5 +1,6 @@
 public struct CompiledActionExecutor<Label: Hashable & Sendable>: Sendable {
-    private let runtime: SpecRuntime
+    private let compilation: CompiledSpecification
+    private let runtime: CompiledRuntime
     private let actionOrdinal: @Sendable (Label) -> Int
     private let arguments: @Sendable (Label) -> [TLAValue]
     private let label: @Sendable (Int, [TLAValue]) -> Label?
@@ -10,7 +11,8 @@ public struct CompiledActionExecutor<Label: Hashable & Sendable>: Sendable {
         arguments: @escaping @Sendable (Label) -> [TLAValue],
         label: @escaping @Sendable (Int, [TLAValue]) -> Label?
     ) {
-        self.runtime = SpecRuntime(compilation: compilation)
+        self.compilation = compilation
+        self.runtime = CompiledRuntime(compilation: compilation)
         self.actionOrdinal = actionOrdinal
         self.arguments = arguments
         self.label = label
@@ -20,19 +22,42 @@ public struct CompiledActionExecutor<Label: Hashable & Sendable>: Sendable {
         for action: Label,
         from state: TLAStateProjection
     ) throws -> [TLAStateProjection] {
-        try runtime.successors(
-            actionAt: actionOrdinal(action),
-            arguments: arguments(action),
-            from: state
-        )
+        let formalState = try FormalState(projection: state, compilation: compilation)
+        let compiledAction = try compiledAction(for: action)
+        let expectedArguments = arguments(action).map(CompiledValue.init(formal:))
+        guard argumentSets(for: compiledAction).contains(expectedArguments) else {
+            throw GeneratedMachineError.noMatchingSuccessor
+        }
+        return try runtime.successors(for: compiledAction.id, from: formalState)
+            .filter { $0.arguments.map(CompiledValue.init(formal:)) == expectedArguments }
+            .map { try $0.state.projection(using: compilation.layout) }
     }
 
     public func availableLabels(in state: TLAStateProjection) throws -> [Label] {
-        try runtime.availableActionResults(in: state).map { result in
-            guard let label = label(result.action, result.arguments) else {
-                throw SpecRuntime.RuntimeError.evaluationUnavailable("The compiled action result cannot be represented by the generated action label.")
+        let formalState = try FormalState(projection: state, compilation: compilation)
+        return try runtime.successors(from: formalState).reduce(into: []) { labels, successor in
+            guard let label = self.label(successor.action.ordinal, successor.arguments) else {
+                throw GeneratedMachineError.noMatchingSuccessor
             }
-            return label
+            if labels.last != label {
+                labels.append(label)
+            }
+        }
+    }
+
+    private func compiledAction(for label: Label) throws -> CompiledAction {
+        let ordinal = actionOrdinal(label)
+        guard compilation.layout.actions.indices.contains(ordinal),
+              let action = compilation.model.actions.first(where: { $0.id == compilation.layout.actions[ordinal].id })
+        else {
+            throw GeneratedMachineError.noMatchingSuccessor
+        }
+        return action
+    }
+
+    private func argumentSets(for action: CompiledAction) -> [[CompiledValue]] {
+        action.bindings.reduce([[]]) { arguments, binding in
+            arguments.flatMap { prefix in binding.values.map { prefix + [.init(formal: $0)] } }
         }
     }
 
