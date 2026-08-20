@@ -226,13 +226,13 @@ struct CompilerPipelineCanonicalizationTests {
             invariants: []
         )
         let compilation = try spec.compile()
-        let state = try FormalState(values: [.int(0), .int(0)], layout: compilation.layout)
+        let state = try FormalState(formalValues: [.int(0), .int(0)], compilation: compilation)
         let nextStates = try CompiledActionEnumerator(state: state, model: compilation.model)
             .enumerate(try #require(compilation.model.actions.first))
 
         #expect(nextStates.count == 1)
-        #expect(try nextStates[0].value(for: .init(ordinal: 0)) == .int(2))
-        #expect(try nextStates[0].value(for: .init(ordinal: 1)) == .int(2))
+        #expect(try nextStates[0].value(for: .init(ordinal: 0)) == .integer(2))
+        #expect(try nextStates[0].value(for: .init(ordinal: 1)) == .integer(2))
     }
 
     @Test("compiled action bindings enumerate their declared values")
@@ -250,12 +250,12 @@ struct CompilerPipelineCanonicalizationTests {
             invariants: []
         )
         let compilation = try spec.compile()
-        let state = try FormalState(values: [.int(0)], layout: compilation.layout)
+        let state = try FormalState(formalValues: [.int(0)], compilation: compilation)
         let next = try CompiledActionEnumerator(state: state, model: compilation.model)
             .enumerate(try #require(compilation.model.actions.first))
 
         let values = try next.map { try $0.value(for: .init(ordinal: 0)) }
-        #expect(Set(values) == [.int(1), .int(2)])
+        #expect(Set(values) == [.integer(1), .integer(2)])
     }
 
     @Test("compiled formal calls use operator identities")
@@ -281,7 +281,7 @@ struct CompilerPipelineCanonicalizationTests {
             formalOperatorDefinitions: [double]
         )
         let compilation = try spec.compile()
-        let state = try FormalState(values: [.int(0)], layout: compilation.layout)
+        let state = try FormalState(formalValues: [.int(0)], compilation: compilation)
         let next = try CompiledActionEnumerator(state: state, model: compilation.model)
             .enumerate(try #require(compilation.model.actions.first))
 
@@ -290,7 +290,7 @@ struct CompilerPipelineCanonicalizationTests {
             return
         }
         #expect(compilation.bindings.operators["Double"] == id)
-        #expect(try #require(next.first).value(for: .init(ordinal: 0)) == .int(4))
+        #expect(try #require(next.first).value(for: .init(ordinal: 0)) == .integer(4))
     }
 
     @Test("compiled higher-order calls bind operator identities")
@@ -329,11 +329,11 @@ struct CompilerPipelineCanonicalizationTests {
             formalOperatorDefinitions: [applyTwice]
         )
         let compilation = try spec.compile()
-        let state = try FormalState(values: [.int(0)], layout: compilation.layout)
+        let state = try FormalState(formalValues: [.int(0)], compilation: compilation)
         let next = try CompiledActionEnumerator(state: state, model: compilation.model)
             .enumerate(try #require(compilation.model.actions.first))
 
-        #expect(try #require(next.first).value(for: .init(ordinal: 0)) == .int(6))
+        #expect(try #require(next.first).value(for: .init(ordinal: 0)) == .integer(6))
     }
 
     @Test("compiled runtime enumerates slot-backed initial and successor states")
@@ -425,13 +425,34 @@ struct CompilerPipelineCanonicalizationTests {
         let compilation = try spec.compile()
         let first = compilation.layout.variables[0].id
         let second = compilation.layout.variables[1].id
-        let state = try FormalState(values: [.int(1), .int(2)], layout: compilation.layout)
-        let updated = try state.updating(second, to: .int(3))
+        let state = try FormalState(formalValues: [.int(1), .int(2)], compilation: compilation)
+        let updated = try state.updating(second, to: .integer(3))
 
-        #expect(try state.value(for: first) == .int(1))
-        #expect(try state.value(for: second) == .int(2))
-        #expect(try updated.value(for: first) == .int(1))
-        #expect(try updated.value(for: second) == .int(3))
+        #expect(try state.value(for: first) == .integer(1))
+        #expect(try state.value(for: second) == .integer(2))
+        #expect(try updated.value(for: first) == .integer(1))
+        #expect(try updated.value(for: second) == .integer(3))
+    }
+
+    @Test("compiled runtimes reject states from another declaration layout")
+    func compiledRuntimeRejectsForeignState() throws {
+        let first = try TLASpec(
+            name: "FirstLayout",
+            variables: [.init(name: "count", initial: .int(0))],
+            actions: [],
+            invariants: []
+        ).compile()
+        let second = try TLASpec(
+            name: "SecondLayout",
+            variables: [.init(name: "count", initial: .int(0))],
+            actions: [],
+            invariants: []
+        ).compile()
+
+        let foreignState = try FormalState(formalValues: [.int(0)], compilation: first)
+        #expect(throws: CompiledEvaluationError.self) {
+            try CompiledRuntime(compilation: second).successors(from: foreignState)
+        }
     }
 
     @Test("compiled evaluator reads slots and binders without names")
@@ -452,7 +473,7 @@ struct CompilerPipelineCanonicalizationTests {
             invariants: []
         )
         let compilation = try spec.compile()
-        let state = try FormalState(values: [.int(1)], layout: compilation.layout)
+        let state = try FormalState(formalValues: [.int(1)], compilation: compilation)
 
         guard case .existsAction(let binder, _, .guard_(let expression)) = compilation.model.actions[0].body else {
             Issue.record("Expected a compiled action binder")
@@ -461,10 +482,10 @@ struct CompilerPipelineCanonicalizationTests {
         let result = try CompiledEvaluator(
             state: state,
             model: compilation.model,
-            bindings: .init().binding(.int(1), to: binder)
+            bindings: .init().binding(.integer(1), to: binder)
         ).evaluate(expression)
 
-        #expect(result == .bool(true))
+        #expect(result == .boolean(true))
     }
 
     @Test("compiled evaluator executes local operators through bound values")
@@ -480,13 +501,13 @@ struct CompilerPipelineCanonicalizationTests {
             invariants: []
         )
         let compilation = try spec.compile()
-        let state = try FormalState(values: [], layout: compilation.layout)
+        let state = try FormalState(formalValues: [], compilation: compilation)
 
         guard case .guard_(let compiled) = compilation.model.actions[0].body else {
             Issue.record("Expected a compiled guard")
             return
         }
-        #expect(try CompiledEvaluator(state: state, model: compilation.model).evaluate(compiled) == .bool(true))
+        #expect(try CompiledEvaluator(state: state, model: compilation.model).evaluate(compiled) == .boolean(true))
     }
 
     @Test("compiled actions update formal state by variable identity")
@@ -498,12 +519,12 @@ struct CompilerPipelineCanonicalizationTests {
             invariants: []
         )
         let compilation = try spec.compile()
-        let state = try FormalState(values: [.int(1)], layout: compilation.layout)
+        let state = try FormalState(formalValues: [.int(1)], compilation: compilation)
 
         let successors = try CompiledActionEnumerator(state: state, model: compilation.model).enumerate(compilation.model.actions[0])
 
         #expect(successors.count == 1)
-        #expect(try successors[0].value(for: compilation.layout.variables[0].id) == .int(2))
+        #expect(try successors[0].value(for: compilation.layout.variables[0].id) == .integer(2))
     }
 
     @Test("declaration order changes the compilation identity")
@@ -528,6 +549,24 @@ struct CompilerPipelineCanonicalizationTests {
         )
 
         #expect(try first.compile().identity != second.compile().identity)
+    }
+
+    @Test("compiled descriptions preserve declaration order without exposing runtime slots")
+    func compiledDescriptionPreservesDeclaredOrder() throws {
+        let compilation = try TLASpec(
+            name: "Description",
+            variables: [
+                .init(name: "count", initial: .int(0)),
+                .init(name: "limit", initial: .int(10))
+            ],
+            actions: [.init(name: "advance", body: .unchanged("count"))],
+            invariants: []
+        ).compile()
+
+        #expect(compilation.description.identity == compilation.identity)
+        #expect(compilation.description.variables.map(\.name) == ["count", "limit"])
+        #expect(compilation.description.actions.map(\.name) == ["advance"])
+        #expect(compilation.description.imports.map(\.name) == ["Description"])
     }
 
     @Test("#spec Algorithm lowering reaches macro-generated consumers through one identity")

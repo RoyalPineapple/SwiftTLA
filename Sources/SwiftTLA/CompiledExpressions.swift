@@ -2,6 +2,7 @@ indirect enum CompiledStateExpr: Sendable {
     case value(TLAValue)
     case stateVariable(VariableID)
     case boundValue(BinderID)
+    case controlLabel(ControlLabelID)
     case operatorReference(OperatorID)
 
     case add(CompiledStateExpr, CompiledStateExpr)
@@ -155,6 +156,7 @@ struct CompiledSymmetricCollection: Sendable {
 }
 
 struct CompiledModel: Sendable {
+    let initialValues: [VariableID: CompiledValue]
     let variableInitializers: [VariableID: CompiledVariableInitializer]
     let actions: [CompiledAction]
     let invariants: [CompiledInvariant]

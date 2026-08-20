@@ -58,6 +58,23 @@ enum ControlOwner: Hashable, Sendable {
     }
 }
 
+extension ControlOwner {
+    var description: ControlOwnerDescription {
+        switch self {
+        case .sequential(let algorithm):
+            return .sequential(algorithm: algorithm)
+        case .process(let algorithm, let ordinal, let typeName):
+            return .process(
+                algorithm: algorithm,
+                declarationOrder: ordinal,
+                typeName: typeName
+            )
+        case .procedure(let algorithm, let name):
+            return .procedure(algorithm: algorithm, name: name)
+        }
+    }
+}
+
 struct CompiledControlLabel: Hashable, Sendable {
     let id: ControlLabelID
     let owner: ControlOwner

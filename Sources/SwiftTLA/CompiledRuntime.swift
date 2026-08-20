@@ -5,8 +5,13 @@ struct CompiledRuntime {
     private var model: CompiledModel { compilation.model }
 
     func initialStates() throws -> [FormalState] {
-        let initialValues = compilation.spec.variables.map(\.initial)
-        var states = [try FormalState(values: initialValues, layout: layout)]
+        let initialValues = try layout.variables.map { variable in
+            guard let value = model.initialValues[variable.id] else {
+                throw CompiledEvaluationError.invalidVariableID(variable.id)
+            }
+            return value
+        }
+        var states = [try FormalState(values: initialValues, compilation: compilation)]
 
         for variable in layout.variables {
             guard let initializer = model.variableInitializers[variable.id] else { continue }
@@ -15,7 +20,7 @@ struct CompiledRuntime {
                 guard case .set(let values) = try CompiledEvaluator(state: state, model: model).evaluate(set) else {
                     throw EvalError.typeMismatch("Variable initialization requires a set")
                 }
-                return try TLAValue.sorted(values).map { value in
+                return try CompiledValue.sorted(values).map { value in
                     try state.updating(variable.id, to: value)
                 }
             }
@@ -36,6 +41,7 @@ struct CompiledRuntime {
     }
 
     func successors(from state: FormalState) throws -> [CompiledSuccessor] {
+        try state.requireIdentity(compilation.identity)
         let enabledActions = try enabledActions(in: state)
         return try model.actions.flatMap { action in
             try successors(for: action.id, from: state, enabledActions: enabledActions)
@@ -43,6 +49,7 @@ struct CompiledRuntime {
     }
 
     func successors(for actionID: ActionID, from state: FormalState) throws -> [CompiledSuccessor] {
+        try state.requireIdentity(compilation.identity)
         return try successors(for: actionID, from: state, enabledActions: try enabledActions(in: state))
     }
 
@@ -61,33 +68,38 @@ struct CompiledRuntime {
     }
 
     func assumeHolds(in state: FormalState) throws -> Bool {
+        try state.requireIdentity(compilation.identity)
         guard let assume = model.assume else { return true }
         return try boolean(assume, in: state)
     }
 
     func invariantHolds(_ invariant: CompiledInvariant, in state: FormalState) throws -> Bool {
+        try state.requireIdentity(compilation.identity)
         return try boolean(invariant.body, in: state, enabledActions: try enabledActions(in: state))
     }
 
-    func canonicalState(_ state: FormalState) -> FormalState {
+    func canonicalState(_ state: FormalState) throws -> FormalState {
+        try state.requireIdentity(compilation.identity)
         let groups = model.symmetricCollections.map {
             SymmetricCollectionPermutationGroup(members: $0.members)
         }
         let candidates = groups.reduce([state]) { candidates, group in
             candidates.flatMap { candidate in
                 group.mappings.map { mapping in
-                    candidate.transformingValues { applySymmetricMemberPermutation($0, mapping: mapping) }
+                    candidate.transformingFormalValues { applySymmetricMemberPermutation($0, mapping: mapping) }
                 }
             }
         }
-        let base = candidates.min { $0.canonicalEncoding < $1.canonicalEncoding } ?? state
+        let base = try candidates.min {
+            try $0.canonicalEncoding(using: layout) < $1.canonicalEncoding(using: layout)
+        } ?? state
         return model.symmetrySets.reduce(base) { current, symmetry in
             let present = TLAValue.sorted(symmetry.values).filter(current.contains)
             guard let canonical = present.first else { return current }
             let mapping: [TLAValue: TLAValue] = Dictionary(
                 uniqueKeysWithValues: present.map { ($0, canonical) }
             )
-            return current.transformingValues { applyMapping($0, mapping) }
+            return current.transformingFormalValues { applyMapping($0, mapping) }
         }
     }
 
@@ -111,7 +123,7 @@ struct CompiledRuntime {
         in state: FormalState,
         enabledActions: Set<ActionID> = []
     ) throws -> Bool {
-        guard case .bool(let result) = try CompiledEvaluator(
+        guard case .boolean(let result) = try CompiledEvaluator(
             state: state,
             model: model,
             enabledActions: enabledActions

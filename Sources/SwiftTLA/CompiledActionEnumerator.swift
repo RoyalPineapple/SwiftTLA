@@ -50,7 +50,7 @@ struct CompiledActionEnumerator {
         case .unchanged:
             return [.init()]
         case .guard_(let expression):
-            guard try evaluator.evaluate(expression) == .bool(true) else { return [] }
+            guard try evaluator.evaluate(expression) == .boolean(true) else { return [] }
             return [.init()]
         case .chooseAction(let variable, let set):
             _ = variable
@@ -71,7 +71,7 @@ struct CompiledActionEnumerator {
             )
         case .ifElse(let condition, let then, let otherwise):
             return try execute(
-                try evaluator.evaluate(condition) == .bool(true) ? then : otherwise,
+                try evaluator.evaluate(condition) == .boolean(true) ? then : otherwise,
                 state: state,
                 bindings: bindings
             )
@@ -92,7 +92,7 @@ struct CompiledActionEnumerator {
             partial.flatMap { current in
                 binding.values.map { value in
                     .init(
-                        values: current.values.binding(value, to: binding.binder),
+                        values: current.values.binding(.init(formal: value), to: binding.binder),
                         arguments: current.arguments + [value]
                     )
                 }
@@ -103,7 +103,7 @@ struct CompiledActionEnumerator {
     private func selectChoices(
         _ choices: [(VariableID, CompiledStateExpr)],
         bindings: CompiledBindings
-    ) throws -> [[VariableID: TLAValue]] {
+    ) throws -> [[VariableID: CompiledValue]] {
         try choices.reduce([[:]]) { selections, choice in
             try selections.flatMap { selection in
                 let selectionState = try state.updating(selection)
@@ -148,7 +148,7 @@ private struct CompiledActionBindingValues {
 }
 
 private struct CompiledActionDelta {
-    var assignments: [VariableID: TLAValue] = [:]
+    var assignments: [VariableID: CompiledValue] = [:]
 
     func merging(_ other: CompiledActionDelta) throws -> CompiledActionDelta {
         var merged = self
