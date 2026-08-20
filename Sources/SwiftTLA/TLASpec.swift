@@ -430,39 +430,6 @@ public struct FormalParameterDecl: SpecComponent {
   public let parameter: FormalModuleParameter
   init(_ parameter: FormalModuleParameter) { self.parameter = parameter }
 }
-public struct OpDecl: SpecComponent {
-  public let name: String
-  public let params: [String]
-  public let body: ActionExpr
-  init(_ n: String, _ p: [String], _ b: ActionExpr) {
-    name = n
-    params = p
-    body = b
-  }
-}
-public func Operator(
-  _ name: String, param: Var<some TLAValueType>, @ActionBuilder body: () -> ActionExpr
-) -> OpDecl {
-  OpDecl(name, [param.name], body())
-}
-public struct OpUse: SpecComponent {
-  public let op: String
-  public let param: String
-  public let varName: String
-  public let value: TLAValue?
-  init(_ o: String, _ p: String, _ v: String, _ val: TLAValue? = nil) {
-    op = o
-    param = p
-    varName = v
-    value = val
-  }
-}
-public func UseOp(_ operatorName: String, with variable: Var<some TLAValueType>) -> OpUse {
-  OpUse(operatorName, "", variable.name)
-}
-public func UseOp(_ operatorName: String, value: some TLAValueConvertible) -> OpUse {
-  OpUse(operatorName, "", "", value.tlaValue)
-}
 public struct DefinitionDecl: SpecComponent, Equatable {
   public let tlaText: String
   public let name: String?
@@ -663,8 +630,6 @@ public enum SpecBuilder {
   public static func buildExpression(_ expr: RuntimeFuncDecl) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: SymmetrySetDecl) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: SymmetricCollectionDecl) -> [SpecComponent] { [expr] }
-  public static func buildExpression(_ expr: OpDecl) -> [SpecComponent] { [expr] }
-  public static func buildExpression(_ expr: OpUse) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: Algorithm) -> [SpecComponent] { [expr] }
   public static func buildExpression<T: TLAValueType>(_ expr: Var<T>) -> [SpecComponent] {
     guard let initial = expr.initial else { return [] }

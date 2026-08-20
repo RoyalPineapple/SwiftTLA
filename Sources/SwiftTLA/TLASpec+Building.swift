@@ -31,12 +31,8 @@ extension TLASpec {
     var symmetricCollections: [SymmetricCollectionDecl] = []
     var algorithmFidelityTokens: [AlgorithmFidelityToken] = []
     var sourceAlgorithms: [Algorithm] = []
-    var operators: [String: OpDecl] = [:]
-
-    // Pass 1: collect operators and the definitions needed to materialize
-    // closed Algorithm initial values.
+    // Collect the definitions needed to materialize closed Algorithm initial values.
     for comp in components {
-      if let op = comp as? OpDecl { operators[op.name] = op }
       if let definition = comp as? FormalOperatorDecl {
         formalOperatorDefinitions.append(definition.definition)
       }
@@ -147,21 +143,6 @@ extension TLASpec {
         runtimeFuncBodies.append(rtf.tlaBody)
       } else if let s = comp as? SymmetrySetDecl {
         symmetrySets.append(SymmetrySet(variableName: s.variableName, values: s.values))
-      } else if comp is OpDecl {
-        // collected in pass 1
-      } else if let u = comp as? OpUse {
-        if let op = operators[u.op] {
-          let body: ActionExpr
-          let name: String
-          if let val = u.value {
-            body = substituteActionVar(op.params[0], with: val, in: op.body)
-            name = "\(u.op)_\(val)"
-          } else {
-            body = renameVar(op.params[0], to: u.varName, in: op.body)
-            name = "\(u.op)_\(u.varName)"
-          }
-          actions.append(NamedAction(name: name, body: body))
-        }
       }
     }
 
@@ -372,11 +353,6 @@ public func substituteConstants(_ spec: TLASpec) -> TLASpec {
   resolved.runtimeFuncs = spec.runtimeFuncs
   resolved.runtimeFuncBodies = spec.runtimeFuncBodies
   return resolved
-}
-
-private func substituteActionVar(_ name: String, with value: TLAValue, in expr: ActionExpr)
-  -> ActionExpr {
-  substituteVar(name, with: value, in: expr)
 }
 
 private func substituteInValue(_ value: TLAValue, constants: [String: TLAValue]) -> TLAValue {
