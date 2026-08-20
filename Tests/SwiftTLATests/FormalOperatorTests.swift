@@ -70,7 +70,7 @@ struct FormalOperatorTests {
       [.value(.int(2)), .value(.int(3))]
     )
 
-    #expect(try expression.evaluate(in: [:]) == .int(5))
+    #expect(try compiledValue(expression) == .int(5))
   }
 
   @Test("a formal reference resolves through the formal operator environment")
@@ -85,7 +85,7 @@ struct FormalOperatorTests {
       body: .add(.variable("value"), .int(1))
     )
 
-    #expect(try expression.evaluate(in: [:], recursiveFuncs: [increment]) == .int(5))
+    #expect(try compiledValue(expression, recursiveFunctions: [increment]) == .int(5))
   }
 
   @Test("a formal definition receives an operator as formal data")
@@ -111,7 +111,7 @@ struct FormalOperatorTests {
     )
 
     #expect(
-      try expression.evaluate(in: [:], formalOperatorDefinitions: [applyTwice]) == .int(6)
+      try compiledValue(expression, formalOperators: [applyTwice]) == .int(6)
     )
   }
 
@@ -128,10 +128,7 @@ struct FormalOperatorTests {
     )
 
     #expect(
-      try expression.evaluate(
-        in: ["value": .int(99)],
-        formalOperatorDefinitions: [identity]
-    ) == .int(4)
+      try compiledValue(expression, values: ["value": .int(99)], formalOperators: [identity]) == .int(4)
     )
   }
 
@@ -256,9 +253,9 @@ struct FormalOperatorTests {
     )
 
     #expect(
-      try expression.evaluate(
-        in: [:],
-        formalOperatorDefinitions: try Folds.module.compile().formalModuleClosure.resolvedFormalOperatorDefinitions
+      try compiledValue(
+        expression,
+        formalOperators: try Folds.module.compile().formalModuleClosure.resolvedFormalOperatorDefinitions
       ) == .int(6)
     )
     #expect(try Folds.module.compile().renderedTLAModuleBundle().tla.contains("MapThenFoldSet(op(_, _), base, f(_), choose(_), S) =="))
@@ -293,13 +290,14 @@ struct FormalOperatorTests {
       ]
     )
 
-    #expect(try restrict.evaluate(in: [:], formalOperatorDefinitions: FunctionsModule.module.compile().formalModuleClosure.resolvedFormalOperatorDefinitions) == .function([
+    let functions = try FunctionsModule.module.compile().formalModuleClosure.resolvedFormalOperatorDefinitions
+    #expect(try compiledValue(restrict, formalOperators: functions) == .function([
       .int(1): .int(10), .int(3): .int(30)
     ]))
-    #expect(try range.evaluate(in: [:], formalOperatorDefinitions: FunctionsModule.module.compile().formalModuleClosure.resolvedFormalOperatorDefinitions) == .set([
+    #expect(try compiledValue(range, formalOperators: functions) == .set([
       .int(10), .int(20), .int(30)
     ]))
-    #expect(try pointwise.evaluate(in: [:], formalOperatorDefinitions: FunctionsModule.module.compile().formalModuleClosure.resolvedFormalOperatorDefinitions) == .function([
+    #expect(try compiledValue(pointwise, formalOperators: functions) == .function([
       .int(1): .int(11), .int(2): .int(22), .int(3): .int(33)
     ]))
     #expect(try FunctionsModule.module.compile().renderedTLAModuleBundle().tla.contains("Restrict(f, S) =="))
@@ -335,10 +333,11 @@ struct FormalOperatorTests {
       ]
     )
 
-    #expect(try reduced.evaluate(in: [:], formalOperatorDefinitions: KeyValueStoreUtil.module.compile().formalModuleClosure.resolvedFormalOperatorDefinitions) == .int(6))
-    #expect(try index.evaluate(in: [:], formalOperatorDefinitions: KeyValueStoreUtil.module.compile().formalModuleClosure.resolvedFormalOperatorDefinitions) == .int(2))
-    #expect(try sequenceSet.evaluate(in: [:], formalOperatorDefinitions: KeyValueStoreUtil.module.compile().formalModuleClosure.resolvedFormalOperatorDefinitions) == .set([.int(1), .int(2)]))
-    #expect(try permutations.evaluate(in: [:], formalOperatorDefinitions: KeyValueStoreUtil.module.compile().formalModuleClosure.resolvedFormalOperatorDefinitions) == .set([
+    let util = try KeyValueStoreUtil.module.compile().formalModuleClosure.resolvedFormalOperatorDefinitions
+    #expect(try compiledValue(reduced, formalOperators: util) == .int(6))
+    #expect(try compiledValue(index, formalOperators: util) == .int(2))
+    #expect(try compiledValue(sequenceSet, formalOperators: util) == .set([.int(1), .int(2)]))
+    #expect(try compiledValue(permutations, formalOperators: util) == .set([
       .tuple([.int(1), .int(2)]), .tuple([.int(2), .int(1)])
     ]))
     #expect(try KeyValueStoreUtil.module.compile().renderedTLAModuleBundle().tla.contains("ReduceSet(op(_, _), set, base) =="))

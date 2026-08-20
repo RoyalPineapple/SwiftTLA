@@ -732,9 +732,9 @@ private func value(
 
   @Test("RecursiveFunction builtins evaluate correctly")
   func recursiveBuiltins() throws {
-    let result = try StateExpr.recursiveCall(
+    let result = try compiledValue(.recursiveCall(
       "SeqFromSet", [.value(.set([.int(3), .int(1), .int(2)]))]
-    ).evaluate(in: [:])
+    ))
     #expect(result == .tuple([.int(1), .int(2), .int(3)]))
   }
 
@@ -756,8 +756,10 @@ private func value(
       )
     )
     let fn = RecursiveFunc(name: "SfS", params: ["S"], body: body)
-    let result = try StateExpr.recursiveCall("SfS", [.value(.set([.int(3), .int(1), .int(2)]))])
-      .evaluate(in: [:], recursiveFuncs: [fn])
+    let result = try compiledValue(
+      .recursiveCall("SfS", [.value(.set([.int(3), .int(1), .int(2)]))]),
+      recursiveFunctions: [fn]
+    )
     guard case .tuple(let tv) = result else {
       #expect(Bool(false))
       return

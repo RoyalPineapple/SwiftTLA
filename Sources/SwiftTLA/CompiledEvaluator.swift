@@ -1,3 +1,19 @@
+enum EvalError: Error, CustomStringConvertible {
+    case undefinedVariable(String)
+    case typeMismatch(String)
+    case divisionByZero
+    case indexOutOfBounds(Int, Int)
+
+    var description: String {
+        switch self {
+        case .undefinedVariable(let name): return "Undefined variable: \(name)"
+        case .typeMismatch(let message): return "Type mismatch: \(message)"
+        case .divisionByZero: return "Division by zero"
+        case .indexOutOfBounds(let index, let count): return "Index \(index) out of bounds (1..\(count))"
+        }
+    }
+}
+
 struct CompiledEvaluator {
     let state: FormalState
     let model: CompiledModel

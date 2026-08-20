@@ -163,8 +163,9 @@ struct TLAModuleBundleTests {
   func zeroBasedSequenceModuleIsExecutable() throws {
     let sequence = ZeroBasedSequence<Int>.literal(3, 1, 2)
     let rotated = ZSequences.rotation(of: sequence, leftBy: Expr(.int(1)))
-    let result = try rotated.raw.evaluate(
-      in: [:], recursiveFuncs: try ZSequences.module.compile().formalModuleClosure.resolvedRecursiveFuncs
+    let result = try compiledValue(
+      rotated.raw,
+      recursiveFunctions: try ZSequences.module.compile().formalModuleClosure.resolvedRecursiveFuncs
     )
     #expect(result == .function([
       .int(0): .int(1), .int(1): .int(2), .int(2): .int(3)
@@ -213,9 +214,10 @@ struct TLAModuleBundleTests {
     #expect(bundle.imports.map(\.name) == ["ZSequences"])
     #expect(!bundle.root.tla.contains("ZSeq(elements) =="))
 
-    let sequences = try StateExpr.recursiveCall("ZSeq", [
-      .setLiteral([.int(0), .int(1)])
-    ]).evaluate(in: [:], recursiveFuncs: try consumer.compile().formalModuleClosure.resolvedRecursiveFuncs)
+    let sequences = try compiledValue(
+      .recursiveCall("ZSeq", [.setLiteral([.int(0), .int(1)])]),
+      recursiveFunctions: try consumer.compile().formalModuleClosure.resolvedRecursiveFuncs
+    )
     guard case .set(let values) = sequences else {
       Issue.record("The bounded ZSeq result was not a set.")
       return
