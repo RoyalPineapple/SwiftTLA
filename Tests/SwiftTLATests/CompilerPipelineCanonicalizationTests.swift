@@ -213,6 +213,49 @@ struct CompilerPipelineCanonicalizationTests {
         #expect(try #require(next.first).value(for: .init(ordinal: 0)) == .int(4))
     }
 
+    @Test("compiled higher-order calls bind operator identities")
+    func compiledHigherOrderCallsBindOperatorIDs() throws {
+        let applyTwice = FormalOperatorDefinition(
+            name: "ApplyTwice",
+            parameters: [.operator("operation", arity: 1), .value("initial")],
+            body: .operatorApplication(
+                .reference("operation", arity: 1),
+                [.value(.operatorApplication(
+                    .reference("operation", arity: 1),
+                    [.value(.variable("initial"))]
+                ))]
+            )
+        )
+        let increment = FormalOperator.lambda(.init(
+            parameters: ["value"],
+            body: .add(.variable("value"), .int(1))
+        ))
+        let spec = TLASpec(
+            name: "CompiledHigherOrderCall",
+            variables: [.init(name: "counter", initial: .int(0))],
+            actions: [
+                .init(
+                    name: "advance",
+                    body: .assign(
+                        "counter",
+                        .operatorApplication(
+                            .reference("ApplyTwice", arity: 2),
+                            [.operator(increment), .value(.int(4))]
+                        )
+                    )
+                )
+            ],
+            invariants: [],
+            formalOperatorDefinitions: [applyTwice]
+        )
+        let compilation = try spec.compile()
+        let state = try FormalState(values: [.int(0)], layout: compilation.layout)
+        let next = try CompiledActionEnumerator(state: state, model: compilation.model)
+            .enumerate(try #require(compilation.model.actions.first))
+
+        #expect(try #require(next.first).value(for: .init(ordinal: 0)) == .int(6))
+    }
+
     @Test("compiled higher-order calls retain lambda binder identities")
     func compiledHigherOrderCallsUsePrivateIdentities() throws {
         let call = StateExpr.operatorApplication(
