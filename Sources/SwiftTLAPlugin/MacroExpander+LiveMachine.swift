@@ -37,9 +37,9 @@ extension MacroExpander {
         ] : []
 
         let liveDriver = hasActions ? """
-            private static func _liveDriver(_ runtime: SpecRuntime) -> TLALiveMachineTransitionDriver<ActionLabel> {
+            private static func _liveDriver() throws -> TLALiveMachineTransitionDriver<ActionLabel> {
                 let executor = CompiledActionExecutor(
-                    runtime: runtime,
+                    compilation: try Self.compiledSpecification(),
                     actionOrdinal: { Self._actionOrdinal(for: $0) },
                     arguments: { Self._actionArguments(for: $0) },
                     label: { Self._actionLabel(actionAt: $0, arguments: $1) }
@@ -59,7 +59,7 @@ extension MacroExpander {
                 )
             }
             """ : """
-            private static func _liveDriver(_ runtime: SpecRuntime) -> TLALiveMachineTransitionDriver<Never> {
+            private static func _liveDriver() throws -> TLALiveMachineTransitionDriver<Never> {
                 .init(
                     successors: { _, action in switch action {} },
                     validateAction: { action in switch action {} },
@@ -141,7 +141,7 @@ extension MacroExpander {
                 return TLALiveMachineOwner.create(
                     schema: machineSchema,
                     initial: initial,
-                    driver: _liveDriver(runtime)
+                    driver: try _liveDriver()
                 )
             }
             """),

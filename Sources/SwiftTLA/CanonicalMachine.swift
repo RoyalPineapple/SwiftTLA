@@ -184,32 +184,31 @@ public struct CanonicalTransitionEvidence<Snapshot: Equatable & Sendable, Action
 /// Reports a generated-machine execution failure.
 public enum GeneratedMachineError: Error {
     case noInitialState
+    case noMatchingSuccessor
     case liveMachineSchemaMismatch(expected: String, actual: String)
     case liveMachineUnavailable(TLALiveMachineUnavailableReason)
-    case runtime(SpecRuntime.RuntimeError)
     /// The formal successor could not be decoded into the generated Swift
     /// state. The canonical snapshot remains unchanged.
     case stateDecodingFailed(TLAStateProjectionDiagnostic)
     case unexpected(any Error)
-    case unrepresentableActionLabel(TLAActionInvocation)
     /// This action selects a live identified collection member and must use
     /// the generated `action(id:)` API rather than generic execution.
     case identityRoutedActionRequiresID
 }
 
 public struct CanonicalMachine<Snapshot: Equatable & Sendable>: Sendable {
-    public let runtime: SpecRuntime
+    public let compilation: CompiledSpecification
     private let projectionForSnapshot: @Sendable (Snapshot) throws -> TLAStateProjection
     private let snapshotFromProjection: @Sendable (TLAStateProjection) throws -> Snapshot
     public private(set) var snapshot: Snapshot
 
     public init(
-        runtime: SpecRuntime,
+        compilation: CompiledSpecification,
         initial: Snapshot,
         projectionForSnapshot: @escaping @Sendable (Snapshot) throws -> TLAStateProjection,
         snapshotFromProjection: @escaping @Sendable (TLAStateProjection) throws -> Snapshot
     ) {
-        self.runtime = runtime
+        self.compilation = compilation
         self.snapshot = initial
         self.projectionForSnapshot = projectionForSnapshot
         self.snapshotFromProjection = snapshotFromProjection
@@ -274,7 +273,7 @@ public struct CanonicalMachine<Snapshot: Equatable & Sendable>: Sendable {
             snapshot = after
             return CanonicalTransitionEvidence(action: action, before: before, after: after)
         }
-        throw GeneratedMachineError.unexpected(SpecRuntime.RuntimeError.evaluationUnavailable("The selected action has no matching successor."))
+        throw GeneratedMachineError.noMatchingSuccessor
     }
 
 }

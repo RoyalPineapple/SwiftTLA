@@ -5,12 +5,12 @@ public struct CompiledActionExecutor<Label: Hashable & Sendable>: Sendable {
     private let label: @Sendable (Int, [TLAValue]) -> Label?
 
     public init(
-        runtime: SpecRuntime,
+        compilation: CompiledSpecification,
         actionOrdinal: @escaping @Sendable (Label) -> Int,
         arguments: @escaping @Sendable (Label) -> [TLAValue],
         label: @escaping @Sendable (Int, [TLAValue]) -> Label?
     ) {
-        self.runtime = runtime
+        self.runtime = SpecRuntime(compilation: compilation)
         self.actionOrdinal = actionOrdinal
         self.arguments = arguments
         self.label = label

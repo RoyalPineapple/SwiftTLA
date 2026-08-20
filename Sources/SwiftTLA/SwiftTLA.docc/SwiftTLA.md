@@ -15,12 +15,14 @@ Application code reads generated `State`, `ActionLabel`, and
 ## Compile before formal work
 
 `TLASpec` is the one formal meaning of a supported model. Compile it before
-you run the checker, create a runtime, or export TLA+ text.
+you run the checker or export TLA+ text. Generated models construct their own
+typed machines.
 
 ```swift
 let compilation = try Counter.spec.compile()
 let checker = ModelChecker(compilation: compilation)
-let runtime = SpecRuntime(compilation: compilation)
+var machine = try Counter.makeMachine()
+try machine.apply(.advance)
 ```
 
 `CompiledSpecification` contains the canonical `TLASpec`, its
@@ -95,9 +97,8 @@ External comparison is a separate evidence step. Read
 - ``TLALiveMachineObservationSubscription``
 - ``TLALiveMachineObservationEvent``
 
-### Runtime action identity
+### Generated-machine errors
 
-- ``TLAActionInvocation``
 - ``GeneratedMachineError``
 
 ### Generated-machine reference
