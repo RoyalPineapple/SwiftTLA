@@ -122,6 +122,78 @@ struct CompilerPipelineCanonicalizationTests {
         #expect(compilation.layout.declarations.map(\.name) == ["first", "second", "advance", "hold", "Safe"])
     }
 
+    @Test("compiled actions use declaration and binder identities")
+    func compiledActionsUsePrivateIdentities() throws {
+        let spec = TLASpec(
+            name: "CompiledActions",
+            variables: [.init(name: "counter", initial: .int(0))],
+            actions: [
+                .init(
+                    name: "step",
+                    body: .existsAction(
+                        "current",
+                        .setLiteral([.int(1)]),
+                        .assign("counter", .variable("current"))
+                    )
+                )
+            ],
+            invariants: []
+        )
+
+        let compilation = try spec.compile()
+
+        guard case .existsAction(let binder, _, .assign(let variable, .boundValue(let value))) = compilation.model.actions[0].body else {
+            Issue.record("Expected a compiled binder assignment")
+            return
+        }
+        #expect(variable == .init(ordinal: 0))
+        #expect(value == binder)
+    }
+
+    @Test("compiled higher-order calls retain lambda binder identities")
+    func compiledHigherOrderCallsUsePrivateIdentities() throws {
+        let call = StateExpr.operatorApplication(
+            .lambda(.init(parameters: ["current"], body: .equal(.variable("current"), .int(1)))),
+            [.value(.int(1))]
+        )
+        let spec = TLASpec(
+            name: "CompiledLambda",
+            variables: [.init(name: "counter", initial: .int(0))],
+            actions: [.init(name: "step", body: .guard_(call) && .unchanged("counter"))],
+            invariants: []
+        )
+
+        let compilation = try spec.compile()
+
+        guard case .and(.guard_(.operatorApplication(.lambda(let lambda), _)), .unchanged) = compilation.model.actions[0].body else {
+            Issue.record("Expected a compiled higher-order call")
+            return
+        }
+        guard case .equal(.boundValue(let value), _) = lambda.body else {
+            Issue.record("Expected a compiled lambda binder")
+            return
+        }
+        #expect(value == lambda.parameters[0])
+    }
+
+    @Test("compiled ranges retain their bound variable identities")
+    func compiledRangesUseBoundPaths() throws {
+        let spec = TLASpec(
+            name: "CompiledRange",
+            variables: [.init(name: "counter", initial: .int(0))],
+            actions: [.init(name: "step", body: .guard_(.in(.int(1), .integerRange(.variable("counter"), .int(2))))],
+            invariants: []
+        )
+
+        let compilation = try spec.compile()
+
+        guard case .guard_(.in(_, .integerRange(.stateVariable(let value), _))) = compilation.model.actions[0].body else {
+            Issue.record("Expected a compiled integer range")
+            return
+        }
+        #expect(value == compilation.layout.variables[0].id)
+    }
+
     @Test("declaration order changes the compilation identity")
     func declarationOrderChangesCompilationIdentity() throws {
         let first = TLASpec(

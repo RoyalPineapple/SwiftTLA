@@ -31,6 +31,7 @@ public struct CompiledSpecification: Sendable {
     public let identity: CompilationIdentity
     let layout: CompiledLayout
     let bindings: CompiledBindingTable
+    let model: CompiledModel
     let directModuleSections: DirectModuleSectionPlan
 
     init(
@@ -38,6 +39,7 @@ public struct CompiledSpecification: Sendable {
         formalModuleClosure: FormalModuleClosure,
         identity: CompilationIdentity,
         bindings: CompiledBindingTable,
+        model: CompiledModel,
         directModuleSections: DirectModuleSectionPlan
     ) {
         self.spec = spec
@@ -46,6 +48,7 @@ public struct CompiledSpecification: Sendable {
         let layout = CompiledLayout(spec: spec)
         self.layout = layout
         self.bindings = bindings
+        self.model = model
         self.directModuleSections = directModuleSections
     }
 
@@ -362,12 +365,14 @@ public extension TLASpec {
         let layout = CompiledLayout(spec: self)
         var validator = BindingValidator(spec: self, layout: layout, closure: closure)
         let bindings = try validator.validate(spec: self)
+        let model = try CompiledLowerer(bindings: bindings).lower(spec: self)
         let directModuleSections = try directModuleSectionPlan()
         return CompiledSpecification(
             spec: self,
             formalModuleClosure: closure,
             identity: .init(value: compilationFingerprint),
             bindings: bindings,
+            model: model,
             directModuleSections: directModuleSections
         )
     }
