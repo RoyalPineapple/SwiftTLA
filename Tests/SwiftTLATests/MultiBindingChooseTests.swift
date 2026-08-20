@@ -20,12 +20,14 @@ struct MultiBindingChooseTests {
 
         #expect(algorithm.validate().isEmpty)
         let spec = try algorithm.lower()
-        let initial = try #require(computeInitialStates(spec).first)
+        let compilation = try spec.compile()
+        let initial = try #require(try CompiledRuntime(compilation: compilation).initialStates().first)
+        let choose = try #require(compilation.layout.actionID(named: "choose"))
+        let successors = try CompiledRuntime(compilation: compilation).successors(for: choose, from: initial).map(\.state)
+        let selected = try #require(compilation.layout.variableID(named: "selected"))
+        let values = try Set(successors.map { try $0.value(for: selected).rendered(using: compilation.layout) })
+        #expect(values == [.int(110), .int(111), .int(210), .int(211)])
         let action = try #require(spec.actions.first { $0.name == "choose" })
-        let successors = try actionInvocations(action).flatMap {
-            try ActionEnumerator.enumerate($0.body, from: initial, varNames: spec.variables.map(\.name))
-        }
-        #expect(Set(successors.compactMap { $0["selected"] }) == [.int(110), .int(111), .int(210), .int(211)])
         #expect(action.body.description.contains("\\E"))
     }
 
