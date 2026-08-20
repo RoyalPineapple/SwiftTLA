@@ -165,11 +165,11 @@ struct NestedComposableMacroConformanceTests {
         ) -> [String:
           TLAValue] { let engine: [String: TLAValue] = [:]; _ = engine; return [] }
         """
-        let legacyResult = """
+        let transitionEvidenceResult = """
         public struct
         TransitionEvidence: Sendable {}
         """
-        let legacyResultSignature = """
+        let transitionEvidenceResultSignature = """
         public func execute() -> TransitionEvidence { fatalError() }
         """
         let safeSurface = """
@@ -185,8 +185,8 @@ struct NestedComposableMacroConformanceTests {
         """
 
         #expect(publicApplicationSurfaceViolations(inEmittedSource: multilineRawMap) == ["raw state map"])
-        #expect(publicApplicationSurfaceViolations(inEmittedSource: legacyResult) == ["legacy transition evidence"])
-        #expect(publicApplicationSurfaceViolations(inEmittedSource: legacyResultSignature) == ["legacy transition evidence"])
+        #expect(publicApplicationSurfaceViolations(inEmittedSource: transitionEvidenceResult) == ["transition evidence"])
+        #expect(publicApplicationSurfaceViolations(inEmittedSource: transitionEvidenceResultSignature) == ["transition evidence"])
         #expect(publicApplicationSurfaceViolations(inEmittedSource: safeSurface).isEmpty)
         #expect(publicApplicationSurfaceViolations(inEmittedSource: safeInternalFormalEngine).isEmpty)
     }
@@ -234,8 +234,8 @@ struct NestedComposableMacroConformanceTests {
         #expect(result.status == 0)
     }
 
-    @Test("External clients cannot use raw state maps or legacy transition evidence")
-    func generatedRawStateAndLegacyEvidenceDoNotCompileExternally() throws {
+    @Test("External clients cannot use raw state maps or transition evidence")
+    func generatedRawStateAndTransitionEvidenceDoNotCompileExternally() throws {
         let fixture = packageRoot().appendingPathComponent("Tests/Fixtures/InvalidGeneratedRawSurface")
         let result = try runSwift(["build", "--package-path", fixture.path])
 
@@ -430,7 +430,7 @@ private final class PublicGeneratedSurfaceInspector: SyntaxVisitor {
     private func inspect(modifiers: DeclModifierListSyntax, name: String) {
         guard isPublic(modifiers) else { return }
         if name == "TransitionEvidence" {
-            violations.insert("legacy transition evidence")
+            violations.insert("transition evidence")
         }
     }
 
@@ -440,7 +440,7 @@ private final class PublicGeneratedSurfaceInspector: SyntaxVisitor {
             violations.insert("raw state map")
         }
         if normalized.contains("TransitionEvidence") {
-            violations.insert("legacy transition evidence")
+            violations.insert("transition evidence")
         }
     }
 
