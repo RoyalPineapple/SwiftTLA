@@ -143,7 +143,7 @@ struct CompiledLowerer {
         case .integerRange(let lower, let upper): return try binary(CompiledStateExpr.integerRange, lower, upper, path)
         case .foldFunction(let lambda, let initial, let sequence):
             return try .foldFunction(
-                lower(lambda, at: "\(path).parameters"),
+                lower(lambda, at: path),
                 initial: lower(initial, at: "\(path).initial"),
                 sequence: lower(sequence, at: "\(path).sequence")
             )
@@ -218,7 +218,7 @@ struct CompiledLowerer {
     private func lower(_ operation: FormalOperator, at path: String) throws -> CompiledFormalOperator {
         switch operation {
         case .reference(let name, let arity): return .reference(name, arity: arity)
-        case .lambda(let lambda): return .lambda(try lower(lambda, at: "\(path).parameters"))
+        case .lambda(let lambda): return .lambda(try lower(lambda, at: path))
         }
     }
 
