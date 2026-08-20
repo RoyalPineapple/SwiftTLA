@@ -86,6 +86,7 @@ struct CompilerPipelineCanonicalizationTests {
             Action("increment") {
                 counter.becomes(counter + 1)
             }
+            Invariant("NonNegative") { counter >= 0 }
         }
 
         let compilation = try spec.compile()
@@ -95,6 +96,8 @@ struct CompilerPipelineCanonicalizationTests {
         #expect(runtime.compilation?.identity == compilation.identity)
         #expect(checker.compilation?.identity == compilation.identity)
         #expect(try runtime.successors(.init(name: "increment"), from: ["counter": .int(0)]) == [["counter": .int(1)]])
+        #expect(try runtime.check("NonNegative", in: ["counter": .int(0)]))
+        #expect(runtime.propertyOutcomes(in: ["counter": .int(0)]) == [.satisfied(name: "NonNegative")])
         #expect(try checker.exploreGraph().states.count == 3)
     }
 

@@ -3,20 +3,21 @@ public struct SpecRuntime: Sendable {
     /// Present when this runtime entered through the validated compiler gate.
     private let compiledSpecification: CompiledSpecification
     public var compilation: CompiledSpecification? { compiledSpecification }
-    private let invariants: [NamedInvariant]
     private let transitionRelation: TransitionRelation
     private let formalModuleClosure: FormalModuleClosure
+    private let runtime: CompiledRuntime
+    private let layout: CompiledLayout
 
     init(spec: TLASpec) throws {
         self.init(compilation: try spec.compile())
     }
 
     public init(compilation: CompiledSpecification) {
-        let resolvedSpec = substituteConstants(compilation.spec)
         self.spec = compilation.spec
         self.compiledSpecification = compilation
         self.formalModuleClosure = compilation.formalModuleClosure
-        self.invariants = resolvedSpec.invariants
+        self.runtime = CompiledRuntime(compilation: compilation)
+        self.layout = compilation.layout
         self.transitionRelation = TransitionRelation(compilation: compilation)
     }
 
@@ -161,17 +162,22 @@ public struct SpecRuntime: Sendable {
     }
 
     public func propertyOutcomes(in state: [String: TLAValue]) -> [RuntimePropertyOutcome] {
-        let evaluationContext = StateExprEvaluationContext()
-        var outcomes = invariants.map { invariant -> RuntimePropertyOutcome in
-            do {
-                return try invariant.body.evaluateBool(
-                    in: state,
-                    runtimeFuncs: spec.runtimeFuncs,
-                    recursiveFuncs: formalModuleClosure.resolvedRecursiveFuncs,
-                    formalOperatorDefinitions: formalModuleClosure.resolvedFormalOperatorDefinitions,
-                    evaluationContext: evaluationContext
+        let formalState: FormalState
+        do {
+            formalState = try FormalState(projected: state, layout: layout)
+        } catch {
+            return compiledSpecification.model.invariants.map {
+                .evaluationFailed(
+                    name: $0.name,
+                    diagnostic: .init(code: .evaluationError, message: String(describing: error))
                 )
-                    ? .satisfied(name: invariant.name) : .violated(name: invariant.name)
+            }
+        }
+        var outcomes = compiledSpecification.model.invariants.map { invariant -> RuntimePropertyOutcome in
+            do {
+                return try runtime.invariantHolds(invariant, in: formalState)
+                    ? .satisfied(name: invariant.name)
+                    : .violated(name: invariant.name)
             } catch {
                 return .evaluationFailed(name: invariant.name, diagnostic: .init(code: .evaluationError, message: String(describing: error)))
             }
@@ -189,15 +195,12 @@ public struct SpecRuntime: Sendable {
     }
 
     public func check(_ invariantName: String, in state: [String: TLAValue]) throws -> Bool {
-        guard let inv = invariants.first(where: { $0.name == invariantName }) else {
+        guard let invariant = compiledSpecification.model.invariants.first(where: { $0.name == invariantName }) else {
             throw RuntimeError.invariantNotFound(invariantName)
         }
-        return try inv.body.evaluateBool(
-            in: state,
-            runtimeFuncs: spec.runtimeFuncs,
-            recursiveFuncs: formalModuleClosure.resolvedRecursiveFuncs,
-            formalOperatorDefinitions: formalModuleClosure.resolvedFormalOperatorDefinitions,
-            evaluationContext: StateExprEvaluationContext()
+        return try runtime.invariantHolds(
+            invariant,
+            in: FormalState(projected: state, layout: layout)
         )
     }
 
@@ -215,17 +218,9 @@ public struct SpecRuntime: Sendable {
         ).first else {
             return .actionNotEnabled(invocation, available: available)
         }
-        var violations: [String] = []
-        for inv in invariants {
-            if !(try inv.body.evaluateBool(
-                in: next,
-                runtimeFuncs: spec.runtimeFuncs,
-                recursiveFuncs: formalModuleClosure.resolvedRecursiveFuncs,
-                formalOperatorDefinitions: formalModuleClosure.resolvedFormalOperatorDefinitions,
-                evaluationContext: StateExprEvaluationContext()
-            )) {
-                violations.append(inv.name)
-            }
+        let formalNext = try FormalState(projected: next, layout: layout)
+        let violations = try compiledSpecification.model.invariants.compactMap { invariant in
+            try runtime.invariantHolds(invariant, in: formalNext) ? nil : invariant.name
         }
         if !violations.isEmpty {
             return .invariantViolated(violations)
