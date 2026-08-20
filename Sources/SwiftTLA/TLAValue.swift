@@ -1,10 +1,48 @@
+public struct TLARecord: Hashable, Sendable {
+    public struct Field: Hashable, Sendable {
+        public let name: String
+        public let value: TLAValue
+
+        public init(_ name: String, _ value: TLAValue) {
+            self.name = name
+            self.value = value
+        }
+    }
+
+    public let fields: [Field]
+
+    public init(_ fields: [Field]) {
+        self.fields = fields.sorted { $0.name < $1.name }
+    }
+
+    public func value(named name: String) -> TLAValue? {
+        fields.first { $0.name == name }?.value
+    }
+
+    public func replacing(_ value: TLAValue, for name: String) -> TLARecord {
+        var replaced = false
+        let updated = fields.map { field -> Field in
+            guard field.name == name else { return field }
+            replaced = true
+            return .init(name, value)
+        }
+        return TLARecord(replaced ? updated : updated + [.init(name, value)])
+    }
+}
+
+extension TLARecord: ExpressibleByDictionaryLiteral {
+    public init(dictionaryLiteral elements: (String, TLAValue)...) {
+        self.init(elements.map { .init($0.0, $0.1) })
+    }
+}
+
 public enum TLAValue: Hashable, Sendable, CustomStringConvertible {
     case int(Int)
     case bool(Bool)
     case string(String)
     case set(Set<TLAValue>)
     case tuple([TLAValue])
-    case record([String: TLAValue])
+    case record(TLARecord)
     case function([TLAValue: TLAValue])
     case constant(String)
 
@@ -21,7 +59,7 @@ public enum TLAValue: Hashable, Sendable, CustomStringConvertible {
         case .tuple(let t):
             return "<<\(t.map { $0._tlaForm(depth) }.joined(separator: ", "))>>"
         case .record(let r):
-            let fields = r.sorted(by: { $0.key < $1.key }).map { "\($0.key) |-> \($0.value._tlaForm(depth))" }
+            let fields = r.fields.map { "\($0.name) |-> \($0.value._tlaForm(depth))" }
             return "[\(fields.joined(separator: ", "))]"
         case .function(let mapping):
             let sorted = mapping.sorted(by: { $0.key < $1.key })
@@ -151,7 +189,7 @@ extension TLAValue: Codable {
             guard let fields = try? container.decode([RecordEntry].self, forKey: .fields), Set(fields.map(\.key)).count == fields.count else {
                 throw TLAValueCodingError.malformedValue(tag.rawValue)
             }
-            self = .record(Dictionary(uniqueKeysWithValues: fields.map { ($0.key, $0.value) }))
+            self = .record(TLARecord(fields.map { .init($0.key, $0.value) }))
         case .function:
             try Self.requireKeys([.version, .tag, .mappings], from: decoder, for: tag)
             guard let mappings = try? container.decode([FunctionEntry].self, forKey: .mappings),
@@ -184,7 +222,7 @@ extension TLAValue: Codable {
             try container.encode(elements, forKey: .elements)
         case .record(let fields):
             try container.encode(Tag.record.rawValue, forKey: .tag)
-            try container.encode(fields.keys.sorted().map { RecordEntry(key: $0, value: fields[$0]!) }, forKey: .fields)
+            try container.encode(fields.fields.map { RecordEntry(key: $0.name, value: $0.value) }, forKey: .fields)
         case .function(let mappings):
             try container.encode(Tag.function.rawValue, forKey: .tag)
             try container.encode(mappings.map { FunctionEntry(key: $0.key, value: $0.value) }, forKey: .mappings)
@@ -210,10 +248,6 @@ public func tuple(_ elements: [some TLAValueConvertible]) -> TLAValue {
     .tuple(elements.map(\.tlaValue))
 }
 
-public func record(_ fields: [String: TLAValue]) -> TLAValue {
-    .record(fields)
-}
-
 extension TLAValue: ExpressibleByIntegerLiteral {
     public init(integerLiteral value: Int) { self = .int(value) }
 }
@@ -229,7 +263,7 @@ extension TLAValue {
     public var setValue: Set<TLAValue> { if case .set(let s) = self { return s }; return [] }
     public var intSetValue: Set<Int> { Set(setValue.compactMap { if case .int(let n) = $0 { return n }; return nil }) }
     public var tupleValue: [TLAValue] { if case .tuple(let t) = self { return t }; return [] }
-    public var recordValue: [String: TLAValue] { if case .record(let r) = self { return r }; return [:] }
+    public var recordValue: TLARecord { if case .record(let r) = self { return r }; return TLARecord([]) }
     public var functionValue: [TLAValue: TLAValue] { if case .function(let f) = self { return f }; return [:] }
 }
 
@@ -251,7 +285,7 @@ extension TLAValue: Comparable {
         case (.tuple(let a), .tuple(let b)): return a.count < b.count
         case (.tuple, _): return false
         case (_, .tuple): return true
-        case (.record(let a), .record(let b)): return a.count < b.count
+        case (.record(let a), .record(let b)): return a.fields.count < b.fields.count
         case (.record, _): return false
         case (_, .record): return true
         case (.function(let a), .function(let b)): return a.count < b.count
@@ -387,7 +421,7 @@ extension TLAValue {
     public var keys: TLAValue {
         switch self {
         case .function(let f): return .set(Set(f.keys))
-        case .record(let r): return .set(Set(r.keys.map { .string($0) }))
+        case .record(let r): return .set(Set(r.fields.map { .string($0.name) }))
         default: return .set([])
         }
     }
@@ -475,9 +509,9 @@ extension TLAValue {
         case .function(var f):
             f[key] = value
             return .function(f)
-        case .record(var r):
-            if case .string(let k) = key { r[k] = value }
-            return .record(r)
+        case .record(let r):
+            guard case .string(let key) = key else { return .record(r) }
+            return .record(r.replacing(value, for: key))
         default:
             return self
         }
@@ -525,7 +559,7 @@ extension TLAValue {
 
     public subscript(field: String) -> TLAValue {
         switch self {
-        case .record(let r): return r[field] ?? .int(0)
+        case .record(let r): return r.value(named: field) ?? .int(0)
         default: return .int(0)
         }
     }

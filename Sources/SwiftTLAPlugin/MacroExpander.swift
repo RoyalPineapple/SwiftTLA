@@ -353,7 +353,7 @@ enum MacroExpander {
         case .set(let s): return ".set([\(s.map(codegenTLAValue).joined(separator: ", "))])"
         case .tuple(let t): return ".tuple([\(t.map(codegenTLAValue).joined(separator: ", "))])"
         case .record(let r):
-            let fields = r.map { "\"\($0.key)\": \(codegenTLAValue($0.value))" }.joined(separator: ", ")
+            let fields = r.fields.map { "\"\($0.name)\": \(codegenTLAValue($0.value))" }.joined(separator: ", ")
             return fields.isEmpty ? ".record([:])" : ".record([\(fields)])"
         case .function(let f):
             let entries = f.map { "\(codegenTLAValue($0.key)): \(codegenTLAValue($0.value))" }.joined(separator: ", ")

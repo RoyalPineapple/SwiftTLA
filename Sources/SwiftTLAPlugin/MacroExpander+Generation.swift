@@ -69,7 +69,7 @@ extension MacroExpander {
         case .string: "String"
         case .set: "Set<Int>"
         case .tuple: "[TLAValue]"
-        case .record: "[String: TLAValue]"
+        case .record: "TLARecord"
         case .function: "[TLAValue: TLAValue]"
         case .constant: "String"
         }

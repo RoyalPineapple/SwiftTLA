@@ -11,7 +11,7 @@ func valueContains(_ val: TLAValue, _ target: TLAValue) -> Bool {
   case .tuple(let t):
     return t.contains(where: { valueContains($0, target) })
   case .record(let r):
-    return r.values.contains(where: { valueContains($0, target) })
+    return r.fields.contains(where: { valueContains($0.value, target) })
   default:
     return false
   }
@@ -32,7 +32,9 @@ func applyMapping(_ val: TLAValue, _ mapping: [TLAValue: TLAValue]) -> TLAValue 
   case .tuple(let elements):
     return .tuple(elements.map { applyMapping($0, mapping) })
   case .record(let fields):
-    return .record(fields.mapValues { applyMapping($0, mapping) })
+    return .record(TLARecord(fields.fields.map {
+      .init($0.name, applyMapping($0.value, mapping))
+    }))
   default:
     return val
   }

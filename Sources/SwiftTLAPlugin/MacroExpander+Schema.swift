@@ -42,9 +42,8 @@ extension MacroExpander {
         case .tuple(let values):
             return ".tuple(elements: [\(values.map(schemaValue).joined(separator: ", "))])"
         case .record(let fields):
-            let entries = fields.keys.sorted().compactMap { key -> String? in
-                guard let nested = fields[key] else { return nil }
-                return ".init(id: \"\(key)\", display: .init(name: \"\(key)\"), value: \(schemaValue(nested)))"
+            let entries = fields.fields.map {
+                ".init(id: \"\($0.name)\", display: .init(name: \"\($0.name)\"), value: \(schemaValue($0.value)))"
             }.joined(separator: ", ")
             return ".record(fields: [\(entries)])"
         case .function(let values):

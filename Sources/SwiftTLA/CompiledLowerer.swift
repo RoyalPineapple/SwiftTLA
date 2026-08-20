@@ -339,11 +339,14 @@ struct CompiledLowerer {
         case .tuple(let values):
             return .tuple(try values.map { try controlValue($0, owner: owner, algorithm: algorithm) })
         case .record(let values):
-            return .record(try values.reduce(into: [:]) { result, entry in
-                result[entry.key] = entry.key == "pc"
-                    ? try controlValue(entry.value, owner: owner, algorithm: algorithm)
-                    : .init(formal: entry.value)
-            })
+            return .record(CompiledRecord(try values.fields.map { entry in
+                .init(
+                    name: entry.name,
+                    value: entry.name == "pc"
+                        ? try controlValue(entry.value, owner: owner, algorithm: algorithm)
+                        : .init(formal: entry.value)
+                )
+            }))
         case .function(let values):
             return .function(try values.reduce(into: [:]) { result, entry in
                 result[.init(formal: entry.key)] = try controlValue(entry.value, owner: owner, algorithm: algorithm)

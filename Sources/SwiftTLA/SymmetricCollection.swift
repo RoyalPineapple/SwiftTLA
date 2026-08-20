@@ -160,7 +160,9 @@ func applySymmetricMemberPermutation(
   case .tuple(let values):
     return .tuple(values.map { applySymmetricMemberPermutation($0, mapping: mapping) })
   case .record(let fields):
-    return .record(fields.mapValues { applySymmetricMemberPermutation($0, mapping: mapping) })
+    return .record(TLARecord(fields.fields.map {
+      .init($0.name, applySymmetricMemberPermutation($0.value, mapping: mapping))
+    }))
   case .function(let entries):
     return .function(Dictionary(uniqueKeysWithValues: entries.map {
       (
@@ -184,8 +186,8 @@ func symmetricValueEncoding(_ value: TLAValue) -> String {
   case .tuple(let values):
     return "tuple:[\(values.map(symmetricValueEncoding).joined(separator: ","))]"
   case .record(let fields):
-    let encodedFields = fields.keys.sorted().map {
-      "\(String(reflecting: $0)):\(symmetricValueEncoding(fields[$0]!))"
+    let encodedFields = fields.fields.map {
+      "\(String(reflecting: $0.name)):\(symmetricValueEncoding($0.value))"
     }
     return "record:[\(encodedFields.joined(separator: ","))]"
   case .function(let entries):

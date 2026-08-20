@@ -233,11 +233,11 @@ struct CompiledEvaluator {
             }
             return .tuple(left + right)
         case .recordLiteral(let fields):
-            return .record(try fields.reduce(into: [String: CompiledValue]()) { result, field in
-                result[field.key] = try value(field.value)
-            })
+            return .record(CompiledRecord(try fields.map {
+                .init(name: $0.key, value: try value($0.value))
+            }))
         case .recordAccess(let record, let field):
-            guard case .record(let values) = try value(record), let result = values[field] else {
+            guard case .record(let values) = try value(record), let result = values.value(named: field) else {
                 throw EvalError.typeMismatch("Expected record field \(field)")
             }
             return result
@@ -246,7 +246,7 @@ struct CompiledEvaluator {
             case .function(let values):
                 return .set(Set(values.keys))
             case .record(let values):
-                return .set(Set(values.keys.map(CompiledValue.string)))
+                return .set(Set(values.fields.map { .string($0.name) }))
             case .tuple(let values):
                 return .set(Set((1...values.count).map(CompiledValue.integer)))
             default:
@@ -276,7 +276,7 @@ struct CompiledEvaluator {
                 }
                 return values[index - 1]
             case .record(let values):
-                guard case .string(let field) = key, let result = values[field] else {
+                guard case .string(let field) = key, let result = values.value(named: field) else {
                     throw EvalError.typeMismatch("Record field is unavailable")
                 }
                 return result
@@ -289,12 +289,11 @@ struct CompiledEvaluator {
             case .function(var values):
                 values[try value(key)] = replacementValue
                 return .function(values)
-            case .record(var values):
+            case .record(let values):
                 guard case .string(let field) = try value(key) else {
                     throw EvalError.typeMismatch("Expected a record field")
                 }
-                values[field] = replacementValue
-                return .record(values)
+                return .record(values.replacing(replacementValue, for: field))
             default:
                 throw EvalError.typeMismatch("Expected a function")
             }
