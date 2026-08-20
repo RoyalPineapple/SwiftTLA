@@ -87,12 +87,17 @@ External comparison is a separate evidence step. Read
 - ``TLAMachineObservation``
 - ``TLAMachineAvailabilityDiagnostic``
 
-### Machine protocols
+### Live machines
 
-- ``TLAMachineObserving``
-- ``TLAMachineExecuting``
-- ``TLAMachineAdapterCanonicalModel``
-- ``TLAMachineAdapterAccess``
+- ``TLALiveMachineOwner``
+- ``TLALiveMachine``
+- ``TLALiveMachineIdentity``
+- ``TLALiveMachineSnapshot``
+- ``TLALiveActionOutcome``
+- ``TLALiveMachineObservationSubscription``
+- ``TLALiveMachineObservationEvent``
+- ``GeneratedLiveMachine``
+- ``TLALiveMachineAdapterBinding``
 
 ### Runtime action identity
 

@@ -90,6 +90,12 @@ enum MacroExpander {
             decls.append(DeclSyntax(stringLiteral: "public init() {}"))
         }
 
+        // The generated value remains useful for finite exploration and
+        // transition examples, but it is never a live runtime. Naming that
+        // role makes the migration boundary explicit without adding another
+        // mutable storage mechanism.
+        decls.append(DeclSyntax(stringLiteral: "public typealias Simulation = Self"))
+
         decls.append(DeclSyntax(stringLiteral: """
         private var _machine = CanonicalMachine(
             runtime: \(model.typeName).runtime,

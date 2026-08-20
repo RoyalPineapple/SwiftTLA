@@ -2,161 +2,159 @@ import SwiftSyntax
 import SwiftSyntaxBuilder
 import SwiftTLA
 
-enum NestedAdapterKind {
-    case actor
-    case observable
-}
+enum NestedAdapterKind { case actor, observable }
 
 extension MacroExpander {
     static func generateNestedAdapterMembers(
         kind: NestedAdapterKind,
         canonicalModel: MacroCompilation,
-        needsPublicInitializer: Bool
+        needsPublicInitializer _: Bool
     ) -> [DeclSyntax] {
-        let modelType = canonicalModel.typeName
-        let isolation = kind == .observable ? "@MainActor " : ""
-        let canonicalStorage = kind == .observable
-            ? "@MainActor private var _canonical: \(modelType)"
-            : "private var _canonical = \(modelType)()"
-        var declarations: [DeclSyntax] = [
-            DeclSyntax(stringLiteral: "public typealias CanonicalModel = \(modelType)"),
-            DeclSyntax(stringLiteral: "public typealias State = \(modelType).State"),
-            DeclSyntax(stringLiteral: "public typealias Variables = \(modelType).Variables"),
-            DeclSyntax(stringLiteral: "public typealias TransitionResult = \(modelType).TransitionResult"),
-            DeclSyntax(stringLiteral: "public static var machineSchema: MachineSchema { CanonicalModel.machineSchema }"),
-            DeclSyntax(stringLiteral: "public static var generatedMachineMetadata: GeneratedMachineMetadata { CanonicalModel.generatedMachineMetadata }"),
-            DeclSyntax(stringLiteral: "public static func verifyGeneratedMachineContract(metadata: GeneratedMachineMetadata? = nil, verificationStateLimit: Int? = nil) -> GeneratedMachineContractReport { CanonicalModel.verifyGeneratedMachineContract(metadata: metadata, verificationStateLimit: verificationStateLimit) }"),
-            DeclSyntax(stringLiteral: canonicalStorage),
-            DeclSyntax(stringLiteral: """
-            \(isolation)public func withCanonicalMachine<Result: Sendable>(
-                _ operation: @escaping @Sendable (inout \(modelType)) throws -> Result
-            ) async rethrows -> Result {
-                try operation(&_canonical)
-            }
-            """)
-        ]
-        if !canonicalModel.machineSurface.actions.isEmpty {
-            declarations.insert(DeclSyntax(stringLiteral: "public typealias ActionLabel = \(modelType).ActionLabel"), at: 3)
+        switch kind {
+        case .actor: return generateNestedActorMembers(model: canonicalModel)
+        case .observable: return generateNestedObservableMembers(model: canonicalModel)
         }
-        if kind == .observable {
-            if needsPublicInitializer {
-                declarations.append(DeclSyntax(stringLiteral: """
-                @MainActor public init() {
-                    _canonical = \(modelType)()
-                }
-                """))
-            }
-            declarations.append(contentsOf: generateNestedObservableMembers(model: canonicalModel))
-        } else {
-            if needsPublicInitializer {
-                declarations.append(DeclSyntax(stringLiteral: """
-                public init() {}
-                """))
-            }
-            declarations.append(DeclSyntax(stringLiteral: """
-            public var state: State {
-                get async {
-                    await withCanonicalMachine { canonical in
-                        canonical.state
-                    }
-                }
-            }
-            public func tlaSnapshot() async -> TLAStateProjectionResult {
-                await withCanonicalMachine { canonical in
-                    canonical.tlaSnapshot()
-                }
-            }
-            """))
+    }
+
+    static func commonAdapterAliases(model: MacroCompilation) -> [DeclSyntax] {
+        var declarations: [DeclSyntax] = [
+            DeclSyntax(stringLiteral: "public typealias CanonicalModel = \(model.typeName)"),
+            DeclSyntax(stringLiteral: "public typealias State = \(model.typeName).State"),
+            DeclSyntax(stringLiteral: "public typealias Variables = \(model.typeName).Variables"),
+            DeclSyntax(stringLiteral: "public typealias Live = \(model.typeName).Live"),
+            DeclSyntax(stringLiteral: "public static var machineSchema: MachineSchema { CanonicalModel.machineSchema }"),
+            DeclSyntax(stringLiteral: "public static var generatedMachineMetadata: GeneratedMachineMetadata { CanonicalModel.generatedMachineMetadata }")
+        ]
+        if !model.machineSurface.actions.isEmpty {
+            declarations.insert(DeclSyntax(stringLiteral: "public typealias ActionLabel = \(model.typeName).ActionLabel"), at: 3)
+            declarations.insert(DeclSyntax(stringLiteral: "public typealias Outcome = \(model.typeName).Live.Outcome"), at: 4)
         }
         return declarations
     }
 
+    static func generateNestedActorMembers(model: MacroCompilation) -> [DeclSyntax] {
+        var declarations = commonAdapterAliases(model: model)
+        declarations += [
+            DeclSyntax(stringLiteral: "private let _live: Live"),
+            DeclSyntax(stringLiteral: "public init(handle: TLALiveMachine) async throws { _ = try await TLALiveMachineAdapterBinding(handle: handle, for: CanonicalModel.self); _live = try Live(handle: handle) }"),
+            DeclSyntax(stringLiteral: "public var handle: TLALiveMachine { _live.handle }"),
+            DeclSyntax(stringLiteral: "public var identity: TLALiveMachineIdentity { _live.identity }"),
+            DeclSyntax(stringLiteral: "public func current() async -> Live.CurrentResult { await _live.current() }"),
+            DeclSyntax(stringLiteral: """
+            public func execute(_ invocation: TLAActionInvocation, requestID: Foundation.UUID = Foundation.UUID()) async -> TLALiveActionOutcome {
+                await _live.execute(invocation, requestID: requestID)
+            }
+            """)
+        ]
+        declarations += typedAdapterActions(model: model, receiver: "_live")
+        return declarations
+    }
+
     static func generateNestedObservableMembers(model: MacroCompilation) -> [DeclSyntax] {
-        let actions = model.machineSurface.actions
-        let callbacks = actions.map { action in
-            let identifier = action.swiftIdentifier
-            let callbackName = "on" + identifier.prefix(1).capitalized + identifier.dropFirst()
+        var declarations = commonAdapterAliases(model: model) + observableCallbacks(model: model)
+        declarations += [
+            DeclSyntax(stringLiteral: "private let _live: Live"),
+            DeclSyntax(stringLiteral: "private let _reducer: TLALiveMachineObservableReducer<State>"),
+            DeclSyntax(stringLiteral: "private let _subscription: TLALiveMachineObservationSubscription"),
+            DeclSyntax(stringLiteral: "private var _observationTask: Task<Void, Never>?"),
+            DeclSyntax(stringLiteral: """
+            @MainActor public init(handle: TLALiveMachine) async throws {
+                _ = try TLALiveMachineAdapterBinding(handle: handle, for: CanonicalModel.self)
+                _live = try Live(handle: handle)
+                _reducer = TLALiveMachineObservableReducer(
+                    identity: handle.identity,
+                    schemaIdentifier: handle.schemaIdentifier,
+                    decode: { try State(projection: $0) }
+                )
+                switch await handle.observe() {
+                case .attached(let subscription): _subscription = subscription
+                case .unavailable(let reason): throw TLALiveMachineAdapterBindingError.runtimeUnavailable(reason)
+                }
+                _observationTask = Task { [weak self, subscription = _subscription] in
+                    var iterator = subscription.makeAsyncIterator()
+                    while let event = await iterator.next() {
+                        guard let self else { return }
+                        await self._reduce(event, subscription: subscription)
+                    }
+                }
+            }
+            """),
+            DeclSyntax(stringLiteral: "deinit { _observationTask?.cancel() }"),
+            DeclSyntax(stringLiteral: "public var handle: TLALiveMachine { _live.handle }"),
+            DeclSyntax(stringLiteral: "public var identity: TLALiveMachineIdentity { _live.identity }"),
+            DeclSyntax(stringLiteral: "public var status: TLALiveMachineAdapterStatus { _reducer.status }"),
+            DeclSyntax(stringLiteral: "public var current: TLALiveMachineAdapterSnapshot<State>? { _reducer.current }"),
+            DeclSyntax(stringLiteral: "public var state: State? { _reducer.current?.state }"),
+            DeclSyntax(stringLiteral: """
+            public func cancelObservation() async {
+                _observationTask?.cancel()
+                await _subscription.cancel()
+            }
+            """),
+            DeclSyntax(stringLiteral: """
+            public func execute(_ invocation: TLAActionInvocation, requestID: Foundation.UUID = Foundation.UUID()) async -> TLALiveActionOutcome {
+                await _live.execute(invocation, requestID: requestID)
+            }
+            """),
+            DeclSyntax(stringLiteral: observableReducerMethod(model: model))
+        ]
+        declarations += typedAdapterActions(model: model, receiver: "_live")
+        return declarations
+    }
+
+    static func typedAdapterActions(model: MacroCompilation, receiver: String) -> [DeclSyntax] {
+        model.machineSurface.actions.map { action in
+            let parameters = action.bindings.filter(\.isPublic).map { "\($0.formalName): \($0.swiftType)" }.joined(separator: ", ")
+            let arguments = action.bindings.filter(\.isPublic).map { "\($0.formalName): \($0.formalName)" }.joined(separator: ", ")
+            let label = arguments.isEmpty ? "ActionLabel.\(action.swiftIdentifier)" : "ActionLabel.\(action.swiftIdentifier)(\(arguments))"
+            let signature = parameters.isEmpty
+                ? "requestID: Foundation.UUID = Foundation.UUID()"
+                : "\(parameters), requestID: Foundation.UUID = Foundation.UUID()"
+            return DeclSyntax(stringLiteral: """
+            public func _\(action.swiftIdentifier)(\(signature)) async -> Outcome {
+                await \(receiver).execute(\(label), requestID: requestID)
+            }
+            """)
+        }
+    }
+
+    static func observableCallbacks(model: MacroCompilation) -> [DeclSyntax] {
+        model.machineSurface.actions.map { action in
+            let callbackName = "on" + action.swiftIdentifier.prefix(1).capitalized + action.swiftIdentifier.dropFirst()
             let parameterTypes = action.bindings.filter(\.isPublic).map(\.swiftType)
             let parameters = (parameterTypes + ["State", "State"]).joined(separator: ", ")
             return DeclSyntax(stringLiteral: "@MainActor public var \(callbackName): ((\(parameters)) async -> Void)?")
         }
-        let notifications = actions.map { action -> String in
-            let identifier = action.swiftIdentifier
-            let callbackName = "on" + identifier.prefix(1).capitalized + identifier.dropFirst()
-            let publicBindings = action.bindings.filter(\.isPublic)
-            let pattern: String
-            let arguments: String
-            if publicBindings.isEmpty {
-                pattern = ".\(identifier)"
-                arguments = "evidence.before, evidence.after"
-            } else {
-                let names = publicBindings.map(\.formalName)
-                pattern = ".\(identifier)(\(names.map { "let \($0)" }.joined(separator: ", ")))"
-                arguments = (names + ["evidence.before", "evidence.after"]).joined(separator: ", ")
-            }
+    }
+
+    static func observableReducerMethod(model: MacroCompilation) -> String {
+        guard !model.machineSurface.actions.isEmpty else {
             return """
-                case \(pattern):
-                    if let \(callbackName) {
-                        await \(callbackName)(\(arguments))
-                    }
+            private func _reduce(_ event: TLALiveMachineObservationEvent, subscription: TLALiveMachineObservationSubscription) async {
+                _ = _reducer.reduce(event)
+                if case .loss = event { _ = await subscription.resynchronize() }
+            }
             """
-        }.joined(separator: "\n")
-        let typedActions = actions.map { action -> DeclSyntax in
-            let identifier = action.swiftIdentifier
+        }
+        let notifications = model.machineSurface.actions.map { action -> String in
+            let callbackName = "on" + action.swiftIdentifier.prefix(1).capitalized + action.swiftIdentifier.dropFirst()
             let bindings = action.bindings.filter(\.isPublic)
-            let parameters = bindings.map { binding in
-                "\(binding.formalName): \(binding.swiftType)"
-            }.joined(separator: ", ")
-            let labelArguments = bindings.map { "\($0.formalName): \($0.formalName)" }.joined(separator: ", ")
-            let label = bindings.isEmpty
-                ? "ActionLabel.\(identifier).toInvocation()"
-                : "ActionLabel.\(identifier)(\(labelArguments)).toInvocation()"
-            return DeclSyntax(stringLiteral: """
-            @MainActor public func _\(identifier)(\(parameters)) async throws -> TransitionResult {
-                try await execute(\(label))
+            let pattern = bindings.isEmpty ? ".\(action.swiftIdentifier)" : ".\(action.swiftIdentifier)(\(bindings.map { "let \($0.formalName)" }.joined(separator: ", ")))"
+            let arguments = (bindings.map(\.formalName) + ["before", "after"]).joined(separator: ", ")
+            return "case \(pattern): if let \(callbackName) { await \(callbackName)(\(arguments)) }"
+        }.joined(separator: "\n")
+        return """
+        private func _reduce(_ event: TLALiveMachineObservationEvent, subscription: TLALiveMachineObservationSubscription) async {
+            let contiguousCommit = _reducer.reduce(event)
+            if case .loss = event { _ = await subscription.resynchronize() }
+            guard let commit = contiguousCommit,
+                  let action = ActionLabel(invocation: commit.invocation),
+                  let before = try? State(projection: commit.before.state),
+                  let after = try? State(projection: commit.after.state) else { return }
+            switch action {
+            \(notifications)
             }
-            """)
         }
-        var declarations = callbacks + [
-            DeclSyntax(stringLiteral: """
-            @MainActor public var state: State {
-                _canonical.state
-            }
-            """),
-            DeclSyntax(stringLiteral: """
-            @MainActor public func machineObservation() async -> TLAMachineObservation {
-                await withCanonicalMachine { canonical in
-                    canonical.synchronousMachineObservation()
-                }
-            }
-            @MainActor public func tlaSnapshot() -> TLAStateProjectionResult {
-                _canonical.tlaSnapshot()
-            }
-            """),
-        ]
-        let executeBody: String
-        if actions.isEmpty {
-            executeBody = """
-            @MainActor public func execute(_ invocation: TLAActionInvocation) async throws -> TransitionResult {
-                try await withCanonicalMachine { canonical in
-                    try canonical.executeSynchronously(invocation)
-                }
-            }
-            """
-        } else {
-            executeBody = """
-            @MainActor public func execute(_ invocation: TLAActionInvocation) async throws -> TransitionResult {
-                let evidence = try await withCanonicalMachine { canonical in
-                    try canonical.executeSynchronously(invocation)
-                }
-                switch evidence.action {
-                \(notifications)
-                }
-                return evidence
-            }
-            """
-        }
-        declarations.append(DeclSyntax(stringLiteral: executeBody))
-        return declarations + typedActions
+        """
     }
 }

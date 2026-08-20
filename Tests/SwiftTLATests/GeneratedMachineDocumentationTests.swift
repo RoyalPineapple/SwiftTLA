@@ -92,7 +92,7 @@ struct GeneratedMachineDocumentationTests {
             encoding: .utf8
         )
 
-        for term in ["TransitionResult", "TLAStateProjectionResult", "ActionLabel", "State"] {
+        for term in ["TransitionResult", "TLAStateProjectionResult", "ActionLabel", "State", "TLALiveMachine"] {
             #expect(guide.contains(term), "Markdown guide is missing typed term: \(term)")
             #expect(docc.contains(term), "SwiftTLA DocC is missing typed term: \(term)")
         }
@@ -104,6 +104,36 @@ struct GeneratedMachineDocumentationTests {
             #expect(!guide.contains(staleTerm), "Markdown guide exposes stale boundary: \(staleTerm)")
             #expect(!docc.contains(staleTerm), "SwiftTLA DocC exposes stale boundary: \(staleTerm)")
         }
+    }
+
+    @Test("Live-machine guides describe one owner and existing-handle binding")
+    func liveMachineGuidesRetainMigrationBoundary() throws {
+        let root = packageRoot()
+        let guide = try String(
+            contentsOf: root.appendingPathComponent("Documentation/GeneratedMachines.md"),
+            encoding: .utf8
+        )
+        let live = try String(
+            contentsOf: root.appendingPathComponent("Documentation/LiveMachines.md"),
+            encoding: .utf8
+        )
+        let migration = try String(
+            contentsOf: root.appendingPathComponent("Documentation/LiveMachineMigration.md"),
+            encoding: .utf8
+        )
+
+        for term in [
+            "TLALiveMachineOwner.create(for:)",
+            "Live(handle:)",
+            "non-cancellable",
+            "resynchronize()",
+            "TLALiveMachineObservationSubscription"
+        ] {
+            #expect(live.contains(term), "Live-machine guide is missing: \(term)")
+        }
+        #expect(!guide.contains("TLAMachineSession"), "Generated guide retains session-copy live guidance")
+        #expect(migration.contains("TLAMachineSession(model)"))
+        #expect(migration.contains("cannot attach"))
     }
 
     @Test("Generated machine documentation fixture compiles and exercises its stated macOS behavior")
@@ -137,12 +167,12 @@ struct GeneratedMachineDocumentationTests {
         "`TLAStateProjection`",
         "`TLAStateProjectionResult`",
         "`availableInvocations()`",
-        "`TLAMachineAdapterCanonicalModel`",
-        "`TLAMachineAdapterAccess`",
         "`execute(_ invocation: TLAActionInvocation)`",
-        "nested `@TLAObservable` adapter is main-actor isolated",
+        "A nested `@TLAObservable` adapter is main-actor isolated",
         "Neither adapter owns a formal specification",
-        "then awaits the matching callback",
+        "reduces a contiguous committed update",
+        "`TLALiveMachineOwner`",
+        "`TLALiveMachineObservationSubscription`",
         "Generated `VerificationError`",
         "Generated `runtime`",
         "Generated `verifySpec()`",
@@ -179,8 +209,6 @@ struct GeneratedMachineDocumentationTests {
             ("`TLAMachineAvailabilityDiagnostic`", "Sources/SwiftTLA/CanonicalMachine.swift", "public struct TLAMachineAvailabilityDiagnostic"),
             ("`TLAMachineObserving`", "Sources/SwiftTLA/CanonicalMachine.swift", "public protocol TLAMachineObserving"),
             ("`TLAMachineExecuting`", "Sources/SwiftTLA/CanonicalMachine.swift", "public protocol TLAMachineExecuting"),
-            ("`TLAMachineAdapterCanonicalModel`", "Sources/SwiftTLA/CanonicalMachine.swift", "public protocol TLAMachineAdapterCanonicalModel"),
-            ("`TLAMachineAdapterAccess`", "Sources/SwiftTLA/CanonicalMachine.swift", "public protocol TLAMachineAdapterAccess"),
             ("`TLAActionInvocation`", "Sources/SwiftTLA/TLASpec.swift", "public struct TLAActionInvocation"),
             ("`GeneratedMachineError`", "Sources/SwiftTLA/CanonicalMachine.swift", "public enum GeneratedMachineError"),
             ("Generated `ActionLabel`", "Sources/SwiftTLAPlugin/MacroExpander.swift", "public enum ActionLabel"),

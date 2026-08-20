@@ -562,7 +562,7 @@ public struct ModelMacro: MemberMacro, ExtensionMacro {
             return []
         }
         guard let ext = ("""
-            extension \(type.trimmed): TLAModelType, TLAMachineExecuting, TLAMachineAdapterCanonicalModel, TLAMachineSchemaProviding, TLAGeneratedLiveModel {}
+            extension \(type.trimmed): TLAModelType, TLAMachineExecuting, TLAMachineSchemaProviding, TLAGeneratedLiveModel {}
             """ as DeclSyntax).as(ExtensionDeclSyntax.self) else { return [] }
         return [ext]
     }
@@ -592,7 +592,7 @@ public struct TLAActorMacro: MemberMacro, ExtensionMacro {
         switch adapterNestingMode(for: declaration, at: node, in: context) {
         case .nested:
             guard let ext = ("""
-                extension \(type.trimmed): TLAMachineAdapterAccess, TLAMachineSchemaProviding {}
+                extension \(type.trimmed): TLAMachineSchemaProviding {}
                 """ as DeclSyntax).as(ExtensionDeclSyntax.self) else { return [] }
             return [ext]
         case .invalid:
@@ -626,7 +626,7 @@ public struct TLAObservableMacro: MemberMacro, ExtensionMacro {
         switch adapterNestingMode(for: declaration, at: node, in: context) {
         case .nested:
             guard let ext = ("""
-                @MainActor extension \(type.trimmed): Sendable, TLAMachineAdapterAccess, TLAMachineSchemaProviding {}
+                @MainActor extension \(type.trimmed): Sendable, TLAMachineSchemaProviding {}
                 """ as DeclSyntax).as(ExtensionDeclSyntax.self) else { return [] }
             return [ext]
         case .invalid:

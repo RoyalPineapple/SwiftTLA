@@ -4,40 +4,39 @@ import SwiftTLA
 import SwiftUI
 
 struct CounterView: View {
-    @State private var machine = CounterScreenModel.Observable()
-    @State private var state: CounterScreenModel.State?
-    @State private var observation: TLAMachineObservation?
+    @State private var owner: TLALiveMachineOwner?
+    @State private var machine: CounterScreenModel.Observable?
     @State private var diagnostic = ""
 
     var body: some View {
         VStack {
-            Text("Value: \(state.map { String($0.value) } ?? "-")")
+            Text("Value: \(machine?.state.map { String($0.value) } ?? "-")")
             Button("Advance") {
                 Task { @MainActor in
-                    do {
-                        _ = try await machine.execute(CounterScreenModel.Observable.ActionLabel.advance.toInvocation())
-                        state = machine.state
-                        observation = await machine.machineObservation()
+                    guard let machine else { return }
+                    switch await machine.execute(CounterScreenModel.Observable.ActionLabel.advance.toInvocation()) {
+                    case .committed:
                         diagnostic = ""
-                    } catch {
-                        diagnostic = String(describing: error)
+                    case .rejected(let rejection):
+                        diagnostic = rejection.reason.description
+                    case .failed(let failure):
+                        diagnostic = failure.message
                     }
                 }
-            }
-            if let invocations = observation?.availableInvocations {
-                ForEach(invocations, id: \.self) { invocation in
-                    Text(invocation.description)
-                }
-            } else if let diagnostic = observation?.availabilityDiagnostic {
-                Text(diagnostic.message)
             }
             if !diagnostic.isEmpty {
                 Text(diagnostic)
             }
         }
         .task {
-            state = machine.state
-            observation = await machine.machineObservation()
+            guard owner == nil else { return }
+            do {
+                let owner = try TLALiveMachineOwner.create(for: CounterScreenModel.self)
+                self.owner = owner
+                machine = try await CounterScreenModel.Observable(handle: owner.handle)
+            } catch {
+                diagnostic = String(describing: error)
+            }
         }
     }
 }

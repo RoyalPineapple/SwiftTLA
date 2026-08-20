@@ -38,11 +38,10 @@ struct CounterHost {
 }
 
 func runActorAccess() async throws {
-    let actor = CounterHost.Actor()
-    let state = await actor.state
-    let result = try await actor.execute(CounterHost.Actor.ActionLabel.advance.toInvocation())
+    let owner = try TLALiveMachineOwner.create(for: CounterHost.self)
+    let actor = try await CounterHost.Actor(handle: owner.handle)
+    let result = await actor.execute(CounterHost.Actor.ActionLabel.advance.toInvocation())
 
-    assert(state.value == 0)
-    assert(result.action == CounterHost.Actor.ActionLabel.advance)
-    assert(result.after.value == 1)
+    guard case .committed(let commit) = result else { return }
+    assert(commit.after.position.value == 1)
 }

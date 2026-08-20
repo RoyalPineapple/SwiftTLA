@@ -1,8 +1,10 @@
 # Generated Machines
 
 `@TLAModel` turns a verified `TLASpec` declaration into a Swift machine.
-This guide documents the current generated-machine public contract. The
-contract covers generated models and their model-owned adapters.
+This guide documents the generated-machine public contract. A generated model
+defines schema and formal behavior. A `TLALiveMachine` is the only mutable
+live instance of that model. See [Live Machines](LiveMachines.md) for shared
+inspection, observation, and control.
 Read [the SwiftTLA DocC catalog](../Sources/SwiftTLA/SwiftTLA.docc/SwiftTLA.md)
 for the symbol-oriented reference.
 
@@ -10,6 +12,7 @@ for the symbol-oriented reference.
 
 - [Generate a machine](#generate-a-machine)
 - [Run actions](#run-actions)
+- [Run a live machine](#run-a-live-machine)
 - [Nest a machine](#nest-a-machine)
 - [Isolation and callbacks](#isolation-and-callbacks)
 - [Test an integration](#test-an-integration)
@@ -74,7 +77,8 @@ The fixture is the compilation authority for this example. It uses Swift tools 5
 
 A generated model has typed `Variables`, `Actions`, `State`, `ActionLabel`, and
 `TransitionResult` members. Use `availableActions()` to get typed labels. Use
-`apply(_:)` to execute one label synchronously on a non-actor model.
+`apply(_:)` to execute one label synchronously on a non-actor value model.
+That value has no live-runtime identity or observer connection.
 
 **Example ID:** `generated-machine-direct-action`  
 **Fixture:** `Tests/Fixtures/GeneratedMachineDocumentation/Sources/GeneratedMachineDocumentation/DirectAction.swift`
@@ -108,22 +112,40 @@ Use `machineObservation()` when code needs state and availability together. It
 returns `TLAMachineObservation` even when availability evaluation fails. The
 observation contains a guarded `TLAStateProjectionResult`, not a raw state map.
 
-An adapter does not execute an `ActionLabel` directly. Follow
-`ActionLabel` → `toInvocation()` →
-`execute(_ invocation: TLAActionInvocation)`:
+Use this value API for local and deliberately independent work only. It is not
+the shared live-machine path.
+
+## Run a live machine
+
+Create the runtime once with `TLALiveMachineOwner.create(for:)`, then bind the
+generated `Live` façade to its existing handle. Binding validates exact schema
+compatibility and never creates a second machine.
 
 ```swift
-let label: CounterHost.Actor.ActionLabel = .advance
-let invocation = label.toInvocation()
-let result = try await actor.execute(invocation)
+let owner = try TLALiveMachineOwner.create(for: BoundedCounter.self)
+let handle = owner.handle
+let live = try BoundedCounter.Live(handle: handle)
+
+switch await live.execute(.advance) {
+case .committed(let transition):
+    assert(transition.after.value == 1)
+case .rejected(let rejection):
+    print(rejection.reason)
+case .failed(let failure):
+    print(failure.code)
+}
 ```
+
+Generic code uses the same runtime through `handle.identity`, `handle.schema`,
+`current()`, `observe()`, and `execute(_:)`. Typed and generic actions share
+one transition pipeline. Only `committed` changes state. An accepted action is
+non-cancellable: it completes as `committed` or normal `failed`.
 
 ## Nest a machine
 
 Put `@TLAActor` or `@TLAObservable` on a nested type inside a `@TLAModel`
-struct. The generated adapter owns its own canonical instance of the enclosing
-model type. It does not share mutable state with another adapter or with a
-separately created enclosing model.
+struct. Bind the generated adapter to a compatible existing live handle. It
+does not own model state, a second runtime, or shutdown authority.
 
 **Example ID:** `generated-machine-actor`  
 **Fixture:** `Tests/Fixtures/GeneratedMachineDocumentation/Sources/GeneratedMachineDocumentation/ActorAccess.swift`
@@ -169,19 +191,18 @@ struct CounterHost {
 }
 
 func runActorAccess() async throws {
-    let actor = CounterHost.Actor()
-    let state = await actor.state
-    let result = try await actor.execute(CounterHost.Actor.ActionLabel.advance.toInvocation())
+    let owner = try TLALiveMachineOwner.create(for: CounterHost.self)
+    let actor = try await CounterHost.Actor(handle: owner.handle)
+    let result = await actor.execute(CounterHost.Actor.ActionLabel.advance.toInvocation())
 
-    assert(state.value == 0)
-    assert(result.action == CounterHost.Actor.ActionLabel.advance)
-    assert(result.after.value == 1)
+    guard case .committed(let commit) = result else { return }
+    assert(commit.after.position.value == 1)
 }
 ```
 
-The nested actor provides its own canonical machine instance. Actor access is
-asynchronous. Call `machineObservation()` or
-`execute(_ invocation: TLAActionInvocation)` across its actor boundary.
+The nested actor is asynchronous. Call `current()` or
+`execute(_ invocation: TLAActionInvocation)` across its actor boundary. It
+shares identity and state with every handle from the same owner.
 
 Nested adapters expose the enclosing model's `State`, `ActionLabel`, and
 `TransitionResult` through type aliases.
@@ -191,9 +212,9 @@ Nested adapters expose the enclosing model's `State`, `ActionLabel`, and
 A nested `@TLAObservable` adapter is main-actor isolated. It must be nested in
 one `@TLAModel` struct. `@TLAActor` has the same nesting requirement. Neither adapter owns a formal specification or generates an independent machine.
 
-A nested observable owns its own canonical model and provides async action
-execution. It does not provide automatic SwiftUI invalidation or shared state
-between adapters.
+A nested observable requires `await Observable(handle:)`. It attaches to that
+runtime and derives its typed cache only from observation events. It does not
+provide automatic SwiftUI invalidation beyond its main-actor properties.
 
 For each action, a nested observable generates an `on<Action>` callback property. The callback receives action parameters, when present, and typed state values from before and after a successful execution.
 
@@ -242,19 +263,21 @@ struct CounterScreenModel {
 
 @MainActor
 func runObservable() async throws {
-    let observable = CounterScreenModel.Observable()
+    let owner = try TLALiveMachineOwner.create(for: CounterScreenModel.self)
+    let observable = try await CounterScreenModel.Observable(handle: owner.handle)
     observable.onAdvance = { before, after in
         assert(before.value == 0)
         assert(after.value == 1)
     }
-    let result = try await observable.execute(CounterScreenModel.Observable.ActionLabel.advance.toInvocation())
-    assert(result.action == CounterScreenModel.Observable.ActionLabel.advance)
+    let result = await observable.execute(CounterScreenModel.Observable.ActionLabel.advance.toInvocation())
+    guard case .committed = result else { return }
 }
 ```
 
-For a nested observable, `execute(_ invocation: TLAActionInvocation)` first
-commits the successful transition, then awaits the matching callback, then
-returns its transition result. A failed execution does not call the callback.
+For a nested observable, `execute(_ invocation: TLAActionInvocation)` submits
+the request to the runtime. The callback occurs only when its subscription
+reduces a contiguous committed update. A rejected or failed action does not
+call the callback. On loss, the observable clears its cache and resynchronizes.
 
 Do not depend on callback scheduling beyond main-actor isolation. Do not infer
 a global order between callbacks on separate adapters. The generated names
@@ -329,9 +352,9 @@ P1 core graph evidence and P3 temporal and symmetry evidence have separate regis
 
 ## SwiftUI
 
-Store the generated typed `State` and an optional `TLAMachineObservation` in
-view state. Refresh both values after a successful action. This pattern does
-not claim automatic updates.
+Keep the live owner and a handle-bound observable adapter in view state. The
+adapter receives its state from the runtime observation, not from a copied
+model value.
 
 **Example ID:** `generated-machine-swiftui`  
 **Fixture:** `Tests/Fixtures/GeneratedMachineDocumentation/Sources/GeneratedMachineDocumentation/CounterView.swift`
@@ -343,49 +366,48 @@ import SwiftTLA
 import SwiftUI
 
 struct CounterView: View {
-    @State private var machine = CounterScreenModel.Observable()
-    @State private var state: CounterScreenModel.State?
-    @State private var observation: TLAMachineObservation?
+    @State private var owner: TLALiveMachineOwner?
+    @State private var machine: CounterScreenModel.Observable?
     @State private var diagnostic = ""
 
     var body: some View {
         VStack {
-            Text("Value: \(state.map { String($0.value) } ?? "-")")
+            Text("Value: \(machine?.state.map { String($0.value) } ?? "-")")
             Button("Advance") {
                 Task { @MainActor in
-                    do {
-                        _ = try await machine.execute(CounterScreenModel.Observable.ActionLabel.advance.toInvocation())
-                        state = machine.state
-                        observation = await machine.machineObservation()
+                    guard let machine else { return }
+                    switch await machine.execute(CounterScreenModel.Observable.ActionLabel.advance.toInvocation()) {
+                    case .committed:
                         diagnostic = ""
-                    } catch {
-                        diagnostic = String(describing: error)
+                    case .rejected(let rejection):
+                        diagnostic = rejection.reason.description
+                    case .failed(let failure):
+                        diagnostic = failure.message
                     }
                 }
-            }
-            if let invocations = observation?.availableInvocations {
-                ForEach(invocations, id: \.self) { invocation in
-                    Text(invocation.description)
-                }
-            } else if let diagnostic = observation?.availabilityDiagnostic {
-                Text(diagnostic.message)
             }
             if !diagnostic.isEmpty {
                 Text(diagnostic)
             }
         }
         .task {
-            state = machine.state
-            observation = await machine.machineObservation()
+            guard owner == nil else { return }
+            do {
+                let owner = try TLALiveMachineOwner.create(for: CounterScreenModel.self)
+                self.owner = owner
+                machine = try await CounterScreenModel.Observable(handle: owner.handle)
+            } catch {
+                diagnostic = String(describing: error)
+            }
         }
     }
 }
 ```
 
-The fixture compiles this view in the macOS package context. A manual review must inspect the initial render and the render after `advance`.
+The fixture compiles this view in the macOS package context. A manual review must inspect the initial render, the render after `advance`, and the state after a loss or termination.
 
-The example omits disabled-button logic and automatic observation. It displays
-the public execution error after a rejected action.
+The example omits disabled-button logic. The observable adapter automatically
+observes its supplied runtime; it displays explicit rejection or failure text.
 
 ## API reference
 
@@ -394,8 +416,13 @@ The following table is the public inventory for this guide. Sources identify the
 | Name | Role and observable contract | Source |
 |---|---|---|
 | `@TLAModel` | Attaches generated machine members to a struct, class, or actor with a `TLASpec`. | [Macros.swift](../Sources/SwiftTLAMacros/Macros.swift), [ModelMacro.swift](../Sources/SwiftTLAPlugin/ModelMacro.swift) |
-| `@TLAActor` | Requires a nested type. It attaches an actor adapter for the enclosing model type. | [Macros.swift](../Sources/SwiftTLAMacros/Macros.swift), [ModelMacro.swift](../Sources/SwiftTLAPlugin/ModelMacro.swift) |
-| `@TLAObservable` | Requires a nested type. It attaches a main-actor adapter for the enclosing model type. | [Macros.swift](../Sources/SwiftTLAMacros/Macros.swift), [ModelMacro.swift](../Sources/SwiftTLAPlugin/ModelMacro.swift), [MacroExpander+Adapters.swift](../Sources/SwiftTLAPlugin/MacroExpander+Adapters.swift) |
+| `@TLAActor` | Requires a nested type. Its generated actor binds an existing compatible `TLALiveMachine` handle. | [Macros.swift](../Sources/SwiftTLAMacros/Macros.swift), [MacroExpander+Adapters.swift](../Sources/SwiftTLAPlugin/MacroExpander+Adapters.swift) |
+| `@TLAObservable` | Requires a nested type. Its generated main-actor adapter binds an existing compatible handle and reduces observation events. | [Macros.swift](../Sources/SwiftTLAMacros/Macros.swift), [MacroExpander+Adapters.swift](../Sources/SwiftTLAPlugin/MacroExpander+Adapters.swift) |
+| `TLALiveMachineOwner` | Creates one live runtime, vends its common handle, and is the sole explicit shutdown authority. | [LiveMachine.swift](../Sources/SwiftTLA/LiveMachine.swift) |
+| `TLALiveMachine` | Common handle for type-unknown identity, schema, current snapshot, observation, and action requests. | [LiveMachine.swift](../Sources/SwiftTLA/LiveMachine.swift) |
+| `GeneratedLiveMachine` and generated `Live` | Schema-validated typed façade over an existing live handle. | [GeneratedLiveMachine.swift](../Sources/SwiftTLA/GeneratedLiveMachine.swift), [MacroExpander+LiveMachine.swift](../Sources/SwiftTLAPlugin/MacroExpander+LiveMachine.swift) |
+| `TLALiveMachineObservationSubscription` | Single-consumer async observation with snapshot, update, explicit loss, recovery, and owner termination. | [LiveMachineObservation.swift](../Sources/SwiftTLA/LiveMachineObservation.swift) |
+| `TLALiveMachineAdapterBinding` | Validates an adapter binding to an existing generated live runtime without creating state. | [LiveMachineAdapter.swift](../Sources/SwiftTLA/LiveMachineAdapter.swift) |
 | Generated `Variables` | `String`, `CaseIterable` enum of declared variables. Each case supplies its raw variable name. | [MacroExpander.swift](../Sources/SwiftTLAPlugin/MacroExpander.swift) |
 | Generated `Actions` | `String`, `CaseIterable` enum of declared action names. Each case supplies its declared action name. | [MacroExpander.swift](../Sources/SwiftTLAPlugin/MacroExpander.swift) |
 | `TLAStateProjection` | Provides guarded token-based access to a formal state. It owns its internal representation. | [CanonicalMachine.swift](../Sources/SwiftTLA/CanonicalMachine.swift) |
@@ -404,8 +431,6 @@ The following table is the public inventory for this guide. Sources identify the
 | `TLAMachineAvailabilityDiagnostic` | Reports an `evaluationFailed` or `stateProjectionFailed` code and a message. | [CanonicalMachine.swift](../Sources/SwiftTLA/CanonicalMachine.swift) |
 | `TLAMachineObserving` | Provides async `machineObservation()`. Its extensions provide `machineState()` and `machineAvailability()`. | [CanonicalMachine.swift](../Sources/SwiftTLA/CanonicalMachine.swift) |
 | `TLAMachineExecuting` | Extends observation with async throwing `execute(_ invocation: TLAActionInvocation)`. | [CanonicalMachine.swift](../Sources/SwiftTLA/CanonicalMachine.swift) |
-| `TLAMachineAdapterCanonicalModel` | Protocol for a canonical adapter model. It provides synchronous observation and `executeSynchronously(_:)`. | [CanonicalMachine.swift](../Sources/SwiftTLA/CanonicalMachine.swift) |
-| `TLAMachineAdapterAccess` | Protocol for an adapter that provides async `withCanonicalMachine(_:)`. Its constrained extension provides `canonicalMachineObservation()` and `executeCanonical(_:)`. | [CanonicalMachine.swift](../Sources/SwiftTLA/CanonicalMachine.swift) |
 | `TLAActionInvocation` | Identifies an action by name and declared arguments. It is the untyped invocation form. | [TLASpec.swift](../Sources/SwiftTLA/TLASpec.swift) |
 | `GeneratedMachineError` | Wraps a runtime error, an unexpected error, or an unrepresentable action label. | [CanonicalMachine.swift](../Sources/SwiftTLA/CanonicalMachine.swift) |
 | Generated `VerificationError` | Error type returned by generated verification helpers when the bounded check does not succeed. | [MacroExpander+Generation.swift](../Sources/SwiftTLAPlugin/MacroExpander+Generation.swift) |
@@ -417,12 +442,12 @@ The following table is the public inventory for this guide. Sources identify the
 | Generated `State` | Holds model variables with generated Swift types. Application code reads this type through `state`, before, and after. | [MacroExpander.swift](../Sources/SwiftTLAPlugin/MacroExpander.swift) |
 | Generated `ActionLabel` | Represents declared actions with typed parameters. `toInvocation()` writes a `TLAActionInvocation`. `init?(invocation:)` reads a valid one. | [MacroExpander+Generation.swift](../Sources/SwiftTLAPlugin/MacroExpander+Generation.swift) |
 | Generated `TransitionResult` | Records the typed action and typed state before and after a successful transition. | [MacroExpander+CanonicalMachine.swift](../Sources/SwiftTLAPlugin/MacroExpander+CanonicalMachine.swift) |
-| Generated `tlaSnapshot()` | Returns `TLAStateProjectionResult` on a generated model and its model-owned adapters. | [MacroExpander+CanonicalMachine.swift](../Sources/SwiftTLAPlugin/MacroExpander+CanonicalMachine.swift) |
+| Generated `tlaSnapshot()` | Returns `TLAStateProjectionResult` on a generated value model. It is not live-runtime observation. | [MacroExpander+CanonicalMachine.swift](../Sources/SwiftTLAPlugin/MacroExpander+CanonicalMachine.swift) |
 | Generated `availableActions()` | Returns typed available action labels for a model that declares actions. | [MacroExpander+CanonicalMachine.swift](../Sources/SwiftTLAPlugin/MacroExpander+CanonicalMachine.swift) |
 | Generated `availableInvocations()` | Returns runtime `TLAActionInvocation` values on a generated model without declared actions. `TLAMachineObservation` reports runtime availability for every generated machine. | [MacroExpander+CanonicalMachine.swift](../Sources/SwiftTLAPlugin/MacroExpander+CanonicalMachine.swift) |
 | Generated `apply(_:)` | Executes a typed label or `TLAActionInvocation`. It returns `TransitionResult` or throws. | [MacroExpander+CanonicalMachine.swift](../Sources/SwiftTLAPlugin/MacroExpander+CanonicalMachine.swift) |
 | Generated `machineObservation()` | Returns current state and availability. It retains state if availability evaluation fails. | [MacroExpander+CanonicalMachine.swift](../Sources/SwiftTLAPlugin/MacroExpander+CanonicalMachine.swift) |
-| Generated `execute(_ invocation: TLAActionInvocation)` | Asynchronously executes an invocation and returns `TransitionResult`. Convert a typed `ActionLabel` first. | [MacroExpander+CanonicalMachine.swift](../Sources/SwiftTLAPlugin/MacroExpander+CanonicalMachine.swift) |
+| Generated `Live.execute(_:)` | Executes a typed label or generic invocation through the existing live runtime and returns an explicit live outcome. | [MacroExpander+LiveMachine.swift](../Sources/SwiftTLAPlugin/MacroExpander+LiveMachine.swift) |
 | Generated `synchronousMachineObservation()` | Returns current state and availability without an async boundary on a canonical generated model. | [MacroExpander+CanonicalMachine.swift](../Sources/SwiftTLAPlugin/MacroExpander+CanonicalMachine.swift) |
 | Generated `executeSynchronously(_ invocation: TLAActionInvocation)` | Executes an invocation without an async boundary on a canonical generated model. | [MacroExpander+CanonicalMachine.swift](../Sources/SwiftTLAPlugin/MacroExpander+CanonicalMachine.swift) |
 

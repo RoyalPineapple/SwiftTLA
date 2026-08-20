@@ -5,7 +5,17 @@ SwiftTLA is a compile-time spec validator and behavioral compiler. Swift types c
 It also exports TLA+ and a TLC configuration. For declared finite cases, TLC is a
 pinned executable reference. Published TLA+ semantics remain authoritative.
 
-See [the supported language fragment](Documentation/Design.md), the [generated-machine guide](Documentation/GeneratedMachines.md), and the [symmetric collections guide](Documentation/SymmetricCollections.md). The generated-machine API reference is in [SwiftTLA DocC](Sources/SwiftTLA/SwiftTLA.docc/SwiftTLA.md).
+See [the supported language fragment](Documentation/Design.md), the [generated-machine guide](Documentation/GeneratedMachines.md), the [live-machine guide](Documentation/LiveMachines.md), and the [symmetric collections guide](Documentation/SymmetricCollections.md). The generated-machine API reference is in [SwiftTLA DocC](Sources/SwiftTLA/SwiftTLA.docc/SwiftTLA.md).
+
+## Live machines
+
+For shared, running machine state, create one `TLALiveMachineOwner` and pass
+its `TLALiveMachine` handle to generated `Live`, actor, observable, and
+generic inspector surfaces. The live runtime is the sole mutable source for
+that identity. Direct generated-model values are non-live value semantics; do
+not use `apply(_:)` or a value copy as a handle for a running runtime. See
+[Live Machines](Documentation/LiveMachines.md) and the
+[migration guide](Documentation/LiveMachineMigration.md).
 
 ## Demonstrations app
 

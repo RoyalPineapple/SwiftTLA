@@ -334,6 +334,15 @@ public struct TLALiveMachine: Sendable {
         await storage.current()
     }
 
+    /// Attaches a non-owning observer to this existing runtime.
+    ///
+    /// Attachment captures its initial snapshot and registers delivery in one
+    /// storage-actor operation, so an overlapping commit is either part of the
+    /// baseline or appears once as the following update.
+    public func observe() async -> TLALiveMachineAttachmentOutcome {
+        await storage.observe()
+    }
+
     /// Executes a generic invocation through this runtime.
     ///
     /// Execution linearizes at runtime acceptance. The runtime rejects
@@ -383,6 +392,28 @@ public final class TLALiveMachineOwner: Sendable {
         return TLALiveMachineOwner(storage: storage, identity: identity, schema: schema)
     }
 
+    /// Creates a runtime with a focused-test observation mailbox capacity.
+    ///
+    /// Production callers use ``create(schema:initial:driver:)`` and receive
+    /// the fixed delivery policy. This internal seam exists only to make loss
+    /// behavior deterministic in the package's contract tests.
+    static func create(
+        schema: MachineSchema,
+        initial: TLAStateProjection,
+        driver: TLALiveMachineTransitionDriver,
+        observationMailboxCapacity: Int
+    ) -> TLALiveMachineOwner {
+        let identity = TLALiveMachineIdentity()
+        let storage = TLALiveMachineStorage(
+            identity: identity,
+            schema: schema,
+            initial: initial,
+            driver: driver,
+            observationMailboxCapacity: observationMailboxCapacity
+        )
+        return TLALiveMachineOwner(storage: storage, identity: identity, schema: schema)
+    }
+
     /// The common handle for this runtime.
     public var handle: TLALiveMachine {
         TLALiveMachine(identity: identity, schema: schema, storage: storage)
@@ -407,18 +438,22 @@ actor TLALiveMachineStorage {
     var state: TLAStateProjection
     var position = TLALiveMachinePosition(value: 0)
     private var isEnded = false
+    private let observationMailboxCapacity: Int
+    private var subscriptions: [UUID: ObservationSubscriptionState] = [:]
     private let logger = Logger(subsystem: "SwiftTLA", category: "LiveMachine")
 
     init(
         identity: TLALiveMachineIdentity,
         schema: MachineSchema,
         initial: TLAStateProjection,
-        driver: TLALiveMachineTransitionDriver
+        driver: TLALiveMachineTransitionDriver,
+        observationMailboxCapacity: Int = 64
     ) {
         self.identity = identity
         self.schema = schema
         self.state = initial
         self.driver = driver
+        self.observationMailboxCapacity = max(1, observationMailboxCapacity)
     }
 
     func current() -> TLALiveMachineCurrentResult {
@@ -426,9 +461,86 @@ actor TLALiveMachineStorage {
         return .snapshot(makeSnapshot())
     }
 
+    func observe() -> TLALiveMachineAttachmentOutcome {
+        guard !isEnded else { return .unavailable(.endedByOwner) }
+        let subscriptionID = UUID()
+        let snapshot = makeSnapshot()
+        subscriptions[subscriptionID] = .init(
+            events: [.snapshot(snapshot, reason: .attached)],
+            continuityAnchor: snapshot.position
+        )
+        return .attached(.init(identity: identity, subscriptionID: subscriptionID, storage: self))
+    }
+
+    func next(_ subscriptionID: UUID) async -> TLALiveMachineObservationEvent? {
+        guard var subscription = subscriptions[subscriptionID] else { return nil }
+        if !subscription.events.isEmpty {
+            let event = subscription.events.removeFirst()
+            subscription.didDeliver(event)
+            if subscription.isClosed && subscription.events.isEmpty {
+                subscriptions.removeValue(forKey: subscriptionID)
+            } else {
+                subscriptions[subscriptionID] = subscription
+            }
+            return event
+        }
+        guard !subscription.isClosed else {
+            subscriptions.removeValue(forKey: subscriptionID)
+            return nil
+        }
+        return await withCheckedContinuation { continuation in
+            subscription.waiter = continuation
+            subscriptions[subscriptionID] = subscription
+        }
+    }
+
+    func resynchronize(_ subscriptionID: UUID) -> TLALiveMachineResynchronizationOutcome {
+        guard var subscription = subscriptions[subscriptionID] else { return .cancelled }
+        guard !isEnded else {
+            return .terminated(.init(identity: identity, finalPosition: position, reason: .endedByOwner))
+        }
+        guard subscription.isLossPending else {
+            return .resumed(at: position)
+        }
+        let snapshot = makeSnapshot()
+        let loss = subscription.loss!
+        subscription.events.removeAll { event in
+            if case .update = event { return true }
+            if case .loss = event { return true }
+            return false
+        }
+        subscription.ordinaryUpdateCount = 0
+        subscription.isLossPending = false
+        subscription.loss = nil
+        subscription.enqueueControl(.snapshot(snapshot, reason: .resynchronized(after: loss)))
+        subscription.resumeWaiterIfPossible()
+        subscriptions[subscriptionID] = subscription
+        return .resumed(at: snapshot.position)
+    }
+
+    func cancel(_ subscriptionID: UUID) {
+        guard var subscription = subscriptions[subscriptionID] else { return }
+        // Owner shutdown won the race: preserve its already-queued terminal.
+        guard !subscription.isClosed else { return }
+        subscriptions.removeValue(forKey: subscriptionID)
+        subscription.waiter?.resume(returning: nil)
+    }
+
     func end() {
         guard !isEnded else { return }
         isEnded = true
+        let termination = TLALiveMachineTermination(
+            identity: identity,
+            finalPosition: position,
+            reason: .endedByOwner
+        )
+        for subscriptionID in Array(subscriptions.keys) {
+            guard var subscription = subscriptions[subscriptionID], !subscription.isClosed else { continue }
+            subscription.enqueueControl(.terminated(termination))
+            subscription.isClosed = true
+            subscription.resumeWaiterIfPossible()
+            subscriptions[subscriptionID] = subscription
+        }
         log("ended")
     }
 
@@ -500,13 +612,28 @@ actor TLALiveMachineStorage {
         state = candidate
         position = nextPosition
         let after = makeSnapshot()
-        log("committed", request: request)
-        return .committed(.init(
+        let commit = TLALiveMachineCommit(
             requestID: request.requestID,
             invocation: request.invocation,
             before: before,
             after: after
-        ))
+        )
+        publish(commit)
+        log("committed", request: request)
+        return .committed(commit)
+    }
+
+    private func publish(_ commit: TLALiveMachineCommit) {
+        for subscriptionID in Array(subscriptions.keys) {
+            guard var subscription = subscriptions[subscriptionID], !subscription.isClosed else { continue }
+            subscription.enqueueUpdate(
+                commit,
+                capacity: observationMailboxCapacity,
+                identity: identity
+            )
+            subscription.resumeWaiterIfPossible()
+            subscriptions[subscriptionID] = subscription
+        }
     }
 
     private func makeSnapshot() -> TLALiveMachineSnapshot {
@@ -564,5 +691,70 @@ actor TLALiveMachineStorage {
         let requestID = request?.requestID.uuidString ?? "-"
         let positionValue = position.value
         logger.notice("outcome=\(outcome, privacy: .public) identity=\(identityValue, privacy: .public) schema=\(schemaIdentifier, privacy: .public) request=\(requestID, privacy: .public) position=\(positionValue, privacy: .public) detail=\(detail, privacy: .public)")
+    }
+}
+
+private struct ObservationSubscriptionState {
+    var events: [TLALiveMachineObservationEvent]
+    var ordinaryUpdateCount = 0
+    var continuityAnchor: TLALiveMachinePosition
+    var isLossPending = false
+    var loss: TLALiveMachineObservationLoss?
+    var isClosed = false
+    var waiter: CheckedContinuation<TLALiveMachineObservationEvent?, Never>?
+
+    init(events: [TLALiveMachineObservationEvent], continuityAnchor: TLALiveMachinePosition) {
+        self.events = events
+        self.continuityAnchor = continuityAnchor
+    }
+
+    mutating func enqueueUpdate(
+        _ commit: TLALiveMachineCommit,
+        capacity: Int,
+        identity: TLALiveMachineIdentity
+    ) {
+        guard !isLossPending else { return }
+        guard ordinaryUpdateCount < capacity else {
+            events.removeAll { event in
+                if case .update = event { return true }
+                return false
+            }
+            ordinaryUpdateCount = 0
+            let loss = TLALiveMachineObservationLoss(
+                identity: identity,
+                lastContiguousPosition: continuityAnchor,
+                latestKnownPosition: commit.after.position
+            )
+            self.loss = loss
+            isLossPending = true
+            enqueueControl(.loss(loss))
+            return
+        }
+        events.append(.update(commit))
+        ordinaryUpdateCount += 1
+    }
+
+    mutating func enqueueControl(_ event: TLALiveMachineObservationEvent) {
+        events.append(event)
+    }
+
+    mutating func didDeliver(_ event: TLALiveMachineObservationEvent) {
+        switch event {
+        case .snapshot(let snapshot, _):
+            continuityAnchor = snapshot.position
+        case .update(let commit):
+            ordinaryUpdateCount -= 1
+            continuityAnchor = commit.after.position
+        case .loss, .terminated:
+            break
+        }
+    }
+
+    mutating func resumeWaiterIfPossible() {
+        guard let waiter, !events.isEmpty else { return }
+        let event = events.removeFirst()
+        self.waiter = nil
+        didDeliver(event)
+        waiter.resume(returning: event)
     }
 }

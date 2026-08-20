@@ -1,135 +1,72 @@
 # Generated machine surface
 
-`@TLAModel` generates a typed machine from a `TLASpec`. The generated public
-surface is the application boundary for that model.
+`@TLAModel` generates the typed schema and formal behavior of a machine. It also generates a typed `Live` façade. `Live` binds an existing ``TLALiveMachine``; it does not own mutable model state or create a runtime.
 
 ## Generated types
 
-Each model with declared variables generates these value types:
+Each generated model exposes these `Sendable` value types:
 
-- `State`: one typed property for each declared variable.
-- `Variables`: an enum of the declared variable names.
-- `Actions`: an enum of the declared action names when the model has actions.
+- `State`: typed values for declared variables.
+- `Variables`: declared variable names.
+- `Actions`: declared action names when actions exist.
 - `ActionLabel`: a typed action identity and typed parameters.
-- `TransitionResult`: the typed action, state before execution, and state after
-  execution.
+- `TransitionResult`: typed action, state before, and state after for direct value-model execution.
 
-All generated value types are `Sendable`. A model state is value data. It does
-not store an arbitrary reference type.
+`ActionLabel.toInvocation()` converts a typed label to a ``TLAActionInvocation``. `ActionLabel.init?(invocation:)` accepts only a valid invocation for that generated type.
 
-## One machine plan
+## Direct value-model execution
 
-The macro first compiles the model. It then creates one `MachineSurfacePlan`
-from that compilation and Swift-only type facts. The plan supplies the typed
-`State`, `Variables`, `ActionLabel`, action descriptors, and
-`GeneratedMachineMetadata`.
+`apply(_:)`, `machineObservation()`, `TLAStateProjectionResult`, and `TransitionResult` remain useful for value semantics. A direct value model is not a live machine: it has no runtime identity, shared mutable state, subscription, or observation history. Use it for local calculation and deliberately independent simulation, not for a running shared machine.
 
-The plan does not contain a second action or invariant tree. The canonical
-`TLASpec` remains the only formal meaning. This prevents a generated label or
-state field from silently describing a different machine.
+## Create a live runtime
 
-## Execute an action
-
-Use `apply(_:)` on a canonical generated model. Use `state` and the typed
-result values after execution.
+Create a runtime once from the generated model, retain its owner, and pass its handle to every consumer:
 
 ```swift
-var machine = BoundedCounter()
-let result = try machine.apply(.advance)
-
-assert(result.action == .advance)
-assert(result.before.value == 0)
-assert(result.after.value == 1)
-assert(machine.state.value == 1)
+let owner = try TLALiveMachineOwner.create(for: Counter.self)
+let handle = owner.handle
+let live = try Counter.Live(handle: handle)
 ```
 
-`apply(_:)` throws `GeneratedMachineError` when the action is not available.
-The machine retains its previous state when that error occurs.
+The owner is the only shutdown authority. `end()` is explicit and idempotent. Handle copies share the same stable ``TLALiveMachineIdentity`` and actor-owned state. A `Live(handle:)` binding checks the exact generated ``MachineSchema``; an incompatible handle throws ``GeneratedLiveMachineDiagnostic`` rather than creating a substitute runtime.
 
-## Inspect a machine
+## Typed and generic control
 
-`machineObservation()` returns a ``TLAMachineObservation``. Its `state` is a
-``TLAStateProjectionResult``. Call `requireProjection()` when a formal-tooling
-integration needs a guarded projection. Application code normally reads the
-generated typed `state` property instead.
-
-`TLAActionInvocation` is the formal runtime representation of an action. It is
-useful at protocol boundaries. Convert between it and a generated
-`ActionLabel` with `toInvocation()` and `init?(invocation:)`.
-
-## Inspect an unknown generated machine
-
-Every generated machine exposes `machineSchema`, emitted from the same macro
-plan as its typed `State` and `ActionLabel`. A generic tool can use this
-schema with `TLAMachineObservation` to render variables and formal action
-invocations without importing the model's generated Swift types.
-
-For ordered live inspection, place a generated model in
-`TLAMachineSession`. Its `machineUpdates()` stream first yields a current
-snapshot, then yields each successfully committed transition with a monotonic
-sequence number. A failed execution publishes no update. Streams use bounded
-buffering, so tools must treat a sequence gap as a request to resynchronize
-with `machineObservation()`.
-
-## Actors and observables
-
-Nested `@TLAActor` and `@TLAObservable` declarations adapt one canonical model
-type. They expose that model's `State`, `Variables`, `ActionLabel`, and
-`TransitionResult` through type aliases.
-
-An actor reads its asynchronous `state` property across its isolation boundary. A nested observable is
-main-actor isolated. It publishes typed `on<Action>` callbacks after a
-successful transition commits.
+Use a generated label with `Live.execute(_:)` or a generic invocation with ``TLALiveMachine/execute(_:requestID:)``. Both reach the same formal transition pipeline.
 
 ```swift
-let actor = CounterHost.Actor()
-let result = try await actor.execute(CounterHost.Actor.ActionLabel.advance.toInvocation())
-assert(result.after.value == 1)
+let typedOutcome = await live.execute(.advance)
+let genericOutcome = await handle.execute(
+    TLAActionInvocation(name: "advance", arguments: [])
+)
 ```
+
+``TLALiveActionOutcome`` is exhaustive:
+
+- `committed` contains atomic before and after snapshots and advances the per-runtime ``TLALiveMachinePosition`` once.
+- `rejected` did not enter execution and contains the unchanged current snapshot plus a validation or lifecycle reason.
+- `failed` entered execution but did not commit; its current snapshot proves state and position remain unchanged.
+
+After a request is accepted, execution is non-cancellable. Caller cancellation cannot report that an accepted action did not commit. If the formal evaluator produces more than one successor, live execution fails with `ambiguousSuccessors`; array order never selects a successor.
+
+## Inspect an unknown live machine
+
+``TLALiveMachine`` is the type-unknown common surface. It provides the runtime identity, generated schema, atomic `current()` snapshots, observation, and generic action execution. A snapshot contains a validated ``TLAStateProjection``, never a public `[String: TLAValue]` map.
+
+Positions begin at zero and have meaning only within one runtime identity. The snapshot availability was evaluated for the exact snapshot state.
+
+## Observe and recover
+
+`observe()` attaches to an existing runtime. Its first event is an atomic snapshot. An overlapping commit is either already in that baseline or is delivered once as the following update.
+
+``TLALiveMachineObservationSubscription`` is a single-consumer `AsyncSequence` of ``TLALiveMachineObservationEvent``. It yields snapshot, update, explicit loss, and one owner-termination event. Its mailbox is bounded. After `loss`, do not treat updates as contiguous; call `resynchronize()` and wait for the recovery snapshot. Cancellation ends only that subscription. It does not end the runtime or cancel an accepted action.
+
+## Generated adapters
+
+Nested `@TLAActor` and `@TLAObservable` types bind a supplied compatible handle with `init(handle:)`; they do not provide zero-argument live ownership. The actor forwards control to the same runtime. The main-actor observable adapter reduces subscription events into its typed cache. Its state is not optimistically changed by an action request. On loss it becomes recovering and waits for a resynchronization snapshot; on owner termination it becomes terminated.
 
 ## Verification helpers
 
-Generated models provide `verifySpec()` (which returns the explored-state count), `transitionMatrix()`,
-`verifyTransitions()`, and `verifyInvariants()` for their declared finite
-model. These helpers use the bounded checker and the model's
-`verificationStateLimit` (default: `100_000`). They do not prove behavior that
-is outside the declared bounds or outside the supported SwiftTLA surface.
+Generated models provide `verifySpec()`, `transitionMatrix()`, `verifyTransitions()`, and `verifyInvariants()` for their declared finite model. These helpers use the bounded checker and the model's `verificationStateLimit` (default: `100_000`). They do not prove behavior outside the declared bounds or supported SwiftTLA surface.
 
-For a narrative guide, compiled examples, and evidence limits, read
-`Documentation/GeneratedMachines.md` in the repository.
-
-## Verify the generated contract
-
-Generated models provide `verifyGeneratedMachineContract()`. The method checks
-the plan identity, metadata, action-label round trips, state projections, and
-the bounded initial states and transitions.
-
-```swift
-let report = Counter.verifyGeneratedMachineContract()
-
-switch report.status {
-case .exact:
-    break
-case .difference:
-    print(report.diagnostic ?? "Generated-machine contract differs.")
-case .unavailable:
-    print(report.diagnostic ?? "Generated-machine evaluation is unavailable.")
-}
-```
-
-`difference` means that the generated surface disagreed with the compiled
-formal machine. Read the diagnostic and correct the model or generator before
-you use the result. `unavailable` means that bounded evaluation did not finish
-safely. Increase no bound until you first inspect the diagnostic and its
-configured limit.
-
-The verifier checks only the declared finite graph up to
-`verificationStateLimit`. An `exact` result is not a proof of larger state
-spaces, other generated models, or unsupported language constructs.
-
-## Evidence status
-
-Generated-machine contract evidence is diagnostic-only. The aggregate Public
-Workflow report can record `candidateEvidence` when the checked-in GitHub
-workflow runs its exact fixture. That aggregate status does not admit general
-generated-machine support. See `Documentation/PublicWorkflowConformance.md`.
+For migration guidance, read `Documentation/LiveMachineMigration.md`. For a narrative guide and limits, read `Documentation/GeneratedMachines.md` and `Documentation/LiveMachines.md` in the repository.
