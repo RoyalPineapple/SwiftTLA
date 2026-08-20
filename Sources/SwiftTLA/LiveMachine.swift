@@ -55,25 +55,17 @@ public struct TLALiveMachineSnapshot: Sendable, Equatable {
     public let schemaIdentifier: String
     public let position: TLALiveMachinePosition
     public let state: TLAStateProjection
-    public let availability: TLAMachineObservation.Availability
 
     public init(
         identity: TLALiveMachineIdentity,
         schemaIdentifier: String,
         position: TLALiveMachinePosition,
-        state: TLAStateProjection,
-        availability: TLAMachineObservation.Availability
+        state: TLAStateProjection
     ) {
         self.identity = identity
         self.schemaIdentifier = schemaIdentifier
         self.position = position
         self.state = state
-        self.availability = availability
-    }
-
-    /// The same observation in the generated-machine observation shape.
-    public var observation: TLAMachineObservation {
-        .init(state: state, availability: availability)
     }
 }
 
@@ -107,54 +99,20 @@ public enum TLALiveMachineUnavailableReason: Sendable, Equatable, CustomStringCo
     }
 }
 
-/// An action request addressed to one live runtime.
-///
-/// The request carries a correlation identifier, the target runtime identity,
-/// and the schema identifier the caller believes the runtime exposes. The
-/// runtime revalidates all three before accepting execution.
-public struct TLALiveActionRequest: Sendable, Equatable {
-    public let requestID: UUID
-    public let target: TLALiveMachineIdentity
-    public let schemaIdentifier: String
-    public let invocation: TLAActionInvocation
-
-    public init(
-        requestID: UUID,
-        target: TLALiveMachineIdentity,
-        schemaIdentifier: String,
-        invocation: TLAActionInvocation
-    ) {
-        self.requestID = requestID
-        self.target = target
-        self.schemaIdentifier = schemaIdentifier
-        self.invocation = invocation
-    }
-}
-
 /// A request the runtime rejected before accepting execution.
 ///
 /// Rejection is a pre-acceptance outcome: the requested transition is never
 /// evaluated on these paths and no state or position changes. The retained
 /// snapshot lets a caller prove that position and state did not move.
-public struct TLALiveActionRejection: Sendable, Equatable {
+public struct TLALiveActionRejection<Action: Sendable & Equatable>: Sendable, Equatable {
     public enum Reason: Sendable, Equatable, CustomStringConvertible {
         case runtimeUnavailable(TLALiveMachineUnavailableReason)
-        case identityMismatch
-        case schemaMismatch
-        case unknownAction
-        case invalidArity
-        case actionArgumentOutOfDomain
         case actionNotEnabled
         case identityRoutedActionRequiresID
 
         public var code: String {
             switch self {
             case .runtimeUnavailable(let reason): return "runtimeUnavailable.\(reason.code)"
-            case .identityMismatch: return "identityMismatch"
-            case .schemaMismatch: return "schemaMismatch"
-            case .unknownAction: return "unknownAction"
-            case .invalidArity: return "invalidArity"
-            case .actionArgumentOutOfDomain: return "actionArgumentOutOfDomain"
             case .actionNotEnabled: return "actionNotEnabled"
             case .identityRoutedActionRequiresID: return "identityRoutedActionRequiresID"
             }
@@ -164,16 +122,6 @@ public struct TLALiveActionRejection: Sendable, Equatable {
             switch self {
             case .runtimeUnavailable(let reason):
                 return "The runtime cannot execute the request: \(reason)"
-            case .identityMismatch:
-                return "The request targets a different runtime identity."
-            case .schemaMismatch:
-                return "The request declares a schema identifier that does not match this runtime."
-            case .unknownAction:
-                return "The requested action is not declared by this runtime's schema."
-            case .invalidArity:
-                return "The requested action's argument count does not match its declared parameters."
-            case .actionArgumentOutOfDomain:
-                return "The requested action has arguments outside its declared finite domains."
             case .actionNotEnabled:
                 return "The requested action is not enabled in the current state."
             case .identityRoutedActionRequiresID:
@@ -183,18 +131,18 @@ public struct TLALiveActionRejection: Sendable, Equatable {
     }
 
     public let requestID: UUID
-    public let invocation: TLAActionInvocation
+    public let action: Action
     public let reason: Reason
     public let current: TLALiveMachineSnapshot
 
     public init(
         requestID: UUID,
-        invocation: TLAActionInvocation,
+        action: Action,
         reason: Reason,
         current: TLALiveMachineSnapshot
     ) {
         self.requestID = requestID
-        self.invocation = invocation
+        self.action = action
         self.reason = reason
         self.current = current
     }
@@ -205,37 +153,30 @@ public struct TLALiveActionRejection: Sendable, Equatable {
 /// A failure is the ordinary noncommit outcome of accepted execution: the
 /// runtime attempted the transition and could not complete it, and the
 /// retained snapshot proves the runtime's state and position are unchanged.
-public struct TLALiveActionFailure: Sendable, Equatable {
+public struct TLALiveActionFailure<Action: Sendable & Equatable>: Sendable, Equatable {
     public enum Code: String, Sendable, Equatable {
         case evaluationFailed
         case decodeFailed
         case positionExhausted
-        /// The accepted action produced more than one formal successor state.
-        ///
-        /// Live execution requires a deterministic successor, so the runtime
-        /// never lets successor array order choose the committed state.
-        /// Model nondeterminism must be resolved by the caller before the
-        /// request is constructed — via parameterized actions or explicit
-        /// successor selection. The failure leaves state and position
-        /// unchanged.
+        /// The typed action produced more than one successor state.
         case ambiguousSuccessors
     }
 
     public let requestID: UUID
-    public let invocation: TLAActionInvocation
+    public let action: Action
     public let code: Code
     public let message: String
     public let current: TLALiveMachineSnapshot
 
     public init(
         requestID: UUID,
-        invocation: TLAActionInvocation,
+        action: Action,
         code: Code,
         message: String,
         current: TLALiveMachineSnapshot
     ) {
         self.requestID = requestID
-        self.invocation = invocation
+        self.action = action
         self.code = code
         self.message = message
         self.current = current
@@ -247,20 +188,20 @@ public struct TLALiveActionFailure: Sendable, Equatable {
 /// A commit is the only outcome that means mutation occurred. The runtime
 /// replaced its state and advanced its position atomically, so
 /// `after.position` is exactly one past `before.position`.
-public struct TLALiveMachineCommit: Sendable, Equatable {
+public struct TLALiveMachineCommit<Action: Sendable & Equatable>: Sendable, Equatable {
     public let requestID: UUID
-    public let invocation: TLAActionInvocation
+    public let action: Action
     public let before: TLALiveMachineSnapshot
     public let after: TLALiveMachineSnapshot
 
     public init(
         requestID: UUID,
-        invocation: TLAActionInvocation,
+        action: Action,
         before: TLALiveMachineSnapshot,
         after: TLALiveMachineSnapshot
     ) {
         self.requestID = requestID
-        self.invocation = invocation
+        self.action = action
         self.before = before
         self.after = after
     }
@@ -271,39 +212,25 @@ public struct TLALiveMachineCommit: Sendable, Equatable {
 /// An accepted request completes as exactly one committed transition or one
 /// normal failure; caller cancellation cannot produce or relabel either
 /// outcome. Rejection is a pre-acceptance lifecycle or validation outcome.
-public enum TLALiveActionOutcome: Sendable, Equatable {
-    case committed(TLALiveMachineCommit)
-    case rejected(TLALiveActionRejection)
-    case failed(TLALiveActionFailure)
+public enum TLALiveActionOutcome<Action: Sendable & Equatable>: Sendable, Equatable {
+    case committed(TLALiveMachineCommit<Action>)
+    case rejected(TLALiveActionRejection<Action>)
+    case failed(TLALiveActionFailure<Action>)
 }
 
-/// The formal transition behavior a live runtime executes.
-///
-/// The driver is the only bridge between the runtime and the formal engine.
-/// It supplies successor computation, availability enumeration, finite-domain
-/// request validation, and typed state decoding. Generated machines build one
-/// driver from a single compiled model so the live runtime never duplicates
-/// model state or formal semantics.
-public struct TLALiveMachineTransitionDriver: Sendable {
-    public let successors: @Sendable (TLAStateProjection, TLAActionInvocation) throws -> [TLAStateProjection]
-    public let availableInvocations: @Sendable (TLAStateProjection) throws -> [TLAActionInvocation]
-    /// Returns a rejection reason for a structurally unknown, out-of-domain,
-    /// or identity-routed invocation, or `nil` when the invocation is valid
-    /// for the model.
-    public let validateInvocation: @Sendable (TLAActionInvocation) -> TLALiveActionRejection.Reason?
-    /// Validates that a formal successor decodes into the model's generated
-    /// typed state. Throwing discards the successor before any commit.
+/// The typed transition behavior of a live runtime.
+public struct TLALiveMachineTransitionDriver<Action: Sendable & Equatable>: Sendable {
+    public let successors: @Sendable (TLAStateProjection, Action) throws -> [TLAStateProjection]
+    public let validateAction: @Sendable (Action) -> TLALiveActionRejection<Action>.Reason?
     public let decodeState: @Sendable (TLAStateProjection) throws -> Void
 
     public init(
-        successors: @escaping @Sendable (TLAStateProjection, TLAActionInvocation) throws -> [TLAStateProjection],
-        availableInvocations: @escaping @Sendable (TLAStateProjection) throws -> [TLAActionInvocation],
-        validateInvocation: @escaping @Sendable (TLAActionInvocation) -> TLALiveActionRejection.Reason?,
+        successors: @escaping @Sendable (TLAStateProjection, Action) throws -> [TLAStateProjection],
+        validateAction: @escaping @Sendable (Action) -> TLALiveActionRejection<Action>.Reason?,
         decodeState: @escaping @Sendable (TLAStateProjection) throws -> Void
     ) {
         self.successors = successors
-        self.availableInvocations = availableInvocations
-        self.validateInvocation = validateInvocation
+        self.validateAction = validateAction
         self.decodeState = decodeState
     }
 }
@@ -313,15 +240,13 @@ public struct TLALiveMachineTransitionDriver: Sendable {
 /// Handle copies share the same storage actor and stable identity, so a
 /// commit made through one handle is immediately visible through every other
 /// handle of the same runtime. A handle exposes identity, schema, current
-/// snapshots, and action execution; it has no shutdown authority and no
-/// access to raw formal state. Typed model surfaces convert their generated
-/// action labels to invocations and execute through this same entry point.
-public struct TLALiveMachine: Sendable {
+/// snapshots, and typed action execution.
+public struct TLALiveMachine<Action: Sendable & Equatable>: Sendable {
     public let identity: TLALiveMachineIdentity
     public let schema: MachineSchema
-    private let storage: TLALiveMachineStorage
+    private let storage: TLALiveMachineStorage<Action>
 
-    init(identity: TLALiveMachineIdentity, schema: MachineSchema, storage: TLALiveMachineStorage) {
+    init(identity: TLALiveMachineIdentity, schema: MachineSchema, storage: TLALiveMachineStorage<Action>) {
         self.identity = identity
         self.schema = schema
         self.storage = storage
@@ -339,28 +264,12 @@ public struct TLALiveMachine: Sendable {
     /// Attachment captures its initial snapshot and registers delivery in one
     /// storage-actor operation, so an overlapping commit is either part of the
     /// baseline or appears once as the following update.
-    public func observe() async -> TLALiveMachineAttachmentOutcome {
+    public func observe() async -> TLALiveMachineAttachmentOutcome<Action> {
         await storage.observe()
     }
 
-    /// Executes a generic invocation through this runtime.
-    ///
-    /// Execution linearizes at runtime acceptance. The runtime rejects
-    /// lifecycle and validation failures before acceptance and then runs a
-    /// non-suspending commit path, so caller cancellation has no execution
-    /// effect and no cancellation outcome exists.
-    public func execute(_ invocation: TLAActionInvocation, requestID: UUID = UUID()) async -> TLALiveActionOutcome {
-        await execute(.init(
-            requestID: requestID,
-            target: identity,
-            schemaIdentifier: schema.identifier,
-            invocation: invocation
-        ))
-    }
-
-    /// Executes a full action request through this runtime.
-    public func execute(_ request: TLALiveActionRequest) async -> TLALiveActionOutcome {
-        await storage.execute(request)
+    public func execute(_ action: Action, requestID: UUID = UUID()) async -> TLALiveActionOutcome<Action> {
+        await storage.execute(action, requestID: requestID)
     }
 }
 
@@ -369,12 +278,12 @@ public struct TLALiveMachine: Sendable {
 /// Creation returns the owner, which vends the common handle and holds the
 /// only explicit shutdown authority. Ending is idempotent and explicit;
 /// releasing non-owner handles never ends an otherwise live runtime.
-public final class TLALiveMachineOwner: Sendable {
-    private let storage: TLALiveMachineStorage
+public final class TLALiveMachineOwner<Action: Sendable & Equatable>: Sendable {
+    private let storage: TLALiveMachineStorage<Action>
     public let identity: TLALiveMachineIdentity
     public let schema: MachineSchema
 
-    private init(storage: TLALiveMachineStorage, identity: TLALiveMachineIdentity, schema: MachineSchema) {
+    private init(storage: TLALiveMachineStorage<Action>, identity: TLALiveMachineIdentity, schema: MachineSchema) {
         self.storage = storage
         self.identity = identity
         self.schema = schema
@@ -385,8 +294,8 @@ public final class TLALiveMachineOwner: Sendable {
     public static func create(
         schema: MachineSchema,
         initial: TLAStateProjection,
-        driver: TLALiveMachineTransitionDriver
-    ) -> TLALiveMachineOwner {
+        driver: TLALiveMachineTransitionDriver<Action>
+    ) -> TLALiveMachineOwner<Action> {
         let identity = TLALiveMachineIdentity()
         let storage = TLALiveMachineStorage(identity: identity, schema: schema, initial: initial, driver: driver)
         return TLALiveMachineOwner(storage: storage, identity: identity, schema: schema)
@@ -400,9 +309,9 @@ public final class TLALiveMachineOwner: Sendable {
     static func create(
         schema: MachineSchema,
         initial: TLAStateProjection,
-        driver: TLALiveMachineTransitionDriver,
+        driver: TLALiveMachineTransitionDriver<Action>,
         observationMailboxCapacity: Int
-    ) -> TLALiveMachineOwner {
+    ) -> TLALiveMachineOwner<Action> {
         let identity = TLALiveMachineIdentity()
         let storage = TLALiveMachineStorage(
             identity: identity,
@@ -415,7 +324,7 @@ public final class TLALiveMachineOwner: Sendable {
     }
 
     /// The common handle for this runtime.
-    public var handle: TLALiveMachine {
+    public var handle: TLALiveMachine<Action> {
         TLALiveMachine(identity: identity, schema: schema, storage: storage)
     }
 
@@ -431,22 +340,22 @@ public final class TLALiveMachineOwner: Sendable {
 /// Every public surface reads or mutates this actor; no supported operation
 /// creates a competing live copy. The commit section is non-suspending, so
 /// once a request is accepted it resolves as exactly one commit or failure.
-actor TLALiveMachineStorage {
+actor TLALiveMachineStorage<Action: Sendable & Equatable> {
     let identity: TLALiveMachineIdentity
     let schema: MachineSchema
-    let driver: TLALiveMachineTransitionDriver
+    let driver: TLALiveMachineTransitionDriver<Action>
     var state: TLAStateProjection
     var position = TLALiveMachinePosition(value: 0)
     private var isEnded = false
     private let observationMailboxCapacity: Int
-    private var subscriptions: [UUID: ObservationSubscriptionState] = [:]
+    private var subscriptions: [UUID: ObservationSubscriptionState<Action>] = [:]
     private let logger = Logger(subsystem: "SwiftTLA", category: "LiveMachine")
 
     init(
         identity: TLALiveMachineIdentity,
         schema: MachineSchema,
         initial: TLAStateProjection,
-        driver: TLALiveMachineTransitionDriver,
+        driver: TLALiveMachineTransitionDriver<Action>,
         observationMailboxCapacity: Int = 64
     ) {
         self.identity = identity
@@ -461,7 +370,7 @@ actor TLALiveMachineStorage {
         return .snapshot(makeSnapshot())
     }
 
-    func observe() -> TLALiveMachineAttachmentOutcome {
+    func observe() -> TLALiveMachineAttachmentOutcome<Action> {
         guard !isEnded else { return .unavailable(.endedByOwner) }
         let subscriptionID = UUID()
         let snapshot = makeSnapshot()
@@ -472,7 +381,7 @@ actor TLALiveMachineStorage {
         return .attached(.init(identity: identity, subscriptionID: subscriptionID, storage: self))
     }
 
-    func next(_ subscriptionID: UUID) async -> TLALiveMachineObservationEvent? {
+    func next(_ subscriptionID: UUID) async -> TLALiveMachineObservationEvent<Action>? {
         guard var subscription = subscriptions[subscriptionID] else { return nil }
         if !subscription.events.isEmpty {
             let event = subscription.events.removeFirst()
@@ -502,8 +411,8 @@ actor TLALiveMachineStorage {
         guard subscription.isLossPending else {
             return .resumed(at: position)
         }
+        guard let loss = subscription.loss else { return .cancelled }
         let snapshot = makeSnapshot()
-        let loss = subscription.loss!
         subscription.events.removeAll { event in
             if case .update = event { return true }
             if case .loss = event { return true }
@@ -544,34 +453,23 @@ actor TLALiveMachineStorage {
         log("ended")
     }
 
-    func execute(_ request: TLALiveActionRequest) -> TLALiveActionOutcome {
+    func execute(_ action: Action, requestID: UUID) -> TLALiveActionOutcome<Action> {
         guard !isEnded else {
-            return rejected(.runtimeUnavailable(.endedByOwner), request: request, current: makeSnapshot())
+            return rejected(.runtimeUnavailable(.endedByOwner), action: action, requestID: requestID, current: makeSnapshot())
         }
         let before = makeSnapshot()
-        guard request.target == identity else {
-            return rejected(.identityMismatch, request: request, current: before)
-        }
-        guard request.schemaIdentifier == schema.identifier else {
-            return rejected(.schemaMismatch, request: request, current: before)
-        }
-        guard let action = schema.actions.first(where: { $0.id == request.invocation.name }) else {
-            return rejected(.unknownAction, request: request, current: before)
-        }
-        guard action.parameters.count == request.invocation.arguments.count else {
-            return rejected(.invalidArity, request: request, current: before)
-        }
-        if let reason = driver.validateInvocation(request.invocation) {
-            return rejected(reason, request: request, current: before)
+        if let reason = driver.validateAction(action) {
+            return rejected(reason, action: action, requestID: requestID, current: before)
         }
         let candidates: [TLAStateProjection]
         do {
-            candidates = try driver.successors(state, request.invocation)
+            candidates = try driver.successors(state, action)
         } catch {
             return failed(
                 code: .evaluationFailed,
                 message: String(describing: error),
-                request: request,
+                action: action,
+                requestID: requestID,
                 current: before
             )
         }
@@ -584,12 +482,13 @@ actor TLALiveMachineStorage {
             return failed(
                 code: .ambiguousSuccessors,
                 message: "The action produced \(candidates.count) successor states; live execution requires a deterministic successor.",
-                request: request,
+                action: action,
+                requestID: requestID,
                 current: before
             )
         }
         guard let candidate = candidates.first else {
-            return rejected(.actionNotEnabled, request: request, current: before)
+            return rejected(.actionNotEnabled, action: action, requestID: requestID, current: before)
         }
         do {
             try driver.decodeState(candidate)
@@ -597,7 +496,8 @@ actor TLALiveMachineStorage {
             return failed(
                 code: .decodeFailed,
                 message: String(describing: error),
-                request: request,
+                action: action,
+                requestID: requestID,
                 current: before
             )
         }
@@ -605,7 +505,8 @@ actor TLALiveMachineStorage {
             return failed(
                 code: .positionExhausted,
                 message: "The runtime ordering position is exhausted.",
-                request: request,
+                action: action,
+                requestID: requestID,
                 current: before
             )
         }
@@ -613,17 +514,17 @@ actor TLALiveMachineStorage {
         position = nextPosition
         let after = makeSnapshot()
         let commit = TLALiveMachineCommit(
-            requestID: request.requestID,
-            invocation: request.invocation,
+            requestID: requestID,
+            action: action,
             before: before,
             after: after
         )
         publish(commit)
-        log("committed", request: request)
+        log("committed", requestID: requestID)
         return .committed(commit)
     }
 
-    private func publish(_ commit: TLALiveMachineCommit) {
+    private func publish(_ commit: TLALiveMachineCommit<Action>) {
         for subscriptionID in Array(subscriptions.keys) {
             guard var subscription = subscriptions[subscriptionID], !subscription.isClosed else { continue }
             subscription.enqueueUpdate(
@@ -637,79 +538,71 @@ actor TLALiveMachineStorage {
     }
 
     private func makeSnapshot() -> TLALiveMachineSnapshot {
-        let availability: TLAMachineObservation.Availability
-        do {
-            availability = .available(try driver.availableInvocations(state))
-        } catch {
-            availability = .unavailable(.init(
-                code: .evaluationFailed,
-                message: String(describing: error)
-            ))
-        }
         return .init(
             identity: identity,
             schemaIdentifier: schema.identifier,
             position: position,
-            state: state,
-            availability: availability
+            state: state
         )
     }
 
     private func rejected(
-        _ reason: TLALiveActionRejection.Reason,
-        request: TLALiveActionRequest,
+        _ reason: TLALiveActionRejection<Action>.Reason,
+        action: Action,
+        requestID: UUID,
         current: TLALiveMachineSnapshot
-    ) -> TLALiveActionOutcome {
-        log("rejected", request: request, detail: "reason=\(reason.code)")
+    ) -> TLALiveActionOutcome<Action> {
+        log("rejected", requestID: requestID, detail: "reason=\(reason.code)")
         return .rejected(.init(
-            requestID: request.requestID,
-            invocation: request.invocation,
+            requestID: requestID,
+            action: action,
             reason: reason,
             current: current
         ))
     }
 
     private func failed(
-        code: TLALiveActionFailure.Code,
+        code: TLALiveActionFailure<Action>.Code,
         message: String,
-        request: TLALiveActionRequest,
+        action: Action,
+        requestID: UUID,
         current: TLALiveMachineSnapshot
-    ) -> TLALiveActionOutcome {
-        log("failed", request: request, detail: "code=\(code.rawValue)")
+    ) -> TLALiveActionOutcome<Action> {
+        log("failed", requestID: requestID, detail: "code=\(code.rawValue)")
         return .failed(.init(
-            requestID: request.requestID,
-            invocation: request.invocation,
+            requestID: requestID,
+            action: action,
             code: code,
             message: message,
             current: current
         ))
     }
 
-    private func log(_ outcome: String, request: TLALiveActionRequest? = nil, detail: String = "") {
+    private func log(_ outcome: String, requestID: UUID? = nil, detail: String = "") {
         let identityValue = identity.value.uuidString
         let schemaIdentifier = schema.identifier
-        let requestID = request?.requestID.uuidString ?? "-"
+        let requestID = requestID?.uuidString ?? "-"
         let positionValue = position.value
         logger.notice("outcome=\(outcome, privacy: .public) identity=\(identityValue, privacy: .public) schema=\(schemaIdentifier, privacy: .public) request=\(requestID, privacy: .public) position=\(positionValue, privacy: .public) detail=\(detail, privacy: .public)")
     }
 }
 
-private struct ObservationSubscriptionState {
-    var events: [TLALiveMachineObservationEvent]
+private struct ObservationSubscriptionState<Action: Sendable & Equatable> {
+    var events: [TLALiveMachineObservationEvent<Action>]
     var ordinaryUpdateCount = 0
     var continuityAnchor: TLALiveMachinePosition
     var isLossPending = false
     var loss: TLALiveMachineObservationLoss?
     var isClosed = false
-    var waiter: CheckedContinuation<TLALiveMachineObservationEvent?, Never>?
+    var waiter: CheckedContinuation<TLALiveMachineObservationEvent<Action>?, Never>?
 
-    init(events: [TLALiveMachineObservationEvent], continuityAnchor: TLALiveMachinePosition) {
+    init(events: [TLALiveMachineObservationEvent<Action>], continuityAnchor: TLALiveMachinePosition) {
         self.events = events
         self.continuityAnchor = continuityAnchor
     }
 
     mutating func enqueueUpdate(
-        _ commit: TLALiveMachineCommit,
+        _ commit: TLALiveMachineCommit<Action>,
         capacity: Int,
         identity: TLALiveMachineIdentity
     ) {
@@ -734,11 +627,11 @@ private struct ObservationSubscriptionState {
         ordinaryUpdateCount += 1
     }
 
-    mutating func enqueueControl(_ event: TLALiveMachineObservationEvent) {
+    mutating func enqueueControl(_ event: TLALiveMachineObservationEvent<Action>) {
         events.append(event)
     }
 
-    mutating func didDeliver(_ event: TLALiveMachineObservationEvent) {
+    mutating func didDeliver(_ event: TLALiveMachineObservationEvent<Action>) {
         switch event {
         case .snapshot(let snapshot, _):
             continuityAnchor = snapshot.position

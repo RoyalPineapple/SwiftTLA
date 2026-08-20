@@ -25,7 +25,7 @@ public struct TLALiveMachineAdapterSnapshot<State: Sendable & Equatable>: Sendab
 /// The single event reducer for a generated observable adapter.
 /// Action requests never mutate this cache. Only subscription events can do so.
 @MainActor
-public final class TLALiveMachineObservableReducer<State: Sendable & Equatable>: Sendable {
+public final class TLALiveMachineObservableReducer<State: Sendable & Equatable, Action: Sendable & Equatable>: Sendable {
     public private(set) var status: TLALiveMachineAdapterStatus = .attaching
     public private(set) var current: TLALiveMachineAdapterSnapshot<State>?
 
@@ -44,7 +44,7 @@ public final class TLALiveMachineObservableReducer<State: Sendable & Equatable>:
     }
 
     @discardableResult
-    public func reduce(_ event: TLALiveMachineObservationEvent) -> TLALiveMachineCommit? {
+    public func reduce(_ event: TLALiveMachineObservationEvent<Action>) -> TLALiveMachineCommit<Action>? {
         switch event {
         case .snapshot(let snapshot, _):
             guard validate(snapshot) else { return nil }

@@ -43,16 +43,17 @@ extension MacroExpander {
     }
 
     static func generateNestedObservableMembers(model: MacroCompilation) -> [DeclSyntax] {
+        let actionType = model.machineSurface.actions.isEmpty ? "Never" : "ActionLabel"
         var declarations = commonAdapterAliases(model: model) + observableCallbacks(model: model)
         declarations += [
             DeclSyntax(stringLiteral: "private let _live: Live"),
-            DeclSyntax(stringLiteral: "private let _reducer: TLALiveMachineObservableReducer<State>"),
-            DeclSyntax(stringLiteral: "private let _subscription: TLALiveMachineObservationSubscription"),
+            DeclSyntax(stringLiteral: "private let _reducer: TLALiveMachineObservableReducer<State, \(actionType)>"),
+            DeclSyntax(stringLiteral: "private let _subscription: TLALiveMachineObservationSubscription<\(actionType)>"),
             DeclSyntax(stringLiteral: "private var _observationTask: Task<Void, Never>?"),
             DeclSyntax(stringLiteral: """
             @MainActor public init(live: Live) async throws {
                 _live = live
-                _reducer = TLALiveMachineObservableReducer(
+                _reducer = TLALiveMachineObservableReducer<State, \(actionType)>(
                     identity: live.identity,
                     schemaIdentifier: live.schema.identifier,
                     decode: { try State(projection: $0) }
@@ -108,7 +109,7 @@ extension MacroExpander {
     static func observableReducerMethod(model: MacroCompilation) -> String {
         guard model.machineSurface.actions.isEmpty == false else {
             return """
-            private func _reduce(_ event: TLALiveMachineObservationEvent, subscription: TLALiveMachineObservationSubscription) async {
+            private func _reduce(_ event: TLALiveMachineObservationEvent<Never>, subscription: TLALiveMachineObservationSubscription<Never>) async {
                 _ = _reducer.reduce(event)
                 if case .loss = event { _ = await subscription.resynchronize() }
             }
@@ -122,12 +123,11 @@ extension MacroExpander {
             return "case \(pattern): if let \(callbackName) { await \(callbackName)(\(arguments)) }"
         }.joined(separator: "\n")
         return """
-        private func _reduce(_ event: TLALiveMachineObservationEvent, subscription: TLALiveMachineObservationSubscription) async {
+        private func _reduce(_ event: TLALiveMachineObservationEvent<ActionLabel>, subscription: TLALiveMachineObservationSubscription<ActionLabel>) async {
             let contiguousCommit = _reducer.reduce(event)
             if case .loss = event { _ = await subscription.resynchronize() }
             guard let commit = contiguousCommit,
-                  let ordinal = \(model.typeName)._machineSurfacePlan.actions.firstIndex(where: { $0.formalName == commit.invocation.name }),
-                  let action = ordinal.flatMap({ \(model.typeName)._actionLabel(actionAt: $0, arguments: commit.invocation.arguments) }),
+                  let action = commit.action,
                   let before = try? State(projection: commit.before.state),
                   let after = try? State(projection: commit.after.state) else { return }
             switch action {
