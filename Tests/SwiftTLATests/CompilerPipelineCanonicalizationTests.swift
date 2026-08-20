@@ -661,7 +661,6 @@ struct CompilerPipelineCanonicalizationTests {
 
         #expect(try CompilerPipelineAlgorithmModel.compiledSpecification().identity == compilation.identity)
         #expect(try CompilerPipelineAlgorithmModel.verifySpec() > 0)
-        #expect(try CompilerPipelineAlgorithmModel.transitionMatrix().isEmpty == false)
         #expect(try compilation.renderedTLAModuleBundle().tla == try CompilerPipelineAlgorithmModel.spec.compile().renderedTLAModuleBundle().tla)
     }
 
@@ -804,7 +803,6 @@ struct CompilerPipelineCanonicalizationTests {
 
         #expect(try CompilerPipelineGeneratedModel.compiledSpecification().identity == compilation.identity)
         #expect(try CompilerPipelineGeneratedModel.verifySpec() > 0)
-        #expect(try CompilerPipelineGeneratedModel.transitionMatrix().isEmpty == false)
         #expect(try compilation.renderedTLAModuleBundle().tla == try CompilerPipelineGeneratedModel.spec.compile().renderedTLAModuleBundle().tla)
     }
 

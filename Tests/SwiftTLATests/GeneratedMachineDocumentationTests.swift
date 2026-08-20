@@ -160,7 +160,6 @@ struct GeneratedMachineDocumentationTests {
         "reduces a contiguous committed update",
         "Generated `VerificationError`",
         "Generated `verifySpec()`",
-        "Generated `transitionMatrix()`",
         "Generated `verifyTransitions()`",
         "Generated `verifyInvariants()`",
         "Generated `synchronousMachineObservation()`"

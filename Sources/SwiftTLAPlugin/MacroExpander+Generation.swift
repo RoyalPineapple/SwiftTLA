@@ -55,17 +55,13 @@ extension MacroExpander {
             }
             return matrix
         }
-        public static func transitionMatrix() throws -> [(from: State, invocation: TLAActionInvocation, to: State)] {
-            try _formalTransitionMatrix().map {
-                (from: try State(projection: $0.from), invocation: $0.invocation, to: try State(projection: $0.to))
-            }
-        }
         """)]
     }
     static func generateTransitionsTest(hasActions: Bool) -> [DeclSyntax] {
         if !hasActions { return [] }
         return [DeclSyntax(stringLiteral: """
-        public static func verifyTransitions() throws {
+        @discardableResult
+        public static func verifyTransitions() throws -> Int {
             let matrix = try Self._formalTransitionMatrix()
             var verified = Array(repeating: false, count: matrix.count)
             for index in matrix.indices where !verified[index] {
@@ -88,18 +84,22 @@ extension MacroExpander {
                     actual.remove(at: match)
                 }
             }
+            return matrix.count
         }
         """)]
     }
     static func generateInvariantsTest() -> [DeclSyntax] {
         [DeclSyntax(stringLiteral: """
-        public static func verifyInvariants() throws {
+        @discardableResult
+        public static func verifyInvariants() throws -> Int {
             let matrix = try Self._formalTransitionMatrix()
             let runtime = try Self._runtime()
+            var verifiedCount = 0
             for (_, invocation, successor) in matrix {
                 for outcome in runtime.invariantOutcomes(in: successor) {
                     switch outcome {
                     case .satisfied:
+                        verifiedCount += 1
                         continue
                     case .violated(let name):
                         throw VerificationError("\\(name) violated by \\(invocation)")
@@ -108,6 +108,7 @@ extension MacroExpander {
                     }
                 }
             }
+            return verifiedCount
         }
         """)]
     }
