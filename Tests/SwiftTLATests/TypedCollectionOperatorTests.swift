@@ -340,10 +340,14 @@ private struct FoldGeneratedModel {
         ]))
 
         NonEmptySubsetGeneratedModel._checkParserTree()
-        let initialStates = try computeInitialStates(NonEmptySubsetGeneratedModel.spec)
+        let compilation = try NonEmptySubsetGeneratedModel.spec.compile()
+        let selectedKeys = try #require(compilation.layout.variableID(named: "selectedKeys"))
+        let initialStates = try CompiledRuntime(compilation: compilation).initialStates()
         #expect(initialStates.count == 3)
         let representative = NonEmptySubsetGeneratedModel.spec.variables.first?.initial
-        #expect(initialStates.contains { $0["selectedKeys"] == representative })
+        #expect(try initialStates.contains {
+            try $0.value(for: selectedKeys).rendered(using: compilation.layout) == representative
+        })
         #expect(try NonEmptySubsetGeneratedModel.spec.compile().renderedTLAModuleBundle().tla.contains("SUBSET"))
     }
 

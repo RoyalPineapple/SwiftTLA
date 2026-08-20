@@ -249,8 +249,11 @@ struct GeneratedRangeInitializedAlgorithm {
 struct GeneratedRangeInitializedAlgorithmTests {
     @Test("#spec independently parses a finite SharedVar initial range")
     func generatedRangePreservesEveryInitialHour() {
-        let initialHours = try computeInitialStates(GeneratedRangeInitializedAlgorithm.spec)
-            .compactMap { $0["hour"] }
+        let compilation = try GeneratedRangeInitializedAlgorithm.spec.compile()
+        let hour = try #require(compilation.layout.variableID(named: "hour"))
+        let initialHours = try CompiledRuntime(compilation: compilation).initialStates().map {
+            try $0.value(for: hour).rendered(using: compilation.layout)
+        }
 
         #expect(Set(initialHours) == [.int(1), .int(2), .int(3)])
         #expect(GeneratedRangeInitializedAlgorithm.spec.variables.first { $0.name == "hour" }?.initialSet
@@ -409,9 +412,13 @@ struct GeneratedDependentInitialAlgorithm {
 struct GeneratedDependentInitialAlgorithmTests {
     @Test("#spec independently preserves a dependent typed function initializer")
     func generatedModelPreservesDependentInitialStates() {
-        let states = try computeInitialStates(GeneratedDependentInitialAlgorithm.spec)
+        let compilation = try GeneratedDependentInitialAlgorithm.spec.compile()
+        let mirrors = try #require(compilation.layout.variableID(named: "mirrors"))
+        let states = try CompiledRuntime(compilation: compilation).initialStates().map {
+            try $0.value(for: mirrors).rendered(using: compilation.layout)
+        }
 
-        #expect(Set(states.compactMap { $0["mirrors"] }) == [
+        #expect(Set(states) == [
             .function([.string("left"): .string("inactive"), .string("right"): .string("inactive")]),
             .function([.string("left"): .string("active"), .string("right"): .string("inactive")])
         ])
