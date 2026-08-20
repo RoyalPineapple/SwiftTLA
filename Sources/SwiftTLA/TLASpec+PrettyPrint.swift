@@ -12,8 +12,8 @@ extension TLASpec {
     func renderTLAModuleSource(sectionPlan: DirectModuleSectionPlan) -> String {
         validateSymmetricCollectionExport()
         let varNames = variables.map(\.name)
-        let algorithmSymbols = algorithmExportSymbols(sourceAlgorithms, actions: actions)
-        let emittedActionNames = tlaActionNames(actions, preferredNames: algorithmSymbols.actionNames)
+        let controlSymbols = controlExportSymbols(sourceAlgorithms, actions: actions)
+        let emittedActionNames = tlaActionNames(actions, preferredNames: controlSymbols.actionNames)
         let varsTuple = varNames.count == 1 ? varNames[0] : "<<\(varNames.joined(separator: ", "))>>"
         let isLibraryModule = variables.isEmpty && actions.isEmpty
         var lines: [String] = []
@@ -164,7 +164,7 @@ extension TLASpec {
             let parameters = action.bindings.map(\.name).joined(separator: ", ")
             let emittedName = emittedActionNames[action.name] ?? action.name
             let header = parameters.isEmpty ? emittedName : "\(emittedName)(\(parameters))"
-            lines.append("\(header) == \(action.body.tlaModuleSource)")
+            lines.append("\(header) == \(exportControlStates(in: action.body, using: controlSymbols).tlaModuleSource)")
             for variant in actionInvocations(action) where !variant.indices.isEmpty {
                 let suffix = variant.indices.map(String.init).joined(separator: "_")
                 lines.append("\(emittedName)__\(suffix) == \(variant.invocation)")
@@ -211,7 +211,7 @@ extension TLASpec {
         }
 
         lines.append("====")
-        return algorithmSymbols.rewrite(lines.joined(separator: "\n") + "\n")
+        return lines.joined(separator: "\n") + "\n"
     }
 
     private func fairnessForm(
@@ -319,27 +319,14 @@ private func tlaActionNames(
 /// and stores that same label in `pc`.  Keep that distinction at the export
 /// boundary: the executable Swift model remains stable while the independently
 /// translated TLA+ modules expose the same administrative state.
-private struct AlgorithmExportSymbols {
+private struct ControlExportSymbols {
     let actionNames: [String: String]
-    let stringLiterals: [String: String]
-
-    func rewrite(_ source: String) -> String {
-        var result = source
-        // `__pcal_stack` is a SwiftTLA implementation identifier.  The
-        // official translator calls the corresponding PlusCal variable
-        // `stack`; its name is part of the TLC state graph.
-        result = result.replacingOccurrences(of: "__pcal_stack", with: "stack")
-        for (from, to) in stringLiterals {
-            result = result.replacingOccurrences(of: "\"\(from)\"", with: "\"\(to)\"")
-        }
-        return result
-    }
 }
 
-private func algorithmExportSymbols(
+private func controlExportSymbols(
     _ algorithms: [Algorithm],
     actions: [NamedAction]
-) -> AlgorithmExportSymbols {
+) -> ControlExportSymbols {
     let actionNames = Set(actions.map(\.name))
     var candidates: [(qualified: String, label: String)] = []
     for algorithm in algorithms {
@@ -364,7 +351,93 @@ private func algorithmExportSymbols(
             && !unqualifiedActions.contains($0.label)
     }
     let names = Dictionary(uniqueKeysWithValues: usable.map { ($0.qualified, $0.label) })
-    return AlgorithmExportSymbols(actionNames: names, stringLiterals: names)
+    return ControlExportSymbols(actionNames: names)
+}
+
+/// Projects only administrative control-state values for direct TLA+ export.
+/// Procedure action names stay qualified in the executable model so generated
+/// Swift APIs remain unambiguous.  The external PlusCal translator uses the
+/// unqualified labels in `pc`; rewrite those values while they are still AST
+/// nodes, never by searching rendered module text.
+private func exportControlStates(
+    in action: ActionExpr,
+    using symbols: ControlExportSymbols
+) -> ActionExpr {
+    func controlValue(_ expression: StateExpr) -> StateExpr {
+        switch expression {
+        case .value(.string(let value)):
+            return .value(.string(symbols.actionNames[value] ?? value))
+        case .except(let function, let key, let value):
+            return .except(function, key, controlValue(value))
+        case .tupleLiteral(let values):
+            return .tupleLiteral(values.map(controlValue))
+        case .tupleConcatenate(let lhs, let rhs):
+            return .tupleConcatenate(controlValue(lhs), controlValue(rhs))
+        case .recordLiteral(let fields):
+            return .recordLiteral(fields.mapValues(controlValue))
+        default:
+            return expression
+        }
+    }
+
+    func isControlReference(_ expression: StateExpr) -> Bool {
+        switch expression {
+        case .variable("pc"):
+            return true
+        case .functionApply(.variable("pc"), _):
+            return true
+        default:
+            return false
+        }
+    }
+
+    func controlGuard(_ expression: StateExpr) -> StateExpr {
+        switch expression {
+        case .equal(let lhs, let rhs) where isControlReference(lhs):
+            return .equal(lhs, controlValue(rhs))
+        case .equal(let lhs, let rhs) where isControlReference(rhs):
+            return .equal(controlValue(lhs), rhs)
+        case .notEqual(let lhs, let rhs) where isControlReference(lhs):
+            return .notEqual(lhs, controlValue(rhs))
+        case .notEqual(let lhs, let rhs) where isControlReference(rhs):
+            return .notEqual(controlValue(lhs), rhs)
+        default:
+            return expression
+        }
+    }
+
+    switch action {
+    case .assign(let name, let value):
+        // `stack` is compiler-owned procedure-frame state. Its return `pc`
+        // is another control-state value and must use the same projection.
+        return .assign(name, name == "pc" || name == "stack" ? controlValue(value) : value)
+    case .unchanged:
+        return action
+    case .chooseAction:
+        return action
+    case .guard_(let condition):
+        return .guard_(controlGuard(condition))
+    case .existsAction(let name, let set, let body):
+        return .existsAction(name, set, exportControlStates(in: body, using: symbols))
+    case .ifElse(let condition, let then, let otherwise):
+        return .ifElse(
+            controlGuard(condition),
+            exportControlStates(in: then, using: symbols),
+            exportControlStates(in: otherwise, using: symbols)
+        )
+    case .define(let name, let value, let body):
+        return .define(name, value, exportControlStates(in: body, using: symbols))
+    case .and(let lhs, let rhs):
+        return .and(
+            exportControlStates(in: lhs, using: symbols),
+            exportControlStates(in: rhs, using: symbols)
+        )
+    case .or(let lhs, let rhs):
+        return .or(
+            exportControlStates(in: lhs, using: symbols),
+            exportControlStates(in: rhs, using: symbols)
+        )
+    }
 }
 
 /// Push UNCHANGED into every OR branch after distributing AND over OR.
