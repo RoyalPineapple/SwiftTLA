@@ -47,9 +47,9 @@ extension MacroExpander {
                 for t in transitions {
                     guard let toState = graph.states[t.target] else { continue }
                     matrix.append((
-                        from: try TLAStateProjection(formalValues: fromState),
+                        from: fromState,
                         invocation: t.label.invocation,
-                        to: try TLAStateProjection(formalValues: toState)
+                        to: toState
                     ))
                 }
             }

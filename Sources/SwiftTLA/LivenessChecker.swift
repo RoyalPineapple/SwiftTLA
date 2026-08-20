@@ -109,8 +109,8 @@ public struct LivenessChecker {
     public func checkAlways(_ predicate: StateExpr, fairSCCs: [Set<StateGraph.StateID>]) throws -> TemporalResult {
         for component in fairSCCs {
             for state in component {
-                guard let values = graph.states[state] else { continue }
-                if try !predicate.evaluateBool(in: values) {
+                guard let projection = graph.states[state] else { continue }
+                if try !predicate.evaluateBool(in: projection.formalValues) {
                     return .violated("[]P: predicate failed in state \(state)", trace: [state])
                 }
             }
@@ -121,7 +121,7 @@ public struct LivenessChecker {
     public func checkEventually(_ predicate: StateExpr, fairSCCs: [Set<StateGraph.StateID>]) throws -> TemporalResult {
         for component in fairSCCs {
             let holds = try component.contains { state in
-                try predicate.evaluateBool(in: graph.states[state] ?? [:])
+                try predicate.evaluateBool(in: graph.states[state]?.formalValues ?? [:])
             }
             if !holds, let first = component.sorted(by: stateOrder).first {
                 return .violated("<>P: no state in SCC satisfies predicate", trace: [first])
@@ -132,8 +132,8 @@ public struct LivenessChecker {
 
     public func checkLeadsTo(_ from: StateExpr, _ to: StateExpr, fairSCCs: [Set<StateGraph.StateID>]) throws -> TemporalResult {
         for component in fairSCCs {
-            let hasFrom = try component.contains { try from.evaluateBool(in: graph.states[$0] ?? [:]) }
-            let hasTo = try component.contains { try to.evaluateBool(in: graph.states[$0] ?? [:]) }
+            let hasFrom = try component.contains { try from.evaluateBool(in: graph.states[$0]?.formalValues ?? [:]) }
+            let hasTo = try component.contains { try to.evaluateBool(in: graph.states[$0]?.formalValues ?? [:]) }
             if hasFrom, !hasTo, let first = component.sorted(by: stateOrder).first {
                 return .violated("~>: 'from' holds but 'to' never reached in SCC", trace: [first])
             }
@@ -217,8 +217,9 @@ public struct LivenessChecker {
         case .leadsTo(let from, _):
             let triggers: Set<StateGraph.StateID>
             do {
-                triggers = Set(try graph.states.compactMap { state, values in
-                    try from.evaluateBool(in: values) && !(selfValue(values, for: property)) ? state : nil
+                triggers = Set(try graph.states.compactMap { state, projection in
+                    try from.evaluateBool(in: projection.formalValues)
+                        && !(selfValue(projection.formalValues, for: property)) ? state : nil
                 })
             } catch {
                 return .init(status: .unavailable, reason: .evaluationFailed, diagnostic: String(describing: error))
@@ -260,13 +261,13 @@ public struct LivenessChecker {
     }
 
     private func evaluate(_ property: TemporalExpr) throws -> [StateGraph.StateID: Bool] {
-        try Dictionary(uniqueKeysWithValues: graph.states.map { state, values in
+        try Dictionary(uniqueKeysWithValues: graph.states.map { state, projection in
             let predicate: StateExpr
             switch property {
             case .always(let value), .eventually(let value), .alwaysEventually(let value), .eventuallyAlways(let value): predicate = value
             case .leadsTo(_, let value): predicate = value
             }
-            return (state, try predicate.evaluateBool(in: values))
+            return (state, try predicate.evaluateBool(in: projection.formalValues))
         })
     }
 

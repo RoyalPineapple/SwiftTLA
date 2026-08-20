@@ -475,8 +475,12 @@ extension TemporalSymmetryConformanceRunner {
   }
 
   private func stateKeys(_ exploration: ModelExplorationResult) throws -> [StateGraph.StateID: String] {
-    Dictionary(uniqueKeysWithValues: exploration.graph.states.map { id, bindings in
-      (id, CanonicalState(bindings: bindings.mapValues(CanonicalValue.init)).key.canonicalEncoding)
+    Dictionary(uniqueKeysWithValues: exploration.graph.states.map { id, projection in
+      let bindings = Dictionary(
+        uniqueKeysWithValues: projection.entries.map { entry in
+          (entry.token.description, CanonicalValue(entry.value))
+        })
+      return (id, CanonicalState(bindings: bindings).key.canonicalEncoding)
     })
   }
 

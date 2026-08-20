@@ -57,8 +57,8 @@ public struct SwiftGraphAdapter: Sendable {
       uniqueKeysWithValues: valueNormalizations.map { ($0.binding, $0) }
     )
     let states = Dictionary(
-      uniqueKeysWithValues: try exploration.graph.states.map { identifier, bindings in
-        (identifier, try canonicalState(bindings, normalizations: normalizations))
+      uniqueKeysWithValues: try exploration.graph.states.map { identifier, projection in
+        (identifier, try canonicalState(projection, normalizations: normalizations))
       })
     let initialStates = try exploration.initialStateIDs.map { identifier in
       guard let state = states[identifier] else {
@@ -97,11 +97,13 @@ public struct SwiftGraphAdapter: Sendable {
   }
 
   private func canonicalState(
-    _ bindings: [String: TLAValue],
+    _ projection: TLAStateProjection,
     normalizations: [String: CoreConformanceValueNormalization]
   ) throws -> CanonicalState {
     var canonicalBindings: [String: CanonicalValue] = [:]
-    for (binding, value) in bindings {
+    for entry in projection.entries {
+      let binding = entry.token.description
+      let value = entry.value
       let canonical = CanonicalValue(value)
       canonicalBindings[binding] =
         try normalizations[binding].map {

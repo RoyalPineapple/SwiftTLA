@@ -23,13 +23,13 @@ public struct StateGraph: Sendable {
     }
 
     public let transitions: [StateID: [Transition]]
-    public let states: [StateID: [String: TLAValue]]
+    public let states: [StateID: TLAStateProjection]
 
     public init(
         specName: String,
         variableNames: [String],
         transitions: [StateID: [Transition]],
-        states: [StateID: [String: TLAValue]]
+        states: [StateID: TLAStateProjection]
     ) {
         self.specName = specName
         self.variableNames = variableNames

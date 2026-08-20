@@ -59,7 +59,10 @@ struct CoreConformanceCanonicalizationTests {
                 specName: "NormalizedFixture",
                 variableNames: ["cars"],
                 transitions: [first: [.init(label: .init(.init(name: "move")), target: second)]],
-                states: [first: ["cars": firstCars], second: ["cars": secondCars]]
+                states: [
+                    first: try .init(formalValues: ["cars": firstCars]),
+                    second: try .init(formalValues: ["cars": secondCars])
+                ]
             ),
             initialStateIDs: [first],
             result: .ok(statesCount: 2)

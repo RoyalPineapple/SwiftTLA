@@ -279,7 +279,7 @@ import UpstreamParity
     let runtime = try SpecRuntime(spec: spec)
 
     for (sourceID, source) in graph.states {
-      let checked = (graph.transitions[sourceID] ?? []).compactMap { transition -> (TLAActionInvocation, [String: TLAValue])? in
+      let checked = (graph.transitions[sourceID] ?? []).compactMap { transition -> (TLAActionInvocation, TLAStateProjection)? in
         guard let successor = graph.states[transition.target] else { return nil }
         return (transition.label.invocation, successor)
       }
@@ -318,7 +318,7 @@ import UpstreamParity
     let runtime = try SpecRuntime(spec: spec)
 
     for (sourceID, source) in graph.states {
-      let checked = (graph.transitions[sourceID] ?? []).compactMap { transition -> (TLAActionInvocation, [String: TLAValue])? in
+      let checked = (graph.transitions[sourceID] ?? []).compactMap { transition -> (TLAActionInvocation, TLAStateProjection)? in
         guard let successor = graph.states[transition.target] else { return nil }
         return (transition.label.invocation, successor)
       }
@@ -333,7 +333,7 @@ import UpstreamParity
   }
 
   private func multiset(
-    _ transitions: [(TLAActionInvocation, [String: TLAValue])]
+    _ transitions: [(TLAActionInvocation, TLAStateProjection)]
   ) -> [String: Int] {
     Dictionary(
       transitions.map { ("\($0.0.description) -> \($0.1)", 1) },
@@ -524,7 +524,7 @@ import UpstreamParity
     }
     let graph = try ModelChecker(spec: spec, maxStates: 100).exploreGraph()
     #expect(graph.states.count == 5)  // 0,1,2,3,4
-    let values = Set(graph.states.values.compactMap { $0["x"] })
+    let values = Set(graph.states.values.compactMap { $0.formalValues["x"] })
     #expect(values == Set([.int(0), .int(1), .int(2), .int(3), .int(4)]))
   }
 

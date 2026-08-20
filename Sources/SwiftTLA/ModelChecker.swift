@@ -175,10 +175,14 @@ private func compiledBFS(
         try state.projected(using: layout)
     }
 
+    func stateProjection(_ state: FormalState) throws -> TLAStateProjection {
+        try .init(formalValues: projected(state))
+    }
+
     func graph() throws -> StateGraph {
-        var states: [StateGraph.StateID: [String: TLAValue]] = [:]
+        var states: [StateGraph.StateID: TLAStateProjection] = [:]
         for (id, state) in idToState {
-            states[id] = try projected(state)
+            states[id] = try stateProjection(state)
         }
         return StateGraph(
             specName: specificationName,
