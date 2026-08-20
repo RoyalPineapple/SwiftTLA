@@ -2,9 +2,9 @@
 
 `@TLAModel` turns a verified `TLASpec` declaration into a Swift machine.
 This guide documents the generated-machine public contract. A generated model
-defines schema and formal behavior. A `TLALiveMachine` is the only mutable
-live instance of that model. See [Live Machines](LiveMachines.md) for shared
-inspection, observation, and control.
+defines schema and formal behavior. Its `Live` value owns the mutable runtime.
+See [Live Machines](LiveMachines.md) for shared inspection, observation, and
+control.
 Read [the SwiftTLA DocC catalog](../Sources/SwiftTLA/SwiftTLA.docc/SwiftTLA.md)
 for the symbol-oriented reference.
 
@@ -69,7 +69,7 @@ struct BoundedCounter {
 }
 ```
 
-This example has one integer variable and two reachable values. It does not demonstrate unbounded state spaces, temporal properties, fairness, or a UI.
+This example has one integer variable and two reachable values.
 
 The fixture is the compilation authority for this example. It uses Swift tools 5.9 and the macOS 14 package context declared in `Package.swift`.
 
@@ -104,7 +104,7 @@ func runDirectAction() throws {
 `TransitionResult` records the typed action and typed state before and after
 the transition.
 
-`apply(_:)` throws `GeneratedMachineError` when it cannot execute an invocation. A rejected invocation does not replace the current snapshot.
+`apply(_:)` throws `GeneratedMachineError` for a rejected action label. The current snapshot remains available after that error.
 
 Use `machineObservation()` when code needs state and availability together. It
 returns the generated `MachineObservation`, with typed `State` and typed
@@ -115,14 +115,10 @@ the shared live-machine path.
 
 ## Run a live machine
 
-Create the runtime once with `TLALiveMachineOwner.create(for:)`, then bind the
-generated `Live` façade to its existing handle. Binding validates exact schema
-compatibility and never creates a second machine.
+Create the typed live runtime with the generated model factory.
 
 ```swift
-let owner = try TLALiveMachineOwner.create(for: BoundedCounter.self)
-let handle = owner.handle
-let live = try BoundedCounter.Live(handle: handle)
+let live = try BoundedCounter.makeLive()
 
 switch await live.execute(.advance) {
 case .committed(let transition):
@@ -141,8 +137,7 @@ changes state. An accepted action is non-cancellable: it completes as
 ## Nest a machine
 
 Put `@TLAActor` or `@TLAObservable` on a nested type inside a `@TLAModel`
-struct. Bind the generated adapter to a compatible existing live handle. It
-does not own model state, a second runtime, or shutdown authority.
+struct. Create the generated adapter with the enclosing model's `Live` value.
 
 **Example ID:** `generated-machine-actor`  
 **Fixture:** `Tests/Fixtures/GeneratedMachineDocumentation/Sources/GeneratedMachineDocumentation/ActorAccess.swift`
@@ -188,8 +183,8 @@ struct CounterHost {
 }
 
 func runActorAccess() async throws {
-    let owner = try TLALiveMachineOwner.create(for: CounterHost.self)
-    let actor = try await CounterHost.Actor(handle: owner.handle)
+    let live = try CounterHost.makeLive()
+    let actor = CounterHost.Actor(live: live)
     let result = try await actor.apply(.advance)
 
     guard case .committed(let commit) = result else { return }
@@ -198,20 +193,21 @@ func runActorAccess() async throws {
 ```
 
 The nested actor is asynchronous. Call `current()` or `apply(_:)` across its
-actor boundary. It shares identity and state with every handle from the same
-owner.
+actor boundary. It shares identity and state with adapters created from the
+same `Live` value.
 
 Nested adapters expose the enclosing model's `State`, `ActionLabel`, and
 `TransitionResult` through type aliases.
 
 ## Isolation and callbacks
 
-A nested `@TLAObservable` adapter is main-actor isolated. It must be nested in
-one `@TLAModel` struct. `@TLAActor` has the same nesting requirement. Neither adapter owns a formal specification or generates an independent machine.
+A nested `@TLAObservable` adapter is main-actor isolated. It is nested in one
+`@TLAModel` struct. `@TLAActor` has the same nesting requirement. Adapters
+share the enclosing model's typed `Live` runtime.
 
-A nested observable requires `await Observable(handle:)`. It attaches to that
-runtime and derives its typed cache only from observation events. It does not
-provide automatic SwiftUI invalidation beyond its main-actor properties.
+A nested observable uses `await Observable(live:)`. It attaches to that
+runtime and derives its typed cache from observation events. Its main-actor
+properties provide SwiftUI observation.
 
 For each action, a nested observable generates an `on<Action>` callback property. The callback receives action parameters, when present, and typed state values from before and after a successful execution.
 
@@ -260,8 +256,8 @@ struct CounterScreenModel {
 
 @MainActor
 func runObservable() async throws {
-    let owner = try TLALiveMachineOwner.create(for: CounterScreenModel.self)
-    let observable = try await CounterScreenModel.Observable(handle: owner.handle)
+    let live = try CounterScreenModel.makeLive()
+    let observable = try await CounterScreenModel.Observable(live: live)
     observable.onAdvance = { before, after in
         assert(before.value == 0)
         assert(after.value == 1)
@@ -349,9 +345,8 @@ P1 core graph evidence and P3 temporal and symmetry evidence have separate regis
 
 ## SwiftUI
 
-Keep the live owner and a handle-bound observable adapter in view state. The
-adapter receives its state from the runtime observation, not from a copied
-model value.
+Keep the typed `Live` value and observable adapter in view state. The adapter
+receives its state from runtime observation.
 
 **Example ID:** `generated-machine-swiftui`  
 **Fixture:** `Tests/Fixtures/GeneratedMachineDocumentation/Sources/GeneratedMachineDocumentation/CounterView.swift`
@@ -363,7 +358,7 @@ import SwiftTLA
 import SwiftUI
 
 struct CounterView: View {
-    @State private var owner: TLALiveMachineOwner?
+    @State private var live: CounterScreenModel.Live?
     @State private var machine: CounterScreenModel.Observable?
     @State private var diagnostic = ""
 
@@ -388,11 +383,11 @@ struct CounterView: View {
             }
         }
         .task {
-            guard owner == nil else { return }
+            guard live == nil else { return }
             do {
-                let owner = try TLALiveMachineOwner.create(for: CounterScreenModel.self)
-                self.owner = owner
-                machine = try await CounterScreenModel.Observable(handle: owner.handle)
+                let live = try CounterScreenModel.makeLive()
+                self.live = live
+                machine = try await CounterScreenModel.Observable(live: live)
             } catch {
                 diagnostic = String(describing: error)
             }
@@ -413,12 +408,9 @@ The following table is the public inventory for this guide. Sources identify the
 | Name | Role and observable contract | Source |
 |---|---|---|
 | `@TLAModel` | Attaches generated machine members to a struct, class, or actor with a `TLASpec`. | [Macros.swift](../Sources/SwiftTLAMacros/Macros.swift), [ModelMacro.swift](../Sources/SwiftTLAPlugin/ModelMacro.swift) |
-| `@TLAActor` | Requires a nested type. Its generated actor binds an existing compatible `TLALiveMachine` handle. | [Macros.swift](../Sources/SwiftTLAMacros/Macros.swift), [MacroExpander+Adapters.swift](../Sources/SwiftTLAPlugin/MacroExpander+Adapters.swift) |
-| `@TLAObservable` | Requires a nested type. Its generated main-actor adapter binds an existing compatible handle and reduces observation events. | [Macros.swift](../Sources/SwiftTLAMacros/Macros.swift), [MacroExpander+Adapters.swift](../Sources/SwiftTLAPlugin/MacroExpander+Adapters.swift) |
-| `TLALiveMachineOwner` | Creates one live runtime, vends its common handle, and is the sole explicit shutdown authority. | [LiveMachine.swift](../Sources/SwiftTLA/LiveMachine.swift) |
-| `TLALiveMachine` | Common handle for runtime identity, schema, current snapshot, and observation. | [LiveMachine.swift](../Sources/SwiftTLA/LiveMachine.swift) |
-| Generated `Live` | Schema-validated typed façade over an existing live handle. | [MacroExpander+LiveMachine.swift](../Sources/SwiftTLAPlugin/MacroExpander+LiveMachine.swift) |
-| `TLALiveMachineObservationSubscription` | Single-consumer async observation with snapshot, update, explicit loss, recovery, and owner termination. | [LiveMachineObservation.swift](../Sources/SwiftTLA/LiveMachineObservation.swift) |
+| `@TLAActor` | Requires a nested type. Its generated actor accepts the enclosing model's typed `Live` value. | [Macros.swift](../Sources/SwiftTLAMacros/Macros.swift), [MacroExpander+Adapters.swift](../Sources/SwiftTLAPlugin/MacroExpander+Adapters.swift) |
+| `@TLAObservable` | Requires a nested type. Its generated main-actor adapter accepts the enclosing model's typed `Live` value and reduces observation events. | [Macros.swift](../Sources/SwiftTLAMacros/Macros.swift), [MacroExpander+Adapters.swift](../Sources/SwiftTLAPlugin/MacroExpander+Adapters.swift) |
+| Generated `Live` | Creates and owns one typed live runtime. | [MacroExpander+LiveMachine.swift](../Sources/SwiftTLAPlugin/MacroExpander+LiveMachine.swift) |
 | `GeneratedMachineError` | Wraps a runtime error, an unexpected error, or an unrepresentable action label. | [CanonicalMachine.swift](../Sources/SwiftTLA/CanonicalMachine.swift) |
 | Generated `VerificationError` | Error type returned by generated verification helpers when the bounded check does not succeed. | [MacroExpander+Generation.swift](../Sources/SwiftTLAPlugin/MacroExpander+Generation.swift) |
 | Generated `verifySpec()` | Runs the generated bounded specification check and returns its explored-state count; it uses `TLAModelType.verificationStateLimit` (default: `100_000`). | [MacroExpander+Generation.swift](../Sources/SwiftTLAPlugin/MacroExpander+Generation.swift) |

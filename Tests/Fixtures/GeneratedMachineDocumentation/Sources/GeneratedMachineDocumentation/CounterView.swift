@@ -4,7 +4,7 @@ import SwiftTLA
 import SwiftUI
 
 struct CounterView: View {
-    @State private var owner: TLALiveMachineOwner?
+    @State private var live: CounterScreenModel.Live?
     @State private var machine: CounterScreenModel.Observable?
     @State private var diagnostic = ""
 
@@ -33,11 +33,11 @@ struct CounterView: View {
             }
         }
         .task {
-            guard owner == nil else { return }
+            guard live == nil else { return }
             do {
-                let owner = try CounterScreenModel.makeLiveOwner()
-                self.owner = owner
-                machine = try await CounterScreenModel.Observable(handle: owner.handle)
+                let live = try CounterScreenModel.makeLive()
+                self.live = live
+                machine = try await CounterScreenModel.Observable(live: live)
             } catch {
                 diagnostic = String(describing: error)
             }

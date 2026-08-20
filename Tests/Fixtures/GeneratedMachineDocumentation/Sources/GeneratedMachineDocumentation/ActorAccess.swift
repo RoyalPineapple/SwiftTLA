@@ -38,8 +38,8 @@ struct CounterHost {
 }
 
 func runActorAccess() async throws {
-    let owner = try CounterHost.makeLiveOwner()
-    let actor = try CounterHost.Actor(handle: owner.handle)
+    let live = try CounterHost.makeLive()
+    let actor = CounterHost.Actor(live: live)
     let result = try await actor.apply(.advance)
 
     guard case .committed(let commit) = result else { return }

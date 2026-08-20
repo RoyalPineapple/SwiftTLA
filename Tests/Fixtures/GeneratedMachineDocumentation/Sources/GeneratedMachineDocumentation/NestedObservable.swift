@@ -39,8 +39,8 @@ struct CounterScreenModel {
 
 @MainActor
 func runObservable() async throws {
-    let owner = try CounterScreenModel.makeLiveOwner()
-    let observable = try await CounterScreenModel.Observable(handle: owner.handle)
+    let live = try CounterScreenModel.makeLive()
+    let observable = try await CounterScreenModel.Observable(live: live)
     observable.onAdvance = { before, after in
         assert(before.value == 0)
         assert(after.value == 1)

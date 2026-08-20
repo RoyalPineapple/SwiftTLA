@@ -23,13 +23,13 @@ struct GeneratedMachineDocumentationTests {
     @Test("nested adapters bind the supplied live runtime")
     @MainActor
     func nestedAdaptersExposeDocumentedBehavior() async throws {
-        let actorOwner = try CounterHost.makeLiveOwner()
-        let actor = try CounterHost.Actor(handle: actorOwner.handle)
-        let observableOwner = try CounterScreenModel.makeLiveOwner()
-        let observable = try await CounterScreenModel.Observable(handle: observableOwner.handle)
+        let actorLive = try CounterHost.makeLive()
+        let actor = CounterHost.Actor(live: actorLive)
+        let observableLive = try CounterScreenModel.makeLive()
+        let observable = try await CounterScreenModel.Observable(live: observableLive)
 
-        #expect(actor.identity == actorOwner.handle.identity)
-        #expect(observable.identity == observableOwner.handle.identity)
+        #expect(actor.identity == actorLive.identity)
+        #expect(observable.identity == observableLive.identity)
         #expect(actor.identity != observable.identity)
 
         let result = try await actor.apply(.advance)
