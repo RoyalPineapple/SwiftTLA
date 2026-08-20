@@ -76,7 +76,7 @@ enum MacroExpander {
             decls.append(DeclSyntax(stringLiteral: """
             private func _actionExecutor() -> CompiledActionExecutor<ActionLabel> {
                 .init(
-                    runtime: _machine.runtime,
+                    compilation: _machine.compilation,
                     actionOrdinal: { Self._actionOrdinal(for: $0) },
                     arguments: { Self._actionArguments(for: $0) },
                     label: { Self._actionLabel(actionAt: $0, arguments: $1) }
@@ -112,13 +112,14 @@ enum MacroExpander {
         decls.append(contentsOf: generateCompilationIdentityCheck(model: model))
         decls.append(DeclSyntax(stringLiteral: """
         public static func makeMachine() throws -> Self {
-            let runtime = try _runtime()
+            let compilation = try compiledSpecification()
+            let runtime = SpecRuntime(compilation: compilation)
             guard let projection = try runtime.initialStateProjections().first else {
                 throw GeneratedMachineError.noInitialState
             }
             let initial = try State(projection: projection)
             return Self(machine: CanonicalMachine(
-                runtime: runtime,
+                compilation: compilation,
                 initial: initial,
                 projectionForSnapshot: { try $0.formalProjection() },
                 snapshotFromProjection: { try State(projection: $0) }
@@ -175,9 +176,8 @@ enum MacroExpander {
                 from projection: TLAStateProjection
             ) throws -> [TLAStateProjection] {
                 _ = try State(projection: projection)
-                let runtime = try Self._runtime()
                 let executor = CompiledActionExecutor(
-                    runtime: runtime,
+                    compilation: try Self.compiledSpecification(),
                     actionOrdinal: { Self._actionOrdinal(for: $0) },
                     arguments: { Self._actionArguments(for: $0) },
                     label: { Self._actionLabel(actionAt: $0, arguments: $1) }

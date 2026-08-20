@@ -47,21 +47,23 @@ struct LiveMachineRuntimeTests {
     }
 
     private static func transitionDriver(
-        runtime: SpecRuntime,
-        successors: @escaping @Sendable (TLAStateProjection, CounterAction) throws -> [TLAStateProjection],
+        compilation: CompiledSpecification,
+        successors: (@Sendable (TLAStateProjection, CounterAction) throws -> [TLAStateProjection])? = nil,
         decodeState: @escaping @Sendable (TLAStateProjection) throws -> Void = { _ in }
     ) -> TLALiveMachineTransitionDriver<CounterAction> {
-        let executor = actionExecutor(runtime)
+        let executor = actionExecutor(compilation)
         return TLALiveMachineTransitionDriver(
-            successors: successors,
+            successors: successors ?? { projection, action in
+                try executor.successors(for: action, from: projection)
+            },
             validateAction: { _ in nil },
             decodeState: decodeState
         )
     }
 
-    private static func actionExecutor(_ runtime: SpecRuntime) -> CompiledActionExecutor<CounterAction> {
+    private static func actionExecutor(_ compilation: CompiledSpecification) -> CompiledActionExecutor<CounterAction> {
         .init(
-            runtime: runtime,
+            compilation: compilation,
             actionOrdinal: { action in
                 switch action {
                 case .advance: 0
@@ -85,9 +87,9 @@ struct LiveMachineRuntimeTests {
     }
 
     private static func realSuccessors(
-        _ runtime: SpecRuntime
+        _ compilation: CompiledSpecification
     ) -> @Sendable (TLAStateProjection, CounterAction) throws -> [TLAStateProjection] {
-        let executor = actionExecutor(runtime)
+        let executor = actionExecutor(compilation)
         return { projection, action in try executor.successors(for: action, from: projection) }
     }
 
@@ -99,7 +101,7 @@ struct LiveMachineRuntimeTests {
         if let driver {
             resolvedDriver = driver
         } else {
-            resolvedDriver = transitionDriver(runtime: try SpecRuntime(spec: counterSpec()))
+            resolvedDriver = transitionDriver(compilation: try counterSpec().compile())
         }
         let initial = try TLAStateProjection(validating: [
             .init(token: try countToken(), value: .int(initialCount))
@@ -164,9 +166,9 @@ struct LiveMachineRuntimeTests {
 
     @Test("An accepted evaluation failure leaves state and position unchanged")
     func evaluationFailureKeepsStateAndPosition() async throws {
-        let runtime = try SpecRuntime(spec: Self.counterSpec())
+        let compilation = try Self.counterSpec().compile()
         let owner = try Self.makeOwner(driver: Self.transitionDriver(
-            runtime: runtime,
+            compilation: compilation,
             successors: { _, _ in throw LiveMachineTestError.evaluationUnavailable }
         ))
         let machine = owner.handle
@@ -187,10 +189,10 @@ struct LiveMachineRuntimeTests {
 
     @Test("An accepted decode failure leaves state and position unchanged")
     func decodeFailureKeepsStateAndPosition() async throws {
-        let runtime = try SpecRuntime(spec: Self.counterSpec())
+        let compilation = try Self.counterSpec().compile()
         let owner = try Self.makeOwner(driver: Self.transitionDriver(
-            runtime: runtime,
-            successors: Self.realSuccessors(runtime),
+            compilation: compilation,
+            successors: Self.realSuccessors(compilation),
             decodeState: { _ in throw TLAStateProjectionDiagnostic.typeMismatch(
                 path: "count",
                 expected: "Int",
@@ -215,7 +217,7 @@ struct LiveMachineRuntimeTests {
 
     @Test("Multiple formal successors fail without commit while a deterministic successor still commits")
     func ambiguousSuccessorsFailWithoutCommitAndDeterministicSuccessorCommits() async throws {
-        let runtime = try SpecRuntime(spec: Self.counterSpec())
+        let compilation = try Self.counterSpec().compile()
         let firstCandidate = try TLAStateProjection(validating: [
             .init(token: try Self.countToken(), value: .int(1))
         ])
@@ -223,12 +225,12 @@ struct LiveMachineRuntimeTests {
             .init(token: try Self.countToken(), value: .int(2))
         ])
         let owner = try Self.makeOwner(driver: Self.transitionDriver(
-            runtime: runtime,
+            compilation: compilation,
             successors: { projection, action in
                 if case .step(_) = action {
                     return [firstCandidate, secondCandidate]
                 }
-                return try Self.realSuccessors(runtime)(projection, action)
+                return try Self.realSuccessors(compilation)(projection, action)
             }
         ))
         let machine = owner.handle
@@ -389,13 +391,13 @@ struct LiveMachineRuntimeTests {
 
     @Test("Caller cancellation after acceptance still commits exactly once")
     func cancellationAfterAcceptanceStillCommits() async throws {
-        let runtime = try SpecRuntime(spec: Self.counterSpec())
+        let compilation = try Self.counterSpec().compile()
         let (accepted, signal) = AsyncStream<Void>.makeStream()
         let owner = try Self.makeOwner(driver: Self.transitionDriver(
-            runtime: runtime,
+            compilation: compilation,
             successors: { projection, action in
                 signal.yield(())
-                return try Self.realSuccessors(runtime)(projection, action)
+                return try Self.realSuccessors(compilation)(projection, action)
             }
         ))
         let machine = owner.handle
@@ -422,10 +424,10 @@ struct LiveMachineRuntimeTests {
 
     @Test("Caller cancellation after acceptance still resolves to the accepted normal failure")
     func cancellationAfterAcceptanceStillFailsNormally() async throws {
-        let runtime = try SpecRuntime(spec: Self.counterSpec())
+        let compilation = try Self.counterSpec().compile()
         let (accepted, signal) = AsyncStream<Void>.makeStream()
         let owner = try Self.makeOwner(driver: Self.transitionDriver(
-            runtime: runtime,
+            compilation: compilation,
             successors: { _, _ in
                 signal.yield(())
                 throw LiveMachineTestError.evaluationUnavailable
