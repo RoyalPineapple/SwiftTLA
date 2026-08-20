@@ -116,6 +116,12 @@ public struct CompiledSpecification: Sendable {
         )
     }
 
+    public func initialStateProjections() throws -> [TLAStateProjection] {
+        try CompiledRuntime(compilation: self).initialStates().map {
+            try $0.projection(using: layout)
+        }
+    }
+
     init(
         spec: TLASpec,
         formalModuleClosure: FormalModuleClosure,
