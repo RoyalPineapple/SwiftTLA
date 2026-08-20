@@ -14,6 +14,43 @@ public struct CompilationIdentity: Sendable, Hashable, CustomStringConvertible {
     public var description: String { value }
 }
 
+public struct CompilationDescription: Sendable, Equatable {
+    public let identity: CompilationIdentity
+    public let variables: [VariableDescription]
+    public let actions: [ActionDescription]
+    public let controlLabels: [ControlLabelDescription]
+    public let imports: [ModuleDescription]
+}
+
+public struct VariableDescription: Sendable, Equatable {
+    public let name: String
+    public let sourceOffset: Int?
+}
+
+public struct ActionDescription: Sendable, Equatable {
+    public let name: String
+    public let sourceOffset: Int?
+}
+
+public enum ControlOwnerDescription: Sendable, Equatable {
+    case sequential(algorithm: String)
+    case process(algorithm: String, declarationOrder: Int, typeName: String)
+    case procedure(algorithm: String, name: String)
+}
+
+public struct ControlLabelDescription: Sendable, Equatable {
+    public let owner: ControlOwnerDescription
+    public let sourceName: String
+    public let renderedName: String
+    public let sourceOffset: Int?
+}
+
+public struct ModuleDescription: Sendable, Equatable {
+    public let name: String
+    public let owningRoot: String
+    public let structuralPath: [String]
+}
+
 /// The legal direct-module declaration order, resolved before rendering.
 public struct DirectModuleSectionPlan: Sendable, Equatable {
     let definitionsBeforeInstances: [DirectModuleDefinition]
@@ -37,10 +74,38 @@ public struct CompiledSpecification: Sendable {
     let directModuleSections: DirectModuleSectionPlan
     let authoredPlusCalModule: AuthoredPlusCalModule?
 
+    public var description: CompilationDescription {
+        .init(
+            identity: identity,
+            variables: layout.variables.map {
+                .init(name: $0.declaration.name, sourceOffset: $0.declaration.sourceOffset)
+            },
+            actions: layout.actions.map {
+                .init(name: $0.declaration.name, sourceOffset: $0.declaration.sourceOffset)
+            },
+            controlLabels: layout.controlLabels.map {
+                .init(
+                    owner: $0.owner.description,
+                    sourceName: $0.sourceName,
+                    renderedName: $0.renderedName,
+                    sourceOffset: nil
+                )
+            },
+            imports: formalModuleClosure.entries.map {
+                .init(
+                    name: $0.module.name,
+                    owningRoot: $0.owningRoot,
+                    structuralPath: $0.structuralPath
+                )
+            }
+        )
+    }
+
     init(
         spec: TLASpec,
         formalModuleClosure: FormalModuleClosure,
         identity: CompilationIdentity,
+        layout: CompiledLayout,
         bindings: CompiledBindingTable,
         model: CompiledModel,
         directModuleSections: DirectModuleSectionPlan,
@@ -49,7 +114,6 @@ public struct CompiledSpecification: Sendable {
         self.spec = spec
         self.formalModuleClosure = formalModuleClosure
         self.identity = identity
-        let layout = CompiledLayout(spec: spec)
         self.layout = layout
         self.bindings = bindings
         self.model = model
@@ -388,6 +452,7 @@ public extension TLASpec {
             spec: self,
             formalModuleClosure: closure,
             identity: .init(value: compilationFingerprint),
+            layout: layout,
             bindings: bindings,
             model: model,
             directModuleSections: directModuleSections,

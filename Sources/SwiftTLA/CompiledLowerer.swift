@@ -3,11 +3,13 @@ struct CompiledLowerer {
     let closure: FormalModuleClosure
 
     func lower(spec: TLASpec) throws -> CompiledModel {
+        var initialValues: [VariableID: CompiledValue] = [:]
         var initializers: [VariableID: CompiledVariableInitializer] = [:]
         for variable in spec.variables {
             guard let id = bindings.variables[variable.name] else {
                 throw diagnostic(path: "variables.\(variable.name)")
             }
+            initialValues[id] = .init(formal: variable.initial)
             initializers[id] = .init(
                 initialSet: try lowerOptional(variable.initialSet, at: "variables.\(variable.name).initialSet"),
                 initExpr: try lowerOptional(variable.initExpr, at: "variables.\(variable.name).initExpr"),
@@ -57,6 +59,7 @@ struct CompiledLowerer {
                 )
             }
         return CompiledModel(
+            initialValues: initialValues,
             variableInitializers: initializers,
             actions: actions,
             invariants: invariants,

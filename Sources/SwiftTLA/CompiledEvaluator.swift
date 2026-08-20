@@ -25,25 +25,25 @@ struct CompiledEvaluator {
         self.remainingRecursionDepth = remainingRecursionDepth
     }
 
-    func evaluate(_ expression: CompiledStateExpr) throws -> TLAValue {
+    func evaluate(_ expression: CompiledStateExpr) throws -> CompiledValue {
         try evaluate(expression, bindings: bindings)
     }
 
     private func evaluate(
         _ expression: CompiledStateExpr,
         bindings: CompiledBindings
-    ) throws -> TLAValue {
-        func value(_ expression: CompiledStateExpr) throws -> TLAValue {
+    ) throws -> CompiledValue {
+        func value(_ expression: CompiledStateExpr) throws -> CompiledValue {
             try evaluate(expression, bindings: bindings)
         }
         func integer(_ expression: CompiledStateExpr) throws -> Int {
-            guard case .int(let value) = try value(expression) else {
+            guard case .integer(let value) = try value(expression) else {
                 throw EvalError.typeMismatch("Expected an integer")
             }
             return value
         }
         func boolean(_ expression: CompiledStateExpr) throws -> Bool {
-            guard case .bool(let value) = try value(expression) else {
+            guard case .boolean(let value) = try value(expression) else {
                 throw EvalError.typeMismatch("Expected a boolean")
             }
             return value
@@ -51,49 +51,51 @@ struct CompiledEvaluator {
 
         switch expression {
         case .value(let value):
-            return value
+            return .init(formal: value)
         case .stateVariable(let variable):
             return try state.value(for: variable)
         case .boundValue(let binder):
             return try bindings.value(for: binder)
+        case .controlLabel(let label):
+            return .controlLabel(label)
         case .operatorReference:
             throw EvalError.typeMismatch("Expected a value")
         case .add(let lhs, let rhs):
-            return .int(try integer(lhs) + integer(rhs))
+            return .integer(try integer(lhs) + integer(rhs))
         case .subtract(let lhs, let rhs):
-            return .int(try integer(lhs) - integer(rhs))
+            return .integer(try integer(lhs) - integer(rhs))
         case .multiply(let lhs, let rhs):
-            return .int(try integer(lhs) * integer(rhs))
+            return .integer(try integer(lhs) * integer(rhs))
         case .divide(let lhs, let rhs), .integerDivide(let lhs, let rhs):
             let divisor = try integer(rhs)
             guard divisor != 0 else { throw EvalError.divisionByZero }
-            return .int(try integer(lhs) / divisor)
+            return .integer(try integer(lhs) / divisor)
         case .modulo(let lhs, let rhs):
             let divisor = try integer(rhs)
             guard divisor != 0 else { throw EvalError.divisionByZero }
-            return .int(try integer(lhs) % divisor)
+            return .integer(try integer(lhs) % divisor)
         case .negate(let value):
-            return .int(-(try integer(value)))
+            return .integer(-(try integer(value)))
         case .equal(let lhs, let rhs):
-            return .bool(try value(lhs) == value(rhs))
+            return .boolean(try value(lhs) == value(rhs))
         case .notEqual(let lhs, let rhs):
-            return .bool(try value(lhs) != value(rhs))
+            return .boolean(try value(lhs) != value(rhs))
         case .lessThan(let lhs, let rhs):
-            return .bool(try integer(lhs) < integer(rhs))
+            return .boolean(try integer(lhs) < integer(rhs))
         case .lessOrEqual(let lhs, let rhs):
-            return .bool(try integer(lhs) <= integer(rhs))
+            return .boolean(try integer(lhs) <= integer(rhs))
         case .greaterThan(let lhs, let rhs):
-            return .bool(try integer(lhs) > integer(rhs))
+            return .boolean(try integer(lhs) > integer(rhs))
         case .greaterOrEqual(let lhs, let rhs):
-            return .bool(try integer(lhs) >= integer(rhs))
+            return .boolean(try integer(lhs) >= integer(rhs))
         case .and(let lhs, let rhs):
-            guard try boolean(lhs) else { return .bool(false) }
-            return .bool(try boolean(rhs))
+            guard try boolean(lhs) else { return .boolean(false) }
+            return .boolean(try boolean(rhs))
         case .or(let lhs, let rhs):
-            guard !(try boolean(lhs)) else { return .bool(true) }
-            return .bool(try boolean(rhs))
+            guard !(try boolean(lhs)) else { return .boolean(true) }
+            return .boolean(try boolean(rhs))
         case .not(let value):
-            return .bool(!(try boolean(value)))
+            return .boolean(!(try boolean(value)))
         case .ifThenElse(let condition, let then, let otherwise):
             return try value(boolean(condition) ? then : otherwise)
         case .setLiteral(let expressions):
@@ -102,12 +104,12 @@ struct CompiledEvaluator {
             guard case .set(let values) = try value(set) else {
                 throw EvalError.typeMismatch("Expected a set")
             }
-            return .bool(values.contains(try value(member)))
+            return .boolean(values.contains(try value(member)))
         case .subset(let lhs, let rhs):
             guard case .set(let left) = try value(lhs), case .set(let right) = try value(rhs) else {
                 throw EvalError.typeMismatch("Expected sets")
             }
-            return .bool(left.isSubset(of: right))
+            return .boolean(left.isSubset(of: right))
         case .union(let lhs, let rhs):
             guard case .set(let left) = try value(lhs), case .set(let right) = try value(rhs) else {
                 throw EvalError.typeMismatch("Expected sets")
@@ -127,13 +129,13 @@ struct CompiledEvaluator {
             guard case .set(let values) = try value(set) else {
                 throw EvalError.typeMismatch("Expected a set")
             }
-            return .int(values.count)
+            return .integer(values.count)
         case .setFilter(let set, let binder, let predicate):
             guard case .set(let values) = try value(set) else {
                 throw EvalError.typeMismatch("Expected a set")
             }
-            return .set(try values.reduce(into: Set<TLAValue>()) { result, element in
-                if case .bool(true) = try evaluate(predicate, bindings: bindings.binding(element, to: binder)) {
+            return .set(try values.reduce(into: Set<CompiledValue>()) { result, element in
+                if case .boolean(true) = try evaluate(predicate, bindings: bindings.binding(element, to: binder)) {
                     result.insert(element)
                 }
             })
@@ -158,7 +160,7 @@ struct CompiledEvaluator {
             guard case .set(let values) = try value(set) else {
                 throw EvalError.typeMismatch("Expected a set")
             }
-            return .set(try values.reduce(into: Set<TLAValue>()) { result, member in
+            return .set(try values.reduce(into: Set<CompiledValue>()) { result, member in
                 guard case .set(let nested) = member else {
                     throw EvalError.typeMismatch("Expected a set of sets")
                 }
@@ -168,7 +170,7 @@ struct CompiledEvaluator {
             let lowerValue = try integer(lower)
             let upperValue = try integer(upper)
             guard lowerValue <= upperValue else { return .set([]) }
-            return .set(Set((lowerValue...upperValue).map(TLAValue.int)))
+            return .set(Set((lowerValue...upperValue).map(CompiledValue.integer)))
         case .tupleLiteral(let expressions):
             return .tuple(try expressions.map(value))
         case .tupleAccess(let tuple, let index):
@@ -192,7 +194,7 @@ struct CompiledEvaluator {
             guard case .tuple(let values) = try value(tuple) else {
                 throw EvalError.typeMismatch("Expected a tuple")
             }
-            return .int(values.count)
+            return .integer(values.count)
         case .tupleAppend(let tuple, let element):
             guard case .tuple(var values) = try value(tuple) else {
                 throw EvalError.typeMismatch("Expected a tuple")
@@ -215,7 +217,7 @@ struct CompiledEvaluator {
             }
             return .tuple(left + right)
         case .recordLiteral(let fields):
-            return .record(try fields.reduce(into: [String: TLAValue]()) { result, field in
+            return .record(try fields.reduce(into: [String: CompiledValue]()) { result, field in
                 result[field.key] = try value(field.value)
             })
         case .recordAccess(let record, let field):
@@ -228,9 +230,9 @@ struct CompiledEvaluator {
             case .function(let values):
                 return .set(Set(values.keys))
             case .record(let values):
-                return .set(Set(values.keys.map(TLAValue.string)))
+                return .set(Set(values.keys.map(CompiledValue.string)))
             case .tuple(let values):
-                return .set(Set((1...values.count).map(TLAValue.int)))
+                return .set(Set((1...values.count).map(CompiledValue.integer)))
             default:
                 throw EvalError.typeMismatch("Expected a function")
             }
@@ -238,7 +240,7 @@ struct CompiledEvaluator {
             guard case .set(let values) = try value(domain) else {
                 throw EvalError.typeMismatch("Expected a function domain")
             }
-            return .function(try values.reduce(into: [TLAValue: TLAValue]()) { result, element in
+            return .function(try values.reduce(into: [CompiledValue: CompiledValue]()) { result, element in
                 result[element] = try evaluate(body, bindings: bindings.binding(element, to: binder))
             })
         case .functionApply(let function, let argument):
@@ -253,7 +255,7 @@ struct CompiledEvaluator {
                 }
                 return result
             case .tuple(let values):
-                guard case .int(let index) = key, index >= 1, index <= values.count else {
+                guard case .integer(let index) = key, index >= 1, index <= values.count else {
                     throw EvalError.typeMismatch("Tuple index is outside its domain")
                 }
                 return values[index - 1]
@@ -284,39 +286,39 @@ struct CompiledEvaluator {
             guard case .set(let values) = try value(set) else {
                 throw EvalError.typeMismatch("Expected a set")
             }
-            for element in values where try evaluate(predicate, bindings: bindings.binding(element, to: binder)) != .bool(true) {
-                return .bool(false)
+            for element in values where try evaluate(predicate, bindings: bindings.binding(element, to: binder)) != .boolean(true) {
+                return .boolean(false)
             }
-            return .bool(true)
+            return .boolean(true)
         case .exists(let set, let binder, let predicate):
             guard case .set(let values) = try value(set) else {
                 throw EvalError.typeMismatch("Expected a set")
             }
-            for element in values where try evaluate(predicate, bindings: bindings.binding(element, to: binder)) == .bool(true) {
-                return .bool(true)
+            for element in values where try evaluate(predicate, bindings: bindings.binding(element, to: binder)) == .boolean(true) {
+                return .boolean(true)
             }
-            return .bool(false)
+            return .boolean(false)
         case .choose(let set, let binder, let predicate):
             guard case .set(let values) = try value(set) else {
                 throw EvalError.typeMismatch("Expected a set")
             }
-            for element in values.sorted() where try evaluate(predicate, bindings: bindings.binding(element, to: binder)) == .bool(true) {
+            for element in CompiledValue.sorted(values) where try evaluate(predicate, bindings: bindings.binding(element, to: binder)) == .boolean(true) {
                 return element
             }
             throw EvalError.typeMismatch("No value satisfies CHOOSE")
         case .enabledAction(let action):
-            return .bool(enabledActions.contains(action))
+            return .boolean(enabledActions.contains(action))
         case .sequenceFromSet(let set):
             guard case .set(let values) = try value(set) else {
                 throw EvalError.typeMismatch("Expected a set")
             }
-            return .tuple(values.sorted())
+            return .tuple(CompiledValue.sorted(values))
         case .setSum(let function, let set):
             guard case .function(let values) = try value(function), case .set(let members) = try value(set) else {
                 throw EvalError.typeMismatch("Expected a function and a set")
             }
-            return .int(try members.reduce(0) { total, member in
-                guard let result = values[member], case .int(let value) = result else {
+            return .integer(try members.reduce(0) { total, member in
+                guard let result = values[member], case .integer(let value) = result else {
                     throw EvalError.typeMismatch("Expected integer function values")
                 }
                 return total + value
@@ -325,9 +327,9 @@ struct CompiledEvaluator {
             guard case .set(let domainValues) = try value(domain), case .set(let rangeValues) = try value(range) else {
                 throw EvalError.typeMismatch("Expected function-set domains")
             }
-            let orderedDomain = domainValues.sorted()
-            let orderedRange = rangeValues.sorted()
-            var functions: [[TLAValue: TLAValue]] = [[:]]
+            let orderedDomain = CompiledValue.sorted(domainValues)
+            let orderedRange = CompiledValue.sorted(rangeValues)
+            var functions: [[CompiledValue: CompiledValue]] = [[:]]
             for key in orderedDomain {
                 functions = functions.flatMap { partial in
                     orderedRange.map { value in
@@ -337,7 +339,7 @@ struct CompiledEvaluator {
                     }
                 }
             }
-            return .set(Set(functions.map(TLAValue.function)))
+            return .set(Set(functions.map(CompiledValue.function)))
         case .foldFunction(let operation, let initial, let sequence):
             guard operation.parameters.count == 2 else {
                 throw EvalError.typeMismatch("FoldFunction requires two parameters")
@@ -460,7 +462,7 @@ struct CompiledEvaluator {
                 for (parameter, argument) in zip(operation.parameters, arguments) {
                     callBindings = callBindings.binding(try value(argument), to: parameter)
                 }
-                if let domain = operation.domain, case .bool(false) = try CompiledEvaluator(
+                if let domain = operation.domain, case .boolean(false) = try CompiledEvaluator(
                     state: state,
                     model: model,
                     bindings: callBindings,
@@ -511,9 +513,11 @@ package func evaluateClosed(_ expression: StateExpr) throws -> TLAValue {
         actions: [],
         invariants: [.init(name: "value", body: expression)]
     ).compile()
-    let state = try FormalState(values: [], layout: compilation.layout)
+    let state = try FormalState(values: [CompiledValue](), compilation: compilation)
     guard let invariant = compilation.model.invariants.first else {
         throw CompiledEvaluationError.unresolvedOperator
     }
-    return try CompiledEvaluator(state: state, model: compilation.model).evaluate(invariant.body)
+    return try CompiledEvaluator(state: state, model: compilation.model)
+        .evaluate(invariant.body)
+        .rendered(using: compilation.layout)
 }

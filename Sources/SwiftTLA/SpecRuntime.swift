@@ -56,7 +56,7 @@ public struct SpecRuntime: Sendable {
     ) throws -> [[String: TLAValue]] {
         let formalState: FormalState
         do {
-            formalState = try FormalState(projected: state, layout: layout)
+            formalState = try FormalState(projected: state, compilation: compiledSpecification)
         } catch {
             throw RuntimeError.enumerationFailed(
                 requested: invocation,
@@ -97,7 +97,7 @@ public struct SpecRuntime: Sendable {
     ) throws -> [TLAActionInvocation] {
         let formalState: FormalState
         do {
-            formalState = try FormalState(projected: state, layout: layout)
+            formalState = try FormalState(projected: state, compilation: compiledSpecification)
             return try runtime.successors(from: formalState).reduce(into: []) { available, successor in
                 let invocation = TLAActionInvocation(
                     name: layout.actions[successor.action.ordinal].declaration.name,
@@ -204,7 +204,7 @@ public struct SpecRuntime: Sendable {
     package func invariantOutcomes(in state: [String: TLAValue]) -> [RuntimePropertyOutcome] {
         let formalState: FormalState
         do {
-            formalState = try FormalState(projected: state, layout: layout)
+            formalState = try FormalState(projected: state, compilation: compiledSpecification)
         } catch {
             return compiledSpecification.model.invariants.map {
                 .evaluationFailed(
@@ -239,7 +239,7 @@ public struct SpecRuntime: Sendable {
         }
         return try runtime.invariantHolds(
             invariant,
-            in: FormalState(projected: state, layout: layout)
+            in: FormalState(projected: state, compilation: compiledSpecification)
         )
     }
 
@@ -257,7 +257,7 @@ public struct SpecRuntime: Sendable {
         ).first else {
             return .actionNotEnabled(invocation, available: available)
         }
-        let formalNext = try FormalState(projected: next, layout: layout)
+        let formalNext = try FormalState(projected: next, compilation: compiledSpecification)
         let violations = try compiledSpecification.model.invariants.compactMap { invariant in
             try runtime.invariantHolds(invariant, in: formalNext) ? nil : invariant.name
         }

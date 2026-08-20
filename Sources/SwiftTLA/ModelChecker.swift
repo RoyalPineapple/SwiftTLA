@@ -200,7 +200,7 @@ private func compiledBFS(
     }
 
     for seed in seeds {
-        let key = runtime.canonicalState(seed)
+        let key = try runtime.canonicalState(seed)
         guard stateToID[key] == nil else { continue }
         let id = StateGraph.StateID(nextID)
         stateToID[key] = id
@@ -223,7 +223,7 @@ private func compiledBFS(
         let current = queue[head]
         head += 1
         processed += 1
-        let key = runtime.canonicalState(current)
+        let key = try runtime.canonicalState(current)
         guard let currentID = stateToID[key] else { continue }
 
         for invariant in runtime.compilation.model.invariants {
@@ -250,7 +250,7 @@ private func compiledBFS(
         }
 
         for successor in successors {
-            let successorKey = runtime.canonicalState(successor.state)
+            let successorKey = try runtime.canonicalState(successor.state)
             let targetID: StateGraph.StateID
             if let existing = stateToID[successorKey] {
                 targetID = existing
