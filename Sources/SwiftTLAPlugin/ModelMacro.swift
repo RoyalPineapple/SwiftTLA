@@ -54,8 +54,6 @@ enum NestedAdapterModelRegistry {
 }
 
 enum TLASpecVerifier {
-    typealias EnumPhaseMap = [String: [String: TLAValue]]
-
     static func parseAndVerify(_ declaration: some DeclGroupSyntax) throws -> MacroCompilation {
         let typeName: String
         let memberList: MemberBlockItemListSyntax
@@ -76,10 +74,7 @@ enum TLASpecVerifier {
 
         let rewritten = rewriteVarNames(in: source.closure)
         let enumInfos = Self.collectEnumVariables(from: memberList)
-        let (enumPhases, caseToType) = collectEnumMetadata(from: memberList)
-        let enumDomains = Dictionary(
-            uniqueKeysWithValues: enumInfos.map { ($0.typeName, $0.formalDomain) }
-        )
+        let (enumDefinitions, caseToType) = collectEnumMetadata(from: memberList)
         let rewriter = EnumDotRewriter(caseToType: caseToType)
         let dotRewrittenSyntax = rewriter.rewrite(rewritten)
         let dotRewritten = dotRewrittenSyntax.as(ClosureExprSyntax.self) ?? rewritten
@@ -94,8 +89,7 @@ enum TLASpecVerifier {
         }
         var parsed = SpecParser.parseSpecClosure(
             dotRewritten,
-            enumPhases: enumPhases,
-            enumDomains: enumDomains
+            enumDefinitions: enumDefinitions
         )
         if let diagnostic = parsed.diagnostics.first {
             throw diagnostic

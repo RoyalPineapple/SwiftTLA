@@ -4,35 +4,37 @@ import SwiftTLA
 extension TLASpecVerifier {
     static func collectEnumPhaseMap(
         from members: MemberBlockItemListSyntax
-    ) -> (phases: EnumPhaseMap, caseToType: [String: String]) {
+    ) -> (definitions: [ParserEnumDefinition], caseToType: [String: String]) {
         let infos = collectEnumVariables(from: members)
-        var phases: EnumPhaseMap = [:]
+        var definitions: [ParserEnumDefinition] = []
         var caseToType: [String: String] = [:]
         for info in infos {
-            var caseMap: [String: TLAValue] = [:]
             for (caseName, value) in info.cases {
-                caseMap[caseName] = value
                 caseToType[caseName] = info.typeName
             }
-            phases[info.typeName] = caseMap
+            definitions.append(.init(
+                typeName: info.typeName,
+                cases: TLARecord(info.cases.map { .init($0.name, $0.value) }),
+                formalDomain: info.formalDomain
+            ))
         }
-        return (phases, caseToType)
+        return (definitions, caseToType)
     }
 
     static func collectEnumMetadata(
         from members: MemberBlockItemListSyntax
-    ) -> (phases: EnumPhaseMap, caseToType: [String: String]) {
+    ) -> (definitions: [ParserEnumDefinition], caseToType: [String: String]) {
         let metadata = collectEnumPhaseMap(from: members)
         return (
-            metadata.phases.merging(collectPlusCalLabelMap(from: members)) { existing, _ in existing },
+            metadata.definitions + collectPlusCalLabelMap(from: members),
             metadata.caseToType
         )
     }
 
     /// Retains raw `PlusCalLabel` values for the parser without treating labels
     /// as state domains or rewriting unqualified enum cases in expressions.
-    static func collectPlusCalLabelMap(from members: MemberBlockItemListSyntax) -> EnumPhaseMap {
-        var labels: EnumPhaseMap = [:]
+    static func collectPlusCalLabelMap(from members: MemberBlockItemListSyntax) -> [ParserEnumDefinition] {
+        var labels: [ParserEnumDefinition] = []
         for member in members {
             guard let enumDecl = member.decl.as(EnumDeclSyntax.self),
                   let inheritance = enumDecl.inheritanceClause
@@ -42,7 +44,7 @@ extension TLASpecVerifier {
             }
             guard inheritedNames.contains("PlusCalLabel"), inheritedNames.contains("String") else { continue }
 
-            var rawValues: [String: TLAValue] = [:]
+            var rawValues: [TLARecord.Field] = []
             for caseMember in enumDecl.memberBlock.members {
                 guard let caseDecl = caseMember.decl.as(EnumCaseDeclSyntax.self) else { continue }
                 for element in caseDecl.elements {
@@ -52,10 +54,10 @@ extension TLASpecVerifier {
                     } else {
                         rawValue = element.name.text
                     }
-                    rawValues[element.name.text] = .string(rawValue)
+                    rawValues.append(.init(element.name.text, .string(rawValue)))
                 }
             }
-            labels[enumDecl.name.text] = rawValues
+            labels.append(.init(typeName: enumDecl.name.text, cases: TLARecord(rawValues)))
         }
         return labels
     }
