@@ -84,8 +84,6 @@ External comparison is a separate evidence step. Read
 - ``TLAStateProjection``
 - ``TLAStateProjectionResult``
 - ``TLAStateProjectionDiagnostic``
-- ``TLAMachineObservation``
-- ``TLAMachineAvailabilityDiagnostic``
 
 ### Live machines
 

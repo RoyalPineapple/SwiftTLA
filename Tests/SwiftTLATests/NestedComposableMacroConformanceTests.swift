@@ -95,7 +95,6 @@ struct NestedComposableMacroConformanceTests {
         requireSendable(NestedComposedCounter.TransitionResult.self)
         requireSendable(GeneratedSymmetricRuntime.self)
         requireSendable(TwoCarElevatorMachine.Observable.self)
-        requireSendable(TLAMachineObservation.self)
 
         for ownedDirectory in ["Sources", "Tests"] {
             let directory = packageRoot().appendingPathComponent(ownedDirectory)
