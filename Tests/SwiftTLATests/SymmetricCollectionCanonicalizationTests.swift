@@ -16,8 +16,8 @@ struct SymmetricCollectionCanonicalizationTests {
     _ graph: StateGraph,
     groups: [[TLAValue]]
   ) -> CanonicalGraph {
-    let canonicalState = { state in
-      independentlyCanonicalizedState(state, groups: groups)
+    let canonicalState = { projection in
+      independentlyCanonicalizedState(projection, groups: groups)
     }
     var transitions = Set<String>()
     for (sourceID, edges) in graph.transitions {
@@ -25,21 +25,21 @@ struct SymmetricCollectionCanonicalizationTests {
       for edge in edges {
         guard let target = graph.states[edge.target] else { continue }
         transitions.insert(
-          "\(canonicalState(source.formalValues)) --\(edge.action)--> \(canonicalState(target.formalValues))"
+          "\(canonicalState(source)) --\(edge.action)--> \(canonicalState(target))"
         )
       }
     }
     return CanonicalGraph(
-      states: Set(graph.states.values.map { canonicalState($0.formalValues) }),
+      states: Set(graph.states.values.map(canonicalState)),
       transitions: transitions
     )
   }
 
   private func independentlyCanonicalizedState(
-    _ state: [String: TLAValue],
+    _ projection: TLAStateProjection,
     groups: [[TLAValue]]
   ) -> String {
-    var candidates = [state]
+    var candidates = [projection.entries]
     for group in groups {
       candidates = candidates.flatMap { candidate in
         permutations(group).map { permutation in
@@ -47,7 +47,7 @@ struct SymmetricCollectionCanonicalizationTests {
         }
       }
     }
-    return candidates.map(encode).min()!
+    return candidates.map(encode).min() ?? ""
   }
 
   private func permutations(_ values: [TLAValue]) -> [[TLAValue]] {
@@ -62,10 +62,10 @@ struct SymmetricCollectionCanonicalizationTests {
   }
 
   private func applyPermutation(
-    _ state: [String: TLAValue],
+    _ state: [TLAStateProjection.Entry],
     mapping: [TLAValue: TLAValue]
-  ) -> [String: TLAValue] {
-    state.mapValues { applyPermutation($0, mapping: mapping) }
+  ) -> [TLAStateProjection.Entry] {
+    state.map { .init(token: $0.token, value: applyPermutation($0.value, mapping: mapping)) }
   }
 
   private func applyPermutation(
@@ -85,8 +85,10 @@ struct SymmetricCollectionCanonicalizationTests {
     }
   }
 
-  private func encode(_ state: [String: TLAValue]) -> String {
-    state.keys.sorted().map { "\(String(reflecting: $0))=\(encode(state[$0]!))" }.joined(separator: "|")
+  private func encode(_ state: [TLAStateProjection.Entry]) -> String {
+    state.sorted { $0.token.description < $1.token.description }
+      .map { "\(String(reflecting: $0.token.description))=\(encode($0.value))" }
+      .joined(separator: "|")
   }
 
   private func encode(_ value: TLAValue) -> String {

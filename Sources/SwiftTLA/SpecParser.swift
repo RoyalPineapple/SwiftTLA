@@ -9,7 +9,7 @@ import Foundation
 public final class ParserSession {
     /// Facts that exist for one syntax tree only. They never escape into a
     /// later parse or another macro expansion.
-    var constants: [String: TLAValue] = [:]
+    var constants: [ConstantDecl] = []
     let enumPhases: [String: [String: TLAValue]]
     let enumDomains: [String: [TLAValue]]
     /// Tuple-shaped algorithm state currently in scope. This lets the parser
@@ -188,7 +188,7 @@ public final class ParserSession {
         }
         if let ref = expression.as(DeclReferenceExprSyntax.self) {
             let name = ref.baseName.text
-            if let resolved = constants[name] { return .value(resolved) }
+            if let resolved = constants.value(named: name) { return .value(resolved) }
             return .variable(name)
         }
         if let memberAccess = expression.as(MemberAccessExprSyntax.self),

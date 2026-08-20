@@ -794,8 +794,8 @@ private struct CanonicalSpecificationEncoder {
         field("spec.name", spec.name)
         field("declarationLayout", CompiledLayout(spec: spec).canonicalEncoding)
         list("variables", spec.variables, canonicalVariable)
-        let constants = spec.constants.keys.sorted().map { key in
-            node("constant", [key, canonicalValue(spec.constants[key]!)])
+        let constants = spec.constants.sorted { $0.name < $1.name }.map {
+            node("constant", [$0.name, canonicalValue($0.value)])
         }
         list("constants", constants) { $0 }
         let formalParameters = spec.formalParameters.map {

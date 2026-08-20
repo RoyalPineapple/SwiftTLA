@@ -3,12 +3,12 @@ import Testing
 
 @Suite(.serialized)
 struct EvaluatorCoverage {
-  let state: [String: TLAValue] = [
-    "x": .int(5), "y": .int(3), "b": .bool(true),
-    "s": .set([.int(1), .int(2), .int(3)]),
-    "t": .tuple([.int(1), .int(2), .int(3)]),
-    "f": .function([.int(1): .string("a"), .int(2): .string("b")]),
-    "r": .record(["a": .int(1), "b": .int(2)])
+  let state: [(String, TLAValue)] = [
+    ("x", .int(5)), ("y", .int(3)), ("b", .bool(true)),
+    ("s", .set([.int(1), .int(2), .int(3)])),
+    ("t", .tuple([.int(1), .int(2), .int(3)])),
+    ("f", .function([.int(1): .string("a"), .int(2): .string("b")])),
+    ("r", .record(["a": .int(1), "b": .int(2)]))
   ]
 
   private func evaluate(_ expression: StateExpr) throws -> TLAValue {

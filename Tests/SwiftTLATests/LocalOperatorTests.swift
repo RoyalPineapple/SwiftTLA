@@ -77,7 +77,7 @@ struct LocalOperatorTests {
       recursion(0)
     })
 
-    #expect(try compiledValue(expression.stateExpr, values: ["limit": .int(4)]) == .int(0))
+    #expect(try compiledValue(expression.stateExpr, values: [("limit", .int(4))]) == .int(0))
     #expect(expression.stateExpr.description.contains("SumTo["))
   }
 
@@ -325,8 +325,8 @@ struct LocalOperatorTests {
       in: expression
     )
 
-    #expect(try compiledValue(expression, values: ["value": .int(0)]) == .int(5))
-    #expect(try compiledValue(substituted, values: ["value": .int(0)]) == .int(5))
+    #expect(try compiledValue(expression, values: [("value", .int(0))]) == .int(5))
+    #expect(try compiledValue(substituted, values: [("value", .int(0))]) == .int(5))
     #expect(expression.description == "LET value == 4 IN (value + 1)")
     #expect(expression.swiftSource.contains("StateExpr.letValue(\"value\", 4,"))
   }

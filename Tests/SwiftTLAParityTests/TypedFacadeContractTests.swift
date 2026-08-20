@@ -74,10 +74,10 @@ struct TypedFacadeContractTests {
     #expect(update.raw == expected)
 
     let result = try compiledValue(update.raw, values: [
-      "cars": .function([
+      ("cars", .function([
         .string("carA"): .record(["floor": .int(0), "doorsOpen": .bool(false)]),
         .string("carB"): .record(["floor": .int(1), "doorsOpen": .bool(true)])
-      ])
+      ]))
     ])
     #expect(
       result

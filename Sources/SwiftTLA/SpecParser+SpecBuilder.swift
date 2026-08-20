@@ -29,7 +29,7 @@ extension ParserSession {
         /// Opaque, pre-lowering Algorithm evidence retained independently of
         /// the ordinary parsed specification tree.
         public var algorithmFidelityTokens: [AlgorithmFidelityToken] = []
-        public var constants: [String: TLAValue] = [:]
+        public var constants: [ConstantDecl] = []
         /// Local named values (from NamedValue declarations, resolved in expressions)
         public var localConstants: [String: TLAValue] = [:]
     }

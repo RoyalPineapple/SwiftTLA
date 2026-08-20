@@ -542,7 +542,7 @@ public struct FormalModuleClosure: Sendable {
   private static func moduleInterfaceSymbols(of module: TLASpec) -> Set<String> {
     var symbols = Set(module.formalParameters.map(\.name))
     let moduleDeclarations = Set(module.variables.map(\.name))
-      .union(module.constants.keys)
+      .union(module.constants.map(\.name))
       .union(module.recursiveFuncs.map(\.name))
       .union(module.formalOperatorDefinitions.map(\.name))
 

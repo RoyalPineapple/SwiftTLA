@@ -66,22 +66,21 @@ public struct TLAStateProjection: Sendable, Equatable, CustomStringConvertible {
         }
     }
 
-    package let formalValues: [String: TLAValue]
+    private let storedEntries: [Entry]
 
     public init(validating entries: [Entry]) throws {
-        var values: [String: TLAValue] = [:]
+        var tokens = Set<Token>()
         for entry in entries {
-            guard values[entry.token.identifier] == nil else {
+            guard tokens.insert(entry.token).inserted else {
                 throw TLAStateProjectionDiagnostic.invalidKey(path: entry.token.identifier)
             }
             try Self.validate(entry.value, at: entry.token.identifier)
-            values[entry.token.identifier] = entry.value
         }
-        self.formalValues = values
+        storedEntries = entries.sorted { $0.token.identifier < $1.token.identifier }
     }
 
     public func value(for token: Token) -> TLAValue? {
-        formalValues[token.identifier]
+        storedEntries.first { $0.token == token }?.value
     }
 
     public func replacing(_ value: TLAValue, for token: Token) throws -> TLAStateProjection {
@@ -91,25 +90,11 @@ public struct TLAStateProjection: Sendable, Equatable, CustomStringConvertible {
     }
 
     public var entries: [Entry] {
-        formalValues.keys.sorted().compactMap { identifier in
-            guard let token = Token(validating: identifier), let value = formalValues[identifier] else { return nil }
-            return Entry(token: token, value: value)
-        }
+        storedEntries
     }
 
     public var description: String {
         entries.map { "\($0.token) = \($0.value)" }.joined(separator: ", ")
-    }
-
-    package init(formalValues: [String: TLAValue]) throws {
-        var entries: [Entry] = []
-        for (identifier, value) in formalValues {
-            guard let token = Token(validating: identifier) else {
-                throw TLAStateProjectionDiagnostic.invalidKey(path: identifier)
-            }
-            entries.append(.init(token: token, value: value))
-        }
-        try self.init(validating: entries)
     }
 
     private static func validate(_ value: TLAValue, at path: String) throws {

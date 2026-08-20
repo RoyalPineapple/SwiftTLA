@@ -545,7 +545,7 @@ extension ParserSession {
             ))
             return
         }
-        result.constants[name] = value
+        result.constants.append(ConstantDecl(name, value))
     }
 
     private func staticConstantValue(_ expression: StateExpr) -> TLAValue? {

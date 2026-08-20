@@ -25,7 +25,7 @@ struct LivenessConformanceTests {
             transitions: transitions,
             states: Dictionary(
                 uniqueKeysWithValues: values.map { identifier, value in
-                    (identifier, fixtureProjection(["x": .int(value)]))
+                    (identifier, try fixtureProjection([("x", .int(value))]))
                 }
             )
         )
@@ -70,10 +70,10 @@ struct LivenessConformanceTests {
                 terminal: [.init(label: .init(.init(name: "done")), target: terminal)]
             ],
             states: [
-                initial: fixtureProjection(["x": .int(0)]),
-                left: fixtureProjection(["x": .int(1)]),
-                right: fixtureProjection(["x": .int(2)]),
-                terminal: fixtureProjection(["x": .int(3)])
+                initial: try fixtureProjection([("x", .int(0))]),
+                left: try fixtureProjection([("x", .int(1))]),
+                right: try fixtureProjection([("x", .int(2))]),
+                terminal: try fixtureProjection([("x", .int(3))])
             ]
         )
         let property: StateExpr = .or(
@@ -156,7 +156,10 @@ struct LivenessConformanceTests {
             return
         }
         let suffix = witness.prefix[triggerIndex...] + witness.cycle.dropFirst()
-        #expect(suffix.allSatisfy { graph.states[$0]?.formalValues["x"] != .int(2) })
+        #expect(try suffix.allSatisfy { stateID in
+            guard let state = graph.states[stateID] else { return false }
+            return try value("x", in: state) != .int(2)
+        })
     }
 
     @Test("canonical witness uses the globally shortest cycle entry")
@@ -354,7 +357,7 @@ struct LivenessConformanceTests {
             specName: "liveness-conformance",
             variableNames: ["x"],
             transitions: [initial: [.init(label: .init(.init(name: "known")), target: initial)]],
-            states: [initial: fixtureProjection(["other": .int(0)])]
+            states: [initial: try fixtureProjection([("other", .int(0))])]
         )
         let unavailable: [(String, TemporalAnalysisResult, TemporalDiagnosticReason)] = [
             (
@@ -406,10 +409,6 @@ struct LivenessConformanceTests {
     }
 }
 
-private func fixtureProjection(_ formalValues: [String: TLAValue]) -> TLAStateProjection {
-    do {
-        return try .init(formalValues: formalValues)
-    } catch {
-        preconditionFailure(String(describing: error))
-    }
+private func fixtureProjection(_ entries: [(String, TLAValue)]) throws -> TLAStateProjection {
+    try projection(entries)
 }

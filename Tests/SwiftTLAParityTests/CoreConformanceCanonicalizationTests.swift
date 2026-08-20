@@ -60,8 +60,8 @@ struct CoreConformanceCanonicalizationTests {
                 variableNames: ["cars"],
                 transitions: [first: [.init(label: .init(.init(name: "move")), target: second)]],
                 states: [
-                    first: try .init(formalValues: ["cars": firstCars]),
-                    second: try .init(formalValues: ["cars": secondCars])
+                    first: try projection([("cars", firstCars)]),
+                    second: try projection([("cars", secondCars)])
                 ]
             ),
             initialStateIDs: [first],

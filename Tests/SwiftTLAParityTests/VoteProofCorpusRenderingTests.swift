@@ -9,15 +9,15 @@ struct VoteProofCorpusRenderingTests {
 
         let bundle = try VoteProofModel.spec.compile().renderedTLAModuleBundle()
         #expect(VoteProofModel.spec.constants == [
-            "Value": .set([.string("v1"), .string("v2")]),
-            "Acceptor": .set([.string("a1"), .string("a2"), .string("a3")]),
-            "Quorum": .set([
+            ConstantDecl("Value", .set([.string("v1"), .string("v2")])),
+            ConstantDecl("Acceptor", .set([.string("a1"), .string("a2"), .string("a3")])),
+            ConstantDecl("Quorum", .set([
                 .set([.string("a1"), .string("a2")]),
                 .set([.string("a1"), .string("a3")]),
                 .set([.string("a2"), .string("a3")]),
                 .set([.string("a1"), .string("a2"), .string("a3")])
-            ]),
-            "Ballot": .set([.int(0), .int(1), .int(2)])
+            ])),
+            ConstantDecl("Ballot", .set([.int(0), .int(1), .int(2)]))
         ])
         #expect(bundle.root.tla.contains("ASSUME Value = {\"v1\", \"v2\"}"))
         #expect(bundle.root.tla.contains("ASSUME Acceptor = {\"a1\", \"a2\", \"a3\"}"))

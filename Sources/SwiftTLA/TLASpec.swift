@@ -128,6 +128,16 @@ public struct NamedInvariant: Sendable, CustomStringConvertible, Equatable {
   }
   public var description: String { "\(name): \(body)" }
 }
+
+extension Array where Element == ConstantDecl {
+  func value(named name: String) -> TLAValue? {
+    first { $0.name == name }?.value
+  }
+
+  func replacing(with replacements: [ConstantDecl]) -> [ConstantDecl] {
+    filter { current in !replacements.contains { $0.name == current.name } } + replacements
+  }
+}
 /// A direct TLA+ declaration with explicit linker dependencies.
 ///
 /// Rendering receives these declarations in compilation-owned order; it never
@@ -146,7 +156,7 @@ public struct DirectModuleDefinition: Sendable, Equatable {
 public struct TLASpec: Sendable {
   public let name: String
   public let variables: [NamedVar]
-  public let constants: [String: TLAValue]
+  public let constants: [ConstantDecl]
   /// Parameters supplied by a named TLA+ `INSTANCE … WITH` declaration.
   public let formalParameters: [FormalModuleParameter]
   public let actions: [NamedAction]
@@ -185,7 +195,7 @@ public struct TLASpec: Sendable {
   let sourceAlgorithms: [Algorithm]
   let authoredPlusCalDeclarations: [AuthoredPlusCalDeclaration]
   public init(
-    name: String, variables: [NamedVar], constants: [String: TLAValue] = [:],
+    name: String, variables: [NamedVar], constants: [ConstantDecl] = [],
     formalParameters: [FormalModuleParameter] = [],
     actions: [NamedAction], invariants: [NamedInvariant], temporalProperties: [NamedTemporal] = [],
     fairness: [FairnessCondition] = [], assume: StateExpr? = nil, checkDeadlock: Bool = false,
@@ -252,7 +262,7 @@ public struct TLASpec: Sendable {
     return TLASpec(
       name: prefixedName,
       variables: self.variables + otherVars,
-      constants: self.constants.merging(other.constants) { $1 },
+      constants: self.constants.replacing(with: other.constants),
       formalParameters: self.formalParameters + other.formalParameters,
       actions: self.actions + other.actions,
       invariants: self.invariants + other.invariants,
@@ -279,8 +289,8 @@ public struct TLASpec: Sendable {
       symmetricCollections: self.symmetricCollections + other.symmetricCollections
     )
   }
-  public func instantiating(_ mapping: [String: TLAValue]) -> TLASpec {
-    let constants = self.constants.merging(mapping) { $1 }
+  public func instantiating(_ constants: [ConstantDecl]) -> TLASpec {
+    let constants = self.constants.replacing(with: constants)
     return TLASpec(
       name: self.name,
       variables: self.variables,
@@ -400,10 +410,10 @@ public struct FairnessDecl: SpecComponent {
   public let condition: FairnessCondition
   init(_ condition: FairnessCondition) { self.condition = condition }
 }
-public struct ConstantDecl: SpecComponent {
+public struct ConstantDecl: SpecComponent, Sendable, Equatable {
   public let name: String
   public let value: TLAValue
-  init(_ name: String, _ value: TLAValue) {
+  public init(_ name: String, _ value: TLAValue) {
     self.name = name
     self.value = value
   }

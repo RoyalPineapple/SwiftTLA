@@ -9,7 +9,7 @@ extension TLASpec {
     var invariants: [NamedInvariant] = []
     var temporalProperties: [NamedTemporal] = []
     var fairness: [FairnessCondition] = []
-    var constants: [String: TLAValue] = [:]
+    var constants: [ConstantDecl] = []
     var formalParameters: [FormalModuleParameter] = []
     var definitions: [DirectModuleDefinition] = []
     var authoredPlusCalDeclarations: [AuthoredPlusCalDeclaration] = []
@@ -92,7 +92,7 @@ extension TLASpec {
       } else if let f = comp as? FairnessDecl {
         fairness.append(f.condition)
       } else if let c = comp as? ConstantDecl {
-        constants[c.name] = c.value
+        constants.append(c)
       } else if let parameter = comp as? FormalParameterDecl {
         formalParameters.append(parameter.parameter)
       } else if let d = comp as? DefinitionDecl {
@@ -228,7 +228,7 @@ extension TLASpec {
 
   private var authoredPlusCalPrelude: [String] {
     var lines: [String] = []
-    let constantNames = (constants.keys + formalParameters.filter { $0.kind == .constant }.map(\.name)).sorted()
+    let constantNames = (constants.map(\.name) + formalParameters.filter { $0.kind == .constant }.map(\.name)).sorted()
     if !constantNames.isEmpty {
       lines.append("CONSTANTS \(constantNames.joined(separator: ", "))")
     }
@@ -311,7 +311,7 @@ public func substituteConstants(_ spec: TLASpec) -> TLASpec {
   var resolved = TLASpec(
     name: spec.name,
     variables: vars,
-    constants: [:],
+    constants: [],
     formalParameters: spec.formalParameters,
     actions: acts,
     invariants: invs,
@@ -341,14 +341,14 @@ public func substituteConstants(_ spec: TLASpec) -> TLASpec {
   return resolved
 }
 
-private func substituteInValue(_ value: TLAValue, constants: [String: TLAValue]) -> TLAValue {
-  if case .constant(let name) = value, let replacement = constants[name] {
+private func substituteInValue(_ value: TLAValue, constants: [ConstantDecl]) -> TLAValue {
+  if case .constant(let name) = value, let replacement = constants.value(named: name) {
     return replacement
   }
   return value
 }
 
-private func substituteInState(_ expr: StateExpr, constants: [String: TLAValue]) -> StateExpr {
+private func substituteInState(_ expr: StateExpr, constants: [ConstantDecl]) -> StateExpr {
   switch expr {
   case .value(let v): return .value(substituteInValue(v, constants: constants))
   case .variable: return expr
@@ -482,14 +482,14 @@ private func substituteInState(_ expr: StateExpr, constants: [String: TLAValue])
   case .recursiveCall(let n, let a):
     return .recursiveCall(n, a.map { substituteInState($0, constants: constants) })
   case .letValue(let name, let value, let body):
-    let bodyConstants = constants.filter { $0.key != name }
+    let bodyConstants = constants.filter { $0.name != name }
     return .letValue(
       name,
       substituteInState(value, constants: constants),
       substituteInState(body, constants: bodyConstants)
     )
   case .foldFunction(let operation, let initial, let sequence):
-    let bodyConstants = constants.filter { !operation.parameters.contains($0.key) }
+    let bodyConstants = constants.filter { !operation.parameters.contains($0.name) }
     return .foldFunction(
       FormalLambda(
         parameters: operation.parameters,
@@ -502,7 +502,7 @@ private func substituteInState(_ expr: StateExpr, constants: [String: TLAValue])
     let substitutedOperator: FormalOperator
     switch operation {
     case .lambda(let lambda):
-      let bodyConstants = constants.filter { !lambda.parameters.contains($0.key) }
+    let bodyConstants = constants.filter { !lambda.parameters.contains($0.name) }
       substitutedOperator = .lambda(
         FormalLambda(
           parameters: lambda.parameters,
@@ -531,7 +531,7 @@ private func substituteInState(_ expr: StateExpr, constants: [String: TLAValue])
   case .letIn(let operators, let body):
     return .letIn(
       operators.map { operation in
-        let bodyConstants = constants.filter { !operation.parameters.contains($0.key) }
+        let bodyConstants = constants.filter { !operation.parameters.contains($0.name) }
         return LocalOperator(
           operation.name,
           parameters: operation.parameters,
@@ -544,7 +544,7 @@ private func substituteInState(_ expr: StateExpr, constants: [String: TLAValue])
   }
 }
 
-private func substituteInAction(_ expr: ActionExpr, constants: [String: TLAValue]) -> ActionExpr {
+private func substituteInAction(_ expr: ActionExpr, constants: [ConstantDecl]) -> ActionExpr {
   switch expr {
   case .assign(let v, let e): return .assign(v, substituteInState(e, constants: constants))
   case .unchanged: return expr
@@ -596,7 +596,7 @@ public func explicitUnchanged(_ e: ActionExpr) -> Set<String> {
 }
 
 /// Joint nondeterministic init: two variables from a constrained cross-product.
-private func substituteInTemporal(_ expr: TemporalExpr, constants: [String: TLAValue])
+private func substituteInTemporal(_ expr: TemporalExpr, constants: [ConstantDecl])
   -> TemporalExpr {
   switch expr {
   case .always(let s): return .always(substituteInState(s, constants: constants))

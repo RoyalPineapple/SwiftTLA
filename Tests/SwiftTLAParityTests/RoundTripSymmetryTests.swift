@@ -261,7 +261,7 @@ enum Status: String, TLAValueType, StateExprConvertible {
       Action("deactivate") { phase.becomes(Mode.idle).when(phase == Mode.active) }
     }
     let graph = try ModelChecker(spec: spec, maxStates: 100).exploreGraph()
-    let values = Set(graph.states.values.compactMap { $0.formalValues["phase"] })
+    let values = try Set(graph.states.values.compactMap { try value("phase", in: $0) })
     #expect(values == Set([TLAValue.int(0), TLAValue.int(1)]))
   }
 

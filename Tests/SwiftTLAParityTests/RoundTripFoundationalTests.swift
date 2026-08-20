@@ -8,7 +8,7 @@ import UpstreamParity
 
 private func compiledSuccessors(
   _ body: ActionExpr,
-  from values: [String: TLAValue],
+  from values: [(String, TLAValue)],
   variables: [String]
 ) throws -> [TLAStateProjection] {
   let spec = TLASpec(
@@ -19,7 +19,7 @@ private func compiledSuccessors(
   )
   let compilation = try spec.compile()
   let state = try FormalState(
-    projection: .init(formalValues: values),
+    projection: projection(values),
     compilation: compilation
   )
   let action = try #require(compilation.model.actions.first)
@@ -32,23 +32,6 @@ private func compiledInitialProjections(_ spec: TLASpec) throws -> [TLAStateProj
   let compilation = try spec.compile()
   return try CompiledRuntime(compilation: compilation).initialStates()
     .map { try $0.projection(using: compilation.layout) }
-}
-
-private func compiledValue(
-  _ expression: StateExpr,
-  values: [String: TLAValue] = [:]
-) throws -> TLAValue {
-  let resultName = "result"
-  let spec = TLASpec(
-    name: "ExpressionFixture",
-    variables: values.sorted { $0.key < $1.key }.map { NamedVar(name: $0.key, initial: $0.value) }
-      + [NamedVar(name: resultName, initial: .int(0), initExpr: expression)],
-    actions: [],
-    invariants: []
-  )
-  let result = try #require(try compiledInitialProjections(spec).first)
-  let token = try #require(TLAStateProjection.Token(validating: resultName))
-  return try #require(result.value(for: token))
 }
 
 // MARK: - Var<T> operators: full matrix
@@ -111,7 +94,7 @@ private func compiledValue(
       ("twoVars", 1)
     ] as [(String, Int)])
   func actionMatrix(_ variant: String, _ expected: Int) throws {
-    let s: [String: TLAValue] = ["x": .int(0), "y": .int(0)]
+    let s: [(String, TLAValue)] = [("x", .int(0)), ("y", .int(0))]
     let action: ActionExpr
     switch variant {
     case "simpleAssign": action = .assign("x", .value(.int(42)))
@@ -227,17 +210,17 @@ private func compiledValue(
 // MARK: - ActionExpr: full variant coverage
 
 @Suite(.serialized) struct ActionExprMatrix {
-  let s0: [String: TLAValue] = ["x": .int(0)]
-  let s2: [String: TLAValue] = ["a": .int(0), "b": .int(0)]
+  let s0: [(String, TLAValue)] = [("x", .int(0))]
+  let s2: [(String, TLAValue)] = [("a", .int(0)), ("b", .int(0))]
 
   @Test func simpleAssign() throws {
     let r = try compiledSuccessors(.assign("x", .value(.int(42))), from: s0, variables: ["x"])
-    #expect(r.count == 1 && r[0].formalValues["x"] == .int(42))
+    #expect(r.count == 1 && try value("x", in: r[0]) == .int(42))
   }
 
   @Test func unchanged() throws {
     let r = try compiledSuccessors(.unchanged("x"), from: s0, variables: ["x"])
-    #expect(r.count == 1 && r[0].formalValues["x"] == .int(0))
+    #expect(r.count == 1 && try value("x", in: r[0]) == .int(0))
   }
 
   @Test func guardTrue() throws {
@@ -257,7 +240,7 @@ private func compiledValue(
   @Test func twoVars() throws {
     let a: ActionExpr = .and(.assign("a", .value(.int(1))), .assign("b", .value(.int(2))))
     let r = try compiledSuccessors(a, from: s2, variables: ["a", "b"])
-    #expect(r.count == 1 && r[0].formalValues["a"] == .int(1) && r[0].formalValues["b"] == .int(2))
+    #expect(r.count == 1 && try value("a", in: r[0]) == .int(1) && try value("b", in: r[0]) == .int(2))
   }
 
   @Test func orBranches() throws {
@@ -284,11 +267,11 @@ private func compiledValue(
       )
     )
 
-    let blocked = try compiledSuccessors(action, from: ["x": .int(1)], variables: ["x"])
+    let blocked = try compiledSuccessors(action, from: [("x", .int(1))], variables: ["x"])
     #expect(blocked.isEmpty)
 
     let advanced = try compiledSuccessors(action, from: s0, variables: ["x"])
-    #expect(advanced.map(\.formalValues) == [["x": .int(1)]])
+    #expect(try advanced.map { try value("x", in: $0) } == [.int(1)])
   }
 
   @Test func equivalentAssignmentsAroundAnExistentialAgree() throws {
@@ -302,7 +285,7 @@ private func compiledValue(
     )
 
     let successors = try compiledSuccessors(action, from: s0, variables: ["x"])
-    #expect(successors.map(\.formalValues) == [["x": .int(1)]])
+    #expect(try successors.map { try value("x", in: $0) } == [.int(1)])
   }
 
 }
@@ -359,7 +342,7 @@ private func compiledValue(
   @Test("StateExpr evaluates correctly in state")
   func evaluatesInState() throws {
     let e: StateExpr = .add(.variable("x"), .int(1))
-    let v = try compiledValue(e, values: ["x": .int(5)])
+    let v = try compiledValue(e, values: [("x", .int(5))])
     #expect(v == .int(6))
   }
 }
@@ -381,7 +364,7 @@ private func compiledValue(
   @Test("TLAValue function apply lookup")
   func functionApplyLookup() throws {
     let v: TLAValue = .function([.int(1): .string("one")])
-    let state: [String: TLAValue] = ["f": v, "k": .int(1)]
+    let state: [(String, TLAValue)] = [("f", v), ("k", .int(1))]
     let result = try compiledValue(StateExpr.functionApply(.variable("f"), .variable("k")), values: state)
     #expect(result == .string("one"))
   }
@@ -403,7 +386,7 @@ private func compiledValue(
       )
     ] as [(String, ActionExpr, Int)])
   func enumerate(_ name: String, _ a: ActionExpr, _ expected: Int) throws {
-    let s: [String: TLAValue] = ["x": .int(0), "y": .int(0)]
+    let s: [(String, TLAValue)] = [("x", .int(0)), ("y", .int(0))]
     let r = try compiledSuccessors(a, from: s, variables: ["x", "y"])
     #expect(r.count == expected, "\(name): expected \(expected), got \(r.count)")
   }
