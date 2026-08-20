@@ -775,16 +775,21 @@ struct GeneratedStateMachineTests {
             "board__1_1_1 == board(2, 20, 200)"
         ])
 
-        let runtime = try SpecRuntime(spec: builder)
-        let initial = try #require(runtime.initialStateProjections().first)
-        let invocation = TLAActionInvocation(
-            name: "board", arguments: [.int(2), .int(20), .int(200)])
+        let compilation = try builder.compile()
+        let action = try #require(compilation.layout.actionID(named: "board"))
+        let initial = try #require(try compilation.initialStateProjections().first)
         let floor = try #require(TLAStateProjection.Token(validating: "floor"))
-        let successor = try #require(try runtime.successors(invocation, from: initial).first)
+        let successor = try #require(try compilation.successors(
+            for: action,
+            arguments: [.int(2), .int(20), .int(200)],
+            from: initial
+        ).first)
         #expect(successor.value(for: floor) == .int(222))
-        #expect(throws: SpecRuntime.RuntimeError.self) {
-            try runtime.successors(.init(name: "board", arguments: [.int(2), .int(30), .int(200)]), from: initial)
-        }
+        #expect(try compilation.successors(
+            for: action,
+            arguments: [.int(2), .int(30), .int(200)],
+            from: initial
+        ).isEmpty)
         #expect(initial.value(for: floor) == .int(0))
 
         var machine = try EndToEndThreeParameterActionMachine.makeMachine()

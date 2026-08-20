@@ -175,7 +175,7 @@ exercised by at least one port. No feature without an oracle.
 - `TLASpec.instantiating(constants)` — overrides CONSTANT values
 - `substituteConstants(spec)` — inlines constants across all fields
 - `distributeOr(action)` — single canonical OR-distribution, shared by enumerator and completeAction
-- `computeInitialStates(spec)` — shared between ModelChecker and SpecRuntime
+- `CompiledRuntime.initialStates()` — initializes a compiled model
 
 ## What goes where
 
@@ -188,7 +188,7 @@ exercised by at least one port. No feature without an oracle.
 | `Evaluator.swift` | Expression eval | Every StateExpr case handled |
 | `ActionEnumerator.swift` | Action expansion | distOr + processDisjunct phases |
 | `ModelChecker.swift` | BFS verification | BFS + invariants + constraints |
-| `SpecRuntime.swift` | Interactive runtime | Wraps ActionEnumerator + Evaluator |
+| `CompiledRuntime.swift` | Compiled execution | Evaluates compiled states and actions |
 | `TLASpec.swift` | Spec container | Builder init, global builder fns, component types |
 | `TLASpec+PrettyPrint.swift` | TLA+ export | 13-step generation order, distributeOr, completeAction |
 | `SpecParser.swift` | SwiftSyntax → DSL | parseStateExpr, parseSpecClosure, enums |

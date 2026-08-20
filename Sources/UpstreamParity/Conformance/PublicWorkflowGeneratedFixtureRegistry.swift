@@ -17,53 +17,53 @@ enum PublicWorkflowGeneratedFixtureRegistry {
   static func fixture(id: String) throws -> PublicWorkflowGeneratedFixture {
     switch id {
     case "p4-generated-counter":
-      let runtime = try SpecRuntime(compilation: P4GeneratedCounterFixture.compiledSpecification())
+      let compilation = try P4GeneratedCounterFixture.compiledSpecification()
       return PublicWorkflowGeneratedFixture(
         builderSpec: P4GeneratedCounterFixture.spec,
         machine: PublicWorkflowGeneratedMachineHarness(
-          initialStates: try runtime.initialStateProjections(),
+          initialStates: try compilation.initialStateProjections(),
           actionNames: ["advance"],
           apply: { state, actionName in
-            generatedActionResult(runtime, actionName: actionName, in: state)
+            generatedActionResult(compilation, actionName: actionName, in: state)
           },
-          propertyOutcomes: runtime.propertyOutcomes(in:)))
+          propertyOutcomes: compilation.propertyOutcomes(in:)))
     case "p4-generated-counter-intentional-mismatch":
-      let runtime = try SpecRuntime(compilation: P4GeneratedCounterMismatchFixture.compiledSpecification())
+      let compilation = try P4GeneratedCounterMismatchFixture.compiledSpecification()
       return PublicWorkflowGeneratedFixture(
         builderSpec: P4GeneratedCounterMismatchFixture.spec,
         machine: PublicWorkflowGeneratedMachineHarness(
-          initialStates: try runtime.initialStateProjections(),
+          initialStates: try compilation.initialStateProjections(),
           actionNames: ["advance"],
           apply: { state, actionName in
-            P4GeneratedCounterMismatchFixture.intentionalMismatchActionOutcome(runtime: runtime, actionName: actionName, in: state)
+            P4GeneratedCounterMismatchFixture.intentionalMismatchActionOutcome(compilation: compilation, actionName: actionName, in: state)
           },
-          propertyOutcomes: runtime.propertyOutcomes(in:)))
+          propertyOutcomes: compilation.propertyOutcomes(in:)))
     case "p4-generated-counter-evaluation-failed":
-      let runtime = try SpecRuntime(compilation: P4GeneratedCounterFixture.compiledSpecification())
+      let compilation = try P4GeneratedCounterFixture.compiledSpecification()
       return PublicWorkflowGeneratedFixture(
         builderSpec: P4GeneratedCounterFixture.spec,
         machine: PublicWorkflowGeneratedMachineHarness(
-          initialStates: try runtime.initialStateProjections(),
+          initialStates: try compilation.initialStateProjections(),
           actionNames: ["advance"],
           apply: { _, actionName in
             .evaluationFailed(
               actionName: actionName,
               diagnostic: .init(code: .evaluationError, message: "fixture failure"))
           },
-          propertyOutcomes: runtime.propertyOutcomes(in:)))
+          propertyOutcomes: compilation.propertyOutcomes(in:)))
     case "p4-generated-counter-evaluation-unavailable":
-      let runtime = try SpecRuntime(compilation: P4GeneratedCounterFixture.compiledSpecification())
+      let compilation = try P4GeneratedCounterFixture.compiledSpecification()
       return PublicWorkflowGeneratedFixture(
         builderSpec: P4GeneratedCounterFixture.spec,
         machine: PublicWorkflowGeneratedMachineHarness(
-          initialStates: try runtime.initialStateProjections(),
+          initialStates: try compilation.initialStateProjections(),
           actionNames: ["advance"],
           apply: { _, actionName in
             .evaluationUnavailable(
               actionName: actionName,
               diagnostic: .init(code: .evaluatorUnavailable, message: "fixture unavailable"))
           },
-          propertyOutcomes: runtime.propertyOutcomes(in:)))
+          propertyOutcomes: compilation.propertyOutcomes(in:)))
     default:
       throw PublicWorkflowGovernanceError.invalidField(
         record: id, field: "compiled generated fixture registry")
@@ -107,11 +107,11 @@ struct P4GeneratedCounterMismatchFixture: Sendable {
   actor Actor {}
 
   static func intentionalMismatchActionOutcome(
-    runtime: SpecRuntime,
+    compilation: CompiledSpecification,
     actionName: String,
     in state: TLAStateProjection
   ) -> GeneratedActionResult {
-    switch generatedActionResult(runtime, actionName: actionName, in: state) {
+    switch generatedActionResult(compilation, actionName: actionName, in: state) {
     case .enabled(let actionName, _):
       do {
         guard let token = TLAStateProjection.Token(validating: "value") else {
@@ -134,49 +134,25 @@ struct P4GeneratedCounterMismatchFixture: Sendable {
 }
 
 func generatedActionResult(
-  _ runtime: SpecRuntime,
+  _ compilation: CompiledSpecification,
   actionName: String,
   in state: TLAStateProjection
 ) -> GeneratedActionResult {
-  guard runtime.spec.actions.contains(where: { $0.name == actionName }) else {
+  guard let action = compilation.actionID(named: actionName) else {
     return .actionNotFound(actionName: actionName)
   }
   do {
-    let successors = try runtime.successors(.init(name: actionName), from: state)
+    let successors = try compilation.successors(for: action, arguments: [], from: state)
     return successors.isEmpty
       ? .disabled(actionName: actionName)
       : .enabled(actionName: actionName, successors: successors)
-  } catch let error as SpecRuntime.RuntimeError {
-    switch error {
-    case .enumerationFailed(_, _, let underlying):
-      if case SpecRuntime.RuntimeError.evaluationUnavailable(let message) = underlying {
-        return .evaluationUnavailable(
-          actionName: actionName,
-          diagnostic: .init(code: .evaluatorUnavailable, message: message))
-      }
-      if let eval = underlying as? EvalError {
-        return .evaluationFailed(
-          actionName: actionName,
-          diagnostic: .init(code: .evaluationError, message: eval.description))
-      }
-      if let action = underlying as? ActionError {
-        return .evaluationFailed(
-          actionName: actionName,
-          diagnostic: .init(code: .actionError, message: action.description))
-      }
-      return .evaluationFailed(
-        actionName: actionName,
-        diagnostic: .init(code: .evaluationError, message: String(describing: underlying)))
-    case .actionNotFound:
-      return .actionNotFound(actionName: actionName)
-    default:
-      return .evaluationFailed(
-        actionName: actionName,
-        diagnostic: .init(code: .evaluationError, message: String(describing: error)))
-    }
   } catch {
     return .evaluationFailed(
       actionName: actionName,
-      diagnostic: .init(code: .evaluationError, message: String(describing: error)))
+      diagnostic: .init(
+        code: error is ActionError ? .actionError : .evaluationError,
+        message: String(describing: error)
+      )
+    )
   }
 }

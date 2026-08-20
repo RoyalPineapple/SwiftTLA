@@ -23,10 +23,11 @@ struct SimultaneousUpdateSemanticsTests {
                 right.becomes(left)
             }
         }
-        let runtime = try SpecRuntime(spec: spec)
-        let initial = try #require(runtime.initialStateProjections().first)
+        let compilation = try spec.compile()
+        let action = try #require(compilation.layout.actionID(named: "swap"))
+        let initial = try #require(try compilation.initialStateProjections().first)
 
-        let successor = try #require(runtime.successors(.init(name: "swap"), from: initial).first)
+        let successor = try #require(try compilation.successors(for: action, arguments: [], from: initial).first)
         let verification = try ModelChecker(spec: spec, maxStates: 10).check()
 
         #expect(try value("left", in: successor) == .int(2))
@@ -52,10 +53,11 @@ struct SimultaneousUpdateSemanticsTests {
                 mirror.becomes(source + 1)
             }
         }
-        let runtime = try SpecRuntime(spec: spec)
-        let initial = try #require(runtime.initialStateProjections().first)
+        let compilation = try spec.compile()
+        let action = try #require(compilation.layout.actionID(named: "advance"))
+        let initial = try #require(try compilation.initialStateProjections().first)
 
-        let successor = try #require(runtime.successors(.init(name: "advance"), from: initial).first)
+        let successor = try #require(try compilation.successors(for: action, arguments: [], from: initial).first)
 
         #expect(try value("source", in: successor) == .int(5))
         #expect(try value("mirror", in: successor) == .int(5))
@@ -75,23 +77,18 @@ struct SimultaneousUpdateSemanticsTests {
                 ActionExpr.assign(right.name, .variable("missing"))
             }
         }
-        let runtime = try SpecRuntime(spec: spec)
+        let compilation = try spec.compile()
+        let action = try #require(compilation.layout.actionID(named: "reject"))
         let initial = try TLAStateProjection(validating: [
             .init(token: try #require(TLAStateProjection.Token(validating: "left")), value: .int(1)),
             .init(token: try #require(TLAStateProjection.Token(validating: "right")), value: .int(2))
         ])
         do {
-            _ = try runtime.successors(.init(name: "reject"), from: initial)
+            _ = try compilation.successors(for: action, arguments: [], from: initial)
             Issue.record("Expected the undefined right-hand side to reject the transition")
-        } catch let error as SpecRuntime.RuntimeError {
-            guard case .enumerationFailed(let requested, let evaluated, let underlying) = error else {
-                Issue.record("Expected action evaluation evidence, found \(error)")
-                return
-            }
-            #expect(requested == .init(name: "reject"))
-            #expect(evaluated == .init(name: "reject"))
-            guard case .some(.undefinedVariable("missing")) = underlying as? EvalError else {
-                Issue.record("Expected the missing right-hand side, found \(underlying)")
+        } catch let error as EvalError {
+            guard case .undefinedVariable("missing") = error else {
+                Issue.record("Expected the missing right-hand side, found \(error)")
                 return
             }
         }

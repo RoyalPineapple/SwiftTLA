@@ -405,7 +405,7 @@ graph TD
     subgraph BFS["ModelChecker BFS"]
         direction TB
         SUB["substituteConstants()<br/>inlines CONSTANT values<br/>also handles temporals via substituteInTemporal"]
-        INIT["computeInitialStates()<br/>shared between ModelChecker + SpecRuntime<br/>nondet sets → cartesian → initExpr"]
+        INIT["CompiledRuntime.initialStates()<br/>nondet sets → cartesian → initExpr"]
         LOOP["BFS loop: queue, visited set"]
         EXPAND["buildExpander:<br/>for each action: ActionEnumerator.enumerate()<br/>→ filter successors by constraint (Evaluator)"]
         DIST["distributeOr()<br/>single canonical function<br/>or→split, and→distribute, ifElse→guard+split, exists→pushInto"]
@@ -418,13 +418,6 @@ graph TD
         SUB --> INIT --> LOOP --> EXPAND --> DIST --> PDIS --> EVAL
         LOOP --> INV --> EVAL
         LOOP --> RESULT --> GRAPH
-    end
-
-    subgraph Runtime["Interactive Runtime"]
-        direction TB
-        SR["SpecRuntime<br/>compiled formal engine<br/>initial projections, properties, and internal action execution"]
-        SR --> AE2["ActionEnumerator.enumerate()"]
-        SR --> EVAL2["Evaluator.evaluateBool()"]
     end
 
     subgraph Export["Compiled bundle export"]
@@ -463,7 +456,7 @@ graph TD
 | `Evaluator` | Evaluator.swift | StateExpr + state | TLAValue |
 | `ActionEnumerator` | ActionEnumerator.swift | ActionExpr + state | successor states |
 | `ModelChecker` | ModelChecker.swift | TLASpec | CheckResult + StateGraph |
-| `SpecRuntime` | SpecRuntime.swift | TLASpec | StepResult (6 methods) |
+| `CompiledRuntime` | CompiledRuntime.swift | CompiledSpecification | FormalState successors and invariant results |
 | `SpecParser` | SpecParser.swift | SwiftSyntax | DSL types (7 public methods) |
 | `ModelMacro` | ModelMacro.swift | struct source | extension + runtime property |
 | `PrettyPrint` | TLASpec+PrettyPrint.swift | TLASpec | .tla string (13-step generation) |

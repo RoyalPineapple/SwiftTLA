@@ -45,13 +45,13 @@ struct GeneratedMachineContractTests {
         _ compilation: CompiledSpecification,
         plan: MachineSurfacePlan
     ) -> GeneratedMachineBehavior {
-        let runtime = SpecRuntime(compilation: compilation)
         return .init(
-            initialStates: { try runtime.initialStateProjections() },
+            initialStates: { try compilation.initialStateProjections() },
             actions: plan.actionInputs.map { input in
                 .init(successors: { projection in
-                    try runtime.successors(
-                        actionAt: input.ordinal,
+                    let action = compilation.layout.actions[input.ordinal].id
+                    return try compilation.successors(
+                        for: action,
                         arguments: input.arguments,
                         from: projection
                     )

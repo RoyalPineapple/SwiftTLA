@@ -90,17 +90,15 @@ struct CompilerPipelineCanonicalizationTests {
         }
 
         let compilation = try spec.compile()
-        let runtime = SpecRuntime(compilation: compilation)
         let checker = ModelChecker(compilation: compilation, maxStates: 3)
 
-        #expect(runtime.compilation.identity == compilation.identity)
         #expect(checker.compilation.identity == compilation.identity)
         let counter = try #require(TLAStateProjection.Token(validating: "counter"))
         let initial = try TLAStateProjection(validating: [.init(token: counter, value: .int(0))])
-        let successor = try #require(try runtime.successors(.init(name: "increment"), from: initial).first)
+        let action = try #require(compilation.layout.actionID(named: "increment"))
+        let successor = try #require(try compilation.successors(for: action, arguments: [], from: initial).first)
         #expect(successor.value(for: counter) == .int(1))
-        #expect(try runtime.check("NonNegative", in: initial))
-        #expect(runtime.propertyOutcomes(initial) == [.satisfied(name: "NonNegative")])
+        #expect(compilation.propertyOutcomes(in: initial) == [.satisfied(name: "NonNegative")])
         #expect(try checker.exploreGraph().states.count == 3)
     }
 
