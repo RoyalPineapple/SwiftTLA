@@ -432,11 +432,11 @@ struct NestedAdapterConcurrencyTests {
             await callbackRecorder.record(before: before, after: after)
         }
 
-        let expectedBefore = await model.machineObservation()
+        let expectedBefore = try await model.machineObservation()
         #expect(observableLabel == .advance)
         #expect(actorLabel == .advance)
-        #expect(await observable.machineObservation() == expectedBefore)
-        #expect(await actor.machineObservation() == expectedBefore)
+        #expect(expectedBefore.state.count == 0)
+        #expect(expectedBefore.availableActions == [.advance])
 
         let expected = try model.apply(.advance)
         let observed = try observable.apply(.advance)
@@ -446,9 +446,8 @@ struct NestedAdapterConcurrencyTests {
         #expect(observed.after == expected.after)
         #expect(acted.before == expected.before)
         #expect(acted.after == expected.after)
-        let count = try #require(TLAStateProjection.Token(validating: "count"))
-        #expect(await observable.machineObservation().state.projection?.value(for: count) == .int(1))
-        #expect(await actor.machineObservation().state.projection?.value(for: count) == .int(1))
+        #expect(observable.state.count == 1)
+        #expect(await actor.state.count == 1)
         #expect(observable.state.count == 1)
         #expect(await actor.state.count == 1)
         #expect(await callbackRecorder.transitions.count == 1)
@@ -463,8 +462,7 @@ struct NestedAdapterConcurrencyTests {
         async let second = actor.apply(.advance)
         _ = try await (first, second)
 
-        let count = try #require(TLAStateProjection.Token(validating: "count"))
-        #expect(await actor.machineObservation().state.projection?.value(for: count) == .int(2))
+        #expect(await actor.state.count == 2)
     }
 
     @Test("Nested observable rejects disabled execution without notification")
@@ -478,12 +476,12 @@ struct NestedAdapterConcurrencyTests {
 
         _ = try observable.apply(.advance)
         _ = try observable.apply(.advance)
-        let beforeFailure = await observable.machineObservation()
+        let beforeFailure = observable.state
         await #expect(throws: GeneratedMachineError.self) {
             try observable.apply(.advance)
         }
 
-        #expect(await observable.machineObservation() == beforeFailure)
+        #expect(observable.state == beforeFailure)
         #expect(await recorder.transitions.count == 2)
     }
 }
@@ -694,12 +692,12 @@ struct GeneratedStateMachineTests {
         ])
 
         var invalidMiddleParameter = try ThreeParameterActionMachine.makeMachine()
-        let before = invalidMiddleParameter.tlaSnapshot()
+        let before = invalidMiddleParameter.state
         #expect(throws: GeneratedMachineError.self) {
             try invalidMiddleParameter.apply(.board(person: 2, elevator: 30, direction: 200))
         }
         #expect(invalidMiddleParameter.floor == 0)
-        #expect(invalidMiddleParameter.tlaSnapshot() == before)
+        #expect(invalidMiddleParameter.state == before)
     }
 
     @Test("Three-parameter actions preserve one ordered contract across builder, parser, macro, runtime, and export")
@@ -779,16 +777,15 @@ struct GeneratedStateMachineTests {
         #expect(initial.value(for: floor) == .int(0))
 
         var machine = try EndToEndThreeParameterActionMachine.makeMachine()
-        let before = machine.tlaSnapshot()
+        let before = machine.state
         let evidence = try machine.apply(.board(person: 2, elevator: 20, direction: 200))
         #expect(evidence.action == .board(person: 2, elevator: 20, direction: 200))
         #expect(evidence.after.floor == 222)
         #expect(throws: GeneratedMachineError.self) {
             try machine.apply(.board(person: 2, elevator: 30, direction: 200))
         }
-        let floorToken = try #require(TLAStateProjection.Token(validating: "floor"))
-        #expect(machine.tlaSnapshot().projection?.value(for: floorToken) == .int(222))
-        #expect(before.projection?.value(for: floorToken) == .int(0))
+        #expect(machine.state.floor == 222)
+        #expect(before.floor == 0)
     }
 
     @Test("Canonical generated machine preserves typed labels, evidence, and failed snapshots")
@@ -801,27 +798,26 @@ struct GeneratedStateMachineTests {
         #expect(evidence.before.floor == 0)
         #expect(evidence.after.floor == 1)
 
-        let before = machine.tlaSnapshot()
+        let before = machine.state
         #expect(throws: GeneratedMachineError.self) {
             try machine.apply(.board(person: 2, elevator: 30, direction: 200))
         }
-        #expect(machine.tlaSnapshot() == before)
+        #expect(machine.state == before)
     }
 
     @Test("Canonical generated execution preserves the complete parameterized invocation")
     func canonicalGeneratedExecutionPreservesParameterizedInvocationEvidence() async throws {
         var machine = try EndToEndThreeParameterActionMachine.makeMachine()
-        let before = await machine.machineObservation()
+        let before = try await machine.machineObservation()
 
         let evidence = try machine.apply(.board(person: 2, elevator: 20, direction: 200))
-        let after = await machine.machineObservation()
+        let after = try await machine.machineObservation()
 
         #expect(evidence.action == .board(person: 2, elevator: 20, direction: 200))
         #expect(evidence.before.floor == 0)
         #expect(evidence.after.floor == 222)
-        let floor = try #require(TLAStateProjection.Token(validating: "floor"))
-        #expect(before.state.projection?.value(for: floor) == .int(0))
-        #expect(after.state.projection?.value(for: floor) == .int(222))
+        #expect(before.state.floor == 0)
+        #expect(after.state.floor == 222)
     }
 
     @Test("Generated verification retains every constrained nondeterministic successor")
@@ -878,37 +874,37 @@ struct GeneratedStateMachineTests {
     @MainActor
     func rejectedActionsDoNotMutateOrNotify() async throws {
         var model = try ThreeParameterActionMachine.makeMachine()
-        let modelBefore = model.tlaSnapshot()
+        let modelBefore = model.state
         do {
             _ = try model.apply(.board(person: 2, elevator: 30, direction: 200))
             Issue.record("Expected rejected model action")
         } catch {
             #expect(error is GeneratedMachineError)
         }
-        #expect(model.tlaSnapshot() == modelBefore)
+        #expect(model.state == modelBefore)
 
         let observable = ThreeParameterActionMachine.Observable()
         let callbackCount = LockedValue(0)
         observable.onBoard = { _, _, _, _, _ in callbackCount.value += 1 }
-        let observableBefore = observable.tlaSnapshot()
+        let observableBefore = observable.state
         do {
             _ = try observable.apply(.board(person: 2, elevator: 30, direction: 200))
             Issue.record("Expected rejected observable action")
         } catch {
             #expect(error is GeneratedMachineError)
         }
-        #expect(observable.tlaSnapshot() == observableBefore)
+        #expect(observable.state == observableBefore)
         #expect(callbackCount.value == 0)
 
         let actor = ThreeParameterActionMachine.Actor()
-        let actorBefore = await actor.tlaSnapshot()
+        let actorBefore = await actor.state
         do {
             _ = try await actor.apply(.board(person: 2, elevator: 30, direction: 200))
             Issue.record("Expected rejected actor action")
         } catch {
             #expect(error is GeneratedMachineError)
         }
-        #expect(await actor.tlaSnapshot() == actorBefore)
+        #expect(await actor.state == actorBefore)
     }
 
     @Test("Removed fixed-arity action syntax does not type check")

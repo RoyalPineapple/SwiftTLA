@@ -42,7 +42,7 @@ struct GeneratedActorExecutionContractTests {
             .pass(from: 1, to: 2, round: 3)
         ]
 
-        #expect(await actor.tlaSnapshot() == canonical.tlaSnapshot())
+        #expect(await actor.state == canonical.state)
 
         for label in schedule {
             let expected = try canonical.apply(label)
@@ -63,7 +63,7 @@ struct GeneratedActorExecutionContractTests {
     func unavailableActionPreservesActorSnapshot() async throws {
         let actor = DuckDuckLeaderCanonical.Actor()
         let unavailable = DuckDuckLeaderCanonical.Actor.ActionLabel.pass(from: 2, to: 1, round: 1)
-        let before = await actor.tlaSnapshot()
+        let before = await actor.state
 
         do {
             _ = try await actor.apply(unavailable)
@@ -71,7 +71,7 @@ struct GeneratedActorExecutionContractTests {
         } catch is GeneratedMachineError {
         }
 
-        #expect(await actor.tlaSnapshot() == before)
+        #expect(await actor.state == before)
     }
 
     @Test("actor serializes concurrent duplicate submissions")

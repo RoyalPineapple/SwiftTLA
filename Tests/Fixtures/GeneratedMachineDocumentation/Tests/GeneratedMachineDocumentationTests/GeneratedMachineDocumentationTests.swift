@@ -6,12 +6,12 @@ struct GeneratedMachineDocumentationTests {
     @Test("bounded model preserves state when a disabled action is rejected")
     func disabledActionRetainsSnapshot() async throws {
         var machine = try BoundedCounter.makeMachine()
-        let initial = await machine.machineObservation()
+        let initial = try await machine.machineObservation()
         let result = try machine.apply(.advance)
         let beforeFailure = machine.state
 
-        #expect(initial.projection != nil)
-        #expect(initial.availableInvocations == [.init(name: "advance", arguments: [.string("only")])])
+        #expect(initial.state.value == 0)
+        #expect(initial.availableActions == [.advance])
         #expect(result.before.value == 0)
         #expect(result.after.value == 1)
         #expect(throws: GeneratedMachineError.self) {

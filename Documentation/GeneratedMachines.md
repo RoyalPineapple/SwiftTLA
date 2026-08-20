@@ -75,8 +75,8 @@ The fixture is the compilation authority for this example. It uses Swift tools 5
 
 ## Run actions
 
-A generated model has typed `Variables`, `State`, `ActionLabel`, and
-`TransitionResult` members. Use `availableActions()` to get typed labels. Use
+A generated model has typed `State`, `ActionLabel`, and `TransitionResult`
+members. Use `availableActions()` to get typed labels. Use
 `apply(_:)` to execute one label synchronously on a non-actor value model.
 That value has no live-runtime identity or observer connection.
 
@@ -107,8 +107,8 @@ the transition.
 `apply(_:)` throws `GeneratedMachineError` when it cannot execute an invocation. A rejected invocation does not replace the current snapshot.
 
 Use `machineObservation()` when code needs state and availability together. It
-returns `TLAMachineObservation` even when availability evaluation fails. The
-observation contains a guarded `TLAStateProjectionResult`, not a raw state map.
+returns the generated `MachineObservation`, with typed `State` and typed
+available action labels.
 
 Use this value API for local and deliberately independent work only. It is not
 the shared live-machine path.
@@ -297,12 +297,12 @@ import SwiftTLA
 
 func runGeneratedMachineTesting() async throws {
     var machine = BoundedCounter()
-    let initial = await machine.machineObservation()
+    let initial = try await machine.machineObservation()
     let result = try machine.apply(.advance)
     let beforeFailure = machine.state
 
-    assert(initial.projection != nil)
-    assert(initial.availableInvocations == [.init(name: "advance", arguments: [.string("only")])])
+    assert(initial.state.value == 0)
+    assert(initial.availableActions == [.advance])
     assert(result.after.value == 1)
 
     do {
@@ -321,8 +321,8 @@ an actor test, read state with `await`. Execute actions with `try await`.
 
 For an action problem, collect these public values:
 
-- `TLAMachineObservation.state` and its guarded projection result
-- `TLAMachineObservation.availableInvocations`, or `availabilityDiagnostic`
+- `MachineObservation.state`
+- `MachineObservation.availableActions`
 - the attempted generated `ActionLabel`
 - the returned `TransitionResult`, when execution succeeds
 - the `GeneratedMachineError`, when execution fails
@@ -419,13 +419,6 @@ The following table is the public inventory for this guide. Sources identify the
 | `TLALiveMachine` | Common handle for runtime identity, schema, current snapshot, and observation. | [LiveMachine.swift](../Sources/SwiftTLA/LiveMachine.swift) |
 | Generated `Live` | Schema-validated typed façade over an existing live handle. | [MacroExpander+LiveMachine.swift](../Sources/SwiftTLAPlugin/MacroExpander+LiveMachine.swift) |
 | `TLALiveMachineObservationSubscription` | Single-consumer async observation with snapshot, update, explicit loss, recovery, and owner termination. | [LiveMachineObservation.swift](../Sources/SwiftTLA/LiveMachineObservation.swift) |
-| Generated `Variables` | `String`, `CaseIterable` enum of declared variables. Each case supplies its raw variable name. | [MacroExpander.swift](../Sources/SwiftTLAPlugin/MacroExpander.swift) |
-| `TLAStateProjection` | Provides guarded token-based access to a formal state. It owns its internal representation. | [CanonicalMachine.swift](../Sources/SwiftTLA/CanonicalMachine.swift) |
-| `TLAStateProjectionResult` | Contains a valid projection or a typed projection diagnostic. | [CanonicalMachine.swift](../Sources/SwiftTLA/CanonicalMachine.swift) |
-| `TLAMachineObservation` | Contains a guarded state projection result and either available invocations or an availability diagnostic. | [CanonicalMachine.swift](../Sources/SwiftTLA/CanonicalMachine.swift) |
-| `TLAMachineAvailabilityDiagnostic` | Reports an `evaluationFailed` or `stateProjectionFailed` code and a message. | [CanonicalMachine.swift](../Sources/SwiftTLA/CanonicalMachine.swift) |
-| `TLAMachineObserving` | Provides async `machineObservation()`. Its extensions provide `machineState()` and `machineAvailability()`. | [CanonicalMachine.swift](../Sources/SwiftTLA/CanonicalMachine.swift) |
-| `TLAActionInvocation` | Identifies an action by name and declared arguments. It is the untyped invocation form. | [TLASpec.swift](../Sources/SwiftTLA/TLASpec.swift) |
 | `GeneratedMachineError` | Wraps a runtime error, an unexpected error, or an unrepresentable action label. | [CanonicalMachine.swift](../Sources/SwiftTLA/CanonicalMachine.swift) |
 | Generated `VerificationError` | Error type returned by generated verification helpers when the bounded check does not succeed. | [MacroExpander+Generation.swift](../Sources/SwiftTLAPlugin/MacroExpander+Generation.swift) |
 | Generated `verifySpec()` | Runs the generated bounded specification check and returns its explored-state count; it uses `TLAModelType.verificationStateLimit` (default: `100_000`). | [MacroExpander+Generation.swift](../Sources/SwiftTLAPlugin/MacroExpander+Generation.swift) |
@@ -435,10 +428,10 @@ The following table is the public inventory for this guide. Sources identify the
 | Generated `State` | Holds model variables with generated Swift types. Application code reads this type through `state`, before, and after. | [MacroExpander.swift](../Sources/SwiftTLAPlugin/MacroExpander.swift) |
 | Generated `ActionLabel` | Represents declared actions with typed parameters. | [MacroExpander+Generation.swift](../Sources/SwiftTLAPlugin/MacroExpander+Generation.swift) |
 | Generated `TransitionResult` | Records the typed action and typed state before and after a successful transition. | [MacroExpander+CanonicalMachine.swift](../Sources/SwiftTLAPlugin/MacroExpander+CanonicalMachine.swift) |
-| Generated `tlaSnapshot()` | Returns `TLAStateProjectionResult` on a generated value model. It is not live-runtime observation. | [MacroExpander+CanonicalMachine.swift](../Sources/SwiftTLAPlugin/MacroExpander+CanonicalMachine.swift) |
 | Generated `availableActions()` | Returns typed available action labels for a model that declares actions. | [MacroExpander+CanonicalMachine.swift](../Sources/SwiftTLAPlugin/MacroExpander+CanonicalMachine.swift) |
 | Generated `apply(_:)` | Executes a typed `ActionLabel`. It returns `TransitionResult` or throws. | [MacroExpander+CanonicalMachine.swift](../Sources/SwiftTLAPlugin/MacroExpander+CanonicalMachine.swift) |
-| Generated `machineObservation()` | Returns current state and availability. It retains state if availability evaluation fails. | [MacroExpander+CanonicalMachine.swift](../Sources/SwiftTLAPlugin/MacroExpander+CanonicalMachine.swift) |
+| Generated `MachineObservation` | Records typed state and currently available typed action labels. | [MacroExpander+CanonicalMachine.swift](../Sources/SwiftTLAPlugin/MacroExpander+CanonicalMachine.swift) |
+| Generated `machineObservation()` | Returns `MachineObservation` or throws. | [MacroExpander+CanonicalMachine.swift](../Sources/SwiftTLAPlugin/MacroExpander+CanonicalMachine.swift) |
 | Generated `Live.execute(_:)` | Executes a typed label through the existing live runtime and returns an explicit live outcome. | [MacroExpander+LiveMachine.swift](../Sources/SwiftTLAPlugin/MacroExpander+LiveMachine.swift) |
 | Generated `synchronousMachineObservation()` | Returns current state and availability without an async boundary on a canonical generated model. | [MacroExpander+CanonicalMachine.swift](../Sources/SwiftTLAPlugin/MacroExpander+CanonicalMachine.swift) |
 

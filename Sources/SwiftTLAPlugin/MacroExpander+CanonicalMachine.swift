@@ -32,6 +32,12 @@ extension MacroExpander {
                 try _apply(Self._actionInvocation(for: action))
             }
             """ : ""
+        let observation = hasActions ? """
+            public struct MachineObservation: Sendable, Equatable {
+                public let state: State
+                public let availableActions: [ActionLabel]
+            }
+            """ : ""
         let availableActions = hasActions ? """
             public func availableActions() throws -> [ActionLabel] {
                 try _machine.availableInvocations(in: _stateWithLiveCollections())\(invocationFilter).map { invocation in
@@ -65,6 +71,7 @@ extension MacroExpander {
                 public let after: State
             }
             """),
+            DeclSyntax(stringLiteral: observation),
             DeclSyntax(stringLiteral: """
             public var state: State {
                 _machine.snapshot
@@ -74,17 +81,6 @@ extension MacroExpander {
             DeclSyntax(stringLiteral: """
             private func _stateWithLiveCollections() throws -> TLAStateProjection {
                 \(stateWithLiveCollections)
-            }
-            """),
-            DeclSyntax(stringLiteral: """
-            public func tlaSnapshot() -> TLAStateProjectionResult {
-                do {
-                    return .projected(try _stateWithLiveCollections())
-                } catch let diagnostic as TLAStateProjectionDiagnostic {
-                    return .unavailable(diagnostic)
-                } catch {
-                    return .unavailable(.invalidKey(path: "state"))
-                }
             }
             """),
             DeclSyntax(stringLiteral: availableActions),
@@ -101,35 +97,16 @@ extension MacroExpander {
                 )
             }
             """),
-            DeclSyntax(stringLiteral: """
-            public func synchronousMachineObservation() -> TLAMachineObservation {
-                let state = tlaSnapshot()
-                guard let projection = state.projection else {
-                    let diagnostic = state.diagnostic ?? .invalidKey(path: "state")
-                    return .init(
-                        state: state,
-                        availability: .unavailable(.init(
-                            code: .stateProjectionFailed,
-                            message: diagnostic.description,
-                            projectionDiagnostic: diagnostic
-                        ))
-                    )
-                }
-                do {
-                    return .init(state: state, availability: .available(try _machine.availableInvocations(in: projection)\(invocationFilter)))
-                } catch {
-                    return .init(
-                        state: state,
-                        availability: .unavailable(.init(code: .evaluationFailed, message: String(describing: error)))
-                    )
-                }
+            DeclSyntax(stringLiteral: hasActions ? """
+            public func synchronousMachineObservation() throws -> MachineObservation {
+                .init(state: state, availableActions: try availableActions())
             }
-            """),
-            DeclSyntax(stringLiteral: """
-            public func machineObservation() async -> TLAMachineObservation {
-                synchronousMachineObservation()
+            """ : ""),
+            DeclSyntax(stringLiteral: hasActions ? """
+            public func machineObservation() async throws -> MachineObservation {
+                try synchronousMachineObservation()
             }
-            """),
+            """ : ""),
         ]
     }
 }

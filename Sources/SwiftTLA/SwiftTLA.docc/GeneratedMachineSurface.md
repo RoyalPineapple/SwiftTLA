@@ -7,14 +7,14 @@
 Each generated model exposes these `Sendable` value types:
 
 - `State`: typed values for declared variables.
-- `Variables`: declared variable names.
 - `ActionLabel`: a typed action identity and typed parameters.
 - `TransitionResult`: typed action, state before, and state after for direct value-model execution.
+- `MachineObservation`: typed state and currently available typed action labels.
 
 
 ## Direct value-model execution
 
-`apply(_:)`, `machineObservation()`, `TLAStateProjectionResult`, and `TransitionResult` remain useful for value semantics. A direct value model is not a live machine: it has no runtime identity, shared mutable state, subscription, or observation history. Use it for local calculation and deliberately independent simulation, not for a running shared machine.
+`apply(_:)`, `machineObservation()`, and `TransitionResult` provide direct value-model execution. `machineObservation()` returns typed `State` and `ActionLabel` values.
 
 ## Create a live runtime
 

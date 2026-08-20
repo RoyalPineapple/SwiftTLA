@@ -31,11 +31,11 @@ precondition(result.after.count == 1)
 let stateCount = observable.state.count
 precondition(stateCount == 1)
 
-let beforeRejectedAction = observable.tlaSnapshot()
+let beforeRejectedAction = observable.state
 do {
   _ = try await observable._advance()
   fatalError("Expected disabled action")
 } catch {
-  let stateAfterRejectedAction = observable.tlaSnapshot()
+  let stateAfterRejectedAction = observable.state
   precondition(stateAfterRejectedAction == beforeRejectedAction)
 }
