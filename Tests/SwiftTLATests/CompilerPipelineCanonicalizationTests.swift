@@ -150,13 +150,14 @@ struct CompilerPipelineCanonicalizationTests {
         let compilation = try algorithm.lower().compile()
         let labels = compilation.layout.controlLabels
 
-        #expect(labels.map(\.id) == [.init(ordinal: 0), .init(ordinal: 1), .init(ordinal: 2)])
-        #expect(labels.map(\.sourceName) == ["start", "start", "start"])
-        #expect(labels.map(\.renderedName) == ["start", "procedure.first.start", "procedure.second.start"])
+        #expect(labels.map(\.id) == [.init(ordinal: 0), .init(ordinal: 1), .init(ordinal: 2), .init(ordinal: 3)])
+        #expect(labels.map(\.sourceName) == ["start", "start", "start", "Done"])
+        #expect(labels.map(\.renderedName) == ["start", "procedure.first.start", "procedure.second.start", "Done"])
         #expect(labels.map(\.owner) == [
             .process(algorithm: "ControlLayout", ordinal: 0, typeName: "Node"),
             .procedure(algorithm: "ControlLayout", name: "first"),
-            .procedure(algorithm: "ControlLayout", name: "second")
+            .procedure(algorithm: "ControlLayout", name: "second"),
+            .generated(algorithm: "ControlLayout", purpose: "Done")
         ])
         #expect(compilation.identity != try Algorithm("ControlLayout") {
             let value = SharedVar("value", initial: 0)
@@ -177,6 +178,47 @@ struct CompilerPipelineCanonicalizationTests {
                 }
             }
         }.lower().compile().identity)
+    }
+
+    @Test("compiled algorithm control state uses control-label identities")
+    func compiledAlgorithmUsesControlLabelIdentities() throws {
+        let algorithm = Algorithm("ControlRuntime") {
+            let value = SharedVar("value", initial: 0)
+            value
+            Each(Node.all) { _ in
+                Do("start") {
+                    Assign(value, to: value + 1)
+                    Goto("finish")
+                }
+                Do("finish") {
+                    Stop()
+                }
+            }
+        }
+        let compilation = try algorithm.lower().compile()
+        let runtime = CompiledRuntime(compilation: compilation)
+        let pc = try #require(compilation.layout.variableID(named: "pc"))
+        let initial = try #require(runtime.initialStates().first)
+
+        guard case .function(let initialControls) = try initial.value(for: pc) else {
+            Issue.record("Expected a process-family control function")
+            return
+        }
+        #expect(initialControls.values.allSatisfy {
+            if case .controlLabel = $0 { return true }
+            return false
+        })
+
+        let successors = try runtime.successors(from: initial)
+        let advanced = try #require(successors.first)
+        guard case .function(let nextControls) = try advanced.state.value(for: pc) else {
+            Issue.record("Expected a process-family control function")
+            return
+        }
+        #expect(nextControls.values.allSatisfy {
+            if case .controlLabel = $0 { return true }
+            return false
+        })
     }
 
     @Test("compiled actions use declaration and binder identities")

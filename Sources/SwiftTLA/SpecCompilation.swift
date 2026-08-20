@@ -36,6 +36,7 @@ public enum ControlOwnerDescription: Sendable, Equatable {
     case sequential(algorithm: String)
     case process(algorithm: String, declarationOrder: Int, typeName: String)
     case procedure(algorithm: String, name: String)
+    case generated(algorithm: String, purpose: String)
 }
 
 public struct ControlLabelDescription: Sendable, Equatable {
@@ -331,6 +332,7 @@ public struct CompilationDiagnostic: Error, Sendable, Hashable, CustomStringConv
         case unresolvedDirectModuleDependency
         case cyclicDirectModuleDependency
         case duplicateDirectModuleDefinition
+        case unknownControlLabel
         case unknownReference
         case outOfScopeReference
         case assignmentToBinder
@@ -445,7 +447,7 @@ public extension TLASpec {
         let layout = CompiledLayout(spec: self)
         var validator = BindingValidator(spec: self, layout: layout, closure: closure)
         let bindings = try validator.validate(spec: self)
-        let model = try CompiledLowerer(bindings: bindings, closure: closure).lower(spec: self)
+        let model = try CompiledLowerer(bindings: bindings, closure: closure, layout: layout).lower(spec: self)
         let directModuleSections = try directModuleSectionPlan()
         let authoredPlusCalModule = try authoredPlusCalModule()
         return CompiledSpecification(

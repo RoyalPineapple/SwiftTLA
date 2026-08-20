@@ -45,6 +45,7 @@ enum ControlOwner: Hashable, Sendable {
     case sequential(algorithm: String)
     case process(algorithm: String, ordinal: Int, typeName: String)
     case procedure(algorithm: String, name: String)
+    case generated(algorithm: String, purpose: String)
 
     var canonicalEncoding: String {
         switch self {
@@ -54,6 +55,8 @@ enum ControlOwner: Hashable, Sendable {
             return "process:\(algorithm):\(ordinal):\(typeName)"
         case .procedure(let algorithm, let name):
             return "procedure:\(algorithm):\(name)"
+        case .generated(let algorithm, let purpose):
+            return "generated:\(algorithm):\(purpose)"
         }
     }
 }
@@ -71,6 +74,8 @@ extension ControlOwner {
             )
         case .procedure(let algorithm, let name):
             return .procedure(algorithm: algorithm, name: name)
+        case .generated(let algorithm, let purpose):
+            return .generated(algorithm: algorithm, purpose: purpose)
         }
     }
 }
@@ -101,7 +106,11 @@ struct CompiledLayout: Hashable, Sendable {
                 declaration: .init(kind: .action, name: action.name, sourceOffset: nil)
             )
         }
-        controlLabels = Self.controlLabels(in: spec.sourceAlgorithms)
+        controlLabels = Self.controlLabels(
+            in: spec.sourceAlgorithms,
+            actions: spec.actions,
+            hasProgramCounter: spec.variables.contains { $0.name == "pc" }
+        )
         declarations = variables.map(\.declaration)
             + actions.map(\.declaration)
             + spec.invariants.map { .init(kind: .invariant, name: $0.name, sourceOffset: nil) }
@@ -128,6 +137,50 @@ struct CompiledLayout: Hashable, Sendable {
         controlLabels.first { $0.id == id }
     }
 
+    func controlOwner(forActionNamed name: String) -> ControlOwner? {
+        let owners = Set(controlLabels.compactMap { label in
+            label.sourceName == name || label.renderedName == name ? label.owner : nil
+        })
+        guard owners.count == 1 else { return nil }
+        return owners.first
+    }
+
+    func controlLabelID(named name: String, owner: ControlOwner?, algorithm: String?) -> ControlLabelID? {
+        if name == "Done" {
+            let doneLabels = controlLabels.filter {
+                if case .generated(_, "Done") = $0.owner {
+                    return $0.sourceName == name
+                }
+                return false
+            }
+            if let algorithm {
+                return doneLabels.first {
+                    $0.owner == .generated(algorithm: algorithm, purpose: "Done")
+                }?.id
+            }
+            if doneLabels.count == 1 {
+                return doneLabels.first?.id
+            }
+        }
+        if let owner, let id = controlLabelID(owner: owner, named: name) {
+            return id
+        }
+        let processMatches = controlLabels.filter {
+            if case .process = $0.owner {
+                return $0.sourceName == name
+            }
+            return false
+        }
+        if processMatches.count == 1 {
+            return processMatches.first?.id
+        }
+        let matches = controlLabels.filter {
+            $0.sourceName == name || $0.renderedName == name
+        }
+        guard matches.count == 1 else { return nil }
+        return matches.first?.id
+    }
+
     var canonicalEncoding: String {
         let declarationEncoding = declarations.enumerated().map { ordinal, declaration in
             let kind = declaration.kind.rawValue
@@ -141,7 +194,11 @@ struct CompiledLayout: Hashable, Sendable {
         return "declarations[\(declarationEncoding)]controls[\(controlEncoding)]"
     }
 
-    private static func controlLabels(in algorithms: [Algorithm]) -> [CompiledControlLabel] {
+    private static func controlLabels(
+        in algorithms: [Algorithm],
+        actions: [NamedAction],
+        hasProgramCounter: Bool
+    ) -> [CompiledControlLabel] {
         var labels: [CompiledControlLabel] = []
 
         func append(
@@ -186,6 +243,37 @@ struct CompiledLayout: Hashable, Sendable {
                     renderedName: { "procedure.\(procedure.name).\($0.label.name)" }
                 )
             }
+            if model.sequentialSteps.isEmpty == false || model.processes.isEmpty == false {
+                labels.append(
+                    .init(
+                        id: .init(ordinal: labels.count),
+                        owner: .generated(algorithm: model.name, purpose: "Done"),
+                        sourceName: "Done",
+                        renderedName: "Done"
+                    )
+                )
+            }
+        }
+        let knownActionNames = Set(labels.flatMap { [$0.sourceName, $0.renderedName] })
+        for action in actions where action.name != "Terminating" && knownActionNames.contains(action.name) == false {
+            labels.append(
+                .init(
+                    id: .init(ordinal: labels.count),
+                    owner: .generated(algorithm: algorithms.first?.model.name ?? "", purpose: action.name),
+                    sourceName: action.name,
+                    renderedName: action.name
+                )
+            )
+        }
+        if hasProgramCounter, labels.contains(where: { $0.sourceName == "Done" }) == false {
+            labels.append(
+                .init(
+                    id: .init(ordinal: labels.count),
+                    owner: .generated(algorithm: algorithms.first?.model.name ?? "", purpose: "Done"),
+                    sourceName: "Done",
+                    renderedName: "Done"
+                )
+            )
         }
         return labels
     }
