@@ -40,10 +40,6 @@ public struct SymmetricCollectionVar<Element: Identifiable, Value: TLAValueType>
   }
 }
 
-/// Opaque action-selection token for a symmetric collection member.
-///
-/// It intentionally provides no public identity projection or comparison
-/// conformance. Only its owning collection may consume it as a selector.
 public struct SymmetricMember<Element: Identifiable> {
   fileprivate let owner: String
   fileprivate let binding: StateExpr

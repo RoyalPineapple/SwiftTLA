@@ -224,13 +224,3 @@ public struct RecordShape<Record: FormalValue>: Hashable, Sendable {
         hasher.combine(fields)
     }
 }
-
-public struct FormalShapeGraph: Hashable, Sendable {
-    public let domains: [ErasedDomainShape]
-    public let records: [ErasedRecordShape]
-
-    public init(domains: [ErasedDomainShape] = [], records: [ErasedRecordShape] = []) {
-        self.domains = domains
-        self.records = records
-    }
-}
