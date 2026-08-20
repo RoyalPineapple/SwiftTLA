@@ -81,17 +81,17 @@ public actor Device: Identifiable {
     public var name: String? { peripheral?.name }
 
     func connected() async {
-        _ = try? await machine.execute(PeripheralModel.Machine.ActionLabel.connected.toInvocation())
+        _ = try? await machine.apply(.connected)
     }
 
     public func discoverServices(_ uuids: [CBUUID]? = nil) async throws -> [CBService] {
         guard let peripheral, await machine.state.phase == .connected else { throw BleError.notReady }
-        _ = try await machine.execute(PeripheralModel.Machine.ActionLabel.beginDiscovery.toInvocation())
+        _ = try await machine.apply(.beginDiscovery)
         return try await withCheckedThrowingContinuation { servicesContinuation = $0; peripheral.discoverServices(uuids) }
     }
 
     func finishedDiscoveringServices(_ error: (any Error)?) async {
-        _ = try? await machine.execute(PeripheralModel.Machine.ActionLabel.finishDiscovery.toInvocation())
+        _ = try? await machine.apply(.finishDiscovery)
         if let error { servicesContinuation?.resume(throwing: error) }
         else { servicesContinuation?.resume(returning: peripheral?.services ?? []) }
         servicesContinuation = nil

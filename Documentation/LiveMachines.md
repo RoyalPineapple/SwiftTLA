@@ -6,7 +6,7 @@ A generated model value uses `Simulation` for local value work. A live runtime i
 
 ## Create and share a runtime
 
-Create the runtime once. Keep its `TLALiveMachineOwner` for as long as the runtime must stay available. Give `owner.handle` to typed code and generic tools. Copies of that handle address the same runtime; they do not copy state.
+Create the runtime once. Keep its `TLALiveMachineOwner` for as long as the runtime must stay available. Give `owner.handle` to generated typed code. Copies of that handle address the same runtime; they do not copy state.
 
 ```swift
 let owner = try TLALiveMachineOwner.create(for: Counter.self)
@@ -21,7 +21,7 @@ assert(handle.schema == typed.schema)
 
 The runtime validates a generated schema before it is created. Binding `Counter.Live(handle:)` validates the supplied handle's schema again. A schema mismatch throws `GeneratedLiveMachineDiagnostic`; it never creates a replacement runtime.
 
-## Inspect without knowing the model type
+## Inspect a live machine
 
 `TLALiveMachine` is the common interface for generic tools. It exposes a stable `identity`, a generated `MachineSchema`, and an atomic current snapshot. A snapshot contains a guarded `TLAStateProjection`, not a public raw formal-state dictionary.
 
@@ -41,15 +41,11 @@ The position starts at zero and advances once for each committed action. It is o
 
 ## Execute actions
 
-Both typed and generic actions reach the same formal transition pipeline. Typed code uses the generated `Live` façade; generic code uses `TLAActionInvocation` on the common handle.
+Typed code uses the generated `Live` façade.
 
 ```swift
 let typed = try Counter.Live(handle: handle)
 let typedOutcome = await typed.execute(.advance)
-
-let genericOutcome = await handle.execute(
-    TLAActionInvocation(name: "advance", arguments: [])
-)
 ```
 
 Each request produces exactly one `TLALiveActionOutcome`:

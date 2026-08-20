@@ -26,7 +26,7 @@ struct TwoBucketsDemoTests {
     @MainActor
     func providesObservableAdapter() async throws {
         let machine = TwoBuckets.Observable()
-        _ = try await machine.execute(TwoBuckets.Observable.ActionLabel.fillFive.toInvocation())
+        _ = try await machine.apply(.fillFive)
 
         #expect(machine.state.five == 5)
     }

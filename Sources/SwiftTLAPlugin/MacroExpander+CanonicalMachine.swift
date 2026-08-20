@@ -29,7 +29,7 @@ extension MacroExpander {
             """
         let typedApply = hasActions ? """
             public \(modifier)func apply(_ action: ActionLabel) throws -> TransitionResult {
-                try apply(action.toInvocation())
+                try _apply(action.toInvocation())
             }
             """ : ""
         let availableActions = hasActions ? """
@@ -41,13 +41,14 @@ extension MacroExpander {
                     return label
                 }
             }
-            """ : """
-            public func availableInvocations() throws -> [TLAActionInvocation] {
-                try _machine.availableInvocations(in: _stateWithLiveCollections())\(invocationFilter)
-            }
-            """
+            """ : ""
         let liveProjection = symmetricCollections.map {
-            "state = try state.replacing(\($0.formalName).projection().modelValue, for: .init(validating: Variables.\($0.formalName).rawValue)!)"
+            """
+            guard let token = TLAStateProjection.Token(validating: Variables.\($0.formalName).rawValue) else {
+                throw TLAStateProjectionDiagnostic.invalidKey(path: Variables.\($0.formalName).rawValue)
+            }
+            state = try state.replacing(\($0.formalName).projection().modelValue, for: token)
+            """
         }.joined(separator: "\n                ")
         let stateWithLiveCollections = symmetricCollections.isEmpty
             ? "try _machine.stateProjection().requireProjection()"
@@ -89,7 +90,7 @@ extension MacroExpander {
             DeclSyntax(stringLiteral: availableActions),
             DeclSyntax(stringLiteral: typedApply),
             DeclSyntax(stringLiteral: """
-            public \(modifier)func apply(_ invocation: TLAActionInvocation) throws -> TransitionResult {
+            private \(modifier)func _apply(_ invocation: TLAActionInvocation) throws -> TransitionResult {
                 \(invocationGuard)
                 \(labelValidation)
                 let evidence = try _machine.apply(invocation, from: _stateWithLiveCollections()) { _ in true }
@@ -129,16 +130,6 @@ extension MacroExpander {
                 synchronousMachineObservation()
             }
             """),
-            DeclSyntax(stringLiteral: """
-            public \(modifier)func executeSynchronously(_ invocation: TLAActionInvocation) throws -> TransitionResult {
-                try apply(invocation)
-            }
-            """),
-            DeclSyntax(stringLiteral: """
-            public \(modifier)func execute(_ invocation: TLAActionInvocation) async throws -> TransitionResult {
-                try apply(invocation)
-            }
-            """)
         ]
     }
 }

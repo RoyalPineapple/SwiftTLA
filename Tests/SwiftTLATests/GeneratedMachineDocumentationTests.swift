@@ -153,26 +153,21 @@ struct GeneratedMachineDocumentationTests {
 
     private let requiredContractTerms = [
         "Generated `Variables`",
-        "Generated `Actions`",
-        "`ActionLabel.toInvocation()`",
-        "`ActionLabel.init?(invocation:)`",
         "`TLAStateProjection`",
         "`TLAStateProjectionResult`",
-        "`availableInvocations()`",
-        "`execute(_ invocation: TLAActionInvocation)`",
+        "`availableActions()`",
+        "`apply(_:)`",
         "A nested `@TLAObservable` adapter is main-actor isolated",
         "Neither adapter owns a formal specification",
         "reduces a contiguous committed update",
         "`TLALiveMachineOwner`",
         "`TLALiveMachineObservationSubscription`",
         "Generated `VerificationError`",
-        "Generated `runtime`",
         "Generated `verifySpec()`",
         "Generated `transitionMatrix()`",
         "Generated `verifyTransitions()`",
         "Generated `verifyInvariants()`",
-        "Generated `synchronousMachineObservation()`",
-        "Generated `executeSynchronously(_ invocation: TLAActionInvocation)`"
+        "Generated `synchronousMachineObservation()`"
     ]
 
     private var fixtureSources: [String: String] {
@@ -200,7 +195,6 @@ struct GeneratedMachineDocumentationTests {
             ("`TLAMachineObservation`", "Sources/SwiftTLA/CanonicalMachine.swift", "public struct TLAMachineObservation"),
             ("`TLAMachineAvailabilityDiagnostic`", "Sources/SwiftTLA/CanonicalMachine.swift", "public struct TLAMachineAvailabilityDiagnostic"),
             ("`TLAMachineObserving`", "Sources/SwiftTLA/CanonicalMachine.swift", "public protocol TLAMachineObserving"),
-            ("`TLAMachineExecuting`", "Sources/SwiftTLA/CanonicalMachine.swift", "public protocol TLAMachineExecuting"),
             ("`TLAActionInvocation`", "Sources/SwiftTLA/TLASpec.swift", "public struct TLAActionInvocation"),
             ("`GeneratedMachineError`", "Sources/SwiftTLA/CanonicalMachine.swift", "public enum GeneratedMachineError"),
             ("Generated `ActionLabel`", "Sources/SwiftTLAPlugin/MacroExpander.swift", "public enum ActionLabel"),

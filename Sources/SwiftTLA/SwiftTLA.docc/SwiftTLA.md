@@ -96,8 +96,6 @@ External comparison is a separate evidence step. Read
 - ``TLALiveActionOutcome``
 - ``TLALiveMachineObservationSubscription``
 - ``TLALiveMachineObservationEvent``
-- ``GeneratedLiveMachine``
-- ``TLALiveMachineAdapterBinding``
 
 ### Runtime action identity
 

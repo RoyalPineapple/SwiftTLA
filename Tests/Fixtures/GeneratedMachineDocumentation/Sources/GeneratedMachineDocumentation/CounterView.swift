@@ -15,7 +15,7 @@ struct CounterView: View {
                 Task { @MainActor in
                     guard let machine else { return }
                     do {
-                        switch try await machine._advance() {
+                        switch try await machine.apply(.advance) {
                         case .committed:
                             diagnostic = ""
                         case .rejected(let rejection):

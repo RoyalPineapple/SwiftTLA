@@ -32,7 +32,7 @@ struct GeneratedMachineDocumentationTests {
         #expect(observable.identity == observableOwner.handle.identity)
         #expect(actor.identity != observable.identity)
 
-        let result = try await actor._advance()
+        let result = try await actor.apply(.advance)
         guard case .committed(let commit) = result else {
             Issue.record("Expected the live actor request to commit")
             return

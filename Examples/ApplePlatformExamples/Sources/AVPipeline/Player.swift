@@ -42,17 +42,17 @@ extension Media {
         public func phase() async -> PlayerModel.Phase { await machine.state.phase }
         public func load() async throws {
             guard await machine.state.phase == .unloaded else { throw MediaError.alreadyLoaded }
-            _ = try await machine.execute(PlayerModel.Machine.ActionLabel.beginLoad.toInvocation())
+            _ = try await machine.apply(.beginLoad)
             _ = try await player.currentItem?.asset.load(.isPlayable)
-            _ = try await machine.execute(PlayerModel.Machine.ActionLabel.ready.toInvocation())
+            _ = try await machine.apply(.ready)
         }
         public func play() async {
             let phase = await machine.state.phase
             guard phase == .ready || phase == .paused else { return }
-            _ = try? await machine.execute(PlayerModel.Machine.ActionLabel.play.toInvocation())
+            _ = try? await machine.apply(.play)
             player.play()
         }
-        public func pause() async { guard await machine.state.phase == .playing else { return }; _ = try? await machine.execute(PlayerModel.Machine.ActionLabel.pause.toInvocation()); player.pause() }
-        public func seek(to time: CMTime) async { guard await machine.state.phase != .loading else { return }; _ = try? await machine.execute(PlayerModel.Machine.ActionLabel.seek.toInvocation()); await player.seek(to: time) }
+        public func pause() async { guard await machine.state.phase == .playing else { return }; _ = try? await machine.apply(.pause); player.pause() }
+        public func seek(to time: CMTime) async { guard await machine.state.phase != .loading else { return }; _ = try? await machine.apply(.seek); await player.seek(to: time) }
     }
 }
