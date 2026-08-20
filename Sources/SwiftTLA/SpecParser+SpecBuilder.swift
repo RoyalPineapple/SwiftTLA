@@ -2,7 +2,7 @@ import SwiftSyntax
 import SwiftParser
 import SwiftBasicFormat
 
-extension SpecParser {
+extension ParserSession {
     // MARK: - Unified spec builder parser
 
     public struct ParsedSpecComponents {
@@ -205,20 +205,7 @@ extension SpecParser {
         }
     }
 
-      public static func parseSpecClosure(
-        _ closure: ClosureExprSyntax,
-        enumPhases: [String: [String: TLAValue]] = [:],
-        enumDomains: [String: [TLAValue]] = [:]
-      ) -> ParsedSpecComponents {
-        parseContextLock.lock()
-        defer { parseContextLock.unlock() }
-        _enumPhases = enumPhases
-        algorithmParseFailure = nil
-        _enumDomains = enumDomains.isEmpty
-            ? enumPhases.mapValues { phases in
-                phases.keys.sorted().compactMap { phases[$0] }
-            }
-            : enumDomains
+      func parseSpecClosure(_ closure: ClosureExprSyntax) -> ParsedSpecComponents {
         var result = ParsedSpecComponents()
         let collectionTypes = collectSymmetricCollectionTypes(in: closure)
         for statement in closure.statements {
@@ -235,7 +222,7 @@ extension SpecParser {
         return result
     }
 
-    static func parseForLoop(_ forStmt: ForStmtSyntax, into result: inout ParsedSpecComponents) {
+    func parseForLoop(_ forStmt: ForStmtSyntax, into result: inout ParsedSpecComponents) {
         guard let pattern = forStmt.pattern.as(IdentifierPatternSyntax.self)?.identifier.text,
               let sequence = forStmt.sequence.as(SequenceExprSyntax.self)
         else { return }
@@ -266,7 +253,7 @@ extension SpecParser {
 
     /// Parses supported low-level `Var(...)` bindings into `ParsedSpecComponents.variables`.
     /// Handles both raw `Var("x", 0)` and rewrites where ModelMacro injected a string name.
-    static func parseVarDecl(_ varDecl: VariableDeclSyntax, into result: inout ParsedSpecComponents) {
+    func parseVarDecl(_ varDecl: VariableDeclSyntax, into result: inout ParsedSpecComponents) {
         for binding in varDecl.bindings {
             guard let patternName = binding.pattern.as(IdentifierPatternSyntax.self)?.identifier.text,
                   let initializer = binding.initializer?.value,
@@ -350,7 +337,7 @@ extension SpecParser {
 
     /// Resolves a supported low-level variable call expression.
     /// Returns nil if the call is not a variable constructor.
-    static func resolveVarCall(_ fc: FunctionCallExprSyntax) -> (String, String?)? {
+    func resolveVarCall(_ fc: FunctionCallExprSyntax) -> (String, String?)? {
         if let ref = fc.calledExpression.as(DeclReferenceExprSyntax.self) {
             guard ["Var", "SharedVar"].contains(ref.baseName.text) else { return nil }
             return (ref.baseName.text, nil)
@@ -367,7 +354,7 @@ extension SpecParser {
         return nil
     }
 
-    static func resolveVarTypeArg(_ fc: FunctionCallExprSyntax) -> String? {
+    func resolveVarTypeArg(_ fc: FunctionCallExprSyntax) -> String? {
         guard let generic = fc.calledExpression.as(GenericSpecializationExprSyntax.self),
               let ref = generic.expression.as(DeclReferenceExprSyntax.self),
               ref.baseName.text == "Var"
@@ -384,7 +371,7 @@ extension SpecParser {
             : nil
     }
 
-    static func parseIntegerClosedRange(_ expression: ExprSyntax) -> ClosedRange<Int>? {
+    func parseIntegerClosedRange(_ expression: ExprSyntax) -> ClosedRange<Int>? {
         guard let sequence = expression.as(SequenceExprSyntax.self) else { return nil }
         let elements = Array(sequence.elements)
         guard elements.count == 3,
@@ -400,7 +387,7 @@ extension SpecParser {
 
     /// Returns the formal element type from `SetExpr<Element>.literal(...)`.
     /// This is syntax-only: the parser must not consult the runtime builder.
-    static func setExpressionElementTypeName(_ expression: ExprSyntax) -> String? {
+    func setExpressionElementTypeName(_ expression: ExprSyntax) -> String? {
         if let call = expression.as(FunctionCallExprSyntax.self),
            call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "Where",
            let candidates = call.arguments.first?.expression {
@@ -441,7 +428,7 @@ extension SpecParser {
     }
 
     /// Extracts the lower bound from a range expression like `1...12`.
-    static func parseRangeLowerBound(_ expression: ExprSyntax) -> Int {
+    func parseRangeLowerBound(_ expression: ExprSyntax) -> Int {
         if let seq = expression.as(SequenceExprSyntax.self) {
             let elements = Array(seq.elements)
             if let firstInt = elements.first?.as(IntegerLiteralExprSyntax.self),
@@ -458,7 +445,7 @@ extension SpecParser {
     }
 
     /// Extracts the first string value from `["a", "b"]`.
-    static func parseValuesFirst(_ expression: ExprSyntax) -> String {
+    func parseValuesFirst(_ expression: ExprSyntax) -> String {
         if let array = expression.as(ArrayExprSyntax.self),
            let first = array.elements.first?.expression.as(StringLiteralExprSyntax.self) {
             return first.segments.description.replacingOccurrences(of: "\"", with: "")
@@ -467,7 +454,7 @@ extension SpecParser {
     }
 
     /// Converts a Swift initializer expression to a TLAValue.
-    static func parseInitialExpr(_ expression: ExprSyntax) -> TLAValue {
+    func parseInitialExpr(_ expression: ExprSyntax) -> TLAValue {
         if let decoded = decodeStateExpr(expression), case .value(let value) = decoded {
             return value
         }
@@ -482,12 +469,12 @@ extension SpecParser {
         }
         if let memberAccess = expression.as(MemberAccessExprSyntax.self) {
             if let baseRef = memberAccess.base?.as(DeclReferenceExprSyntax.self),
-               let cases = _enumPhases[baseRef.baseName.text],
+               let cases = enumPhases[baseRef.baseName.text],
                let value = cases[memberAccess.declName.baseName.text] {
                 return value
             }
             let caseName = memberAccess.declName.baseName.text
-            for (_, cases) in _enumPhases {
+            for (_, cases) in enumPhases {
                 if let value = cases[caseName] { return value }
             }
         }
@@ -503,7 +490,7 @@ extension SpecParser {
     /// Returns the enum type name if `expression` is an enum case reference.
     /// `.idle` → `nil` (implicit member, type unknown from this AST).
     /// `CameraMode.idle` → `"CameraMode"` (explicit member, type known).
-    static func enumCaseTypeName(from expression: ExprSyntax) -> String? {
+    func enumCaseTypeName(from expression: ExprSyntax) -> String? {
         guard let memberAccess = expression.as(MemberAccessExprSyntax.self) else { return nil }
         if let base = memberAccess.base?.as(DeclReferenceExprSyntax.self) {
             return base.baseName.text
@@ -511,7 +498,7 @@ extension SpecParser {
         return nil
     }
 
-    static func initialValueTypeName(from expression: ExprSyntax) -> String? {
+    func initialValueTypeName(from expression: ExprSyntax) -> String? {
         if let call = expression.as(FunctionCallExprSyntax.self),
            call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "IntRange" {
             return "SetExpr<Int>"
@@ -547,7 +534,7 @@ extension SpecParser {
     /// Evaluates a closed typed formal initializer through the same expression
     /// decoder used for actions. Literal-only parsing is insufficient for
     /// values such as `IntRange(1, through: 4)`.
-    static func parsedInitialValue(_ expression: ExprSyntax) -> TLAValue {
+    func parsedInitialValue(_ expression: ExprSyntax) -> TLAValue {
         if let decoded = decodeStateExpr(expression),
            let value = try? decoded.evaluate(in: [:]) {
             return value
@@ -555,7 +542,7 @@ extension SpecParser {
         return parseInitialExpr(expression)
     }
 
-    static func parseBuilderCall(
+    func parseBuilderCall(
         _ call: FunctionCallExprSyntax,
         into result: inout ParsedSpecComponents,
         loopVar: String? = nil,
@@ -654,7 +641,7 @@ extension SpecParser {
         }
     }
 
-    private static func parseSymmetry(
+    private func parseSymmetry(
         _ call: FunctionCallExprSyntax,
         into result: inout ParsedSpecComponents
     ) {
@@ -672,7 +659,7 @@ extension SpecParser {
         result.symmetrySets.append(SymmetrySet(variableName: variableName, values: Set(values)))
     }
 
-    private static func parseSymmetryValues(_ expression: ExprSyntax) -> [TLAValue]? {
+    private func parseSymmetryValues(_ expression: ExprSyntax) -> [TLAValue]? {
         guard let call = expression.as(FunctionCallExprSyntax.self),
               call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "Set",
               let domainSyntax = call.arguments.first?.expression,
@@ -681,7 +668,7 @@ extension SpecParser {
         return domain.values
     }
 
-    private static func parseFormalDefinition(
+    private func parseFormalDefinition(
         _ call: FunctionCallExprSyntax,
         into result: inout ParsedSpecComponents
     ) {
@@ -720,7 +707,7 @@ extension SpecParser {
         ))
     }
 
-    static func decodeFormalDefinition(
+    func decodeFormalDefinition(
         _ call: FunctionCallExprSyntax
     ) -> FormalOperatorDefinition? {
         guard let name = extractStringArg(call, index: 0), !name.isEmpty else { return nil }
@@ -763,7 +750,7 @@ extension SpecParser {
         )
     }
 
-    private static func parseDefinition(
+    private func parseDefinition(
         _ call: FunctionCallExprSyntax,
         into result: inout ParsedSpecComponents
     ) {
@@ -794,7 +781,7 @@ extension SpecParser {
         ))
     }
 
-    private static func parseFormalParameters(_ expression: ExprSyntax) -> [FormalParameter]? {
+    private func parseFormalParameters(_ expression: ExprSyntax) -> [FormalParameter]? {
         guard let array = expression.as(ArrayExprSyntax.self) else { return nil }
         let parameters: [FormalParameter?] = array.elements.map { element -> FormalParameter? in
             guard let call = element.expression.as(FunctionCallExprSyntax.self),
@@ -816,7 +803,7 @@ extension SpecParser {
         return parameters.compactMap { $0 }
     }
 
-    private static func parseFormalModuleInstance(
+    private func parseFormalModuleInstance(
         _ call: FunctionCallExprSyntax,
         into result: inout ParsedSpecComponents
     ) {
@@ -874,7 +861,7 @@ extension SpecParser {
         ))
     }
 
-    private static func plusCalPhase(_ call: FunctionCallExprSyntax) -> AuthoredPlusCalDeclarationPhase {
+    private func plusCalPhase(_ call: FunctionCallExprSyntax) -> AuthoredPlusCalDeclarationPhase {
         let phase = call.arguments.first(where: { $0.label?.text == "plusCalPhase" })?
             .expression.as(MemberAccessExprSyntax.self)?.declName.baseName.text
         switch phase {
@@ -883,12 +870,12 @@ extension SpecParser {
         }
     }
 
-    private static func plusCalDependencies(_ call: FunctionCallExprSyntax) -> [String] {
+    private func plusCalDependencies(_ call: FunctionCallExprSyntax) -> [String] {
         guard let array = call.arguments.first(where: { $0.label?.text == "dependsOn" })?.expression.as(ArrayExprSyntax.self) else { return [] }
         return array.elements.compactMap { $0.expression.as(StringLiteralExprSyntax.self)?.representedLiteralValue }
     }
 
-    private static func parseFormalModuleConfiguration(
+    private func parseFormalModuleConfiguration(
         _ call: FunctionCallExprSyntax,
         moduleName: String
     ) -> FormalModuleConfiguration? {
@@ -909,7 +896,7 @@ extension SpecParser {
         return ZSequences.boundedNaturalNumbers(lower...upper)
     }
 
-    static func mergeVariableDeclaration(
+    func mergeVariableDeclaration(
         named name: String,
         into result: inout ParsedSpecComponents
     ) {
@@ -924,7 +911,7 @@ extension SpecParser {
         )
     }
 
-    static func validateVariableDeclaration(
+    func validateVariableDeclaration(
         _ call: FunctionCallExprSyntax,
         into result: inout ParsedSpecComponents
     ) {
@@ -944,7 +931,7 @@ extension SpecParser {
         }
     }
 
-    static func parseAction(
+    func parseAction(
         _ call: FunctionCallExprSyntax,
         into result: inout ParsedSpecComponents,
         loopVar: String?,
@@ -1040,7 +1027,7 @@ extension SpecParser {
         ))
     }
 
-    static func unsupportedActionExpression(in closure: ClosureExprSyntax) -> ExprSyntax? {
+    func unsupportedActionExpression(in closure: ClosureExprSyntax) -> ExprSyntax? {
         closure.statements.compactMap { statement in
             guard case .expr(let expression) = statement.item,
                   decodeActionExpr(expression) == nil
@@ -1049,7 +1036,7 @@ extension SpecParser {
         }.first
     }
 
-    static func typedUpdateExpression(in expression: ExprSyntax) -> ExprSyntax? {
+    func typedUpdateExpression(in expression: ExprSyntax) -> ExprSyntax? {
         if let call = expression.as(FunctionCallExprSyntax.self) {
             if call.calledExpression.as(MemberAccessExprSyntax.self)?.declName.baseName.text == "updating" {
                 return expression
@@ -1089,7 +1076,7 @@ extension SpecParser {
         return nil
     }
 
-    static func actionParameter(
+    func actionParameter(
         _ expression: ExprSyntax,
         actionName: String,
         position: Int,
@@ -1142,7 +1129,7 @@ extension SpecParser {
         return ActionBinding(name: name, values: values)
     }
 
-    static func closureParameterNames(in closure: ClosureExprSyntax) -> [String] {
+    func closureParameterNames(in closure: ClosureExprSyntax) -> [String] {
         guard let parameters = closure.signature?.parameterClause else { return [] }
         switch parameters {
         case .simpleInput(let list): return list.map { $0.name.text }
@@ -1151,7 +1138,7 @@ extension SpecParser {
         }
     }
 
-    static func finiteDomain(_ expression: ExprSyntax) -> [TLAValue]? {
+    func finiteDomain(_ expression: ExprSyntax) -> [TLAValue]? {
         if let array = expression.as(ArrayExprSyntax.self) {
             let values = array.elements.compactMap { element -> TLAValue? in
                 guard case .value(let value)? = decodeStateExpr(element.expression) else { return nil }
@@ -1163,10 +1150,10 @@ extension SpecParser {
               member.declName.baseName.text == "finiteValues",
               let type = member.base?.as(DeclReferenceExprSyntax.self)?.baseName.text
         else { return nil }
-        return _enumDomains[type]
+        return enumDomains[type]
     }
 
-    static func parseInvariant(
+    func parseInvariant(
         _ call: FunctionCallExprSyntax,
         into result: inout ParsedSpecComponents
     ) {
@@ -1188,7 +1175,7 @@ extension SpecParser {
         result.invariants.append((name, body))
     }
 
-    static func parseInvariantBody(
+    func parseInvariantBody(
         _ closure: ClosureExprSyntax,
         symmetricCollections: Set<String>
     ) -> StateExpr? {
@@ -1203,7 +1190,7 @@ extension SpecParser {
         return expressions.dropFirst().reduce(first, StateExpr.and)
     }
 
-    static func decodeInvariantExpression(
+    func decodeInvariantExpression(
         _ expression: ExprSyntax,
         symmetricCollections: Set<String>
     ) -> StateExpr? {
@@ -1217,7 +1204,7 @@ extension SpecParser {
         return decodeStateExpr(unwrapped)
     }
 
-    static func unsupportedInvariantExpression(
+    func unsupportedInvariantExpression(
         in closure: ClosureExprSyntax,
         symmetricCollections: Set<String>
     ) -> ExprSyntax? {
@@ -1230,7 +1217,7 @@ extension SpecParser {
         return nil
     }
 
-    static func parseCollectionPredicate(
+    func parseCollectionPredicate(
         _ expression: ExprSyntax,
         symmetricCollections: Set<String>
     ) -> StateExpr? {
@@ -1241,7 +1228,7 @@ extension SpecParser {
               let kind = CollectionPredicateKind(rawValue: access.declName.baseName.text),
               let closure = call.trailingClosure
                 ?? call.arguments.first?.expression.as(ClosureExprSyntax.self),
-              let parameter = collectionPredicateParameter(in: closure)
+              let parameter = Self.collectionPredicateParameter(in: closure)
         else { return nil }
 
         let member = FreshVarName.fresh()
@@ -1293,7 +1280,7 @@ extension SpecParser {
         }
 
         override func visit(_ node: ClosureExprSyntax) -> ExprSyntax {
-            if closureDepth > 0, collectionPredicateParameter(in: node) == parameter {
+            if closureDepth > 0, ParserSession.collectionPredicateParameter(in: node) == parameter {
                 return ExprSyntax(node)
             }
             closureDepth += 1

@@ -5,12 +5,12 @@ private struct AlgorithmMacroDefinition: Sendable {
     let statements: [AlgorithmStatementModel]
 }
 
-extension SpecParser {
+extension ParserSession {
     /// Parses the bounded PlusCal-shaped authoring layer into the same TLA+ AST
     /// used by the ordinary builder parser. This path deliberately constructs an
     /// `AlgorithmModel` and uses `AlgorithmLowerer`; it does not maintain a
     /// second lowering implementation in the macro.
-    static func parseAlgorithm(
+    func parseAlgorithm(
         _ call: FunctionCallExprSyntax,
         into result: inout ParsedSpecComponents
     ) {
@@ -27,12 +27,12 @@ extension SpecParser {
         var components: [AlgorithmComponentModel] = []
         var macros: [String: AlgorithmMacroDefinition] = [:]
         var lexicalValues: [String: TLAValue] = [:]
-        let outerTupleVariables = _algorithmTupleVariables
-        _algorithmTupleVariables = []
+        let outerTupleVariables = algorithmTupleVariables
+        algorithmTupleVariables = []
         defer {
-            _algorithmTupleVariables = outerTupleVariables
+            algorithmTupleVariables = outerTupleVariables
             for name in lexicalValues.keys {
-                _constants.removeValue(forKey: name)
+                constants.removeValue(forKey: name)
             }
         }
         for statement in closure.statements {
@@ -53,7 +53,7 @@ extension SpecParser {
                 components.append(component)
                 if case .shared(let state) = component,
                    state.swiftTypeName?.hasPrefix("TupleExpr<") == true {
-                    _algorithmTupleVariables.insert(state.root)
+                    algorithmTupleVariables.insert(state.root)
                 }
                 continue
             }
@@ -61,7 +61,7 @@ extension SpecParser {
                let variable = declaration.as(VariableDeclSyntax.self),
                let value = parseAlgorithmLexicalValue(variable) {
                 lexicalValues[value.name] = value.value
-                _constants[value.name] = value.value
+                constants[value.name] = value.value
                 continue
             }
             guard case .expr(let expression) = statement.item else {
@@ -173,7 +173,7 @@ extension SpecParser {
         }
     }
 
-    private static func parseAlgorithmFormalDefinition(
+    private func parseAlgorithmFormalDefinition(
         _ expression: ExprSyntax
     ) -> FormalOperatorDefinition? {
         guard let call = expression.as(FunctionCallExprSyntax.self),
@@ -188,7 +188,7 @@ extension SpecParser {
         return definition
     }
 
-    private static func algorithmStateDeclarations(in model: AlgorithmModel) -> [AlgorithmStateModel] {
+    private func algorithmStateDeclarations(in model: AlgorithmModel) -> [AlgorithmStateModel] {
         model.components.flatMap { component in
             switch component {
             case .shared(let state): return [state]
@@ -210,7 +210,7 @@ extension SpecParser {
         }
     }
 
-    private static func parseAlgorithmComponent(
+    private func parseAlgorithmComponent(
         _ expression: ExprSyntax,
         macros: [String: AlgorithmMacroDefinition]
     ) -> AlgorithmComponentModel? {
@@ -248,7 +248,7 @@ extension SpecParser {
         }
     }
 
-    private static func parseProcedure(
+    private func parseProcedure(
         _ call: FunctionCallExprSyntax,
         macros: [String: AlgorithmMacroDefinition]
     ) -> AlgorithmComponentModel? {
@@ -308,7 +308,7 @@ extension SpecParser {
         return .procedure(.init(name: name, parameters: parameters, locals: locals, steps: steps))
     }
 
-    private static func procedureDefaultValue(for type: String) -> StateExpr {
+    private func procedureDefaultValue(for type: String) -> StateExpr {
         switch type {
         case "Int": return .value(.int(0))
         case "Bool": return .value(.bool(false))
@@ -317,7 +317,7 @@ extension SpecParser {
         }
     }
 
-    private static func parseAlgorithmTemporal(
+    private func parseAlgorithmTemporal(
         _ call: FunctionCallExprSyntax,
         named kind: String
     ) -> NamedTemporal? {
@@ -345,7 +345,7 @@ extension SpecParser {
         return expression.map { .init(name: name, expr: $0) }
     }
 
-    private static func parseAlgorithmInvariant(
+    private func parseAlgorithmInvariant(
         _ call: FunctionCallExprSyntax
     ) -> NamedInvariant? {
         guard let name = extractStringArg(call, index: 0),
@@ -370,13 +370,13 @@ extension SpecParser {
         return .init(name: name, body: body)
     }
 
-    private static func formalAlgorithmProperty(_ expression: ExprSyntax) -> StateExpr? {
+    private func formalAlgorithmProperty(_ expression: ExprSyntax) -> StateExpr? {
         decodeAlgorithmDomainQuantifier(expression)
             ?? decodeTypedFacadeValue(expression, substitutions: [:])
             ?? decodeStateExpr(expression)
     }
 
-    private static func parseEach(
+    private func parseEach(
         _ call: FunctionCallExprSyntax,
         macros: [String: AlgorithmMacroDefinition]
     ) -> AlgorithmComponentModel? {
@@ -384,7 +384,7 @@ extension SpecParser {
               let domain = finiteAlgorithmDomain(domainSyntax),
               let closure = call.trailingClosure
         else {
-            let knownDomains = _enumDomains.keys.sorted()
+            let knownDomains = enumDomains.keys.sorted()
             let known = knownDomains.isEmpty ? "none" : knownDomains.joined(separator: ", ")
             algorithmParseFailure = "Each could not resolve its finite domain. Known finite domains: \(known)."
             return nil
@@ -434,7 +434,7 @@ extension SpecParser {
     /// Parses the declaration spelling used by the public PlusCal-shaped DSL.
     /// The runtime builder receives the same declaration through `#spec`'s
     /// registration rewrite; this parser deliberately does its own decoding.
-    private static func parseAlgorithmVariableDeclaration(
+    private func parseAlgorithmVariableDeclaration(
         _ declaration: VariableDeclSyntax,
         expectedKind: String
     ) -> AlgorithmComponentModel? {
@@ -492,7 +492,7 @@ extension SpecParser {
         return expectedKind == "SharedVar" ? .shared(state) : .local(state)
     }
 
-    private static func parseAlgorithmMacroDeclaration(
+    private func parseAlgorithmMacroDeclaration(
         _ declaration: VariableDeclSyntax
     ) -> AlgorithmMacroDefinition? {
         guard let initializer = declaration.bindings.first?.initializer?.value.as(FunctionCallExprSyntax.self),
@@ -519,7 +519,7 @@ extension SpecParser {
     /// expressions that the DSL evaluator can reduce now. The same value is
     /// then visible to subsequent syntax decoding through the parser's formal
     /// constant table.
-    private static func parseAlgorithmLexicalValue(
+    private func parseAlgorithmLexicalValue(
         _ declaration: VariableDeclSyntax
     ) -> (name: String, value: TLAValue)? {
         guard declaration.bindings.count == 1,
@@ -540,7 +540,7 @@ extension SpecParser {
         return (name, value)
     }
 
-    private static func isAlgorithmMacroInitializer(_ initializer: FunctionCallExprSyntax) -> Bool {
+    private func isAlgorithmMacroInitializer(_ initializer: FunctionCallExprSyntax) -> Bool {
         if initializer.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "Macro" {
             return true
         }
@@ -551,7 +551,7 @@ extension SpecParser {
             .baseName.text == "Macro"
     }
 
-    private static func algorithmInitialTypeName(_ expression: ExprSyntax) -> String? {
+    private func algorithmInitialTypeName(_ expression: ExprSyntax) -> String? {
         if let call = expression.as(FunctionCallExprSyntax.self),
            let member = call.calledExpression.as(MemberAccessExprSyntax.self),
            member.declName.baseName.text == "literal",
@@ -561,7 +561,7 @@ extension SpecParser {
         return initialValueTypeName(from: expression)
     }
 
-    private static func parseEachComponent(
+    private func parseEachComponent(
         _ expression: ExprSyntax,
         processParameter: String,
         macros: [String: AlgorithmMacroDefinition]
@@ -601,7 +601,7 @@ extension SpecParser {
         }
     }
 
-    private static func parseAlgorithmStatements(
+    private func parseAlgorithmStatements(
         _ statements: CodeBlockItemListSyntax,
         processParameter: String,
         macros: [String: AlgorithmMacroDefinition]
@@ -665,7 +665,7 @@ extension SpecParser {
     /// Parses a Swift `let` inside a formal block as a lexical formal alias.
     /// It never evaluates host-language code. The initializer must be an
     /// expression the formal parser can represent.
-    private static func parseFormalLet(_ declaration: VariableDeclSyntax) -> (name: String, value: StateExpr)? {
+    private func parseFormalLet(_ declaration: VariableDeclSyntax) -> (name: String, value: StateExpr)? {
         guard declaration.bindingSpecifier.text == "let",
               declaration.bindings.count == 1,
               let binding = declaration.bindings.first,
@@ -677,7 +677,7 @@ extension SpecParser {
         return (name, value)
     }
 
-    private static func parseAlgorithmStatement(
+    private func parseAlgorithmStatement(
         _ expression: ExprSyntax,
         processParameter: String,
         macros: [String: AlgorithmMacroDefinition]
@@ -862,20 +862,20 @@ extension SpecParser {
         }
     }
 
-    private static func algorithmWithSource(_ syntax: ExprSyntax) -> StateExpr? {
+    private func algorithmWithSource(_ syntax: ExprSyntax) -> StateExpr? {
         finiteAlgorithmDomain(syntax).map { domain in
             StateExpr.setLiteral(domain.values.map(StateExpr.value))
         } ?? decodeAlgorithmStateExpression(syntax)
     }
 
-    private static func decodeAlgorithmStateExpression(_ syntax: ExprSyntax) -> StateExpr? {
+    private func decodeAlgorithmStateExpression(_ syntax: ExprSyntax) -> StateExpr? {
         decodeTypedFacadeValue(syntax, substitutions: [:]) ?? decodeStateExpr(syntax)
     }
 
     /// Expands a bounded statement macro into the surrounding atomic block.
     /// Every formal parameter is a direct algorithm variable so macro expansion
     /// remains in the same typed state namespace as its caller.
-    private static func parseMacroInvocation(
+    private func parseMacroInvocation(
         _ expression: ExprSyntax,
         macros: [String: AlgorithmMacroDefinition]
     ) -> [AlgorithmStatementModel]? {
@@ -912,7 +912,7 @@ extension SpecParser {
         }
     }
 
-    private static func macroAssigns(
+    private func macroAssigns(
         to parameter: String,
         in statements: [AlgorithmStatementModel]
     ) -> Bool {
@@ -933,7 +933,7 @@ extension SpecParser {
         return false
     }
 
-    private static func algorithmTarget(_ expression: ExprSyntax?) -> AlgorithmLValueModel? {
+    private func algorithmTarget(_ expression: ExprSyntax?) -> AlgorithmLValueModel? {
         guard let expression else { return nil }
         if let reference = expression.as(DeclReferenceExprSyntax.self) {
             return .root(reference.baseName.text)
@@ -946,14 +946,14 @@ extension SpecParser {
         return nil
     }
 
-    private static func algorithmLabel(_ expression: ExprSyntax?) -> String? {
+    private func algorithmLabel(_ expression: ExprSyntax?) -> String? {
         guard let expression else { return nil }
         if let literal = expression.as(StringLiteralExprSyntax.self) {
             return literal.segments.compactMap { $0.as(StringSegmentSyntax.self)?.content.text }.joined()
         }
         if let access = expression.as(MemberAccessExprSyntax.self) {
             if let type = access.base?.as(DeclReferenceExprSyntax.self)?.baseName.text,
-               case .string(let rawLabel) = _enumPhases[type]?[access.declName.baseName.text] {
+               case .string(let rawLabel) = enumPhases[type]?[access.declName.baseName.text] {
                 return rawLabel
             }
             return access.declName.baseName.text
@@ -964,20 +964,20 @@ extension SpecParser {
         return nil
     }
 
-    static func finiteAlgorithmDomain(_ expression: ExprSyntax) -> (typeName: String, values: [TLAValue])? {
+    func finiteAlgorithmDomain(_ expression: ExprSyntax) -> (typeName: String, values: [TLAValue])? {
         guard let access = expression.as(MemberAccessExprSyntax.self),
               access.declName.baseName.text == "all",
               let type = access.base?.as(DeclReferenceExprSyntax.self)?.baseName.text,
-              let values = _enumDomains[type], !values.isEmpty
+              let values = enumDomains[type], !values.isEmpty
         else { return nil }
         return (type, values)
     }
 
-    private static func replacingProcessParameter(in expression: StateExpr, named parameter: String) -> StateExpr {
+    private func replacingProcessParameter(in expression: StateExpr, named parameter: String) -> StateExpr {
         parameter == "__pcal_self" ? expression : renameVar(parameter, to: "__pcal_self", in: expression)
     }
 
-    private static func replaceAlgorithmVariable(
+    private func replaceAlgorithmVariable(
         _ statement: AlgorithmStatementModel,
         from: String,
         to: String
@@ -1048,7 +1048,7 @@ extension SpecParser {
         }
     }
 
-    private static func captureSafeAlgorithmBody(
+    private func captureSafeAlgorithmBody(
         variable: String,
         body: [AlgorithmStatementModel],
         replacing parameter: String,
