@@ -70,19 +70,19 @@ struct ProcedureLoweringTests {
 
         #expect(AlgorithmValidator.validate(model).isEmpty)
         let spec = try AlgorithmLowerer.lower(model)
-        let initial = try #require(computeInitialStates(spec).first)
-        let afterCall = try apply("start", in: spec, to: initial)
-        #expect(afterCall["pc"] == .string("procedure.work.enter"))
-        #expect(afterCall["workValue"] == .int(7))
-        #expect(afterCall["workOffset"] == .int(1))
-        #expect(afterCall["stack"] != .tuple([]))
+        let (compilation, initial) = try initialState(of: spec)
+        let afterCall = try apply("start", in: compilation, to: initial)
+        #expect(try value(named: "pc", in: afterCall, compilation: compilation) == .string("procedure.work.enter"))
+        #expect(try value(named: "workValue", in: afterCall, compilation: compilation) == .int(7))
+        #expect(try value(named: "workOffset", in: afterCall, compilation: compilation) == .int(1))
+        #expect(try value(named: "stack", in: afterCall, compilation: compilation) != .tuple([]))
 
-        let afterReturn = try apply("procedure.work.enter", in: spec, to: afterCall)
-        #expect(afterReturn["output"] == .int(8))
-        #expect(afterReturn["workValue"] == .int(0))
-        #expect(afterReturn["workOffset"] == .int(1))
-        #expect(afterReturn["stack"] == .tuple([]))
-        #expect(afterReturn["pc"] == .string("finished"))
+        let afterReturn = try apply("procedure.work.enter", in: compilation, to: afterCall)
+        #expect(try value(named: "output", in: afterReturn, compilation: compilation) == .int(8))
+        #expect(try value(named: "workValue", in: afterReturn, compilation: compilation) == .int(0))
+        #expect(try value(named: "workOffset", in: afterReturn, compilation: compilation) == .int(1))
+        #expect(try value(named: "stack", in: afterReturn, compilation: compilation) == .tuple([]))
+        #expect(try value(named: "pc", in: afterReturn, compilation: compilation) == .string("finished"))
     }
 
     @Test("cross-procedure tail call keeps the original continuation and restores every frame slot")
@@ -118,19 +118,21 @@ struct ProcedureLoweringTests {
 
         #expect(AlgorithmValidator.validate(model).isEmpty)
         let spec = try AlgorithmLowerer.lower(model)
-        let initial = try #require(computeInitialStates(spec).first)
-        let inOuter = try apply("start", in: spec, to: initial)
-        let inInner = try apply("procedure.outer.enter", in: spec, to: inOuter)
-        #expect(inInner["pc"] == .string("procedure.inner.enter"))
-        #expect(inInner["stack"] == inOuter["stack"])
-        #expect(inInner["innerValue"] == .int(4))
+        let (compilation, initial) = try initialState(of: spec)
+        let inOuter = try apply("start", in: compilation, to: initial)
+        let inInner = try apply("procedure.outer.enter", in: compilation, to: inOuter)
+        #expect(try value(named: "pc", in: inInner, compilation: compilation) == .string("procedure.inner.enter"))
+        let outerStack = try value(named: "stack", in: inOuter, compilation: compilation)
+        let innerStack = try value(named: "stack", in: inInner, compilation: compilation)
+        #expect(innerStack == outerStack)
+        #expect(try value(named: "innerValue", in: inInner, compilation: compilation) == .int(4))
 
-        let afterReturn = try apply("procedure.inner.enter", in: spec, to: inInner)
-        #expect(afterReturn["output"] == .int(4))
-        #expect(afterReturn["outerValue"] == .int(0))
-        #expect(afterReturn["innerValue"] == .int(0))
-        #expect(afterReturn["stack"] == .tuple([]))
-        #expect(afterReturn["pc"] == .string("finished"))
+        let afterReturn = try apply("procedure.inner.enter", in: compilation, to: inInner)
+        #expect(try value(named: "output", in: afterReturn, compilation: compilation) == .int(4))
+        #expect(try value(named: "outerValue", in: afterReturn, compilation: compilation) == .int(0))
+        #expect(try value(named: "innerValue", in: afterReturn, compilation: compilation) == .int(0))
+        #expect(try value(named: "stack", in: afterReturn, compilation: compilation) == .tuple([]))
+        #expect(try value(named: "pc", in: afterReturn, compilation: compilation) == .string("finished"))
     }
 
     @Test("Each processes keep recursive procedure frames and parameter slots independent")
@@ -178,58 +180,76 @@ struct ProcedureLoweringTests {
 
         #expect(AlgorithmValidator.validate(model).isEmpty)
         let spec = try AlgorithmLowerer.lower(model)
-        let initial = try #require(computeInitialStates(spec).first)
-        let oneInOuter = try apply("start", process: .int(1), in: spec, to: initial)
-        let bothInOuter = try apply("start", process: .int(2), in: spec, to: oneInOuter)
-        #expect(try functionValue("outerValue", key: .int(1), in: bothInOuter) == .int(1))
-        #expect(try functionValue("outerValue", key: .int(2), in: bothInOuter) == .int(2))
+        let (compilation, initial) = try initialState(of: spec)
+        let oneInOuter = try apply("start", process: .int(1), in: compilation, to: initial)
+        let bothInOuter = try apply("start", process: .int(2), in: compilation, to: oneInOuter)
+        #expect(try functionValue("outerValue", key: .int(1), in: bothInOuter, compilation: compilation) == .int(1))
+        #expect(try functionValue("outerValue", key: .int(2), in: bothInOuter, compilation: compilation) == .int(2))
 
-        let oneInInner = try apply("procedure.outer.enter", process: .int(1), in: spec, to: bothInOuter)
-        #expect(try functionValue("innerValue", key: .int(1), in: oneInInner) == .int(1))
-        #expect(try functionValue("innerValue", key: .int(2), in: oneInInner) == .int(0))
-        let stackBeforeNestedCall = try functionValue("stack", key: .int(1), in: bothInOuter)
-        let stackDuringNestedCall = try functionValue("stack", key: .int(1), in: oneInInner)
+        let oneInInner = try apply("procedure.outer.enter", process: .int(1), in: compilation, to: bothInOuter)
+        #expect(try functionValue("innerValue", key: .int(1), in: oneInInner, compilation: compilation) == .int(1))
+        #expect(try functionValue("innerValue", key: .int(2), in: oneInInner, compilation: compilation) == .int(0))
+        let stackBeforeNestedCall = try functionValue("stack", key: .int(1), in: bothInOuter, compilation: compilation)
+        let stackDuringNestedCall = try functionValue("stack", key: .int(1), in: oneInInner, compilation: compilation)
         #expect(stackDuringNestedCall != stackBeforeNestedCall)
 
-        let oneReturned = try apply("procedure.inner.enter", process: .int(1), in: spec, to: oneInInner)
-        #expect(try functionValue("seen", key: .int(1), in: oneReturned) == .int(1))
-        #expect(try functionValue("seen", key: .int(2), in: oneReturned) == .int(0))
-        #expect(try functionValue("innerValue", key: .int(1), in: oneReturned) == .int(0))
-        #expect(try functionValue("outerValue", key: .int(1), in: oneReturned) == .int(1))
-        #expect(try functionValue("outerValue", key: .int(2), in: oneReturned) == .int(2))
-        #expect(try functionValue("pc", key: .int(1), in: oneReturned) == .string("procedure.outer.return"))
+        let oneReturned = try apply("procedure.inner.enter", process: .int(1), in: compilation, to: oneInInner)
+        #expect(try functionValue("seen", key: .int(1), in: oneReturned, compilation: compilation) == .int(1))
+        #expect(try functionValue("seen", key: .int(2), in: oneReturned, compilation: compilation) == .int(0))
+        #expect(try functionValue("innerValue", key: .int(1), in: oneReturned, compilation: compilation) == .int(0))
+        #expect(try functionValue("outerValue", key: .int(1), in: oneReturned, compilation: compilation) == .int(1))
+        #expect(try functionValue("outerValue", key: .int(2), in: oneReturned, compilation: compilation) == .int(2))
+        #expect(try functionValue("pc", key: .int(1), in: oneReturned, compilation: compilation) == .string("procedure.outer.return"))
 
-        let oneFinished = try apply("procedure.outer.return", process: .int(1), in: spec, to: oneReturned)
-        #expect(try functionValue("pc", key: .int(1), in: oneFinished) == .string("finished"))
-        #expect(try functionValue("pc", key: .int(2), in: oneFinished) == .string("procedure.outer.enter"))
+        let oneFinished = try apply("procedure.outer.return", process: .int(1), in: compilation, to: oneReturned)
+        #expect(try functionValue("pc", key: .int(1), in: oneFinished, compilation: compilation) == .string("finished"))
+        #expect(try functionValue("pc", key: .int(2), in: oneFinished, compilation: compilation) == .string("procedure.outer.enter"))
     }
 
-    private func apply(_ label: String, in spec: TLASpec, to state: [String: TLAValue]) throws -> [String: TLAValue] {
-        let action = try #require(spec.actions.first(where: { $0.name == label }))
-        let next = try ActionEnumerator.enumerate(
-            action.body,
-            from: state,
-            varNames: spec.variables.map(\.name)
-        )
-        #expect(next.count == 1)
-        return try #require(next.first)
+    private func initialState(of spec: TLASpec) throws -> (CompiledSpecification, FormalState) {
+        let compilation = try spec.compile()
+        let state = try #require(try CompiledRuntime(compilation: compilation).initialStates().first)
+        return (compilation, state)
+    }
+
+    private func apply(_ label: String, in compilation: CompiledSpecification, to state: FormalState) throws -> FormalState {
+        try #require(try successors(label, in: compilation, from: state).first)
     }
 
     private func apply(
         _ label: String,
         process: TLAValue,
-        in spec: TLASpec,
-        to state: [String: TLAValue]
-    ) throws -> [String: TLAValue] {
-        let action = try #require(spec.actions.first(where: { $0.name == label }))
-        let variant = try #require(actionInvocations(action).first { $0.invocation.arguments == [process] })
-        let next = try ActionEnumerator.enumerate(variant.body, from: state, varNames: spec.variables.map(\.name))
-        #expect(next.count == 1)
-        return try #require(next.first)
+        in compilation: CompiledSpecification,
+        to state: FormalState
+    ) throws -> FormalState {
+        try #require(try successors(label, arguments: [process], in: compilation, from: state).first)
     }
 
-    private func functionValue(_ root: String, key: TLAValue, in state: [String: TLAValue]) throws -> TLAValue {
-        let value = try #require(state[root])
-        return try #require(value.functionValue[key])
+    private func successors(
+        _ label: String,
+        arguments: [TLAValue]? = nil,
+        in compilation: CompiledSpecification,
+        from state: FormalState
+    ) throws -> [FormalState] {
+        let action = try #require(compilation.layout.actionID(named: label))
+        return try CompiledRuntime(compilation: compilation)
+            .successors(for: action, from: state)
+            .filter { arguments == nil || $0.arguments == arguments }
+            .map(\.state)
+    }
+
+    private func value(named name: String, in state: FormalState, compilation: CompiledSpecification) throws -> TLAValue {
+        let variable = try #require(compilation.layout.variableID(named: name))
+        return try state.value(for: variable).rendered(using: compilation.layout)
+    }
+
+    private func functionValue(
+        _ root: String,
+        key: TLAValue,
+        in state: FormalState,
+        compilation: CompiledSpecification
+    ) throws -> TLAValue {
+        let formalValue = try value(named: root, in: state, compilation: compilation)
+        return try #require(formalValue.functionValue[key])
     }
 }
