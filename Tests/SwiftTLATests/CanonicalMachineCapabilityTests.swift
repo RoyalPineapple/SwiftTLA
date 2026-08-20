@@ -100,8 +100,8 @@ struct CanonicalMachineCapabilityTests {
         let machine = CanonicalMachine(
             runtime: runtime,
             initial: ["count": .int(0)],
-            stateDictionary: { $0 },
-            snapshotFromDictionary: { $0 }
+            projectionForSnapshot: { try .init(formalValues: $0) },
+            snapshotFromProjection: { $0.formalValues }
         )
 
         let observation = machine.machineObservation()
@@ -122,14 +122,14 @@ struct CanonicalMachineCapabilityTests {
         let invalidKeyMachine = CanonicalMachine(
             runtime: try SpecRuntime(spec: spec),
             initial: 0,
-            stateDictionary: { _ in ["invalid-key": .constant("valid")] },
-            snapshotFromDictionary: { _ in 0 }
+            projectionForSnapshot: { _ in try .init(formalValues: ["invalid-key": .constant("valid")]) },
+            snapshotFromProjection: { _ in 0 }
         )
         let invalidValueMachine = CanonicalMachine(
             runtime: try SpecRuntime(spec: spec),
             initial: 0,
-            stateDictionary: { _ in ["count": .constant("invalid-constant")] },
-            snapshotFromDictionary: { _ in 0 }
+            projectionForSnapshot: { _ in try .init(formalValues: ["count": .constant("invalid-constant")]) },
+            snapshotFromProjection: { _ in 0 }
         )
 
         let observation = invalidKeyMachine.machineObservation()

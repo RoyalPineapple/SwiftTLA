@@ -495,13 +495,10 @@ public struct GeneratedMachineBehavior: Sendable {
         let runtime = SpecRuntime(compilation: compilation)
         return .init(
             initialStates: {
-                try runtime.initialStates().map(TLAStateProjection.init(formalValues:))
+                try runtime.initialStateProjections()
             },
             successors: { projection, invocation in
-                let state = Dictionary(
-                    uniqueKeysWithValues: projection.entries.map { ($0.token.description, $0.value) }
-                )
-                return try runtime.successors(invocation, from: state).map(TLAStateProjection.init(formalValues:))
+                try runtime.successors(invocation, from: projection)
             }
         )
     }

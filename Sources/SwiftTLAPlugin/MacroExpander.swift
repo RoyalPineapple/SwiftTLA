@@ -95,9 +95,9 @@ enum MacroExpander {
         decls.append(DeclSyntax(stringLiteral: """
         private var _machine = CanonicalMachine(
             runtime: \(model.typeName).runtime,
-            initial: try! State(formalDictionary: \(model.typeName).runtime.initialStates().first!),
-            stateDictionary: { $0.asDictionary },
-            snapshotFromDictionary: { try State(formalDictionary: $0) }
+            initial: Self._initialState(),
+            projectionForSnapshot: { try $0.formalProjection() },
+            snapshotFromProjection: { try State(projection: $0) }
         )
         """))
 
@@ -149,15 +149,15 @@ enum MacroExpander {
             public static func generatedActionReport(
                 actionName: String,
                 in state: State
-            ) -> SpecRuntime.RuntimeActionReport {
-                Self.runtime.actionReport(named: actionName, in: state.asDictionary)
+            ) throws -> SpecRuntime.RuntimeActionReport {
+                Self.runtime.actionReport(named: actionName, in: try state.formalProjection())
             }
             """))
             decls.append(DeclSyntax(stringLiteral: """
             public static func generatedPropertyOutcomes(
                 in state: State
-            ) -> [SpecRuntime.RuntimePropertyOutcome] {
-                Self.runtime.propertyOutcomes(in: state.asDictionary)
+            ) throws -> [SpecRuntime.RuntimePropertyOutcome] {
+                Self.runtime.propertyOutcomes(in: try state.formalProjection())
             }
             """))
         }
@@ -176,23 +176,12 @@ enum MacroExpander {
         let expectedIdentity = model.compilation.identity.value
         let expectedSchema = model.machineSurface.schemaIdentifier
         let facts = machineSurfaceSwiftFactsSource(model.swiftFacts)
-        let projectionSource = """
-        private static func _generatedProjection(_ formalState: [String: TLAValue]) throws -> TLAStateProjection {
-            try TLAStateProjection(validating: formalState.map { key, value in
-                guard let token = TLAStateProjection.Token(validating: key) else {
-                    throw TLAStateProjectionDiagnostic.invalidKey(path: key)
-                }
-                return .init(token: token, value: value)
-            })
-        }
-        """
         let behaviorSource: String
         if model.machineSurface.actions.isEmpty {
             behaviorSource = """
             private static let _generatedMachineBehavior = GeneratedMachineBehavior(
                 initialStates: {
-                    try Self.runtime.initialStates().map { formalState in
-                        let projection = try Self._generatedProjection(formalState)
+                    try Self.runtime.initialStateProjections().map { projection in
                         _ = try State(projection: projection)
                         return projection
                     }
@@ -204,8 +193,7 @@ enum MacroExpander {
             behaviorSource = """
             private static let _generatedMachineBehavior = GeneratedMachineBehavior(
                 initialStates: {
-                    try Self.runtime.initialStates().map { formalState in
-                        let projection = try Self._generatedProjection(formalState)
+                    try Self.runtime.initialStateProjections().map { projection in
                         _ = try State(projection: projection)
                         return projection
                     }
@@ -222,11 +210,7 @@ enum MacroExpander {
                         )
                     }
                     _ = try State(projection: projection)
-                    let formalState = Dictionary(
-                        uniqueKeysWithValues: projection.entries.map { ($0.token.description, $0.value) }
-                    )
-                    return try Self.runtime.successors(label.toInvocation(), from: formalState).map { formalTarget in
-                        let target = try Self._generatedProjection(formalTarget)
+                    return try Self.runtime.successors(label.toInvocation(), from: projection).map { target in
                         _ = try State(projection: target)
                         return target
                     }
@@ -245,7 +229,16 @@ enum MacroExpander {
             }
         }()
         public static let generatedMachineMetadata = _machineSurfacePlan.metadata
-        \(projectionSource)
+        private static func _initialState() -> State {
+            do {
+                guard let projection = try Self.runtime.initialStateProjections().first else {
+                    fatalError("The compiled model has no initial state.")
+                }
+                return try State(projection: projection)
+            } catch {
+                fatalError(String(describing: error))
+            }
+        }
         \(behaviorSource)
         public static func compiledSpecification() throws -> CompiledSpecification {
             let compilation = try Self.spec.compile()
@@ -661,23 +654,6 @@ extension MacroExpander {
                     signature: FunctionSignatureSyntax(
                         parameterClause: FunctionParameterClauseSyntax {
                             FunctionParameterSyntax(
-                                firstName: "formalDictionary", secondName: "dict",
-                                type: TypeSyntax(stringLiteral: "[String: TLAValue]")
-                            )
-                        },
-                        effectSpecifiers: FunctionEffectSpecifiersSyntax(
-                            throwsClause: ThrowsClauseSyntax(throwsSpecifier: .keyword(.throws))
-                        )
-                    ),
-                    body: CodeBlockSyntax {
-                        ExprSyntax(stringLiteral: stateDecodingStatements(variables: variables, enumInfos: enumInfos, source: "dict"))
-                    }
-                )
-                InitializerDeclSyntax(
-                    modifiers: [DeclModifierSyntax(name: .keyword(.fileprivate))],
-                    signature: FunctionSignatureSyntax(
-                        parameterClause: FunctionParameterClauseSyntax {
-                            FunctionParameterSyntax(
                                 firstName: "projection",
                                 type: TypeSyntax(stringLiteral: "TLAStateProjection")
                             )
@@ -687,37 +663,10 @@ extension MacroExpander {
                         )
                     ),
                     body: CodeBlockSyntax {
-                        ExprSyntax(stringLiteral: stateDecodingStatements(variables: variables, enumInfos: enumInfos, source: "projection"))
+                        ExprSyntax(stringLiteral: stateDecodingStatements(variables: variables, enumInfos: enumInfos))
                     }
                 )
-                VariableDeclSyntax(
-                    modifiers: [DeclModifierSyntax(name: .keyword(.fileprivate))],
-                    bindingSpecifier: .keyword(.var),
-                    bindings: [PatternBindingSyntax(
-                        pattern: IdentifierPatternSyntax(identifier: "asDictionary"),
-                        typeAnnotation: TypeAnnotationSyntax(type: TypeSyntax(stringLiteral: "[String: TLAValue]")),
-                        accessorBlock: AccessorBlockSyntax(accessors: .getter(
-                            CodeBlockItemListSyntax {
-                                DeclSyntax(stringLiteral: "var d: [String: TLAValue] = [:]")
-                                for v in variables {
-                                    let st = stateType(for: v, enumInfos: enumInfos)
-                                    if enumInfos.contains(where: { $0.typeName == st }) {
-                                        ExprSyntax(stringLiteral: "d[Variables.\(v.formalName).rawValue] = .string(String(describing: \(v.formalName)))")
-                                    } else if st == "TLAValue" {
-                                        ExprSyntax(stringLiteral: "d[Variables.\(v.formalName).rawValue] = \(v.formalName)")
-                                    } else if ["Int", "Bool", "String"].contains(st) {
-                                        ExprSyntax(stringLiteral: "d[Variables.\(v.formalName).rawValue] = \(constructor(forSwiftType: st, value: v.formalName))")
-                                    } else if v.swiftType != "TLAValue" {
-                                        ExprSyntax(stringLiteral: "d[Variables.\(v.formalName).rawValue] = \(v.formalName).tlaValue")
-                                    } else {
-                                        ExprSyntax(stringLiteral: "d[Variables.\(v.formalName).rawValue] = \(v.formalName)")
-                                    }
-                                }
-                                StmtSyntax(stringLiteral: "return d")
-                            }
-                        ))
-                    )]
-                )
+                DeclSyntax(stringLiteral: stateProjectionFunction(variables: variables, enumInfos: enumInfos))
             }
         )
     }
@@ -744,19 +693,23 @@ extension MacroExpander {
 
     static func stateDecodingStatements(
         variables: [MachineSurfacePlan.Variable],
-        enumInfos: [ParsedEnumInfo],
-        source: String
+        enumInfos: [ParsedEnumInfo]
     ) -> String {
-        variables.map { variable in
+        variables.enumerated().map { index, variable in
             let key = "Variables.\(variable.formalName).rawValue"
-            let rawValue = source == "dict"
-                ? "dict[\(key)]"
-                : "projection.value(for: TLAStateProjection.Token(validating: \(key))!)"
+            let token = "token\(index)"
+            let rawValue = "projection.value(for: \(token))"
             let typeName = stateType(for: variable, enumInfos: enumInfos)
+            let tokenDeclaration = """
+            guard let \(token) = TLAStateProjection.Token(validating: \(key)) else {
+                throw TLAStateProjectionDiagnostic.invalidKey(path: \(key))
+            }
+            """
             if let info = enumInfos.first(where: { $0.typeName == typeName }) {
                 let cases = info.cases.map { "case \"\($0.name)\": self.\(variable.formalName) = \(typeName).\($0.name)" }
                     .joined(separator: "\n")
                 return """
+                \(tokenDeclaration)
                 guard let rawValue = \(rawValue) else {
                     throw TLAStateProjectionDiagnostic.missingRequiredValue(path: \(key), expected: "\(typeName)")
                 }
@@ -773,6 +726,7 @@ extension MacroExpander {
             let type = typeName
             if type == "TLAValue" {
                 return """
+                \(tokenDeclaration)
                 guard let value = \(rawValue) else {
                     throw TLAStateProjectionDiagnostic.missingRequiredValue(path: \(key), expected: "\(type)")
                 }
@@ -781,6 +735,7 @@ extension MacroExpander {
             }
             if !["Int", "Bool", "String", "TLAValue"].contains(typeName) {
                 return """
+                \(tokenDeclaration)
                 guard let rawValue = \(rawValue) else {
                     throw TLAStateProjectionDiagnostic.missingRequiredValue(path: \(key), expected: "\(typeName)")
                 }
@@ -792,6 +747,7 @@ extension MacroExpander {
             }
             let pattern = tlaValuePattern(forSwiftType: type, binding: "value")
             return """
+            \(tokenDeclaration)
             guard let rawValue = \(rawValue) else {
                 throw TLAStateProjectionDiagnostic.missingRequiredValue(path: \(key), expected: "\(type)")
             }
@@ -801,6 +757,38 @@ extension MacroExpander {
             self.\(variable.formalName) = value
             """
         }.joined(separator: "\n")
+    }
+
+    static func stateProjectionFunction(
+        variables: [MachineSurfacePlan.Variable],
+        enumInfos: [ParsedEnumInfo]
+    ) -> String {
+        let entries = variables.map { variable -> String in
+            let typeName = stateType(for: variable, enumInfos: enumInfos)
+            let value: String
+            if enumInfos.contains(where: { $0.typeName == typeName }) {
+                value = ".string(String(describing: \(variable.formalName)) )"
+            } else if typeName == "TLAValue" {
+                value = variable.formalName
+            } else if ["Int", "Bool", "String"].contains(typeName) {
+                value = constructor(forSwiftType: typeName, value: variable.formalName)
+            } else {
+                value = "\(variable.formalName).tlaValue"
+            }
+            return """
+            guard let token = TLAStateProjection.Token(validating: Variables.\(variable.formalName).rawValue) else {
+                throw TLAStateProjectionDiagnostic.invalidKey(path: Variables.\(variable.formalName).rawValue)
+            }
+            entries.append(.init(token: token, value: \(value)))
+            """
+        }.joined(separator: "\n")
+        return """
+        fileprivate func formalProjection() throws -> TLAStateProjection {
+            var entries: [TLAStateProjection.Entry] = []
+            \(entries)
+            return try TLAStateProjection(validating: entries)
+        }
+        """
     }
 
     static func tlaValuePattern(forSwiftType swiftType: String, binding: String) -> String {

@@ -69,8 +69,8 @@ struct SimultaneousUpdateSemanticsTests {
         var machine = CanonicalMachine(
             runtime: runtime,
             initial: ["left": TLAValue.int(1), "right": .int(2)],
-            stateDictionary: { $0 },
-            snapshotFromDictionary: { $0 }
+            projectionForSnapshot: { try .init(formalValues: $0) },
+            snapshotFromProjection: { $0.formalValues }
         )
         let before = machine.snapshot
 

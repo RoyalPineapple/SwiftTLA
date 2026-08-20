@@ -39,21 +39,25 @@ extension MacroExpander {
     }
     static func generateTransitionMatrix() -> [DeclSyntax] {
         [DeclSyntax(stringLiteral: """
-        private static func _formalTransitionMatrix() throws -> [(from: [String: TLAValue], invocation: TLAActionInvocation, to: [String: TLAValue])] {
+        private static func _formalTransitionMatrix() throws -> [(from: TLAStateProjection, invocation: TLAActionInvocation, to: TLAStateProjection)] {
             let graph = try ModelChecker(compilation: Self.compiledSpecification(), maxStates: Self.verificationStateLimit).exploreGraph()
-            var matrix: [(from: [String: TLAValue], invocation: TLAActionInvocation, to: [String: TLAValue])] = []
+            var matrix: [(from: TLAStateProjection, invocation: TLAActionInvocation, to: TLAStateProjection)] = []
             for (fromID, transitions) in graph.transitions {
                 guard let fromState = graph.states[fromID] else { continue }
                 for t in transitions {
                     guard let toState = graph.states[t.target] else { continue }
-                    matrix.append((from: fromState, invocation: t.label.invocation, to: toState))
+                    matrix.append((
+                        from: try TLAStateProjection(formalValues: fromState),
+                        invocation: t.label.invocation,
+                        to: try TLAStateProjection(formalValues: toState)
+                    ))
                 }
             }
             return matrix
         }
         public static func transitionMatrix() throws -> [(from: State, invocation: TLAActionInvocation, to: State)] {
             try _formalTransitionMatrix().map {
-                (from: try State(formalDictionary: $0.from), invocation: $0.invocation, to: try State(formalDictionary: $0.to))
+                (from: try State(projection: $0.from), invocation: $0.invocation, to: try State(projection: $0.to))
             }
         }
         """)]
@@ -66,7 +70,7 @@ extension MacroExpander {
             var verified = Array(repeating: false, count: matrix.count)
             for index in matrix.indices where !verified[index] {
                 let (from, invocation, _) = matrix[index]
-                let expected = matrix.indices.compactMap { candidate -> [String: TLAValue]? in
+                let expected = matrix.indices.compactMap { candidate -> TLAStateProjection? in
                     guard matrix[candidate].from == from, matrix[candidate].invocation == invocation else {
                         return nil
                     }
@@ -93,13 +97,14 @@ extension MacroExpander {
             let matrix = try Self._formalTransitionMatrix()
             let runtime = Self.runtime
             for (_, invocation, successor) in matrix {
-                for inv in runtime.spec.invariants {
-                    guard try inv.body.evaluateBool(
-                        in: successor,
-                        runtimeFuncs: runtime.spec.runtimeFuncs,
-                        recursiveFuncs: runtime.spec.recursiveFuncs
-                    ) else {
-                        throw VerificationError("\\(inv.name) violated by \\(invocation)")
+                for outcome in runtime.invariantOutcomes(in: successor) {
+                    switch outcome {
+                    case .satisfied:
+                        continue
+                    case .violated(let name):
+                        throw VerificationError("\\(name) violated by \\(invocation)")
+                    case .evaluationFailed(let name, let diagnostic), .evaluationUnavailable(let name, let diagnostic):
+                        throw VerificationError("\\(name) could not be evaluated: \\(diagnostic.message)")
                     }
                 }
             }
@@ -136,11 +141,23 @@ extension MacroExpander {
         decls.append(DeclSyntax(generateActionLabel(actions: plan.actions)))
         decls.append(DeclSyntax(generateStateStruct(variables: plan.variables, enumInfos: enumInfos)))
         decls.append(DeclSyntax(stringLiteral: """
+        private static func _initialState() -> State {
+            do {
+                guard let projection = try \(typeName).runtime.initialStateProjections().first else {
+                    fatalError("The compiled model has no initial state.")
+                }
+                return try State(projection: projection)
+            } catch {
+                fatalError(String(describing: error))
+            }
+        }
+        """))
+        decls.append(DeclSyntax(stringLiteral: """
         private let _machine = CanonicalMachineStorage(CanonicalMachine(
             runtime: \(typeName).runtime,
-            initial: try! State(formalDictionary: \(typeName).runtime.initialStates().first!),
-            stateDictionary: { $0.asDictionary },
-            snapshotFromDictionary: { try State(formalDictionary: $0) }
+            initial: Self._initialState(),
+            projectionForSnapshot: { try $0.formalProjection() },
+            snapshotFromProjection: { try State(projection: $0) }
         ))
         """))
         decls.append(contentsOf: generateCanonicalMachineMembers(
