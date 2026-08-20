@@ -122,6 +122,34 @@ struct CompilerPipelineCanonicalizationTests {
         #expect(compilation.layout.declarations.map(\.name) == ["first", "second", "advance", "hold", "Safe"])
     }
 
+    @Test("compiled actions use declaration and binder identities")
+    func compiledActionsUsePrivateIdentities() throws {
+        let spec = TLASpec(
+            name: "CompiledActions",
+            variables: [.init(name: "counter", initial: .int(0))],
+            actions: [
+                .init(
+                    name: "step",
+                    body: .existsAction(
+                        "current",
+                        .setLiteral([.int(1)]),
+                        .assign("counter", .variable("current"))
+                    )
+                )
+            ],
+            invariants: []
+        )
+
+        let compilation = try spec.compile()
+
+        guard case .existsAction(let binder, _, .assign(let variable, .boundValue(let value))) = compilation.model.actions[0].body else {
+            Issue.record("Expected a compiled binder assignment")
+            return
+        }
+        #expect(variable == .init(ordinal: 0))
+        #expect(value == binder)
+    }
+
     @Test("declaration order changes the compilation identity")
     func declarationOrderChangesCompilationIdentity() throws {
         let first = TLASpec(
