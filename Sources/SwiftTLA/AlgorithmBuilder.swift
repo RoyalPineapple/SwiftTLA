@@ -1091,7 +1091,7 @@ public func SharedVar<Value: TLAValueType>(
     // dependent domains (for example `ZSeq(CharacterSet)`) use the type's
     // neutral value solely as metadata. `initialSet` is the actual Init rule.
     let representative: TLAValue
-    if case .set(let members) = try? values.raw.evaluate(in: [:]),
+    if case .set(let members) = try? evaluateClosed(values.raw),
        let first = members.min(by: { $0.description < $1.description }) {
         representative = first
     } else {
@@ -1276,7 +1276,7 @@ extension SpecBuilder {
     /// Lets a `#spec` body use the same typed shared declaration whether it
     /// contains a PlusCal `Algorithm` or an ordinary TLA+ action specification.
     public static func buildExpression<Value>(_ variable: SharedVariable<Value>) -> [SpecComponent] {
-        let initial = (try? variable.initial.evaluate(in: [:])) ?? Value.defaultValue.tlaValue
+        let initial = (try? evaluateClosed(variable.initial)) ?? Value.defaultValue.tlaValue
         return [VarDecl(variable.name, initial, initialSet: variable.initialSet)]
     }
 }

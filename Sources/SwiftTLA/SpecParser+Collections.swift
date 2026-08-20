@@ -454,7 +454,7 @@ extension ParserSession {
             let label = args[1].label?.text
             if label == "in" {
                 if let setExpr = decodeStateExpr(args[1].expression) {
-                    let initial = (try? setExpr.evaluate(in: [:])) ?? .int(0)
+                    let initial = (try? evaluateClosed(setExpr)) ?? .int(0)
                     result.variables.append(.init(name: firstName, initial: initial, initialSet: setExpr))
                     return
                 }

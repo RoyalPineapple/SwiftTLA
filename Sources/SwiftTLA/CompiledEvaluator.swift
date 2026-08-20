@@ -503,3 +503,17 @@ struct CompiledEvaluator {
         }
     }
 }
+
+package func evaluateClosed(_ expression: StateExpr) throws -> TLAValue {
+    let compilation = try TLASpec(
+        name: "ClosedExpression",
+        variables: [],
+        actions: [],
+        invariants: [.init(name: "value", body: expression)]
+    ).compile()
+    let state = try FormalState(values: [], layout: compilation.layout)
+    guard let invariant = compilation.model.invariants.first else {
+        throw CompiledEvaluationError.unresolvedOperator
+    }
+    return try CompiledEvaluator(state: state, model: compilation.model).evaluate(invariant.body)
+}

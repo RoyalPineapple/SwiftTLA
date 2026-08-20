@@ -292,7 +292,7 @@ extension ParserSession {
                    case .setLiteral(let elements) = initialSet,
                    let first = elements.first,
                    let elementType = setExpressionElementTypeName(rangeExpr) {
-                    let initial = (try? first.evaluate(in: [:])) ?? .int(0)
+                    let initial = (try? evaluateClosed(first)) ?? .int(0)
                     result.variables.append(.init(
                         name: patternName, initial: initial, initialSet: initialSet,
                         swiftTypeName: elementType
@@ -536,7 +536,7 @@ extension ParserSession {
     /// values such as `IntRange(1, through: 4)`.
     func parsedInitialValue(_ expression: ExprSyntax) -> TLAValue {
         if let decoded = decodeStateExpr(expression),
-           let value = try? decoded.evaluate(in: [:]) {
+           let value = try? evaluateClosed(decoded) {
             return value
         }
         return parseInitialExpr(expression)

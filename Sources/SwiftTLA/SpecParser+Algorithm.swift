@@ -470,7 +470,7 @@ extension ParserSession {
         } else if expectedKind == "SharedVar",
                   let setSyntax = initializer.arguments.first(where: { $0.label?.text == "in" })?.expression {
             guard let initialSet = decodeStateExpr(setSyntax),
-                  case .set(let elements) = try? initialSet.evaluate(in: [:]),
+                  case .set(let elements) = try? evaluateClosed(initialSet),
                   !elements.isEmpty,
                   let typeName = setExpressionElementTypeName(setSyntax)
             else {
@@ -533,7 +533,7 @@ extension ParserSession {
                 ?? "Algorithm let '\(name)' must be a closed formal value; its expression could not be decoded."
             return nil
         }
-        guard let value = try? expression.evaluate(in: [:]) else {
+        guard let value = try? evaluateClosed(expression) else {
             algorithmParseFailure = "Algorithm let '\(name)' must be a closed formal value; it depends on runtime state or has no matching value."
             return nil
         }
