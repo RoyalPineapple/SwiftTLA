@@ -1,6 +1,5 @@
 public struct TransitionRelation: Sendable {
     public typealias State = [String: TLAValue]
-    public typealias ActionEvaluator = @Sendable (ActionExpr, State, [String]) throws -> [State]
 
     public struct Successor: Sendable, Equatable {
         public let invocation: TLAActionInvocation
@@ -20,35 +19,22 @@ public struct TransitionRelation: Sendable {
 
     private let spec: TLASpec
     private let variableNames: [String]
-    private let actionEvaluator: ActionEvaluator?
     private let formalModuleClosure: FormalModuleClosure
 
-    public init(
-        spec: TLASpec,
-        actionEvaluator: ActionEvaluator? = nil
-    ) throws {
-        self.init(compilation: try spec.compile(), actionEvaluator: actionEvaluator)
+    public init(spec: TLASpec) throws {
+        self.init(compilation: try spec.compile())
     }
 
-    public init(
-        compilation: CompiledSpecification,
-        actionEvaluator: ActionEvaluator? = nil
-    ) {
+    public init(compilation: CompiledSpecification) {
         self.init(
             resolvedSpec: substituteConstants(compilation.spec),
-            formalModuleClosure: compilation.formalModuleClosure,
-            actionEvaluator: actionEvaluator
+            formalModuleClosure: compilation.formalModuleClosure
         )
     }
 
-    init(
-        resolvedSpec: TLASpec,
-        formalModuleClosure: FormalModuleClosure,
-        actionEvaluator: ActionEvaluator? = nil
-    ) {
+    init(resolvedSpec: TLASpec, formalModuleClosure: FormalModuleClosure) {
         self.spec = resolvedSpec
         self.variableNames = resolvedSpec.variables.map(\.name)
-        self.actionEvaluator = actionEvaluator
         self.formalModuleClosure = formalModuleClosure
     }
 
@@ -126,16 +112,12 @@ public struct TransitionRelation: Sendable {
         from state: State,
         evaluationContext: StateExprEvaluationContext
     ) throws -> [State] {
-        if let actionEvaluator {
-            return try actionEvaluator(action, state, variableNames)
-        } else {
-            return try ActionEnumerator.enumerate(
-                action,
-                from: state,
-                varNames: variableNames,
-                formalOperatorDefinitions: formalModuleClosure.resolvedFormalOperatorDefinitions,
-                evaluationContext: evaluationContext
-            )
-        }
+        return try ActionEnumerator.enumerate(
+            action,
+            from: state,
+            varNames: variableNames,
+            formalOperatorDefinitions: formalModuleClosure.resolvedFormalOperatorDefinitions,
+            evaluationContext: evaluationContext
+        )
     }
 }

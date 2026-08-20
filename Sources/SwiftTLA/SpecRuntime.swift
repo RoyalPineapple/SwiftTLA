@@ -1,6 +1,4 @@
 public struct SpecRuntime: Sendable {
-    public typealias ActionEvaluator = @Sendable (ActionExpr, [String: TLAValue], [String]) throws -> [[String: TLAValue]]
-
     public let spec: TLASpec
     /// Present when this runtime entered through the validated compiler gate.
     private let compiledSpecification: CompiledSpecification
@@ -9,23 +7,17 @@ public struct SpecRuntime: Sendable {
     private let transitionRelation: TransitionRelation
     private let formalModuleClosure: FormalModuleClosure
 
-    init(
-        spec: TLASpec,
-        actionEvaluator: ActionEvaluator? = nil
-    ) throws {
-        self.init(compilation: try spec.compile(), actionEvaluator: actionEvaluator)
+    init(spec: TLASpec) throws {
+        self.init(compilation: try spec.compile())
     }
 
-    public init(
-        compilation: CompiledSpecification,
-        actionEvaluator: ActionEvaluator? = nil
-    ) {
+    public init(compilation: CompiledSpecification) {
         let resolvedSpec = substituteConstants(compilation.spec)
         self.spec = compilation.spec
         self.compiledSpecification = compilation
         self.formalModuleClosure = compilation.formalModuleClosure
         self.invariants = resolvedSpec.invariants
-        self.transitionRelation = TransitionRelation(resolvedSpec: resolvedSpec, formalModuleClosure: formalModuleClosure, actionEvaluator: actionEvaluator)
+        self.transitionRelation = TransitionRelation(resolvedSpec: resolvedSpec, formalModuleClosure: formalModuleClosure)
     }
 
     public func initialStates() -> [[String: TLAValue]] {
