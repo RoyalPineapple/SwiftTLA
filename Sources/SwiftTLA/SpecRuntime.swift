@@ -29,6 +29,10 @@ public struct SpecRuntime: Sendable {
         )
     }
 
+    public func initialStateProjections() throws -> [TLAStateProjection] {
+        try initialStates().map(TLAStateProjection.init(formalValues:))
+    }
+
     public func apply(_ invocation: TLAActionInvocation, to state: [String: TLAValue]) throws -> [String: TLAValue] {
         let successors = try evaluatedSuccessors(invocation, from: state)
         guard let next = successors.first else {
@@ -45,6 +49,13 @@ public struct SpecRuntime: Sendable {
 
     public func successors(_ invocation: TLAActionInvocation, from state: [String: TLAValue]) throws -> [[String: TLAValue]] {
         try evaluatedSuccessors(invocation, from: state)
+    }
+
+    public func successors(
+        _ invocation: TLAActionInvocation,
+        from state: TLAStateProjection
+    ) throws -> [TLAStateProjection] {
+        try successors(invocation, from: state.formalValues).map(TLAStateProjection.init(formalValues:))
     }
 
     private func evaluatedSuccessors(
@@ -64,6 +75,10 @@ public struct SpecRuntime: Sendable {
 
     public func availableInvocations(in state: [String: TLAValue]) throws -> [TLAActionInvocation] {
         try availableInvocations(in: state, requested: nil)
+    }
+
+    public func availableInvocations(in state: TLAStateProjection) throws -> [TLAActionInvocation] {
+        try availableInvocations(in: state.formalValues)
     }
 
     private func availableInvocations(
@@ -161,7 +176,23 @@ public struct SpecRuntime: Sendable {
         )
     }
 
+    public func actionReport(named actionName: String, in state: TLAStateProjection) -> RuntimeActionReport {
+        actionReport(named: actionName, in: state.formalValues)
+    }
+
     public func propertyOutcomes(in state: [String: TLAValue]) -> [RuntimePropertyOutcome] {
+        invariantOutcomes(in: state) + spec.temporalProperties.map {
+            .evaluationUnavailable(
+                name: $0.name,
+                diagnostic: .init(
+                    code: .evaluatorUnavailable,
+                    message: "Temporal properties require a complete graph evaluation"
+                )
+            )
+        }
+    }
+
+    public func invariantOutcomes(in state: [String: TLAValue]) -> [RuntimePropertyOutcome] {
         let formalState: FormalState
         do {
             formalState = try FormalState(projected: state, layout: layout)
@@ -173,7 +204,7 @@ public struct SpecRuntime: Sendable {
                 )
             }
         }
-        var outcomes = compiledSpecification.model.invariants.map { invariant -> RuntimePropertyOutcome in
+        let outcomes = compiledSpecification.model.invariants.map { invariant -> RuntimePropertyOutcome in
             do {
                 return try runtime.invariantHolds(invariant, in: formalState)
                     ? .satisfied(name: invariant.name)
@@ -182,16 +213,15 @@ public struct SpecRuntime: Sendable {
                 return .evaluationFailed(name: invariant.name, diagnostic: .init(code: .evaluationError, message: String(describing: error)))
             }
         }
-        outcomes += spec.temporalProperties.map {
-            .evaluationUnavailable(
-                name: $0.name,
-                diagnostic: .init(
-                    code: .evaluatorUnavailable,
-                    message: "Temporal properties require a complete graph evaluation"
-                )
-            )
-        }
         return outcomes
+    }
+
+    public func propertyOutcomes(in state: TLAStateProjection) -> [RuntimePropertyOutcome] {
+        propertyOutcomes(in: state.formalValues)
+    }
+
+    public func invariantOutcomes(in state: TLAStateProjection) -> [RuntimePropertyOutcome] {
+        invariantOutcomes(in: state.formalValues)
     }
 
     public func check(_ invariantName: String, in state: [String: TLAValue]) throws -> Bool {

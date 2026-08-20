@@ -153,14 +153,10 @@ public struct GeneratedLiveMachine<Model: TLAGeneratedLiveModel>: Sendable {
         let identityRouted = Model.identityRoutedActionNames
         return TLALiveMachineTransitionDriver(
             successors: { projection, invocation in
-                let state = formalStateDictionary(from: projection)
-                return try runtime.successors(invocation, from: state).map { formal in
-                    try TLAStateProjection(formalValues: formal)
-                }
+                try runtime.successors(invocation, from: projection)
             },
             availableInvocations: { projection in
-                let state = formalStateDictionary(from: projection)
-                return try runtime.availableInvocations(in: state).filter {
+                try runtime.availableInvocations(in: projection).filter {
                     !identityRouted.contains($0.name)
                 }
             },
@@ -186,11 +182,6 @@ public struct GeneratedLiveMachine<Model: TLAGeneratedLiveModel>: Sendable {
         )
     }
 
-    private static func formalStateDictionary(
-        from projection: TLAStateProjection
-    ) -> [String: TLAValue] {
-        Dictionary(uniqueKeysWithValues: projection.entries.map { ($0.token.description, $0.value) })
-    }
 }
 
 extension TLALiveMachineOwner {

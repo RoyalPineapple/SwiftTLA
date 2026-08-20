@@ -201,8 +201,8 @@ struct GeneratedSimultaneousSwapTests {
         var machine = CanonicalMachine(
             runtime: runtime,
             initial: GeneratedSimultaneousSwap.State(left: 1, right: 2, pc: "swap"),
-            stateDictionary: { $0.asDictionary },
-            snapshotFromDictionary: { try GeneratedSimultaneousSwap.State(formalDictionary: $0) }
+            projectionForSnapshot: { try $0.formalProjection() },
+            snapshotFromProjection: { try GeneratedSimultaneousSwap.State(projection: $0) }
         )
         let before = machine.snapshot
 
@@ -869,8 +869,8 @@ struct GeneratedStateMachineTests {
             var machine = CanonicalMachine(
                 runtime: runtime,
                 initial: ThreeParameterActionMachine.State(floor: 0),
-                stateDictionary: { $0.asDictionary },
-                snapshotFromDictionary: { try ThreeParameterActionMachine.State(formalDictionary: $0) }
+                projectionForSnapshot: { try $0.formalProjection() },
+                snapshotFromProjection: { try ThreeParameterActionMachine.State(projection: $0) }
             )
             let before = machine.snapshot
 
