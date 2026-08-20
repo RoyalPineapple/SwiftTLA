@@ -32,15 +32,14 @@ struct SymmetricCollectionDeclarationTests {
     #expect(initial.count == 2)
     #expect(Set(initial.values) == Set([TLAValue.int(0)]))
 
-    let initialState = try computeInitialStates(spec)[0]
-    let successors = try ActionEnumerator.enumerate(
-      spec.actions[0].body,
-      from: initialState,
-      varNames: spec.variables.map(\.name)
-    )
+    let compilation = try spec.compile()
+    let initialState = try #require(try CompiledRuntime(compilation: compilation).initialStates().first)
+    let begin = try #require(compilation.layout.actionID(named: "begin"))
+    let successors = try CompiledRuntime(compilation: compilation).successors(for: begin, from: initialState).map(\.state)
+    let phases = try #require(compilation.layout.variableID(named: "phases"))
     #expect(successors.count == 2)
     for successor in successors {
-      let values = successor["phases"]!.functionValue
+      let values = try successor.value(for: phases).rendered(using: compilation.layout).functionValue
       #expect(values.values.filter { $0 == .int(1) }.count == 1)
       #expect(values.values.filter { $0 == .int(0) }.count == 1)
     }

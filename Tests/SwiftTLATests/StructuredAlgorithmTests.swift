@@ -104,13 +104,13 @@ struct StructuredAlgorithmTests {
         }
 
         let spec = try algorithm.lower()
-        let initial = try #require(computeInitialStates(spec).first)
+        let compilation = try spec.compile()
+        let initial = try #require(try CompiledRuntime(compilation: compilation).initialStates().first)
+        let cars = try #require(compilation.layout.variableID(named: "cars"))
+        let values = try initial.value(for: cars).rendered(using: compilation.layout).functionValue
 
         for car in StructuredCarModel.Car.allCases {
-            let record = try #require(Record<StructuredCarModel.CarRecord>(formalValue: StateExpr.functionApply(
-                .variable("cars"),
-                .value(car.tlaValue)
-            ).evaluate(in: initial)))
+            let record = try #require(Record<StructuredCarModel.CarRecord>(formalValue: values[car.tlaValue]))
             #expect(record[StructuredCarModel.CarRecord.floor] == 4)
             #expect(record[StructuredCarModel.CarRecord.door] == .closed)
         }
