@@ -209,7 +209,7 @@ extension StateExpr {
         case seqFromSet = "SeqFromSet"
     }
 
-    public func evaluate(in state: [String: TLAValue],
+    package func evaluate(in state: [String: TLAValue],
                          runtimeFuncs: [String: RuntimeFunc] = [:],
                          recursiveFuncs: [RecursiveFunc] = [],
                          formalOperatorDefinitions: [FormalOperatorDefinition] = [],
@@ -879,7 +879,7 @@ extension StateExpr {
     }
     // swiftlint:enable function_body_length
 
-    public func evaluateBool(in state: [String: TLAValue],
+    package func evaluateBool(in state: [String: TLAValue],
                              runtimeFuncs: [String: RuntimeFunc] = [:],
                              recursiveFuncs: [RecursiveFunc] = [],
                              formalOperatorDefinitions: [FormalOperatorDefinition] = [],
