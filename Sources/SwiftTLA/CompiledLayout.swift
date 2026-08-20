@@ -101,6 +101,7 @@ struct CompiledBindingTable: Sendable {
 
 struct BindingValidator {
     private let layout: CompiledLayout
+    private let closure: FormalModuleClosure
     private var symbols: Set<String>
     private var nextBinderOrdinal = 0
     private var knownBinderNames: Set<String> = []
@@ -108,6 +109,7 @@ struct BindingValidator {
 
     init(spec: TLASpec, layout: CompiledLayout, closure: FormalModuleClosure) {
         self.layout = layout
+        self.closure = closure
         symbols = Set(spec.constants.keys)
             .union(spec.formalParameters.map(\.name))
             .union(spec.formalOperatorDefinitions.map(\.name))
@@ -142,6 +144,16 @@ struct BindingValidator {
         for function in spec.recursiveFuncs {
             let scope = try bind(function.params, at: "recursiveFunctions.\(function.name).parameters", scope: [:])
             try validateExpression(function.body, at: "recursiveFunctions.\(function.name).body", scope: scope)
+        }
+        let localFormalNames = Set(spec.formalOperatorDefinitions.map(\.name))
+        for definition in closure.resolvedFormalOperatorDefinitions where !localFormalNames.contains(definition.name) {
+            let scope = try bind(definition.parameters.map(\.name), at: "linkedFormalOperators.\(definition.name).parameters", scope: [:])
+            try validateExpression(definition.body, at: "linkedFormalOperators.\(definition.name).body", scope: scope)
+        }
+        let localRecursiveNames = Set(spec.recursiveFuncs.map(\.name))
+        for function in closure.resolvedRecursiveFuncs where !localRecursiveNames.contains(function.name) {
+            let scope = try bind(function.params, at: "linkedRecursiveFunctions.\(function.name).parameters", scope: [:])
+            try validateExpression(function.body, at: "linkedRecursiveFunctions.\(function.name).body", scope: scope)
         }
         return CompiledBindingTable(layout: layout, references: references)
     }

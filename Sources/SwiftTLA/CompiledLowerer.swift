@@ -1,5 +1,6 @@
 struct CompiledLowerer {
     let bindings: CompiledBindingTable
+    let closure: FormalModuleClosure
 
     func lower(spec: TLASpec) throws -> CompiledModel {
         var initializers: [VariableID: CompiledVariableInitializer] = [:]
@@ -35,14 +36,39 @@ struct CompiledLowerer {
                 body: try lower(function.body, at: "recursiveFunctions.\(function.name).body")
             )
         }
+        let localFormalNames = Set(spec.formalOperatorDefinitions.map(\.name))
+        let linkedFormalOperators = try closure.resolvedFormalOperatorDefinitions
+            .filter { !localFormalNames.contains($0.name) }
+            .map { definition in
+                CompiledFormalOperatorDefinition(
+                    name: definition.name,
+                    parameters: try definition.parameters.map {
+                        try binder(at: "linkedFormalOperators.\(definition.name).parameters.\($0.name)")
+                    },
+                    body: try lower(definition.body, at: "linkedFormalOperators.\(definition.name).body")
+                )
+            }
+        let localRecursiveNames = Set(spec.recursiveFuncs.map(\.name))
+        let linkedRecursiveFunctions = try closure.resolvedRecursiveFuncs
+            .filter { !localRecursiveNames.contains($0.name) }
+            .map { function in
+                CompiledRecursiveFunction(
+                    name: function.name,
+                    parameters: try function.params.map {
+                        try binder(at: "linkedRecursiveFunctions.\(function.name).parameters.\($0)")
+                    },
+                    body: try lower(function.body, at: "linkedRecursiveFunctions.\(function.name).body")
+                )
+            }
         return CompiledModel(
+            constants: spec.constants,
             variableInitializers: initializers,
             actions: actions,
             invariants: invariants,
             constraint: try lowerOptional(spec.constraint, at: "constraint"),
             assume: try lowerOptional(spec.assume, at: "assume"),
-            formalOperatorDefinitions: formalOperators,
-            recursiveFunctions: recursiveFunctions
+            formalOperatorDefinitions: formalOperators + linkedFormalOperators,
+            recursiveFunctions: recursiveFunctions + linkedRecursiveFunctions
         )
     }
 

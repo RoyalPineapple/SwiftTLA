@@ -135,6 +135,7 @@ struct CompiledVariableInitializer: Sendable {
 }
 
 struct CompiledModel: Sendable {
+    let constants: [String: TLAValue]
     let variableInitializers: [VariableID: CompiledVariableInitializer]
     let actions: [CompiledAction]
     let invariants: [CompiledInvariant]

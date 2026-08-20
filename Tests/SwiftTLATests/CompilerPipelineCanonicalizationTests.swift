@@ -194,6 +194,101 @@ struct CompilerPipelineCanonicalizationTests {
         #expect(value == compilation.layout.variables[0].id)
     }
 
+    @Test("formal state stores values by compiled variable identity")
+    func formalStateUsesVariableSlots() throws {
+        let spec = TLASpec(
+            name: "FormalState",
+            variables: [
+                .init(name: "first", initial: .int(1)),
+                .init(name: "second", initial: .int(2)),
+            ],
+            actions: [],
+            invariants: []
+        )
+        let compilation = try spec.compile()
+        let first = compilation.layout.variables[0].id
+        let second = compilation.layout.variables[1].id
+        let state = try FormalState(values: [.int(1), .int(2)], layout: compilation.layout)
+        let updated = try state.updating(second, to: .int(3))
+
+        #expect(try state.value(for: first) == .int(1))
+        #expect(try state.value(for: second) == .int(2))
+        #expect(try updated.value(for: first) == .int(1))
+        #expect(try updated.value(for: second) == .int(3))
+    }
+
+    @Test("compiled evaluator reads slots and binders without names")
+    func compiledEvaluatorUsesPrivateIdentities() throws {
+        let spec = TLASpec(
+            name: "CompiledEvaluation",
+            variables: [.init(name: "counter", initial: .int(0))],
+            actions: [
+                .init(
+                    name: "step",
+                    body: .existsAction(
+                        "current",
+                        .setLiteral([.int(1)]),
+                        .guard_(.equal(.add(.variable("counter"), .variable("current")), .int(2)))
+                    )
+                )
+            ],
+            invariants: []
+        )
+        let compilation = try spec.compile()
+        let state = try FormalState(values: [.int(1)], layout: compilation.layout)
+
+        guard case .existsAction(let binder, _, .guard_(let expression)) = compilation.model.actions[0].body else {
+            Issue.record("Expected a compiled action binder")
+            return
+        }
+        let result = try CompiledEvaluator(
+            state: state,
+            model: compilation.model,
+            bindings: .init().binding(.int(1), to: binder)
+        ).evaluate(expression)
+
+        #expect(result == .bool(true))
+    }
+
+    @Test("compiled evaluator executes local operators through bound values")
+    func compiledEvaluatorExecutesLocalOperators() throws {
+        let expression = StateExpr.letIn(
+            [LocalOperator("increment", parameters: ["value"], body: .add(.variable("value"), .int(1)))],
+            .equal(.recursiveCall("increment", [.int(1)]), .int(2))
+        )
+        let spec = TLASpec(
+            name: "CompiledLocalOperator",
+            variables: [],
+            actions: [.init(name: "step", body: .guard_(expression))],
+            invariants: []
+        )
+        let compilation = try spec.compile()
+        let state = try FormalState(values: [], layout: compilation.layout)
+
+        guard case .guard_(let compiled) = compilation.model.actions[0].body else {
+            Issue.record("Expected a compiled guard")
+            return
+        }
+        #expect(try CompiledEvaluator(state: state, model: compilation.model).evaluate(compiled) == .bool(true))
+    }
+
+    @Test("compiled actions update formal state by variable identity")
+    func compiledActionsUpdateFormalState() throws {
+        let spec = TLASpec(
+            name: "CompiledActionExecution",
+            variables: [.init(name: "counter", initial: .int(0))],
+            actions: [.init(name: "step", body: .assign("counter", .add(.variable("counter"), .int(1))))],
+            invariants: []
+        )
+        let compilation = try spec.compile()
+        let state = try FormalState(values: [.int(1)], layout: compilation.layout)
+
+        let successors = try CompiledActionEnumerator(state: state, model: compilation.model).enumerate(compilation.model.actions[0])
+
+        #expect(successors.count == 1)
+        #expect(try successors[0].value(for: compilation.layout.variables[0].id) == .int(2))
+    }
+
     @Test("declaration order changes the compilation identity")
     func declarationOrderChangesCompilationIdentity() throws {
         let first = TLASpec(
