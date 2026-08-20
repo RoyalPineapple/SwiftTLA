@@ -1,5 +1,4 @@
 struct CompiledLowerer {
-    let layout: CompiledLayout
     let bindings: CompiledBindingTable
 
     func lower(spec: TLASpec) throws -> CompiledModel {

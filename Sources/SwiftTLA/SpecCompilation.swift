@@ -365,7 +365,7 @@ public extension TLASpec {
         let layout = CompiledLayout(spec: self)
         var validator = BindingValidator(spec: self, layout: layout, closure: closure)
         let bindings = try validator.validate(spec: self)
-        let model = try CompiledLowerer(layout: layout, bindings: bindings).lower(spec: self)
+        let model = try CompiledLowerer(bindings: bindings).lower(spec: self)
         let directModuleSections = try directModuleSectionPlan()
         return CompiledSpecification(
             spec: self,
