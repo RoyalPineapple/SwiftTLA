@@ -12,28 +12,30 @@ public struct KVsnapModel: Sendable {
     public static let corpusEntry = CanonicalCorpusEntry(
         id: "kvsnap-upstream-port",
         specification: { KVsnapModel.spec },
-        swiftConfiguration: """
-        SPECIFICATION Spec
-        INVARIANTS TypeOK SnapshotIsolation
-        PROPERTIES Termination
-        CONSTANT k1 = k1
-        CONSTANT k2 = k2
-        CONSTANT t1 = t1
-        CONSTANT t2 = t2
-        CONSTANT t3 = t3
-        CONSTANT NoVal = NoVal
-        """,
-        plusCalConfiguration: """
-        SPECIFICATION Spec
-        INVARIANTS TypeOK SnapshotIsolation
-        PROPERTIES Termination
-        CONSTANT k1 = k1
-        CONSTANT k2 = k2
-        CONSTANT t1 = t1
-        CONSTANT t2 = t2
-        CONSTANT t3 = t3
-        CONSTANT NoVal = NoVal
-        """
+        swiftConfiguration: .init(
+            checks: [
+                .init("TypeOK", kind: .invariant),
+                .init("SnapshotIsolation", kind: .invariant),
+                .init("Termination", kind: .property)
+            ],
+            constants: [
+                .init("k1", "k1"), .init("k2", "k2"),
+                .init("t1", "t1"), .init("t2", "t2"), .init("t3", "t3"),
+                .init("NoVal", "NoVal")
+            ]
+        ),
+        plusCalConfiguration: .init(
+            checks: [
+                .init("TypeOK", kind: .invariant),
+                .init("SnapshotIsolation", kind: .invariant),
+                .init("Termination", kind: .property)
+            ],
+            constants: [
+                .init("k1", "k1"), .init("k2", "k2"),
+                .init("t1", "t1"), .init("t2", "t2"), .init("t3", "t3"),
+                .init("NoVal", "NoVal")
+            ]
+        )
     )
 
     public enum Key: String, FiniteDomainKey {

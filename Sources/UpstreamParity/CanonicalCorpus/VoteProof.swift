@@ -7,8 +7,8 @@ public struct VoteProofModel: Sendable {
     public static let corpusEntry = CanonicalCorpusEntry(
         id: "voteproof-upstream-port",
         specification: { VoteProofModel.spec },
-        swiftConfiguration: "SPECIFICATION Spec\nINVARIANTS TypeOK VInv1 VInv2 VInv3 VInv4\nPROPERTIES Refines\nCONSTANT Value = {\"v1\", \"v2\"}\nCONSTANT Acceptor = {\"a1\", \"a2\", \"a3\"}\nCONSTANT Quorum = {{\"a1\", \"a2\"}, {\"a1\", \"a3\"}, {\"a2\", \"a3\"}, {\"a1\", \"a2\", \"a3\"}}\nCONSTANT Ballot = {0, 1, 2}\nCHECK_DEADLOCK FALSE\n",
-        plusCalConfiguration: "SPECIFICATION Spec\nINVARIANTS TypeOK VInv1 VInv2 VInv3 VInv4\nPROPERTIES Refines\nCONSTANT Value = {\"v1\", \"v2\"}\nCONSTANT Acceptor = {\"a1\", \"a2\", \"a3\"}\nCONSTANT Quorum = {{\"a1\", \"a2\"}, {\"a1\", \"a3\"}, {\"a2\", \"a3\"}, {\"a1\", \"a2\", \"a3\"}}\nCONSTANT Ballot = {0, 1, 2}\nCHECK_DEADLOCK FALSE\n",
+        swiftConfiguration: configuration,
+        plusCalConfiguration: configuration,
         externalInputs: [
             .init(name: "NaturalsInduction", source: .init(repository: "tlaplus/tlapm", commit: "4600b24c6d95a25ff081ad37b63b2a01c29d43a5", path: "library/NaturalsInduction.tla"), sha256: "08f52420cdaaf11292ed366782b5ce5b596bb7cbe789526a1cfd8806dbf98624"),
             .init(name: "WellFoundedInduction", source: .init(repository: "tlaplus/tlapm", commit: "4600b24c6d95a25ff081ad37b63b2a01c29d43a5", path: "library/WellFoundedInduction.tla"), sha256: "6f2f274c2e987d1edcf004d8e37b053f1f82b912e66d6a51bae0af8012ddcbec"),
@@ -18,6 +18,26 @@ public struct VoteProofModel: Sendable {
             .init(name: "Folds", source: .init(repository: "tlaplus/CommunityModules", commit: "a8068a4c21ed76b339b9a2aa6de69d78f64f6422", path: "modules/Folds.tla"), sha256: "aa59063fd600bb640b2ae24dc85ef770277ef5bf7955092b76b8b471790086da")
         ]
     )
+
+    private static let configuration = CanonicalCorpusConfiguration(
+        checks: [
+            .init("TypeOK", kind: .invariant, support: .externalOnly(reason: externalReason)),
+            .init("VInv1", kind: .invariant, support: .externalOnly(reason: externalReason)),
+            .init("VInv2", kind: .invariant, support: .externalOnly(reason: externalReason)),
+            .init("VInv3", kind: .invariant, support: .externalOnly(reason: externalReason)),
+            .init("VInv4", kind: .invariant, support: .externalOnly(reason: externalReason)),
+            .init("Refines", kind: .property, support: .externalOnly(reason: externalReason))
+        ],
+        constants: [
+            .init("Value", "{\"v1\", \"v2\"}"),
+            .init("Acceptor", "{\"a1\", \"a2\", \"a3\"}"),
+            .init("Quorum", "{{\"a1\", \"a2\"}, {\"a1\", \"a3\"}, {\"a2\", \"a3\"}, {\"a1\", \"a2\", \"a3\"}}"),
+            .init("Ballot", "{0, 1, 2}")
+        ],
+        checkDeadlock: false
+    )
+
+    private static let externalReason = "The upstream VoteProof claims use TLA+ constructs outside SwiftTLA's supported property DSL."
 
     public enum Value: String, FiniteDomainKey {
         case v1, v2

@@ -8,8 +8,8 @@ public struct BoulangerModel: Sendable {
     public static let corpusEntry = CanonicalCorpusEntry(
         id: "boulanger-upstream-port",
         specification: { BoulangerModel.spec },
-        swiftConfiguration: "SPECIFICATION Spec\nCONSTRAINT StateConstraint\n",
-        plusCalConfiguration: "SPECIFICATION Spec\nCONSTRAINT StateConstraint\n"
+        swiftConfiguration: .init(checks: [.init("StateConstraint", kind: .constraint)]),
+        plusCalConfiguration: .init(checks: [.init("StateConstraint", kind: .constraint)])
     )
 
     public enum Process: Int, FiniteDomainKey {

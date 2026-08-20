@@ -122,6 +122,7 @@ do {
     let cases = try CanonicalCorpus.entries.map { item -> Manifest.Case in
         let specification = item.specification()
         let compilation = try specification.compile()
+        try item.validateConfigurationReferences(in: compilation)
         let externalInputs = try item.externalInputs.map { input in
             (input, try fetchPinnedModule(input))
         }
@@ -133,13 +134,13 @@ do {
 
         var files = [Manifest.Case.File]()
         files.append(try write(bundle.root.tla, relativePath: "\(item.id)/swift/\(bundle.root.name).tla", under: options.output))
-        files.append(try write(item.swiftConfiguration, relativePath: "\(item.id)/swift/\(bundle.root.name).cfg", under: options.output))
+        files.append(try write(item.swiftConfiguration.tlaText, relativePath: "\(item.id)/swift/\(bundle.root.name).cfg", under: options.output))
         let externalNames = Set(externalImports.map(\.name))
         for imported in bundle.imports where !externalNames.contains(imported.name) {
             files.append(try write(imported.tla, relativePath: "\(item.id)/imports/\(imported.name).tla", under: options.output))
         }
         files.append(try write(plusCalBundle.root.tla, relativePath: "\(item.id)/pluscal/\(plusCalBundle.root.name).tla", under: options.output))
-        files.append(try write(item.plusCalConfiguration, relativePath: "\(item.id)/pluscal/\(bundle.root.name).cfg", under: options.output))
+        files.append(try write(item.plusCalConfiguration.tlaText, relativePath: "\(item.id)/pluscal/\(bundle.root.name).cfg", under: options.output))
         for (input, data) in externalInputs {
             let source = Manifest.Case.File.Source(
                 repository: input.source.repository,
