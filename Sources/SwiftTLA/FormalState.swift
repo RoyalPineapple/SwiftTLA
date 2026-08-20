@@ -11,6 +11,26 @@ struct FormalState: Hashable, Sendable {
         self.init(validatedValues: values)
     }
 
+    init(projected valuesByName: [String: TLAValue], layout: CompiledLayout) throws {
+        let expectedNames = Set(layout.variables.map(\.declaration.name))
+        guard Set(valuesByName.keys) == expectedNames else {
+            throw CompiledEvaluationError.invalidStateLayout(
+                expected: expectedNames.count,
+                actual: valuesByName.count
+            )
+        }
+        let values = try layout.variables.map { variable in
+            guard let value = valuesByName[variable.declaration.name] else {
+                throw CompiledEvaluationError.invalidStateLayout(
+                    expected: expectedNames.count,
+                    actual: valuesByName.count
+                )
+            }
+            return value
+        }
+        try self.init(values: values, layout: layout)
+    }
+
     func value(for variable: VariableID) throws -> TLAValue {
         guard values.indices.contains(variable.ordinal) else {
             throw CompiledEvaluationError.invalidVariableID(variable)
