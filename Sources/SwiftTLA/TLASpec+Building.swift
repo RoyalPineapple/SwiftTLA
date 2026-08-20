@@ -179,19 +179,9 @@ extension TLASpec {
 }
 
 extension TLASpec {
-  /// Renders the sole Algorithm authored in this builder as a PlusCal module.
-  /// Direct TLA+ specifications and multi-algorithm source are not silently
-  /// split into ad-hoc exports; callers must use a source model with one
-  /// compiler-owned root module.
-  func renderAuthoredPlusCalModule() throws -> String {
+  func authoredPlusCalModule() throws -> AuthoredPlusCalModule? {
     guard sourceAlgorithms.count == 1, let algorithm = sourceAlgorithms.first else {
-      throw AlgorithmPlusCalRenderDiagnostic(
-        failedConcept: "authored PlusCal module root",
-        path: "TLASpec.sourceAlgorithms",
-        expected: "exactly one authored Algorithm",
-        actual: "\(sourceAlgorithms.count) authored Algorithms",
-        nextSafeAction: "Compile one canonical Algorithm model per exported module."
-      )
+      return nil
     }
     let renderer = AlgorithmPlusCalRenderer(model: algorithm.model)
     let sourceProperties = try renderer.sourcePropertyDefinitions()
@@ -222,7 +212,7 @@ extension TLASpec {
       postTranslationDeclarations: sourceProperties.map(\.definition)
         + authoredPlusCalSymmetry
     )
-    return try AlgorithmPlusCalRenderer(model: algorithm.model).render(module)
+    return module
   }
 
   private var authoredPlusCalExtends: [String] {
