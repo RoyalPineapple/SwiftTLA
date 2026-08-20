@@ -64,7 +64,7 @@ struct CompiledLowerer {
             assume: try lowerOptional(spec.assume, at: "assume"),
             formalOperatorDefinitions: formalOperators + linkedFormalOperators,
             recursiveFunctions: recursiveFunctions + linkedRecursiveFunctions,
-            symmetrySets: try spec.symmetrySets.map { symmetry in
+            symmetrySets: spec.symmetrySets.map { symmetry in
                 .init(values: symmetry.values)
             },
             symmetricCollections: spec.symmetricCollections.map {
