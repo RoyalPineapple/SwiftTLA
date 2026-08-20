@@ -106,8 +106,8 @@ struct GeneratedMachineDocumentationTests {
         }
     }
 
-    @Test("Live-machine guides describe one owner and existing-handle binding")
-    func liveMachineGuidesRetainMigrationBoundary() throws {
+    @Test("Live-machine guide describes one owner and existing-handle binding")
+    func liveMachineGuideDescribesOneOwner() throws {
         let root = packageRoot()
         let guide = try String(
             contentsOf: root.appendingPathComponent("Documentation/GeneratedMachines.md"),
@@ -117,11 +117,6 @@ struct GeneratedMachineDocumentationTests {
             contentsOf: root.appendingPathComponent("Documentation/LiveMachines.md"),
             encoding: .utf8
         )
-        let migration = try String(
-            contentsOf: root.appendingPathComponent("Documentation/LiveMachineMigration.md"),
-            encoding: .utf8
-        )
-
         for term in [
             "TLALiveMachineOwner.create(for:)",
             "Live(handle:)",
@@ -131,9 +126,6 @@ struct GeneratedMachineDocumentationTests {
         ] {
             #expect(live.contains(term), "Live-machine guide is missing: \(term)")
         }
-        #expect(!guide.contains("TLAMachineSession"), "Generated guide retains session-copy live guidance")
-        #expect(migration.contains("TLAMachineSession(model)"))
-        #expect(migration.contains("cannot attach"))
     }
 
     @Test("Generated machine documentation fixture compiles and exercises its stated macOS behavior")

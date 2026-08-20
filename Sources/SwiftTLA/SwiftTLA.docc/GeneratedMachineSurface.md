@@ -69,4 +69,4 @@ Nested `@TLAActor` and `@TLAObservable` types bind a supplied compatible handle 
 
 Generated models provide `verifySpec()`, `transitionMatrix()`, `verifyTransitions()`, and `verifyInvariants()` for their declared finite model. These helpers use the bounded checker and the model's `verificationStateLimit` (default: `100_000`). They do not prove behavior outside the declared bounds or supported SwiftTLA surface.
 
-For migration guidance, read `Documentation/LiveMachineMigration.md`. For a narrative guide and limits, read `Documentation/GeneratedMachines.md` and `Documentation/LiveMachines.md` in the repository.
+For a narrative guide and limits, read `Documentation/GeneratedMachines.md` and `Documentation/LiveMachines.md` in the repository.
