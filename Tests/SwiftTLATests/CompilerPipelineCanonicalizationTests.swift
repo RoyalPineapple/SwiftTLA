@@ -176,6 +176,24 @@ struct CompilerPipelineCanonicalizationTests {
         #expect(value == lambda.parameters[0])
     }
 
+    @Test("compiled ranges retain their bound variable identities")
+    func compiledRangesUseBoundPaths() throws {
+        let spec = TLASpec(
+            name: "CompiledRange",
+            variables: [.init(name: "counter", initial: .int(0))],
+            actions: [.init(name: "step", body: .guard_(.in(.int(1), .integerRange(.variable("counter"), .int(2))))],
+            invariants: []
+        )
+
+        let compilation = try spec.compile()
+
+        guard case .guard_(.in(_, .integerRange(.stateVariable(let value), _))) = compilation.model.actions[0].body else {
+            Issue.record("Expected a compiled integer range")
+            return
+        }
+        #expect(value == compilation.layout.variables[0].id)
+    }
+
     @Test("declaration order changes the compilation identity")
     func declarationOrderChangesCompilationIdentity() throws {
         let first = TLASpec(

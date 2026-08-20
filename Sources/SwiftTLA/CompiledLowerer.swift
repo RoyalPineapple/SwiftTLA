@@ -140,7 +140,11 @@ struct CompiledLowerer {
         case .forAll(let set, let name, let predicate): return try binding(CompiledStateExpr.forAll, set, name, predicate, path)
         case .exists(let set, let name, let predicate): return try binding(CompiledStateExpr.exists, set, name, predicate, path)
         case .choose(let set, let name, let predicate): return try binding(CompiledStateExpr.choose, set, name, predicate, path)
-        case .integerRange(let lower, let upper): return try binary(CompiledStateExpr.integerRange, lower, upper, path)
+        case .integerRange(let lowerBound, let upperBound):
+            return try .integerRange(
+                lower(lowerBound, at: "\(path).lower"),
+                lower(upperBound, at: "\(path).upper")
+            )
         case .foldFunction(let lambda, let initial, let sequence):
             return try .foldFunction(
                 lower(lambda, at: path),
