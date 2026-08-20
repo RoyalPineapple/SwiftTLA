@@ -10,6 +10,10 @@ struct ActionID: Hashable, Sendable {
     let ordinal: Int
 }
 
+struct ControlLabelID: Hashable, Sendable {
+    let ordinal: Int
+}
+
 struct OperatorID: Hashable, Sendable {
     let ordinal: Int
 }
@@ -37,9 +41,34 @@ struct CompiledActionLayout: Hashable, Sendable {
     let declaration: CompiledDeclaration
 }
 
+enum ControlOwner: Hashable, Sendable {
+    case sequential(algorithm: String)
+    case process(algorithm: String, ordinal: Int, typeName: String)
+    case procedure(algorithm: String, name: String)
+
+    var canonicalEncoding: String {
+        switch self {
+        case .sequential(let algorithm):
+            return "sequential:\(algorithm)"
+        case .process(let algorithm, let ordinal, let typeName):
+            return "process:\(algorithm):\(ordinal):\(typeName)"
+        case .procedure(let algorithm, let name):
+            return "procedure:\(algorithm):\(name)"
+        }
+    }
+}
+
+struct CompiledControlLabel: Hashable, Sendable {
+    let id: ControlLabelID
+    let owner: ControlOwner
+    let sourceName: String
+    let renderedName: String
+}
+
 struct CompiledLayout: Hashable, Sendable {
     let variables: [CompiledVariableLayout]
     let actions: [CompiledActionLayout]
+    let controlLabels: [CompiledControlLabel]
     let declarations: [CompiledDeclaration]
 
     init(spec: TLASpec) {
@@ -55,6 +84,7 @@ struct CompiledLayout: Hashable, Sendable {
                 declaration: .init(kind: .action, name: action.name, sourceOffset: nil)
             )
         }
+        controlLabels = Self.controlLabels(in: spec.sourceAlgorithms)
         declarations = variables.map(\.declaration)
             + actions.map(\.declaration)
             + spec.invariants.map { .init(kind: .invariant, name: $0.name, sourceOffset: nil) }
@@ -71,12 +101,76 @@ struct CompiledLayout: Hashable, Sendable {
         actions.first { $0.declaration.name == name }?.id
     }
 
+    func controlLabelID(owner: ControlOwner, named sourceName: String) -> ControlLabelID? {
+        controlLabels.first {
+            $0.owner == owner && $0.sourceName == sourceName
+        }?.id
+    }
+
+    func controlLabel(_ id: ControlLabelID) -> CompiledControlLabel? {
+        controlLabels.first { $0.id == id }
+    }
+
     var canonicalEncoding: String {
-        declarations.enumerated().map { ordinal, declaration in
+        let declarationEncoding = declarations.enumerated().map { ordinal, declaration in
             let kind = declaration.kind.rawValue
             let name = declaration.name
             return "\(ordinal):\(kind.utf8.count):\(kind)\(name.utf8.count):\(name)"
         }.joined(separator: "|")
+        let controlEncoding = controlLabels.map { label in
+            let owner = label.owner.canonicalEncoding
+            return "\(label.id.ordinal):\(owner.utf8.count):\(owner)\(label.sourceName.utf8.count):\(label.sourceName)\(label.renderedName.utf8.count):\(label.renderedName)"
+        }.joined(separator: "|")
+        return "declarations[\(declarationEncoding)]controls[\(controlEncoding)]"
+    }
+
+    private static func controlLabels(in algorithms: [Algorithm]) -> [CompiledControlLabel] {
+        var labels: [CompiledControlLabel] = []
+
+        func append(
+            _ steps: [AlgorithmStepModel],
+            owner: ControlOwner,
+            renderedName: (AlgorithmStepModel) -> String
+        ) {
+            for step in steps {
+                labels.append(
+                    .init(
+                        id: .init(ordinal: labels.count),
+                        owner: owner,
+                        sourceName: step.label.name,
+                        renderedName: renderedName(step)
+                    )
+                )
+            }
+        }
+
+        for algorithm in algorithms {
+            let model = algorithm.model
+            append(
+                model.sequentialSteps,
+                owner: .sequential(algorithm: model.name),
+                renderedName: { $0.label.name }
+            )
+            for (ordinal, process) in model.processes.enumerated() {
+                append(
+                    process.steps,
+                    owner: .process(
+                        algorithm: model.name,
+                        ordinal: ordinal,
+                        typeName: process.typeName
+                    ),
+                    renderedName: { $0.label.name }
+                )
+            }
+            for procedure in model.procedures {
+                append(
+                    procedure.steps,
+                    owner: .procedure(algorithm: model.name, name: procedure.name),
+                    renderedName: { "procedure.\(procedure.name).\($0.label.name)" }
+                )
+            }
+        }
+        return labels
     }
 }
 
