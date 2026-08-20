@@ -4,6 +4,43 @@ import SwiftTLAMacros
 
 @Suite("PlusCal algorithm builders")
 struct AlgorithmBuilderTests {
+    private func initialState(of spec: TLASpec) throws -> (CompiledSpecification, FormalState) {
+        let compilation = try spec.compile()
+        let state = try #require(try CompiledRuntime(compilation: compilation).initialStates().first)
+        return (compilation, state)
+    }
+
+    private func successor(
+        named name: String,
+        arguments: [TLAValue] = [],
+        in compilation: CompiledSpecification,
+        from state: FormalState
+    ) throws -> FormalState {
+        try #require(successors(named: name, arguments: arguments, in: compilation, from: state).first)
+    }
+
+    private func successors(
+        named name: String,
+        arguments: [TLAValue]? = nil,
+        in compilation: CompiledSpecification,
+        from state: FormalState
+    ) throws -> [FormalState] {
+        let action = try #require(compilation.layout.actionID(named: name))
+        return try CompiledRuntime(compilation: compilation)
+            .successors(for: action, from: state)
+            .filter { arguments == nil || $0.arguments == arguments }
+            .map(\.state)
+    }
+
+    private func value(
+        named name: String,
+        in state: FormalState,
+        compilation: CompiledSpecification
+    ) throws -> TLAValue {
+        let variable = try #require(compilation.layout.variableID(named: name))
+        return try state.value(for: variable).rendered(using: compilation.layout)
+    }
+
     @Test("statement macros expand into their surrounding atomic block")
     func expandsTypedStatementMacro() throws {
         let algorithm = Algorithm("MacroLock") {
@@ -25,13 +62,9 @@ struct AlgorithmBuilderTests {
 
         #expect(algorithm.validate().isEmpty)
         let spec = try algorithm.lower()
-        let initial = try #require(computeInitialStates(spec).first)
-        let acquire = try #require(spec.actions.first { $0.name == "acquire" })
-        let invocation = try #require(actionInvocations(acquire).first)
-        let successor = try #require(
-            ActionEnumerator.enumerate(invocation.body, from: initial, varNames: spec.variables.map(\.name)).first
-        )
-        #expect(successor["lock"] == .int(0))
+        let (compilation, initial) = try initialState(of: spec)
+        let next = try successor(named: "acquire", arguments: [.string("first")], in: compilation, from: initial)
+        #expect(try value(named: "lock", in: next, compilation: compilation) == .int(0))
     }
 
     @Test("two-parameter statement macros bind each argument in caller scope")
@@ -50,13 +83,10 @@ struct AlgorithmBuilderTests {
 
         #expect(algorithm.validate().isEmpty)
         let spec = try algorithm.lower()
-        let initial = try #require(computeInitialStates(spec).first)
-        let copy = try #require(spec.actions.first { $0.name == "copy" })
-        let successor = try #require(
-            ActionEnumerator.enumerate(copy.body, from: initial, varNames: spec.variables.map(\.name)).first
-        )
-        #expect(successor["destination"] == .int(7))
-        #expect(successor["source"] == .int(7))
+        let (compilation, initial) = try initialState(of: spec)
+        let next = try successor(named: "copy", in: compilation, from: initial)
+        #expect(try value(named: "destination", in: next, compilation: compilation) == .int(7))
+        #expect(try value(named: "source", in: next, compilation: compilation) == .int(7))
     }
 
     @Test("statement macros retain formal expression arguments in read positions")
@@ -75,12 +105,9 @@ struct AlgorithmBuilderTests {
 
         #expect(algorithm.validate().isEmpty)
         let spec = try algorithm.lower()
-        let initial = try #require(computeInitialStates(spec).first)
-        let copy = try #require(spec.actions.first { $0.name == "copy" })
-        let successor = try #require(
-            ActionEnumerator.enumerate(copy.body, from: initial, varNames: spec.variables.map(\.name)).first
-        )
-        #expect(successor["destination"] == .int(8))
+        let (compilation, initial) = try initialState(of: spec)
+        let next = try successor(named: "copy", in: compilation, from: initial)
+        #expect(try value(named: "destination", in: next, compilation: compilation) == .int(8))
     }
 
     @Test("typed procedure builders use deterministic formal parameter slots")
@@ -102,17 +129,10 @@ struct AlgorithmBuilderTests {
 
         #expect(algorithm.validate().isEmpty)
         let spec = try algorithm.lower()
-        let initial = try #require(computeInitialStates(spec).first)
-        let start = try #require(spec.actions.first { $0.name == "start" })
-        let afterCall = try #require(
-            ActionEnumerator.enumerate(
-                start.body,
-                from: initial,
-                varNames: spec.variables.map(\.name)
-            ).first
-        )
-        #expect(afterCall["parameter0"] == .int(7))
-        #expect(afterCall["pc"] == .string("procedure.work.enter"))
+        let (compilation, initial) = try initialState(of: spec)
+        let afterCall = try successor(named: "start", in: compilation, from: initial)
+        #expect(try value(named: "parameter0", in: afterCall, compilation: compilation) == .int(7))
+        #expect(try value(named: "pc", in: afterCall, compilation: compilation) == .string("procedure.work.enter"))
 
         let rendered = try TLASpec("ProcedureBuilderExport") {
             Definition("Marker == \"procedure.work.enter\"")
@@ -142,16 +162,9 @@ struct AlgorithmBuilderTests {
 
         #expect(algorithm.validate().isEmpty)
         let spec = try algorithm.lower()
-        let initial = try #require(computeInitialStates(spec).first)
-        let increment = try #require(spec.actions.first { $0.name == "increment" })
-        let successor = try #require(
-            ActionEnumerator.enumerate(
-                increment.body,
-                from: initial,
-                varNames: spec.variables.map(\.name)
-            ).first
-        )
-        #expect(successor["count"] == .int(1))
+        let (compilation, initial) = try initialState(of: spec)
+        let next = try successor(named: "increment", in: compilation, from: initial)
+        #expect(try value(named: "count", in: next, compilation: compilation) == .int(1))
     }
 
     @Test("formal function domains stay typed through the builder")
@@ -171,7 +184,8 @@ struct AlgorithmBuilderTests {
         }
 
         let spec = try algorithm.lower()
-        #expect(try computeInitialStates(spec).count == 4)
+        let compilation = try spec.compile()
+        #expect(try CompiledRuntime(compilation: compilation).initialStates().count == 4)
     }
 
     @Test("static formal selection uses the matching finite value")
@@ -194,25 +208,31 @@ struct AlgorithmBuilderTests {
             matching: { successor in successor.expr == successor.expr }
         )
 
-        #expect((try? selected.raw.evaluate(in: [:])) != nil)
+        guard case .value(.function(let _)) = selected.raw else {
+            Issue.record("A static filtered selection must produce a formal function value.")
+            return
+        }
     }
 
     @Test("generated models retain typed filtered function domains")
     func generatedModelRetainsFilteredFunctionDomain() throws {
         FunctionDomainGeneratedModel._checkParserTree()
-        #expect(try computeInitialStates(FunctionDomainGeneratedModel.spec).count == 4)
+        let compilation = try FunctionDomainGeneratedModel.spec.compile()
+        #expect(try CompiledRuntime(compilation: compilation).initialStates().count == 4)
     }
 
     @Test("generated models retain static formal selections")
     func generatedModelRetainsStaticFormalSelection() {
         StaticFormalSelectionModel._checkParserTree()
-        #expect(try computeInitialStates(StaticFormalSelectionModel.spec).first?["current"] == .int(2))
+        let (compilation, state) = try initialState(of: StaticFormalSelectionModel.spec)
+        #expect(try value(named: "current", in: state, compilation: compilation) == .int(2))
     }
 
     @Test("generated models retain static filtered function selections")
     func generatedModelRetainsStaticFilteredFunctionSelection() {
         StaticFilteredFunctionSelectionModel._checkParserTree()
-        #expect(try computeInitialStates(StaticFilteredFunctionSelectionModel.spec).count == 1)
+        let compilation = try StaticFilteredFunctionSelectionModel.spec.compile()
+        #expect(try CompiledRuntime(compilation: compilation).initialStates().count == 1)
     }
 
     @Test("statement macros accept the current typed process identifier")
@@ -235,19 +255,10 @@ struct AlgorithmBuilderTests {
 
         #expect(algorithm.validate().isEmpty)
         let spec = try algorithm.lower()
-        let initial = try #require(computeInitialStates(spec).first)
-        let mark = try #require(spec.actions.first { $0.name == "mark" })
-        let invocation = try #require(actionInvocations(mark).first {
-            $0.invocation.arguments == [.string("first")]
-        })
-        let successor = try #require(
-            ActionEnumerator.enumerate(
-                invocation.body,
-                from: initial,
-                varNames: spec.variables.map(\.name)
-            ).first
-        )
-        #expect(successor["marked"] == .function([.string("first"): .bool(true), .string("second"): .bool(false)]))
+        let (compilation, initial) = try initialState(of: spec)
+        let next = try successor(named: "mark", arguments: [.string("first")], in: compilation, from: initial)
+        #expect(try value(named: "marked", in: next, compilation: compilation)
+            == .function([.string("first"): .bool(true), .string("second"): .bool(false)]))
     }
 
     @Test("generated models compare macro process identifiers through both construction paths")
@@ -267,8 +278,8 @@ struct AlgorithmBuilderTests {
         }
 
         let spec = try algorithm.lower()
-        let initial = try #require(computeInitialStates(spec).first)
-        #expect(initial["pc"] == .function([
+        let (compilation, initial) = try initialState(of: spec)
+        #expect(try value(named: "pc", in: initial, compilation: compilation) == .function([
             .string("first"): .string("stringProcess"),
             .string("second"): .string("stringProcess"),
             .string("other"): .string("otherProcess")
@@ -298,14 +309,11 @@ struct AlgorithmBuilderTests {
         #expect(spec.actions.map(\.name) == ["increment", "finish", "Terminating"])
         #expect(spec.actions.allSatisfy { $0.bindings.isEmpty })
 
-        let initial = try #require(computeInitialStates(spec).first)
-        #expect(initial["pc"] == .string("increment"))
-        let increment = try #require(spec.actions.first { $0.name == "increment" })
-        let successor = try #require(
-            ActionEnumerator.enumerate(increment.body, from: initial, varNames: spec.variables.map(\.name)).first
-        )
-        #expect(successor["value"] == .int(1))
-        #expect(successor["pc"] == .string("finish"))
+        let (compilation, initial) = try initialState(of: spec)
+        #expect(try value(named: "pc", in: initial, compilation: compilation) == .string("increment"))
+        let next = try successor(named: "increment", in: compilation, from: initial)
+        #expect(try value(named: "value", in: next, compilation: compilation) == .int(1))
+        #expect(try value(named: "pc", in: next, compilation: compilation) == .string("finish"))
     }
 
     @Test("typed first-slice builders preserve ordered process steps")
@@ -464,8 +472,8 @@ struct AlgorithmBuilderTests {
             #expect(action.bindings == [ActionBinding(name: "process", values: Node.formalDomain.map(\.tlaValue))])
         }
 
-        let initial = try #require(computeInitialStates(spec).first)
-        #expect(initial["pc"] == .function([
+        let (compilation, initial) = try initialState(of: spec)
+        #expect(try value(named: "pc", in: initial, compilation: compilation) == .function([
             .string("first"): .string("receive"),
             .string("second"): .string("receive")
         ]))
@@ -488,16 +496,9 @@ struct AlgorithmBuilderTests {
         #expect(spec.actions.map(\.name) == ["pcalProcess1"])
         #expect(spec.tlaModule.contains("pc") == false)
 
-        let initial = try #require(computeInitialStates(spec).first)
-        let advance = try #require(spec.actions.first)
-        let successor = try #require(
-            ActionEnumerator.enumerate(
-                advance.body,
-                from: initial,
-                varNames: spec.variables.map(\.name)
-            ).first
-        )
-        #expect(successor["value"] == .int(1))
+        let (compilation, initial) = try initialState(of: spec)
+        let next = try successor(named: "pcalProcess1", arguments: [.string("first")], in: compilation, from: initial)
+        #expect(try value(named: "value", in: next, compilation: compilation) == .int(1))
     }
 
     @Test("lowered atomic actions advance pc and stop before the explicit terminating self loop")
@@ -517,37 +518,25 @@ struct AlgorithmBuilderTests {
         }
 
         let spec = try algorithm.lower()
-        let initial = try #require(computeInitialStates(spec).first)
-        let receive = try #require(spec.actions.first { $0.name == "receive" })
-        let firstReceive = try #require(actionInvocations(receive).first { $0.invocation.arguments == [.string("first")] })
-        let advanced = try #require(
-            ActionEnumerator.enumerate(firstReceive.body, from: initial, varNames: spec.variables.map(\.name)).first)
+        let (compilation, initial) = try initialState(of: spec)
+        let advanced = try successor(named: "receive", arguments: [.string("first")], in: compilation, from: initial)
 
-        #expect(advanced["value"] == .int(1))
-        #expect(advanced["pc"] == .function([
+        #expect(try value(named: "value", in: advanced, compilation: compilation) == .int(1))
+        #expect(try value(named: "pc", in: advanced, compilation: compilation) == .function([
             .string("first"): .string("done"),
             .string("second"): .string("receive")
         ]))
 
-        let done = try #require(spec.actions.first { $0.name == "done" })
-        let firstDone = try #require(actionInvocations(done).first { $0.invocation.arguments == [.string("first")] })
-        let stopped = try #require(
-            ActionEnumerator.enumerate(firstDone.body, from: advanced, varNames: spec.variables.map(\.name)).first)
-        #expect(stopped["pc"] == .function([
+        let stopped = try successor(named: "done", arguments: [.string("first")], in: compilation, from: advanced)
+        #expect(try value(named: "pc", in: stopped, compilation: compilation) == .function([
             .string("first"): .string("Done"),
             .string("second"): .string("receive")
         ]))
 
-        let secondReceive = try #require(actionInvocations(receive).first { $0.invocation.arguments == [.string("second")] })
-        let secondAdvanced = try #require(
-            ActionEnumerator.enumerate(secondReceive.body, from: stopped, varNames: spec.variables.map(\.name)).first)
-        let secondDone = try #require(actionInvocations(done).first { $0.invocation.arguments == [.string("second")] })
-        let allDone = try #require(
-            ActionEnumerator.enumerate(secondDone.body, from: secondAdvanced, varNames: spec.variables.map(\.name)).first)
-        let terminating = try #require(spec.actions.first { $0.name == "Terminating" })
-        let terminal = try #require(
-            ActionEnumerator.enumerate(terminating.body, from: allDone, varNames: spec.variables.map(\.name)).first)
-        #expect(terminal == allDone)
+        let secondAdvanced = try successor(named: "receive", arguments: [.string("second")], in: compilation, from: stopped)
+        let allDone = try successor(named: "done", arguments: [.string("second")], in: compilation, from: secondAdvanced)
+        let terminal = try successor(named: "Terminating", in: compilation, from: allDone)
+        #expect(try terminal.projection(using: compilation.layout) == allDone.projection(using: compilation.layout))
     }
 
     @Test("lowering represents process-local state as a function of self")
@@ -568,17 +557,14 @@ struct AlgorithmBuilderTests {
         }
 
         let spec = try algorithm.lower()
-        let initial = try #require(computeInitialStates(spec).first)
-        #expect(initial["inbox"] == .function([
+        let (compilation, initial) = try initialState(of: spec)
+        #expect(try value(named: "inbox", in: initial, compilation: compilation) == .function([
             .string("first"): .int(0),
             .string("second"): .int(0)
         ]))
 
-        let receive = try #require(spec.actions.first { $0.name == "receive" })
-        let firstReceive = try #require(actionInvocations(receive).first { $0.invocation.arguments == [.string("first")] })
-        let advanced = try #require(
-            ActionEnumerator.enumerate(firstReceive.body, from: initial, varNames: spec.variables.map(\.name)).first)
-        #expect(advanced["inbox"] == .function([
+        let advanced = try successor(named: "receive", arguments: [.string("first")], in: compilation, from: initial)
+        #expect(try value(named: "inbox", in: advanced, compilation: compilation) == .function([
             .string("first"): .int(1),
             .string("second"): .int(0)
         ]))
@@ -595,8 +581,8 @@ struct AlgorithmBuilderTests {
         }
 
         let spec = try algorithm.lower()
-        let initial = try #require(computeInitialStates(spec).first)
-        #expect(initial["leader"] == .function([
+        let (compilation, initial) = try initialState(of: spec)
+        #expect(try value(named: "leader", in: initial, compilation: compilation) == .function([
             .string("first"): .bool(true),
             .string("second"): .bool(false)
         ]))
@@ -640,12 +626,9 @@ struct AlgorithmBuilderTests {
         }
 
         let spec = try algorithm.lower()
-        let initial = try #require(computeInitialStates(spec).first)
-        let finish = try #require(spec.actions.first { $0.name == "finish" })
-        let invocation = try #require(actionInvocations(finish).first { $0.invocation.arguments == [.string("first")] })
-        let terminal = try #require(
-            ActionEnumerator.enumerate(invocation.body, from: initial, varNames: spec.variables.map(\.name)).first)
-        #expect(terminal["pc"] == .function([
+        let (compilation, initial) = try initialState(of: spec)
+        let terminal = try successor(named: "finish", arguments: [.string("first")], in: compilation, from: initial)
+        #expect(try value(named: "pc", in: terminal, compilation: compilation) == .function([
             .string("first"): .string("Done"),
             .string("second"): .string("finish")
         ]))
@@ -667,12 +650,9 @@ struct AlgorithmBuilderTests {
         }
 
         let spec = try algorithm.lower()
-        let initial = try #require(computeInitialStates(spec).first)
-        let prepare = try #require(spec.actions.first { $0.name == "prepare" })
-        let invocation = try #require(actionInvocations(prepare).first { $0.invocation.arguments == [.string("first")] })
-        let advanced = try #require(
-            ActionEnumerator.enumerate(invocation.body, from: initial, varNames: spec.variables.map(\.name)).first)
-        #expect(advanced["pc"] == .function([
+        let (compilation, initial) = try initialState(of: spec)
+        let advanced = try successor(named: "prepare", arguments: [.string("first")], in: compilation, from: initial)
+        #expect(try value(named: "pc", in: advanced, compilation: compilation) == .function([
             .string("first"): .string("finish"),
             .string("second"): .string("prepare")
         ]))
@@ -754,12 +734,10 @@ struct AlgorithmBuilderTests {
         #expect(rendered.contains("WF_<<count, selected, pc>>(choose__0)"))
         #expect(rendered.contains("WF_<<count, selected, pc>>(choose__1)"))
 
-        let initial = try #require(computeInitialStates(spec).first)
-        let choose = try #require(spec.actions.first { $0.name == "choose" })
-        let first = try #require(actionInvocations(choose).first { $0.invocation.arguments == [.string("first")] })
-        let states = try ActionEnumerator.enumerate(first.body, from: initial, varNames: spec.variables.map(\.name))
+        let (compilation, initial) = try initialState(of: spec)
+        let states = try successors(named: "choose", arguments: [.string("first")], in: compilation, from: initial)
         #expect(states.count == 2)
-        #expect(Set(states.compactMap { $0["selected"] }) == Set([.int(1), .int(2)]))
+        #expect(Set(try states.map { try value(named: "selected", in: $0, compilation: compilation) }) == Set([.int(1), .int(2)]))
     }
 
     @Test("a false While condition advances control and a true condition loops")
@@ -776,19 +754,18 @@ struct AlgorithmBuilderTests {
         }
 
         let spec = try algorithm.lower()
-        let initial = try #require(computeInitialStates(spec).first)
-        let repeatAction = try #require(spec.actions.first { $0.name == "repeat" })
-        let first = try #require(actionInvocations(repeatAction).first { $0.invocation.arguments == [.string("first")] })
-        let looped = try #require(ActionEnumerator.enumerate(first.body, from: initial, varNames: spec.variables.map(\.name)).first)
-        #expect(looped["count"] == .int(1))
-        #expect(looped["pc"] == .function([
+        let (compilation, initial) = try initialState(of: spec)
+        let looped = try successor(named: "repeat", arguments: [.string("first")], in: compilation, from: initial)
+        #expect(try value(named: "count", in: looped, compilation: compilation) == .int(1))
+        #expect(try value(named: "pc", in: looped, compilation: compilation) == .function([
             .string("first"): .string("repeat"),
             .string("second"): .string("repeat")
         ]))
 
-        let atLimit = looped.merging(["count": .int(2)]) { _, replacement in replacement }
-        let exited = try #require(ActionEnumerator.enumerate(first.body, from: atLimit, varNames: spec.variables.map(\.name)).first)
-        #expect(exited["pc"] == .function([
+        let count = try #require(compilation.layout.variableID(named: "count"))
+        let atLimit = try looped.updating(count, to: .integer(2))
+        let exited = try successor(named: "repeat", arguments: [.string("first")], in: compilation, from: atLimit)
+        #expect(try value(named: "pc", in: exited, compilation: compilation) == .function([
             .string("first"): .string("finish"),
             .string("second"): .string("repeat")
         ]))
@@ -805,11 +782,17 @@ struct AlgorithmBuilderTests {
             )
         )
 
-        let successors = try ActionEnumerator.enumerate(
-            action,
-            from: ["sequence": .tuple([]), "result": .int(0)],
-            varNames: ["sequence", "result"]
+        let spec = TLASpec(
+            name: "ShortCircuitFixture",
+            variables: [
+                NamedVar(name: "sequence", initial: .tuple([])),
+                NamedVar(name: "result", initial: .int(0))
+            ],
+            actions: [NamedAction(name: "step", body: action)],
+            invariants: []
         )
+        let (compilation, initial) = try initialState(of: spec)
+        let successors = try successors(named: "step", in: compilation, from: initial)
         #expect(successors.isEmpty)
     }
 
@@ -830,10 +813,15 @@ struct AlgorithmBuilderTests {
         }
 
         let spec = try algorithm.lower()
-        let initial = try #require(computeInitialStates(spec).first)
-        #expect(try spec.invariants.allSatisfy { try $0.body.evaluateBool(in: initial) })
-        let alternate = initial.merging(["count": .int(1)]) { _, replacement in replacement }
-        #expect(try spec.invariants.allSatisfy { try $0.body.evaluateBool(in: alternate) })
+        let (compilation, initial) = try initialState(of: spec)
+        let count = try #require(compilation.layout.variableID(named: "count"))
+        #expect(try compilation.model.invariants.allSatisfy {
+            try CompiledRuntime(compilation: compilation).invariantHolds($0, in: initial)
+        })
+        let alternate = try initial.updating(count, to: .integer(1))
+        #expect(try compilation.model.invariants.allSatisfy {
+            try CompiledRuntime(compilation: compilation).invariantHolds($0, in: alternate)
+        })
     }
 
     @Test("Assert becomes a model-checker safety obligation")
@@ -872,9 +860,11 @@ struct AlgorithmBuilderTests {
         }
 
         let spec = try algorithm.lower()
-        let states = try computeInitialStates(spec)
+        let compilation = try spec.compile()
+        let hour = try #require(compilation.layout.variableID(named: "hour"))
+        let states = try CompiledRuntime(compilation: compilation).initialStates()
 
-        #expect(Set(states.compactMap { $0["hour"] }) == [.int(1), .int(2), .int(3)])
+        #expect(Set(try states.map { try $0.value(for: hour).rendered(using: compilation.layout) }) == [.int(1), .int(2), .int(3)])
         #expect(spec.variables.first { $0.name == "hour" }?.initialSet == .setLiteral([
             .value(.int(1)), .value(.int(2)), .value(.int(3))
         ]))
@@ -894,7 +884,10 @@ struct AlgorithmBuilderTests {
         }
 
         let spec = try algorithm.lower()
-        #expect(Set(try computeInitialStates(spec).compactMap { $0["candidate"] }) == [
+        let compilation = try spec.compile()
+        let candidate = try #require(compilation.layout.variableID(named: "candidate"))
+        let states = try CompiledRuntime(compilation: compilation).initialStates()
+        #expect(Set(try states.map { try $0.value(for: candidate).rendered(using: compilation.layout) }) == [
             .int(0), .int(1), .int(2)
         ])
     }
@@ -914,13 +907,10 @@ struct AlgorithmBuilderTests {
         }
 
         let spec = try algorithm.lower()
-        let initial = try #require(computeInitialStates(spec).first)
-        let action = try #require(spec.actions.first { $0.name == "choose" })
-        let successors = try actionInvocations(action).flatMap {
-            try ActionEnumerator.enumerate($0.body, from: initial, varNames: spec.variables.map(\.name))
-        }
+        let (compilation, initial) = try initialState(of: spec)
+        let successors = try successors(named: "choose", in: compilation, from: initial)
 
-        #expect(Set(successors.compactMap { $0["selected"] }) == [.int(11), .int(12), .int(21), .int(22)])
+        #expect(Set(try successors.map { try value(named: "selected", in: $0, compilation: compilation) }) == [.int(11), .int(12), .int(21), .int(22)])
     }
 
     @Test("With preserves ordered three-source bindings")
@@ -940,15 +930,10 @@ struct AlgorithmBuilderTests {
         }
 
         let spec = try algorithm.lower()
-        let initial = try #require(computeInitialStates(spec).first)
-        let action = try #require(spec.actions.first { $0.name == "choose" })
-        let successors = try ActionEnumerator.enumerate(
-            action.body,
-            from: initial,
-            varNames: spec.variables.map(\.name)
-        )
+        let (compilation, initial) = try initialState(of: spec)
+        let successors = try successors(named: "choose", in: compilation, from: initial)
 
-        #expect(Set(successors.compactMap { $0["selected"] }) == [.int(111), .int(112), .int(211), .int(212)])
+        #expect(Set(try successors.map { try value(named: "selected", in: $0, compilation: compilation) }) == [.int(111), .int(112), .int(211), .int(212)])
     }
 
     @Test("tuple patterns bind independently typed members")
@@ -968,15 +953,10 @@ struct AlgorithmBuilderTests {
         }
 
         let spec = try algorithm.lower()
-        let initial = try #require(computeInitialStates(spec).first)
-        let action = try #require(spec.actions.first { $0.name == "choose" })
-        let successors = try ActionEnumerator.enumerate(
-            action.body,
-            from: initial,
-            varNames: spec.variables.map(\.name)
-        )
+        let (compilation, initial) = try initialState(of: spec)
+        let successors = try successors(named: "choose", in: compilation, from: initial)
 
-        #expect(Set(successors.compactMap { $0["selected"] }) == [.int(1), .int(2)])
+        #expect(Set(try successors.map { try value(named: "selected", in: $0, compilation: compilation) }) == [.int(1), .int(2)])
     }
 
     @Test("Choose accepts a bounded Swift integer range")
@@ -994,12 +974,9 @@ struct AlgorithmBuilderTests {
         }
 
         let spec = try algorithm.lower()
-        let initial = try #require(computeInitialStates(spec).first)
-        let action = try #require(spec.actions.first { $0.name == "choose" })
-        let successors = try actionInvocations(action).flatMap {
-            try ActionEnumerator.enumerate($0.body, from: initial, varNames: spec.variables.map(\.name))
-        }
-        #expect(Set(successors.compactMap { $0["selected"] }) == [.int(1), .int(2), .int(3)])
+        let (compilation, initial) = try initialState(of: spec)
+        let successors = try successors(named: "choose", in: compilation, from: initial)
+        #expect(Set(try successors.map { try value(named: "selected", in: $0, compilation: compilation) }) == [.int(1), .int(2), .int(3)])
     }
 
     @Test("dependent typed function initialization is evaluated after earlier initial state choices")
@@ -1015,10 +992,13 @@ struct AlgorithmBuilderTests {
         }
 
         let spec = try algorithm.lower()
-        let states = try computeInitialStates(spec)
+        let compilation = try spec.compile()
+        let seed = try #require(compilation.layout.variableID(named: "seed"))
+        let mirrors = try #require(compilation.layout.variableID(named: "mirrors"))
+        let states = try CompiledRuntime(compilation: compilation).initialStates()
 
-        #expect(Set(states.compactMap { $0["seed"] }) == [.bool(false), .bool(true)])
-        #expect(Set(states.compactMap { $0["mirrors"] }) == [
+        #expect(Set(try states.map { try $0.value(for: seed).rendered(using: compilation.layout) }) == [.bool(false), .bool(true)])
+        #expect(Set(try states.map { try $0.value(for: mirrors).rendered(using: compilation.layout) }) == [
             .function([.string("first"): .bool(false), .string("second"): .bool(false)]),
             .function([.string("first"): .bool(true), .string("second"): .bool(true)])
         ])

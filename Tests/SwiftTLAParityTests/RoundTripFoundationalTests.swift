@@ -636,9 +636,12 @@ private func compiledValue(
       Invariant("TypeOK") { x >= 1 && x <= 3 }
     }
 
-    let states = try compiledInitialProjections(spec)
-    let x = try #require(TLAStateProjection.Token(validating: "x"))
-    #expect(Set(states.compactMap { $0.value(for: x) }) == Set([.int(1), .int(2), .int(3)]))
+    let compilation = try spec.compile()
+    let x = try #require(compilation.layout.variableID(named: "x"))
+    let initialValues = try CompiledRuntime(compilation: compilation).initialStates().map {
+      try $0.value(for: x).rendered(using: compilation.layout)
+    }
+    #expect(Set(initialValues) == Set([.int(1), .int(2), .int(3)]))
     #expect(try ModelChecker(spec: spec).exploreGraph().states.count == 3)
     #expect(try spec.compile().renderedTLAModuleBundle().tla.contains("Init == x \\in {1, 2, 3}"))
   }
