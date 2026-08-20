@@ -125,6 +125,60 @@ struct CompilerPipelineCanonicalizationTests {
         #expect(compilation.layout.declarations.map(\.name) == ["first", "second", "advance", "hold", "Safe"])
     }
 
+    @Test("compiled layout assigns scoped control-label identities")
+    func compiledLayoutAssignsScopedControlLabelIDs() throws {
+        let algorithm = Algorithm("ControlLayout") {
+            let value = SharedVar("value", initial: 0)
+            value
+            Each(Node.all) { _ in
+                Do("start") {
+                    Assign(value, to: value + 1)
+                }
+            }
+            Procedure("first") {
+                Do("start") {
+                    Return()
+                }
+            }
+            Procedure("second") {
+                Do("start") {
+                    Return()
+                }
+            }
+        }
+
+        let compilation = try algorithm.lower().compile()
+        let labels = compilation.layout.controlLabels
+
+        #expect(labels.map(\.id) == [.init(ordinal: 0), .init(ordinal: 1), .init(ordinal: 2)])
+        #expect(labels.map(\.sourceName) == ["start", "start", "start"])
+        #expect(labels.map(\.renderedName) == ["start", "procedure.first.start", "procedure.second.start"])
+        #expect(labels.map(\.owner) == [
+            .process(algorithm: "ControlLayout", ordinal: 0, typeName: "Node"),
+            .procedure(algorithm: "ControlLayout", name: "first"),
+            .procedure(algorithm: "ControlLayout", name: "second")
+        ])
+        #expect(compilation.identity != try Algorithm("ControlLayout") {
+            let value = SharedVar("value", initial: 0)
+            value
+            Each(Node.all) { _ in
+                Do("changed") {
+                    Assign(value, to: value + 1)
+                }
+            }
+            Procedure("first") {
+                Do("start") {
+                    Return()
+                }
+            }
+            Procedure("second") {
+                Do("start") {
+                    Return()
+                }
+            }
+        }.lower().compile().identity)
+    }
+
     @Test("compiled actions use declaration and binder identities")
     func compiledActionsUsePrivateIdentities() throws {
         let spec = TLASpec(
