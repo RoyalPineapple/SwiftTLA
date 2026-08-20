@@ -41,6 +41,12 @@ struct CompiledActionLayout: Hashable, Sendable {
     let declaration: CompiledDeclaration
 }
 
+struct CompiledProcedureLayout: Hashable, Sendable {
+    let algorithm: String
+    let name: String
+    let sourceOffset: Int?
+}
+
 enum ControlOwner: Hashable, Sendable {
     case sequential(algorithm: String)
     case process(algorithm: String, ordinal: Int, typeName: String)
@@ -90,6 +96,7 @@ struct CompiledControlLabel: Hashable, Sendable {
 struct CompiledLayout: Hashable, Sendable {
     let variables: [CompiledVariableLayout]
     let actions: [CompiledActionLayout]
+    let procedures: [CompiledProcedureLayout]
     let controlLabels: [CompiledControlLabel]
     let declarations: [CompiledDeclaration]
 
@@ -105,6 +112,11 @@ struct CompiledLayout: Hashable, Sendable {
                 id: ActionID(ordinal: ordinal),
                 declaration: .init(kind: .action, name: action.name, sourceOffset: nil)
             )
+        }
+        procedures = spec.sourceAlgorithms.flatMap { algorithm in
+            algorithm.model.procedures.map { procedure in
+                .init(algorithm: algorithm.model.name, name: procedure.name, sourceOffset: nil)
+            }
         }
         controlLabels = Self.controlLabels(
             in: spec.sourceAlgorithms,
@@ -191,7 +203,10 @@ struct CompiledLayout: Hashable, Sendable {
             let owner = label.owner.canonicalEncoding
             return "\(label.id.ordinal):\(owner.utf8.count):\(owner)\(label.sourceName.utf8.count):\(label.sourceName)\(label.renderedName.utf8.count):\(label.renderedName)"
         }.joined(separator: "|")
-        return "declarations[\(declarationEncoding)]controls[\(controlEncoding)]"
+        let procedureEncoding = procedures.map { procedure in
+            "\(procedure.algorithm.utf8.count):\(procedure.algorithm)\(procedure.name.utf8.count):\(procedure.name)"
+        }.joined(separator: "|")
+        return "declarations[\(declarationEncoding)]procedures[\(procedureEncoding)]controls[\(controlEncoding)]"
     }
 
     private static func controlLabels(
