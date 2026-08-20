@@ -29,7 +29,7 @@ public struct SpecRuntime: Sendable {
     }
 
     public func apply(_ invocation: TLAActionInvocation, to state: [String: TLAValue]) throws -> [String: TLAValue] {
-        let successors = try successors(invocation, from: state)
+        let successors = try evaluatedSuccessors(invocation, from: state)
         guard let next = successors.first else {
             throw RuntimeError.actionNotEnabled(
                 invocation,
@@ -43,10 +43,10 @@ public struct SpecRuntime: Sendable {
     }
 
     public func successors(_ invocation: TLAActionInvocation, from state: [String: TLAValue]) throws -> [[String: TLAValue]] {
-        try successors(invocation, from: state)
+        try evaluatedSuccessors(invocation, from: state)
     }
 
-    private func successors(
+    private func evaluatedSuccessors(
         _ invocation: TLAActionInvocation,
         from state: [String: TLAValue]
     ) throws -> [[String: TLAValue]] {
@@ -209,7 +209,7 @@ public struct SpecRuntime: Sendable {
         guard available.contains(invocation) else {
             return .actionNotEnabled(invocation, available: available)
         }
-        guard let next = try successors(
+        guard let next = try evaluatedSuccessors(
             invocation,
             from: state
         ).first else {
