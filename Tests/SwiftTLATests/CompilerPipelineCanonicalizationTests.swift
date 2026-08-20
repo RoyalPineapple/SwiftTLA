@@ -178,6 +178,41 @@ struct CompilerPipelineCanonicalizationTests {
         #expect(try nextStates[0].value(for: .init(ordinal: 1)) == .int(2))
     }
 
+    @Test("compiled formal calls use operator identities")
+    func compiledFormalCallsUseOperatorIDs() throws {
+        let double = FormalOperatorDefinition(
+            name: "Double",
+            parameters: [.init(name: "value")],
+            body: .multiply(.variable("value"), .int(2))
+        )
+        let spec = TLASpec(
+            name: "CompiledFormalCall",
+            variables: [.init(name: "counter", initial: .int(0))],
+            actions: [
+                .init(
+                    name: "advance",
+                    body: .assign(
+                        "counter",
+                        .operatorApplication(.reference("Double", arity: 1), [.value(.int(2))])
+                    )
+                )
+            ],
+            invariants: [],
+            formalOperatorDefinitions: [double]
+        )
+        let compilation = try spec.compile()
+        let state = try FormalState(values: [.int(0)], layout: compilation.layout)
+        let next = try CompiledActionEnumerator(state: state, model: compilation.model)
+            .enumerate(try #require(compilation.model.actions.first))
+
+        guard case .assign(_, .operatorApplication(.reference(let id, _), _)) = compilation.model.actions[0].body else {
+            Issue.record("Expected an operator identity")
+            return
+        }
+        #expect(compilation.bindings.operators["Double"] == id)
+        #expect(try #require(next.first).value(for: .init(ordinal: 0)) == .int(4))
+    }
+
     @Test("compiled higher-order calls retain lambda binder identities")
     func compiledHigherOrderCallsUsePrivateIdentities() throws {
         let call = StateExpr.operatorApplication(
