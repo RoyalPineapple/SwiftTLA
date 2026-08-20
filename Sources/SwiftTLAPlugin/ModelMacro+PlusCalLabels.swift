@@ -9,7 +9,7 @@ extension TLASpecVerifier {
         var definitions: [ParserEnumDefinition] = []
         var caseToType: [String: String] = [:]
         for info in infos {
-            for (caseName, value) in info.cases {
+            for (caseName, _) in info.cases {
                 caseToType[caseName] = info.typeName
             }
             definitions.append(.init(
@@ -31,8 +31,6 @@ extension TLASpecVerifier {
         )
     }
 
-    /// Retains raw `PlusCalLabel` values for the parser without treating labels
-    /// as state domains or rewriting unqualified enum cases in expressions.
     static func collectPlusCalLabelMap(from members: MemberBlockItemListSyntax) -> [ParserEnumDefinition] {
         var labels: [ParserEnumDefinition] = []
         for member in members {
