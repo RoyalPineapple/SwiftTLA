@@ -203,34 +203,14 @@ extension TLALiveMachineOwner {
 
         try validateSchemaCompatibility(schema: schema, metadata: metadata, spec: spec)
 
-        let initialStates = try runtime.initialStates()
-        guard let firstInitialState = initialStates.first else {
+        let initialStates = try runtime.initialStateProjections()
+        guard let initial = initialStates.first else {
             throw GeneratedLiveMachineDiagnostic(
                 code: .noInitialState,
                 path: "initialStates",
                 expected: "at least one formal initial state",
                 actual: "no initial states",
                 nextSafeAction: "Declare an initial state for the model before creating a live runtime."
-            )
-        }
-        let initial: TLAStateProjection
-        do {
-            initial = try TLAStateProjection(formalValues: firstInitialState)
-        } catch let diagnostic as TLAStateProjectionDiagnostic {
-            throw GeneratedLiveMachineDiagnostic(
-                code: .initialProjectionFailed,
-                path: "initialStates",
-                expected: "a projectable formal initial state",
-                actual: diagnostic.description,
-                nextSafeAction: "Correct the model's declared initial values, then create the runtime again."
-            )
-        } catch {
-            throw GeneratedLiveMachineDiagnostic(
-                code: .initialProjectionFailed,
-                path: "initialStates",
-                expected: "a projectable formal initial state",
-                actual: String(describing: error),
-                nextSafeAction: "Correct the model's declared initial values, then create the runtime again."
             )
         }
         do {

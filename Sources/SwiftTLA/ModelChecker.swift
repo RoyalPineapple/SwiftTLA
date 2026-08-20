@@ -5,8 +5,7 @@
 public struct ModelChecker {
     public let spec: TLASpec
     /// Present when this checker entered through the validated compiler gate.
-    private let compiledSpecification: CompiledSpecification
-    public var compilation: CompiledSpecification? { compiledSpecification }
+    public let compilation: CompiledSpecification
     public let maxStates: Int
     public let permutationProductBudget: Int
 
@@ -20,7 +19,7 @@ public struct ModelChecker {
 
     public init(compilation: CompiledSpecification, maxStates: Int = 100_000, permutationProductBudget: Int = 100_000) {
         self.spec = compilation.spec
-        self.compiledSpecification = compilation
+        self.compilation = compilation
         self.maxStates = maxStates
         self.permutationProductBudget = permutationProductBudget
     }
@@ -90,7 +89,7 @@ public struct ModelChecker {
                 result: bounded(.error(validationError.description))
             )
         }
-        let runtime = CompiledRuntime(compilation: compiledSpecification)
+        let runtime = CompiledRuntime(compilation: compilation)
         let initialStates = try runtime.initialStates()
         guard !initialStates.isEmpty else {
             return emptyExploration(
@@ -111,7 +110,7 @@ public struct ModelChecker {
         let exploration = try compiledBFS(
             runtime: runtime,
             seeds: initialStates,
-            layout: compiledSpecification.layout,
+            layout: compilation.layout,
             checkDeadlock: self.spec.checkDeadlock,
             specificationName: self.spec.name,
             maxStates: self.maxStates
@@ -171,12 +170,8 @@ private func compiledBFS(
     var predecessors: [FormalState: (FormalState, String)] = [:]
     var nextID = 0
 
-    func projected(_ state: FormalState) throws -> [String: TLAValue] {
-        try state.projected(using: layout)
-    }
-
     func stateProjection(_ state: FormalState) throws -> TLAStateProjection {
-        try .init(formalValues: projected(state))
+        try state.projection(using: layout)
     }
 
     func graph() throws -> StateGraph {
@@ -199,8 +194,8 @@ private func compiledBFS(
             steps.append((current, predecessor.1))
             current = predecessor.0
         }
-        return try [TraceStep(state: projected(initial), action: "init")]
-            + steps.reversed().map { try TraceStep(state: projected($0.0), action: $0.1) }
+        return try [TraceStep(state: initial.projection(using: layout), action: "init")]
+            + steps.reversed().map { try TraceStep(state: $0.0.projection(using: layout), action: $0.1) }
     }
 
     for seed in seeds {
@@ -237,7 +232,7 @@ private func compiledBFS(
                     initialStateIDs: initialStateIDs,
                     result: .invariantViolated(
                         invariant: invariant.name,
-                        state: try projected(current),
+                        state: try current.projection(using: layout),
                         trace: try trace(to: current, initial: queue[0])
                     )
                 )
@@ -249,7 +244,7 @@ private func compiledBFS(
             return .init(
                 graph: try graph(),
                 initialStateIDs: initialStateIDs,
-                result: .deadlocked(state: try projected(current))
+                result: .deadlocked(state: try current.projection(using: layout))
             )
         }
 
@@ -304,18 +299,9 @@ public struct ModelTraceEvidence: Sendable, Equatable, CustomStringConvertible {
     public let action: String
     public let state: TLAStateProjectionResult
 
-    package init(action: String, formalState: [String: TLAValue]) {
+    package init(action: String, state: TLAStateProjection) {
         self.action = action
-        do {
-            self.state = .projected(try .init(formalValues: formalState))
-        } catch let diagnostic as TLAStateProjectionDiagnostic {
-            self.state = .unavailable(diagnostic)
-        } catch {
-            self.state = .unavailable(.projectionUnavailable(
-                path: "state",
-                reason: String(describing: error)
-            ))
-        }
+        self.state = .projected(state)
     }
 
     public var description: String {
@@ -379,9 +365,9 @@ public struct ModelCheckingDiagnostic: Sendable, Equatable, CustomStringConverti
 
 public indirect enum CheckResult: CustomStringConvertible {
     case ok(statesCount: Int)
-    case invariantViolated(invariant: String, state: [String: TLAValue], trace: [TraceStep])
+    case invariantViolated(invariant: String, state: TLAStateProjection, trace: [TraceStep])
     case depthExceeded(statesCount: Int, limit: Int)
-    case deadlocked(state: [String: TLAValue])
+    case deadlocked(state: TLAStateProjection)
     case livenessViolated(String)
     case error(String)
     case bounded(scopes: [SymmetricCollectionScope], outcome: CheckResult)
@@ -400,19 +386,6 @@ public indirect enum CheckResult: CustomStringConvertible {
     /// state and counterexample evidence without exposing the engine's raw
     /// string-keyed state map to application code.
     public var diagnostic: ModelCheckingDiagnostic? {
-        func project(_ formalState: [String: TLAValue]) -> TLAStateProjectionResult {
-            do {
-                return .projected(try .init(formalValues: formalState))
-            } catch let diagnostic as TLAStateProjectionDiagnostic {
-                return .unavailable(diagnostic)
-            } catch {
-                return .unavailable(.projectionUnavailable(
-                    path: "state",
-                    reason: String(describing: error)
-                ))
-            }
-        }
-
         switch self {
         case .ok:
             return nil
@@ -422,8 +395,8 @@ public indirect enum CheckResult: CustomStringConvertible {
                 subject: invariant,
                 expected: "the invariant to evaluate to true",
                 actual: "false",
-                state: project(state),
-                trace: trace.map { .init(action: $0.action, formalState: $0.state) },
+                state: .projected(state),
+                trace: trace.map { .init(action: $0.action, state: $0.state) },
                 nextSafeAction: "Inspect the final trace transition and revise the action guard, update, or invariant."
             )
         case .depthExceeded(let count, let limit):
@@ -438,7 +411,7 @@ public indirect enum CheckResult: CustomStringConvertible {
                 kind: .deadlock,
                 expected: "at least one enabled action",
                 actual: "no action produced a successor",
-                state: project(state),
+                state: .projected(state),
                 nextSafeAction: "Inspect the guards and explicit unchanged clauses for this state."
             )
         case .livenessViolated(let message):
@@ -481,13 +454,7 @@ public indirect enum CheckResult: CustomStringConvertible {
 }
 
 public struct TraceStep: CustomStringConvertible {
-    public let state: [String: TLAValue]
+    public let state: TLAStateProjection
     public let action: String
-    public var description: String { "[" + action + "] " + formatState(state) }
-}
-
-private func formatState(_ state: [String: TLAValue]) -> String {
-    "{" + state.sorted { $0.key < $1.key }.map {
-        $0.key + " = " + String(describing: $0.value)
-    }.joined(separator: ", ") + "}"
+    public var description: String { "[" + action + "] " + state.description }
 }

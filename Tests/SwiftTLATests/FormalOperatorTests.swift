@@ -174,8 +174,10 @@ struct FormalOperatorTests {
     )
 
     let runtime = try SpecRuntime(spec: spec)
-    let initial = try #require(runtime.initialStates().first)
-    #expect(try runtime.apply(.init(name: "advance"), to: initial)["counter"] == .int(2))
+    let initial = try #require(runtime.initialStateProjections().first)
+    let successor = try #require(runtime.successors(.init(name: "advance"), from: initial).first)
+    let token = try #require(TLAStateProjection.Token(validating: "counter"))
+    #expect(successor.value(for: token) == .int(2))
     let result = try ModelChecker(spec: spec, maxStates: 10).check()
     #expect({ if case .ok = result { true } else { false } }())
   }
@@ -222,8 +224,10 @@ struct FormalOperatorTests {
     )
 
     let runtime = try SpecRuntime(spec: consumer)
-    let initial = try #require(runtime.initialStates().first)
-    #expect(try runtime.apply(.init(name: "advance"), to: initial)["counter"] == .int(2))
+    let initial = try #require(runtime.initialStateProjections().first)
+    let successor = try #require(runtime.successors(.init(name: "advance"), from: initial).first)
+    let token = try #require(TLAStateProjection.Token(validating: "counter"))
+    #expect(successor.value(for: token) == .int(2))
     let result = try ModelChecker(spec: consumer, maxStates: 10).check()
     #expect({ if case .ok = result { true } else { false } }())
   }

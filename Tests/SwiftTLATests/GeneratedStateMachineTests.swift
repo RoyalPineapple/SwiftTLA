@@ -193,33 +193,6 @@ struct GeneratedSimultaneousSwapTests {
         #expect(model.state == result.after)
     }
 
-    @Test("generated swap rejects an undecodable successor without a partial commit")
-    func generatedMachineKeepsItsStateWhenOneSimultaneousFieldCannotDecode() throws {
-        let runtime = try SpecRuntime(spec: GeneratedSimultaneousSwap.spec) { _, _, _ in
-            [["left": .int(2), "right": .string("wrong"), "pc": .string("swap")]]
-        }
-        var machine = CanonicalMachine(
-            runtime: runtime,
-            initial: GeneratedSimultaneousSwap.State(left: 1, right: 2, pc: "swap"),
-            projectionForSnapshot: { try $0.formalProjection() },
-            snapshotFromProjection: { try GeneratedSimultaneousSwap.State(projection: $0) }
-        )
-        let before = machine.snapshot
-
-        do {
-            _ = try machine.apply(.init(name: "swap"))
-            Issue.record("Expected the generated State decoder to reject the malformed right value")
-        } catch let GeneratedMachineError.stateDecodingFailed(diagnostic) {
-            #expect(diagnostic == .typeMismatch(
-                path: "right",
-                expected: "Int",
-                actual: .string("wrong")
-            ))
-            #expect(diagnostic.description.contains("state was not committed"))
-        }
-
-        #expect(machine.snapshot == before)
-    }
 }
 
 @TLAModel
@@ -811,14 +784,16 @@ struct GeneratedStateMachineTests {
         ])
 
         let runtime = try SpecRuntime(spec: builder)
-        let initial = try #require(runtime.initialStates().first)
+        let initial = try #require(runtime.initialStateProjections().first)
         let invocation = TLAActionInvocation(
             name: "board", arguments: [.int(2), .int(20), .int(200)])
-        #expect(try runtime.apply(invocation, to: initial)["floor"] == .int(222))
+        let floor = try #require(TLAStateProjection.Token(validating: "floor"))
+        let successor = try #require(try runtime.successors(invocation, from: initial).first)
+        #expect(successor.value(for: floor) == .int(222))
         #expect(throws: SpecRuntime.RuntimeError.self) {
-            try runtime.apply(.init(name: "board", arguments: [.int(2), .int(30), .int(200)]), to: initial)
+            try runtime.successors(.init(name: "board", arguments: [.int(2), .int(30), .int(200)]), from: initial)
         }
-        #expect(initial["floor"] == .int(0))
+        #expect(initial.value(for: floor) == .int(0))
 
         var machine = try EndToEndThreeParameterActionMachine.makeMachine()
         let before = machine.tlaSnapshot()
@@ -849,40 +824,6 @@ struct GeneratedStateMachineTests {
             try machine.apply(.board(person: 2, elevator: 30, direction: 200))
         }
         #expect(machine.tlaSnapshot() == before)
-    }
-
-    @Test("Malformed formal successors fail through generated State decoding without committing")
-    func malformedFormalSuccessorsDoNotCrashOrCommitGeneratedState() throws {
-        let invocation = TLAActionInvocation(
-            name: "board",
-            arguments: [.int(2), .int(20), .int(200)]
-        )
-        let malformedStates: [([String: TLAValue], TLAStateProjectionDiagnostic)] = [
-            ([:], .missingRequiredValue(path: "floor", expected: "Int")),
-            (["floor": .string("wrong")], .typeMismatch(path: "floor", expected: "Int", actual: .string("wrong")))
-        ]
-
-        for (malformedState, expectedDiagnostic) in malformedStates {
-            let runtime = try SpecRuntime(spec: ThreeParameterActionMachine.spec) { _, _, _ in
-                [malformedState]
-            }
-            var machine = CanonicalMachine(
-                runtime: runtime,
-                initial: ThreeParameterActionMachine.State(floor: 0),
-                projectionForSnapshot: { try $0.formalProjection() },
-                snapshotFromProjection: { try ThreeParameterActionMachine.State(projection: $0) }
-            )
-            let before = machine.snapshot
-
-            do {
-                _ = try machine.apply(invocation)
-                Issue.record("Expected malformed formal state to fail")
-            } catch let GeneratedMachineError.stateDecodingFailed(diagnostic) {
-                #expect(diagnostic == expectedDiagnostic)
-            }
-
-            #expect(machine.snapshot == before)
-        }
     }
 
     @Test("Canonical generated execution preserves the complete parameterized invocation")

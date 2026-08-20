@@ -1,8 +1,7 @@
 public struct SpecRuntime: Sendable {
     public let spec: TLASpec
     /// Present when this runtime entered through the validated compiler gate.
-    private let compiledSpecification: CompiledSpecification
-    public var compilation: CompiledSpecification? { compiledSpecification }
+    public let compilation: CompiledSpecification
     private let runtime: CompiledRuntime
     private let layout: CompiledLayout
 
@@ -12,68 +11,44 @@ public struct SpecRuntime: Sendable {
 
     public init(compilation: CompiledSpecification) {
         self.spec = compilation.spec
-        self.compiledSpecification = compilation
+        self.compilation = compilation
         self.runtime = CompiledRuntime(compilation: compilation)
         self.layout = compilation.layout
     }
 
-    package func initialStates() throws -> [[String: TLAValue]] {
-        try runtime.initialStates().map { try $0.projected(using: layout) }
-    }
-
     public func initialStateProjections() throws -> [TLAStateProjection] {
-        try initialStates().map(TLAStateProjection.init(formalValues:))
-    }
-
-    package func apply(_ invocation: TLAActionInvocation, to state: [String: TLAValue]) throws -> [String: TLAValue] {
-        let successors = try evaluatedSuccessors(invocation, from: state)
-        guard let next = successors.first else {
-            throw RuntimeError.actionNotEnabled(
-                invocation,
-                available: try availableInvocations(
-                    in: state,
-                    requested: invocation
-                )
-            )
-        }
-        return next
-    }
-
-    package func successors(_ invocation: TLAActionInvocation, from state: [String: TLAValue]) throws -> [[String: TLAValue]] {
-        try evaluatedSuccessors(invocation, from: state)
+        try runtime.initialStates().map { try $0.projection(using: layout) }
     }
 
     public func successors(
         _ invocation: TLAActionInvocation,
         from state: TLAStateProjection
     ) throws -> [TLAStateProjection] {
-        try successors(invocation, from: state.formalValues).map(TLAStateProjection.init(formalValues:))
+        let formalState = try FormalState(projection: state, compilation: compilation)
+        return try evaluatedSuccessors(invocation, from: formalState).map {
+            try $0.state.projection(using: layout)
+        }
     }
 
     private func evaluatedSuccessors(
         _ invocation: TLAActionInvocation,
-        from state: [String: TLAValue]
-    ) throws -> [[String: TLAValue]] {
-        let formalState: FormalState
-        do {
-            formalState = try FormalState(projected: state, compilation: compiledSpecification)
-        } catch {
-            throw RuntimeError.enumerationFailed(
-                requested: invocation,
-                evaluated: invocation,
-                underlying: error
+        from formalState: FormalState
+    ) throws -> [CompiledSuccessor] {
+        guard let actionID = layout.actionID(named: invocation.name) else {
+            throw RuntimeError.actionNotFound(
+                invocation,
+                available: try availableInvocations(in: formalState, requested: invocation)
             )
         }
-        guard let actionID = layout.actionID(named: invocation.name) else {
-            throw RuntimeError.actionNotFound(invocation, available: try availableInvocations(in: state))
-        }
         guard argumentSets(for: actionID).contains(invocation.arguments) else {
-            throw RuntimeError.invalidActionArguments(invocation, available: try availableInvocations(in: state))
+            throw RuntimeError.invalidActionArguments(
+                invocation,
+                available: try availableInvocations(in: formalState, requested: invocation)
+            )
         }
         do {
             return try runtime.successors(for: actionID, from: formalState)
                 .filter { $0.arguments == invocation.arguments }
-                .map { try $0.state.projected(using: layout) }
         } catch {
             throw RuntimeError.enumerationFailed(
                 requested: invocation,
@@ -83,21 +58,18 @@ public struct SpecRuntime: Sendable {
         }
     }
 
-    package func availableInvocations(in state: [String: TLAValue]) throws -> [TLAActionInvocation] {
-        try availableInvocations(in: state, requested: nil)
-    }
-
     public func availableInvocations(in state: TLAStateProjection) throws -> [TLAActionInvocation] {
-        try availableInvocations(in: state.formalValues)
+        try availableInvocations(
+            in: FormalState(projection: state, compilation: compilation),
+            requested: nil
+        )
     }
 
     private func availableInvocations(
-        in state: [String: TLAValue],
+        in formalState: FormalState,
         requested: TLAActionInvocation?
     ) throws -> [TLAActionInvocation] {
-        let formalState: FormalState
         do {
-            formalState = try FormalState(projected: state, compilation: compiledSpecification)
             return try runtime.successors(from: formalState).reduce(into: []) { available, successor in
                 let invocation = TLAActionInvocation(
                     name: layout.actions[successor.action.ordinal].declaration.name,
@@ -116,26 +88,17 @@ public struct SpecRuntime: Sendable {
         }
     }
 
-    package func actionReport(named actionName: String, in state: [String: TLAValue]) -> RuntimeActionReport {
+    public func actionReport(named actionName: String, in state: TLAStateProjection) -> RuntimeActionReport {
         let requested = TLAActionInvocation(name: actionName)
-        let projection: TLAStateProjectionResult
-        do {
-            projection = .projected(try .init(formalValues: state))
-        } catch let diagnostic as TLAStateProjectionDiagnostic {
-            projection = .unavailable(diagnostic)
-        } catch {
-            projection = .unavailable(.projectionUnavailable(
-                path: "state",
-                reason: String(describing: error)
-            ))
-        }
+        let projection = TLAStateProjectionResult.projected(state)
 
         let status: RuntimeActionReport.Status
         let nextSafeAction: String
         if let action = spec.actions.first(where: { $0.name == actionName }) {
             do {
+                let formalState = try FormalState(projection: state, compilation: compilation)
                 let successors = try actionInvocations(action).flatMap {
-                    try evaluatedSuccessors($0.invocation, from: state)
+                    try evaluatedSuccessors($0.invocation, from: formalState)
                 }
                 if successors.isEmpty {
                     status = .unavailable(
@@ -163,7 +126,7 @@ public struct SpecRuntime: Sendable {
         let availability: RuntimeActionReport.Availability
         do {
             availability = .known(try availableInvocations(
-                in: state,
+                in: FormalState(projection: state, compilation: compilation),
                 requested: nil
             ))
         } catch let error as RuntimeError {
@@ -185,11 +148,7 @@ public struct SpecRuntime: Sendable {
         )
     }
 
-    public func actionReport(named actionName: String, in state: TLAStateProjection) -> RuntimeActionReport {
-        actionReport(named: actionName, in: state.formalValues)
-    }
-
-    package func propertyOutcomes(in state: [String: TLAValue]) -> [RuntimePropertyOutcome] {
+    public func propertyOutcomes(in state: TLAStateProjection) -> [RuntimePropertyOutcome] {
         invariantOutcomes(in: state) + spec.temporalProperties.map {
             .evaluationUnavailable(
                 name: $0.name,
@@ -201,19 +160,19 @@ public struct SpecRuntime: Sendable {
         }
     }
 
-    package func invariantOutcomes(in state: [String: TLAValue]) -> [RuntimePropertyOutcome] {
+    public func invariantOutcomes(in state: TLAStateProjection) -> [RuntimePropertyOutcome] {
         let formalState: FormalState
         do {
-            formalState = try FormalState(projected: state, compilation: compiledSpecification)
+            formalState = try FormalState(projection: state, compilation: compilation)
         } catch {
-            return compiledSpecification.model.invariants.map {
+            return compilation.model.invariants.map {
                 .evaluationFailed(
                     name: $0.name,
                     diagnostic: .init(code: .evaluationError, message: String(describing: error))
                 )
             }
         }
-        let outcomes = compiledSpecification.model.invariants.map { invariant -> RuntimePropertyOutcome in
+        let outcomes = compilation.model.invariants.map { invariant -> RuntimePropertyOutcome in
             do {
                 return try runtime.invariantHolds(invariant, in: formalState)
                     ? .satisfied(name: invariant.name)
@@ -225,27 +184,20 @@ public struct SpecRuntime: Sendable {
         return outcomes
     }
 
-    public func propertyOutcomes(in state: TLAStateProjection) -> [RuntimePropertyOutcome] {
-        propertyOutcomes(in: state.formalValues)
-    }
-
-    public func invariantOutcomes(in state: TLAStateProjection) -> [RuntimePropertyOutcome] {
-        invariantOutcomes(in: state.formalValues)
-    }
-
-    package func check(_ invariantName: String, in state: [String: TLAValue]) throws -> Bool {
-        guard let invariant = compiledSpecification.model.invariants.first(where: { $0.name == invariantName }) else {
+    public func check(_ invariantName: String, in state: TLAStateProjection) throws -> Bool {
+        guard let invariant = compilation.model.invariants.first(where: { $0.name == invariantName }) else {
             throw RuntimeError.invariantNotFound(invariantName)
         }
         return try runtime.invariantHolds(
             invariant,
-            in: FormalState(projected: state, compilation: compiledSpecification)
+            in: FormalState(projection: state, compilation: compilation)
         )
     }
 
-    package func step(_ invocation: TLAActionInvocation, from state: [String: TLAValue]) throws -> StepResult {
+    package func step(_ invocation: TLAActionInvocation, from state: TLAStateProjection) throws -> StepResult {
+        let formalState = try FormalState(projection: state, compilation: compilation)
         let available = try availableInvocations(
-            in: state,
+            in: formalState,
             requested: invocation
         )
         guard available.contains(invocation) else {
@@ -253,22 +205,22 @@ public struct SpecRuntime: Sendable {
         }
         guard let next = try evaluatedSuccessors(
             invocation,
-            from: state
+            from: formalState
         ).first else {
             return .actionNotEnabled(invocation, available: available)
         }
-        let formalNext = try FormalState(projected: next, compilation: compiledSpecification)
-        let violations = try compiledSpecification.model.invariants.compactMap { invariant in
+        let formalNext = next.state
+        let violations = try compilation.model.invariants.compactMap { invariant in
             try runtime.invariantHolds(invariant, in: formalNext) ? nil : invariant.name
         }
         if !violations.isEmpty {
             return .invariantViolated(violations)
         }
-        return .ok(next)
+        return .ok(try formalNext.projection(using: layout))
     }
 
     package enum StepResult {
-        case ok([String: TLAValue])
+        case ok(TLAStateProjection)
         case actionNotEnabled(TLAActionInvocation, available: [TLAActionInvocation])
         case invariantViolated([String])
     }
@@ -287,7 +239,7 @@ public struct SpecRuntime: Sendable {
     }
 
     private func argumentSets(for actionID: ActionID) -> [[TLAValue]] {
-        guard let action = compiledSpecification.model.actions.first(where: { $0.id == actionID }) else {
+        guard let action = compilation.model.actions.first(where: { $0.id == actionID }) else {
             return []
         }
         return action.bindings.reduce([[]]) { arguments, binding in

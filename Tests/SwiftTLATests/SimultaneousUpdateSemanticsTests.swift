@@ -3,6 +3,14 @@ import Testing
 
 @Suite("Simultaneous update semantics")
 struct SimultaneousUpdateSemanticsTests {
+    private func value(_ name: String, in state: TLAStateProjection) throws -> TLAValue {
+        guard let token = TLAStateProjection.Token(validating: name),
+              let value = state.value(for: token) else {
+            throw TLAStateProjectionDiagnostic.missingValue(path: name)
+        }
+        return value
+    }
+
     @Test("swap reads both right-hand sides from the old state")
     func swapUsesOldStateForEveryRightHandSide() throws {
         let left = Var<Int>("left")
@@ -16,14 +24,15 @@ struct SimultaneousUpdateSemanticsTests {
             }
         }
         let runtime = try SpecRuntime(spec: spec)
-        let initial = try #require(runtime.initialStates().first)
+        let initial = try #require(runtime.initialStateProjections().first)
 
-        let successor = try runtime.apply(.init(name: "swap"), to: initial)
+        let successor = try #require(runtime.successors(.init(name: "swap"), from: initial).first)
         let verification = try ModelChecker(spec: spec, maxStates: 10).check()
 
-        #expect(successor["left"] == .int(2))
-        #expect(successor["right"] == .int(1))
-        #expect(initial == ["left": .int(1), "right": .int(2)])
+        #expect(try value("left", in: successor) == .int(2))
+        #expect(try value("right", in: successor) == .int(1))
+        #expect(try value("left", in: initial) == .int(1))
+        #expect(try value("right", in: initial) == .int(2))
         guard case .ok(let stateCount) = verification.underlyingOutcome else {
             Issue.record("Expected the model checker to verify the two-state swap graph, found \(verification)")
             return
@@ -44,13 +53,14 @@ struct SimultaneousUpdateSemanticsTests {
             }
         }
         let runtime = try SpecRuntime(spec: spec)
-        let initial = try #require(runtime.initialStates().first)
+        let initial = try #require(runtime.initialStateProjections().first)
 
-        let successor = try runtime.apply(.init(name: "advance"), to: initial)
+        let successor = try #require(runtime.successors(.init(name: "advance"), from: initial).first)
 
-        #expect(successor["source"] == .int(5))
-        #expect(successor["mirror"] == .int(5))
-        #expect(initial == ["source": .int(4), "mirror": .int(0)])
+        #expect(try value("source", in: successor) == .int(5))
+        #expect(try value("mirror", in: successor) == .int(5))
+        #expect(try value("source", in: initial) == .int(4))
+        #expect(try value("mirror", in: initial) == .int(0))
     }
 
     @Test("a failed later right-hand side does not partially commit a canonical machine")
@@ -66,11 +76,15 @@ struct SimultaneousUpdateSemanticsTests {
             }
         }
         let runtime = try SpecRuntime(spec: spec)
+        let initial = try TLAStateProjection(validating: [
+            .init(token: try #require(TLAStateProjection.Token(validating: "left")), value: .int(1)),
+            .init(token: try #require(TLAStateProjection.Token(validating: "right")), value: .int(2))
+        ])
         var machine = CanonicalMachine(
             runtime: runtime,
-            initial: ["left": TLAValue.int(1), "right": .int(2)],
-            projectionForSnapshot: { try .init(formalValues: $0) },
-            snapshotFromProjection: { $0.formalValues }
+            initial: initial,
+            projectionForSnapshot: { $0 },
+            snapshotFromProjection: { $0 }
         )
         let before = machine.snapshot
 

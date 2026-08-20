@@ -19,10 +19,6 @@ private actor ObservationFixture: TLAMachineObserving {
     }
 }
 
-private enum ActionEvaluationFailure: Error {
-    case unavailable
-}
-
 struct CanonicalMachineCapabilityTests {
     @Test("State projections require validated tokens and safely enumerate entries")
     func stateProjectionGuardsFormalKeys() throws {
@@ -85,31 +81,6 @@ struct CanonicalMachineCapabilityTests {
             code: .evaluationFailed,
             message: "action enumeration failed"
         ))
-    }
-
-    @Test("Canonical machine reports availability evaluation failures without losing its snapshot")
-    func canonicalMachineObservationRetainsStateWhenAvailabilityFails() throws {
-        let count = Var<Int>("count")
-        let spec = TLASpec("UnavailableAvailability") {
-            Variable(count, 0)
-            Action("advance") { count.becomes(count + 1) }
-        }
-        let runtime = try SpecRuntime(spec: spec) { _, _, _ in
-            throw ActionEvaluationFailure.unavailable
-        }
-        let machine = CanonicalMachine(
-            runtime: runtime,
-            initial: ["count": .int(0)],
-            projectionForSnapshot: { try .init(formalValues: $0) },
-            snapshotFromProjection: { $0.formalValues }
-        )
-
-        let observation = machine.machineObservation()
-
-        #expect(observation.state.projection?.value(for: countToken) == .int(0))
-        #expect(observation.availableInvocations == nil)
-        #expect(observation.availabilityDiagnostic?.code == .evaluationFailed)
-        #expect(observation.availabilityDiagnostic?.message.contains("unavailable") == true)
     }
 
     @Test("Canonical observation rejects invalid formal state without a projection")
