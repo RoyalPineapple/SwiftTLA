@@ -19,7 +19,6 @@ private func requireSendable<Value: Sendable>(_: Value.Type) {}
 
 requireSendable(ObservableHost.Observable.self)
 requireSendable(ObservableHost.Observable.State.self)
-requireSendable(ObservableHost.Observable.Variables.self)
 requireSendable(ObservableHost.Observable.ActionLabel.self)
 requireSendable(ObservableHost.Observable.TransitionResult.self)
 

@@ -19,7 +19,6 @@ extension MacroExpander {
         var declarations: [DeclSyntax] = [
             DeclSyntax(stringLiteral: "public typealias CanonicalModel = \(model.typeName)"),
             DeclSyntax(stringLiteral: "public typealias State = \(model.typeName).State"),
-            DeclSyntax(stringLiteral: "public typealias Variables = \(model.typeName).Variables"),
             DeclSyntax(stringLiteral: "public typealias Live = \(model.typeName).Live"),
             DeclSyntax(stringLiteral: "public static var machineSchema: MachineSchema { CanonicalModel.machineSchema }"),
             DeclSyntax(stringLiteral: "public static var generatedMachineMetadata: GeneratedMachineMetadata { CanonicalModel.generatedMachineMetadata }")

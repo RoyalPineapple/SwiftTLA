@@ -74,7 +74,6 @@ enum MacroExpander {
         }
         """))
 
-        decls.append(DeclSyntax(generateVariablesEnum(variables: plan.variables)))
         if !plan.actions.isEmpty {
             decls.append(contentsOf: generateActionLabel(actions: plan.actions))
         }
@@ -458,25 +457,6 @@ enum MacroExpander {
         }
     }
 
-    static func generateVariablesEnum(variables: [MachineSurfacePlan.Variable]) -> EnumDeclSyntax {
-        EnumDeclSyntax(
-            modifiers: [DeclModifierSyntax(name: .keyword(.public))],
-            name: "Variables",
-            inheritanceClause: InheritanceClauseSyntax {
-                InheritedTypeListSyntax {
-                    InheritedTypeSyntax(type: IdentifierTypeSyntax(name: "String"))
-                    InheritedTypeSyntax(type: IdentifierTypeSyntax(name: "CaseIterable"))
-                    InheritedTypeSyntax(type: IdentifierTypeSyntax(name: "Sendable"))
-                }
-            },
-            memberBlock: MemberBlockSyntax {
-                for v in variables {
-                    EnumCaseDeclSyntax { EnumCaseElementSyntax(name: .identifier(v.formalName)) }
-                }
-            }
-        )
-    }
-
     static func generateActionLabel(actions: [MachineSurfacePlan.Action]) -> [DeclSyntax] {
         func argumentConstructor(for binding: MachineSurfacePlan.Binding) -> String {
             switch binding.swiftType {
@@ -656,7 +636,7 @@ extension MacroExpander {
         enumInfos: [ParsedEnumInfo]
     ) -> String {
         variables.enumerated().map { index, variable in
-            let key = "Variables.\(variable.formalName).rawValue"
+            let key = String(reflecting: variable.formalName)
             let token = "token\(index)"
             let rawValue = "projection.value(for: \(token))"
             let typeName = stateType(for: variable, enumInfos: enumInfos)
@@ -736,8 +716,8 @@ extension MacroExpander {
                 value = "\(variable.formalName).tlaValue"
             }
             return """
-            guard let token = TLAStateProjection.Token(validating: Variables.\(variable.formalName).rawValue) else {
-                throw TLAStateProjectionDiagnostic.invalidKey(path: Variables.\(variable.formalName).rawValue)
+            guard let token = TLAStateProjection.Token(validating: \(String(reflecting: variable.formalName))) else {
+                throw TLAStateProjectionDiagnostic.invalidKey(path: \(String(reflecting: variable.formalName)))
             }
             entries.append(.init(token: token, value: \(value)))
             """
@@ -781,10 +761,10 @@ extension MacroExpander {
                         throw GeneratedMachineError.unexpected(error)
                     }
                     let formalState = try _stateWithLiveCollections()
-                    guard let token = TLAStateProjection.Token(validating: Variables.\(collection.formalName).rawValue),
+                    guard let token = TLAStateProjection.Token(validating: \(String(reflecting: collection.formalName))),
                           case .function(let originalValues) = formalState.value(for: token) else {
                         throw GeneratedMachineError.stateDecodingFailed(.missingRequiredValue(
-                            path: Variables.\(collection.formalName).rawValue,
+                            path: \(String(reflecting: collection.formalName)),
                             expected: "a formal collection function"
                         ))
                     }
@@ -799,7 +779,7 @@ extension MacroExpander {
                           let nextFormalValue = nextValues[targetKey],
                           let nextValue = \(collection.valueType)(formalValue: nextFormalValue) else {
                         throw GeneratedMachineError.stateDecodingFailed(.typeMismatch(
-                            path: Variables.\(collection.formalName).rawValue,
+                            path: \(String(reflecting: collection.formalName)),
                             expected: "\(collection.valueType)",
                             actual: evidence.after.\(collection.formalName)
                         ))
