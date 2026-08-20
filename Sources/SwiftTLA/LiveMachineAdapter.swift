@@ -1,33 +1,5 @@
 import Foundation
 
-/// A schema-validated binding from an adapter to an existing live runtime.
-/// A binding owns no runtime state and has no creation or shutdown operation.
-public struct TLALiveMachineAdapterBinding: Sendable {
-    public let handle: TLALiveMachine
-
-    public init<Model: TLAGeneratedLiveModel>(
-        handle: TLALiveMachine,
-        for model: Model.Type
-    ) async throws {
-        _ = try GeneratedLiveMachine<Model>(handle: handle)
-        switch await handle.current() {
-        case .snapshot:
-            break
-        case .unavailable(let reason):
-            throw TLALiveMachineAdapterBindingError.runtimeUnavailable(reason)
-        }
-        self.handle = handle
-    }
-
-    public var identity: TLALiveMachineIdentity { handle.identity }
-    public var schema: MachineSchema { handle.schema }
-}
-
-/// A lifecycle failure while attaching an adapter to an existing runtime.
-public enum TLALiveMachineAdapterBindingError: Error, Sendable, Equatable {
-    case runtimeUnavailable(TLALiveMachineUnavailableReason)
-}
-
 /// The lifecycle state of an observable adapter's locally derived cache.
 public enum TLALiveMachineAdapterStatus: Sendable, Equatable {
     case attaching

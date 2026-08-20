@@ -17,49 +17,53 @@ enum PublicWorkflowGeneratedFixtureRegistry {
   static func fixture(id: String) throws -> PublicWorkflowGeneratedFixture {
     switch id {
     case "p4-generated-counter":
+      let runtime = try SpecRuntime(compilation: P4GeneratedCounterFixture.compiledSpecification())
       return PublicWorkflowGeneratedFixture(
         builderSpec: P4GeneratedCounterFixture.spec,
         machine: PublicWorkflowGeneratedMachineHarness(
-          initialStates: try P4GeneratedCounterFixture.runtime.initialStateProjections(),
+          initialStates: try runtime.initialStateProjections(),
           actionNames: ["advance"],
           apply: { state, actionName in
-            generatedActionResult(P4GeneratedCounterFixture.runtime, actionName: actionName, in: state)
+            generatedActionResult(runtime, actionName: actionName, in: state)
           },
-          propertyOutcomes: P4GeneratedCounterFixture.runtime.propertyOutcomes(in:)))
+          propertyOutcomes: runtime.propertyOutcomes(in:)))
     case "p4-generated-counter-intentional-mismatch":
+      let runtime = try SpecRuntime(compilation: P4GeneratedCounterMismatchFixture.compiledSpecification())
       return PublicWorkflowGeneratedFixture(
         builderSpec: P4GeneratedCounterMismatchFixture.spec,
         machine: PublicWorkflowGeneratedMachineHarness(
-          initialStates: try P4GeneratedCounterMismatchFixture.runtime.initialStateProjections(),
+          initialStates: try runtime.initialStateProjections(),
           actionNames: ["advance"],
           apply: { state, actionName in
-            P4GeneratedCounterMismatchFixture.intentionalMismatchActionOutcome(actionName: actionName, in: state)
+            P4GeneratedCounterMismatchFixture.intentionalMismatchActionOutcome(runtime: runtime, actionName: actionName, in: state)
           },
-          propertyOutcomes: P4GeneratedCounterMismatchFixture.runtime.propertyOutcomes(in:)))
+          propertyOutcomes: runtime.propertyOutcomes(in:)))
     case "p4-generated-counter-evaluation-failed":
+      let runtime = try SpecRuntime(compilation: P4GeneratedCounterFixture.compiledSpecification())
       return PublicWorkflowGeneratedFixture(
         builderSpec: P4GeneratedCounterFixture.spec,
         machine: PublicWorkflowGeneratedMachineHarness(
-          initialStates: try P4GeneratedCounterFixture.runtime.initialStateProjections(),
+          initialStates: try runtime.initialStateProjections(),
           actionNames: ["advance"],
           apply: { _, actionName in
             .evaluationFailed(
               actionName: actionName,
               diagnostic: .init(code: .evaluationError, message: "fixture failure"))
           },
-          propertyOutcomes: P4GeneratedCounterFixture.runtime.propertyOutcomes(in:)))
+          propertyOutcomes: runtime.propertyOutcomes(in:)))
     case "p4-generated-counter-evaluation-unavailable":
+      let runtime = try SpecRuntime(compilation: P4GeneratedCounterFixture.compiledSpecification())
       return PublicWorkflowGeneratedFixture(
         builderSpec: P4GeneratedCounterFixture.spec,
         machine: PublicWorkflowGeneratedMachineHarness(
-          initialStates: try P4GeneratedCounterFixture.runtime.initialStateProjections(),
+          initialStates: try runtime.initialStateProjections(),
           actionNames: ["advance"],
           apply: { _, actionName in
             .evaluationUnavailable(
               actionName: actionName,
               diagnostic: .init(code: .evaluatorUnavailable, message: "fixture unavailable"))
           },
-          propertyOutcomes: P4GeneratedCounterFixture.runtime.propertyOutcomes(in:)))
+          propertyOutcomes: runtime.propertyOutcomes(in:)))
     default:
       throw PublicWorkflowGovernanceError.invalidField(
         record: id, field: "compiled generated fixture registry")
@@ -103,6 +107,7 @@ struct P4GeneratedCounterMismatchFixture: Sendable {
   actor Actor {}
 
   static func intentionalMismatchActionOutcome(
+    runtime: SpecRuntime,
     actionName: String,
     in state: TLAStateProjection
   ) -> GeneratedActionResult {

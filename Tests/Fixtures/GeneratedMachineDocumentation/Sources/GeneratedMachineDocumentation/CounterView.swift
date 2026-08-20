@@ -14,13 +14,17 @@ struct CounterView: View {
             Button("Advance") {
                 Task { @MainActor in
                     guard let machine else { return }
-                    switch await machine.execute(CounterScreenModel.Observable.ActionLabel.advance.toInvocation()) {
-                    case .committed:
-                        diagnostic = ""
-                    case .rejected(let rejection):
-                        diagnostic = rejection.reason.description
-                    case .failed(let failure):
-                        diagnostic = failure.message
+                    do {
+                        switch try await machine._advance() {
+                        case .committed:
+                            diagnostic = ""
+                        case .rejected(let rejection):
+                            diagnostic = rejection.reason.description
+                        case .failed(let failure):
+                            diagnostic = failure.message
+                        }
+                    } catch {
+                        diagnostic = String(describing: error)
                     }
                 }
             }
@@ -31,7 +35,7 @@ struct CounterView: View {
         .task {
             guard owner == nil else { return }
             do {
-                let owner = try TLALiveMachineOwner.create(for: CounterScreenModel.self)
+                let owner = try CounterScreenModel.makeLiveOwner()
                 self.owner = owner
                 machine = try await CounterScreenModel.Observable(handle: owner.handle)
             } catch {

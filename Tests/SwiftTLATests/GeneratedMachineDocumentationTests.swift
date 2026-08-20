@@ -118,7 +118,7 @@ struct GeneratedMachineDocumentationTests {
             encoding: .utf8
         )
         for term in [
-            "TLALiveMachineOwner.create(for:)",
+            "makeLiveOwner()",
             "Live(handle:)",
             "non-cancellable",
             "resynchronize()",

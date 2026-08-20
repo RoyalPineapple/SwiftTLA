@@ -23,16 +23,16 @@ struct GeneratedMachineDocumentationTests {
     @Test("nested adapters bind the supplied live runtime")
     @MainActor
     func nestedAdaptersExposeDocumentedBehavior() async throws {
-        let actorOwner = try TLALiveMachineOwner.create(for: CounterHost.self)
-        let actor = try await CounterHost.Actor(handle: actorOwner.handle)
-        let observableOwner = try TLALiveMachineOwner.create(for: CounterScreenModel.self)
+        let actorOwner = try CounterHost.makeLiveOwner()
+        let actor = try CounterHost.Actor(handle: actorOwner.handle)
+        let observableOwner = try CounterScreenModel.makeLiveOwner()
         let observable = try await CounterScreenModel.Observable(handle: observableOwner.handle)
 
         #expect(actor.identity == actorOwner.handle.identity)
         #expect(observable.identity == observableOwner.handle.identity)
         #expect(actor.identity != observable.identity)
 
-        let result = await actor.execute(CounterHost.Actor.ActionLabel.advance.toInvocation())
+        let result = try await actor._advance()
         guard case .committed(let commit) = result else {
             Issue.record("Expected the live actor request to commit")
             return

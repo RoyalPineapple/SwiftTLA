@@ -52,23 +52,8 @@ enum MacroExpander {
         action.bindings.filter { $0.values.count > 1 }
     }
 
-    static func generate(
-        mode: GenerationMode,
-        model: MacroCompilation
-    ) -> [DeclSyntax] {
-        switch mode {
-        case .model, .actor:
-            return generateStateMachineMembers(
-                isActor: mode == .actor,
-                model: model
-            )
-        case .observable:
-            return generateObservableMembers(
-                typeName: model.typeName,
-                plan: model.machineSurface,
-                enumInfos: model.enumInfos
-            )
-        }
+    static func generate(model: MacroCompilation) -> [DeclSyntax] {
+        generateStateMachineMembers(isActor: false, model: model)
     }
 
     // MARK: - State machine code generation (model / actor)
@@ -580,7 +565,7 @@ enum MacroExpander {
         }.joined(separator: "\n        ")
 
         return DeclSyntax(stringLiteral: """
-        public enum ActionLabel: Hashable, Sendable, TLALiveActionLabel {
+        public enum ActionLabel: Hashable, Sendable {
             \(cases)
 
             public func toInvocation() -> TLAActionInvocation {

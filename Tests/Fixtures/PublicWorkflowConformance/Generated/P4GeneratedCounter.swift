@@ -40,28 +40,4 @@ public struct P4GeneratedCounterIntentionalMismatch {
     @TLAActor
     public actor Actor {}
 
-    public static func intentionalMismatchActionOutcome(
-        actionName: String,
-        in state: [String: TLAValue]
-    ) -> SpecRuntime.RuntimeActionReport {
-        let report = runtime.actionReport(named: actionName, in: state)
-        switch report.status {
-        case .enabled:
-            return .init(
-                requested: report.requested,
-                state: report.state,
-                availability: report.availability,
-                status: .enabled(successorCount: 2),
-                nextSafeAction: "Intentional mismatch fixture successor count."
-            )
-        case let status:
-            return .init(
-                requested: report.requested,
-                state: report.state,
-                availability: report.availability,
-                status: status,
-                nextSafeAction: report.nextSafeAction
-            )
-        }
-    }
 }
