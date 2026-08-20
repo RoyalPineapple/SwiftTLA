@@ -65,10 +65,7 @@ struct CompiledLowerer {
             formalOperatorDefinitions: formalOperators + linkedFormalOperators,
             recursiveFunctions: recursiveFunctions + linkedRecursiveFunctions,
             symmetrySets: try spec.symmetrySets.map { symmetry in
-                .init(
-                    variable: try variable(at: "symmetry.\(symmetry.variableName)"),
-                    values: symmetry.values
-                )
+                .init(values: symmetry.values)
             },
             symmetricCollections: spec.symmetricCollections.map {
                 .init(members: $0.metadata.members)

@@ -152,13 +152,6 @@ struct BindingValidator {
         for invariant in spec.invariants {
             try validateExpression(invariant.body, at: "invariants.\(invariant.name).body", scope: [:])
         }
-        for symmetry in spec.symmetrySets {
-            guard let id = layout.variableID(named: symmetry.variableName) else {
-                try unresolved(symmetry.variableName, at: "symmetry.\(symmetry.variableName)", expected: "a declared state variable")
-                continue
-            }
-            references["symmetry.\(symmetry.variableName)"] = .variable(id)
-        }
         try validateExpression(spec.constraint, at: "constraint", scope: [:])
         try validateExpression(spec.assume, at: "assume", scope: [:])
         for definition in spec.formalOperatorDefinitions {

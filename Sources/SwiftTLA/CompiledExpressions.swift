@@ -147,7 +147,6 @@ struct CompiledVariableInitializer: Sendable {
 }
 
 struct CompiledSymmetrySet: Sendable {
-    let variable: VariableID
     let values: Set<TLAValue>
 }
 
