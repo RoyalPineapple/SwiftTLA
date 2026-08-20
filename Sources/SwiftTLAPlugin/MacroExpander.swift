@@ -122,22 +122,6 @@ enum MacroExpander {
             try SpecRuntime(compilation: compiledSpecification())
         }
         """))
-        if model.hasNestedLiveAdapter {
-            decls.append(DeclSyntax(
-                VariableDeclSyntax(
-                    modifiers: [DeclModifierSyntax(name: .keyword(.public)), DeclModifierSyntax(name: .keyword(.static))],
-                    bindingSpecifier: .keyword(.var),
-                    bindings: [PatternBindingSyntax(
-                        pattern: IdentifierPatternSyntax(identifier: "runtime"),
-                        typeAnnotation: TypeAnnotationSyntax(type: IdentifierTypeSyntax(name: "SpecRuntime")),
-                        accessorBlock: AccessorBlockSyntax(accessors: .getter(
-                            CodeBlockItemListSyntax { ExprSyntax(stringLiteral: "do { return try _runtime() } catch { fatalError(String(describing: error)) }") }
-                        ))
-                    )]
-                )
-            ))
-        }
-
         decls.append(contentsOf: generateSpecTest())
         if !plan.actions.isEmpty {
             decls.append(contentsOf: generateTransitionMatrix())
