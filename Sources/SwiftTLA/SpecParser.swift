@@ -39,7 +39,7 @@ public final class ParserSession {
         self.enumDefinitions = enumDefinitions
     }
 
-    private func enumDefinition(named typeName: String) -> ParserEnumDefinition? {
+    func enumDefinition(named typeName: String) -> ParserEnumDefinition? {
         enumDefinitions.first { $0.typeName == typeName }
     }
 
