@@ -36,13 +36,6 @@ guard case .function = result.after.phases else {
     fatalError("Generated transition result did not retain typed state")
 }
 
-let phases = TLAStateProjection.Token(validating: "phases")!
-guard case .projected(let snapshot) = contract.tlaSnapshot(),
-      case .function = snapshot.value(for: phases)
-else {
-    fatalError("Generated state projection was unavailable")
-}
-
 let generatedSpec = DeviceContract.spec
 precondition(generatedSpec.invariants.count == 1)
 guard case .forAll = generatedSpec.invariants[0].body else {

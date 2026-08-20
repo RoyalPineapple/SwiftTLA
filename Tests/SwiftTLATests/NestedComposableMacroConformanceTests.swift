@@ -41,22 +41,17 @@ struct NestedComposableMacroConformanceTests {
         var observable = NestedComposedCounter.Observable()
         var actor = NestedComposedCounter.Actor()
 
-        let modelBefore = await model.machineObservation()
+        let modelBefore = try await model.machineObservation()
         _ = try model.apply(.advance)
-        let modelAfter = await model.machineObservation()
-        let observableBefore = await observable.machineObservation()
+        let modelAfter = try await model.machineObservation()
         _ = try observable.apply(.advance)
-        let observableAfter = await observable.machineObservation()
-        let actorBefore = await actor.machineObservation()
         _ = try await actor.apply(.advance)
-        let actorAfter = await actor.machineObservation()
-
-        #expect(modelBefore == observableBefore)
-        #expect(modelBefore == actorBefore)
-        #expect(modelAfter == observableAfter)
-        #expect(modelAfter == actorAfter)
-        #expect(modelBefore.availableInvocations == [.init(name: "advance")])
-        #expect(modelAfter.availableInvocations == [.init(name: "advance")])
+        #expect(modelBefore.state.count == 0)
+        #expect(modelAfter.state.count == 1)
+        #expect(modelBefore.availableActions == [.advance])
+        #expect(modelAfter.availableActions == [.advance])
+        #expect(observable.state.count == 1)
+        #expect(await actor.state.count == 1)
     }
 
     @Test("Three-parameter invocation identity survives canonical and nested adapter execution")
@@ -146,23 +141,14 @@ struct NestedComposableMacroConformanceTests {
         let transitionEvidenceResultSignature = """
         public func execute() -> TransitionEvidence { fatalError() }
         """
-        let safeSurface = """
+        let rawSnapshot = """
         public func tlaSnapshot() -> TLAStateProjectionResult { .unavailable(.invalidKey(path: "state")) }
-        public struct TransitionResult: Sendable {}
-        """
-        let safeInternalFormalEngine = """
-        public func tlaSnapshot() -> TLAStateProjectionResult {
-          let formal: [String: TLAValue] = [:]
-          _ = formal
-          return .unavailable(.invalidKey(path: "state"))
-        }
         """
 
         #expect(publicApplicationSurfaceViolations(inEmittedSource: multilineRawMap) == ["raw state map"])
         #expect(publicApplicationSurfaceViolations(inEmittedSource: transitionEvidenceResult) == ["transition evidence"])
         #expect(publicApplicationSurfaceViolations(inEmittedSource: transitionEvidenceResultSignature) == ["transition evidence"])
-        #expect(publicApplicationSurfaceViolations(inEmittedSource: safeSurface).isEmpty)
-        #expect(publicApplicationSurfaceViolations(inEmittedSource: safeInternalFormalEngine).isEmpty)
+        #expect(publicApplicationSurfaceViolations(inEmittedSource: rawSnapshot) == ["formal state snapshot"])
     }
 
     @Test("Model macro rejects arbitrary instance state")
@@ -214,7 +200,7 @@ struct NestedComposableMacroConformanceTests {
         let result = try runSwift(["build", "--package-path", fixture.path])
 
         #expect(result.status != 0)
-        #expect(result.output.contains("TLAStateProjectionResult"))
+        #expect(result.output.contains("has no member 'tlaSnapshot'"))
         #expect(result.output.contains("TransitionEvidence"))
     }
 
@@ -223,7 +209,7 @@ struct NestedComposableMacroConformanceTests {
         try assertExternalSurfaceIsForbidden(
             fixture: "InvalidNestedActorRawSurface",
             typeName: "NestedActorSurface.Actor",
-            stateDiagnostic: "cannot convert value of type 'TLAStateProjectionResult'"
+            stateDiagnostic: "has no member 'tlaSnapshot'"
         )
     }
 
@@ -232,7 +218,7 @@ struct NestedComposableMacroConformanceTests {
         try assertExternalSurfaceIsForbidden(
             fixture: "InvalidNestedObservableRawSurface",
             typeName: "NestedObservableSurface.Observable",
-            stateDiagnostic: "cannot convert value of type 'TLAStateProjectionResult'"
+            stateDiagnostic: "has no member 'tlaSnapshot'"
         )
     }
 
@@ -348,6 +334,9 @@ private final class PublicGeneratedSurfaceInspector: SyntaxVisitor {
 
     override func visit(_ node: FunctionDeclSyntax) -> SyntaxVisitorContinueKind {
         inspect(modifiers: node.modifiers, signature: node.signature.description)
+        if isPublic(node.modifiers), node.name.text == "tlaSnapshot" {
+            violations.insert("formal state snapshot")
+        }
         return .skipChildren
     }
 

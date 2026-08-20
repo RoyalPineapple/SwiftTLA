@@ -92,7 +92,7 @@ struct GeneratedMachineDocumentationTests {
             encoding: .utf8
         )
 
-        for term in ["TransitionResult", "TLAStateProjectionResult", "ActionLabel", "State", "TLALiveMachine"] {
+        for term in ["TransitionResult", "MachineObservation", "ActionLabel", "State", "TLALiveMachine"] {
             #expect(guide.contains(term), "Markdown guide is missing typed term: \(term)")
             #expect(docc.contains(term), "SwiftTLA DocC is missing typed term: \(term)")
         }
@@ -152,9 +152,7 @@ struct GeneratedMachineDocumentationTests {
     ]
 
     private let requiredContractTerms = [
-        "Generated `Variables`",
-        "`TLAStateProjection`",
-        "`TLAStateProjectionResult`",
+        "Generated `MachineObservation`",
         "`availableActions()`",
         "`apply(_:)`",
         "A nested `@TLAObservable` adapter is main-actor isolated",
@@ -190,12 +188,6 @@ struct GeneratedMachineDocumentationTests {
             ("`@TLAModel`", "Sources/SwiftTLAMacros/Macros.swift", "public macro TLAModel"),
             ("`@TLAActor`", "Sources/SwiftTLAMacros/Macros.swift", "public macro TLAActor"),
             ("`@TLAObservable`", "Sources/SwiftTLAMacros/Macros.swift", "public macro TLAObservable"),
-            ("`TLAStateProjection`", "Sources/SwiftTLA/CanonicalMachine.swift", "public struct TLAStateProjection"),
-            ("`TLAStateProjectionResult`", "Sources/SwiftTLA/CanonicalMachine.swift", "public enum TLAStateProjectionResult"),
-            ("`TLAMachineObservation`", "Sources/SwiftTLA/CanonicalMachine.swift", "public struct TLAMachineObservation"),
-            ("`TLAMachineAvailabilityDiagnostic`", "Sources/SwiftTLA/CanonicalMachine.swift", "public struct TLAMachineAvailabilityDiagnostic"),
-            ("`TLAMachineObserving`", "Sources/SwiftTLA/CanonicalMachine.swift", "public protocol TLAMachineObserving"),
-            ("`TLAActionInvocation`", "Sources/SwiftTLA/TLASpec.swift", "public struct TLAActionInvocation"),
             ("`GeneratedMachineError`", "Sources/SwiftTLA/CanonicalMachine.swift", "public enum GeneratedMachineError"),
             ("Generated `ActionLabel`", "Sources/SwiftTLAPlugin/MacroExpander.swift", "public enum ActionLabel"),
             ("Generated `TransitionResult`", "Sources/SwiftTLAPlugin/MacroExpander+CanonicalMachine.swift", "public struct TransitionResult"),

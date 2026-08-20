@@ -468,11 +468,11 @@ struct SymmetricCollectionMacroRuntimeTests {
     }
     rejected.devices.insert(violating, value: 1)
 
-    let rejectedSnapshot = rejected.tlaSnapshot()
+    let rejectedSnapshot = rejected.state
     #expect(throws: GeneratedMachineError.self) {
       try rejected.applyadvance()
     }
-    #expect(rejected.tlaSnapshot() == rejectedSnapshot)
+    #expect(rejected.state == rejectedSnapshot)
     #expect(rejected.phase == 0)
     #expect(rejected.devices.count == 4)
     #expect(rejected.devices[violating.id] == 1)
@@ -489,11 +489,11 @@ struct SymmetricCollectionMacroRuntimeTests {
       model.devices.insert(device)
     }
 
-    let rejectedSnapshot = model.tlaSnapshot()
+    let rejectedSnapshot = model.state
     #expect(throws: GeneratedMachineError.self) {
       try model.applyadvance()
     }
-    #expect(model.tlaSnapshot() == rejectedSnapshot)
+    #expect(model.state == rejectedSnapshot)
     #expect(model.phase == 0)
 
     let matching = StringMacroDevice(id: "matching")
