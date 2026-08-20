@@ -304,6 +304,10 @@ struct CompilerPipelineCanonicalizationTests {
         let firstSuccessor = try runtime.successors(from: try #require(initial.first))
         #expect(firstSuccessor.count == 1)
         #expect(try runtime.invariantHolds(compilation.model.invariants[0], in: firstSuccessor[0].state))
+
+        let exploration = try ModelChecker(compilation: compilation, maxStates: 10).explore()
+        #expect(exploration.graph.states.count == 5)
+        #expect(exploration.isComplete)
     }
 
     @Test("compiled higher-order calls retain lambda binder identities")
