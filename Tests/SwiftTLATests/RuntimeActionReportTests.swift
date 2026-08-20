@@ -51,18 +51,6 @@ struct RuntimeActionReportTests {
             message: "Variable 'x' is assigned multiple times in one action branch")))
     }
 
-    @Test("unavailable action evaluation remains explicit")
-    func actionEvaluationUnavailable() throws {
-        let runtime = try runtime(
-            action: .assign("x", .value(.int(1))),
-            actionEvaluator: { _, _, _ in throw SpecRuntime.RuntimeError.evaluationUnavailable("evaluator offline") })
-
-        let report = runtime.actionReport(named: "Next", in: state)
-        #expect(report.status == .evaluationFailed(.init(
-            code: .evaluatorUnavailable,
-            message: "evaluator offline")))
-    }
-
     @Test("action reports retain safe state and explain an unavailable guard")
     func actionReportExplainsUnavailableAction() throws {
         let runtime = try runtime(action: .guard_(.value(.bool(false))))
@@ -81,17 +69,11 @@ struct RuntimeActionReportTests {
         #expect(report.nextSafeAction.contains("available actions"))
     }
 
-    private func runtime(
-        action: ActionExpr,
-        actionEvaluator: SpecRuntime.ActionEvaluator? = nil
-    ) throws -> SpecRuntime {
+    private func runtime(action: ActionExpr) throws -> SpecRuntime {
         let x = Var<Int>("x")
         let spec = TLASpec("RuntimeActionReport") {
             Variable(x, 0)
             Action("Next") { action }
-        }
-        if let actionEvaluator {
-            return try SpecRuntime(spec: spec, actionEvaluator: actionEvaluator)
         }
         return try SpecRuntime(spec: spec)
     }

@@ -146,6 +146,14 @@ struct CompiledVariableInitializer: Sendable {
     let lazySet: CompiledStateExpr?
 }
 
+struct CompiledSymmetrySet: Sendable {
+    let values: Set<TLAValue>
+}
+
+struct CompiledSymmetricCollection: Sendable {
+    let members: [TLAValue]
+}
+
 struct CompiledModel: Sendable {
     let variableInitializers: [VariableID: CompiledVariableInitializer]
     let actions: [CompiledAction]
@@ -154,4 +162,6 @@ struct CompiledModel: Sendable {
     let assume: CompiledStateExpr?
     let formalOperatorDefinitions: [CompiledFormalOperatorDefinition]
     let recursiveFunctions: [CompiledRecursiveFunction]
+    let symmetrySets: [CompiledSymmetrySet]
+    let symmetricCollections: [CompiledSymmetricCollection]
 }

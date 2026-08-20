@@ -82,10 +82,7 @@ public struct ModelChecker {
         try compose(checker, user).check()
     }
 
-    private typealias State = [String: TLAValue]
-
     private func runExploration() throws -> ModelExplorationResult {
-        let closure = compiledSpecification.formalModuleClosure
         if let validationError = validateSymmetricCollections() {
             return emptyExploration(
                 self.spec,
@@ -93,59 +90,31 @@ public struct ModelChecker {
                 result: bounded(.error(validationError.description))
             )
         }
-        let substituted = substituteConstants(self.spec)
-        let transitionRelation = TransitionRelation(resolvedSpec: substituted, formalModuleClosure: closure)
-        let evaluationContext = StateExprEvaluationContext()
-        let variableNames = substituted.variables.map(\.name)
-        let actions = substituted.actions.isEmpty
-            ? [NamedAction(name: "", body: .guard_(.value(.bool(false))))]
-            : substituted.actions
-
-        let initialStates = computeInitialStates(
-            substituted,
-            formalModuleClosure: closure,
-            evaluationContext: evaluationContext
-        )
+        let runtime = CompiledRuntime(compilation: compiledSpecification)
+        let initialStates = try runtime.initialStates()
         guard !initialStates.isEmpty else {
             return emptyExploration(
-                substituted,
-                variableNames: variableNames,
+                self.spec,
+                variableNames: self.spec.variables.map(\.name),
                 result: bounded(.error("No initial states"))
             )
         }
 
-        guard try checkAssume(
-            substituted,
-            initial: initialStates[0],
-            evaluationContext: evaluationContext
-        ) else {
+        guard try runtime.assumeHolds(in: initialStates[0]) else {
             return emptyExploration(
-                substituted,
-                variableNames: variableNames,
+                self.spec,
+                variableNames: self.spec.variables.map(\.name),
                 result: bounded(.error("ASSUME failed"))
             )
         }
 
-        let seeds = initialStates
-        let exploration = try bfs(
-            seeds: seeds,
-            variableNames: variableNames,
-            expand: buildExpander(transitionRelation, evaluationContext: evaluationContext),
-            evaluate: buildEvaluator(
-                runtimeFuncs: substituted.runtimeFuncs,
-                recursiveFuncs: closure.resolvedRecursiveFuncs,
-                formalOperatorDefinitions: closure.resolvedFormalOperatorDefinitions,
-                evaluationContext: evaluationContext
-            ),
-            actions: actions,
-            formalOperatorDefinitions: closure.resolvedFormalOperatorDefinitions,
-            evaluationContext: evaluationContext,
-            invariants: substituted.invariants,
-            checkDeadlock: substituted.checkDeadlock,
-            specificationName: substituted.name,
-            maxStates: self.maxStates,
-            symmetrySets: substituted.symmetrySets,
-            symmetricCollections: substituted.symmetricCollections
+        let exploration = try compiledBFS(
+            runtime: runtime,
+            seeds: initialStates,
+            layout: compiledSpecification.layout,
+            checkDeadlock: self.spec.checkDeadlock,
+            specificationName: self.spec.name,
+            maxStates: self.maxStates
         )
         return ModelExplorationResult(
             graph: exploration.graph,
@@ -154,49 +123,6 @@ public struct ModelChecker {
         )
     }
 
-    private func buildExpander(
-        _ transitionRelation: TransitionRelation,
-        evaluationContext: StateExprEvaluationContext
-    ) -> (State) throws -> [(StateGraph.TransitionLabel, State)] {
-        { state in
-            try transitionRelation.successors(from: state, evaluationContext: evaluationContext).map {
-                (StateGraph.TransitionLabel($0.invocation), $0.state)
-            }
-        }
-    }
-
-    private func buildEvaluator(
-        runtimeFuncs: [String: StateExpr.RuntimeFunc] = [:],
-        recursiveFuncs: [RecursiveFunc] = [],
-        formalOperatorDefinitions: [FormalOperatorDefinition] = [],
-        evaluationContext: StateExprEvaluationContext
-    ) -> (StateExpr, State) throws -> Bool {
-        { expression, state in
-            try expression.evaluateBool(
-                in: state,
-                runtimeFuncs: runtimeFuncs,
-                recursiveFuncs: recursiveFuncs,
-                formalOperatorDefinitions: formalOperatorDefinitions,
-                evaluationContext: evaluationContext
-            )
-        }
-    }
-
-    private func checkAssume(
-        _ specification: TLASpec,
-        initial: State,
-        evaluationContext: StateExprEvaluationContext
-    ) throws -> Bool {
-        guard let assume = specification.assume else { return true }
-        let closure = compiledSpecification.formalModuleClosure
-        return try assume.evaluateBool(
-            in: initial,
-            runtimeFuncs: specification.runtimeFuncs,
-            recursiveFuncs: closure.resolvedRecursiveFuncs,
-            formalOperatorDefinitions: closure.resolvedFormalOperatorDefinitions,
-            evaluationContext: evaluationContext
-        )
-    }
 
     private func emptyExploration(
         _ specification: TLASpec,
@@ -229,65 +155,53 @@ public struct ModelChecker {
     }
 }
 
-// MARK: - Plain BFS
-
-private typealias State = [String: TLAValue]
-
-private enum CheckerEvalError: Error, CustomStringConvertible {
-    case action(String, Error)
-    case invariant(String, Error)
-    case enabled(String, Error)
-
-    var description: String {
-        switch self {
-        case .action(let n, let e): return "Action '\(n)': \(e)"
-        case .invariant(let n, let e): return "Invariant '\(n)': \(e)"
-        case .enabled(let n, let e): return "ENABLED('\(n)'): \(e)"
-        }
-    }
-}
-
-private func bfs(
-    seeds: [State],
-    variableNames: [String],
-    expand: (State) throws -> [(StateGraph.TransitionLabel, State)],
-    evaluate: (StateExpr, State) throws -> Bool,
-    actions: [NamedAction],
-    formalOperatorDefinitions: [FormalOperatorDefinition],
-    evaluationContext: StateExprEvaluationContext,
-    invariants: [NamedInvariant],
+private func compiledBFS(
+    runtime: CompiledRuntime,
+    seeds: [FormalState],
+    layout: CompiledLayout,
     checkDeadlock: Bool,
     specificationName: String,
-    maxStates: Int,
-    symmetrySets: [SymmetrySet] = [],
-    symmetricCollections: [SymmetricCollectionDecl] = []
+    maxStates: Int
 ) throws -> ModelExplorationResult {
-    let symmetricCollectionGroups = symmetricCollections.map {
-        SymmetricCollectionPermutationGroup(members: $0.metadata.members)
-    }
-
-    func canonicalKey(_ state: State) -> State {
-        var candidates = [state]
-        for group in symmetricCollectionGroups {
-            candidates = candidates.flatMap { candidate in
-                group.mappings.map { applySymmetricMemberPermutation(candidate, mapping: $0) }
-            }
-        }
-        let canonical = candidates.min { symmetricStateEncoding($0) < symmetricStateEncoding($1) } ?? state
-        return symmetrySets.reduce(canonical) { $1.canonicalize($0) }
-    }
-
-    var queue: [State] = []
-    var stateToID: [State: StateGraph.StateID] = [:]
-    var idToState: [StateGraph.StateID: State] = [:]
-    var visited = Set<State>()
-    var nextID = 0
+    var queue: [FormalState] = []
+    var stateToID: [FormalState: StateGraph.StateID] = [:]
+    var idToState: [StateGraph.StateID: FormalState] = [:]
     var initialStateIDs: [StateGraph.StateID] = []
+    var transitions: [StateGraph.StateID: [StateGraph.Transition]] = [:]
+    var predecessors: [FormalState: (FormalState, String)] = [:]
+    var nextID = 0
+
+    func projected(_ state: FormalState) throws -> [String: TLAValue] {
+        try state.projected(using: layout)
+    }
+
+    func graph() throws -> StateGraph {
+        var states: [StateGraph.StateID: [String: TLAValue]] = [:]
+        for (id, state) in idToState {
+            states[id] = try projected(state)
+        }
+        return StateGraph(
+            specName: specificationName,
+            variableNames: layout.variables.map(\.declaration.name),
+            transitions: transitions,
+            states: states
+        )
+    }
+
+    func trace(to final: FormalState, initial: FormalState) throws -> [TraceStep] {
+        var steps: [(FormalState, String)] = []
+        var current = final
+        while let predecessor = predecessors[current] {
+            steps.append((current, predecessor.1))
+            current = predecessor.0
+        }
+        return try [TraceStep(state: projected(initial), action: "init")]
+            + steps.reversed().map { try TraceStep(state: projected($0.0), action: $0.1) }
+    }
 
     for seed in seeds {
-        let key = canonicalKey(seed)
-        guard !visited.contains(key) else { continue }
-        visited.insert(key)
+        let key = runtime.canonicalState(seed)
+        guard stateToID[key] == nil else { continue }
         let id = StateGraph.StateID(nextID)
         stateToID[key] = id
         idToState[id] = seed
@@ -296,168 +210,74 @@ private func bfs(
         nextID += 1
     }
 
-    var transitions: [StateGraph.StateID: [StateGraph.Transition]] = [:]
-    var predecessors: [State: (State, String)] = [:]
     var head = 0
     var processed = 0
-
-    func graph() -> StateGraph {
-        StateGraph(
-            specName: specificationName,
-            variableNames: variableNames,
-            transitions: transitions,
-            states: idToState
-        )
-    }
-
     while head < queue.count {
         guard processed < maxStates else {
-            return ModelExplorationResult(
-                graph: graph(),
+            return .init(
+                graph: try graph(),
                 initialStateIDs: initialStateIDs,
                 result: .depthExceeded(statesCount: processed, limit: maxStates)
             )
         }
-
         let current = queue[head]
         head += 1
         processed += 1
+        let key = runtime.canonicalState(current)
+        guard let currentID = stateToID[key] else { continue }
 
-        guard let currentID = stateToID[canonicalKey(current)] else { continue }
-
-        let enabled: State
-        do {
-            enabled = try enabledState(
-                current,
-                actions: actions,
-                variableNames: variableNames,
-                formalOperatorDefinitions: formalOperatorDefinitions,
-                evaluationContext: evaluationContext
-            )
-        } catch {
-            return ModelExplorationResult(
-                graph: graph(),
-                initialStateIDs: initialStateIDs,
-                result: .error(String(describing: error))
-            )
-        }
-
-        for invariant in invariants {
-            let holds: Bool
-            do {
-                holds = try evaluate(invariant.body, enabled)
-            } catch {
-                return ModelExplorationResult(
-                    graph: graph(),
-                    initialStateIDs: initialStateIDs,
-                    result: .error("Invariant '\(invariant.name)': \(error)")
-                )
-            }
-            if !holds {
-                let trace = buildTrace(
-                    to: current,
-                    predecessors: predecessors,
-                    initial: queue.isEmpty ? current : queue[0]
-                )
-                return ModelExplorationResult(
-                    graph: graph(),
+        for invariant in runtime.compilation.model.invariants {
+            guard try runtime.invariantHolds(invariant, in: current) else {
+                return .init(
+                    graph: try graph(),
                     initialStateIDs: initialStateIDs,
                     result: .invariantViolated(
                         invariant: invariant.name,
-                        state: current,
-                        trace: trace
+                        state: try projected(current),
+                        trace: try trace(to: current, initial: queue[0])
                     )
                 )
             }
         }
 
-        let successors: [(StateGraph.TransitionLabel, State)]
-        do {
-            successors = try expand(current)
-        } catch {
-            return ModelExplorationResult(
-                graph: graph(),
-                initialStateIDs: initialStateIDs,
-                result: .error(String(describing: error))
-            )
-        }
-
+        let successors = try runtime.successors(from: current)
         if checkDeadlock && successors.isEmpty {
-            return ModelExplorationResult(
-                graph: graph(),
+            return .init(
+                graph: try graph(),
                 initialStateIDs: initialStateIDs,
-                result: .deadlocked(state: current)
+                result: .deadlocked(state: try projected(current))
             )
         }
 
-        for (successorLabel, successorState) in successors {
-            let key = canonicalKey(successorState)
+        for successor in successors {
+            let successorKey = runtime.canonicalState(successor.state)
             let targetID: StateGraph.StateID
-            if let existing = stateToID[key] {
+            if let existing = stateToID[successorKey] {
                 targetID = existing
             } else {
                 targetID = StateGraph.StateID(nextID)
-                stateToID[key] = targetID
-                idToState[targetID] = successorState
-                predecessors[successorState] = (current, successorLabel.description)
-                queue.append(successorState)
-                visited.insert(key)
+                stateToID[successorKey] = targetID
+                idToState[targetID] = successor.state
+                let actionName = layout.actions[successor.action.ordinal].declaration.name
+                predecessors[successor.state] = (current, TLAActionInvocation(name: actionName, arguments: successor.arguments).description)
+                queue.append(successor.state)
                 nextID += 1
             }
-            transitions[currentID, default: []] += [
-                StateGraph.Transition(label: successorLabel, target: targetID)
-            ]
+            let actionName = layout.actions[successor.action.ordinal].declaration.name
+            transitions[currentID, default: []].append(
+                .init(
+                    label: .init(.init(name: actionName, arguments: successor.arguments)),
+                    target: targetID
+                )
+            )
         }
     }
 
-    return ModelExplorationResult(
-        graph: graph(),
+    return .init(
+        graph: try graph(),
         initialStateIDs: initialStateIDs,
         result: .ok(statesCount: processed)
     )
-}
-
-private func enabledState(
-    _ state: State,
-    actions: [NamedAction],
-    variableNames: [String],
-    formalOperatorDefinitions: [FormalOperatorDefinition],
-    evaluationContext: StateExprEvaluationContext
-) throws -> State {
-    var result = state
-    for action in actions where !action.name.isEmpty {
-        do {
-            let enabled = try actionInvocations(action).contains { variant in
-                if try !ActionEnumerator.enumerate(
-                    variant.body,
-                    from: state,
-                    varNames: variableNames,
-                    formalOperatorDefinitions: formalOperatorDefinitions,
-                    evaluationContext: evaluationContext
-                ).isEmpty {
-                    return true
-                }
-                return false
-            }
-            result["_enabled_" + action.name] = .bool(enabled)
-        } catch {
-            throw CheckerEvalError.enabled(action.name, error)
-        }
-    }
-    return result
-}
-
-private func buildTrace(
-    to final: State,
-    predecessors: [State: (State, String)],
-    initial: State
-) -> [TraceStep] {
-    func loop(_ current: State, _ accumulated: [(State, String)]) -> [(State, String)] {
-        guard let (predecessor, action) = predecessors[current] else { return accumulated }
-        return loop(predecessor, [(current, action)] + accumulated)
-    }
-    return [TraceStep(state: initial, action: "init")]
-        + loop(final, []).map { TraceStep(state: $0.0, action: $0.1) }
 }
 
 // MARK: - Results

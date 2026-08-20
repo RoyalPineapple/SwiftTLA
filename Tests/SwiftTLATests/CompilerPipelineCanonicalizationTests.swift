@@ -86,6 +86,7 @@ struct CompilerPipelineCanonicalizationTests {
             Action("increment") {
                 counter.becomes(counter + 1)
             }
+            Invariant("NonNegative") { counter >= 0 }
         }
 
         let compilation = try spec.compile()
@@ -95,6 +96,8 @@ struct CompilerPipelineCanonicalizationTests {
         #expect(runtime.compilation?.identity == compilation.identity)
         #expect(checker.compilation?.identity == compilation.identity)
         #expect(try runtime.successors(.init(name: "increment"), from: ["counter": .int(0)]) == [["counter": .int(1)]])
+        #expect(try runtime.check("NonNegative", in: ["counter": .int(0)]))
+        #expect(runtime.propertyOutcomes(in: ["counter": .int(0)]) == [.satisfied(name: "NonNegative")])
         #expect(try checker.exploreGraph().states.count == 3)
     }
 
@@ -277,6 +280,37 @@ struct CompilerPipelineCanonicalizationTests {
             .enumerate(try #require(compilation.model.actions.first))
 
         #expect(try #require(next.first).value(for: .init(ordinal: 0)) == .int(6))
+    }
+
+    @Test("compiled runtime enumerates slot-backed initial and successor states")
+    func compiledRuntimeUsesSlotsForExecution() throws {
+        let spec = TLASpec(
+            name: "CompiledRuntime",
+            variables: [
+                .init(name: "counter", initial: .int(0)),
+                .init(name: "choice", initialSet: .setLiteral([.int(1), .int(2)]))
+            ],
+            actions: [
+                .init(
+                    name: "advance",
+                    body: .guard_(.lessThan(.variable("counter"), .variable("choice")))
+                        && .assign("counter", .add(.variable("counter"), .int(1)))
+                )
+            ],
+            invariants: [.init(name: "Bounded", body: .lessOrEqual(.variable("counter"), .variable("choice"))]
+        )
+        let compilation = try spec.compile()
+        let runtime = CompiledRuntime(compilation: compilation)
+        let initial = try runtime.initialStates()
+
+        #expect(initial.count == 2)
+        let firstSuccessor = try runtime.successors(from: try #require(initial.first))
+        #expect(firstSuccessor.count == 1)
+        #expect(try runtime.invariantHolds(compilation.model.invariants[0], in: firstSuccessor[0].state))
+
+        let exploration = try ModelChecker(compilation: compilation, maxStates: 10).explore()
+        #expect(exploration.graph.states.count == 5)
+        #expect(exploration.isComplete)
     }
 
     @Test("compiled higher-order calls retain lambda binder identities")

@@ -11,6 +11,26 @@ struct FormalState: Hashable, Sendable {
         self.init(validatedValues: values)
     }
 
+    init(projected valuesByName: [String: TLAValue], layout: CompiledLayout) throws {
+        let expectedNames = Set(layout.variables.map(\.declaration.name))
+        guard Set(valuesByName.keys) == expectedNames else {
+            throw CompiledEvaluationError.invalidStateLayout(
+                expected: expectedNames.count,
+                actual: valuesByName.count
+            )
+        }
+        let values = try layout.variables.map { variable in
+            guard let value = valuesByName[variable.declaration.name] else {
+                throw CompiledEvaluationError.invalidStateLayout(
+                    expected: expectedNames.count,
+                    actual: valuesByName.count
+                )
+            }
+            return value
+        }
+        try self.init(values: values, layout: layout)
+    }
+
     func value(for variable: VariableID) throws -> TLAValue {
         guard values.indices.contains(variable.ordinal) else {
             throw CompiledEvaluationError.invalidVariableID(variable)
@@ -33,6 +53,30 @@ struct FormalState: Hashable, Sendable {
             updated = try updated.updating(assignment.key, to: assignment.value)
         }
         return updated
+    }
+
+    func transformingValues(_ transform: (TLAValue) -> TLAValue) -> FormalState {
+        FormalState(validatedValues: values.map(transform))
+    }
+
+    func contains(_ value: TLAValue) -> Bool {
+        values.contains { valueContains($0, value) }
+    }
+
+    func projected(using layout: CompiledLayout) throws -> [String: TLAValue] {
+        guard values.count == layout.variables.count else {
+            throw CompiledEvaluationError.invalidStateLayout(
+                expected: layout.variables.count,
+                actual: values.count
+            )
+        }
+        return Dictionary(uniqueKeysWithValues: layout.variables.map { variable in
+            (variable.declaration.name, values[variable.id.ordinal])
+        })
+    }
+
+    var canonicalEncoding: String {
+        values.map(symmetricValueEncoding).joined(separator: "|")
     }
 
     private init(validatedValues: [TLAValue]) {

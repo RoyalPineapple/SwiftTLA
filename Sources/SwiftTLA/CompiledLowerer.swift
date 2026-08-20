@@ -63,7 +63,13 @@ struct CompiledLowerer {
             constraint: try lowerOptional(spec.constraint, at: "constraint"),
             assume: try lowerOptional(spec.assume, at: "assume"),
             formalOperatorDefinitions: formalOperators + linkedFormalOperators,
-            recursiveFunctions: recursiveFunctions + linkedRecursiveFunctions
+            recursiveFunctions: recursiveFunctions + linkedRecursiveFunctions,
+            symmetrySets: spec.symmetrySets.map { symmetry in
+                .init(values: symmetry.values)
+            },
+            symmetricCollections: spec.symmetricCollections.map {
+                .init(members: $0.metadata.members)
+            }
         )
     }
 
