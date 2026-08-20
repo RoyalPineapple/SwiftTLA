@@ -185,7 +185,6 @@ struct CompilerBundleOwnershipTests {
     )
 
     #expect(throws: CompilationDiagnostic.self) { try computeInitialStates(invalid) }
-    #expect(throws: CompilationDiagnostic.self) { try TransitionRelation(spec: invalid) }
     #expect(throws: CompilationDiagnostic.self) { try ModelChecker(spec: invalid) }
     #expect(throws: CompilationDiagnostic.self) { try SpecRuntime(spec: invalid) }
   }

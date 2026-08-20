@@ -203,7 +203,7 @@ extension TLALiveMachineOwner {
 
         try validateSchemaCompatibility(schema: schema, metadata: metadata, spec: spec)
 
-        let initialStates = runtime.initialStates()
+        let initialStates = try runtime.initialStates()
         guard let firstInitialState = initialStates.first else {
             throw GeneratedLiveMachineDiagnostic(
                 code: .noInitialState,

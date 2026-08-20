@@ -700,11 +700,11 @@ public func Variable(from name: String, _ range: StateExpr) -> VarDecl {
   VarDecl(name, lazySet: range)
 }
 // MARK: - Shared initial state computation
-public func computeInitialStates(_ spec: TLASpec) throws -> [[String: TLAValue]] {
+package func computeInitialStates(_ spec: TLASpec) throws -> [[String: TLAValue]] {
   computeInitialStates(try spec.compile())
 }
 
-public func computeInitialStates(_ compilation: CompiledSpecification) -> [[String: TLAValue]] {
+package func computeInitialStates(_ compilation: CompiledSpecification) -> [[String: TLAValue]] {
   computeInitialStates(
     compilation.spec,
     formalModuleClosure: compilation.formalModuleClosure,

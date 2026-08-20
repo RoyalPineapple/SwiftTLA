@@ -1,8 +1,8 @@
-public enum ActionError: Error, CustomStringConvertible {
+package enum ActionError: Error, CustomStringConvertible {
     case multipleAssignment(String)
     case invalidActionForm(String)
 
-    public var description: String {
+    package var description: String {
         switch self {
         case .multipleAssignment(let v): return "Variable '\(v)' is assigned multiple times in one action branch"
         case .invalidActionForm(let m): return "Invalid action form: \(m)"
@@ -10,8 +10,8 @@ public enum ActionError: Error, CustomStringConvertible {
     }
 }
 
-public enum ActionEnumerator {
-    public static func enumerate(
+package enum ActionEnumerator {
+    package static func enumerate(
         _ action: ActionExpr,
         from oldState: [String: TLAValue],
         varNames: [String],
