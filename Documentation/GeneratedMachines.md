@@ -335,7 +335,7 @@ state count, limit, Swift toolchain, and platform context.
 
 Generated-machine verification depends on a declared finite state space and a configured exploration limit. It is not a proof for unbounded models.
 
-The generated `verifySpec()` returns the number of explored states. It, `transitionMatrix()`, `verifyTransitions()`, and `verifyInvariants()` use `TLAModelType.verificationStateLimit`, which defaults to `100_000`. A model can override that value for a published finite configuration with a larger checked graph. A limit failure is an error result. It does not establish a complete result outside that limit.
+The generated `verifySpec()`, `verifyTransitions()`, and `verifyInvariants()` use `TLAModelType.verificationStateLimit`, which defaults to `100_000`. They return the verified state, transition, and invariant-check counts. A model can override that value for a published finite configuration with a larger checked graph. A limit failure is an error result.
 
 The public-workflow command has a separate bounded scope. A local result is `diagnosticOnly`. A result from the checked-in hosted workflow is `candidateEvidence` for its exact fixture.
 
@@ -414,9 +414,8 @@ The following table is the public inventory for this guide. Sources identify the
 | `GeneratedMachineError` | Wraps a runtime error, an unexpected error, or an unrepresentable action label. | [CanonicalMachine.swift](../Sources/SwiftTLA/CanonicalMachine.swift) |
 | Generated `VerificationError` | Error type returned by generated verification helpers when the bounded check does not succeed. | [MacroExpander+Generation.swift](../Sources/SwiftTLAPlugin/MacroExpander+Generation.swift) |
 | Generated `verifySpec()` | Runs the generated bounded specification check and returns its explored-state count; it uses `TLAModelType.verificationStateLimit` (default: `100_000`). | [MacroExpander+Generation.swift](../Sources/SwiftTLAPlugin/MacroExpander+Generation.swift) |
-| Generated `transitionMatrix()` | Returns the explored transitions as source state, invocation, and target state tuples. | [MacroExpander+Generation.swift](../Sources/SwiftTLAPlugin/MacroExpander+Generation.swift) |
-| Generated `verifyTransitions()` | Compares each generated transition with the runtime successors for that source state and invocation. | [MacroExpander+Generation.swift](../Sources/SwiftTLAPlugin/MacroExpander+Generation.swift) |
-| Generated `verifyInvariants()` | Checks declared invariants on explored transition targets when the model has actions and invariants. | [MacroExpander+Generation.swift](../Sources/SwiftTLAPlugin/MacroExpander+Generation.swift) |
+| Generated `verifyTransitions()` | Compares each generated transition with the runtime successors for that source state and returns the verified transition count. | [MacroExpander+Generation.swift](../Sources/SwiftTLAPlugin/MacroExpander+Generation.swift) |
+| Generated `verifyInvariants()` | Checks declared invariants on explored transition targets and returns the verified invariant-check count. | [MacroExpander+Generation.swift](../Sources/SwiftTLAPlugin/MacroExpander+Generation.swift) |
 | Generated `State` | Holds model variables with generated Swift types. Application code reads this type through `state`, before, and after. | [MacroExpander.swift](../Sources/SwiftTLAPlugin/MacroExpander.swift) |
 | Generated `ActionLabel` | Represents declared actions with typed parameters. | [MacroExpander+Generation.swift](../Sources/SwiftTLAPlugin/MacroExpander+Generation.swift) |
 | Generated `TransitionResult` | Records the typed action and typed state before and after a successful transition. | [MacroExpander+CanonicalMachine.swift](../Sources/SwiftTLAPlugin/MacroExpander+CanonicalMachine.swift) |

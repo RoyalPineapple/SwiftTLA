@@ -297,7 +297,7 @@ public struct MachineSurfacePlan: Sendable, Equatable {
         )
     }
 
-    public func label(for invocation: TLAActionInvocation) -> ActionLabel? {
+    func label(for invocation: TLAActionInvocation) -> ActionLabel? {
         guard let action = actions.first(where: { $0.formalName == invocation.name }),
               action.bindings.count == invocation.arguments.count else {
             return nil
@@ -314,7 +314,7 @@ public struct MachineSurfacePlan: Sendable, Equatable {
         return .init(swiftIdentifier: action.swiftIdentifier, publicArguments: publicArguments)
     }
 
-    public func invocation(for label: ActionLabel) -> TLAActionInvocation? {
+    func invocation(for label: ActionLabel) -> TLAActionInvocation? {
         guard let action = actions.first(where: { $0.swiftIdentifier == label.swiftIdentifier }) else {
             return nil
         }
@@ -336,7 +336,7 @@ public struct MachineSurfacePlan: Sendable, Equatable {
         return .init(name: action.formalName, arguments: arguments)
     }
 
-    public var allInvocations: [TLAActionInvocation] {
+    var allInvocations: [TLAActionInvocation] {
         actions.flatMap { action in
             let argumentLists = action.bindings.reduce([[]]) { partial, binding in
                 partial.flatMap { arguments in

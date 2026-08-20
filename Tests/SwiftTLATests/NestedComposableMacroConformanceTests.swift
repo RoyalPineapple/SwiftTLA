@@ -57,12 +57,9 @@ struct NestedComposableMacroConformanceTests {
     @Test("Three-parameter invocation identity survives canonical and nested adapter execution")
     @MainActor
     func threeParameterIdentityRemainsDistinctAcrossNestedSurfaces() async throws {
-        let first = TLAActionInvocation(name: "board", arguments: [.int(1), .int(10), .int(100)])
-        let selected = TLAActionInvocation(name: "board", arguments: [.int(2), .int(20), .int(200)])
-        let matrix = try EndToEndThreeParameterActionMachine.transitionMatrix()
-        let available = matrix
-            .filter { $0.from.floor == 0 }
-            .map(\.invocation)
+        let first = EndToEndThreeParameterActionMachine.ActionLabel.board(person: 1, elevator: 10, direction: 100)
+        let selected = EndToEndThreeParameterActionMachine.ActionLabel.board(person: 2, elevator: 20, direction: 200)
+        let available = try EndToEndThreeParameterActionMachine.makeMachine().availableActions()
         let observable = ThreeParameterActionMachine.Observable()
         let actor = ThreeParameterActionMachine.Actor()
 

@@ -33,12 +33,12 @@ public enum GeneratedDemoTestSuite {
     public static func run(_ target: GeneratedDemoTestTarget) -> [GeneratedDemoTestResult] {
         switch target {
         case .twoBuckets:
-            testResults(for: target.title, verifySpec: TwoBuckets.verifySpec, matrix: TwoBuckets.transitionMatrix,
+            testResults(for: target.title, verifySpec: TwoBuckets.verifySpec,
                         verifyTransitions: TwoBuckets.verifyTransitions, verifyInvariants: TwoBuckets.verifyInvariants)
         case .duckDuckLeader:
             ringTestResults()
         case .elevatorBank:
-            testResults(for: target.title, verifySpec: ElevatorBank.verifySpec, matrix: ElevatorBank.transitionMatrix,
+            testResults(for: target.title, verifySpec: ElevatorBank.verifySpec,
                         verifyTransitions: ElevatorBank.verifyTransitions, verifyInvariants: ElevatorBank.verifyInvariants)
         }
     }
@@ -47,25 +47,22 @@ public enum GeneratedDemoTestSuite {
         GeneratedDemoTestTarget.allCases.flatMap(run)
     }
 
-    private static func testResults<State>(
+    private static func testResults(
         for model: String,
         verifySpec: () throws -> Int,
-        matrix: () throws -> [(from: State, invocation: TLAActionInvocation, to: State)],
-        verifyTransitions: () throws -> Void,
-        verifyInvariants: () throws -> Void
+        verifyTransitions: () throws -> Int,
+        verifyInvariants: () throws -> Int
     ) -> [GeneratedDemoTestResult] {
         [
             result(model: model, check: "Specification") {
-                let count = try verifySpec()
-                return "\(count) verified states"
+                "\(try verifySpec()) verified states"
             },
-            result(model: model, check: "Reachable graph") {
-                let count = try matrix().count
-                guard count > 0 else { throw GeneratedDemoSuiteError.emptyMatrix }
-                return "\(count) generated transitions"
+            result(model: model, check: "Native transitions") {
+                "\(try verifyTransitions()) verified transitions"
             },
-            result(model: model, check: "Native transitions", action: verifyTransitions),
-            result(model: model, check: "Invariants", action: verifyInvariants)
+            result(model: model, check: "Invariants") {
+                "\(try verifyInvariants()) verified invariant checks"
+            }
         ]
     }
 
@@ -133,7 +130,6 @@ public enum GeneratedDemoTestSuite {
 }
 
 private enum GeneratedDemoSuiteError: Error {
-    case emptyMatrix
     case unexpectedFormalSurface
     case unexpectedInitialState
     case deliveryWasNotForwarded

@@ -19,7 +19,14 @@ struct ValidActorHost {
 @main
 struct ValidActorFixture {
   static func main() async throws {
-    try await ValidActorHost.verifyTransitions()
-    try await ValidActorHost.verifyInvariants()
+    let transitions = try await ValidActorHost.verifyTransitions()
+    guard transitions > 0 else {
+      throw ValidActorFixtureError.emptyTransitions
+    }
+    _ = try await ValidActorHost.verifyInvariants()
   }
+}
+
+private enum ValidActorFixtureError: Error {
+  case emptyTransitions
 }

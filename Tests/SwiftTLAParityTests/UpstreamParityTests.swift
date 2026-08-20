@@ -239,29 +239,25 @@ struct UpstreamParityNativeTests {
     @Test("HourClock native verifySpec")
     func hourClockNativeVerifySpec() throws { try HourClockModel.verifySpec() }
     @Test("HourClock native verifyTransitions")
-    func hourClockNativeVerifyTransitions() throws { try HourClockModel.verifyTransitions() }
+    func hourClockNativeVerifyTransitions() throws { #expect(try HourClockModel.verifyTransitions() > 0) }
     @Test("HourClock native verifyInvariants")
-    func hourClockNativeVerifyInvariants() throws { try HourClockModel.verifyInvariants() }
-    @Test("HourClock native transitionMatrix count")
-    func hourClockNativeTransitionMatrix() throws { #expect(try HourClockModel.transitionMatrix().count == 12) }
+    func hourClockNativeVerifyInvariants() throws { #expect(try HourClockModel.verifyInvariants() > 0) }
 
     // HourClock2
     @Test("HourClock2 native verifySpec")
     func hourClock2NativeVerifySpec() throws { try HourClock2Model.verifySpec() }
     @Test("HourClock2 native verifyTransitions")
-    func hourClock2NativeVerifyTransitions() throws { try HourClock2Model.verifyTransitions() }
+    func hourClock2NativeVerifyTransitions() throws { #expect(try HourClock2Model.verifyTransitions() > 0) }
     @Test("HourClock2 native verifyInvariants")
-    func hourClock2NativeVerifyInvariants() throws { try HourClock2Model.verifyInvariants() }
-    @Test("HourClock2 native transitionMatrix count")
-    func hourClock2NativeTransitionMatrix() throws { #expect(try HourClock2Model.transitionMatrix().count == 12) }
+    func hourClock2NativeVerifyInvariants() throws { #expect(try HourClock2Model.verifyInvariants() > 0) }
 
     // DieHard
     @Test("DieHard native verifySpec")
     func dieHardNativeVerifySpec() throws { try DieHardModel.verifySpec() }
     @Test("DieHard native verifyTransitions")
-    func dieHardNativeVerifyTransitions() throws { try DieHardModel.verifyTransitions() }
+    func dieHardNativeVerifyTransitions() throws { #expect(try DieHardModel.verifyTransitions() > 0) }
     @Test("DieHard native verifyInvariants")
-    func dieHardNativeVerifyInvariants() throws { try DieHardModel.verifyInvariants() }
+    func dieHardNativeVerifyInvariants() throws { #expect(try DieHardModel.verifyInvariants() > 0) }
 
     // TwoPhase
     @Test("TwoPhase native verifySpec")
@@ -286,6 +282,6 @@ struct UpstreamParityNativeTests {
     @Test("Barrier_N6 native verifySpec")
     func barrierNativeVerifySpec() throws { try BarrierModel.verifySpec() }
     @Test("Barrier_N6 native verifyTransitions")
-    func barrierNativeVerifyTransitions() throws { try BarrierModel.verifyTransitions() }
+    func barrierNativeVerifyTransitions() throws { #expect(try BarrierModel.verifyTransitions() > 0) }
 
 }
