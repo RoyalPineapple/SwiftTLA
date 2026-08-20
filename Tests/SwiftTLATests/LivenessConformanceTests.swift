@@ -1,5 +1,5 @@
 import Testing
-import SwiftTLA
+@testable import SwiftTLA
 
 @Suite(.serialized)
 struct LivenessConformanceTests {

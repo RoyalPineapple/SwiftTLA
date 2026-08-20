@@ -421,12 +421,19 @@ extension TemporalSymmetryConformanceRunner {
     inputs: URL,
     projectRoot: URL
   ) throws -> TemporalPropertyResult {
-    guard let property = model.spec.temporalProperties.first else {
+    guard model.spec.temporalProperties.isEmpty == false else {
       throw TemporalSymmetryGovernanceError.invalidField(record: declaredCase.id, field: "temporal property")
     }
-    let analysis = LivenessChecker(graph: exploration.graph).analyze(
-      property.expr, fairness: model.spec.fairness, actions: model.spec.actions,
-      initialStateIDs: exploration.initialStateIDs, isComplete: exploration.isComplete)
+    let analyses = LivenessChecker(
+      compilation: try model.spec.compile(),
+      graph: exploration.graph
+    ).analyze(
+      initialStateIDs: exploration.initialStateIDs,
+      isComplete: exploration.isComplete
+    )
+    guard let analysis = analyses.first else {
+      throw TemporalSymmetryGovernanceError.invalidField(record: declaredCase.id, field: "compiled temporal property")
+    }
     let resultURL = inputs.appendingPathComponent("swift-result.json")
     let enablednessURL = inputs.appendingPathComponent("enabledness.json")
     try writeJSON([

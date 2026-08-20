@@ -43,15 +43,11 @@ public struct ModelChecker {
             guard !self.spec.temporalProperties.isEmpty else { return exploration.result }
 
             let graph = exploration.graph
-            let lc = LivenessChecker(graph: graph)
-            for property in self.spec.temporalProperties {
-                let result = lc.analyze(
-                    property.expr,
-                    fairness: self.spec.fairness,
-                    actions: self.spec.actions,
-                    initialStateIDs: exploration.initialStateIDs,
-                    isComplete: exploration.isComplete
-                )
+            let analyses = LivenessChecker(compilation: compilation, graph: graph).analyze(
+                initialStateIDs: exploration.initialStateIDs,
+                isComplete: exploration.isComplete
+            )
+            for (property, result) in zip(self.spec.temporalProperties, analyses) {
                 switch result.status {
                 case .satisfied:
                     continue
