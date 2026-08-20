@@ -159,7 +159,7 @@ public struct CompiledSpecification: Sendable {
         let files = try entries.map { entry in
             let sectionPlan = entry.module.name == spec.name
                 ? directModuleSections
-                : try entry.module.directModuleSectionPlan()
+                : try entry.module.directModuleSectionPlan(layout: .init(spec: entry.module))
             return TLAModuleFile(
                 name: entry.module.name,
                 tla: entry.module.renderTLAModuleSource(sectionPlan: sectionPlan),
@@ -448,7 +448,7 @@ public extension TLASpec {
         var validator = BindingValidator(spec: self, layout: layout, closure: closure)
         let bindings = try validator.validate(spec: self)
         let model = try CompiledLowerer(bindings: bindings, closure: closure, layout: layout).lower(spec: self)
-        let directModuleSections = try directModuleSectionPlan()
+        let directModuleSections = try directModuleSectionPlan(layout: layout)
         let authoredPlusCalModule = try authoredPlusCalModule()
         return CompiledSpecification(
             spec: self,
@@ -462,7 +462,7 @@ public extension TLASpec {
         )
     }
 
-    func directModuleSectionPlan() throws -> DirectModuleSectionPlan {
+    internal func directModuleSectionPlan(layout: CompiledLayout) throws -> DirectModuleSectionPlan {
         let explicitDefinitions = definitions
         let explicitNames = Set(explicitDefinitions.compactMap(\.name))
         let formalDefinitions = formalOperatorDefinitions
@@ -501,8 +501,8 @@ public extension TLASpec {
         let definitionsAfterInstances = allDefinitions.filter {
             !instanceNames.isDisjoint(with: $0.dependencies)
         }
-        let controlSymbols = controlExportSymbols(sourceAlgorithms, actions: actions)
-        let emittedActionNames = tlaActionNames(actions, preferredNames: controlSymbols.actionNames)
+        let renderedControlNames = layout.directActionNames(actions: actions)
+        let emittedActionNames = tlaActionNames(actions, preferredNames: renderedControlNames)
         return DirectModuleSectionPlan(
             definitionsBeforeInstances: try orderDirectDefinitions(
                 definitionsBeforeInstances,
@@ -515,7 +515,7 @@ public extension TLASpec {
             actions: actions.map {
                 .init(
                     name: $0.name,
-                    body: exportControlStates(in: $0.body, using: controlSymbols),
+                    body: renderControlReferences(in: $0.body, visibleNames: renderedControlNames),
                     bindings: $0.bindings
                 )
             },
@@ -608,25 +608,12 @@ private func tlaActionNames(
     return emitted
 }
 
-private struct ControlExportSymbols {
-    let actionNames: [String: String]
-}
-
-private func controlExportSymbols(
-    _ algorithms: [Algorithm],
-    actions: [NamedAction]
-) -> ControlExportSymbols {
+private extension CompiledLayout {
+    func directActionNames(actions: [NamedAction]) -> [String: String] {
     let actionNames = Set(actions.map(\.name))
-    var candidates: [(qualified: String, label: String)] = []
-    for algorithm in algorithms {
-        for procedure in algorithm.model.procedures {
-            for step in procedure.steps {
-                candidates.append((
-                    qualified: "procedure.\(procedure.name).\(step.label.name)",
-                    label: step.label.name
-                ))
-            }
-        }
+    let candidates = controlLabels.compactMap { label -> (qualified: String, label: String)? in
+        guard case .procedure = label.owner else { return nil }
+        return (qualified: label.renderedName, label: label.sourceName)
     }
 
     let labelCounts = Dictionary(grouping: candidates, by: { $0.label }).mapValues { $0.count }
@@ -636,17 +623,18 @@ private func controlExportSymbols(
             && labelCounts[$0.label] == 1
             && !unqualifiedActions.contains($0.label)
     }
-    return ControlExportSymbols(actionNames: Dictionary(uniqueKeysWithValues: usable.map { ($0.qualified, $0.label) }))
+    return Dictionary(uniqueKeysWithValues: usable.map { ($0.qualified, $0.label) })
+    }
 }
 
-private func exportControlStates(
+private func renderControlReferences(
     in action: ActionExpr,
-    using symbols: ControlExportSymbols
+    visibleNames: [String: String]
 ) -> ActionExpr {
     func controlValue(_ expression: StateExpr) -> StateExpr {
         switch expression {
         case .value(.string(let value)):
-            return .value(.string(symbols.actionNames[value] ?? value))
+            return .value(.string(visibleNames[value] ?? value))
         case .except(let function, let key, let value):
             return .except(function, key, controlValue(value))
         case .tupleLiteral(let values):
@@ -692,15 +680,15 @@ private func exportControlStates(
     case .guard_(let condition):
         return .guard_(controlGuard(condition))
     case .existsAction(let name, let set, let body):
-        return .existsAction(name, set, exportControlStates(in: body, using: symbols))
+        return .existsAction(name, set, renderControlReferences(in: body, visibleNames: visibleNames))
     case .ifElse(let condition, let then, let otherwise):
-        return .ifElse(controlGuard(condition), exportControlStates(in: then, using: symbols), exportControlStates(in: otherwise, using: symbols))
+        return .ifElse(controlGuard(condition), renderControlReferences(in: then, visibleNames: visibleNames), renderControlReferences(in: otherwise, visibleNames: visibleNames))
     case .define(let name, let value, let body):
-        return .define(name, value, exportControlStates(in: body, using: symbols))
+        return .define(name, value, renderControlReferences(in: body, visibleNames: visibleNames))
     case .and(let lhs, let rhs):
-        return .and(exportControlStates(in: lhs, using: symbols), exportControlStates(in: rhs, using: symbols))
+        return .and(renderControlReferences(in: lhs, visibleNames: visibleNames), renderControlReferences(in: rhs, visibleNames: visibleNames))
     case .or(let lhs, let rhs):
-        return .or(exportControlStates(in: lhs, using: symbols), exportControlStates(in: rhs, using: symbols))
+        return .or(renderControlReferences(in: lhs, visibleNames: visibleNames), renderControlReferences(in: rhs, visibleNames: visibleNames))
     }
 }
 
