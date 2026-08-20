@@ -75,13 +75,13 @@ struct ProcedureLoweringTests {
         #expect(afterCall["pc"] == .string("procedure.work.enter"))
         #expect(afterCall["workValue"] == .int(7))
         #expect(afterCall["workOffset"] == .int(1))
-        #expect(afterCall["__pcal_stack"] != .tuple([]))
+        #expect(afterCall["stack"] != .tuple([]))
 
         let afterReturn = try apply("procedure.work.enter", in: spec, to: afterCall)
         #expect(afterReturn["output"] == .int(8))
         #expect(afterReturn["workValue"] == .int(0))
         #expect(afterReturn["workOffset"] == .int(1))
-        #expect(afterReturn["__pcal_stack"] == .tuple([]))
+        #expect(afterReturn["stack"] == .tuple([]))
         #expect(afterReturn["pc"] == .string("finished"))
     }
 
@@ -122,14 +122,14 @@ struct ProcedureLoweringTests {
         let inOuter = try apply("start", in: spec, to: initial)
         let inInner = try apply("procedure.outer.enter", in: spec, to: inOuter)
         #expect(inInner["pc"] == .string("procedure.inner.enter"))
-        #expect(inInner["__pcal_stack"] == inOuter["__pcal_stack"])
+        #expect(inInner["stack"] == inOuter["stack"])
         #expect(inInner["innerValue"] == .int(4))
 
         let afterReturn = try apply("procedure.inner.enter", in: spec, to: inInner)
         #expect(afterReturn["output"] == .int(4))
         #expect(afterReturn["outerValue"] == .int(0))
         #expect(afterReturn["innerValue"] == .int(0))
-        #expect(afterReturn["__pcal_stack"] == .tuple([]))
+        #expect(afterReturn["stack"] == .tuple([]))
         #expect(afterReturn["pc"] == .string("finished"))
     }
 
@@ -187,8 +187,8 @@ struct ProcedureLoweringTests {
         let oneInInner = try apply("procedure.outer.enter", process: .int(1), in: spec, to: bothInOuter)
         #expect(try functionValue("innerValue", key: .int(1), in: oneInInner) == .int(1))
         #expect(try functionValue("innerValue", key: .int(2), in: oneInInner) == .int(0))
-        let stackBeforeNestedCall = try functionValue("__pcal_stack", key: .int(1), in: bothInOuter)
-        let stackDuringNestedCall = try functionValue("__pcal_stack", key: .int(1), in: oneInInner)
+        let stackBeforeNestedCall = try functionValue("stack", key: .int(1), in: bothInOuter)
+        let stackDuringNestedCall = try functionValue("stack", key: .int(1), in: oneInInner)
         #expect(stackDuringNestedCall != stackBeforeNestedCall)
 
         let oneReturned = try apply("procedure.inner.enter", process: .int(1), in: spec, to: oneInInner)

@@ -24,7 +24,7 @@ enum AlgorithmLoweringError: Error, CustomStringConvertible {
 
 enum AlgorithmLowerer {
     private static let controlVariable = "pc"
-    private static let stackVariable = "__pcal_stack"
+    private static let stackVariable = "stack"
     // These frame keys are the names emitted by the official PlusCal
     // translator.  The runtime stack remains an implementation detail, but
     // its formal representation must be comparable to the independent

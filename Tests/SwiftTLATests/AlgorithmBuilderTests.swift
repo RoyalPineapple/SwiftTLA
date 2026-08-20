@@ -113,6 +113,14 @@ struct AlgorithmBuilderTests {
         )
         #expect(afterCall["parameter0"] == .int(7))
         #expect(afterCall["pc"] == .string("procedure.work.enter"))
+
+        let rendered = try TLASpec("ProcedureBuilderExport") {
+            Definition("Marker == \"procedure.work.enter\"")
+            algorithm
+        }.compile().renderedTLAModuleBundle().tla
+        #expect(rendered.contains("Marker == \"procedure.work.enter\""))
+        #expect(rendered.contains("pc' = \"enter\""))
+        #expect(!rendered.contains("pc' = \"procedure.work.enter\""))
     }
 
     @Test("procedure source bindings normalize to builder formal slots")
