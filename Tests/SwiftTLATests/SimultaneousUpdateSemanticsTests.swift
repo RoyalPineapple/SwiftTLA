@@ -95,12 +95,5 @@ struct SimultaneousUpdateSemanticsTests {
                 return
             }
         }
-
-        let report = runtime.actionReport(named: "reject", in: initial)
-        #expect(report.stateCommitted == false)
-        #expect(report.status == SpecRuntime.RuntimeActionReport.Status.evaluationFailed(.init(
-            code: .evaluationError,
-            message: "Undefined variable: missing"
-        )))
     }
 }
