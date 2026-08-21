@@ -316,14 +316,6 @@ public extension TLASpec {
   }
 }
 
-private func tlaDeclaredSymbol(_ text: String) -> String? {
-  let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-  guard let first = trimmed.split(whereSeparator: \.isWhitespace).first else { return nil }
-  let name = first.split(separator: "(", maxSplits: 1).first
-  guard let name, !name.isEmpty else { return nil }
-  return String(name)
-}
-
 @discardableResult
 public func SymmetricCollection<Element: Identifiable, Value: TLAValueType>(
   _ collection: SymmetricCollectionVar<Element, Value>,
