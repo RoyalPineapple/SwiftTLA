@@ -25,6 +25,20 @@ struct AlgorithmPlusCalRendererTests {
         var tlaValue: TLAValue { .string(rawValue) }
     }
 
+    @Test("rejects residual anonymous formal lambdas")
+    func rejectsResidualAnonymousFormalLambdas() {
+        #expect(StateExpr.plusCalExpression(from: .variable("count"), using: { $0 }) != nil)
+        #expect(StateExpr.plusCalExpression(from: .operatorApplication(
+            .lambda(.init(parameters: ["value"], body: .variable("value"))),
+            [.value(0)]
+        ), using: { $0 }) != nil)
+        #expect(StateExpr.plusCalExpression(from: .foldFunction(
+            .init(parameters: ["left", "right"], body: .add(.variable("left"), .variable("right"))),
+            initial: 0,
+            sequence: .tupleLiteral([])
+        ), using: { $0 }) == nil)
+    }
+
     @Test("renders process declarations, source labels, and structured statements")
     func rendersProcessAlgorithm() throws {
         let algorithm = Algorithm("RenderedProcess") {

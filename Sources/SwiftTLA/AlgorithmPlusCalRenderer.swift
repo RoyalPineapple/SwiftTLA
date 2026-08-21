@@ -364,19 +364,17 @@ internal struct AlgorithmPlusCalRenderer {
         let sourceValue = localFamilyRoots.reduce(value) { expression, root in
             renameVar("__pcal_local_family:\(root)", to: root, in: expression)
         }
-        let rendered = StateExpr.renamingRecursiveCalls(
-            in: renameVar("__pcal_self", to: "self", in: sourceValue),
-            using: { $0 },
-            lowerAnonymousLambdaApplications: true
-        ).description
-        guard !rendered.contains("LAMBDA") else {
+        guard let renderedExpression = StateExpr.plusCalExpression(
+            from: renameVar("__pcal_self", to: "self", in: sourceValue),
+            using: { $0 }
+        ) else {
             throw unsupported(
                 path: path,
                 expected: "a direct anonymous formal-lambda application with value arguments, or a named operator reference",
                 actual: "a residual anonymous formal lambda that PlusCal cannot render without changing higher-order semantics"
             )
         }
-        return rendered
+        return renderedExpression.description
     }
 
     private var localFamilyRoots: [String] {
