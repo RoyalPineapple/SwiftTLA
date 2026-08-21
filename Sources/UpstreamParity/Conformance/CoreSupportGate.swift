@@ -648,6 +648,9 @@ public struct CoreSupportGate: Sendable {
       let swiftRun = swiftLoaded.run
       let tlcRun = tlcLoaded.run
       var reasons = Set<CoreSupportReasonCode>()
+      guard swiftEvidence.receiptContext.maximumStateLimit == declaredCase.maximumStateLimit,
+            tlcEvidence.receiptContext.maximumStateLimit == declaredCase.maximumStateLimit
+      else { throw EvidenceError.invalidJSON }
       let expectedCase = try declaredCaseContract(declaredCase)
       if !caseMatches(caseJSON, declaredCase, expectedCase)
         || !argumentsMatch(argumentsJSON, declaredCase) {

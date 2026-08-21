@@ -46,18 +46,17 @@ public struct TLALiveMachinePosition: Comparable, Codable, Sendable, CustomStrin
 
 /// One complete committed observation of a live runtime.
 ///
-/// The snapshot binds the runtime identity, ordering position, and the validated state projection that was current at that
-/// position. Consumers read one complete committed state; they never see a
-/// mixture of fields from different states or a raw formal-state map.
-public struct TLALiveMachineSnapshot: Sendable, Equatable {
+/// The snapshot binds the runtime identity, ordering position, and storage
+/// state that was current at that position.
+package struct TLALiveMachineSnapshot: Sendable, Equatable {
     public let identity: TLALiveMachineIdentity
     public let position: TLALiveMachinePosition
-    public let state: TLAStateProjection
+    public let state: GeneratedMachineStorage.State
 
     public init(
         identity: TLALiveMachineIdentity,
         position: TLALiveMachinePosition,
-        state: TLAStateProjection
+        state: GeneratedMachineStorage.State
     ) {
         self.identity = identity
         self.position = position
@@ -66,7 +65,7 @@ public struct TLALiveMachineSnapshot: Sendable, Equatable {
 }
 
 /// The result of requesting the current snapshot of a live runtime.
-public enum TLALiveMachineCurrentResult: Sendable, Equatable {
+package enum TLALiveMachineCurrentResult: Sendable, Equatable {
     /// A complete committed snapshot of the active runtime.
     case snapshot(TLALiveMachineSnapshot)
     /// The runtime can no longer serve snapshots.
@@ -100,7 +99,7 @@ public enum TLALiveMachineUnavailableReason: Sendable, Equatable, CustomStringCo
 /// Rejection is a pre-acceptance outcome: the requested transition is never
 /// evaluated on these paths and no state or position changes. The retained
 /// snapshot lets a caller prove that position and state did not move.
-public struct TLALiveActionRejection<Action: Sendable & Equatable>: Sendable, Equatable {
+package struct TLALiveActionRejection<Action: Sendable & Equatable>: Sendable, Equatable {
     public enum Reason: Sendable, Equatable, CustomStringConvertible {
         case runtimeUnavailable(TLALiveMachineUnavailableReason)
         case actionNotEnabled
@@ -149,7 +148,7 @@ public struct TLALiveActionRejection<Action: Sendable & Equatable>: Sendable, Eq
 /// A failure is the ordinary noncommit outcome of accepted execution: the
 /// runtime attempted the transition and could not complete it, and the
 /// retained snapshot proves the runtime's state and position are unchanged.
-public struct TLALiveActionFailure<Action: Sendable & Equatable>: Sendable, Equatable {
+package struct TLALiveActionFailure<Action: Sendable & Equatable>: Sendable, Equatable {
     public enum Code: String, Sendable, Equatable {
         case evaluationFailed
         case decodeFailed
@@ -184,7 +183,7 @@ public struct TLALiveActionFailure<Action: Sendable & Equatable>: Sendable, Equa
 /// A commit is the only outcome that means mutation occurred. The runtime
 /// replaced its state and advanced its position atomically, so
 /// `after.position` is exactly one past `before.position`.
-public struct TLALiveMachineCommit<Action: Sendable & Equatable>: Sendable, Equatable {
+package struct TLALiveMachineCommit<Action: Sendable & Equatable>: Sendable, Equatable {
     public let requestID: UUID
     public let action: Action
     public let before: TLALiveMachineSnapshot
@@ -208,22 +207,22 @@ public struct TLALiveMachineCommit<Action: Sendable & Equatable>: Sendable, Equa
 /// An accepted request completes as exactly one committed transition or one
 /// normal failure; caller cancellation cannot produce or relabel either
 /// outcome. Rejection is a pre-acceptance lifecycle or validation outcome.
-public enum TLALiveActionOutcome<Action: Sendable & Equatable>: Sendable, Equatable {
+package enum TLALiveActionOutcome<Action: Sendable & Equatable>: Sendable, Equatable {
     case committed(TLALiveMachineCommit<Action>)
     case rejected(TLALiveActionRejection<Action>)
     case failed(TLALiveActionFailure<Action>)
 }
 
 /// The typed transition behavior of a live runtime.
-public struct TLALiveMachineTransitionDriver<Action: Sendable & Equatable>: Sendable {
-    public let successors: @Sendable (TLAStateProjection, Action) throws -> [TLAStateProjection]
+package struct TLALiveMachineTransitionDriver<Action: Sendable & Equatable>: Sendable {
+    public let successors: @Sendable (GeneratedMachineStorage.State, Action) throws -> [GeneratedMachineStorage.State]
     public let validateAction: @Sendable (Action) -> TLALiveActionRejection<Action>.Reason?
-    public let decodeState: @Sendable (TLAStateProjection) throws -> Void
+    public let decodeState: @Sendable (GeneratedMachineStorage.State) throws -> Void
 
     public init(
-        successors: @escaping @Sendable (TLAStateProjection, Action) throws -> [TLAStateProjection],
+        successors: @escaping @Sendable (GeneratedMachineStorage.State, Action) throws -> [GeneratedMachineStorage.State],
         validateAction: @escaping @Sendable (Action) -> TLALiveActionRejection<Action>.Reason?,
-        decodeState: @escaping @Sendable (TLAStateProjection) throws -> Void
+        decodeState: @escaping @Sendable (GeneratedMachineStorage.State) throws -> Void
     ) {
         self.successors = successors
         self.validateAction = validateAction
@@ -235,16 +234,14 @@ public struct TLALiveMachineTransitionDriver<Action: Sendable & Equatable>: Send
 ///
 /// Handle copies share the same storage actor and stable identity, so a
 /// commit made through one handle is immediately visible through every other
-/// handle of the same runtime. A handle exposes identity, schema, current
-/// snapshots, and typed action execution.
-public struct TLALiveMachine<Action: Sendable & Equatable>: Sendable {
+/// handle of the same runtime. A handle exposes identity, current snapshots,
+/// and typed action execution.
+package struct TLALiveMachine<Action: Sendable & Equatable>: Sendable {
     public let identity: TLALiveMachineIdentity
-    public let schema: MachineSchema
     private let storage: TLALiveMachineStorage<Action>
 
-    init(identity: TLALiveMachineIdentity, schema: MachineSchema, storage: TLALiveMachineStorage<Action>) {
+    init(identity: TLALiveMachineIdentity, storage: TLALiveMachineStorage<Action>) {
         self.identity = identity
-        self.schema = schema
         self.storage = storage
     }
 
@@ -272,54 +269,49 @@ public struct TLALiveMachine<Action: Sendable & Equatable>: Sendable {
 /// Creation returns the owner, which vends the common handle and holds the
 /// only explicit shutdown authority. Ending is idempotent and explicit;
 /// releasing non-owner handles never ends an otherwise live runtime.
-public final class TLALiveMachineOwner<Action: Sendable & Equatable>: Sendable {
+package final class TLALiveMachineOwner<Action: Sendable & Equatable>: Sendable {
     private let storage: TLALiveMachineStorage<Action>
     public let identity: TLALiveMachineIdentity
-    public let schema: MachineSchema
 
-    private init(storage: TLALiveMachineStorage<Action>, identity: TLALiveMachineIdentity, schema: MachineSchema) {
+    private init(storage: TLALiveMachineStorage<Action>, identity: TLALiveMachineIdentity) {
         self.storage = storage
         self.identity = identity
-        self.schema = schema
     }
 
     /// Creates a new runtime with a fresh identity, an initial committed
     /// state, and the supplied formal transition driver.
     public static func create(
-        schema: MachineSchema,
-        initial: TLAStateProjection,
+        initial: GeneratedMachineStorage.State,
         driver: TLALiveMachineTransitionDriver<Action>
     ) -> TLALiveMachineOwner<Action> {
         let identity = TLALiveMachineIdentity()
-        let storage = TLALiveMachineStorage(identity: identity, schema: schema, initial: initial, driver: driver)
-        return TLALiveMachineOwner(storage: storage, identity: identity, schema: schema)
+        let storage = TLALiveMachineStorage(identity: identity, initial: initial, driver: driver)
+        return TLALiveMachineOwner(storage: storage, identity: identity)
     }
 
     /// Creates a runtime with a focused-test observation mailbox capacity.
     ///
-    /// Production callers use ``create(schema:initial:driver:)`` and receive
+    /// Production callers use ``create(initial:driver:)`` and receive
     /// the fixed delivery policy. This internal seam exists only to make loss
     /// behavior deterministic in the package's contract tests.
     static func create(
-        schema: MachineSchema,
-        initial: TLAStateProjection,
+        initial: GeneratedMachineStorage.State,
         driver: TLALiveMachineTransitionDriver<Action>,
         observationMailboxCapacity: Int
     ) -> TLALiveMachineOwner<Action> {
         let identity = TLALiveMachineIdentity()
         let storage = TLALiveMachineStorage(
             identity: identity,
-            schema: schema,
             initial: initial,
             driver: driver,
             observationMailboxCapacity: observationMailboxCapacity
         )
-        return TLALiveMachineOwner(storage: storage, identity: identity, schema: schema)
+        return TLALiveMachineOwner(storage: storage, identity: identity)
     }
 
     /// The common handle for this runtime.
     public var handle: TLALiveMachine<Action> {
-        TLALiveMachine(identity: identity, schema: schema, storage: storage)
+        TLALiveMachine(identity: identity, storage: storage)
     }
 
     /// Ends this runtime. Idempotent; after ending, snapshots report
@@ -336,9 +328,8 @@ public final class TLALiveMachineOwner<Action: Sendable & Equatable>: Sendable {
 /// once a request is accepted it resolves as exactly one commit or failure.
 actor TLALiveMachineStorage<Action: Sendable & Equatable> {
     let identity: TLALiveMachineIdentity
-    let schema: MachineSchema
     let driver: TLALiveMachineTransitionDriver<Action>
-    var state: TLAStateProjection
+    var state: GeneratedMachineStorage.State
     var position = TLALiveMachinePosition(value: 0)
     private var isEnded = false
     private let observationMailboxCapacity: Int
@@ -347,13 +338,11 @@ actor TLALiveMachineStorage<Action: Sendable & Equatable> {
 
     init(
         identity: TLALiveMachineIdentity,
-        schema: MachineSchema,
-        initial: TLAStateProjection,
+        initial: GeneratedMachineStorage.State,
         driver: TLALiveMachineTransitionDriver<Action>,
         observationMailboxCapacity: Int = 64
     ) {
         self.identity = identity
-        self.schema = schema
         self.state = initial
         self.driver = driver
         self.observationMailboxCapacity = max(1, observationMailboxCapacity)
@@ -455,7 +444,7 @@ actor TLALiveMachineStorage<Action: Sendable & Equatable> {
         if let reason = driver.validateAction(action) {
             return rejected(reason, action: action, requestID: requestID, current: before)
         }
-        let candidates: [TLAStateProjection]
+        let candidates: [GeneratedMachineStorage.State]
         do {
             candidates = try driver.successors(state, action)
         } catch {

@@ -163,9 +163,7 @@ struct CanonicalRunEvidence: Codable, Sendable {
       receiptContext: receiptContext,
       graph: .init(digest: receipt.graphDigest, chunks: manifest)
     )
-    let encoder = JSONEncoder()
-    encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-    try encoder.encode(evidence).write(to: url, options: .atomic)
+    try ConformanceEvidence.writePrettyCanonical(evidence, to: url)
   }
 
   static func read(from url: URL) throws -> (evidence: CanonicalRunEvidence, run: CanonicalRun) {

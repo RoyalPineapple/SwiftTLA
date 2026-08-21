@@ -105,17 +105,9 @@ The renderer prints the compiled declaration plan.
 
 ## Explore and compare finite behavior
 
-`ModelChecker` explores the compiled specification with a declared finite
-exploration configuration.
-
-```swift
-let checker = ModelChecker(compilation: compilation)
-let result = try checker.check()
-```
-
-The runtime evaluates compiled expressions, values, state slots, and action
-identities. `TLAStateProjection` is the validated formal-tool boundary for
-state inspection and serialization.
+The conformance harness explores the compiled specification with a declared
+finite exploration configuration. The runtime evaluates compiled expressions,
+values, state slots, and action identities.
 
 Core conformance runs SwiftTLA exploration and TLC against the same rendered
 bundle. Both sides produce a canonical graph. Exact graph comparison decides
@@ -147,8 +139,8 @@ including abstract stuttering.
 | Authored structure | `#spec` and result builders |
 | Name binding and module linking | compilation |
 | IDs and slots | `CompiledLayout` |
-| Runtime evaluation | `CompiledRuntime` and `CompiledEvaluator` |
-| Generated Swift surface | `MachineSurfacePlan` and macros |
+| Runtime evaluation | private compiled runtime and evaluator |
+| Generated Swift surface | compilation and macros |
 | TLA+ and PlusCal text | renderers |
 | TLC staging and event parsing | TLC adapter |
 | Graph comparison and evidence | canonical graph and conformance components |

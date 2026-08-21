@@ -14,7 +14,7 @@ struct NestedComposableMacroConformanceTests {
             }
             Constraint(value <= 2)
         }
-        let graph = try ModelChecker(spec: spec).exploreGraph()
+        let graph = try ModelChecker(compilation: try spec.compile()).exploreGraph()
         let compilation = try spec.compile()
 
         for (sourceID, source) in graph.states {

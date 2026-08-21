@@ -10,17 +10,13 @@ Create the runtime from its generated model.
 
 ```swift
 let live = try Counter.makeLive()
-
-assert(live.schema == Counter.machineSchema)
 ```
 
 Calling `await live.end()` is idempotent. It ends the runtime for its typed adapters and observers.
 
-The generated model validates its schema before it creates the runtime.
-
 ## Inspect a live machine
 
-`Live` exposes a stable identity, the generated schema, and an atomic typed snapshot.
+`Live` exposes a stable identity and an atomic typed snapshot.
 
 ```swift
 switch try await live.current() {

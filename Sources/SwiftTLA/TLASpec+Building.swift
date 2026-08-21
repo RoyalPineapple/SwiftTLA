@@ -317,7 +317,7 @@ struct AuthoredPlusCalDeclarationSections {
   }
 }
 
-public func assignedVars(_ e: ActionExpr) -> Set<String> {
+package func assignedVars(_ e: ActionExpr) -> Set<String> {
   switch e {
   case .assign(let v, _), .chooseAction(let v, _): return [v]
   case .unchanged, .guard_: return []
@@ -329,7 +329,7 @@ public func assignedVars(_ e: ActionExpr) -> Set<String> {
   }
 }
 
-public func explicitUnchanged(_ e: ActionExpr) -> Set<String> {
+package func explicitUnchanged(_ e: ActionExpr) -> Set<String> {
   switch e {
   case .unchanged(let v): return [v]
   case .and(let a, let b): return explicitUnchanged(a).union(explicitUnchanged(b))

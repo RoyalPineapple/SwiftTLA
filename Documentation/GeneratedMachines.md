@@ -330,23 +330,6 @@ For an action problem, collect these public values:
 - the `GeneratedMachineError`, when execution fails
 
 For a macro expansion problem, collect the macro diagnostic and model source.
-When the macro provides the invariant name and trace, record them. Record the explored
-state count, limit, Swift toolchain, and platform context.
-
-## Limits and evidence
-
-Generated-machine verification depends on a declared finite state space and a configured exploration limit. It is not a proof for unbounded models.
-
-The generated `verifySpec(configuration:)`,
-`verifyTransitions(configuration:)`, and `verifyInvariants(configuration:)`
-use the supplied `FiniteExplorationConfiguration`. They return verified state,
-transition, and invariant-check counts. A limit failure is an error result.
-
-The public-workflow command records bounded evidence for its declared fixtures.
-Its report records the evidence authority and checked scope. See
-[Public workflow conformance](PublicWorkflowConformance.md).
-
-P1 core graph evidence and P3 temporal and symmetry evidence have separate registers and boundaries. A generated-machine example does not widen either surface. See [Core support](CoreSupport.md) and [Temporal and symmetry conformance](TemporalSymmetryConformance.md).
 
 ## SwiftUI
 
@@ -416,20 +399,16 @@ The following table is the public inventory for this guide. Sources identify the
 | `@TLAActor` | Requires a nested type. Its generated actor accepts the enclosing model's typed `Live` value. | [Macros.swift](../Sources/SwiftTLAMacros/Macros.swift), [MacroExpander+Adapters.swift](../Sources/SwiftTLAPlugin/MacroExpander+Adapters.swift) |
 | `@TLAObservable` | Requires a nested type. Its generated main-actor adapter accepts the enclosing model's typed `Live` value and reduces observation events. | [Macros.swift](../Sources/SwiftTLAMacros/Macros.swift), [MacroExpander+Adapters.swift](../Sources/SwiftTLAPlugin/MacroExpander+Adapters.swift) |
 | Generated `Live` | Creates and owns one typed live runtime. | [MacroExpander+LiveMachine.swift](../Sources/SwiftTLAPlugin/MacroExpander+LiveMachine.swift) |
-| `GeneratedMachineError` | Reports invalid initial state selection, unavailable successors, and live-machine failures. | [CanonicalMachine.swift](../Sources/SwiftTLA/CanonicalMachine.swift) |
-| Generated `VerificationError` | Error type returned by generated verification helpers when the bounded check does not succeed. | [MacroExpander+Generation.swift](../Sources/SwiftTLAPlugin/MacroExpander+Generation.swift) |
-| Generated `verifySpec(configuration:)` | Runs the generated bounded specification check with its declared finite-exploration configuration and returns its explored-state count. | [MacroExpander+Generation.swift](../Sources/SwiftTLAPlugin/MacroExpander+Generation.swift) |
-| Generated `verifyTransitions(configuration:)` | Compares each generated transition with the runtime successors for that source state and returns the verified transition count. | [MacroExpander+Generation.swift](../Sources/SwiftTLAPlugin/MacroExpander+Generation.swift) |
-| Generated `verifyInvariants(configuration:)` | Checks declared invariants on explored transition targets and returns the verified invariant-check count. | [MacroExpander+Generation.swift](../Sources/SwiftTLAPlugin/MacroExpander+Generation.swift) |
+| `GeneratedMachineError` | Reports invalid initial state selection, unavailable successors, and live-machine failures. | [GeneratedMachineError.swift](../Sources/SwiftTLA/GeneratedMachineError.swift) |
 | Generated `State` | Holds model variables with generated Swift types. Application code reads this type through `state`, before, and after. | [MacroExpander.swift](../Sources/SwiftTLAPlugin/MacroExpander.swift) |
-| Generated `ActionLabel` | Represents declared actions with typed parameters. | [MacroExpander+Generation.swift](../Sources/SwiftTLAPlugin/MacroExpander+Generation.swift) |
-| Generated `TransitionResult` | Records the typed action and typed state before and after a successful transition. | [MacroExpander+CanonicalMachine.swift](../Sources/SwiftTLAPlugin/MacroExpander+CanonicalMachine.swift) |
-| Generated `availableActions()` | Returns typed available action labels for a model that declares actions. | [MacroExpander+CanonicalMachine.swift](../Sources/SwiftTLAPlugin/MacroExpander+CanonicalMachine.swift) |
-| Generated `apply(_:)` | Executes a typed `ActionLabel`. It returns `TransitionResult` or throws. | [MacroExpander+CanonicalMachine.swift](../Sources/SwiftTLAPlugin/MacroExpander+CanonicalMachine.swift) |
-| Generated `MachineObservation` | Records typed state and currently available typed action labels. | [MacroExpander+CanonicalMachine.swift](../Sources/SwiftTLAPlugin/MacroExpander+CanonicalMachine.swift) |
-| Generated `machineObservation()` | Returns `MachineObservation` or throws. | [MacroExpander+CanonicalMachine.swift](../Sources/SwiftTLAPlugin/MacroExpander+CanonicalMachine.swift) |
+| Generated `ActionLabel` | Represents declared actions with typed parameters. | [MacroExpander.swift](../Sources/SwiftTLAPlugin/MacroExpander.swift) |
+| Generated `TransitionResult` | Records the typed action and typed state before and after a successful transition. | [MacroExpander+GeneratedMachineStorage.swift](../Sources/SwiftTLAPlugin/MacroExpander+GeneratedMachineStorage.swift) |
+| Generated `availableActions()` | Returns typed available action labels for a model that declares actions. | [MacroExpander+GeneratedMachineStorage.swift](../Sources/SwiftTLAPlugin/MacroExpander+GeneratedMachineStorage.swift) |
+| Generated `apply(_:)` | Executes a typed `ActionLabel`. It returns `TransitionResult` or throws. | [MacroExpander+GeneratedMachineStorage.swift](../Sources/SwiftTLAPlugin/MacroExpander+GeneratedMachineStorage.swift) |
+| Generated `MachineObservation` | Records typed state and currently available typed action labels. | [MacroExpander+GeneratedMachineStorage.swift](../Sources/SwiftTLAPlugin/MacroExpander+GeneratedMachineStorage.swift) |
+| Generated `machineObservation()` | Returns `MachineObservation` or throws. | [MacroExpander+GeneratedMachineStorage.swift](../Sources/SwiftTLAPlugin/MacroExpander+GeneratedMachineStorage.swift) |
 | Generated `Live.execute(_:)` | Executes a typed label through the existing live runtime and returns an explicit live outcome. | [MacroExpander+LiveMachine.swift](../Sources/SwiftTLAPlugin/MacroExpander+LiveMachine.swift) |
-| Generated `synchronousMachineObservation()` | Returns current state and availability without an async boundary on a canonical generated model. | [MacroExpander+CanonicalMachine.swift](../Sources/SwiftTLAPlugin/MacroExpander+CanonicalMachine.swift) |
+| Generated `synchronousMachineObservation()` | Returns current state and availability without an async boundary on a generated model. | [MacroExpander+GeneratedMachineStorage.swift](../Sources/SwiftTLAPlugin/MacroExpander+GeneratedMachineStorage.swift) |
 
 ## Stable contract
 
@@ -443,8 +422,8 @@ and observable adapters are the application-facing generated API.
 | Claim area | Evidence |
 |---|---|
 | Public annotations | `Sources/SwiftTLAMacros/Macros.swift` |
-| Generated model and adapter members | `Sources/SwiftTLAPlugin/MacroExpander+CanonicalMachine.swift`, `Sources/SwiftTLAPlugin/MacroExpander+Adapters.swift`, and `Sources/SwiftTLAPlugin/MacroExpander+Generation.swift` |
-| Observation and error behavior | `Sources/SwiftTLA/CanonicalMachine.swift` and `Sources/SwiftTLA/CompiledRuntime.swift` |
+| Generated model and adapter members | `Sources/SwiftTLAPlugin/MacroExpander+GeneratedMachineStorage.swift`, `Sources/SwiftTLAPlugin/MacroExpander+Adapters.swift`, and `Sources/SwiftTLAPlugin/MacroExpander.swift` |
+| Observation and error behavior | `Sources/SwiftTLA/GeneratedMachineError.swift` and `Sources/SwiftTLA/LiveMachine.swift` |
 | Action failure preserves state | Generated `apply(_:)` and `Tests/SwiftTLATests/GeneratedStateMachineTests.swift` |
 | Public-workflow evidence labels | [Public workflow conformance](PublicWorkflowConformance.md) |
 | Compilable examples | The fixtures named beside each example ID |

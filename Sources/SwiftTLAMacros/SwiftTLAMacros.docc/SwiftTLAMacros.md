@@ -59,13 +59,10 @@ and parity fixtures. They are not a second application authoring style.
 
 ## Compiler outcomes
 
-The generated model exposes `compiledSpecification() throws`. It returns the
-same compiled model used by generated metadata, runtime execution, checking,
-and formal export. A `CompilationDiagnostic` names the failed stage and safe
-next action. Fix the source model before you use an output from that stage.
-
-The generated-machine contract reports `exact`, `difference`, or
-`unavailable`. These are finite diagnostic results. Read the contract guide in
+`try Model.spec.compile()` returns the compiled specification used by formal
+rendering and bounded checking. Generated machines compile internally before
+they create typed state. A `CompilationDiagnostic` names the failed stage and
+safe next action.
 `SwiftTLA` before you make a broader behavior claim.
 
 ## Topics

@@ -12,14 +12,11 @@ private func isTLAModuleIdentifier(_ name: String) -> Bool {
     }
 }
 
-/// Identifies the canonical formal interpretation consumed by SwiftTLA tools.
-///
-/// The identifier is deterministic for one semantic `TLASpec`; it deliberately
-/// excludes Swift-only presentation facts such as generated type names.
+/// Identifies one canonical compiled specification.
 public struct CompilationIdentity: Sendable, Hashable, CustomStringConvertible {
     public let value: String
 
-    public init(value: String) {
+    init(value: String) {
         self.value = value
     }
 
@@ -139,7 +136,7 @@ public struct CompiledSpecification: Sendable {
         )
     }
 
-    public func initialStateProjections() throws -> [TLAStateProjection] {
+    package func initialStateProjections() throws -> [TLAStateProjection] {
         try CompiledRuntime(compilation: self).initialStates().map {
             try $0.projection(using: layout)
         }
@@ -268,40 +265,16 @@ public struct CompiledSpecification: Sendable {
 
     /// Renders a complete TLA+/CFG bundle from the already-linked closure.
     public func renderedTLAModuleBundle() throws -> TLAModuleBundle {
-        let expectedIdentity = spec.compilationFingerprint
-        guard identity.value == expectedIdentity,
-              formalModuleClosure.root.module.compilationFingerprint == expectedIdentity else {
-            throw CompilationDiagnostic(
-                code: .compilationIdentityMismatch,
-                stage: .rendering,
-                path: "compilation.identity",
-                expected: expectedIdentity,
-                actual: identity.value,
-                nextSafeAction: "Compile the current source model again before rendering."
-            )
-        }
-
         let entries = formalModuleClosure.entries
-        guard let root = entries.last, root.module.name == spec.name else {
-            throw CompilationDiagnostic(
-                code: .compilationIdentityMismatch,
-                stage: .rendering,
-                path: "formalModuleClosure.root",
-                expected: "the compiled root module '\(spec.name)'",
-                actual: entries.last?.module.name ?? "no rendered root module",
-                nextSafeAction: "Compile the current source model again before rendering."
-            )
-        }
-
         let files = try entries.map { entry in
             guard let sectionPlan = moduleSectionPlans[entry.module.name] else {
                 throw CompilationDiagnostic(
                     code: .compilationIdentityMismatch,
                     stage: .rendering,
                     path: "formalModuleClosure.\(entry.module.name)",
-                    expected: "a compiled declaration plan",
-                    actual: "no declaration plan",
-                    nextSafeAction: "Compile the current source model again before rendering."
+                    expected: "a compiled module section plan",
+                    actual: "no module section plan",
+                    nextSafeAction: "Compile the source model again."
                 )
             }
             return TLAModuleFile(
@@ -309,10 +282,19 @@ public struct CompiledSpecification: Sendable {
                 tla: entry.module.renderTLAModuleSource(sectionPlan: sectionPlan),
                 cfg: entry.module.name == spec.name
                     ? entry.module.renderTLCConfiguration(sectionPlan: sectionPlan)
-                    : nil
+                : nil
             )
         }
-        let rootFile = files[files.count - 1]
+        guard let rootFile = files.last else {
+            throw CompilationDiagnostic(
+                code: .compilationIdentityMismatch,
+                stage: .rendering,
+                path: "formalModuleClosure",
+                expected: "a root module",
+                actual: "an empty module closure",
+                nextSafeAction: "Compile the source model again."
+            )
+        }
         let bundle = TLAModuleBundle(
             root: rootFile,
             imports: Array(files.dropLast()),
@@ -653,7 +635,7 @@ public extension TLASpec {
         return CompiledSpecification(
             spec: self,
             formalModuleClosure: closure,
-            identity: .init(value: compilationFingerprint),
+            identity: compilationIdentity,
             layout: layout,
             bindings: bindings,
             semantics: semantics,
@@ -1249,12 +1231,13 @@ public extension TLASpec {
         }
     }
 
-    var compilationFingerprint: String {
+    var compilationIdentity: CompilationIdentity {
         var encoder = CanonicalSpecificationEncoder()
         let source = encoder.encode(self)
-        return SHA256.hash(data: Data(source.utf8))
+        let value = SHA256.hash(data: Data(source.utf8))
             .map { String(format: "%02x", $0) }
             .joined()
+        return .init(value: value)
     }
 }
 

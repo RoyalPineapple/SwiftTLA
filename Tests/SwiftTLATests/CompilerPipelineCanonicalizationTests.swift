@@ -85,8 +85,6 @@ struct CompilerPipelineCanonicalizationTests {
         let second = try sourceModel().compile()
 
         #expect(first.identity == second.identity)
-        #expect(first.identity.value.count == 64)
-        #expect(first.identity.value.allSatisfy { $0.isHexDigit })
         #expect(try first.renderedTLAModuleBundle().root.tla == second.renderedTLAModuleBundle().root.tla)
     }
 
@@ -113,7 +111,7 @@ struct CompilerPipelineCanonicalizationTests {
 
     @Test("macro compilation uses the explicit formal module name")
     func macroUsesExplicitFormalModuleName() throws {
-        let compilation = try CompilerPipelineExplicitFormalNameModel.compiledSpecification()
+        let compilation = try CompilerPipelineExplicitFormalNameModel.spec.compile()
 
         #expect(compilation.spec.name == "CompilerPipelineExplicitFormalName")
         #expect(compilation.identity == try CompilerPipelineExplicitFormalNameModel.spec.compile().identity)
@@ -814,10 +812,9 @@ struct CompilerPipelineCanonicalizationTests {
 
     @Test("#spec Algorithm lowering reaches macro-generated consumers through one identity")
     func algorithmSpecificationUsesMacroCompiledPayload() throws {
-        let compilation = try CompilerPipelineAlgorithmModel.compiledSpecification()
+        let compilation = try CompilerPipelineAlgorithmModel.spec.compile()
 
-        #expect(try CompilerPipelineAlgorithmModel.compiledSpecification().identity == compilation.identity)
-        #expect(try CompilerPipelineAlgorithmModel.verifySpec(configuration: .standard) > 0)
+        #expect(try CompilerPipelineAlgorithmModel.spec.compile().identity == compilation.identity)
         #expect(try compilation.renderedTLAModuleBundle().tla == try CompilerPipelineAlgorithmModel.spec.compile().renderedTLAModuleBundle().tla)
     }
 
@@ -956,16 +953,15 @@ struct CompilerPipelineCanonicalizationTests {
 
     @Test("macro-generated consumers and rendering retain the compiled identity")
     func macroGeneratedConsumersUseCompiledPayload() throws {
-        let compilation = try CompilerPipelineGeneratedModel.compiledSpecification()
+        let compilation = try CompilerPipelineGeneratedModel.spec.compile()
 
-        #expect(try CompilerPipelineGeneratedModel.compiledSpecification().identity == compilation.identity)
-        #expect(try CompilerPipelineGeneratedModel.verifySpec(configuration: .standard) > 0)
+        #expect(try CompilerPipelineGeneratedModel.spec.compile().identity == compilation.identity)
         #expect(try compilation.renderedTLAModuleBundle().tla == try CompilerPipelineGeneratedModel.spec.compile().renderedTLAModuleBundle().tla)
     }
 
     @Test("#spec lowering preserves every canonical variable initialization field")
     func specMacroRetainsInitializationForms() throws {
-        let compilation = try CompilerPipelineInitializationModel.compiledSpecification()
+        let compilation = try CompilerPipelineInitializationModel.spec.compile()
         let computed = try #require(compilation.spec.variables.first { $0.name == "computed" })
         let choice = try #require(compilation.spec.variables.first { $0.name == "choice" })
 
@@ -973,19 +969,19 @@ struct CompilerPipelineCanonicalizationTests {
         #expect(computed.lazySet == nil)
         #expect(choice.initExpr == nil)
         #expect(choice.lazySet == .setLiteral([.value(.int(1)), .value(.int(2))]))
-        #expect(try CompilerPipelineInitializationModel.compiledSpecification().identity == compilation.identity)
+        #expect(try CompilerPipelineInitializationModel.spec.compile().identity == compilation.identity)
     }
 
     @Test("#spec lowering preserves symmetric collection metadata")
     func specMacroRetainsSymmetricCollectionMetadata() throws {
-        let compilation = try CompilerPipelineCollectionModel.compiledSpecification()
+        let compilation = try CompilerPipelineCollectionModel.spec.compile()
         let devices = try #require(compilation.spec.variables.first { $0.name == "devices" })
         let declaration = try #require(compilation.spec.symmetricCollections.first { $0.name == "devices" })
 
         #expect(devices.collectionType == .dictionary(2))
         #expect(declaration.variable == devices)
         #expect(declaration.verificationScope == 2)
-        #expect(try CompilerPipelineCollectionModel.compiledSpecification().identity == compilation.identity)
+        #expect(try CompilerPipelineCollectionModel.spec.compile().identity == compilation.identity)
     }
 
     @Test("semantic compilation fields change the identity")

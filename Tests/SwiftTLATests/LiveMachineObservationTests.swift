@@ -14,12 +14,6 @@ struct LiveMachineObservationTests {
         }
         return token
     }
-    private static let schema = MachineSchema(
-        model: .init(name: "ObservationCounter"),
-        state: [.init(id: "count", display: .init(name: "count"), value: .integer, swiftType: "Int")],
-        actions: [.init(id: "advance", display: .init(name: "advance"), parameters: [])]
-    )
-
     private static func makeOwner(capacity: Int = 64) throws -> TLALiveMachineOwner<ObservationAction> {
         let initial = try TLAStateProjection(validating: [
             .init(token: try countToken(), value: .int(0))
@@ -36,7 +30,6 @@ struct LiveMachineObservationTests {
             decodeState: { _ in }
         )
         return TLALiveMachineOwner.create(
-            schema: schema,
             initial: initial,
             driver: driver,
             observationMailboxCapacity: capacity

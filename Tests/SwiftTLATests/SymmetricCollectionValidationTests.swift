@@ -29,7 +29,7 @@ struct SymmetricCollectionValidationTests {
       SymmetricCollection(devices, verificationScope: 0, initial: 0)
     }
 
-    let result = try ModelChecker(spec: spec).check()
+    let result = try ModelChecker(compilation: try spec.compile()).check()
     guard case .bounded(let scopes, let outcome) = result else {
       Issue.record("Expected bounded result, got \(result)")
       return
@@ -50,7 +50,7 @@ struct SymmetricCollectionValidationTests {
       SymmetricCollection(devices, verificationScope: -1, initial: 0)
     }
 
-    let result = try ModelChecker(spec: spec).check().underlyingOutcome
+    let result = try ModelChecker(compilation: try spec.compile()).check().underlyingOutcome
     guard case .error(let message) = result else {
       Issue.record("Expected negative scope validation error, got \(result)")
       return
@@ -67,7 +67,7 @@ struct SymmetricCollectionValidationTests {
       SymmetricCollection(unnamed, verificationScope: 1, initial: 0)
     }
 
-    let result = try ModelChecker(spec: spec).check().underlyingOutcome
+    let result = try ModelChecker(compilation: try spec.compile()).check().underlyingOutcome
     guard case .error(let message) = result else {
       Issue.record("Expected missing-name validation error, got \(result)")
       return
@@ -88,8 +88,8 @@ struct SymmetricCollectionValidationTests {
       SymmetricCollection(devices, verificationScope: 1, initial: 0)
     }
 
-    let duplicateResult = try ModelChecker(spec: duplicate).check().underlyingOutcome
-    let collisionResult = try ModelChecker(spec: collision).check().underlyingOutcome
+    let duplicateResult = try ModelChecker(compilation: try duplicate.compile()).check().underlyingOutcome
+    let collisionResult = try ModelChecker(compilation: try collision.compile()).check().underlyingOutcome
     guard case .error(let duplicateMessage) = duplicateResult,
           case .error(let collisionMessage) = collisionResult else {
       Issue.record("Expected declaration validation errors")
@@ -172,7 +172,7 @@ struct SymmetricCollectionValidationTests {
       symmetricCollections: declared.symmetricCollections
     )
 
-    let result = try ModelChecker(spec: malformed).check().underlyingOutcome
+    let result = try ModelChecker(compilation: try malformed.compile()).check().underlyingOutcome
     guard case .error(let message) = result else {
       Issue.record("Expected domain validation error, got \(result)")
       return
@@ -195,7 +195,7 @@ struct SymmetricCollectionValidationTests {
       symmetricCollections: declared.symmetricCollections
     )
 
-    let result = try ModelChecker(spec: malformed).check().underlyingOutcome
+    let result = try ModelChecker(compilation: try malformed.compile()).check().underlyingOutcome
     guard case .error(let message) = result else {
       Issue.record("Expected ownership validation error, got \(result)")
       return
@@ -213,7 +213,7 @@ struct SymmetricCollectionValidationTests {
       SymmetricCollection(right, verificationScope: 3, initial: 0)
     }
 
-    let result = try ModelChecker(spec: spec, permutationProductBudget: 35).check()
+    let result = try ModelChecker(compilation: try spec.compile(), permutationProductBudget: 35).check()
     guard case .bounded(_, let outcome) = result,
           case .error(let message) = outcome else {
       Issue.record("Expected bounded budget error, got \(result)")

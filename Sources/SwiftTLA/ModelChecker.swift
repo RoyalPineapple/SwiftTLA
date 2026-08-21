@@ -20,27 +20,15 @@ public struct FiniteExplorationConfiguration: Sendable, Equatable, Hashable {
 }
 
 /// Explores every reachable state of a TLA+ specification with breadth-first search.
-public struct ModelChecker {
+package struct ModelChecker {
     private let spec: TLASpec
-    public let compilation: CompiledSpecification
-    public let configuration: FiniteExplorationConfiguration
-    public let permutationProductBudget: Int
+    let compilation: CompiledSpecification
+    let configuration: FiniteExplorationConfiguration
+    let permutationProductBudget: Int
 
     private var maxStates: Int { configuration.maximumStateLimit }
 
     init(
-        spec: TLASpec,
-        configuration: FiniteExplorationConfiguration = .standard,
-        permutationProductBudget: Int = 100_000
-    ) throws {
-        self.init(
-            compilation: try spec.compile(),
-            configuration: configuration,
-            permutationProductBudget: permutationProductBudget
-        )
-    }
-
-    public init(
         compilation: CompiledSpecification,
         configuration: FiniteExplorationConfiguration = .standard,
         permutationProductBudget: Int = 100_000
@@ -51,7 +39,7 @@ public struct ModelChecker {
         self.permutationProductBudget = permutationProductBudget
     }
 
-    public func check() throws -> CheckResult {
+    func check() throws -> CheckResult {
         do {
             let exploration = try explore()
             if let result = try RefinementChecker(compilation: compilation).check(exploration) {
@@ -64,11 +52,11 @@ public struct ModelChecker {
             return bounded(.error(String(describing: error)))
         }
     }
-    public func exploreGraph() throws -> StateGraph { try explore().graph }
+    func exploreGraph() throws -> StateGraph { try explore().graph }
 
-    public func explore() throws -> ModelExplorationResult { try runExploration() }
+    func explore() throws -> ModelExplorationResult { try runExploration() }
 
-    public func checkLiveness() throws -> CheckResult {
+    func checkLiveness() throws -> CheckResult {
         do {
             let exploration = try explore()
             guard case .ok = exploration.result.underlyingOutcome else { return exploration.result }
@@ -310,7 +298,7 @@ private func compiledBFS(
 /// The class of a model-checking result that needs an engineer's attention.
 /// This is deliberately a domain enum rather than a Boolean or a generic
 /// error string so tooling can present the failed formal concept directly.
-public enum ModelCheckingFailureKind: String, Sendable, Equatable {
+package enum ModelCheckingFailureKind: String, Sendable, Equatable {
     case invariantViolated
     case deadlock
     case stateLimit
@@ -322,7 +310,7 @@ public enum ModelCheckingFailureKind: String, Sendable, Equatable {
 }
 
 /// One safely projected state in a counterexample trace.
-public struct ModelTraceEvidence: Sendable, Equatable, CustomStringConvertible {
+package struct ModelTraceEvidence: Sendable, Equatable, CustomStringConvertible {
     public let action: String
     public let state: TLAStateProjectionResult
 
@@ -344,7 +332,7 @@ public struct ModelTraceEvidence: Sendable, Equatable, CustomStringConvertible {
 /// This companion is the public diagnostic boundary: it retains the named formal
 /// property, the failing state, counterexample trace when there is one, the
 /// expected condition, actual result, mutation outcome, and recovery step.
-public struct ModelCheckingDiagnostic: Sendable, Equatable, CustomStringConvertible {
+package struct ModelCheckingDiagnostic: Sendable, Equatable, CustomStringConvertible {
     public let kind: ModelCheckingFailureKind
     public let subject: String?
     public let expected: String
@@ -390,7 +378,7 @@ public struct ModelCheckingDiagnostic: Sendable, Equatable, CustomStringConverti
     }
 }
 
-public indirect enum CheckResult: CustomStringConvertible {
+package indirect enum CheckResult: CustomStringConvertible {
     case ok(statesCount: Int)
     case invariantViolated(invariant: String, state: TLAStateProjection, trace: [TraceStep])
     case depthExceeded(statesCount: Int, limit: Int)
@@ -515,7 +503,7 @@ public indirect enum CheckResult: CustomStringConvertible {
     }
 }
 
-public struct TraceStep: CustomStringConvertible {
+package struct TraceStep: CustomStringConvertible {
     public let state: TLAStateProjection
     public let action: String
     public var description: String { "[" + action + "] " + state.description }

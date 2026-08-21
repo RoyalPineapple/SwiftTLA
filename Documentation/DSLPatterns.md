@@ -68,10 +68,6 @@ Generated `State`, `ActionLabel`, `TransitionResult`, `Live`, actor, and
 observable types form the application API. A generated action label carries
 the action type and argument types selected by the source model.
 
-Use `TLAStateProjection` at the formal-tool boundary. It validates the
-identifier and formal values that cross into inspection, serialization, and
-tool adapters.
-
 ## Declare modules and refinement structurally
 
 Use `Import` and `Instance` for TLA+ modules. Compilation links their complete
@@ -83,15 +79,10 @@ evaluates mapped initial states and concrete edges against the abstract model.
 
 ## Verify finite behavior
 
-```swift
-let compilation = try Counter.spec.compile()
-let result = try ModelChecker(compilation: compilation).check()
-```
-
-`FiniteExplorationConfiguration` declares the maximum state limit for an
-exploration. Core conformance compares canonical SwiftTLA and TLC graphs for
-declared finite cases. The exact comparison explains a mismatch; the graph
-receipt identifies the completed exploration.
+Core conformance explores compiled specifications with declared finite limits
+and compares canonical SwiftTLA and TLC graphs for declared finite cases. The
+exact comparison explains a mismatch; the graph receipt identifies the
+completed exploration.
 
 ## Own one concern per component
 
@@ -102,8 +93,8 @@ receipt identifies the completed exploration.
 | `CompiledLayout` | canonical IDs and slots |
 | `CompiledEvaluator` | compiled expressions and values |
 | `CompiledRuntime` | compiled state and action execution |
-| `ModelChecker` | finite graph exploration |
-| `MachineSurfacePlan` | generated Swift surface |
+| private runtime explorer | finite graph exploration |
+| compilation and macros | generated Swift surface |
 | `TLASpec+PrettyPrint` | compiled TLA+ declaration plan |
 | TLC adapter | declared bundle staging and event parsing |
 | canonical graph | exact finite conformance records |

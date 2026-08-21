@@ -1,6 +1,6 @@
 import Foundation
 
-enum ConformanceEvidence {
+package enum ConformanceEvidence {
   static func projectRoot(_ url: URL) throws -> URL {
     let root = url.resolvingSymlinksInPath().standardizedFileURL
     var isDirectory: ObjCBool = false
@@ -104,5 +104,14 @@ enum ConformanceEvidence {
 
   static func writeCanonical<T: Encodable>(_ value: T, to url: URL, trailingNewline: Bool = false) throws {
     try write(canonicalData(value, trailingNewline: trailingNewline), to: url)
+  }
+
+  package static func writePrettyCanonical<T: Encodable>(_ value: T, to url: URL) throws {
+    try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+    let encoder = JSONEncoder()
+    encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+    var data = try encoder.encode(value)
+    data.append(0x0A)
+    try write(data, to: url)
   }
 }

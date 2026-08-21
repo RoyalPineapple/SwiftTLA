@@ -1,12 +1,12 @@
 import Foundation
 
-public enum TemporalAnalysisStatus: Equatable, Sendable {
+package enum TemporalAnalysisStatus: Equatable, Sendable {
     case satisfied
     case violated
     case unavailable
 }
 
-public enum TemporalDiagnosticReason: String, Equatable, Sendable {
+package enum TemporalDiagnosticReason: String, Equatable, Sendable {
     case satisfied
     case violatingFairLasso = "violating-fair-lasso"
     case missingInitialStateIdentity = "missing-initial-state-identity"
@@ -15,7 +15,7 @@ public enum TemporalDiagnosticReason: String, Equatable, Sendable {
     case evaluationFailed = "evaluation-failed"
 }
 
-public struct FairLassoWitness: Equatable, Sendable {
+package struct FairLassoWitness: Equatable, Sendable {
     public let prefix: [StateGraph.StateID]
     public let cycle: [StateGraph.StateID]
     public let prefixActions: [String]
@@ -34,7 +34,7 @@ public struct FairLassoWitness: Equatable, Sendable {
     }
 }
 
-public struct TemporalAnalysisResult: Equatable, Sendable {
+package struct TemporalAnalysisResult: Equatable, Sendable {
     public let status: TemporalAnalysisStatus
     public let reason: TemporalDiagnosticReason
     public let diagnostic: String?
@@ -69,7 +69,7 @@ public struct TemporalAnalysisResult: Equatable, Sendable {
 ///
 /// Every reachable state has an implicit stutter edge. Fairness uses only
 /// explicit, state-changing named-action transitions.
-public struct LivenessChecker {
+package struct LivenessChecker {
     public let graph: StateGraph
     private let compilation: CompiledSpecification
 

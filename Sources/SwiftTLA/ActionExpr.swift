@@ -73,7 +73,7 @@ extension ActionExpr {
 }
 
 extension ActionExpr {
-    func substitutingVariable(_ name: String, with replacement: StateExpr) -> ActionExpr {
+    package func substitutingVariable(_ name: String, with replacement: StateExpr) -> ActionExpr {
         func state(_ expression: StateExpr) -> StateExpr {
             StateExpr.substituteVariable(name, with: replacement, in: expression)
         }
@@ -94,12 +94,6 @@ extension ActionExpr {
     }
 }
 
-/// Substitute a free variable reference with a concrete value in an ActionExpr.
-/// A nested TLA binder can shadow the name. Its body stays unchanged.
-public func substituteVar(_ param: String, with value: TLAValue, in action: ActionExpr) -> ActionExpr {
-    action.substitutingVariable(param, with: .value(value))
-}
-
 extension ActionExpr {
     @discardableResult public static func && (lhs: ActionExpr, rhs: ActionExpr) -> ActionExpr { .and(lhs, rhs) }
     @discardableResult public static func || (lhs: ActionExpr, rhs: ActionExpr) -> ActionExpr { .or(lhs, rhs) }
@@ -112,7 +106,7 @@ extension ActionExpr {
     @discardableResult public static func || (lhs: StateExpr, rhs: ActionExpr) -> ActionExpr { .or(.guard_(lhs), rhs) }
 }
 
-public func renameVar(_ from: String, to: String, in action: ActionExpr) -> ActionExpr {
+package func renameVar(_ from: String, to: String, in action: ActionExpr) -> ActionExpr {
     func r(_ s: StateExpr) -> StateExpr { renameVar(from, to: to, in: s) }
     func ra(_ a: ActionExpr) -> ActionExpr { renameVar(from, to: to, in: a) }
     switch action {

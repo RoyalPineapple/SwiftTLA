@@ -186,7 +186,7 @@ struct CompilerBundleOwnershipTests {
     )
 
     #expect(throws: CompilationDiagnostic.self) { try invalid.compile() }
-    #expect(throws: CompilationDiagnostic.self) { try ModelChecker(spec: invalid) }
+    #expect(throws: CompilationDiagnostic.self) { try ModelChecker(compilation: try invalid.compile()) }
     #expect(throws: CompilationDiagnostic.self) { try invalid.compile() }
   }
 

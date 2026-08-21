@@ -46,7 +46,7 @@ struct TemporalSymmetryConformanceRunnerTests {
     ]
     for declaredCase in cases.cases where declaredCase.kind == .temporal {
       let model = try #require(try TemporalSymmetryModelCatalog.model(for: declaredCase))
-      let result = try ModelChecker(spec: model.spec, configuration: try FiniteExplorationConfiguration(maximumStateLimit: model.maxStates)).checkLiveness()
+      let result = try ModelChecker(compilation: try model.spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: model.maxStates)).checkLiveness()
       let isSatisfied: Bool
       if case .ok = result.underlyingOutcome { isSatisfied = true } else { isSatisfied = false }
       #expect(isSatisfied == expected[declaredCase.id])

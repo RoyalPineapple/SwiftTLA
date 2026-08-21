@@ -153,7 +153,7 @@ func actionVariants(_ action: NamedAction) -> [(
     return binding.values.enumerated().flatMap { index, value in
       expand(
         position + 1, arguments + [value], indices + [index],
-        substituteVar(binding.name, with: value, in: body))
+        body.substitutingVariable(binding.name, with: .value(value)))
     }
   }
   return expand(0, [], [], action.body)

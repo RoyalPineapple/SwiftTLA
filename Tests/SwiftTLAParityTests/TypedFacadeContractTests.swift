@@ -162,6 +162,18 @@ struct TypedFacadeContractTests {
     }
   }
 
+  @Test("external consumers cannot name raw execution implementation types")
+  func rawExecutionImplementationTypesDoNotTypeCheck() throws {
+    let fixture = packageRoot().appendingPathComponent("Tests/Fixtures/InvalidRawExecutionSurface")
+    let result = try runSwift(["build", "--package-path", fixture.path])
+
+    #expect(result.status != 0)
+    #expect(result.output.contains("cannot find 'ModelChecker' in scope"))
+    #expect(result.output.contains("cannot find 'StateGraph' in scope"))
+    #expect(result.output.contains("cannot find 'TLALiveMachine' in scope"))
+    #expect(result.output.contains("cannot find 'TLALiveMachineTransitionDriver' in scope"))
+  }
+
   @Test("typed DSL invalid fixture reports each source-local diagnostic")
   func invalidTypedDSLReportsSourceLocalDiagnostics() throws {
     let fixture = packageRoot().appendingPathComponent("Tests/Fixtures/InvalidTypedDSL")
@@ -207,7 +219,7 @@ struct TypedFacadeContractTests {
 
   @Test("bounded elevator source model checks successfully")
   func boundedElevatorSourceModelChecksSuccessfully() throws {
-    let checker = try ModelChecker(spec: MultiCarElevator.spec, configuration: try FiniteExplorationConfiguration(maximumStateLimit: 30_000))
+    let checker = try ModelChecker(compilation: try MultiCarElevator.spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 30_000))
     guard case .ok(let stateCount) = try checker.check() else {
       Issue.record("Bounded MultiCarElevator safety model did not complete successfully")
       return

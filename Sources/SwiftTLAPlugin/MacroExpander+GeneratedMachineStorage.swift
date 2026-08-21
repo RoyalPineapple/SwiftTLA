@@ -2,10 +2,11 @@ import SwiftSyntax
 import SwiftTLA
 
 extension MacroExpander {
-    static func generateCanonicalMachineMembers(
+    static func generateGeneratedMachineStorageMembers(
         isActor: Bool,
         hasActions: Bool,
         actions: [MachineSurfacePlan.Action],
+        variables: [MachineSurfacePlan.Variable],
         symmetricCollections: [MachineSurfacePlan.SymmetricCollection] = [],
         identityRoutedActions: Set<String> = []
     ) -> [DeclSyntax] {
@@ -22,25 +23,29 @@ extension MacroExpander {
                     throw GeneratedMachineError.identityRoutedActionRequiresID
                 }
             """
-        let liveProjection = symmetricCollections.map {
-            """
-            guard let token = TLAStateProjection.Token(validating: \(String(reflecting: $0.formalName))) else {
-                throw TLAStateProjectionDiagnostic.invalidKey(path: \(String(reflecting: $0.formalName)))
+        let liveProjection = symmetricCollections.compactMap { collection in
+            guard let ordinal = variables.firstIndex(where: { $0.formalName == collection.formalName }) else {
+                return nil
             }
-            state = try state.replacing(\($0.formalName).projection().modelValue, for: token)
+            """
+            state = try _storage.replacing(
+                formalValue: \(collection.formalName).projection().modelValue,
+                at: \(ordinal),
+                in: state
+            )
             """
         }.joined(separator: "\n                ")
         let stateWithLiveCollections = symmetricCollections.isEmpty
-            ? "try _machine.stateProjection().requireProjection()"
+            ? "_storageState"
             : """
-            var state = try _machine.stateProjection().requireProjection()
+            var state = _storageState
                             \(liveProjection)
                             return state
             """
         var members: [DeclSyntax] = [
             DeclSyntax(stringLiteral: """
             public var state: State {
-                _machine.snapshot
+                _state
             }
             """),
             DeclSyntax(stringLiteral: """
@@ -61,15 +66,21 @@ extension MacroExpander {
                 """),
                 DeclSyntax(stringLiteral: "private static let _identityRoutedActionOrdinals: Set<Int> = [\(identityRoutedOrdinals)]"),
                 DeclSyntax(stringLiteral: """
-                private func _stateWithLiveCollections() throws -> TLAStateProjection {
+                private func _stateWithLiveCollections() throws -> GeneratedMachineStorage.State {
                     \(stateWithLiveCollections)
                 }
                 """),
                 DeclSyntax(stringLiteral: """
                 public func availableActions() throws -> [ActionLabel] {
-                    try _machine.availableActions(in: _stateWithLiveCollections()).filter {
-                        !Self._identityRoutedActionOrdinals.contains(Self._actionOrdinal(for: $0))
-                    }
+                    try _storage.availableActions(in: _stateWithLiveCollections()) { ordinal, arguments in
+                        guard let action = Self._actionLabel(
+                            actionAt: ordinal,
+                            arguments: arguments
+                        ) else {
+                            throw GeneratedMachineError.noMatchingSuccessor
+                        }
+                        return action
+                    }.filter { !Self._identityRoutedActionOrdinals.contains(Self._actionOrdinal(for: $0)) }
                 }
                 """),
                 DeclSyntax(stringLiteral: """
@@ -80,14 +91,19 @@ extension MacroExpander {
                 DeclSyntax(stringLiteral: """
             private \(modifier)func _apply(_ action: ActionLabel) throws -> TransitionResult {
                 \(identityRoutedGuard)
-                let evidence = try _machine.apply(
-                    action,
+                let before = _state
+                let afterStorageState = try _storage.apply(
+                    actionOrdinal: Self._actionOrdinal(for: action),
+                    formalArguments: Self._formalArguments(for: action),
                     from: _stateWithLiveCollections()
-                ) { _ in true }
+                )
+                let after = try State(storage: _storage, storageState: afterStorageState)
+                _storageState = afterStorageState
+                _state = after
                 return TransitionResult(
-                    action: evidence.action,
-                    before: evidence.before,
-                    after: evidence.after
+                    action: action,
+                    before: before,
+                    after: after
                 )
             }
             """),

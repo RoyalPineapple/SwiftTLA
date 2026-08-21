@@ -5,6 +5,33 @@ import SwiftBasicFormat
 extension ParserSession {
     // MARK: - Unified spec builder parser
 
+    /// Source-boundary declaration facts for one specification closure.
+    public struct BoundSourceContext: Sendable, Equatable {
+        public struct Variable: Sendable, Equatable {
+            public let sourceName: String
+            public let swiftTypeName: String?
+
+            public init(sourceName: String, swiftTypeName: String?) {
+                self.sourceName = sourceName
+                self.swiftTypeName = swiftTypeName
+            }
+        }
+
+        public let variables: [Variable]
+
+        public init(variables: [Variable] = []) {
+            self.variables = variables
+        }
+
+        public var swiftVariableTypes: [String: String] {
+            Dictionary(
+                uniqueKeysWithValues: variables.compactMap { variable in
+                    variable.swiftTypeName.map { (variable.sourceName, $0) }
+                }
+            )
+        }
+    }
+
     public struct ParsedSpecComponents {
         /// Canonical formal variables and Swift-only type facts for generated
         /// surface code.
@@ -29,14 +56,12 @@ extension ParserSession {
         /// Authored algorithms in the source model.
         public var algorithmFidelityTokens: [AlgorithmFidelityToken] = []
         public var constants: [ConstantDecl] = []
+        /// The parser's top-level declaration facts for generated Swift.
+        public var sourceContext = BoundSourceContext()
         var instanceBindings: [String: FormalModuleInstance] = [:]
 
         public func swiftVariableTypes() -> [String: String] {
-            var types = Dictionary(
-                uniqueKeysWithValues: variables.compactMap { variable in
-                    variable.swiftTypeName.map { (variable.name, $0) }
-                }
-            )
+            var types = sourceContext.swiftVariableTypes
             for algorithm in sourceAlgorithms {
                 let localNames: Set<String> = Set(algorithm.model.processes.flatMap { process in
                     process.components.compactMap {
@@ -274,6 +299,9 @@ extension ParserSession {
                 ))
             }
         }
+        result.sourceContext = .init(variables: result.variables.map {
+            .init(sourceName: $0.name, swiftTypeName: $0.swiftTypeName)
+        })
         return result
     }
 
@@ -342,8 +370,7 @@ extension ParserSession {
         }
     }
 
-    /// Parses supported low-level `Var(...)` bindings into `ParsedSpecComponents.variables`.
-    /// Handles both raw `Var("x", 0)` and rewrites where ModelMacro injected a string name.
+    /// Parses supported variable bindings into `ParsedSpecComponents.variables`.
     func parseVarDecl(_ varDecl: VariableDeclSyntax, into result: inout ParsedSpecComponents) {
         for binding in varDecl.bindings {
             guard let patternName = binding.pattern.as(IdentifierPatternSyntax.self)?.identifier.text,
@@ -352,7 +379,9 @@ extension ParserSession {
             else { continue }
 
             let stateVarInfo = resolveVarCall(fc)
-            let varTypeName = stateVarInfo?.1 ?? resolveVarTypeArg(fc)
+            let varTypeName = swiftValueType(from: binding.typeAnnotation)
+                ?? stateVarInfo?.1
+                ?? resolveVarTypeArg(fc)
             let callName = stateVarInfo?.0 ?? (resolveVarTypeArg(fc) != nil ? "Var" : nil)
 
             guard callName != nil else { continue }
@@ -370,21 +399,19 @@ extension ParserSession {
                 if callName == "SharedVar", let range = parseIntegerClosedRange(rangeExpr) {
                     result.variables.append(.init(
                         name: patternName,
-                        initial: .int(range.lowerBound),
+                        initial: .int(0),
                         initialSet: .setLiteral(range.map { .value(.int($0)) }),
-                        swiftTypeName: "Int"
+                        swiftTypeName: varTypeName ?? "Int"
                     ))
                     continue
                 }
                 if callName == "SharedVar",
                    let initialSet = decodeStateExpr(rangeExpr),
-                   case .setLiteral(let elements) = initialSet,
-                   let first = elements.first,
+                   case .setLiteral = initialSet,
                    let elementType = setExpressionElementTypeName(rangeExpr) {
-                    let initial = (try? evaluateClosed(first)) ?? .int(0)
                     result.variables.append(.init(
-                        name: patternName, initial: initial, initialSet: initialSet,
-                        swiftTypeName: elementType
+                        name: patternName, initial: .int(0), initialSet: initialSet,
+                        swiftTypeName: varTypeName ?? elementType
                     ))
                     continue
                 }
@@ -407,6 +434,25 @@ extension ParserSession {
 
             if let stringLit = args[0].expression.as(StringLiteralExprSyntax.self) {
                 guard let varName = stringLit.representedLiteralValue else { continue }
+                if callName == "SharedVar" {
+                    guard args.count >= 2,
+                          let initial = decodeTypedFacadeValue(args[1].expression, scope: .empty)
+                    else {
+                        result.diagnostics.append(.init(
+                            message: "SharedVar requires a supported initial formal expression.",
+                            source: call
+                        ))
+                        continue
+                    }
+                    let inferredType = initialValueTypeName(from: args[1].expression)
+                    result.variables.append(.init(
+                        name: varName,
+                        initial: .int(0),
+                        initExpr: initial,
+                        swiftTypeName: varTypeName ?? inferredType
+                    ))
+                    continue
+                }
                 let initial: TLAValue = args.count >= 2
                     ? parsedInitialValue(args[1].expression)
                     : .int(0)
@@ -453,6 +499,24 @@ extension ParserSession {
         }
         let typeArgs = Array(generic.genericArgumentClause.arguments)
         return typeArgs.first.flatMap { sourceTypeSpelling($0.argument) }
+    }
+
+    /// Extracts the value type from a variable declaration annotation without
+    /// rendering or reparsing its syntax. `SharedVariable<Mode>` contributes
+    /// `Mode`; an explicit value annotation contributes itself.
+    func swiftValueType(from annotation: TypeAnnotationSyntax?) -> String? {
+        guard let type = annotation?.type else { return nil }
+        if let generic = type.as(IdentifierTypeSyntax.self),
+           ["SharedVariable", "LocalVariable"].contains(generic.name.text),
+           let argument = generic.genericArgumentClause?.arguments.first?.argument {
+            return sourceTypeSpelling(argument)
+        }
+        if let generic = type.as(MemberTypeSyntax.self),
+           ["SharedVariable", "LocalVariable"].contains(generic.name.text),
+           let argument = generic.genericArgumentClause?.arguments.first?.argument {
+            return sourceTypeSpelling(argument)
+        }
+        return sourceTypeSpelling(type)
     }
 
     func isDefaultConstructibleVarType(_ call: FunctionCallExprSyntax) -> Bool {
@@ -831,7 +895,7 @@ extension ParserSession {
                       let target = mapping.arguments.first?.expression,
                       let mappedName = refinementTargetName(target),
                       let source = mapping.arguments.first(where: { $0.label?.text == "from" })?.expression,
-                      let expression = decodeTypedFacadeValue(source, substitutions: [:]) ?? decodeStateExpr(source)
+                      let expression = decodeTypedFacadeValue(source, scope: .empty) ?? decodeStateExpr(source)
                 else {
                     result.diagnostics.append(.init(
                         message: "Each refinement mapping must name an abstract declaration and provide a source expression.",
@@ -927,7 +991,7 @@ extension ParserSession {
         if let parametersSyntax = call.arguments.first(where: { $0.label?.text == "parameters" })?.expression,
            let bodySyntax = call.arguments.first(where: { $0.label?.text == "body" })?.expression,
            let parameters = parseFormalParameters(parametersSyntax),
-           let body = decodeTypedFacadeValue(bodySyntax, substitutions: [:]) ?? decodeStateExpr(bodySyntax) {
+           let body = decodeTypedFacadeValue(bodySyntax, scope: .empty) ?? decodeStateExpr(bodySyntax) {
             return FormalOperatorDefinition(name: name, parameters: parameters, body: body,
                 plusCalPhase: plusCalPhase(call), plusCalDependencies: plusCalDependencies(call))
         }
@@ -949,10 +1013,13 @@ extension ParserSession {
         let formalParameters = parameters.enumerated().map { index, _ in
             FormalParameter.value("value\(index)")
         }
-        let substitutions = Dictionary(uniqueKeysWithValues: zip(parameters, formalParameters).map {
-            ($0, StateExpr.variable($1.name))
-        })
-        guard let body = decodeTypedFacadeValue(bodySyntax, substitutions: substitutions) else { return nil }
+        let scope = typedFacadeScope(
+            .empty,
+            bindings: zip(parameters, formalParameters).map {
+                (sourceName: $0, value: StateExpr.variable($1.name))
+            }
+        )
+        guard let body = decodeTypedFacadeValue(bodySyntax, scope: scope) else { return nil }
         return FormalOperatorDefinition(
             name: name,
             parameters: formalParameters,
@@ -1013,7 +1080,7 @@ extension ParserSession {
                         || argumentCall.calledExpression.as(MemberAccessExprSyntax.self)?.declName.baseName.text == "init"),
                       let parameter = extractStringArg(argumentCall, index: 0),
                       let valueSyntax = argumentCall.arguments.first(where: { $0.label?.text == "value" })?.expression,
-                      let value = decodeTypedFacadeValue(valueSyntax, substitutions: [:]) ?? decodeStateExpr(valueSyntax)
+                      let value = decodeTypedFacadeValue(valueSyntax, scope: .empty) ?? decodeStateExpr(valueSyntax)
                 else {
                     result.diagnostics.append(.init(
                         message: "Each Instance argument must be ModuleArgument(\"parameter\", value: expression).",
@@ -1442,8 +1509,8 @@ extension ParserSession {
         return decodeCollectionPredicate(
             call,
             requiringCollectionIn: symmetricCollections
-        ) { body, substitutions in
-            decodeTypedFacadeValue(body, substitutions: substitutions)
+        ) { body, scope in
+            decodeTypedFacadeValue(body, scope: scope)
         }
     }
 

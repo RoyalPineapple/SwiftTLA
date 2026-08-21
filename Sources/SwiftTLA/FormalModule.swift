@@ -310,7 +310,7 @@ struct FormalModuleClosure: Sendable {
   static func resolve(root: TLASpec) throws -> FormalModuleClosure {
     var entries: [Entry] = []
     var edges: [Edge] = []
-    var sourceByName: [String: String] = [:]
+    var sourceByName: [String: CompilationIdentity] = [:]
     var active: [String] = []
 
     func diagnostic(
@@ -339,9 +339,9 @@ struct FormalModuleClosure: Sendable {
         throw diagnostic(.duplicateFormalModuleParameter, path: path + ["parameters", duplicate], expected: "one formal parameter named '\(duplicate)'", actual: "multiple formal parameters", nextSafeAction: "Rename or remove the duplicate parameter, then compile again.")
       }
       let importNames = module.imports.map(\.name)
-      var sourceByImportName: [String: String] = [:]
+      var sourceByImportName: [String: CompilationIdentity] = [:]
       for imported in module.imports {
-        let source = imported.compilationFingerprint
+        let source = imported.compilationIdentity
         if let firstSource = sourceByImportName[imported.name] {
           guard firstSource == source else {
             throw diagnostic(
@@ -446,7 +446,7 @@ struct FormalModuleClosure: Sendable {
 
     func visit(_ module: TLASpec, path: [String]) throws {
       try validateDeclaredRelationships(module, path: path)
-      let source = module.compilationFingerprint
+      let source = module.compilationIdentity
       if let previousSource = sourceByName[module.name] {
         guard previousSource == source else {
           throw diagnostic(

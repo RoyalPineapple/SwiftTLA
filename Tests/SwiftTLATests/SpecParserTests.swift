@@ -746,6 +746,34 @@ private func parserEnum(
         )
         #expect(try parserTree.compile().identity == runtimeTree.compile().identity)
     }
+
+    @Test("parsed and result-builder shared initializers retain their formal expression")
+    func sharedInitializerExpressionMatchesAcrossFrontEnds() throws {
+        let closure = try parseClosure("""
+        {
+            let count = SharedVar("count", initial: 1 + 2)
+            count
+        }
+        """)
+        let parsed = SpecParser.parseSpecClosure(closure)
+        #expect(parsed.diagnostics.isEmpty)
+
+        let runtime = TLASpec("SharedInitializer") {
+            let count = SharedVar("count", initial: 1 + 2)
+            count
+        }
+        let parsedVariable = try #require(try compile(parsed, named: "SharedInitializer").spec.variables.first)
+        let runtimeVariable = try #require(try runtime.compile().spec.variables.first)
+
+        #expect(parsedVariable == runtimeVariable)
+        #expect(parsedVariable.initial == .int(0))
+        #expect(parsedVariable.initExpr == .add(.value(.int(1)), .value(.int(2))))
+
+        let compilation = try runtime.compile()
+        let state = try #require(try CompiledRuntime(compilation: compilation).initialStates().first)
+        let count = try #require(TLAStateProjection.Token(validating: "count"))
+        #expect(try state.projection(using: compilation.layout).value(for: count) == .int(3))
+    }
 }
 
 private enum ParserNode: String, FiniteDomainKey {
@@ -844,6 +872,22 @@ private enum ParserNode: String, FiniteDomainKey {
 
         #expect(parsed.diagnostics.isEmpty)
         #expect(parsed.variables.map(\.swiftTypeName) == ["SwiftTLA.Function<Model.Node, SwiftTLA.SetExpr<Swift.Int>>"])
+    }
+
+    @Test("top-level variable type facts are retained in the parser context")
+    func retainsAnnotatedVariableTypeInSourceContext() throws {
+        let source = """
+        {
+            let mode: SharedVariable<CameraMode> = SharedVar("mode", initial: CameraMode.idle)
+        }
+        """
+        let closure = try parseClosure(source)
+        let parsed = SpecParser.parseSpecClosure(closure, enumDefinitions: [cameraModeDefinition])
+
+        #expect(parsed.diagnostics.isEmpty)
+        #expect(parsed.variables.map(\.swiftTypeName) == ["CameraMode"])
+        #expect(parsed.sourceContext.variables.map(\.sourceName) == ["mode"])
+        #expect(parsed.sourceContext.swiftVariableTypes == ["mode": "CameraMode"])
     }
 
     @Test func finiteVariableDomainsCompareAsFormalSets() throws {
@@ -1129,13 +1173,35 @@ private enum ParserNode: String, FiniteDomainKey {
     @Test func explicitlyTypedBinaryFormalCallPreservesItsArguments() throws {
         let built: Expr<Bool> = FormalCall(as: Bool.self, "SafeAt", 3, 5)
         let parsed = SpecParser.decodeTypedFacadeValue(
-            try parseExpression("FormalCall(as: Bool.self, \"SafeAt\", 3, 5)"),
-            substitutions: [:]
+            try parseExpression("FormalCall(as: Bool.self, \"SafeAt\", 3, 5)")
         )
 
         #expect(parsed == built.stateExpr)
         #expect(built.stateExpr == .operatorApplication(
             .reference("SafeAt", arity: 2), [.value(3), .value(5)]
+        ))
+    }
+
+    @Test("typed facade closure binders preserve lexical shadowing")
+    func typedFacadeBindersPreserveLexicalShadowing() throws {
+        let parsed = try #require(SpecParser.decodeTypedFacadeValue(
+            try parseExpression("""
+            ForAll(in: IntRange(1, through: 2)) { outer in
+                Exists(in: IntRange(1, through: 2)) { inner in
+                    outer.expr + inner.expr > 0
+                }
+            }
+            """)
+        ))
+
+        #expect(parsed == .forAll(
+            .integerRange(.int(1), .int(2)),
+            "outer",
+            .exists(
+                .integerRange(.int(1), .int(2)),
+                "inner",
+                .greaterThan(.add(.variable("outer"), .variable("inner")), .int(0))
+            )
         ))
     }
 
@@ -1985,7 +2051,7 @@ private struct FormalDefinitionFidelityMacro {
 @Suite(.serialized) struct FormalDefinitionFidelityMacroTests {
     @Test func generatedModelRetainsFormalDefinition() throws {
         #expect(FormalDefinitionFidelityMacro.spec.formalOperatorDefinitions.map(\.name) == ["Refines"])
-        _ = try FormalDefinitionFidelityMacro.compiledSpecification()
+        _ = try FormalDefinitionFidelityMacro.spec.compile()
     }
 }
 

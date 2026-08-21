@@ -5,10 +5,8 @@ import Foundation
 struct BluetoothCLI {
     static func main() async {
         let arguments = Array(CommandLine.arguments.dropFirst())
-        if arguments.contains("--verify") {
+        if arguments.contains("--exercise") {
             do {
-                try BluetoothModel.verifySpec(configuration: .standard)
-                try PeripheralModel.verifySpec(configuration: .standard)
                 let central = BluetoothModel.Machine()
                 _ = try await central.apply(.poweredOn)
                 _ = try await central.apply(.startScan)
@@ -17,7 +15,7 @@ struct BluetoothCLI {
                 _ = try await peripheral.apply(.connected)
                 _ = try await peripheral.apply(.beginDiscovery)
                 _ = try await peripheral.apply(.finishDiscovery)
-                print("Bluetooth formal checks passed.")
+                print("Bluetooth typed machine checks passed.")
                 print("central: \(await central.state.phase.rawValue)")
                 print("peripheral: \(await peripheral.state.phase.rawValue)")
             } catch {

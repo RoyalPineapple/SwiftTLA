@@ -35,15 +35,9 @@ member constants. Independent collections use independent permutation groups.
 
 ## Run a bounded check
 
-```swift
-let compilation = try spec.compile()
-let result = try ModelChecker(compilation: compilation).check()
-```
-
-The exploration result states the declared finite scope. The rendered TLA+
-bundle declares the member domain, symmetry operator, and TLC configuration.
-The temporal and symmetry conformance gate compares the declared finite
-SwiftTLA and TLC explorations.
+The rendered TLA+ bundle declares the member domain, symmetry operator, and
+TLC configuration. The temporal and symmetry conformance gate compares the
+declared finite SwiftTLA and TLC explorations.
 
 ## Generated collections
 

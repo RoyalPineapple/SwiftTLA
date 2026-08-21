@@ -515,7 +515,7 @@ extension ParserSession {
             ))
             return
         }
-        guard let expression = decodeTypedFacadeValue(args[1].expression, substitutions: [:]),
+        guard let expression = decodeTypedFacadeValue(args[1].expression, scope: .empty),
               let value = staticConstantValue(expression)
         else {
             result.diagnostics.append(.init(

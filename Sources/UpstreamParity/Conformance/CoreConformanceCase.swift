@@ -322,6 +322,7 @@ public struct CoreConformanceCasesManifest: Decodable, Sendable {
         public let argumentsSHA256: String
         public let workers: Int
         public let fingerprintPolynomial: Int
+        public let maximumStateLimit: Int
         public let deadlock: Bool
         public let replay: String
         public let expectedExit: Int?
@@ -336,7 +337,7 @@ public struct CoreConformanceCasesManifest: Decodable, Sendable {
 
         private enum CodingKeys: String, CodingKey, CaseIterable {
             case id, swiftSpec, module, configuration, imports, moduleSHA256, cfgSHA256
-            case arguments, argumentsSHA256, workers, fingerprintPolynomial, deadlock, replay
+            case arguments, argumentsSHA256, workers, fingerprintPolynomial, maximumStateLimit, deadlock, replay
             case expectedExit, upstream, fixtures, identityMapping, invocationMappings, valueNormalizations, semanticCitations, governance
             case expectedArtifacts
         }
@@ -354,6 +355,7 @@ public struct CoreConformanceCasesManifest: Decodable, Sendable {
             argumentsSHA256 = try container.decode(String.self, forKey: .argumentsSHA256)
             workers = try container.decode(Int.self, forKey: .workers)
             fingerprintPolynomial = try container.decode(Int.self, forKey: .fingerprintPolynomial)
+            maximumStateLimit = try container.decode(Int.self, forKey: .maximumStateLimit)
             deadlock = try container.decode(Bool.self, forKey: .deadlock)
             replay = try container.decode(String.self, forKey: .replay)
             expectedExit = try container.decodeIfPresent(Int.self, forKey: .expectedExit)
@@ -378,7 +380,7 @@ public struct CoreConformanceCasesManifest: Decodable, Sendable {
             }
             guard TLCReferencePin.isSHA256(moduleSHA256), TLCReferencePin.isSHA256(cfgSHA256),
                   argumentsSHA256 == try CoreConformanceCase.argumentsDigest(arguments), workers == 1,
-                  fingerprintPolynomial >= 0 else {
+                  fingerprintPolynomial >= 0, maximumStateLimit > 0 else {
                 throw ConformanceGovernanceError.invalidField(record: id, field: "launch contract")
             }
             let wrappers = invocationMappings.map(\.wrapper)

@@ -5,6 +5,28 @@ import SwiftTLAMacros
 import SwiftParser
 import SwiftSyntax
 
+private actor CallbackValue<Value: Sendable> {
+    private var stored: Value
+
+    init(_ value: Value) {
+        stored = value
+    }
+
+    func set(_ value: Value) {
+        stored = value
+    }
+
+    func value() -> Value {
+        stored
+    }
+}
+
+private extension CallbackValue where Value == Int {
+    func increment() {
+        stored += 1
+    }
+}
+
 @TLAModel
 private struct SanitizedActionLabelModel {
     static var spec: TLASpec {
@@ -123,9 +145,6 @@ struct GeneratedAlgorithmMachineTests {
 
     @Test("a generated machine accepts one declared initial state")
     func generatedMachineAcceptsDeclaredInitialState() throws {
-        #expect(
-            SeededCounterMachine.generatedMachineMetadata.variables.contains { $0.formalName == "pc" } == false
-        )
         var machine = try SeededCounterMachine.makeMachine(
             .init(value: 2)
         )
@@ -367,7 +386,7 @@ struct GeneratedIntegerChoiceAlgorithmTests {
     func generatedModelRetainsIntegerChoice() throws {
         GeneratedIntegerChoiceAlgorithm._checkParserTree()
         let spec = GeneratedIntegerChoiceAlgorithm.spec
-        let graph = try ModelChecker(spec: spec).exploreGraph()
+        let graph = try ModelChecker(compilation: try spec.compile()).exploreGraph()
         #expect(try Set(graph.states.values.compactMap { try value("selected", in: $0) }) == [.int(0), .int(1), .int(2), .int(3)])
     }
 }
@@ -393,7 +412,7 @@ struct GeneratedAlgorithmStateConstraintTests {
         GeneratedAlgorithmStateConstraint._checkParserTree()
         #expect(GeneratedAlgorithmStateConstraint.spec.constraint
             == .lessThan(.variable("count"), .value(.int(2))))
-        let graph = try ModelChecker(spec: GeneratedAlgorithmStateConstraint.spec).exploreGraph()
+        let graph = try ModelChecker(compilation: try GeneratedAlgorithmStateConstraint.spec.compile()).exploreGraph()
         #expect(try Set(graph.states.values.compactMap { try value("count", in: $0) }) == [.int(0), .int(1)])
     }
 }
@@ -585,7 +604,7 @@ struct NestedAdapterConcurrencyTests {
     ) async throws -> NestedComposedCounter.State {
         switch try await actor.current() {
         case .snapshot(let snapshot): return snapshot.state
-        case .unavailable(let reason): throw GeneratedMachineError.liveMachineUnavailable(reason)
+        case .unavailable(let reason): throw GeneratedMachineError.liveMachineUnavailable(String(describing: reason))
         }
     }
 }
@@ -772,14 +791,15 @@ struct GeneratedStateMachineTests {
     @MainActor
     func observableParameterizedAction() async throws {
         let elevator = try await TwoCarElevatorMachine.Observable(live: try TwoCarElevatorMachine.makeLive())
-        let callbackID = LockedValue<Int?>(nil)
+        let callbackID = CallbackValue<Int?>(nil)
         elevator.onTransition = { action, _, _ in
             guard case .moveElevator(let id) = action else { return }
-            callbackID.value = id
+            await callbackID.set(id)
         }
         _ = try await elevator._moveElevator(id: 2)
         #expect(elevator.state.floor == 1)
-        #expect(callbackID.value == 2)
+        let capturedID = await callbackID.value()
+        #expect(capturedID == 2)
     }
 
     @Test("Model macro generates a parameterized action method")
@@ -850,7 +870,7 @@ struct GeneratedStateMachineTests {
             [.int(2), .int(10), .int(100)], [.int(2), .int(10), .int(200)],
             [.int(2), .int(20), .int(100)], [.int(2), .int(20), .int(200)]
         ]
-        let graph = try ModelChecker(spec: builder).exploreGraph()
+        let graph = try ModelChecker(compilation: try builder.compile()).exploreGraph()
         #expect(graph.transitions[.init(0)]?.map(\.label.arguments) == expectedArguments)
 
         let machine = try EndToEndThreeParameterActionMachine.makeMachine()
@@ -936,12 +956,6 @@ struct GeneratedStateMachineTests {
         #expect(after.state.floor == 222)
     }
 
-    @Test("Generated verification retains every constrained nondeterministic successor")
-    func generatedVerificationRetainsNondeterministicSuccessors() throws {
-        #expect(try NondeterministicConstrainedMachine.verifyTransitions(configuration: .standard) > 0)
-        #expect(try NondeterministicConstrainedMachine.verifyInvariants(configuration: .standard) > 0)
-    }
-
     @Test("Observable and actor adapters return the canonical three-argument transition evidence")
     @MainActor
     func observableAndActorMatchCanonicalThreeArgumentEvidence() async throws {
@@ -949,16 +963,16 @@ struct GeneratedStateMachineTests {
         let expected = try model.apply(.board(person: 2, elevator: 20, direction: 200))
 
         let observable = try await ThreeParameterActionMachine.Observable(live: try ThreeParameterActionMachine.makeLive())
-        let callback = LockedValue<BoardCallback?>(nil)
+        let callback = CallbackValue<BoardCallback?>(nil)
         observable.onTransition = { action, before, after in
             guard case .board(let person, let elevator, let direction) = action else { return }
-            callback.value = .init(
+            await callback.set(.init(
                 person: person,
                 elevator: elevator,
                 direction: direction,
                 before: before,
                 after: after
-            )
+            ))
         }
         let observed = try await observable.apply(.board(person: 2, elevator: 20, direction: 200))
 
@@ -971,11 +985,12 @@ struct GeneratedStateMachineTests {
         #expect(acted.action == expected.action)
         #expect(acted.before.floor == expected.before.floor)
         #expect(acted.after.floor == expected.after.floor)
-        #expect(callback.value?.person == 2)
-        #expect(callback.value?.elevator == 20)
-        #expect(callback.value?.direction == 200)
-        #expect(callback.value?.before.floor == expected.before.floor)
-        #expect(callback.value?.after.floor == expected.after.floor)
+        let callbackValue = await callback.value()
+        #expect(callbackValue?.person == 2)
+        #expect(callbackValue?.elevator == 20)
+        #expect(callbackValue?.direction == 200)
+        #expect(callbackValue?.before.floor == expected.before.floor)
+        #expect(callbackValue?.after.floor == expected.after.floor)
     }
 
     @Test("Rejected generated labels preserve model, observable, and actor state")
@@ -992,8 +1007,8 @@ struct GeneratedStateMachineTests {
         #expect(model.state == modelBefore)
 
         let observable = try await ThreeParameterActionMachine.Observable(live: try ThreeParameterActionMachine.makeLive())
-        let callbackCount = LockedValue(0)
-        observable.onTransition = { _, _, _ in callbackCount.value += 1 }
+        let callbackCount = CallbackValue(0)
+        observable.onTransition = { _, _, _ in await callbackCount.increment() }
         let observableBefore = observable.state
         do {
             _ = try await observable.apply(.board(person: 2, elevator: 30, direction: 200))
@@ -1002,7 +1017,8 @@ struct GeneratedStateMachineTests {
             #expect(error is GeneratedMachineError)
         }
         #expect(observable.state == observableBefore)
-        #expect(callbackCount.value == 0)
+        let observedCallbackCount = await callbackCount.value()
+        #expect(observedCallbackCount == 0)
 
         let actor = ThreeParameterActionMachine.Actor(live: try ThreeParameterActionMachine.makeLive())
         let actorBefore = try await actorState(actor)
@@ -1019,7 +1035,7 @@ struct GeneratedStateMachineTests {
     ) async throws -> ThreeParameterActionMachine.State {
         switch try await actor.current() {
         case .snapshot(let snapshot): return snapshot.state
-        case .unavailable(let reason): throw GeneratedMachineError.liveMachineUnavailable(reason)
+        case .unavailable(let reason): throw GeneratedMachineError.liveMachineUnavailable(String(describing: reason))
         }
     }
 
@@ -1049,15 +1065,10 @@ struct GeneratedStateMachineTests {
         #expect(spec.variables.count == 1)
         #expect(spec.variables[0].name == "hr")
         #expect(spec.variables[0].initial == .int(1))
-        let result = try ModelChecker(spec: spec, configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100)).check()
+        let result = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100)).check()
         if case .ok(let count) = result { #expect(count == 12) } else {
             #expect(Bool(false), "Expected 12 states")
         }
-    }
-
-    @Test("verifySpec passes for CounterNoInvs")
-    func counterNoInvsVerifySpec() throws {
-        try CounterNoInvs.verifySpec(configuration: .standard)
     }
 
     private func runSwift(_ arguments: [String]) throws -> (status: Int32, output: String) {

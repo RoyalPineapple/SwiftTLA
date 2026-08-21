@@ -924,21 +924,9 @@ public func SharedVar<Value: TLAValueType>(
     _ name: String,
     in values: Expr<SetExpr<Value>>
 ) -> SharedVariable<Value> {
-    // The initial domain is a formal expression, not Swift collection data.
-    // Static sets keep a canonical declaration value for parser fidelity;
-    // dependent domains (for example `ZSeq(CharacterSet)`) use the type's
-    // neutral value solely as metadata. `initialSet` is the actual Init rule.
-    let representative: TLAValue
-    if case .set(let members) = try? evaluateClosed(values.raw),
-       let first = members.min() {
-        representative = first
-    } else {
-        representative = Value.defaultValue.tlaValue
-    }
     return SharedVariable(
         name: name,
-        // `initialSet` supplies every initial state.
-        initial: .value(representative),
+        initial: .value(.int(0)),
         initialSet: values.raw,
         swiftTypeName: String(reflecting: Value.self)
     )
@@ -1094,8 +1082,12 @@ extension SpecBuilder {
     /// Lets a `#spec` body use the same typed shared declaration whether it
     /// contains a PlusCal `Algorithm` or an ordinary TLA+ action specification.
     public static func buildExpression<Value>(_ variable: SharedVariable<Value>) -> [SpecComponent] {
-        let initial = (try? evaluateClosed(variable.initial)) ?? Value.defaultValue.tlaValue
-        return [VarDecl(variable.name, initial, initialSet: variable.initialSet)]
+        return [VarDecl(
+            variable.name,
+            .int(0),
+            initialSet: variable.initialSet,
+            initExpr: variable.initialSet == nil ? variable.initial : nil
+        )]
     }
 }
 

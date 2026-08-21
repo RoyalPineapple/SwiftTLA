@@ -3,19 +3,6 @@ import Bluetooth
 import XCTest
 
 final class GeneratedAppleModelTests: XCTestCase {
-    func testBluetoothModelsVerify() throws {
-        try BluetoothModel.verifySpec(configuration: .standard)
-        try PeripheralModel.verifySpec(configuration: .standard)
-    }
-
-    func testAVPipelineModelsVerify() throws {
-        try CaptureModel.verifySpec(configuration: .standard)
-        try WriterModel.verifySpec(configuration: .standard)
-        try PlayerModel.verifySpec(configuration: .standard)
-        try DiskStoreModel.verifySpec(configuration: .standard)
-        try MediaPipelineModel.verifySpec(configuration: .standard)
-    }
-
     func testCaptureGeneratedLifecycle() async throws {
         let machine = CaptureModel.Machine()
         _ = try await machine.apply(.configure)

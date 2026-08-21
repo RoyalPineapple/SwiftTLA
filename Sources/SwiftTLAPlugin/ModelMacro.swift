@@ -57,7 +57,7 @@ enum TLASpecVerifier {
 
         let enumInfos = Self.collectEnumVariables(from: memberList)
         let enumDefinitions = collectEnumMetadata(from: memberList)
-        var parsed = SpecParser.parseSpecClosure(
+        let parsed = SpecParser.parseSpecClosure(
             source.closure,
             enumDefinitions: enumDefinitions
         )
@@ -66,16 +66,6 @@ enum TLASpecVerifier {
         }
         if parsed.variables.isEmpty && parsed.sourceAlgorithms.isEmpty {
             throw SimpleError("No variables in spec")
-        }
-
-        let varBindings = scanVarBindings(in: source.closure)
-        for i in parsed.variables.indices {
-            if let binding = varBindings.first(where: { $0.name == parsed.variables[i].name }),
-               binding.typeName != "TLAValue" {
-                if parsed.variables[i].swiftTypeName == nil {
-                    parsed.variables[i].swiftTypeName = binding.typeName
-                }
-            }
         }
 
         var allInvariants = parsed.invariants.map { NamedInvariant(name: $0.name, body: $0.body) }
@@ -103,60 +93,6 @@ enum TLASpecVerifier {
             enumInfos: enumInfos,
             hasNestedLiveAdapter: hasNestedLiveAdapter(in: memberList)
         )
-    }
-
-    // MARK: - Var bindings (scan pass)
-
-    struct VarBinding {
-        let name: String
-        let typeName: String
-    }
-
-    static func typeNameFromAnnotation(_ typeAnn: TypeAnnotationSyntax?) -> String? {
-        typeAnn?.type.as(IdentifierTypeSyntax.self)?.name.text
-    }
-
-    static func inferTypeFromExpr(_ expr: ExprSyntax) -> String? {
-        if expr.is(IntegerLiteralExprSyntax.self) { return "Int" }
-        if expr.is(BooleanLiteralExprSyntax.self) { return "Bool" }
-        if expr.is(StringLiteralExprSyntax.self) { return "String" }
-        if let memberAccess = expr.as(MemberAccessExprSyntax.self),
-           let baseRef = memberAccess.base?.as(DeclReferenceExprSyntax.self) {
-            return baseRef.baseName.text
-        }
-        return nil
-    }
-
-    static func scanVarBindings(in closure: ClosureExprSyntax) -> [VarBinding] {
-        var bindings: [VarBinding] = []
-        for item in closure.statements {
-            guard case .decl(let decl) = item.item,
-                  let varDecl = decl.as(VariableDeclSyntax.self)
-            else { continue }
-            for binding in varDecl.bindings {
-                guard let patternName = binding.pattern.as(IdentifierPatternSyntax.self)?.identifier.text,
-                      let initializer = binding.initializer,
-                      let fc = initializer.value.as(FunctionCallExprSyntax.self)
-                else { continue }
-                let baseName = fc.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text
-                    ?? fc.calledExpression.as(GenericSpecializationExprSyntax.self)?.expression.as(DeclReferenceExprSyntax.self)?.baseName.text
-                guard baseName == "Var" else { continue }
-                let genericType = fc.calledExpression.as(GenericSpecializationExprSyntax.self)?
-                    .genericArgumentClause.arguments.first?.argument.as(IdentifierTypeSyntax.self)?.name.text
-                let args = Array(fc.arguments)
-                guard !args.isEmpty,
-                      let firstArg = args[0].expression.as(StringLiteralExprSyntax.self),
-                      let varName = firstArg.segments.first?.as(StringSegmentSyntax.self)?.content.text,
-                      varName == patternName
-                else { continue }
-                let typeName = typeNameFromAnnotation(binding.typeAnnotation)
-                    ?? genericType
-                    ?? (args.count >= 2 ? inferTypeFromExpr(args[1].expression) : nil)
-                    ?? "Int"
-                bindings.append(VarBinding(name: patternName, typeName: typeName))
-            }
-        }
-        return bindings
     }
 
     // MARK: - Helpers
@@ -316,7 +252,7 @@ public struct ModelMacro: MemberMacro, ExtensionMacro {
             return []
         }
         guard let ext = ("""
-            extension \(type.trimmed): TLAModelType, TLAMachineSchemaProviding {}
+            extension \(type.trimmed): TLAModelType {}
             """ as DeclSyntax).as(ExtensionDeclSyntax.self) else { return [] }
         return [ext]
     }
@@ -341,7 +277,7 @@ public struct TLAActorMacro: MemberMacro, ExtensionMacro {
         switch adapterNestingMode(for: declaration, at: node, in: context) {
         case .nested:
             guard let ext = ("""
-                extension \(type.trimmed): TLAMachineSchemaProviding {}
+                extension \(type.trimmed) {}
                 """ as DeclSyntax).as(ExtensionDeclSyntax.self) else { return [] }
             return [ext]
         case .invalid:
@@ -367,7 +303,7 @@ public struct TLAObservableMacro: MemberMacro, ExtensionMacro {
         switch adapterNestingMode(for: declaration, at: node, in: context) {
         case .nested:
             guard let ext = ("""
-                @MainActor extension \(type.trimmed): Sendable, TLAMachineSchemaProviding {}
+                @MainActor extension \(type.trimmed): Sendable {}
                 """ as DeclSyntax).as(ExtensionDeclSyntax.self) else { return [] }
             return [ext]
         case .invalid:

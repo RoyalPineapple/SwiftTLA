@@ -11,29 +11,17 @@ if args.first == "temporal-symmetry" {
 if args.first == "public-workflow" {
     runPublicWorkflow(arguments: Array(args.dropFirst()))
 }
-if args.first == "symmetric-collections" {
-    do {
-        try runSymmetricCollectionOracle()
-        exit(0)
-    } catch {
-        fputs("Symmetric collection TLC oracle failed: \(error)\n", stderr)
-        exit(1)
-    }
-}
 guard let name = args.first else {
     fputs("""
     Usage: tlc-validate <command>
       core-conformance run|gate ...
       temporal-symmetry run|gate ...
       public-workflow ...
-      symmetric-collections
     """, stderr)
     exit(1)
 }
 fputs("tlc-validate: unknown command \(name)\n", stderr)
 exit(1)
-private let coreConformanceMaximumStateLimit = 100_000
-
 private struct PublicWorkflowOptions {
     let output: String
     let hostedCI: Bool
@@ -295,11 +283,11 @@ private func runCoreConformance(arguments: [String]) -> Never {
                         exploration: try ModelChecker(
                             compilation: compilation,
                             configuration: try FiniteExplorationConfiguration(
-                                maximumStateLimit: coreConformanceMaximumStateLimit
+                                maximumStateLimit: entry.maximumStateLimit
                             )
                         ).explore(),
                         compiledModelIdentity: compilation.identity.value,
-                        maximumStateLimit: coreConformanceMaximumStateLimit
+                        maximumStateLimit: entry.maximumStateLimit
                     )
                 },
                 tlcRequest: request,
@@ -396,7 +384,7 @@ private func runCoreSupportGate(arguments: [String]) -> Never {
         fputs("core-support-gate: register loading failed: \(error)\n", stderr)
     }
     do {
-        try writeJSONReport(report, to: reportURL)
+        try ConformanceEvidence.writePrettyCanonical(report, to: reportURL)
     } catch {
         failCoreConformance(CoreConformanceCLIError.unableToWriteReport(reportURL.path))
     }
@@ -467,14 +455,6 @@ private func invalidRegisterReport(gateRunID: UUID) throws -> CoreSupportAdmissi
         mandatoryCaseIDs: ["governance-register"],
         divergenceIDs: [])
     return try CoreSupportAdmission(gateRunID: gateRunID, entries: [entry])
-}
-private func writeJSONReport<Record: Encodable>(_ record: Record, to url: URL) throws {
-    try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-    let encoder = JSONEncoder()
-    encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-    var data = try encoder.encode(record)
-    data.append(0x0A)
-    try data.write(to: url, options: .atomic)
 }
 private enum TemporalSymmetryCLIError: Error, CustomStringConvertible {
     case usage
@@ -553,7 +533,7 @@ private func runTemporalSymmetry(arguments: [String]) -> Never {
         }
     }
     do {
-        try writeJSONReport(report, to: reportURL)
+        try ConformanceEvidence.writePrettyCanonical(report, to: reportURL)
     } catch {
         failTemporalSymmetry(TemporalSymmetryCLIError.unableToWriteReport(reportURL.path))
     }

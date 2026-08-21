@@ -123,7 +123,7 @@ struct GeneratedActorExecutionContractTests {
     private func state(of actor: DuckDuckLeaderCanonical.Actor) async throws -> DuckDuckLeaderCanonical.State {
         switch try await actor.current() {
         case .snapshot(let snapshot): return snapshot.state
-        case .unavailable(let reason): throw GeneratedMachineError.liveMachineUnavailable(reason)
+        case .unavailable(let reason): throw GeneratedMachineError.liveMachineUnavailable(String(describing: reason))
         }
     }
 

@@ -145,7 +145,6 @@ struct GeneratedMachineDocumentationTests {
         "Isolation and callbacks",
         "Test an integration",
         "Debug a machine",
-        "Limits and evidence",
         "SwiftUI",
         "API reference",
         "Stable contract"
@@ -158,10 +157,6 @@ struct GeneratedMachineDocumentationTests {
         "A nested `@TLAObservable` adapter is main-actor isolated",
         "Adapters\nshare the enclosing model's typed `Live` runtime",
         "reduces a contiguous committed update",
-        "Generated `VerificationError`",
-        "Generated `verifySpec(configuration:)`",
-        "Generated `verifyTransitions(configuration:)`",
-        "Generated `verifyInvariants(configuration:)`",
         "Generated `synchronousMachineObservation()`"
     ]
 
@@ -185,10 +180,9 @@ struct GeneratedMachineDocumentationTests {
             ("`@TLAModel`", "Sources/SwiftTLAMacros/Macros.swift", "public macro TLAModel"),
             ("`@TLAActor`", "Sources/SwiftTLAMacros/Macros.swift", "public macro TLAActor"),
             ("`@TLAObservable`", "Sources/SwiftTLAMacros/Macros.swift", "public macro TLAObservable"),
-            ("`GeneratedMachineError`", "Sources/SwiftTLA/CanonicalMachine.swift", "public enum GeneratedMachineError"),
+            ("`GeneratedMachineError`", "Sources/SwiftTLA/TLAStateProjection.swift", "public enum GeneratedMachineError"),
             ("Generated `ActionLabel`", "Sources/SwiftTLAPlugin/MacroExpander.swift", "public enum ActionLabel"),
-            ("Generated `TransitionResult`", "Sources/SwiftTLAPlugin/MacroExpander+CanonicalMachine.swift", "public struct TransitionResult"),
-            ("Generated `verifySpec(configuration:)`", "Sources/SwiftTLAPlugin/MacroExpander+Generation.swift", "public static func verifySpec(")
+            ("Generated `TransitionResult`", "Sources/SwiftTLAPlugin/MacroExpander+GeneratedMachineStorage.swift", "public struct TransitionResult"),
         ]
     }
 

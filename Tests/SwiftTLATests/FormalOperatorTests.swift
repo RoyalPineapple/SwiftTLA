@@ -198,7 +198,7 @@ struct FormalOperatorTests {
     let successor = try #require(try compilation.successors(for: action, arguments: [], from: initial).first)
     let token = try #require(TLAStateProjection.Token(validating: "counter"))
     #expect(successor.value(for: token) == .int(2))
-    let result = try ModelChecker(spec: spec, configuration: try FiniteExplorationConfiguration(maximumStateLimit: 10)).check()
+    let result = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 10)).check()
     #expect({ if case .ok = result { true } else { false } }())
   }
 
@@ -249,7 +249,7 @@ struct FormalOperatorTests {
     let successor = try #require(try compilation.successors(for: action, arguments: [], from: initial).first)
     let token = try #require(TLAStateProjection.Token(validating: "counter"))
     #expect(successor.value(for: token) == .int(2))
-    let result = try ModelChecker(spec: consumer, configuration: try FiniteExplorationConfiguration(maximumStateLimit: 10)).check()
+    let result = try ModelChecker(compilation: try consumer.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 10)).check()
     #expect({ if case .ok = result { true } else { false } }())
   }
 

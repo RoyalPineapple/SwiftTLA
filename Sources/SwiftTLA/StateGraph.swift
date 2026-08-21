@@ -1,4 +1,4 @@
-public struct StateGraph: Sendable {
+package struct StateGraph: Sendable {
     public let specName: String
     public let variableNames: [String]
     public struct TransitionLabel: Hashable, Sendable, CustomStringConvertible {
@@ -54,7 +54,7 @@ public struct StateGraph: Sendable {
     }
 }
 
-public struct ModelExplorationResult {
+package struct ModelExplorationResult {
     public let graph: StateGraph
     public let initialStateIDs: [StateGraph.StateID]
     public let result: CheckResult

@@ -514,7 +514,6 @@ extension StateExpr {
   }
 }
 
-/// Replaces `.variable(from)` with `.variable(to)` throughout a StateExpr AST.
-public func renameVar(_ from: String, to: String, in expr: StateExpr) -> StateExpr {
+package func renameVar(_ from: String, to: String, in expr: StateExpr) -> StateExpr {
   StateExpr.substituteVariable(from, with: .variable(to), in: expr)
 }

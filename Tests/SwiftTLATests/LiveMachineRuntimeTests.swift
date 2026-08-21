@@ -21,19 +21,6 @@ struct LiveMachineRuntimeTests {
         return token
     }
 
-    private static let counterSchema = MachineSchema(
-        model: .init(name: "LiveCounter"),
-        state: [.init(id: "count", display: .init(name: "count"), value: .integer, swiftType: "Int")],
-        actions: [
-            .init(id: "advance", display: .init(name: "advance"), parameters: []),
-            .init(
-                id: "step",
-                display: .init(name: "step"),
-                parameters: [.init(id: "delta", display: .init(name: "delta"), value: .integer, swiftType: "Int")]
-            )
-        ]
-    )
-
     private static func counterSpec() -> TLASpec {
         let count = Var<Int>("count")
         return TLASpec("LiveCounter") {
@@ -88,7 +75,6 @@ struct LiveMachineRuntimeTests {
             .init(token: try countToken(), value: .int(initialCount))
         ])
         return TLALiveMachineOwner.create(
-            schema: counterSchema,
             initial: initial,
             driver: resolvedDriver
         )

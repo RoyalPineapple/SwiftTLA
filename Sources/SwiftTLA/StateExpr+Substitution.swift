@@ -1,9 +1,9 @@
 extension StateExpr {
-    public static func substituteVariable(_ name: String, _ value: TLAValue, in expr: StateExpr) -> StateExpr {
+    package static func substituteVariable(_ name: String, _ value: TLAValue, in expr: StateExpr) -> StateExpr {
         substituteVariable(name, with: .value(value), in: expr)
     }
 
-    public static func substituteVariable(
+    package static func substituteVariable(
         _ name: String,
         with replacement: StateExpr,
         in expr: StateExpr

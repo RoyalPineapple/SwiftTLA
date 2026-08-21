@@ -15,7 +15,7 @@ struct SymmetricCollectionReportTests {
       Invariant("valid") { devices.allSatisfy { $0 == 0 } }
     }
 
-    let result = try ModelChecker(spec: spec).check()
+    let result = try ModelChecker(compilation: try spec.compile()).check()
     guard case .bounded(let scopes, let outcome) = result else {
       Issue.record("Expected bounded result, got \(result)")
       return
@@ -34,7 +34,7 @@ struct SymmetricCollectionReportTests {
       Variable(counter, 0)
     }
 
-    let result = try ModelChecker(spec: spec).check()
+    let result = try ModelChecker(compilation: try spec.compile()).check()
     #expect({ if case .ok = result { true } else { false } }())
     #expect(result.description == "OK — explored 1 state(s)")
   }
@@ -47,7 +47,7 @@ struct SymmetricCollectionReportTests {
       Assume(false)
     }
 
-    let result = try ModelChecker(spec: spec).check()
+    let result = try ModelChecker(compilation: try spec.compile()).check()
     guard case .bounded(let scopes, let outcome) = result,
           case .error("ASSUME failed") = outcome else {
       Issue.record("Expected wrapped assumption failure, got \(result)")
@@ -64,7 +64,7 @@ struct SymmetricCollectionReportTests {
       Invariant("mustBeOne") { devices.allSatisfy { $0 == 1 } }
     }
 
-    let result = try ModelChecker(spec: spec).check()
+    let result = try ModelChecker(compilation: try spec.compile()).check()
     assertBounded(result) { if case .invariantViolated = $0 { true } else { false } }
   }
 
@@ -78,7 +78,7 @@ struct SymmetricCollectionReportTests {
       }
     }
 
-    let result = try ModelChecker(spec: spec, configuration: try FiniteExplorationConfiguration(maximumStateLimit: 1)).check()
+    let result = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 1)).check()
     assertBounded(result) { if case .depthExceeded = $0 { true } else { false } }
   }
 
@@ -90,7 +90,7 @@ struct SymmetricCollectionReportTests {
       DeadlockCheck()
     }
 
-    let result = try ModelChecker(spec: spec).check()
+    let result = try ModelChecker(compilation: try spec.compile()).check()
     assertBounded(result) { if case .deadlocked = $0 { true } else { false } }
   }
 
@@ -102,7 +102,7 @@ struct SymmetricCollectionReportTests {
       Eventually("reachesOne", devices.contains { $0 == 1 })
     }
 
-    let result = try ModelChecker(spec: spec).checkLiveness()
+    let result = try ModelChecker(compilation: try spec.compile()).checkLiveness()
     assertBounded(result) { if case .livenessViolated = $0 { true } else { false } }
   }
 
@@ -114,7 +114,7 @@ struct SymmetricCollectionReportTests {
       Assume(StateExpr.variable("missing"))
     }
 
-    let result = try ModelChecker(spec: spec).check()
+    let result = try ModelChecker(compilation: try spec.compile()).check()
     guard case .bounded(let scopes, let outcome) = result,
           case .error(let message) = outcome else {
       Issue.record("Expected wrapped ASSUME evaluation error, got \(result)")
@@ -133,7 +133,7 @@ struct SymmetricCollectionReportTests {
       Always("defined", .variable("missing"))
     }
 
-    let result = try ModelChecker(spec: spec).checkLiveness()
+    let result = try ModelChecker(compilation: try spec.compile()).checkLiveness()
     guard case .bounded(let scopes, let outcome) = result,
           case .error(let message) = outcome else {
       Issue.record("Expected wrapped liveness evaluation error, got \(result)")

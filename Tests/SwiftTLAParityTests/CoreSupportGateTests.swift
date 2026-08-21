@@ -111,6 +111,19 @@ struct CoreSupportGateTests {
     #expect(reasons(in: report, for: "hour-clock-reachable-state-space").contains(.partialEvidence))
   }
 
+  @Test("retained graph evidence uses its declared exploration bound")
+  func blocksReceiptWithDifferentExplorationBound() throws {
+    let fixture = try GateFixture()
+    try fixture.mutateJSONObject(in: "hour-clock", file: "swift-run.json") { record in
+      var context = try #require(record["receiptContext"] as? [String: Any])
+      context["maximumStateLimit"] = 1
+      record["receiptContext"] = context
+    }
+
+    let report = try CoreSupportGate().evaluate(try fixture.input())
+    #expect(reasons(in: report, for: "hour-clock-reachable-state-space").contains(.partialEvidence))
+  }
+
   @Test("TLC process evidence has one complete lifecycle and artifact manifest")
   func blocksInvalidTLCProcessLifecycle() throws {
     let fixture = try GateFixture()

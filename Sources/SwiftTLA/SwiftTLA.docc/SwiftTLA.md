@@ -5,7 +5,7 @@ same model from Swift.
 
 ## Overview
 
-`SwiftTLA` contains the formal value model, parser support, checker, runtime,
+`SwiftTLA` contains the formal value model, parser support, compiler, runtime,
 and guarded application boundary. The `SwiftTLAMacros` module contains the
 macros that generate typed machines from a `TLASpec` declaration.
 
@@ -15,12 +15,11 @@ Application code reads generated `State`, `ActionLabel`, and
 ## Compile before formal work
 
 `TLASpec` is the one formal meaning of a supported model. Compile it before
-you run the checker or export TLA+ text. Generated models construct their own
+you export TLA+ text. Generated models construct their own
 typed machines.
 
 ```swift
 let compilation = try Counter.spec.compile()
-let checker = ModelChecker(compilation: compilation)
 var machine = try Counter.makeMachine()
 try machine.apply(.advance)
 ```
@@ -32,8 +31,7 @@ that requires each module. It contains no unrelated modules.
 
 Compilation can throw `CompilationDiagnostic`. The diagnostic identifies the
 stage, code, source path, expected value, actual value, and next safe action.
-Fix that source relationship before you compile again. Do not ignore the
-diagnostic and construct a checker or renderer from uncompiled input.
+Fix that source relationship before you compile again.
 
 ## Materialize a linked bundle
 
@@ -80,22 +78,6 @@ External comparison is a separate evidence step. Read
 - ``FormalModuleClosure``
 - ``TLAModuleBundle``
 - ``TLAModuleBundleIntegrityError``
-
-### State boundaries
-
-- ``TLAStateProjection``
-- ``TLAStateProjectionResult``
-- ``TLAStateProjectionDiagnostic``
-
-### Live machines
-
-- ``TLALiveMachineOwner``
-- ``TLALiveMachine``
-- ``TLALiveMachineIdentity``
-- ``TLALiveMachineSnapshot``
-- ``TLALiveActionOutcome``
-- ``TLALiveMachineObservationSubscription``
-- ``TLALiveMachineObservationEvent``
 
 ### Generated-machine errors
 

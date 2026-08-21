@@ -76,14 +76,6 @@ public struct IdentifiedModelCollection<Element: Identifiable, Value: TLAValueTy
     return entry
   }
 
-  public func projectedModelValue(preserving modelKeys: [TLAValue]) -> TLAValue {
-    let entries = insertionOrder.enumerated().compactMap { index, id -> (TLAValue, TLAValue)? in
-      guard let entry = self.entries[id] else { return nil }
-      let key = modelKeys.indices.contains(index) ? modelKeys[index] : .constant("\(name)LiveMember\(index)")
-      return (key, entry.value.tlaValue)
-    }
-    return .function(Dictionary(uniqueKeysWithValues: entries))
-  }
 }
 
 extension IdentifiedModelCollection.Entry: Sendable where Element: Sendable, Value: Sendable {}
