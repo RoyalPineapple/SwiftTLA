@@ -48,7 +48,7 @@ struct AlgorithmPlusCalRendererTests {
             }
         }
 
-        let rendered = try algorithm.renderPlusCalModule()
+        let rendered = try renderedSourceAlgorithmPlusCal(algorithm)
 
         #expect(rendered.contains("---- MODULE RenderedProcess ----"))
         #expect(rendered.contains("count = 0"))
@@ -76,7 +76,7 @@ struct AlgorithmPlusCalRendererTests {
             Do("stop") { Stop() }
         }
 
-        let rendered = try algorithm.renderPlusCalModule()
+        let rendered = try renderedSourceAlgorithmPlusCal(algorithm)
 
         #expect(rendered.contains("EXTENDS Naturals, Integers, Sequences, FiniteSets"))
         #expect(rendered.contains("previous = -1"))
@@ -120,7 +120,7 @@ struct AlgorithmPlusCalRendererTests {
             Do("done") { Stop() }
         }
 
-        let rendered = try algorithm.renderPlusCalModule()
+        let rendered = try renderedSourceAlgorithmPlusCal(algorithm)
         let variableRange = try #require(rendered.range(of: "count = 0"))
         let defineRange = try #require(rendered.range(of: "define {"))
         let definitionRange = try #require(rendered.range(of: "Ready(value0) =="))
@@ -230,7 +230,7 @@ struct AlgorithmPlusCalRendererTests {
             Do(ProgramLabel(rawValue: "finished")) { Stop() }
         }
 
-        let rendered = try algorithm.renderPlusCalModule()
+        let rendered = try renderedSourceAlgorithmPlusCal(algorithm)
 
         #expect(rendered.contains("procedure work(parameter0)"))
         #expect(rendered.contains("enter:"))

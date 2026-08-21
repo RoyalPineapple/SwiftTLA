@@ -1,15 +1,3 @@
-extension Algorithm {
-    func lower(
-        formalOperatorDefinitions: [FormalOperatorDefinition] = []
-    ) throws -> TLASpec {
-        try requireValid()
-        return try AlgorithmLowerer.lower(
-            model,
-            formalOperatorDefinitions: formalOperatorDefinitions
-        )
-    }
-}
-
 enum AlgorithmLowerer {
     private static let controlVariable = "pc"
     private static let stackVariable = "stack"

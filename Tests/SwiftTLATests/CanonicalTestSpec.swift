@@ -1,5 +1,17 @@
 @testable import SwiftTLA
 
+func compiledSourceSpecification(_ algorithm: Algorithm) throws -> TLASpec {
+    try TLASpec(algorithm.model.name) { algorithm }.compile().spec
+}
+
+func renderedSourceAlgorithmPlusCal(_ algorithm: Algorithm) throws -> String {
+    try TLASpec(algorithm.model.name) { algorithm }
+        .compile()
+        .renderedPlusCalBundle()
+        .root
+        .tla
+}
+
 func canonicalTestSpec(
     variables: [(name: String, initial: TLAValue, initialSet: StateExpr?)] = [],
     actions: [(name: String, body: ActionExpr, bindings: [ActionBinding])] = [],

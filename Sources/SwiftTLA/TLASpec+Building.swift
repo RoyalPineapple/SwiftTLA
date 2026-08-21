@@ -158,7 +158,9 @@ extension TLASpec {
     var formalOperatorDefinitions = formalOperatorDefinitions
 
     for algorithm in sourceAlgorithms {
-      let lowered = try algorithm.lower(
+      try algorithm.requireValid()
+      let lowered = try AlgorithmLowerer.lower(
+        algorithm.model,
         formalOperatorDefinitions: formalOperatorDefinitions
       )
       variables += lowered.variables
