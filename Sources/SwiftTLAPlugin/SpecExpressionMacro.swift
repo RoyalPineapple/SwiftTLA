@@ -26,8 +26,7 @@ public struct SpecExpressionMacro: ExpressionMacro {
             )
         }
 
-        let runtimeClosure = SpecDeclarationRegistration().rewrite(Syntax(closure))
-            .as(ClosureExprSyntax.self) ?? closure
+        let runtimeClosure = SpecDeclarationRegistration().rewrite(closure)
         return specCall(named: name, body: runtimeClosure)
     }
 
@@ -48,17 +47,36 @@ public struct SpecExpressionMacro: ExpressionMacro {
 }
 
 private final class SpecDeclarationRegistration: SyntaxRewriter {
-    override func visit(_ node: CodeBlockItemListSyntax) -> CodeBlockItemListSyntax {
+    func rewrite(_ closure: ClosureExprSyntax) -> ClosureExprSyntax {
+        register(super.visit(closure).as(ClosureExprSyntax.self) ?? closure)
+    }
+
+    override func visit(_ node: FunctionCallExprSyntax) -> ExprSyntax {
         let rewritten = super.visit(node)
+        guard let call = rewritten.as(FunctionCallExprSyntax.self),
+              isBuilderCall(call),
+              let closure = call.trailingClosure
+        else { return rewritten }
+        return ExprSyntax(call.with(\.trailingClosure, register(closure)))
+    }
+
+    private func register(_ closure: ClosureExprSyntax) -> ClosureExprSyntax {
         var items: [CodeBlockItemSyntax] = []
-        for item in rewritten {
+        for item in closure.statements {
             items.append(item)
             guard let reference = declaredVariableReference(in: item) else { continue }
             items.append(
                 .init(item: .expr(ExprSyntax(reference)))
             )
         }
-        return .init(items)
+        return closure.with(\.statements, .init(items))
+    }
+
+    private func isBuilderCall(_ call: FunctionCallExprSyntax) -> Bool {
+        guard let name = call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text,
+              ["Algorithm", "Each", "Procedure"].contains(name)
+        else { return false }
+        return true
     }
 
     private func declaredVariableReference(in item: CodeBlockItemSyntax) -> DeclReferenceExprSyntax? {
