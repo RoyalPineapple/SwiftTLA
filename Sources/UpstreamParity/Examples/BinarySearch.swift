@@ -56,7 +56,7 @@ public struct BinarySearchModel: Sendable {
                         else: result == 0
                     )
                 }
-                WeakFairness("Next")
+                WeakFairnessNext()
             }
         }
     }

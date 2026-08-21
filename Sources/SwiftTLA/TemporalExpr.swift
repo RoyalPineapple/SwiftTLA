@@ -37,6 +37,8 @@ extension StateExprConvertible {
 public enum FairnessCondition: Hashable, Sendable, CustomStringConvertible {
     case weakFairness(String)
     case strongFairness(String)
+    case weakFairnessNext
+    case strongFairnessNext
     /// Fairness for one concrete finite parameterization of an action.
     /// Algorithm lowering uses this form so each process receives its own
     /// PlusCal-equivalent fairness obligation.
@@ -47,6 +49,8 @@ public enum FairnessCondition: Hashable, Sendable, CustomStringConvertible {
         switch self {
         case .weakFairness(let a): return "WF(\(a))"
         case .strongFairness(let a): return "SF(\(a))"
+        case .weakFairnessNext: return "WF(Next)"
+        case .strongFairnessNext: return "SF(Next)"
         case .weakFairnessActionCall(let action): return "WF(\(action))"
         case .strongFairnessActionCall(let action): return "SF(\(action))"
         }
@@ -56,6 +60,8 @@ public enum FairnessCondition: Hashable, Sendable, CustomStringConvertible {
         switch self {
         case .weakFairness(let a): return "WF_\(vars)(\(a))"
         case .strongFairness(let a): return "SF_\(vars)(\(a))"
+        case .weakFairnessNext: return "WF_\(vars)(Next)"
+        case .strongFairnessNext: return "SF_\(vars)(Next)"
         case .weakFairnessActionCall(let action): return "WF_\(vars)(\(action))"
         case .strongFairnessActionCall(let action): return "SF_\(vars)(\(action))"
         }
@@ -63,8 +69,8 @@ public enum FairnessCondition: Hashable, Sendable, CustomStringConvertible {
 
     internal var isStrong: Bool {
         switch self {
-        case .strongFairness, .strongFairnessActionCall: true
-        case .weakFairness, .weakFairnessActionCall: false
+        case .strongFairness, .strongFairnessNext, .strongFairnessActionCall: true
+        case .weakFairness, .weakFairnessNext, .weakFairnessActionCall: false
         }
     }
 }

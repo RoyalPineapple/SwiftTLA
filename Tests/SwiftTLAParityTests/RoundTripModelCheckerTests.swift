@@ -52,8 +52,8 @@ private func value(
     let x = Var<Int>("x")
     let spec = TLASpec("Test") {
       Variable(x, 0)
-      Action("Next") { x.becomes(x + 1).when(x < 3) }
-      WeakFairness("Next")
+      Action("advance") { x.becomes(x + 1).when(x < 3) }
+      WeakFairnessNext()
     }
     let tla = try spec.compile().renderedTLAModuleBundle().tla
     #expect(tla.contains("WF_x(Next)"))  // single var → no tuple brackets
@@ -63,10 +63,10 @@ private func value(
     let x = Var<Int>("x")
     let spec = TLASpec("Config") {
       Variable(x, 0)
-      Action("Next") { x.becomes(x + 1).when(x < 2) }
+      Action("advance") { x.becomes(x + 1).when(x < 2) }
       Invariant("TypeOK") { x >= 0 }
       Constraint(x <= 2)
-      WeakFairness("Next")
+      WeakFairnessNext()
     }
 
     #expect(try spec.compile().renderedTLAModuleBundle().cfg.contains("CONSTRAINT StateConstraint"))

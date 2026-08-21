@@ -35,7 +35,7 @@ public struct SumSequenceModel: Sendable {
                 Invariant("DoneIndex") {
                     !Finished() || index == sequence.count + 1
                 }
-                WeakFairness("Next")
+                WeakFairnessNext()
                 Eventually("Termination", Finished())
             }
         }

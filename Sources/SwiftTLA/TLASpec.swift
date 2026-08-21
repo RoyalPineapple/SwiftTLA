@@ -687,6 +687,12 @@ public func WeakFairness(_ action: String) -> FairnessDecl {
 public func StrongFairness(_ action: String) -> FairnessDecl {
   FairnessDecl(.strongFairness(action))
 }
+public func WeakFairnessNext() -> FairnessDecl {
+  FairnessDecl(.weakFairnessNext)
+}
+public func StrongFairnessNext() -> FairnessDecl {
+  FairnessDecl(.strongFairnessNext)
+}
 @discardableResult
 public func Variable<T>(computed ref: Var<T>, @InvariantBuilder _ body: () -> StateExpr) -> VarDecl {
   VarDecl(ref.name, initExpr: body())

@@ -57,7 +57,7 @@ public struct ReachableModel: Sendable {
                     frontier.isSubset(of: SetExpr<Node>.literal(.one, .two, .three, .four))
                     (!Finished()) || frontier.isEmpty
                 }
-                WeakFairness("Next")
+                WeakFairnessNext()
                 Eventually("Termination", Finished())
             }
         }

@@ -105,6 +105,10 @@ struct CompiledLowerer {
         let name: String
         let arguments: [TLAValue]?
         switch condition {
+        case .weakFairnessNext:
+            return .init(scope: .next, isStrong: false)
+        case .strongFairnessNext:
+            return .init(scope: .next, isStrong: true)
         case .weakFairness(let value):
             name = value
             arguments = nil

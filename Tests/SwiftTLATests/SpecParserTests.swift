@@ -1571,24 +1571,24 @@ private func parseClosure(_ source: String) -> ClosureExprSyntax {
 // MARK: - FairnessCondition
 
 @Suite(.serialized) struct FairnessConditionTests {
-    @Test func parseWeakFairness() {
+    @Test func parseWeakFairness() throws {
         #expect(
-            SpecParser.decodeFairness(parseExpression("x.weakFairness(\"Tick\")").as(FunctionCallExprSyntax.self)!)
+            SpecParser.decodeFairness(try #require(parseExpression("x.weakFairness(\"Tick\")").as(FunctionCallExprSyntax.self)))
                 == FairnessCondition.weakFairness("Tick")
         )
     }
 
-    @Test func parseStrongFairness() {
+    @Test func parseStrongFairness() throws {
         #expect(
-            SpecParser.decodeFairness(parseExpression("x.strongFairness(\"Tick\")").as(FunctionCallExprSyntax.self)!)
+            SpecParser.decodeFairness(try #require(parseExpression("x.strongFairness(\"Tick\")").as(FunctionCallExprSyntax.self)))
                 == FairnessCondition.strongFairness("Tick")
         )
     }
 
-    @Test func parseAlgorithmFairnessDeclaration() {
+    @Test func parseAggregateFairnessDeclaration() throws {
         #expect(
-            SpecParser.decodeFairness(parseExpression("WeakFairness(\"Next\")").as(FunctionCallExprSyntax.self)!)
-                == FairnessCondition.weakFairness("Next")
+            SpecParser.decodeFairness(try #require(parseExpression("WeakFairnessNext()").as(FunctionCallExprSyntax.self)))
+                == FairnessCondition.weakFairnessNext
         )
     }
 
