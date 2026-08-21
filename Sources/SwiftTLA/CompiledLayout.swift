@@ -18,6 +18,10 @@ struct OperatorID: Hashable, Sendable {
     let ordinal: Int
 }
 
+struct FieldID: Hashable, Sendable {
+    let ordinal: Int
+}
+
 struct CompiledDeclaration: Hashable, Sendable {
     enum Kind: String, Hashable, Sendable {
         case variable
@@ -39,6 +43,11 @@ struct CompiledVariableLayout: Hashable, Sendable {
 struct CompiledActionLayout: Hashable, Sendable {
     let id: ActionID
     let declaration: CompiledDeclaration
+}
+
+struct CompiledFieldLayout: Hashable, Sendable {
+    let id: FieldID
+    let renderedName: String
 }
 
 struct CompiledProcedureLayout: Hashable, Sendable {
@@ -96,11 +105,20 @@ struct CompiledControlLocation: Hashable, Sendable {
 struct CompiledLayout: Hashable, Sendable {
     let variables: [CompiledVariableLayout]
     let actions: [CompiledActionLayout]
+    let fields: [CompiledFieldLayout]
     let procedures: [CompiledProcedureLayout]
     let controlLocations: [CompiledControlLocation]
     let declarations: [CompiledDeclaration]
 
-    init(spec: TLASpec) {
+    init(source spec: TLASpec) {
+        self.init(spec: spec, modules: [spec])
+    }
+
+    init(spec: TLASpec, closure: FormalModuleClosure) {
+        self.init(spec: spec, modules: closure.entries.map(\.module))
+    }
+
+    private init(spec: TLASpec, modules: [TLASpec]) {
         variables = spec.variables.enumerated().map { ordinal, variable in
             CompiledVariableLayout(
                 id: VariableID(ordinal: ordinal),
@@ -112,6 +130,9 @@ struct CompiledLayout: Hashable, Sendable {
                 id: ActionID(ordinal: ordinal),
                 declaration: .init(kind: .action, name: action.name, sourceOffset: nil)
             )
+        }
+        fields = Self.fields(in: modules).enumerated().map { ordinal, name in
+            .init(id: .init(ordinal: ordinal), renderedName: name)
         }
         procedures = spec.sourceAlgorithms.flatMap { algorithm in
             algorithm.model.procedures.map { procedure in
@@ -137,6 +158,14 @@ struct CompiledLayout: Hashable, Sendable {
 
     func actionID(named name: String) -> ActionID? {
         actions.first { $0.declaration.name == name }?.id
+    }
+
+    func fieldID(named name: String) -> FieldID? {
+        fields.first { $0.renderedName == name }?.id
+    }
+
+    func field(_ id: FieldID) -> CompiledFieldLayout? {
+        fields.first { $0.id == id }
     }
 
     func controlLocationID(owner: ControlOwner, named sourceName: String) -> ControlLocationID? {
@@ -206,7 +235,183 @@ struct CompiledLayout: Hashable, Sendable {
         let procedureEncoding = procedures.map { procedure in
             "\(procedure.algorithm.utf8.count):\(procedure.algorithm)\(procedure.name.utf8.count):\(procedure.name)"
         }.joined(separator: "|")
-        return "declarations[\(declarationEncoding)]procedures[\(procedureEncoding)]controls[\(controlEncoding)]"
+        let fieldEncoding = fields.map { field in
+            "\(field.id.ordinal):\(field.renderedName.utf8.count):\(field.renderedName)"
+        }.joined(separator: "|")
+        return "declarations[\(declarationEncoding)]fields[\(fieldEncoding)]procedures[\(procedureEncoding)]controls[\(controlEncoding)]"
+    }
+
+    private static func fields(in modules: [TLASpec]) -> [String] {
+        var names: [String] = []
+        var seen: Set<String> = []
+
+        func append(_ name: String) {
+            guard seen.insert(name).inserted else { return }
+            names.append(name)
+        }
+
+        func visit(_ value: TLAValue) {
+            switch value {
+            case .int, .bool, .string, .constant:
+                return
+            case .set(let values):
+                values.sorted().forEach(visit)
+            case .tuple(let values):
+                values.forEach(visit)
+            case .record(let record):
+                for field in record.fields {
+                    append(field.name)
+                    visit(field.value)
+                }
+            case .function(let values):
+                for entry in values.sorted(by: { $0.key < $1.key }) {
+                    visit(entry.key)
+                    visit(entry.value)
+                }
+            }
+        }
+
+        func visit(_ expression: StateExpr) {
+            switch expression {
+            case .value(let value):
+                visit(value)
+            case .variable, .enabledAction:
+                return
+            case .negate(let value), .not(let value), .cardinality(let value), .powerSet(let value),
+                 .unionAll(let value), .tupleLength(let value), .tupleHead(let value), .tupleTail(let value),
+                 .domain(let value), .sequenceFromSet(let value):
+                visit(value)
+            case .add(let lhs, let rhs), .subtract(let lhs, let rhs), .multiply(let lhs, let rhs),
+                 .divide(let lhs, let rhs), .modulo(let lhs, let rhs), .integerDivide(let lhs, let rhs),
+                 .equal(let lhs, let rhs), .notEqual(let lhs, let rhs), .lessThan(let lhs, let rhs),
+                 .lessOrEqual(let lhs, let rhs), .greaterThan(let lhs, let rhs), .greaterOrEqual(let lhs, let rhs),
+                 .and(let lhs, let rhs), .or(let lhs, let rhs), .in(let lhs, let rhs), .subset(let lhs, let rhs),
+                 .union(let lhs, let rhs), .intersection(let lhs, let rhs), .setDifference(let lhs, let rhs),
+                 .tupleDynamicAccess(let lhs, let rhs), .tupleAppend(let lhs, let rhs),
+                 .tupleConcatenate(let lhs, let rhs), .functionApply(let lhs, let rhs),
+                 .functionSet(let lhs, let rhs), .setSum(let lhs, let rhs):
+                visit(lhs)
+                visit(rhs)
+            case .ifThenElse(let condition, let then, let otherwise):
+                visit(condition)
+                visit(then)
+                visit(otherwise)
+            case .setLiteral(let values), .tupleLiteral(let values):
+                values.forEach(visit)
+            case .tupleAccess(let value, _):
+                visit(value)
+            case .recordLiteral(let record):
+                for field in record.fields {
+                    append(field.name)
+                    visit(field.value)
+                }
+            case .recordAccess(let value, let field):
+                visit(value)
+                append(field)
+            case .except(let function, let key, let value):
+                visit(function)
+                visit(key)
+                visit(value)
+            case .caseExpr(let branches, let otherwise):
+                branches.forEach(visit)
+                if let otherwise { visit(otherwise) }
+            case .setFilter(let set, _, let predicate), .functionLiteral(let set, _, let predicate),
+                 .forAll(let set, _, let predicate), .exists(let set, _, let predicate),
+                 .choose(let set, _, let predicate):
+                visit(set)
+                visit(predicate)
+            case .setMap(let value, _, let set):
+                visit(value)
+                visit(set)
+            case .integerRange(let lower, let upper):
+                visit(lower)
+                visit(upper)
+            case .foldFunction(let lambda, let initial, let sequence):
+                visit(lambda.body)
+                visit(initial)
+                visit(sequence)
+            case .operatorApplication(let operation, let arguments):
+                visit(operation)
+                arguments.forEach(visit)
+            case .recursiveCall(_, let arguments):
+                arguments.forEach(visit)
+            case .letValue(_, let value, let body):
+                visit(value)
+                visit(body)
+            case .letIn(let definitions, let body):
+                for definition in definitions {
+                    if let domain = definition.domain { visit(domain) }
+                    visit(definition.body)
+                }
+                visit(body)
+            }
+        }
+
+        func visit(_ operation: FormalOperator) {
+            if case .lambda(let lambda) = operation { visit(lambda.body) }
+        }
+
+        func visit(_ argument: FormalCallArgument) {
+            switch argument {
+            case .value(let expression): visit(expression)
+            case .operator(let operation): visit(operation)
+            }
+        }
+
+        func visit(_ action: ActionExpr) {
+            switch action {
+            case .assign(_, let value), .guard_(let value), .chooseAction(_, let value):
+                visit(value)
+            case .unchanged:
+                return
+            case .existsAction(_, let set, let body), .define(_, let set, let body):
+                visit(set)
+                visit(body)
+            case .ifElse(let condition, let then, let otherwise):
+                visit(condition)
+                visit(then)
+                visit(otherwise)
+            case .and(let lhs, let rhs), .or(let lhs, let rhs):
+                visit(lhs)
+                visit(rhs)
+            }
+        }
+
+        for module in modules {
+            module.constants.forEach { visit($0.value) }
+            for variable in module.variables {
+                visit(variable.initial)
+                if let initialSet = variable.initialSet { visit(initialSet) }
+                if let initialExpression = variable.initExpr { visit(initialExpression) }
+                if let lazySet = variable.lazySet { visit(lazySet) }
+            }
+            for action in module.actions {
+                action.bindings.flatMap(\.values).forEach(visit)
+                visit(action.body)
+            }
+            module.invariants.forEach { visit($0.body) }
+            module.temporalProperties.forEach { temporal in
+                switch temporal.expr {
+                case .always(let expression), .eventually(let expression), .alwaysEventually(let expression), .eventuallyAlways(let expression):
+                    visit(expression)
+                case .leadsTo(let lhs, let rhs):
+                    visit(lhs)
+                    visit(rhs)
+                }
+            }
+            if let constraint = module.constraint { visit(constraint) }
+            if let assume = module.assume { visit(assume) }
+            module.formalOperatorDefinitions.forEach { definition in
+                visit(definition.body)
+            }
+            module.recursiveFuncs.forEach { function in
+                visit(function.body)
+            }
+            module.importConfigurations.flatMap(\.replacements).forEach { replacement in
+                visit(replacement.expression)
+            }
+        }
+        return names
     }
 
     private static func controlLocations(

@@ -1,15 +1,18 @@
 struct CompiledActionEnumerator {
     let state: CompiledState
     let model: CompiledModel
+    let layout: CompiledLayout
     let enabledActions: Set<ActionID>
 
     init(
         state: CompiledState,
         model: CompiledModel,
+        layout: CompiledLayout,
         enabledActions: Set<ActionID> = []
     ) {
         self.state = state
         self.model = model
+        self.layout = layout
         self.enabledActions = enabledActions
     }
 
@@ -41,6 +44,7 @@ struct CompiledActionEnumerator {
         let evaluator = CompiledEvaluator(
             state: state,
             model: model,
+            layout: layout,
             bindings: bindings,
             enabledActions: enabledActions
         )
@@ -87,12 +91,12 @@ struct CompiledActionEnumerator {
         }
     }
 
-    private func actionBindings(_ bindings: [CompiledActionBinding]) -> [CompiledActionBindingValues] {
-        bindings.reduce([.init(values: .init(), arguments: [])]) { partial, binding in
-            partial.flatMap { current in
-                binding.values.map { value in
+    private func actionBindings(_ bindings: [CompiledActionBinding]) throws -> [CompiledActionBindingValues] {
+        try bindings.reduce([.init(values: .init(), arguments: [])]) { partial, binding in
+            try partial.flatMap { current in
+                try binding.values.map { value in
                     .init(
-                        values: current.values.binding(.init(formal: value), to: binding.binder),
+                        values: current.values.binding(try .init(formal: value, using: layout), to: binding.binder),
                         arguments: current.arguments + [value]
                     )
                 }
@@ -110,6 +114,7 @@ struct CompiledActionEnumerator {
                 let evaluator = CompiledEvaluator(
                     state: selectionState,
                     model: model,
+                    layout: layout,
                     bindings: bindings,
                     enabledActions: enabledActions
                 )

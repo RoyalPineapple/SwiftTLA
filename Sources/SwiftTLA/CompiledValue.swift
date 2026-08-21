@@ -1,27 +1,27 @@
 struct CompiledRecord: Hashable, Sendable {
     struct Field: Hashable, Sendable {
-        let name: String
+        let id: FieldID
         let value: CompiledValue
     }
 
     let fields: [Field]
 
     init(_ fields: [Field]) {
-        self.fields = fields.sorted { $0.name < $1.name }
+        self.fields = fields.sorted { $0.id.ordinal < $1.id.ordinal }
     }
 
-    func value(named name: String) -> CompiledValue? {
-        fields.first { $0.name == name }?.value
+    func value(for field: FieldID) -> CompiledValue? {
+        fields.first { $0.id == field }?.value
     }
 
-    func replacing(_ value: CompiledValue, for name: String) -> CompiledRecord {
+    func replacing(_ value: CompiledValue, for field: FieldID) -> CompiledRecord {
         var replaced = false
-        let updated = fields.map { field -> Field in
-            guard field.name == name else { return field }
+        let updated = fields.map { current -> Field in
+            guard current.id == field else { return current }
             replaced = true
-            return .init(name: name, value: value)
+            return .init(id: field, value: value)
         }
-        return CompiledRecord(replaced ? updated : updated + [.init(name: name, value: value)])
+        return CompiledRecord(replaced ? updated : updated + [.init(id: field, value: value)])
     }
 }
 
@@ -36,7 +36,7 @@ indirect enum CompiledValue: Hashable, Sendable {
     case function([CompiledValue: CompiledValue])
     case constant(String)
 
-    init(formal value: TLAValue) {
+    init(formal value: TLAValue, using layout: CompiledLayout) throws {
         switch value {
         case .int(let value):
             self = .integer(value)
@@ -45,16 +45,19 @@ indirect enum CompiledValue: Hashable, Sendable {
         case .string(let value):
             self = .string(value)
         case .set(let values):
-            self = .set(Set(values.map { Self(formal: $0) }))
+            self = .set(try Set(values.map { try Self(formal: $0, using: layout) }))
         case .tuple(let values):
-            self = .tuple(values.map { Self(formal: $0) })
+            self = .tuple(try values.map { try Self(formal: $0, using: layout) })
         case .record(let values):
-            self = .record(CompiledRecord(values.fields.map {
-                .init(name: $0.name, value: Self(formal: $0.value))
+            self = .record(CompiledRecord(try values.fields.map { entry in
+                guard let field = layout.fieldID(named: entry.name) else {
+                    throw CompiledEvaluationError.unknownFieldName(entry.name)
+                }
+                return .init(id: field, value: try Self(formal: entry.value, using: layout))
             }))
         case .function(let values):
-            self = .function(Dictionary(uniqueKeysWithValues: values.map {
-                (Self(formal: $0.key), Self(formal: $0.value))
+            self = .function(try Dictionary(uniqueKeysWithValues: values.map {
+                (try Self(formal: $0.key, using: layout), try Self(formal: $0.value, using: layout))
             }))
         case .constant(let value):
             self = .constant(value)
@@ -79,8 +82,11 @@ indirect enum CompiledValue: Hashable, Sendable {
         case .tuple(let values):
             return .tuple(try values.map { try $0.rendered(using: layout) })
         case .record(let values):
-            return .record(TLARecord(try values.fields.map {
-                .init($0.name, try $0.value.rendered(using: layout))
+            return .record(TLARecord(try values.fields.map { field in
+                guard let name = layout.field(field.id)?.renderedName else {
+                    throw CompiledEvaluationError.invalidFieldID(field.id)
+                }
+                return .init(name, try field.value.rendered(using: layout))
             }))
         case .function(let values):
             return .function(try values.reduce(into: [TLAValue: TLAValue]()) { result, entry in
@@ -101,7 +107,7 @@ indirect enum CompiledValue: Hashable, Sendable {
             return .tuple(values.map { $0.transformingFormalValues(transform) })
         case .record(let values):
             return .record(CompiledRecord(values.fields.map {
-                .init(name: $0.name, value: $0.value.transformingFormalValues(transform))
+                .init(id: $0.id, value: $0.value.transformingFormalValues(transform))
             }))
         case .function(let values):
             return .function(Dictionary(uniqueKeysWithValues: values.map {
@@ -152,7 +158,7 @@ indirect enum CompiledValue: Hashable, Sendable {
         case .tuple(let values):
             return "tuple:[\(values.map(\.canonicalEncoding).joined(separator: ","))]"
         case .record(let values):
-            return "record:[\(values.fields.map { "\($0.name):\($0.value.canonicalEncoding)" }.joined(separator: ","))]"
+            return "record:[\(values.fields.map { "\($0.id.ordinal):\($0.value.canonicalEncoding)" }.joined(separator: ","))]"
         case .function(let values):
             return "function:[\(values.keys.sorted { $0.canonicalEncoding < $1.canonicalEncoding }.map { "\($0.canonicalEncoding):\(values[$0]?.canonicalEncoding ?? "")" }.joined(separator: ","))]"
         case .constant(let value):

@@ -171,9 +171,13 @@ struct CompiledLowerer {
         case .tupleAccess(let value, let index): return try .tupleAccess(lower(value, at: path), index)
         case .recordLiteral(let fields):
             return try .recordLiteral(.init(fields.fields.map { item in
-                .init(name: item.name, value: try lower(item.value, at: "\(path).\(item.name)"))
+                .init(
+                    id: try field(named: item.name, at: "\(path).\(item.name)"),
+                    value: try lower(item.value, at: "\(path).\(item.name)")
+                )
             }))
-        case .recordAccess(let value, let field): return try .recordAccess(lower(value, at: path), field)
+        case .recordAccess(let value, let field):
+            return try .recordAccess(lower(value, at: path), self.field(named: field, at: "\(path).\(field)"))
         case .except(let function, let key, let value):
             return try .except(
                 lower(function, at: "\(path).function"),
@@ -302,7 +306,7 @@ struct CompiledLowerer {
         algorithm: String?
     ) throws -> CompiledValue {
         guard variable.name == "pc" else {
-            return .init(formal: variable.initial)
+            return try .init(formal: variable.initial, using: layout)
         }
         return try controlValue(variable.initial, owner: nil, algorithm: algorithm)
     }
@@ -341,18 +345,18 @@ struct CompiledLowerer {
         case .record(let values):
             return .record(CompiledRecord(try values.fields.map { entry in
                 .init(
-                    name: entry.name,
+                    id: try field(named: entry.name, at: "controlValue.\(entry.name)"),
                     value: entry.name == "pc"
                         ? try controlValue(entry.value, owner: owner, algorithm: algorithm)
-                        : .init(formal: entry.value)
+                        : try .init(formal: entry.value, using: layout)
                 )
             }))
         case .function(let values):
             return .function(try values.reduce(into: [:]) { result, entry in
-                result[.init(formal: entry.key)] = try controlValue(entry.value, owner: owner, algorithm: algorithm)
+                result[try .init(formal: entry.key, using: layout)] = try controlValue(entry.value, owner: owner, algorithm: algorithm)
             })
         default:
-            return .init(formal: value)
+            return try .init(formal: value, using: layout)
         }
     }
 
@@ -399,7 +403,7 @@ struct CompiledLowerer {
                         algorithm: algorithm
                     )
                 }
-                return .init(name: field.name, value: value)
+                return .init(id: try self.field(named: field.name, at: "\(path).\(field.name)"), value: value)
             }))
         case .functionLiteral(let domain, let binder, let body):
             return .functionLiteral(
@@ -564,6 +568,20 @@ struct CompiledLowerer {
     private func action(at path: String) throws -> ActionID {
         guard case .action(let id) = try reference(at: path) else { throw diagnostic(path: path) }
         return id
+    }
+
+    private func field(named name: String, at path: String) throws -> FieldID {
+        guard let field = layout.fieldID(named: name) else {
+            throw CompilationDiagnostic(
+                code: .unknownReference,
+                stage: .lowering,
+                path: path,
+                expected: "a field declared by the compiled layout",
+                actual: "unresolved field '\(name)'",
+                nextSafeAction: "Compile the source model with the field declaration, then lower it."
+            )
+        }
+        return field
     }
 
     private func operatorID(at path: String) throws -> OperatorID {

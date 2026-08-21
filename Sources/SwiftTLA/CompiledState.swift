@@ -3,7 +3,7 @@ struct CompiledState: Hashable, Sendable {
     private let values: [CompiledValue]
 
     init(formalValues values: [TLAValue], compilation: CompiledSpecification) throws {
-        try self.init(values: values.map { .init(formal: $0) }, compilation: compilation)
+        try self.init(values: values.map { try .init(formal: $0, using: compilation.layout) }, compilation: compilation)
     }
 
     init(values: [CompiledValue], compilation: CompiledSpecification) throws {
@@ -33,7 +33,7 @@ struct CompiledState: Hashable, Sendable {
                     actual: actualNames.count
                 )
             }
-            return CompiledValue(formal: value)
+            return try CompiledValue(formal: value, using: compilation.layout)
         }
         try self.init(values: values, compilation: compilation)
     }
@@ -139,8 +139,10 @@ enum CompiledEvaluationError: Error, Sendable {
     case invalidStateLayout(expected: Int, actual: Int)
     case invalidVariableID(VariableID)
     case invalidControlLocationID(ControlLocationID)
+    case invalidFieldID(FieldID)
     case invalidCompilationIdentity(expected: CompilationIdentity, actual: CompilationIdentity)
     case unboundBinder(BinderID)
     case unresolvedOperator
+    case unknownFieldName(String)
     case conflictingAssignment(VariableID)
 }

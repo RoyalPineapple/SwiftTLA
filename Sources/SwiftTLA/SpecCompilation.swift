@@ -233,7 +233,7 @@ public struct CompiledSpecification: Sendable {
         let files = try entries.map { entry in
             let sectionPlan = entry.module.name == spec.name
                 ? directModuleSections
-                : try entry.module.directModuleSectionPlan(layout: .init(spec: entry.module))
+                : try entry.module.directModuleSectionPlan(layout: .init(source: entry.module))
             return TLAModuleFile(
                 name: entry.module.name,
                 tla: entry.module.renderTLAModuleSource(sectionPlan: sectionPlan),
@@ -523,7 +523,7 @@ public extension TLASpec {
         try validateUnique(actions.map(\.name), code: .duplicateAction, path: "actions")
         try validateUnique(invariants.map(\.name), code: .duplicateInvariant, path: "invariants")
         let closure = try FormalModuleClosure.resolve(root: self)
-        let layout = CompiledLayout(spec: self)
+        let layout = CompiledLayout(spec: self, closure: closure)
         var validator = BindingValidator(spec: self, layout: layout, closure: closure)
         let bindings = try validator.validate(spec: self)
         let model = try CompiledLowerer(bindings: bindings, closure: closure, layout: layout).lower(spec: self)
@@ -797,7 +797,7 @@ private struct CanonicalSpecificationEncoder {
 
     private mutating func specification(_ spec: TLASpec) {
         field("spec.name", spec.name)
-        field("declarationLayout", CompiledLayout(spec: spec).canonicalEncoding)
+        field("declarationLayout", CompiledLayout(source: spec).canonicalEncoding)
         list("variables", spec.variables, canonicalVariable)
         let constants = spec.constants.sorted { $0.name < $1.name }.map {
             node("constant", [$0.name, canonicalValue($0.value)])
