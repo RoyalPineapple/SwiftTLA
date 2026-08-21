@@ -560,7 +560,7 @@ extension ParserSession {
            let member = call.calledExpression.as(MemberAccessExprSyntax.self),
            member.declName.baseName.text == "literal",
            let base = member.base {
-            return terminalTypeName(in: base)
+            return typedFacadeType(base)?.renderedSourceName ?? terminalTypeName(in: base)
         }
         return initialValueTypeName(from: expression)
     }
