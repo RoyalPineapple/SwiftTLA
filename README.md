@@ -32,34 +32,48 @@ import SwiftTLA
 import SwiftTLAMacros
 
 @TLAModel
-public struct HourClock {
-    enum Process: String, FiniteDomainKey {
-        case clock
-
-        static let formalDomain: [Process] = [.clock]
-        static let formalTypeIdentity = FormalTypeIdentity(rawValue: "readme.hour-clock.process")
-
-        var tlaValue: TLAValue { .string(rawValue) }
-    }
-
-    enum Step: String, PlusCalLabel {
+public struct ClockModel: Sendable {
+    private enum Step: String, PlusCalLabel {
         case tick
     }
 
     public static var spec: TLASpec {
-        #spec("HourClock") {
-            Algorithm("HourClock") {
-                let hour = SharedVar(initial: 1)
-                Each(Process.all) { _ in
-                    Do(Step.tick) {
-                        Either {
-                            When(hour < 12)
-                            Assign(hour, to: hour + 1)
-                        } or: {
-                            When(hour == 12)
-                            Assign(hour, to: 1)
-                        }
+        #spec("Clock") {
+            Algorithm("Clock") {
+                let hour = SharedVar(initial: 0)
+                let minute = SharedVar(initial: 0)
+                let second = SharedVar(initial: 0)
+
+                While(Step.tick, true) {
+                    Either {
+                        When(second < 59)
+                        Assign(second, to: second + 1)
+                    } or: {
+                        When(second == 59)
+                        When(minute < 59)
+                        Assign(second, to: 0)
+                        Assign(minute, to: minute + 1)
+                    } or: {
+                        When(second == 59)
+                        When(minute == 59)
+                        When(hour < 23)
+                        Assign(second, to: 0)
+                        Assign(minute, to: 0)
+                        Assign(hour, to: hour + 1)
+                    } or: {
+                        When(second == 59)
+                        When(minute == 59)
+                        When(hour == 23)
+                        Assign(second, to: 0)
+                        Assign(minute, to: 0)
+                        Assign(hour, to: 0)
                     }
+                }
+
+                Invariant("ValidTime") {
+                    hour >= 0 && hour <= 23 &&
+                    minute >= 0 && minute <= 59 &&
+                    second >= 0 && second <= 59
                 }
             }
         }
@@ -72,7 +86,7 @@ public struct HourClock {
 The generated API gives your application typed state and action cases.
 
 ```swift
-var clock = try HourClock.makeMachine()
+var clock = try ClockModel.makeMachine()
 let result = try clock.apply(.tick)
 print(result.after.hour)
 ```
@@ -83,7 +97,7 @@ The model checker explores the complete reachable graph from the model's
 initial state. It validates the invariants and properties that you define.
 
 ```swift
-let compilation = try HourClock.spec.compile()
+let compilation = try ClockModel.spec.compile()
 let result = try ModelChecker(compilation: compilation).check()
 ```
 
