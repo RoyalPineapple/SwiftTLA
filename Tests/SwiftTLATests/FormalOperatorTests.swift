@@ -73,6 +73,28 @@ struct FormalOperatorTests {
     #expect(try compiledValue(expression) == .int(5))
   }
 
+  @Test("a formal lambda application renders through local bindings")
+  func rendersFormalLambdaApplicationThroughLocalBindings() throws {
+    let lambda = FormalOperator.lambda(.init(
+      parameters: ["value"],
+      body: .add(.variable("value"), .int(1))
+    ))
+    let spec = TLASpec(
+      name: "LambdaApplication",
+      variables: [.init(name: "counter", initial: .int(0))],
+      actions: [.init(
+        name: "advance",
+        body: .assign("counter", .operatorApplication(lambda, [.value(.variable("counter"))])
+      )],
+      invariants: []
+    )
+
+    let rendered = try spec.compile().renderedTLAModuleBundle().root.tla
+
+    #expect(rendered.contains("LET "))
+    #expect(rendered.contains("(LAMBDA") == false)
+  }
+
   @Test("a formal reference resolves through the formal operator environment")
   func appliesNamedFormalOperator() throws {
     let expression = StateExpr.operatorApplication(

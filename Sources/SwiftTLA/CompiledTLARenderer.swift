@@ -97,13 +97,14 @@ struct CompiledTLARenderer {
         case .foldFunction(let operation, let initial, let sequence):
             return "FoldFunction(\(try formalLambda(operation)), \(try state(initial)), \(try state(sequence)))"
         case .operatorApplication(let operation, let arguments):
-            let arguments = try arguments.map(formalArgument).joined(separator: ", ")
-            let renderedOperation = try formalOperator(operation)
             switch operation {
-            case .lambda:
-                return "(\(renderedOperation))(\(arguments))"
+            case .lambda(let lambda):
+                let bindings = try lambdaBindings(lambda, arguments: arguments)
+                return "LET \(bindings) IN \(try state(lambda.body))"
             case .reference:
-                return arguments.isEmpty ? renderedOperation : "\(renderedOperation)(\(arguments))"
+                let arguments = try arguments.map(formalArgument).joined(separator: ", ")
+                let name = try formalOperator(operation)
+                return arguments.isEmpty ? name : "\(name)(\(arguments))"
             }
         case .recursiveCall(let operation, let arguments):
             let name = try operatorName(operation)
@@ -121,6 +122,35 @@ struct CompiledTLARenderer {
         case .value(let value): return try state(value)
         case .operator(let operation): return try formalOperator(operation)
         }
+    }
+
+    private func lambdaBindings(
+        _ lambda: CompiledFormalLambda,
+        arguments: [CompiledFormalCallArgument]
+    ) throws -> String {
+        guard lambda.parameters.count == arguments.count else {
+            throw CompilationDiagnostic(
+                code: .unknownReference,
+                stage: .rendering,
+                path: "compiledRenderer.lambdaApplication",
+                expected: "one formal value for each lambda parameter",
+                actual: "\(arguments.count) arguments for \(lambda.parameters.count) parameters",
+                nextSafeAction: "Compile the source model again before rendering."
+            )
+        }
+        return try zip(lambda.parameters, arguments).map { parameter, argument in
+            guard case .value(let value) = argument else {
+                throw CompilationDiagnostic(
+                    code: .unknownReference,
+                    stage: .rendering,
+                    path: "compiledRenderer.lambdaApplication",
+                    expected: "a formal value lambda argument",
+                    actual: "a formal operator argument",
+                    nextSafeAction: "Compile the source model again before rendering."
+                )
+            }
+            return "\(try binderName(parameter)) == \(try state(value))"
+        }.joined(separator: " ")
     }
 
     private func formalOperator(_ operation: CompiledFormalOperator) throws -> String {
