@@ -1203,7 +1203,7 @@ public extension TLASpec {
                 return (parameter.name, source)
             })
             let specialized = abstractModule.specializing(parameters: parameters)
-            return try .init(
+            return .init(
                 name: refinement.name,
                 instance: instanceID,
                 abstract: try specialized.compile(),
