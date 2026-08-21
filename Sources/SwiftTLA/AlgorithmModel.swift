@@ -100,22 +100,7 @@ public struct AlgorithmFidelityToken: Sendable, Hashable {
         canonicalForm = algorithmCanonicalEncoding(model)
     }
 
-    /// Used by macro-generated declarations to retain parser evidence without
-    /// exposing the underlying Algorithm IR as public API.
-    public init(encodedCanonicalForm: String) {
-        guard let data = Data(base64Encoded: encodedCanonicalForm),
-              let decoded = String(data: data, encoding: .utf8)
-        else {
-            preconditionFailure(
-                "AlgorithmFidelityToken transport is invalid. Expected Base64-encoded canonical Algorithm evidence."
-            )
-        }
-        canonicalForm = decoded
-    }
-
-    /// Canonical transport used only to embed parser evidence in generated
-    /// source. The Algorithm IR itself remains private to SwiftTLA.
-    public var encodedCanonicalForm: String {
+    var encodedCanonicalForm: String {
         Data(canonicalForm.utf8).base64EncodedString()
     }
 }
