@@ -285,12 +285,12 @@ package struct FormalModuleClosure: Sendable {
       for edge in edges where edge.fromModule == name {
         switch edge.kind {
         case .importModule(let configuration):
-          result += resolve(
+          result += formalOperatorDefinitions(
             edge.toModule,
             replacements: configuration?.replacements ?? []
           )
         case .namedInstance(let namespace, let arguments):
-          let definitions = resolve(edge.toModule, replacements: [])
+          let definitions = formalOperatorDefinitions(edge.toModule, replacements: [])
           let localNames = Set(definitions.map(\.name))
           result += definitions.map { definition in
             let body = arguments.reduce(definition.body) {
