@@ -316,6 +316,8 @@ enum AlgorithmLowerer {
     private static func containsControlTransfer(_ statements: [AlgorithmStatementModel]) -> Bool {
         statements.contains { statement in
             switch statement {
+            case .rejected:
+                return true
             case .assert, .goto, .call, .return, .stop:
                 return true
             case .letBinding(_, _, let body), .with(_, _, let body), .choose(_, _, let body):
@@ -530,6 +532,8 @@ enum AlgorithmLowerer {
         owner: AlgorithmProcedureModel?
     ) -> ActionExpr {
         switch statement {
+        case .rejected:
+            return .guard_(.value(.bool(false)))
         case .await(let condition): return .guard_(condition)
         case .assert: return .guard_(.value(.bool(true)))
         case .set(let target, let value):
@@ -720,6 +724,8 @@ enum AlgorithmLowerer {
         let executed = StateExpr.and(executionCondition.map { .and(atLabel, $0) } ?? atLabel, pathCondition)
         return statements.enumerated().flatMap { index, statement in
             switch statement {
+            case .rejected:
+                return [NamedInvariant]()
             case .assert(let condition):
                 return [NamedInvariant(
                     name: "__pcal_assert_\(label)_\(index)",
@@ -826,6 +832,8 @@ enum AlgorithmLowerer {
         nextLabel: String
     ) -> ActionExpr {
         switch statement {
+        case .rejected:
+            return .guard_(.value(.bool(false)))
         case .await(let condition):
             return .guard_(rewrite(condition, localRoots: localRoots))
         case .assert:
@@ -911,6 +919,8 @@ enum AlgorithmLowerer {
         )
         return statements.enumerated().flatMap { statementIndex, statement in
             switch statement {
+            case .rejected:
+                return [NamedInvariant]()
             case .assert(let condition):
                 return process.domain.enumerated().map { offset, identifier in
                     let assertion = quantifiedBindings.reversed().reduce(
@@ -1037,6 +1047,7 @@ enum AlgorithmLowerer {
             StateExpr.substituteVariable(name, with: replacement, in: value)
         }
         switch statement {
+        case .rejected: return statement
         case .await(let value): return .await(expression(value))
         case .assert(let value): return .assert(expression(value))
         case .set(let target, let value):

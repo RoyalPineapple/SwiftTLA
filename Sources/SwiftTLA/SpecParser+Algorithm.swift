@@ -916,6 +916,8 @@ extension ParserSession {
     ) -> Bool {
         for statement in statements {
             switch statement {
+            case .rejected:
+                continue
             case .set(let target, _):
                 if target.root == parameter { return true }
             case .letBinding(_, _, let body), .with(_, _, let body), .choose(_, _, let body):
@@ -982,6 +984,7 @@ extension ParserSession {
         to: String
     ) -> AlgorithmStatementModel {
         switch statement {
+        case .rejected: return statement
         case .await(let expression): return .await(renameVar(from, to: to, in: expression))
         case .assert(let expression): return .assert(renameVar(from, to: to, in: expression))
         case .set(let target, let value):

@@ -337,12 +337,9 @@ public struct StatementMacro: Sendable {
     }
 
     private func expand(_ arguments: [StateExpr]) -> [StepStatement] {
-        precondition(
-            parameterNames.count == arguments.count,
-            "What failed: statement macro invocation arity. Where: macro expansion. "
-                + "Expected \(parameterNames.count) formal argument(s); found \(arguments.count). "
-                + "What changed: no algorithm model was changed. Next safe action: pass the declared number of arguments."
-        )
+        guard parameterNames.count == arguments.count else {
+            return [.init(model: .rejected(.statementMacroArgumentCount))]
+        }
         return parameterNames.enumerated().reduce(statements) { expanded, binding in
             expanded.map {
                 substituteMacroParameter($0, from: binding.element, with: arguments[binding.offset])
@@ -397,30 +394,16 @@ private func substituteMacroParameter(
         StateExpr.substituteVariable(from, with: replacement, in: expression)
     }
 
-    func substituteTarget(_ target: AlgorithmLValueModel) -> AlgorithmLValueModel {
+    func substituteTarget(_ target: AlgorithmLValueModel) -> AlgorithmLValueModel? {
         switch target {
         case .root(let root):
             guard root == from else { return .root(root) }
-            guard case .variable(let replacementRoot) = replacement else {
-                preconditionFailure(
-                    "What failed: macro assignment-target substitution. Where: macro parameter '\(from)'. "
-                        + "Expected a formal variable because the macro assigns to it; found \(replacement). "
-                        + "What changed: no algorithm model was changed. Next safe action: pass a shared or local variable, "
-                        + "or keep this parameter in read-only expressions."
-                )
-            }
+            guard case .variable(let replacementRoot) = replacement else { return nil }
             return .root(replacementRoot)
         case .function(let root, let key):
             let replacementRoot: String
             if root == from {
-                guard case .variable(let name) = replacement else {
-                    preconditionFailure(
-                        "What failed: macro function-target substitution. Where: macro parameter '\(from)'. "
-                            + "Expected a formal variable because the macro assigns through it; found \(replacement). "
-                            + "What changed: no algorithm model was changed. Next safe action: pass a shared or local variable, "
-                            + "or keep this parameter in read-only expressions."
-                    )
-                }
+                guard case .variable(let name) = replacement else { return nil }
                 replacementRoot = name
             } else {
                 replacementRoot = root
@@ -430,10 +413,14 @@ private func substituteMacroParameter(
     }
 
     switch statement {
+    case .rejected: return statement
     case .await(let expression): return .await(substitute(expression))
     case .assert(let expression): return .assert(substitute(expression))
     case .set(let target, let value):
-        return .set(target: substituteTarget(target), value: substitute(value))
+        guard let substitutedTarget = substituteTarget(target) else {
+            return .rejected(.statementMacroAssignmentTarget)
+        }
+        return .set(target: substitutedTarget, value: substitute(value))
     case .letBinding(let variable, let value, let body):
         let (scopedVariable, scopedBody) = captureSafeMacroBody(
             variable: variable,
@@ -2072,6 +2059,8 @@ internal enum AlgorithmValidator {
     ) {
         for statement in statements {
             switch statement {
+            case .rejected(let code):
+                diagnostics.append(AlgorithmDiagnostic(code, at: anchor))
             case .await, .assert, .skip:
                 break
             case .letBinding(_, _, let body), .with(_, _, let body):
@@ -2100,6 +2089,7 @@ internal enum AlgorithmValidator {
         statements.reduce(into: [[]]) { paths, statement in
             let statementPaths: [[String]]
             switch statement {
+            case .rejected: statementPaths = [[]]
             case .set(let target, _):
                 statementPaths = [[target.root]]
             case .ifElse(_, let then, let otherwise), .either(let then, let otherwise):

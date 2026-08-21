@@ -110,6 +110,24 @@ struct AlgorithmBuilderTests {
         #expect(try value(named: "destination", in: next, compilation: compilation) == .int(8))
     }
 
+    @Test("statement macros report expression assignment targets during validation")
+    func rejectsExpressionMacroAssignmentTarget() {
+        let algorithm = Algorithm("RejectedMacroTarget") {
+            let destination = SharedVar("destination", initial: 0)
+            destination
+            let write = Macro { (target: MacroParameter<Int>) in
+                Assign(target, to: 0)
+            }
+
+            Do("write") { write(destination.expr + 1) }
+        }
+
+        #expect(algorithm.validate().map(\.code).contains(.statementMacroAssignmentTarget))
+        #expect(throws: AlgorithmValidationError.self) {
+            try algorithm.lower()
+        }
+    }
+
     @Test("typed procedure builders use deterministic formal parameter slots")
     func buildsTypedProcedure() throws {
         let algorithm = Algorithm("ProcedureBuilder") {

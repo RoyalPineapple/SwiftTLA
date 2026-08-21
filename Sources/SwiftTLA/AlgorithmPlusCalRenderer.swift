@@ -337,6 +337,8 @@ internal struct AlgorithmPlusCalRenderer {
 
     private func render(statement: AlgorithmStatementModel, indent: String, path: String) throws -> [String] {
         switch statement {
+        case .rejected(let diagnostic):
+            throw unsupported(path: path, expected: "a validated algorithm statement", actual: diagnostic.rawValue)
         case .await(let condition): return ["\(indent)await \(try expression(condition, path: "\(path).condition"));"]
         case .assert(let condition): return ["\(indent)assert \(try expression(condition, path: "\(path).condition"));"]
         case .set(let target, let value): return ["\(indent)\(try lvalue(target, path: "\(path).target")) := \(try expression(value, path: "\(path).value"));"]
