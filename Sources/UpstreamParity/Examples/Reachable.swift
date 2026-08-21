@@ -58,7 +58,7 @@ public struct ReachableModel: Sendable {
                     (!Finished()) || frontier.isEmpty
                 }
                 WeakFairnessNext()
-                Eventually("Termination", Finished())
+                Eventually("EventuallyFinished", Finished())
             }
         }
     }

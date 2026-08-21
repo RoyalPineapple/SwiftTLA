@@ -69,16 +69,19 @@ public struct EWD998TerminationModel: Sendable {
                 ActionParameter("node", values: Node.finiteValues)
             ]) {
                 let node = Expr<Node>(.variable("node"))
-                let quiescent = active[.zero] == false && active[.one] == false
-                    && active[.two] == false && active[.three] == false
-                    && pending[.zero] == 0 && pending[.one] == 0
-                    && pending[.two] == 0 && pending[.three] == 0
-
                 active[node] == true
                     && active.becomes(active.updating(node, to: false))
                     && pending.stays
-                    && ((quiescent && terminationDetected.becomes(true))
-                        || (!quiescent && terminationDetected.stays))
+                    && (((active[.zero] == false && active[.one] == false
+                        && active[.two] == false && active[.three] == false
+                        && pending[.zero] == 0 && pending[.one] == 0
+                        && pending[.two] == 0 && pending[.three] == 0)
+                        && terminationDetected.becomes(true))
+                        || ((active[.zero].expr.notEqual(false) || active[.one].expr.notEqual(false)
+                            || active[.two].expr.notEqual(false) || active[.three].expr.notEqual(false)
+                            || pending[.zero].expr.notEqual(0) || pending[.one].expr.notEqual(0)
+                            || pending[.two].expr.notEqual(0) || pending[.three].expr.notEqual(0))
+                            && terminationDetected.stays))
             }
 
             Action("RcvMsg", parameters: [
