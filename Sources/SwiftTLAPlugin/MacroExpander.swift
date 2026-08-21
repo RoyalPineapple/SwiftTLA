@@ -79,12 +79,14 @@ enum MacroExpander {
         ] + collectionAssignments)
             .joined(separator: "\n            ")
         let collectionInitializers = plan.symmetricCollections.map { collection in
-            """,
+            """
+            ,
                 \(collection.formalName): try IdentifiedModelCollection<\(collection.elementType), \(collection.valueType)>(
                     name: \"\(collection.formalName)\",
                     verificationScope: \(collection.verificationScope),
                     initial: \(literalExpr(for: collection.initial))
-                )"""
+                )
+            """
         }.joined()
 
         decls.append(DeclSyntax(stringLiteral: "private let _storage: _GeneratedMachineStorage"))
