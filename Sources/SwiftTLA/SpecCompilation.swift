@@ -652,6 +652,7 @@ public extension TLASpec {
         let renderer = CompiledTLARenderer(layout: layout, bindings: bindings)
         let renderedRefinements = try refinements.map(renderer.refinement)
         let renderedTheorems = try semantics.theorems.map(renderer.theorem)
+        let renderedFormalModuleReplacements = try semantics.formalModuleReplacements.map(renderer.formalModuleReplacement)
         let formalDefinitions = try formalOperatorDefinitions.enumerated()
             .map { index, definition in
                 RenderedModuleDefinition(
@@ -741,10 +742,11 @@ public extension TLASpec {
                 emittedActionCallNames: emittedActionCallNames,
                 renderedRefinements: renderedRefinements,
                 renderedTheorems: renderedTheorems,
+                renderedFormalModuleReplacements: renderedFormalModuleReplacements,
                 renderer: renderer,
                 semantics: semantics
             ),
-            renderedConfiguration: renderedTLCConfiguration()
+            renderedConfiguration: renderedTLCConfiguration(semantics: semantics)
         )
     }
 
@@ -771,6 +773,7 @@ public extension TLASpec {
         emittedActionCallNames: [CompiledActionCall: String],
         renderedRefinements: [String],
         renderedTheorems: [String],
+        renderedFormalModuleReplacements: [String],
         renderer: CompiledTLARenderer,
         semantics: CompiledSemantics
     ) throws -> String {
@@ -834,11 +837,9 @@ public extension TLASpec {
             lines.append("")
         }
 
-        for configuration in importConfigurations {
-            for replacement in configuration.replacements {
-                lines.append("\(replacement.definitionName) == \(replacement.expression)")
-                lines.append("")
-            }
+        for replacement in renderedFormalModuleReplacements {
+            lines.append(replacement)
+            lines.append("")
         }
         for definition in definitionsBeforeInstances {
             lines.append(definition.text)
@@ -965,19 +966,17 @@ public extension TLASpec {
         return lines.joined(separator: "\n") + "\n"
     }
 
-    private func renderedTLCConfiguration() -> String {
+    private func renderedTLCConfiguration(semantics: CompiledSemantics) -> String {
         var lines: [String] = []
         lines.append("SPECIFICATION Spec")
         lines.append(checkDeadlock ? "CHECK_DEADLOCK TRUE" : "CHECK_DEADLOCK FALSE")
         for constant in constants.sorted(by: { $0.name < $1.name }) {
             lines.append("CONSTANT \(constant.name) = \(constant.value)")
         }
-        for configuration in importConfigurations {
-            for replacement in configuration.replacements {
-                lines.append(
-                    "CONSTANT \(replacement.operatorName) <- [\(configuration.moduleName)]\(replacement.definitionName)"
-                )
-            }
+        for replacement in semantics.formalModuleReplacements {
+            lines.append(
+                "CONSTANT \(replacement.operatorName) <- [\(replacement.moduleName)]\(replacement.definitionName)"
+            )
         }
         for collection in symmetricCollections {
             for member in collection.metadata.members {

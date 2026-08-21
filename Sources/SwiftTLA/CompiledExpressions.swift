@@ -235,6 +235,13 @@ struct CompiledVariableInitializer: Sendable {
     let lazySet: CompiledStateExpr?
 }
 
+struct CompiledFormalModuleReplacement: Sendable {
+    let moduleName: String
+    let operatorName: String
+    let definitionName: String
+    let expression: CompiledStateExpr
+}
+
 struct CompiledSymmetrySet: Sendable {
     let values: Set<TLAValue>
 }
@@ -255,6 +262,7 @@ struct CompiledSemantics: Sendable {
     let assume: CompiledStateExpr?
     let formalOperatorDefinitions: [CompiledFormalOperatorDefinition]
     let recursiveFunctions: [CompiledRecursiveFunction]
+    let formalModuleReplacements: [CompiledFormalModuleReplacement]
     let symmetrySets: [CompiledSymmetrySet]
     let symmetricCollections: [CompiledSymmetricCollection]
 }

@@ -70,6 +70,19 @@ struct CompiledLowerer {
                 body: try lower(function.body, at: "recursiveFunctions.\(function.name).body")
             )
         }
+        let formalModuleReplacements = try spec.importConfigurations.flatMap { configuration in
+            try configuration.replacements.map { replacement in
+                CompiledFormalModuleReplacement(
+                    moduleName: configuration.moduleName,
+                    operatorName: replacement.operatorName,
+                    definitionName: replacement.definitionName,
+                    expression: try lower(
+                        replacement.expression,
+                        at: "importConfigurations.\(configuration.moduleName).\(replacement.operatorName)"
+                    )
+                )
+            }
+        }
         let localFormalNames = Set(spec.formalOperatorDefinitions.map(\.name))
         let linkedFormalOperators = try closure.resolvedFormalOperatorDefinitions
             .filter { !localFormalNames.contains($0.name) }
@@ -104,6 +117,7 @@ struct CompiledLowerer {
             assume: try lowerOptional(spec.assume, at: "assume"),
             formalOperatorDefinitions: formalOperators + linkedFormalOperators,
             recursiveFunctions: recursiveFunctions + linkedRecursiveFunctions,
+            formalModuleReplacements: formalModuleReplacements,
             symmetrySets: spec.symmetrySets.map { symmetry in
                 .init(values: symmetry.values)
             },

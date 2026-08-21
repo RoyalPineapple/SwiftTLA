@@ -92,6 +92,10 @@ struct CompiledTLARenderer {
         }
     }
 
+    func formalModuleReplacement(_ replacement: CompiledFormalModuleReplacement) throws -> String {
+        "\(replacement.definitionName) == \(try state(replacement.expression))"
+    }
+
     func state(_ expression: CompiledStateExpr) throws -> String {
         switch expression {
         case .value(let value): return value.description
