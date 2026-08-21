@@ -710,6 +710,36 @@ struct CompilerPipelineCanonicalizationTests {
         #expect(try CompiledRuntime(compilation: compilation).successors(from: initial).count == 1)
     }
 
+    @Test("compiled record function access retains its formal key")
+    func compiledRecordFunctionAccessRetainsFormalKey() throws {
+        let spec = TLASpec(
+            name: "CompiledRecordFunctionAccess",
+            variables: [
+                .init(name: "state", initial: .record(["count": .int(1)])),
+                .init(name: "key", initial: .string("count"))
+            ],
+            actions: [
+                .init(
+                    name: "step",
+                    body: .and(
+                        .guard_(.equal(.functionApply(.variable("state"), .variable("key")), .int(1))),
+                        .assign("state", .except(.variable("state"), .variable("key"), .int(2)))
+                    )
+                )
+            ],
+            invariants: []
+        )
+        let compilation = try spec.compile()
+        let runtime = CompiledRuntime(compilation: compilation)
+        let initial = try #require(try runtime.initialStates().first)
+        let successor = try #require(try runtime.successors(from: initial).first?.state)
+        let projection = try successor.projection(using: compilation.layout)
+        let stateToken = try TLAStateProjection.Token(validating: "state")
+        let state = try #require(projection.value(for: stateToken))
+
+        #expect(state == .record(["count": .int(2)]))
+    }
+
     @Test("declaration order changes the compilation identity")
     func declarationOrderChangesCompilationIdentity() throws {
         let first = TLASpec(

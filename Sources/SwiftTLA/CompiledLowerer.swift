@@ -224,11 +224,16 @@ struct CompiledLowerer {
             return try .recordLiteral(.init(fields.fields.map { item in
                 .init(
                     id: try field(named: item.name, at: "\(path).\(item.name)"),
+                    key: .string(item.name),
                     value: try lower(item.value, at: "\(path).\(item.name)")
                 )
             }))
         case .recordAccess(let value, let field):
-            return try .recordAccess(lower(value, at: path), self.field(named: field, at: "\(path).\(field)"))
+            return try .recordAccess(
+                lower(value, at: path),
+                self.field(named: field, at: "\(path).\(field)"),
+                .string(field)
+            )
         case .except(let function, let key, let value):
             return try .except(
                 lower(function, at: "\(path).function"),
@@ -396,7 +401,7 @@ struct CompiledLowerer {
         case .record(let values):
             return .record(CompiledRecord(try values.fields.map { entry in
                 .init(
-                    id: try field(named: entry.name, at: "controlValue.\(entry.name)"),
+                    key: .string(entry.name),
                     value: entry.name == "pc"
                         ? try controlValue(entry.value, owner: owner, algorithm: algorithm)
                         : try .init(formal: entry.value, using: layout)
@@ -454,7 +459,11 @@ struct CompiledLowerer {
                         algorithm: algorithm
                     )
                 }
-                return .init(id: try self.field(named: field.name, at: "\(path).\(field.name)"), value: value)
+                return .init(
+                    id: try self.field(named: field.name, at: "\(path).\(field.name)"),
+                    key: .string(field.name),
+                    value: value
+                )
             }))
         case .functionLiteral(let domain, let binder, let body):
             return .functionLiteral(

@@ -1,13 +1,14 @@
 struct CompiledRecordExpression: Sendable {
     struct Field: Sendable {
         let id: FieldID
+        let key: CompiledValue
         let value: CompiledStateExpr
     }
 
     let fields: [Field]
 
     init(_ fields: [Field]) {
-        self.fields = fields.sorted { $0.id.ordinal < $1.id.ordinal }
+        self.fields = fields.sorted { $0.key.canonicalEncoding < $1.key.canonicalEncoding }
     }
 }
 
@@ -59,7 +60,7 @@ indirect enum CompiledStateExpr: Sendable {
     case tupleConcatenate(CompiledStateExpr, CompiledStateExpr)
 
     case recordLiteral(CompiledRecordExpression)
-    case recordAccess(CompiledStateExpr, FieldID)
+    case recordAccess(CompiledStateExpr, FieldID, CompiledValue)
     case domain(CompiledStateExpr)
     case functionLiteral(CompiledStateExpr, BinderID, CompiledStateExpr)
     case functionApply(CompiledStateExpr, CompiledStateExpr)

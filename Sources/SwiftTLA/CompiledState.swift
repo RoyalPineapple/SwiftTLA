@@ -140,9 +140,9 @@ enum CompiledEvaluationError: Error, Sendable {
     case invalidVariableID(VariableID)
     case invalidControlLocationID(ControlLocationID)
     case invalidFieldID(FieldID)
+    case invalidRecordKey(CompiledValue)
     case invalidCompilationIdentity(expected: CompilationIdentity, actual: CompilationIdentity)
     case unboundBinder(BinderID)
     case unresolvedOperator
-    case unknownFieldName(String)
     case conflictingAssignment(VariableID)
 }
