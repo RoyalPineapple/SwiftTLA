@@ -295,13 +295,27 @@ extension ParserSession {
               let closure = call.trailingClosure
         else { return nil }
 
+        var bodyScope = scope
         var expressions: [StateExpr] = []
         for (index, statement) in closure.statements.enumerated() {
-            guard case .expr(let expression) = statement.item else {
+            if case .decl(let declaration) = statement.item,
+               let binding = parseFormalLet(declaration, scope: bodyScope) {
+                bodyScope = typedFacadeScope(bodyScope, binding: binding.name, to: binding.value)
+                continue
+            }
+            let expression: ExprSyntax?
+            if case .expr(let value) = statement.item {
+                expression = value
+            } else if let returned = statement.item.as(ReturnStmtSyntax.self) {
+                expression = returned.expression
+            } else {
+                expression = nil
+            }
+            guard let expression else {
                 algorithmParseFailure = "Invariant '\(name)' statement \(index + 1) is not a formal expression."
                 return nil
             }
-            guard let decoded = formalAlgorithmProperty(expression, scope: scope) else {
+            guard let decoded = formalAlgorithmProperty(expression, scope: bodyScope) else {
                 algorithmParseFailure = "Invariant '\(name)' statement \(index + 1) could not be decoded: "
                     + "'\(expression.description.trimmingCharacters(in: .whitespacesAndNewlines))'."
                 return nil
@@ -317,7 +331,7 @@ extension ParserSession {
         _ expression: ExprSyntax,
         scope: TypedFacadeScope
     ) -> StateExpr? {
-        if scope.isEmpty, let quantifier = decodeAlgorithmDomainQuantifier(expression) {
+        if let quantifier = decodeAlgorithmDomainQuantifier(expression, scope: scope) {
             return quantifier
         }
         return decodeTypedFacadeValue(expression, scope: scope)

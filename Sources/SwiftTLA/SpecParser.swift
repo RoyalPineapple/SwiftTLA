@@ -361,12 +361,17 @@ public final class ParserSession {
 
     /// Parses `At(Label.name, process)`, keeping the lowered `pc` variable
     /// private to the builder and macro implementation.
-    private func decodeControlLocation(_ expression: ExprSyntax) -> StateExpr? {
+    private func decodeControlLocation(
+        _ expression: ExprSyntax,
+        scope: TypedFacadeScope = .empty
+    ) -> StateExpr? {
         guard let call = expression.as(FunctionCallExprSyntax.self),
               call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "At",
               call.arguments.count == 2,
               let label = controlLocation(call.arguments.first?.expression),
-              let process = call.arguments.dropFirst().first.map(\.expression).flatMap(decodeStateExpr)
+              let process = call.arguments.dropFirst().first.map(\.expression).flatMap {
+                decodeTypedFacadeValue($0, scope: scope)
+              }
         else { return nil }
         return .equal(
             .functionApply(.programCounter, process),
@@ -545,7 +550,10 @@ public final class ParserSession {
         )
     }
 
-    func decodeAlgorithmDomainQuantifier(_ expression: ExprSyntax) -> StateExpr? {
+    func decodeAlgorithmDomainQuantifier(
+        _ expression: ExprSyntax,
+        scope: TypedFacadeScope = .empty
+    ) -> StateExpr? {
         guard let call = expression.as(FunctionCallExprSyntax.self),
               let name = call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text,
               name == "All",
@@ -567,7 +575,7 @@ public final class ParserSession {
            let argument = finished.arguments.first?.expression,
            decodeTypedFacadeValue(
             argument,
-            scope: typedFacadeScope(.empty, binding: parameter, to: binding)
+            scope: typedFacadeScope(scope, binding: parameter, to: binding)
            ) != nil {
             predicate = .equal(
                 .functionApply(.programCounter, binding),
@@ -576,7 +584,7 @@ public final class ParserSession {
         } else {
             predicate = decodeTypedFacadeValue(
                 bodySyntax,
-                scope: typedFacadeScope(.empty, binding: parameter, to: binding)
+                scope: typedFacadeScope(scope, binding: parameter, to: binding)
             )
         }
         guard let predicate else { return nil }
@@ -588,6 +596,9 @@ public final class ParserSession {
         _ expression: ExprSyntax,
         scope: TypedFacadeScope
     ) -> StateExpr? {
+        if let controlLocation = decodeControlLocation(expression, scope: scope) {
+            return controlLocation
+        }
         if let precedingMembers = decodePrecedingFormalMembers(expression, scope: scope) {
             return precedingMembers
         }
@@ -984,6 +995,11 @@ public final class ParserSession {
                   let other = decodeTypedFacadeValue(otherSyntax, scope: scope)
             else { return nil }
             return .union(base, other)
+        case "concatenating":
+            guard let otherSyntax = call.arguments.first?.expression,
+                  let other = decodeTypedFacadeValue(otherSyntax, scope: scope)
+            else { return nil }
+            return .tupleConcatenate(base, other)
         case "inserting", "removing":
             guard let elementSyntax = call.arguments.first?.expression,
                   let element = decodeTypedFacadeValue(elementSyntax, scope: scope)
