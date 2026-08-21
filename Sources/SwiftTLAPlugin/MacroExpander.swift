@@ -138,6 +138,7 @@ enum MacroExpander {
         let expectedIdentity = model.compilation.identity.value
         let expectedSchema = model.machineSurface.schemaIdentifier
         let facts = machineSurfaceSwiftFactsSource(model.swiftFacts)
+        let metadata = generatedMachineMetadataSource(model.machineSurface)
         let behaviorSource: String
         if model.machineSurface.actions.isEmpty {
             behaviorSource = """
@@ -186,23 +187,22 @@ enum MacroExpander {
         let compilationSource = """
         static let _expectedCompilationIdentity = \"\(expectedIdentity)\"
         static let _expectedMachineSchemaIdentifier = \"\(expectedSchema)\"
-        private static let _machineSurfacePlan: MachineSurfacePlan = {
-            do {
-                return try MachineSurfacePlan(compilation: Self.spec.compile(), swiftFacts: \(facts))
-            } catch {
-                fatalError(String(describing: error))
+        public static let generatedMachineMetadata: GeneratedMachineMetadata = \(metadata)
+        private static func _machineSurfacePlan(
+            _ compilation: CompiledSpecification
+        ) throws -> MachineSurfacePlan {
+            let plan = try MachineSurfacePlan(compilation: compilation, swiftFacts: \(facts))
+            guard plan.schemaIdentifier == _expectedMachineSchemaIdentifier,
+                  plan.metadata == generatedMachineMetadata else {
+                throw GeneratedMachineContractDiagnostic(
+                    code: .schemaMismatch,
+                    path: "generatedMachineMetadata",
+                    expected: _expectedMachineSchemaIdentifier,
+                    actual: plan.schemaIdentifier,
+                    nextSafeAction: "Compile the model from its current source."
+                )
             }
-        }()
-        public static let generatedMachineMetadata = _machineSurfacePlan.metadata
-        private static func _initialState() -> State {
-            do {
-                guard let projection = try Self.compiledSpecification().initialStateProjections().first else {
-                    fatalError("The compiled model has no initial state.")
-                }
-                return try State(projection: projection)
-            } catch {
-                fatalError(String(describing: error))
-            }
+            return plan
         }
         \(behaviorSource)
         public static func compiledSpecification() throws -> CompiledSpecification {
@@ -217,16 +217,17 @@ enum MacroExpander {
                     nextSafeAction: \"Update the authored #spec declaration so every consumer compiles the same formal model.\"
                 )
             }
-            guard compilation.identity == _machineSurfacePlan.compilationIdentity,
-                  _machineSurfacePlan.schemaIdentifier == _expectedMachineSchemaIdentifier,
+            let plan = try _machineSurfacePlan(compilation)
+            guard compilation.identity == plan.compilationIdentity,
+                  plan.schemaIdentifier == _expectedMachineSchemaIdentifier,
                   generatedMachineMetadata.compilationIdentity.value == _expectedCompilationIdentity,
                   generatedMachineMetadata.schemaIdentifier == _expectedMachineSchemaIdentifier else {
                 throw GeneratedMachineContractDiagnostic(
                     code: .schemaMismatch,
                     path: \"generatedMachineMetadata\",
                     expected: _expectedMachineSchemaIdentifier,
-                    actual: _machineSurfacePlan.schemaIdentifier,
-                    nextSafeAction: \"Regenerate the generated machine surface from the current #spec source.\"
+                    actual: plan.schemaIdentifier,
+                    nextSafeAction: \"Compile the model from its current source.\"
                 )
             }
             return compilation
@@ -236,9 +237,10 @@ enum MacroExpander {
             verificationStateLimit: Int? = nil
         ) -> GeneratedMachineContractReport {
             do {
+                let compilation = try compiledSpecification()
                 return GeneratedMachineContractVerifier.verify(
-                    compilation: try compiledSpecification(),
-                    plan: _machineSurfacePlan,
+                    compilation: compilation,
+                    plan: try _machineSurfacePlan(compilation),
                     metadata: metadata ?? generatedMachineMetadata,
                     expectedSchemaIdentifier: _expectedMachineSchemaIdentifier,
                     verificationStateLimit: verificationStateLimit ?? Self.verificationStateLimit,
@@ -318,6 +320,28 @@ enum MacroExpander {
             return "\(quoted(name)): .init(elementType: \(quoted(fact.elementType)), valueType: \(quoted(fact.valueType)))"
         }.joined(separator: ", ") + "]"
         return "MachineSurfaceSwiftFacts(variableTypes: \(dictionary(facts.variableTypes)), actionBindingTypes: \(actionBindings), symmetricCollections: \(collections), collectionActions: \(dictionary(facts.collectionActions)))"
+    }
+
+    static func generatedMachineMetadataSource(_ plan: MachineSurfacePlan) -> String {
+        func quoted(_ value: String) -> String { String(reflecting: value) }
+        func collectionType(_ value: CollectionVarType) -> String {
+            switch value {
+            case .scalar: ".scalar"
+            case .set: ".set"
+            case .array(let scope): ".array(\(scope))"
+            case .dictionary(let scope): ".dictionary(\(scope))"
+            }
+        }
+        let variables = plan.variables.map {
+            ".init(formalName: \(quoted($0.formalName)), swiftType: \(quoted($0.swiftType)), valueShape: .\($0.valueShape.rawValue), collectionType: \(collectionType($0.collectionType)))"
+        }.joined(separator: ", ")
+        let actions = plan.actions.map { action in
+            let bindings = action.bindings.map {
+                ".init(formalName: \(quoted($0.formalName)), swiftType: \(quoted($0.swiftType)), domain: [\($0.domain.map(codegenTLAValue).joined(separator: ", "))], isPublic: \($0.isPublic))"
+            }.joined(separator: ", ")
+            return ".init(formalName: \(quoted(action.formalName)), swiftIdentifier: \(quoted(action.swiftIdentifier)), bindings: [\(bindings)])"
+        }.joined(separator: ", ")
+        return ".init(compilationIdentity: .init(value: \(quoted(plan.compilationIdentity.value))), schemaIdentifier: \(quoted(plan.schemaIdentifier)), variables: [\(variables)], actions: [\(actions)])"
     }
 
     static func codegenTemporalExpr(_ expression: TemporalExpr) -> String {
