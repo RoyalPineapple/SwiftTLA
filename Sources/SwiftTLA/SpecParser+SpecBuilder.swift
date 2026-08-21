@@ -39,7 +39,7 @@ extension ParserSession {
                 }
             )
             for algorithm in sourceAlgorithms {
-                let localNames = Set(algorithm.model.processes.flatMap { process in
+                let localNames: Set<String> = Set(algorithm.model.processes.flatMap { process in
                     process.components.compactMap {
                         guard case .local(let state) = $0 else { return nil }
                         return state.root
