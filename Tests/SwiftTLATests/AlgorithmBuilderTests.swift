@@ -528,7 +528,7 @@ struct AlgorithmBuilderTests {
         let spec = try compiledSourceSpecification(algorithm)
         #expect(spec.variables.map(\.name) == ["value"])
         #expect(spec.actions.map(\.name) == ["pcalProcess1"])
-        #expect(spec.tlaModule.contains("pc") == false)
+        #expect(try spec.compile().renderedTLAModuleBundle().tla.contains("pc") == false)
 
         let (compilation, initial) = try initialState(of: spec)
         let next = try successor(named: "pcalProcess1", arguments: [.string("first")], in: compilation, from: initial)
