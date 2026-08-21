@@ -409,7 +409,8 @@ extension ParserSession {
 
         let state: AlgorithmStateModel
         if let initialSyntax = initializer.arguments.first(where: { $0.label?.text == "initial" })?.expression,
-           let initial = decodeAlgorithmStateExpression(initialSyntax, scope: scope) {
+           let initial = decodeAlgorithmStateExpression(initialSyntax, scope: scope)
+                ?? decodeStateExpr(initialSyntax) {
             state = AlgorithmStateModel(
                 root: declaredName,
                 initial: initial,
