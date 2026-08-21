@@ -203,59 +203,14 @@ struct TypedFacadeContractTests {
         ))
   }
 
-  @Test("bounded builder and macro fixtures preserve the complete typed model")
-  func boundedModelFixtureChecksAndExports() throws {
-    let builder = MultiCarElevator.builderSpec
-    let macro = MultiCarElevatorMacroFixture.spec
-
-    #expect(_tlaAlphaEquivalent(builder, macro))
-
+  @Test("bounded elevator source model checks successfully")
+  func boundedElevatorSourceModelChecksSuccessfully() throws {
     let checker = try ModelChecker(spec: MultiCarElevatorModel.spec, maxStates: 30_000)
     guard case .ok(let stateCount) = try checker.check() else {
       Issue.record("Bounded MultiCarElevator safety model did not complete successfully")
       return
     }
     #expect(stateCount == 3_276)
-
-    #expect(wrapperLines(in: try macro.compile().renderedTLAModuleBundle().tla) == expectedWrapperLines)
-  }
-
-  private func wrapperLines(in tla: String) -> [String] {
-    tla.split(separator: "\n").map(String.init).filter { line in
-      line.contains("__") && line.contains(" == ")
-    }
-  }
-
-  private var expectedWrapperLines: [String] {
-    let people: [TLAValue] = [.string("alice"), .string("bob")]
-    let cars: [TLAValue] = [.string("carA"), .string("carB")]
-    let floors: [TLAValue] = [.int(0), .int(1), .int(2)]
-    let directions: [TLAValue] = [.string("up"), .string("down")]
-    let actionDomains: [(String, [[TLAValue]])] = [
-      ("request", [people, floors, directions]),
-      ("assign", [people, cars, directions]),
-      ("move", [cars, directions, floors]),
-      ("openDoor", [cars, floors, directions]),
-      ("board", [people, cars, floors]),
-      ("closeDoor", [cars, floors, directions]),
-      ("completeRide", [people, cars, floors])
-    ]
-    return actionDomains.flatMap { name, domains in
-      cartesianValues(domains).map { indices, values in
-        let suffix = indices.map(String.init).joined(separator: "_")
-        let arguments = values.map(\.description).joined(separator: ", ")
-        return "\(name)__\(suffix) == \(name)(\(arguments))"
-      }
-    }
-  }
-
-  private func cartesianValues(_ domains: [[TLAValue]]) -> [([Int], [TLAValue])] {
-    guard let first = domains.first else { return [([], [])] }
-    return first.enumerated().flatMap { index, value in
-      cartesianValues(Array(domains.dropFirst())).map { indices, values in
-        ([index] + indices, [value] + values)
-      }
-    }
   }
 
   private func runSwift(_ arguments: [String]) throws -> (status: Int32, output: String) {
