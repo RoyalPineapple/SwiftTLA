@@ -166,7 +166,14 @@ struct CompilerPipelineCanonicalizationTests {
             }
         }
 
-        let compilation = try compiledSourceSpecification(algorithm).compile()
+        let source = try compiledSourceSpecification(algorithm)
+        #expect(source.actions.map(\.controlOwner) == [
+            .process(algorithm: "ControlLayout", ordinal: 0, typeName: "Node"),
+            .procedure(algorithm: "ControlLayout", name: "first"),
+            .procedure(algorithm: "ControlLayout", name: "second"),
+            nil
+        ])
+        let compilation = try source.compile()
         let description = compilation.description
 
         #expect(description.procedures.map { "\($0.algorithm).\($0.name)" } == [

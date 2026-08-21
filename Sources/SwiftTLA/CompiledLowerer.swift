@@ -159,7 +159,7 @@ struct CompiledLowerer {
             body: try lower(
                 action.body,
                 at: "actions.\(action.name).body",
-                controlOwner: layout.controlOwner(forActionNamed: action.name),
+                controlOwner: action.controlOwner,
                 algorithm: algorithm
             )
         )

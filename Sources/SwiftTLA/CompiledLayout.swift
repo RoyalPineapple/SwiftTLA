@@ -178,14 +178,6 @@ struct CompiledLayout: Hashable, Sendable {
         controlLocations.first { $0.id == id }
     }
 
-    func controlOwner(forActionNamed name: String) -> ControlOwner? {
-        let owners = Set(controlLocations.compactMap { label in
-            label.sourceName == name || label.renderedName == name ? label.owner : nil
-        })
-        guard owners.count == 1 else { return nil }
-        return owners.first
-    }
-
     func controlLocationID(named name: String, owner: ControlOwner?, algorithm: String?) -> ControlLocationID? {
         if name == "Done" {
             let doneLabels = controlLocations.filter {
