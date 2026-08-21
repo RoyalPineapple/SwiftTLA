@@ -13,6 +13,7 @@ documentation, diagnostics, and reviews use these terms.
 | linking | Resolve module imports, instances, substitutions, and the module closure. | binding, staging |
 | layout | The ordered allocation of compiler-owned IDs and slots. | schema, map, registry |
 | identity | The stable digest for one compiled declaration plan and configuration. | hash, fingerprint, ID |
+| configuration | The declared finite exploration and tool settings for one check. | options, setup |
 | slot | A private runtime position for one compiled variable. | index, key |
 | compiled value | A private recursive value used by the runtime. | formal value, state value |
 | formal value | A value in TLA+ or PlusCal. | compiled value |
@@ -24,12 +25,14 @@ documentation, diagnostics, and reviews use these terms.
 | action call | An action with concrete formal argument values. | action ID |
 | action ID | A private compiled identity that executes an action. | action name |
 | control location | A compiler-owned algorithm or procedure position. | label, pc |
+| source location | A position in author source used by diagnostics and inspection. | source name, identity |
 | rendered name | Text emitted for a declaration or control location. | identity |
 | program counter (`pc`) | State data that holds current control locations. | stack |
 | procedure stack | State data that holds return control locations and procedure data. | pc |
 | module | One TLA+ source unit. | bundle, closure |
 | module closure | The resolved transitive modules for one root module. | directory |
 | bundle | Rendered files, configuration, provenance, and ownership for a tool. | module closure |
+| generated | Swift API emitted from a compiled specification for application code. | compiled, rendered |
 | render | Convert compiled declarations to TLA+ or PlusCal text. | compile, export |
 | serialize | Encode boundary data such as JSON, graph records, or manifests. | render |
 | exploration | A bounded traversal of a compiled machine graph. | checking |
