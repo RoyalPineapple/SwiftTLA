@@ -72,8 +72,8 @@ struct CompiledEvaluator {
             return try state.value(for: variable)
         case .boundValue(let binder):
             return try bindings.value(for: binder)
-        case .controlLabel(let label):
-            return .controlLabel(label)
+        case .controlLocation(let label):
+            return .controlLocation(label)
         case .operatorReference:
             throw EvalError.typeMismatch("Expected a value")
         case .add(let lhs, let rhs):

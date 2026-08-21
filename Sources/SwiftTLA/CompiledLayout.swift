@@ -10,7 +10,7 @@ package struct ActionID: Hashable, Sendable {
     let ordinal: Int
 }
 
-struct ControlLabelID: Hashable, Sendable {
+struct ControlLocationID: Hashable, Sendable {
     let ordinal: Int
 }
 
@@ -86,8 +86,8 @@ extension ControlOwner {
     }
 }
 
-struct CompiledControlLabel: Hashable, Sendable {
-    let id: ControlLabelID
+struct CompiledControlLocation: Hashable, Sendable {
+    let id: ControlLocationID
     let owner: ControlOwner
     let sourceName: String
     let renderedName: String
@@ -97,7 +97,7 @@ struct CompiledLayout: Hashable, Sendable {
     let variables: [CompiledVariableLayout]
     let actions: [CompiledActionLayout]
     let procedures: [CompiledProcedureLayout]
-    let controlLabels: [CompiledControlLabel]
+    let controlLocations: [CompiledControlLocation]
     let declarations: [CompiledDeclaration]
 
     init(spec: TLASpec) {
@@ -118,7 +118,7 @@ struct CompiledLayout: Hashable, Sendable {
                 .init(algorithm: algorithm.model.name, name: procedure.name, sourceOffset: nil)
             }
         }
-        controlLabels = Self.controlLabels(
+        controlLocations = Self.controlLocations(
             in: spec.sourceAlgorithms,
             actions: spec.actions,
             hasProgramCounter: spec.variables.contains { $0.name == "pc" }
@@ -139,27 +139,27 @@ struct CompiledLayout: Hashable, Sendable {
         actions.first { $0.declaration.name == name }?.id
     }
 
-    func controlLabelID(owner: ControlOwner, named sourceName: String) -> ControlLabelID? {
-        controlLabels.first {
+    func controlLocationID(owner: ControlOwner, named sourceName: String) -> ControlLocationID? {
+        controlLocations.first {
             $0.owner == owner && $0.sourceName == sourceName
         }?.id
     }
 
-    func controlLabel(_ id: ControlLabelID) -> CompiledControlLabel? {
-        controlLabels.first { $0.id == id }
+    func controlLocation(_ id: ControlLocationID) -> CompiledControlLocation? {
+        controlLocations.first { $0.id == id }
     }
 
     func controlOwner(forActionNamed name: String) -> ControlOwner? {
-        let owners = Set(controlLabels.compactMap { label in
+        let owners = Set(controlLocations.compactMap { label in
             label.sourceName == name || label.renderedName == name ? label.owner : nil
         })
         guard owners.count == 1 else { return nil }
         return owners.first
     }
 
-    func controlLabelID(named name: String, owner: ControlOwner?, algorithm: String?) -> ControlLabelID? {
+    func controlLocationID(named name: String, owner: ControlOwner?, algorithm: String?) -> ControlLocationID? {
         if name == "Done" {
-            let doneLabels = controlLabels.filter {
+            let doneLabels = controlLocations.filter {
                 if case .generated(_, "Done") = $0.owner {
                     return $0.sourceName == name
                 }
@@ -174,10 +174,10 @@ struct CompiledLayout: Hashable, Sendable {
                 return doneLabels.first?.id
             }
         }
-        if let owner, let id = controlLabelID(owner: owner, named: name) {
+        if let owner, let id = controlLocationID(owner: owner, named: name) {
             return id
         }
-        let processMatches = controlLabels.filter {
+        let processMatches = controlLocations.filter {
             if case .process = $0.owner {
                 return $0.sourceName == name
             }
@@ -186,7 +186,7 @@ struct CompiledLayout: Hashable, Sendable {
         if processMatches.count == 1 {
             return processMatches.first?.id
         }
-        let matches = controlLabels.filter {
+        let matches = controlLocations.filter {
             $0.sourceName == name || $0.renderedName == name
         }
         guard matches.count == 1 else { return nil }
@@ -199,7 +199,7 @@ struct CompiledLayout: Hashable, Sendable {
             let name = declaration.name
             return "\(ordinal):\(kind.utf8.count):\(kind)\(name.utf8.count):\(name)"
         }.joined(separator: "|")
-        let controlEncoding = controlLabels.map { label in
+        let controlEncoding = controlLocations.map { label in
             let owner = label.owner.canonicalEncoding
             return "\(label.id.ordinal):\(owner.utf8.count):\(owner)\(label.sourceName.utf8.count):\(label.sourceName)\(label.renderedName.utf8.count):\(label.renderedName)"
         }.joined(separator: "|")
@@ -209,12 +209,12 @@ struct CompiledLayout: Hashable, Sendable {
         return "declarations[\(declarationEncoding)]procedures[\(procedureEncoding)]controls[\(controlEncoding)]"
     }
 
-    private static func controlLabels(
+    private static func controlLocations(
         in algorithms: [Algorithm],
         actions: [NamedAction],
         hasProgramCounter: Bool
-    ) -> [CompiledControlLabel] {
-        var labels: [CompiledControlLabel] = []
+    ) -> [CompiledControlLocation] {
+        var labels: [CompiledControlLocation] = []
 
         func append(
             _ steps: [AlgorithmStepModel],

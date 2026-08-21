@@ -126,8 +126,8 @@ struct CompilerPipelineCanonicalizationTests {
         #expect(compilation.layout.declarations.map(\.name) == ["first", "second", "advance", "hold", "Safe"])
     }
 
-    @Test("compiled layout assigns scoped control-label identities")
-    func compiledLayoutAssignsScopedControlLabelIDs() throws {
+    @Test("compiled layout assigns scoped control-location identities")
+    func compiledLayoutAssignsScopedControlLocationIDs() throws {
         let algorithm = Algorithm("ControlLayout") {
             let value = SharedVar("value", initial: 0)
             value
@@ -155,9 +155,9 @@ struct CompilerPipelineCanonicalizationTests {
             "ControlLayout.first",
             "ControlLayout.second"
         ])
-        #expect(description.controlLabels.map(\.sourceName) == ["start", "start", "start", "Done"])
-        #expect(description.controlLabels.map(\.renderedName) == ["start", "procedure.first.start", "procedure.second.start", "Done"])
-        #expect(description.controlLabels.map(\.owner) == [
+        #expect(description.controlLocations.map(\.sourceName) == ["start", "start", "start", "Done"])
+        #expect(description.controlLocations.map(\.renderedName) == ["start", "procedure.first.start", "procedure.second.start", "Done"])
+        #expect(description.controlLocations.map(\.owner) == [
             .process(algorithm: "ControlLayout", ordinal: 0, typeName: "Node"),
             .procedure(algorithm: "ControlLayout", name: "first"),
             .procedure(algorithm: "ControlLayout", name: "second"),
@@ -184,8 +184,8 @@ struct CompilerPipelineCanonicalizationTests {
         }.lower().compile().identity)
     }
 
-    @Test("compiled algorithm control state uses control-label identities")
-    func compiledAlgorithmUsesControlLabelIdentities() throws {
+    @Test("compiled algorithm control state uses control-location identities")
+    func compiledAlgorithmUsesControlLocationIdentities() throws {
         let algorithm = Algorithm("ControlRuntime") {
             let value = SharedVar("value", initial: 0)
             value
@@ -209,7 +209,7 @@ struct CompilerPipelineCanonicalizationTests {
             return
         }
         #expect(initialControls.values.allSatisfy {
-            if case .controlLabel = $0 { return true }
+            if case .controlLocation = $0 { return true }
             return false
         })
 
@@ -220,7 +220,7 @@ struct CompilerPipelineCanonicalizationTests {
             return
         }
         #expect(nextControls.values.allSatisfy {
-            if case .controlLabel = $0 { return true }
+            if case .controlLocation = $0 { return true }
             return false
         })
     }

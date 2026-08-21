@@ -330,10 +330,10 @@ struct CompiledLowerer {
     ) throws -> CompiledValue {
         switch value {
         case .string(let name):
-            guard let label = layout.controlLabelID(named: name, owner: owner, algorithm: algorithm) else {
-                throw controlLabelDiagnostic(name: name)
+            guard let label = layout.controlLocationID(named: name, owner: owner, algorithm: algorithm) else {
+                throw controlLocationDiagnostic(name: name)
             }
-            return .controlLabel(label)
+            return .controlLocation(label)
         case .set(let values):
             return .set(try Set(values.map { try controlValue($0, owner: owner, algorithm: algorithm) }))
         case .tuple(let values):
@@ -365,10 +365,10 @@ struct CompiledLowerer {
     ) throws -> CompiledStateExpr {
         switch expression {
         case .value(.string(let name)):
-            guard let label = layout.controlLabelID(named: name, owner: owner, algorithm: algorithm) else {
-                throw controlLabelDiagnostic(name: name)
+            guard let label = layout.controlLocationID(named: name, owner: owner, algorithm: algorithm) else {
+                throw controlLocationDiagnostic(name: name)
             }
-            return .controlLabel(label)
+            return .controlLocation(label)
         case .tupleLiteral(let values):
             return .tupleLiteral(try values.enumerated().map { index, value in
                 try lowerControlValue(
@@ -457,13 +457,13 @@ struct CompiledLowerer {
         }
     }
 
-    private func controlLabelDiagnostic(name: String) -> CompilationDiagnostic {
+    private func controlLocationDiagnostic(name: String) -> CompilationDiagnostic {
         .init(
-            code: .unknownControlLabel,
+            code: .unknownControlLocation,
             stage: .binding,
-            path: "controlLabels.\(name)",
-            expected: "a control label declared by the source algorithm",
-            actual: "no matching control label",
+            path: "controlLocations.\(name)",
+            expected: "a control location declared by the source algorithm",
+            actual: "no matching control location",
             nextSafeAction: "Use a label declared by this algorithm, then compile again."
         )
     }

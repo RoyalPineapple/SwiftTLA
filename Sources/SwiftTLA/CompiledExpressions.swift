@@ -2,7 +2,7 @@ indirect enum CompiledStateExpr: Sendable {
     case value(TLAValue)
     case stateVariable(VariableID)
     case boundValue(BinderID)
-    case controlLabel(ControlLabelID)
+    case controlLocation(ControlLocationID)
     case operatorReference(OperatorID)
 
     case add(CompiledStateExpr, CompiledStateExpr)
