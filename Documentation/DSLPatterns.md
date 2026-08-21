@@ -194,5 +194,4 @@ exercised by at least one port. No feature without an oracle.
 | `StateGraph.swift` | BFS output | States + transitions |
 | `TemporalExpr.swift` | Temporal AST | 5 cases |
 | `SwiftSource.swift` | Swift → Swift | Round-trip for tests |
-| `BFSCheckerSpec.swift` | Self-proof | TLAModelType, bfsChecker factory |
 | `ModelMacro.swift` | @TLAModel | Compile-time check + emit runtime |

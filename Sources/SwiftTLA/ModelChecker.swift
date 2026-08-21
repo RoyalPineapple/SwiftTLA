@@ -1,7 +1,4 @@
-/// Explores every reachable state of a TLA+ specification (plain BFS).
-///
-/// Lifecycle self-proof lives in `TLASpec.bfsChecker` / `@TLAModel BFSChecker`
-/// and composition APIs — not as a decorative controller inside this loop.
+/// Explores every reachable state of a TLA+ specification with breadth-first search.
 public struct ModelChecker {
     public let spec: TLASpec
     /// Present when this checker entered through the validated compiler gate.
@@ -62,19 +59,6 @@ public struct ModelChecker {
             guard !spec.symmetricCollections.isEmpty else { throw error }
             return bounded(.error(String(describing: error)))
         }
-    }
-
-    /// Compose checker lifecycle ⋊ user and explore (bootstrap entry point).
-    public static func compose(_ checker: TLASpec, _ user: TLASpec) throws -> ModelChecker {
-        ModelChecker(compilation: try checker.extending(user).compile())
-    }
-
-    public static func checkComposed(
-        checker: TLASpec = .bfsChecker(maxStates: 20),
-        user: TLASpec,
-        maxStates: Int = 10_000
-    ) throws -> CheckResult {
-        try compose(checker, user).check()
     }
 
     private func runExploration() throws -> ModelExplorationResult {

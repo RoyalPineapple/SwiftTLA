@@ -2,7 +2,6 @@ import Foundation
 import SwiftParser
 import SwiftSyntax
 @testable import SwiftTLA
-import SwiftTLAModels
 import Testing
 import UpstreamParity
 
@@ -426,82 +425,7 @@ private func value(
   }
 }
 
-// MARK: - Checker self-proof: BFS invariants verified on our own checker
-
 @Suite(.serialized) struct CheckerSelfProofTests {
-  @Test("BFSExplorer model-checks with sets")
-  func bfsExplorer1to1() throws {
-    let result = try ModelChecker(spec: BFSExplorer.spec, maxStates: 200).check()
-    switch result {
-    case .ok(let count):
-      #expect(count > 0)
-    case .invariantViolated(let name, let state, let trace):
-      print("Invariant \(name) violated at state: \(state)")
-      for step in trace { print("  \(step)") }
-      #expect(Bool(false), "Invariant \(name) violated")
-    default:
-      #expect(Bool(false), "Unexpected: \(result)")
-    }
-  }
-
-  @Test("BFSExplorer TLA+ output structure")
-  func bfsExplorerTLA() throws {
-    let tla = try BFSExplorer.spec.compile().renderedTLAModuleBundle().tla
-    #expect(tla.contains("q"))
-    #expect(tla.contains("visited"))
-    #expect(tla.contains("explored"))
-    #expect(tla.contains("picked"))
-  }
-
-  @Test("Bootstrap composition: bfsChecker ⋊ user")
-  func checkerComposition() throws {
-    let counter = Var<Int>("counter")
-    let userSpec = TLASpec("Counter") {
-      Variable(counter, 0)
-      Action("increment") { counter.becomes(counter + 1).when(counter < 10) }
-      Invariant("counterNonNegative") { counter >= 0 }
-    }
-    let graph = try ModelChecker.compose(
-      .bfsChecker(maxStates: 5),
-      userSpec
-    ).exploreGraph()
-    #expect(graph.states.count > 0)
-    #expect(graph.variableNames.contains("phase"))
-    #expect(graph.variableNames.contains("processed"))
-    #expect(graph.variableNames.contains("queued"))
-    #expect(graph.variableNames.contains("counter"))
-  }
-
-  @Test("BFSChecker @TLAModel exposes compiled execution")
-  func bfsCheckerCompiledExecution() throws {
-    let graph = try ModelChecker(spec: BFSChecker.spec, maxStates: 20).exploreGraph()
-    let initial = try #require(graph.initialStateIDs.first)
-    let state = try #require(graph.states[initial])
-    let phase = try #require(TLAStateProjection.Token(validating: "phase"))
-    #expect(state.value(for: phase) == .int(0))
-    let transition = try #require(graph.transitions[initial]?.first(where: {
-      $0.label.action == "StepDiscover"
-    }))
-    let next = try #require(graph.states[transition.target])
-    let processed = try #require(TLAStateProjection.Token(validating: "processed"))
-    #expect(next.value(for: processed) == .int(1))
-  }
-
-  @Test("checkComposed works with plain TLASpec")
-  func checkComposedSpec() throws {
-    let s1 = TLASpec("A") {
-      let x = Var<Int>("x")
-      Variable(x, 0)
-      Action("inc") { x.becomes(x + 1).when(x < 2) }
-    }
-    let result = try ModelChecker.checkComposed(
-      checker: TLASpec.bfsChecker(maxStates: 10),
-      user: s1,
-      maxStates: 500
-    )
-    #expect({ if case .ok = result { true } else { false } }())
-  }
-
   @Test("All explored states are reachable from initial")
   func reachability() throws {
     let x = Var<Int>("x")
