@@ -15,6 +15,8 @@ public enum AlgorithmDiagnosticCode: String, Sendable, Hashable {
     case invalidProcedureArity
     case invalidProcedureReturn
     case invalidProcedureControlFlow
+    case statementMacroArgumentCount
+    case statementMacroAssignmentTarget
 }
 
 public enum AlgorithmDiagnosticAnchor: Sendable, Hashable {

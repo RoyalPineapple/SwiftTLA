@@ -11,6 +11,7 @@ extension ParserSession {
             StateExpr.substituteVariable(name, with: replacement, in: value)
         }
         switch statement {
+        case .rejected: return statement
         case .await(let value): return .await(expression(value))
         case .assert(let value): return .assert(expression(value))
         case .set(let target, let value):

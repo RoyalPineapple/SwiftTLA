@@ -98,6 +98,7 @@ internal enum AlgorithmProcedureValidator {
     ) {
         for (index, statement) in statements.enumerated() {
             switch statement {
+            case .rejected(let code): diagnostics.append(.init(code, at: anchor))
             case .await, .assert, .skip: break
             case .set(let target, _): validateName(target.root, at: anchor, diagnostics: &diagnostics)
             case .letBinding(_, _, let body), .with(_, _, let body), .choose(_, _, let body):
@@ -142,6 +143,7 @@ internal enum AlgorithmProcedureValidator {
     ) {
         for (index, statement) in statements.enumerated() {
             switch statement {
+            case .rejected(let code): diagnostics.append(.init(code, at: anchor))
             case .call(let target, let arguments):
                 if !allowCalls {
                     diagnostics.append(.init(.invalidAlgorithmComponent, at: anchor))
@@ -185,6 +187,7 @@ internal enum AlgorithmProcedureValidator {
         statements.reduce(into: [[]]) { paths, statement in
             let statementPaths: [[String]]
             switch statement {
+            case .rejected: statementPaths = [[]]
             case .set(let target, _): statementPaths = [[target.root]]
             case .ifElse(_, let then, let otherwise), .either(let then, let otherwise): statementPaths = writePaths(then) + writePaths(otherwise)
             case .choose(_, _, let body), .letBinding(_, _, let body), .with(_, _, let body): statementPaths = writePaths(body)

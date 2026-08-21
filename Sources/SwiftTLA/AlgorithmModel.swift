@@ -190,6 +190,7 @@ private func algorithmCanonicalEncoding(_ model: AlgorithmModel) -> String {
     func statement(_ value: AlgorithmStatementModel, _ environment: [String: String], path: String) -> String {
         let result: String
         switch value {
+        case .rejected(let diagnostic): result = "rejected(\(diagnostic.rawValue))"
         case .await(let expression): result = "await(\(state(expression, environment)))"
         case .assert(let expression): result = "assert(\(state(expression, environment)))"
         case .set(let target, let expression): result = "set(\(lvalue(target, environment)),\(state(expression, environment)))"
@@ -374,6 +375,7 @@ internal enum AlgorithmLValueModel: Sendable {
 }
 
 internal indirect enum AlgorithmStatementModel: Sendable {
+    case rejected(AlgorithmDiagnosticCode)
     case await(StateExpr)
     case assert(StateExpr)
     case set(target: AlgorithmLValueModel, value: StateExpr)
