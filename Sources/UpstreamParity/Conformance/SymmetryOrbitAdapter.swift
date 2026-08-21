@@ -188,8 +188,10 @@ public struct PinnedSymmetryTLCAdapter: Sendable {
           raw.runID == correlation.rawRunID, reduced.runID == correlation.reducedRunID,
           raw.expectedCase.moduleSHA256 == reduced.expectedCase.moduleSHA256,
           raw.expectedCase.pin == reduced.expectedCase.pin,
-          raw.module.resolvingSymlinksInPath() == reduced.module.resolvingSymlinksInPath(),
-          raw.configuration.resolvingSymlinksInPath() != reduced.configuration.resolvingSymlinksInPath() else {
+          raw.bundle.root.name == reduced.bundle.root.name,
+          raw.bundle.root.tla == reduced.bundle.root.tla,
+          raw.bundle.imports == reduced.bundle.imports,
+          (raw.bundle.root.cfg == reduced.bundle.root.cfg) == false else {
       throw TemporalSymmetryGovernanceError.inconsistentReference(
         record: raw.caseID, field: "pinned TLC raw/reduced pair")
     }
