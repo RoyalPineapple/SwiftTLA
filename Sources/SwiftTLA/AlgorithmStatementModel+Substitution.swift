@@ -42,7 +42,7 @@ extension AlgorithmStatementModel {
             return (fresh, renamed.map { $0.replacingCurrentProcess(with: replacement) })
         }
 
-        switch self {
+        return switch self {
         case .rejected, .goto, .return, .stop, .skip:
             self
         case .await(let value):
