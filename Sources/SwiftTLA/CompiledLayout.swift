@@ -314,7 +314,7 @@ struct CompiledLayout: Hashable, Sendable {
                 return
             case .value(let value):
                 visit(value)
-            case .variable, .programCounter, .procedureStack, .controlLocation, .enabledAction:
+            case .variable, .currentProcess, .programCounter, .procedureStack, .controlLocation, .enabledAction:
                 return
             case .negate(let value), .not(let value), .cardinality(let value), .powerSet(let value),
                  .unionAll(let value), .tupleLength(let value), .tupleHead(let value), .tupleTail(let value),
@@ -725,6 +725,13 @@ struct BindingValidator {
             throw issue.compilationDiagnostic(stage: .validation, path: path)
         case .value:
             return
+        case .currentProcess:
+            throw diagnostic(
+                code: .unknownReference,
+                path: path,
+                expected: "a process scope",
+                actual: "current-process identity outside an algorithm process"
+            )
         case .programCounter:
             guard let id = layout.programCounterID() else {
                 throw diagnostic(

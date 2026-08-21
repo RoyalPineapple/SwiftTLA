@@ -20,7 +20,6 @@ enum AlgorithmLowerer {
         }
     }
     private static let processBinding = "process"
-    private static let builderProcessIdentifier = "__pcal_self"
     private static func lowered(_ specification: TLASpec) -> TLASpec {
         var specification = specification
         specification.algorithmPhase = .lowered
@@ -1118,8 +1117,9 @@ enum AlgorithmLowerer {
             switch expression {
             case .sourceIssue, .value, .programCounter, .procedureStack, .controlLocation:
                 return expression
+            case .currentProcess:
+                return .variable(processBinding)
             case .variable(let name):
-                if name == builderProcessIdentifier { return .variable(processBinding) }
                 if name.hasPrefix(algorithmLocalFamilyPrefix) {
                     let root = String(name.dropFirst(algorithmLocalFamilyPrefix.count))
                     return localRoots.contains(root) ? .variable(root) : expression

@@ -5,6 +5,77 @@ enum AlgorithmAssignmentTargetPolicy {
 }
 
 extension AlgorithmStatementModel {
+    func replacingCurrentProcess(with replacement: StateExpr) -> AlgorithmStatementModel {
+        func expression(_ value: StateExpr) -> StateExpr {
+            value.replacingCurrentProcess(with: replacement)
+        }
+
+        func target(_ value: AlgorithmLValueModel) -> AlgorithmLValueModel {
+            switch value {
+            case .root:
+                value
+            case .function(let root, let key):
+                .function(root: root, key: expression(key))
+            }
+        }
+
+        func scopedBody(
+            variable: String,
+            body: [AlgorithmStatementModel]
+        ) -> (variable: String, body: [AlgorithmStatementModel]) {
+            guard replacement.freeVariableNames.contains(variable) else {
+                return (variable, body.map { $0.replacingCurrentProcess(with: replacement) })
+            }
+            let fresh = StateExpr.freshBoundName(
+                variable,
+                avoiding: body.algorithmScopeNames
+                    .union(replacement.freeVariableNames)
+                    .union([variable])
+            )
+            let renamed = body.map {
+                $0.substitutingVariable(
+                    variable,
+                    with: .variable(fresh),
+                    assignmentTargets: .replaceWhenVariable
+                )
+            }
+            return (fresh, renamed.map { $0.replacingCurrentProcess(with: replacement) })
+        }
+
+        switch self {
+        case .rejected, .goto, .return, .stop, .skip:
+            self
+        case .await(let value):
+            .await(expression(value))
+        case .assert(let value):
+            .assert(expression(value))
+        case .set(let originalTarget, let value):
+            .set(target: target(originalTarget), value: expression(value))
+        case .letBinding(let variable, let value, let body):
+            let scoped = scopedBody(variable: variable, body: body)
+            .letBinding(variable: scoped.variable, value: expression(value), scoped.body)
+        case .with(let variable, let source, let body):
+            let scoped = scopedBody(variable: variable, body: body)
+            .with(variable: scoped.variable, source: expression(source), scoped.body)
+        case .ifElse(let condition, let then, let otherwise):
+            .ifElse(
+                expression(condition),
+                then.map { $0.replacingCurrentProcess(with: replacement) },
+                otherwise.map { $0.replacingCurrentProcess(with: replacement) }
+            )
+        case .either(let first, let second):
+            .either(
+                first.map { $0.replacingCurrentProcess(with: replacement) },
+                second.map { $0.replacingCurrentProcess(with: replacement) }
+            )
+        case .choose(let variable, let domain, let body):
+            let scoped = scopedBody(variable: variable, body: body)
+            .choose(variable: scoped.variable, domain: domain, scoped.body)
+        case .call(let target, let arguments):
+            .call(target: target, arguments: arguments.map(expression))
+        }
+    }
+
     func substitutingVariable(
         _ name: String,
         with replacement: StateExpr,

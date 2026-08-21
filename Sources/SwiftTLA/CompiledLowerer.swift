@@ -212,6 +212,8 @@ struct CompiledLowerer {
         case .sourceIssue(let issue):
             throw issue.compilationDiagnostic(stage: .lowering, path: path)
         case .value(let value): return .value(value)
+        case .currentProcess:
+            throw diagnostic(path: path)
         case .programCounter, .procedureStack: return try valueReference(at: path)
         case .controlLocation: return .controlLocation(try controlLocation(at: path))
         case .variable: return try valueReference(at: path)

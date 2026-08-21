@@ -150,7 +150,7 @@ struct ProcedureLoweringTests {
                     fairness: .none,
                     components: [
                         .step(.init(label: .init(name: "start"), statements: [
-                            .call(target: "outer", arguments: [.variable("__pcal_self")])
+                            .call(target: "outer", arguments: [.currentProcess])
                         ])),
                         .step(.init(label: .init(name: "finished"), statements: [.stop]))
                     ]

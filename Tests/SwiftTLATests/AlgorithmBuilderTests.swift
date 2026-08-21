@@ -56,6 +56,50 @@ struct AlgorithmBuilderTests {
         #expect(compilation.spec.actions.map(\.name).contains("advance"))
     }
 
+    @Test("Each records its process identity structurally")
+    func eachRecordsCurrentProcess() {
+        let algorithm = Algorithm("CurrentProcess") {
+            Each(Node.all) { node in
+                Do(AlgorithmLabel.receive) { Assert(node.expr == node.expr) }
+            }
+        }
+
+        guard case .process(let process) = algorithm.model.components.first,
+              case .step(let step) = process.components.first,
+              case .assert(let condition) = step.statements.first
+        else {
+            Issue.record("Expected one process assertion")
+            return
+        }
+        #expect(condition == .equal(.currentProcess, .currentProcess))
+    }
+
+    @Test("current-process replacement preserves lexical bindings")
+    func currentProcessReplacementPreservesLexicalBindings() {
+        let expression = StateExpr.forAll(
+            .setLiteral([.int(1)]),
+            "self",
+            .equal(.currentProcess, .variable("self"))
+        )
+
+        #expect(expression.replacingCurrentProcess(with: .variable("self")) == .forAll(
+            .setLiteral([.int(1)]),
+            "self_1",
+            .equal(.variable("self"), .variable("self_1"))
+        ))
+
+        let statement = AlgorithmStatementModel.letBinding(
+            "self",
+            .int(1),
+            [.assert(.equal(.currentProcess, .variable("self")))]
+        )
+        #expect(statement.replacingCurrentProcess(with: .variable("self")) == .letBinding(
+            "self_1",
+            .int(1),
+            [.assert(.equal(.variable("self"), .variable("self_1")))]
+        ))
+    }
+
     @Test("statement macros expand into their surrounding atomic block")
     func expandsTypedStatementMacro() throws {
         let algorithm = Algorithm("MacroLock") {

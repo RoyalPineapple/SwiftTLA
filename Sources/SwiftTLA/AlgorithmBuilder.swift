@@ -1161,7 +1161,7 @@ private func process<Value: FiniteDomainKey>(
     fairness: AlgorithmFairness,
     @AlgorithmBuilder _ body: (ProcessIdentifier<Value>) -> [AlgorithmElement]
 ) -> AlgorithmElement {
-    let identifier = ProcessIdentifier<Value>(expression: .variable("__pcal_self"))
+    let identifier = ProcessIdentifier<Value>(expression: .currentProcess)
     return AlgorithmElement(
         model: .process(
             AlgorithmProcessModel(

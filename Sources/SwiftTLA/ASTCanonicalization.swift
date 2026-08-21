@@ -135,6 +135,7 @@ func stateKey(_ expression: StateExpr, environment: [String: String], next: inou
     case .sourceIssue(let issue): return "sourceIssue(\(issue))"
     case .value(let value): return "value(\(value))"
     case .variable(let name): return "var(\(environment[name] ?? name))"
+    case .currentProcess: return "currentProcess"
     case .programCounter: return "programCounter"
     case .procedureStack: return "procedureStack"
     case .controlLocation(let reference):

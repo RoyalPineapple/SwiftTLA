@@ -352,11 +352,11 @@ extension ParserSession {
             algorithmParseFailure = "Each could not resolve its finite domain. Known finite domains: \(known)."
             return nil
         }
-        let parameter = closureParameterNames(in: closure).first ?? "__pcal_self"
+        let parameter = closureParameterNames(in: closure).first ?? "self"
         var processScope = typedFacadeScope(
             scope,
             binding: parameter,
-            to: .variable("__pcal_self")
+            to: .currentProcess
         )
         var components: [AlgorithmComponentModel] = []
         for (index, statement) in closure.statements.enumerated() {
