@@ -234,10 +234,9 @@ machine generates typed `State`, `Variables`, `ActionLabel`, and
 `TransitionResult` types. A transition result records the typed action and
 typed state before and after one successful transition.
 
-The formal engine retains its string-keyed state representation internally.
-Application-facing APIs do not expose that map. `TLAStateProjection` validates
-formal keys and values before formal tooling can inspect a state. A failed
-projection produces a typed diagnostic instead of a partially valid map.
+The runtime stores state in compiled layout slots as compiled values.
+`TLAStateProjection` validates formal keys and values before formal tooling
+inspects a state. A failed projection produces a typed diagnostic.
 
 Nested `@TLAActor` and `@TLAObservable` declarations adapt the same canonical
 model type. The actor provides isolated access. The nested observable is

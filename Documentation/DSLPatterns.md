@@ -132,11 +132,11 @@ Every known set of identifiers uses a `String`-backed enum:
 
 No bare string literals in pattern-matching switches.
 
-## Type safety rule: no bare-string-keyed collections
+## Type safety rule: compiled runtime state
 
-The formal engine uses `[String: TLAValue]` internally. This representation is
-not an application-facing API. Engine code derives every key from a typed source
-such as `Var<T>.name` or `RecursiveFunc.name`; it never writes a bare key.
+The runtime stores each state in compiled layout slots as compiled values.
+`TLAStateProjection` validates formal keys and values for formal-tool
+inspection.
 
 Generated application APIs expose typed `State`, `Variables`, `ActionLabel`,
 and `TransitionResult` values. `TLAStateProjection` is the guarded bridge for
@@ -150,7 +150,7 @@ internal initializers — only the builder function can create them.
 
 | Builder function | Creates | Internal type |
 |-----------------|---------|---------------|
-| `Variable(x, 0)` | `VarDecl` | `VarDecl` (formal engine / direct TLA+) |
+| `Variable(x, 0)` | `VarDecl` | `VarDecl` (compiled runtime / direct TLA+) |
 | `Variable(x, in: set)` | `VarDecl` | `VarDecl` |
 | `Variable(computed: x) { ... }` | `VarDecl` | `VarDecl` |
 | `Action("Name") { ... }` | `ActionDecl` | `ActionDecl` |
