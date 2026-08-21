@@ -516,7 +516,7 @@ public func FormalDefinition<First: TLAValueType, Second: TLAValueType>(
     plusCalDependencies: dependsOn
   ))
 }
-public struct TheoremDecl: SpecComponent, Equatable {
+public struct TheoremDecl: SpecComponent, Sendable, Equatable {
   public let name: String
   public let temporalBody: TemporalExpr?
   public let stateBody: StateExpr?

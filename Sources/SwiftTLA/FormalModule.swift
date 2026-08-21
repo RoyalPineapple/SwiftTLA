@@ -200,7 +200,7 @@ public struct FormalModuleConfiguration: Sendable, Equatable {
 /// Entries are dependency-first and include the root exactly once. Every
 /// retained edge records its declared relationship instead of flattening
 /// imports and named instances into a name-only module list.
-struct FormalModuleClosure: Sendable {
+package struct FormalModuleClosure: Sendable {
   struct Entry: Sendable {
     let module: TLASpec
     let owningRoot: String

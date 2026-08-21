@@ -102,6 +102,8 @@ extension CompiledStateExpr {
              .unionAll(let value), .tupleAccess(let value, _), .tupleLength(let value),
              .tupleHead(let value), .tupleTail(let value), .domain(let value), .sequenceFromSet(let value):
             return value.isStateIndependent
+        case .recordAccess(let value, _, _):
+            return value.isStateIndependent
         case .ifThenElse(let condition, let then, let otherwise):
             return condition.isStateIndependent && then.isStateIndependent && otherwise.isStateIndependent
         case .setLiteral(let values), .tupleLiteral(let values):

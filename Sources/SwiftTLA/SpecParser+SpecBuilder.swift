@@ -78,7 +78,7 @@ extension ParserSession {
             return types
         }
 
-        public func machineSurfaceSwiftFacts(
+        package func machineSurfaceSwiftFacts(
             for compilation: CompiledSpecification
         ) -> MachineSurfaceSwiftFacts {
             let processDomains = sourceAlgorithms.flatMap { algorithm in

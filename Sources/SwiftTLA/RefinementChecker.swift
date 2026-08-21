@@ -1,4 +1,4 @@
-public enum RefinementFailureEvidence: Sendable, Equatable {
+package enum RefinementFailureEvidence: Sendable, Equatable {
     case initialState(
         mapped: TLAStateProjection,
         abstractInitialStates: [TLAStateProjection]
