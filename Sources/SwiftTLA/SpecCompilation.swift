@@ -750,6 +750,7 @@ public extension TLASpec {
                 renderedTheorems: renderedTheorems,
                 renderedFormalModuleReplacements: renderedFormalModuleReplacements,
                 renderer: renderer,
+                layout: layout,
                 semantics: semantics
             ),
             renderedConfiguration: renderedTLCConfiguration(semantics: semantics)
@@ -781,6 +782,7 @@ public extension TLASpec {
         renderedTheorems: [String],
         renderedFormalModuleReplacements: [String],
         renderer: CompiledTLARenderer,
+        layout: CompiledLayout,
         semantics: CompiledSemantics
     ) throws -> String {
         let varNames = variables.map(\.name)
@@ -895,7 +897,7 @@ public extension TLASpec {
             uniqueKeysWithValues: symmetricCollections.map { ($0.name, $0.metadata) }
         )
         let initialPredicates = try variables.map { variable -> String in
-            guard let id = bindings.variables[variable.name],
+            guard let id = layout.variableID(named: variable.name),
                   let initializer = semantics.variableInitializers[id],
                   let initialValue = semantics.initialValues[id] else {
                 throw CompilationDiagnostic(

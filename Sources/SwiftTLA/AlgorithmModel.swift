@@ -1,10 +1,5 @@
 import Foundation
 
-/// Internal marker for a process-local variable viewed as its lowered
-/// per-process function.  It is introduced only by `LocalVariable.family` and
-/// removed by the algorithm lowerer before the formal specification escapes.
-let algorithmLocalFamilyPrefix = "__pcal_local_family:"
-
 internal struct AlgorithmModel: Sendable {
     let name: String
     let components: [AlgorithmComponentModel]
@@ -115,11 +110,7 @@ internal struct AlgorithmModel: Sendable {
 
         func expression(_ value: StateExpr) -> StateExpr {
             let family = localRoots.reduce(value) { result, root in
-                StateExpr.substituteVariable(
-                    "\(algorithmLocalFamilyPrefix)\(root)",
-                    with: .variable(root),
-                    in: result
-                )
+                result.replacingProcessLocalFamily(named: root, with: .variable(root))
             }
             return family.replacingCurrentProcess(with: .variable("self"))
         }
@@ -149,11 +140,7 @@ internal struct AlgorithmModel: Sendable {
                 statement.replacingCurrentProcess(with: .variable("self"))
             }.map { statement in
                 localRoots.reduce(statement) { result, root in
-                    result.substitutingVariable(
-                        "\(algorithmLocalFamilyPrefix)\(root)",
-                        with: .variable(root),
-                        assignmentTargets: .preserve
-                    )
+                    result.replacingProcessLocalFamily(named: root, with: .variable(root))
                 }
             }
         }

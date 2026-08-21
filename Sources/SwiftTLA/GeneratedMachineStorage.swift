@@ -96,7 +96,7 @@ public struct _GeneratedMachineStorage: Sendable {
         }
         let variable = compilation.layout.variables[variableOrdinal]
         let formalValue = try state.compiled.value(for: variable.id).rendered(using: compilation.layout)
-        return try Self.decode(formalValue, at: variable.formalName)
+        return try Self.decode(formalValue, at: variable.declaration.name)
     }
 
     /// Returns every successor for one generated action call.
