@@ -23,8 +23,8 @@ struct ClientCentricModuleTests {
     let closure = try consumer.compile().formalModuleClosure
     #expect(try compiledValue(
       snapshot.raw,
-      recursiveFunctions: closure.resolvedRecursiveFuncs,
-      formalOperators: closure.resolvedFormalOperatorDefinitions
+      recursiveFunctions: closure.linkedOperators.recursiveFunctions,
+      formalOperators: closure.linkedOperators.formalOperatorDefinitions
     ) == .bool(true))
     #expect(try consumer.compile().renderedTLAModuleBundle().imports.map(\.name) == ["Folds", "Functions", "Util", "ClientCentric"])
     #expect(try consumer.compile().renderedTLAModuleBundle().tla.contains("CC == INSTANCE ClientCentric WITH Keys <- {\"k\"}, Values <- {\"none\"}"))
@@ -40,7 +40,7 @@ struct ClientCentricModuleTests {
     let expression = StateExpr.tupleConcatenate(.tupleLiteral([]), selected)
     let result = try compiledValue(
       expression,
-      formalOperators: try FunctionsModule.module.compile().formalModuleClosure.resolvedFormalOperatorDefinitions
+      formalOperators: try FunctionsModule.module.compile().formalModuleClosure.linkedOperators.formalOperatorDefinitions
     )
     guard case .tuple(let values) = result else {
       Issue.record("An injective function choice must be consumable as a formal sequence.")

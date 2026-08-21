@@ -1113,7 +1113,7 @@ public extension TLASpec {
             switch refinement.operator {
             case .spec:
                 exportsTarget = !targetModel.variables.isEmpty || !targetModel.actions.isEmpty
-                    || targetClosure.resolvedFormalOperatorDefinitions.contains(where: { $0.name == target })
+                    || targetClosure.linkedOperators.formalOperatorDefinitions.contains(where: { $0.name == target })
             case .liveSpec, .liveSpecEquals:
                 exportsTarget = false
             }

@@ -277,7 +277,7 @@ struct FormalOperatorTests {
     #expect(
       try compiledValue(
         expression,
-        formalOperators: try Folds.module.compile().formalModuleClosure.resolvedFormalOperatorDefinitions
+        formalOperators: try Folds.module.compile().formalModuleClosure.linkedOperators.formalOperatorDefinitions
       ) == .int(6)
     )
     #expect(try Folds.module.compile().renderedTLAModuleBundle().tla.contains("MapThenFoldSet(op(_, _), base, f(_), choose(_), S) =="))
@@ -312,7 +312,7 @@ struct FormalOperatorTests {
       ]
     )
 
-    let functions = try FunctionsModule.module.compile().formalModuleClosure.resolvedFormalOperatorDefinitions
+    let functions = try FunctionsModule.module.compile().formalModuleClosure.linkedOperators.formalOperatorDefinitions
     #expect(try compiledValue(restrict, formalOperators: functions) == .function([
       .int(1): .int(10), .int(3): .int(30)
     ]))
@@ -355,7 +355,7 @@ struct FormalOperatorTests {
       ]
     )
 
-    let util = try KeyValueStoreUtil.module.compile().formalModuleClosure.resolvedFormalOperatorDefinitions
+    let util = try KeyValueStoreUtil.module.compile().formalModuleClosure.linkedOperators.formalOperatorDefinitions
     #expect(try compiledValue(reduced, formalOperators: util) == .int(6))
     #expect(try compiledValue(index, formalOperators: util) == .int(2))
     #expect(try compiledValue(sequenceSet, formalOperators: util) == .set([.int(1), .int(2)]))

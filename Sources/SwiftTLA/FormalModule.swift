@@ -201,6 +201,11 @@ public struct FormalModuleConfiguration: Sendable, Equatable {
 /// retained edge records its declared relationship instead of flattening
 /// imports and named instances into a name-only module list.
 package struct FormalModuleClosure: Sendable {
+  struct LinkedOperatorPlan: Sendable {
+    let recursiveFunctions: [RecursiveFunc]
+    let formalOperatorDefinitions: [FormalOperatorDefinition]
+  }
+
   struct Entry: Sendable {
     let module: TLASpec
     let owningRoot: String
@@ -223,18 +228,29 @@ package struct FormalModuleClosure: Sendable {
   let root: Entry
   let entries: [Entry]
   let edges: [Edge]
+  let linkedOperators: LinkedOperatorPlan
 
-  var resolvedRecursiveFuncs: [RecursiveFunc] {
+  private static func makeLinkedOperatorPlan(
+    root: Entry,
+    entries: [Entry],
+    edges: [Edge]
+  ) -> LinkedOperatorPlan {
     let modules = Dictionary(uniqueKeysWithValues: entries.map { ($0.module.name, $0.module) })
-    func resolve(_ name: String, replacements: [FormalModuleReplacement]) -> [RecursiveFunc] {
+    func recursiveFunctions(
+      named name: String,
+      replacements: [FormalModuleReplacement]
+    ) -> [RecursiveFunc] {
       guard let module = modules[name] else { return [] }
       var result: [RecursiveFunc] = []
       for edge in edges where edge.fromModule == name {
         switch edge.kind {
         case .importModule(let configuration):
-          result += resolve(edge.toModule, replacements: configuration?.replacements ?? [])
+          result += recursiveFunctions(
+            named: edge.toModule,
+            replacements: configuration?.replacements ?? []
+          )
         case .namedInstance(let namespace, let arguments):
-          let functions = resolve(edge.toModule, replacements: [])
+          let functions = recursiveFunctions(named: edge.toModule, replacements: [])
           let localNames = Set(functions.map(\.name))
           result += functions.map { function in
             let body = arguments.reduce(function.body) {
@@ -259,12 +275,8 @@ package struct FormalModuleClosure: Sendable {
       }
       return result
     }
-    return resolve(root.module.name, replacements: [])
-  }
 
-  var resolvedFormalOperatorDefinitions: [FormalOperatorDefinition] {
-    let modules = Dictionary(uniqueKeysWithValues: entries.map { ($0.module.name, $0.module) })
-    func resolve(
+    func formalOperatorDefinitions(
       _ name: String,
       replacements: [FormalModuleReplacement]
     ) -> [FormalOperatorDefinition] {
@@ -304,7 +316,11 @@ package struct FormalModuleClosure: Sendable {
       }
       return result
     }
-    return resolve(root.module.name, replacements: [])
+
+    return .init(
+      recursiveFunctions: recursiveFunctions(named: root.module.name, replacements: []),
+      formalOperatorDefinitions: formalOperatorDefinitions(root.module.name, replacements: [])
+    )
   }
 
   static func resolve(root: TLASpec) throws -> FormalModuleClosure {
@@ -511,7 +527,12 @@ package struct FormalModuleClosure: Sendable {
         nextSafeAction: "Compile the source model again."
       )
     }
-    return FormalModuleClosure(root: rootEntry, entries: entries, edges: edges)
+    return FormalModuleClosure(
+      root: rootEntry,
+      entries: entries,
+      edges: edges,
+      linkedOperators: Self.makeLinkedOperatorPlan(root: rootEntry, entries: entries, edges: edges)
+    )
   }
 
   private static func firstDuplicate(in names: [String]) -> String? {

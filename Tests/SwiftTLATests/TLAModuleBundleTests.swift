@@ -111,7 +111,7 @@ struct TLAModuleBundleTests {
     let rotated = ZSequences.rotation(of: sequence, leftBy: Expr(.int(1)))
     let result = try compiledValue(
       rotated.raw,
-      recursiveFunctions: try ZSequences.module.compile().formalModuleClosure.resolvedRecursiveFuncs
+      recursiveFunctions: try ZSequences.module.compile().formalModuleClosure.linkedOperators.recursiveFunctions
     )
     #expect(result == .function([
       .int(0): .int(1), .int(1): .int(2), .int(2): .int(3)
@@ -162,7 +162,7 @@ struct TLAModuleBundleTests {
 
     let sequences = try compiledValue(
       .recursiveCall("ZSeq", [.setLiteral([.int(0), .int(1)])]),
-      recursiveFunctions: try consumer.compile().formalModuleClosure.resolvedRecursiveFuncs
+      recursiveFunctions: try consumer.compile().formalModuleClosure.linkedOperators.recursiveFunctions
     )
     guard case .set(let values) = sequences else {
       Issue.record("The bounded ZSeq result was not a set.")
@@ -266,7 +266,7 @@ struct TLAModuleBundleTests {
       Invariant("CountsDown") { math.call("CountDown", value.stateExpr) == 3 }
     }
 
-    let resolved = try consumer.compile().formalModuleClosure.resolvedRecursiveFuncs
+    let resolved = try consumer.compile().formalModuleClosure.linkedOperators.recursiveFunctions
     #expect(resolved.map(\.name) == ["Math!CountDown"])
     #expect(resolved[0].body.description.contains("Math!CountDown"))
     let result = try ModelChecker(compilation: try consumer.compile(), configuration: .standard).check()

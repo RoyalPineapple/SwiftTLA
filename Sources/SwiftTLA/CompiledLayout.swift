@@ -599,8 +599,8 @@ struct BindingValidator {
         })
         let names = spec.formalOperatorDefinitions.map(\.name)
             + spec.recursiveFuncs.map(\.name)
-            + closure.resolvedFormalOperatorDefinitions.map(\.name)
-            + closure.resolvedRecursiveFuncs.map(\.name)
+            + closure.linkedOperators.formalOperatorDefinitions.map(\.name)
+            + closure.linkedOperators.recursiveFunctions.map(\.name)
         operators = names.reduce(into: [:]) { result, name in
             guard result[name] == nil else { return }
             result[name] = OperatorID(ordinal: result.count)
@@ -652,7 +652,7 @@ struct BindingValidator {
             try validateExpression(function.body, at: "recursiveFunctions.\(function.name).body", scope: scope)
         }
         let localFormalNames = Set(spec.formalOperatorDefinitions.map(\.name))
-        for definition in closure.resolvedFormalOperatorDefinitions where !localFormalNames.contains(definition.name) {
+        for definition in closure.linkedOperators.formalOperatorDefinitions where !localFormalNames.contains(definition.name) {
             guard let id = operators[definition.name] else {
                 throw diagnostic(code: .unknownReference, path: "linkedFormalOperators.\(definition.name)", expected: "a declared operator", actual: "no operator identity")
             }
@@ -663,7 +663,7 @@ struct BindingValidator {
             operators = outerOperators
         }
         let localRecursiveNames = Set(spec.recursiveFuncs.map(\.name))
-        for function in closure.resolvedRecursiveFuncs where !localRecursiveNames.contains(function.name) {
+        for function in closure.linkedOperators.recursiveFunctions where !localRecursiveNames.contains(function.name) {
             guard let id = operators[function.name] else {
                 throw diagnostic(code: .unknownReference, path: "linkedRecursiveFunctions.\(function.name)", expected: "a declared operator", actual: "no operator identity")
             }

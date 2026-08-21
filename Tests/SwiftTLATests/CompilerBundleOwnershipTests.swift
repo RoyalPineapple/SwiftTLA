@@ -75,7 +75,7 @@ struct CompilerBundleOwnershipTests {
       ]
     )
 
-    let definitions = try root.compile().formalModuleClosure.resolvedFormalOperatorDefinitions
+    let definitions = try root.compile().formalModuleClosure.linkedOperators.formalOperatorDefinitions
     let value = try compiledValue(
       .operatorApplication(.reference("ConfiguredValue", arity: 0), []),
       formalOperators: definitions

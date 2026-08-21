@@ -84,7 +84,7 @@ struct CompiledLowerer {
             }
         }
         let localFormalNames = Set(spec.formalOperatorDefinitions.map(\.name))
-        let linkedFormalOperators = try closure.resolvedFormalOperatorDefinitions
+        let linkedFormalOperators = try closure.linkedOperators.formalOperatorDefinitions
             .filter { !localFormalNames.contains($0.name) }
             .map { definition in
                 CompiledFormalOperatorDefinition(
@@ -94,7 +94,7 @@ struct CompiledLowerer {
                 )
             }
         let localRecursiveNames = Set(spec.recursiveFuncs.map(\.name))
-        let linkedRecursiveFunctions = try closure.resolvedRecursiveFuncs
+        let linkedRecursiveFunctions = try closure.linkedOperators.recursiveFunctions
             .filter { !localRecursiveNames.contains($0.name) }
             .map { function in
                 CompiledRecursiveFunction(
