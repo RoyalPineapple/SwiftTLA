@@ -225,13 +225,7 @@ enum MacroExpander {
             ]
         }
         func argumentConstructor(for binding: MachineSurfacePlan.Binding) -> String {
-            switch binding.swiftType {
-            case "Int": return ".int(\(binding.formalName))"
-            case "Bool": return ".bool(\(binding.formalName))"
-            case "String": return ".string(\(binding.formalName))"
-            case "TLAValue": return binding.formalName
-            default: return "\(binding.formalName).tlaValue"
-            }
+            "\(binding.formalName).tlaValue"
         }
 
         func fixedArgument(_ binding: MachineSurfacePlan.Binding) -> String {

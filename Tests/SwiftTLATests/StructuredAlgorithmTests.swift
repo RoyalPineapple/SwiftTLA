@@ -1,5 +1,5 @@
 import Testing
-import SwiftTLA
+@testable import SwiftTLA
 import SwiftTLAMacros
 
 /// The smallest end-to-end witness: a finite map holds typed records, an
@@ -78,8 +78,6 @@ private struct StructuredCarModel {
 struct StructuredAlgorithmTests {
     @Test("record-valued map updates survive #spec, lowering, and generated state")
     func generatedStateRetainsNestedTypedRecordUpdate() throws {
-        StructuredCarModel._checkParserTree()
-
         var model = try StructuredCarModel.makeMachine()
         let result = try model.apply(.open(process: .north))
 

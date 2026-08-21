@@ -1,7 +1,7 @@
 import Testing
 import SwiftSyntax
 import SwiftParser
-import SwiftTLA
+@testable import SwiftTLA
 import SwiftTLAMacros
 
 // Proves SpecParser's compact decoder produces the same AST as the runtime
@@ -585,7 +585,8 @@ private func parserEnum(
         #expect(cars.count == 2)
         #expect(cars.values.allSatisfy { value in
             guard case .record(let fields) = value else { return false }
-            return fields["floor"] == .int(4) && fields["door"] == .string("closed")
+            return fields.value(named: "floor") == .int(4)
+                && fields.value(named: "door") == .string("closed")
         })
     }
 

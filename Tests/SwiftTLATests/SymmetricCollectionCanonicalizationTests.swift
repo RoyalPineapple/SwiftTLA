@@ -76,7 +76,10 @@ struct SymmetricCollectionCanonicalizationTests {
     switch value {
     case .set(let values): return .set(Set(values.map { applyPermutation($0, mapping: mapping) }))
     case .tuple(let values): return .tuple(values.map { applyPermutation($0, mapping: mapping) })
-    case .record(let fields): return .record(fields.mapValues { applyPermutation($0, mapping: mapping) })
+    case .record(let fields):
+      return .record(.init(fields.fields.map { field in
+        .init(field.name, applyPermutation(field.value, mapping: mapping))
+      }))
     case .function(let entries):
       return .function(Dictionary(uniqueKeysWithValues: entries.map {
         (applyPermutation($0.key, mapping: mapping), applyPermutation($0.value, mapping: mapping))
@@ -100,8 +103,8 @@ struct SymmetricCollectionCanonicalizationTests {
     case .set(let values): return "set:[\(values.map(encode).sorted().joined(separator: ","))]"
     case .tuple(let values): return "tuple:[\(values.map(encode).joined(separator: ","))]"
     case .record(let fields):
-      let entries = fields.sorted { $0.key < $1.key }.map { field in
-        "\(String(reflecting: field.key)):\(encode(field.value))"
+      let entries = fields.fields.map { field in
+        "\(String(reflecting: field.name)):\(encode(field.value))"
       }.joined(separator: ",")
       return "record:[\(entries)]"
     case .function(let entries):
