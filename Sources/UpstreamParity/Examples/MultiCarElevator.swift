@@ -321,21 +321,18 @@ public struct MultiCarElevatorMacroFixture: Sendable {
             let cars: Var<Function<CarID, Record<CarSchema>>> = .init("cars")
             let calls: Var<SetExpr<Record<CallSchema>>> = .init("calls")
             let lastMoveDoorClosed: Var<Bool> = .init("lastMoveDoorClosed")
-            let floorValues = StateExpr.setLiteral(FloorID.tlaValues.map(StateExpr.value))
-            let riderValues = StateExpr.setLiteral([
-                .value(.string("none")), .value(PersonID.alice.tlaValue), .value(PersonID.bob.tlaValue)
-            ])
-
             Variable(cars, initialCarsValue)
             Variable(calls, TLAValue.set([]))
             Variable(lastMoveDoorClosed, true)
             Constraint(calls.stateExpr.cardinality <= 1)
 
             Invariant("TypeOK") {
-                cars[.carA][CarSchema.floor].raw.isIn(floorValues)
-                    && cars[.carB][CarSchema.floor].raw.isIn(floorValues)
-                    && cars[.carA][CarSchema.rider].raw.isIn(riderValues)
-                    && cars[.carB][CarSchema.rider].raw.isIn(riderValues)
+                (cars[.carA][CarSchema.rider].raw == "none"
+                    || cars[.carA][CarSchema.rider].raw == PersonID.alice
+                    || cars[.carA][CarSchema.rider].raw == PersonID.bob)
+                    && (cars[.carB][CarSchema.rider].raw == "none"
+                        || cars[.carB][CarSchema.rider].raw == PersonID.alice
+                        || cars[.carB][CarSchema.rider].raw == PersonID.bob)
             }
             Invariant("FloorBounds") {
                 cars[.carA][CarSchema.floor].raw >= 0
