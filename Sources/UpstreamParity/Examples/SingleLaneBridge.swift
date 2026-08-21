@@ -60,8 +60,6 @@ public struct SingleLaneBridgeModel: Sendable {
 
             Invariant("Invariants") {
                 let l = StateExpr.variable("Location")
-                let carsInBridge = StateExpr.filterSet(carsSet) { x in inBridge(l.applying(x)) }
-
                 for a in allCars {
                     let ia = StateExpr.value(a)
                     for b in allCars where a < b {
@@ -70,7 +68,7 @@ public struct SingleLaneBridgeModel: Sendable {
                             && StateExpr.equal(l.applying(ia), l.applying(ib)))
                     }
                 }
-                carsInBridge.cardinality < bridge.count + 1
+                StateExpr.filterSet(carsSet) { x in inBridge(l.applying(x)) }.cardinality < bridge.count + 1
                 for r in carsRight {
                     let ir = StateExpr.value(r)
                     for lc in carsLeft {

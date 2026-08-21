@@ -4,7 +4,7 @@ import SwiftTLAMacros
     // MARK: Helpers
 
 func recordMessage(_ fields: [String: String]) -> TLAValue {
-        .record(fields.mapValues { .string($0) })
+        .record(.init(fields.map { .init($0.key, .string($0.value)) }))
     }
 
 func recordMessageExpr(_ fields: [String: StateExpr]) -> StateExpr {
