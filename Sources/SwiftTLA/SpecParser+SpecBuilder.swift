@@ -49,6 +49,7 @@ extension ParserSession {
         public var moduleInstances: [FormalModuleInstance] = []
         public var refinements: [RefinementDecl] = []
         public var requiredCapabilities: [FormalCapability] = []
+        public var extendsModules: [StandardModule] = []
         public var sourceAlgorithms: [Algorithm] = []
         public var formalParameters: [FormalModuleParameter] = []
         public var formalOperatorDefinitions: [FormalOperatorDefinition] = []
@@ -287,6 +288,10 @@ extension ParserSession {
             if case .expr(let expression) = statement.item,
                let fc = expression.as(FunctionCallExprSyntax.self) {
                 parseBuilderCall(fc, into: &result, collectionTypes: collectionTypes)
+            } else if case .expr(let expression) = statement.item,
+                      let reference = expression.as(DeclReferenceExprSyntax.self),
+                      result.instanceBindings[reference.baseName.text] != nil {
+                continue
             } else if let forStmt = statement.item.as(ForStmtSyntax.self) {
                 parseForLoop(forStmt, into: &result)
             } else if case .decl(let decl) = statement.item,
@@ -329,6 +334,9 @@ extension ParserSession {
                 result.instanceBindings[sourceName] = instance
             } else if resolveVarCall(call) != nil {
                 containsVariableConstructor = true
+            } else if call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "FormalCall"
+                        || call.calledExpression.as(GenericSpecializationExprSyntax.self) != nil {
+                continue
             } else {
                 result.diagnostics.append(.init(
                     message: "Specification body contains an unsupported local declaration.",
@@ -763,6 +771,23 @@ extension ParserSession {
             }
         case "Constant":
             parseConstantDecl(call, into: &result)
+        case "Extends":
+            let modules = call.arguments.compactMap { argument -> StandardModule? in
+                guard let member = argument.expression.as(MemberAccessExprSyntax.self) else { return nil }
+                switch member.declName.baseName.text {
+                case "integers": return .integers
+                case "naturals": return .naturals
+                case "finiteSets": return .finiteSets
+                case "sequences": return .sequences
+                case "tlc": return .tlc
+                default: return nil
+                }
+            }
+            guard modules.count == call.arguments.count else {
+                result.diagnostics.append(.init(message: "Extends requires standard modules such as .integers.", source: call))
+                return
+            }
+            result.extendsModules.append(contentsOf: modules)
         case "Parameter":
             guard let name = extractStringArg(call, index: 0), !name.isEmpty else {
                 result.diagnostics.append(.init(message: "Parameter requires a name.", source: call))
