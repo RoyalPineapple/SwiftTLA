@@ -138,7 +138,7 @@ struct CompiledBindings: Sendable {
 enum CompiledEvaluationError: Error, Sendable {
     case invalidStateLayout(expected: Int, actual: Int)
     case invalidVariableID(VariableID)
-    case invalidControlLabelID(ControlLabelID)
+    case invalidControlLocationID(ControlLocationID)
     case invalidCompilationIdentity(expected: CompilationIdentity, actual: CompilationIdentity)
     case unboundBinder(BinderID)
     case unresolvedOperator

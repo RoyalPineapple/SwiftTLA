@@ -290,7 +290,7 @@ public final class ParserSession {
         guard let call = expression.as(FunctionCallExprSyntax.self),
               call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "At",
               call.arguments.count == 2,
-              let label = controlLabel(call.arguments.first?.expression),
+              let label = controlLocation(call.arguments.first?.expression),
               let process = call.arguments.dropFirst().first.map(\.expression).flatMap(decodeStateExpr)
         else { return nil }
         return .equal(
@@ -320,7 +320,7 @@ public final class ParserSession {
         )
     }
 
-    private func controlLabel(_ expression: ExprSyntax?) -> String? {
+    private func controlLocation(_ expression: ExprSyntax?) -> String? {
         guard let expression else { return nil }
         if let literal = expression.as(StringLiteralExprSyntax.self) {
             return literal.segments.compactMap { $0.as(StringSegmentSyntax.self)?.content.text }.joined()

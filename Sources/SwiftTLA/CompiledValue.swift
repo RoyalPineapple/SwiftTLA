@@ -29,7 +29,7 @@ indirect enum CompiledValue: Hashable, Sendable {
     case integer(Int)
     case boolean(Bool)
     case string(String)
-    case controlLabel(ControlLabelID)
+    case controlLocation(ControlLocationID)
     case set(Set<CompiledValue>)
     case tuple([CompiledValue])
     case record(CompiledRecord)
@@ -69,9 +69,9 @@ indirect enum CompiledValue: Hashable, Sendable {
             return .bool(value)
         case .string(let value):
             return .string(value)
-        case .controlLabel(let id):
-            guard let label = layout.controlLabel(id) else {
-                throw CompiledEvaluationError.invalidControlLabelID(id)
+        case .controlLocation(let id):
+            guard let label = layout.controlLocation(id) else {
+                throw CompiledEvaluationError.invalidControlLocationID(id)
             }
             return .string(label.renderedName)
         case .set(let values):
@@ -93,7 +93,7 @@ indirect enum CompiledValue: Hashable, Sendable {
 
     func transformingFormalValues(_ transform: (TLAValue) -> TLAValue) -> CompiledValue {
         switch self {
-        case .integer, .boolean, .string, .controlLabel, .constant:
+        case .integer, .boolean, .string, .controlLocation, .constant:
             return self
         case .set(let values):
             return .set(Set(values.map { $0.transformingFormalValues(transform) }))
@@ -118,7 +118,7 @@ indirect enum CompiledValue: Hashable, Sendable {
             return valueContains(.bool(current), value)
         case .string(let current):
             return valueContains(.string(current), value)
-        case .controlLabel:
+        case .controlLocation:
             return false
         case .set(let values):
             return values.contains { $0.contains(value) }
@@ -145,7 +145,7 @@ indirect enum CompiledValue: Hashable, Sendable {
             return "boolean:\(value)"
         case .string(let value):
             return "string:\(value)"
-        case .controlLabel(let value):
+        case .controlLocation(let value):
             return "control:\(value.ordinal)"
         case .set(let values):
             return "set:[\(Self.sorted(values).map(\.canonicalEncoding).joined(separator: ","))]"

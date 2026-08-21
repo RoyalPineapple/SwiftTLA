@@ -19,7 +19,7 @@ public struct CompilationDescription: Sendable, Equatable {
     public let variables: [VariableDescription]
     public let actions: [ActionDescription]
     public let procedures: [ProcedureDescription]
-    public let controlLabels: [ControlLabelDescription]
+    public let controlLocations: [ControlLocationDescription]
     public let imports: [ModuleDescription]
 }
 
@@ -46,7 +46,7 @@ public enum ControlOwnerDescription: Sendable, Equatable {
     case generated(algorithm: String, purpose: String)
 }
 
-public struct ControlLabelDescription: Sendable, Equatable {
+public struct ControlLocationDescription: Sendable, Equatable {
     public let owner: ControlOwnerDescription
     public let sourceName: String
     public let renderedName: String
@@ -98,7 +98,7 @@ public struct CompiledSpecification: Sendable {
                     sourceOffset: $0.sourceOffset
                 )
             },
-            controlLabels: layout.controlLabels.map {
+            controlLocations: layout.controlLocations.map {
                 .init(
                     owner: $0.owner.description,
                     sourceName: $0.sourceName,
@@ -406,7 +406,7 @@ public struct CompilationDiagnostic: Error, Sendable, Hashable, CustomStringConv
         case unresolvedDirectModuleDependency
         case cyclicDirectModuleDependency
         case duplicateDirectModuleDefinition
-        case unknownControlLabel
+        case unknownControlLocation
         case unknownReference
         case outOfScopeReference
         case assignmentToBinder
@@ -685,7 +685,7 @@ private func tlaActionNames(
 private extension CompiledLayout {
     func directActionNames(actions: [NamedAction]) -> [String: String] {
     let actionNames = Set(actions.map(\.name))
-    let candidates = controlLabels.compactMap { label -> (qualified: String, label: String)? in
+    let candidates = controlLocations.compactMap { label -> (qualified: String, label: String)? in
         guard case .procedure = label.owner else { return nil }
         return (qualified: label.renderedName, label: label.sourceName)
     }
