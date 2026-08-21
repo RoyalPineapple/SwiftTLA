@@ -12,7 +12,8 @@ extension TLASpec {
     func renderTLAModuleSource(sectionPlan: DirectModuleSectionPlan) -> String {
         validateSymmetricCollectionExport()
         let varNames = variables.map(\.name)
-        let actions = sectionPlan.actions
+        let renderedActions = sectionPlan.actions
+        let actions = renderedActions.map(\.declaration)
         let emittedActionNames = sectionPlan.emittedActionNames
         let varsTuple = varNames.count == 1 ? varNames[0] : "<<\(varNames.joined(separator: ", "))>>"
         let isLibraryModule = variables.isEmpty && actions.isEmpty
@@ -155,11 +156,12 @@ extension TLASpec {
         }
         lines.append("")
 
-        for action in actions where !action.name.isEmpty {
+        for renderedAction in renderedActions where renderedAction.declaration.name.isEmpty == false {
+            let action = renderedAction.declaration
             let parameters = action.bindings.map(\.name).joined(separator: ", ")
             let emittedName = emittedActionNames[action.name] ?? action.name
             let header = parameters.isEmpty ? emittedName : "\(emittedName)(\(parameters))"
-            lines.append("\(header) == \(action.body.tlaModuleSource)")
+            lines.append("\(header) == \(renderedAction.renderedBody)")
             for variant in actionVariants(action) where !variant.indices.isEmpty {
                 let suffix = variant.indices.map(String.init).joined(separator: "_")
                 lines.append("\(emittedName)__\(suffix) == \(formalActionCall(named: action.name, arguments: variant.arguments))")

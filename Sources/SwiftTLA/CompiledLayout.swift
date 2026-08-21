@@ -511,11 +511,14 @@ struct CompiledBindingTable: Sendable {
     let variables: [String: VariableID]
     let actions: [String: ActionID]
     let operators: [String: OperatorID]
+    let binders: [BinderID: String]
+    let operatorNames: [OperatorID: String]
     let references: [String: CompiledReference]
 
     init(
         layout: CompiledLayout,
         operators: [String: OperatorID] = [:],
+        binders: [BinderID: String] = [:],
         references: [String: CompiledReference] = [:]
     ) {
         variables = Dictionary(
@@ -525,8 +528,14 @@ struct CompiledBindingTable: Sendable {
             uniqueKeysWithValues: layout.actions.map { ($0.declaration.name, $0.id) }
         )
         self.operators = operators
+        self.binders = binders
+        operatorNames = Dictionary(uniqueKeysWithValues: operators.map { ($0.value, $0.key) })
         self.references = references
     }
+
+    func binderName(_ id: BinderID) -> String? { binders[id] }
+
+    func operatorName(_ id: OperatorID) -> String? { operatorNames[id] }
 }
 
 struct BindingValidator {
@@ -537,6 +546,7 @@ struct BindingValidator {
     private var nextBinderOrdinal = 0
     private var nextOperatorOrdinal = 0
     private var knownBinderNames: Set<String> = []
+    private var binders: [BinderID: String] = [:]
     private var references: [String: CompiledReference] = [:]
 
     init(spec: TLASpec, layout: CompiledLayout, closure: FormalModuleClosure) {
@@ -614,7 +624,12 @@ struct BindingValidator {
             let scope = try bind(function.params, at: "linkedRecursiveFunctions.\(function.name).parameters", scope: [:])
             try validateExpression(function.body, at: "linkedRecursiveFunctions.\(function.name).body", scope: scope)
         }
-        return CompiledBindingTable(layout: layout, operators: operators, references: references)
+        return CompiledBindingTable(
+            layout: layout,
+            operators: operators,
+            binders: binders,
+            references: references
+        )
     }
 
     private mutating func validate(_ expression: TemporalExpr, at path: String) throws {
@@ -870,6 +885,7 @@ struct BindingValidator {
             nextBinderOrdinal += 1
             knownBinderNames.insert(name)
             nested[name] = id
+            binders[id] = name
             references["\(path).\(name)"] = .binder(id)
         }
         return nested
@@ -889,6 +905,7 @@ struct BindingValidator {
                 nextBinderOrdinal += 1
                 knownBinderNames.insert(name)
                 nested[name] = id
+                binders[id] = name
                 references["\(path).\(name)"] = .binder(id)
             case .operator(let name, _):
                 let id = OperatorID(ordinal: nextOperatorOrdinal)

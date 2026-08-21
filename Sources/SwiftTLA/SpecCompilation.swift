@@ -63,8 +63,13 @@ public struct ModuleDescription: Sendable, Equatable {
 public struct DirectModuleSectionPlan: Sendable, Equatable {
     let definitionsBeforeInstances: [DirectModuleDefinition]
     let definitionsAfterInstances: [DirectModuleDefinition]
-    let actions: [NamedAction]
+    let actions: [DirectModuleAction]
     let emittedActionNames: [String: String]
+}
+
+struct DirectModuleAction: Sendable, Equatable {
+    let declaration: NamedAction
+    let renderedBody: String
 }
 
 /// The point at which a formal specification becomes available to consumers.
@@ -226,12 +231,10 @@ public struct CompiledSpecification: Sendable {
         }
 
         let files = try entries.map { entry in
-            let sectionPlan = entry.module.name == spec.name
-                ? directModuleSections
-                : try entry.module.directModuleSectionPlan(layout: .init(source: entry.module))
+            let compilation = entry.module.name == spec.name ? self : try entry.module.compile()
             return TLAModuleFile(
                 name: entry.module.name,
-                tla: entry.module.renderTLAModuleSource(sectionPlan: sectionPlan),
+                tla: entry.module.renderTLAModuleSource(sectionPlan: compilation.directModuleSections),
                 cfg: entry.module.name == spec.name ? entry.module.renderTLCConfiguration() : nil
             )
         }
@@ -505,7 +508,11 @@ public extension TLASpec {
         var validator = BindingValidator(spec: self, layout: layout, closure: closure)
         let bindings = try validator.validate(spec: self)
         let semantics = try CompiledLowerer(bindings: bindings, closure: closure, layout: layout).lower(spec: self)
-        let directModuleSections = try directModuleSectionPlan(layout: layout)
+        let directModuleSections = try directModuleSectionPlan(
+            layout: layout,
+            bindings: bindings,
+            semantics: semantics
+        )
         let authoredPlusCalModule = try authoredPlusCalModule()
         return CompiledSpecification(
             spec: self,
@@ -519,7 +526,11 @@ public extension TLASpec {
         )
     }
 
-    internal func directModuleSectionPlan(layout: CompiledLayout) throws -> DirectModuleSectionPlan {
+    internal func directModuleSectionPlan(
+        layout: CompiledLayout,
+        bindings: CompiledBindingTable,
+        semantics: CompiledSemantics
+    ) throws -> DirectModuleSectionPlan {
         let explicitDefinitions = definitions
         let explicitNames = Set(explicitDefinitions.compactMap(\.name))
         let formalDefinitions = formalOperatorDefinitions
@@ -569,11 +580,11 @@ public extension TLASpec {
                 definitionsAfterInstances,
                 declared: Set(definitionsBeforeInstances.compactMap(\.name)).union(instanceNames)
             ),
-            actions: actions.map {
+            actions: try actions.enumerated().map { index, declaration in
                 .init(
-                    name: $0.name,
-                    body: renderControlReferences(in: $0.body, visibleNames: renderedControlNames),
-                    bindings: $0.bindings
+                    declaration: declaration,
+                    renderedBody: try CompiledTLARenderer(layout: layout, bindings: bindings)
+                        .action(semantics.actions[index].body)
                 )
             },
             emittedActionNames: emittedActionNames
@@ -681,71 +692,6 @@ private extension CompiledLayout {
             && !unqualifiedActions.contains($0.label)
     }
     return Dictionary(uniqueKeysWithValues: usable.map { ($0.qualified, $0.label) })
-    }
-}
-
-private func renderControlReferences(
-    in action: ActionExpr,
-    visibleNames: [String: String]
-) -> ActionExpr {
-    func controlValue(_ expression: StateExpr) -> StateExpr {
-        switch expression {
-        case .value(.string(let value)):
-            return .value(.string(visibleNames[value] ?? value))
-        case .except(let function, let key, let value):
-            return .except(function, key, controlValue(value))
-        case .tupleLiteral(let values):
-            return .tupleLiteral(values.map(controlValue))
-        case .tupleConcatenate(let lhs, let rhs):
-            return .tupleConcatenate(controlValue(lhs), controlValue(rhs))
-        case .recordLiteral(let fields):
-            return .recordLiteral(.init(fields.fields.map { .init(name: $0.name, value: controlValue($0.value)) }))
-        default:
-            return expression
-        }
-    }
-
-    func isControlReference(_ expression: StateExpr) -> Bool {
-        switch expression {
-        case .variable("pc"), .functionApply(.variable("pc"), _):
-            return true
-        default:
-            return false
-        }
-    }
-
-    func controlGuard(_ expression: StateExpr) -> StateExpr {
-        switch expression {
-        case .equal(let lhs, let rhs) where isControlReference(lhs):
-            return .equal(lhs, controlValue(rhs))
-        case .equal(let lhs, let rhs) where isControlReference(rhs):
-            return .equal(controlValue(lhs), rhs)
-        case .notEqual(let lhs, let rhs) where isControlReference(lhs):
-            return .notEqual(lhs, controlValue(rhs))
-        case .notEqual(let lhs, let rhs) where isControlReference(rhs):
-            return .notEqual(controlValue(lhs), rhs)
-        default:
-            return expression
-        }
-    }
-
-    switch action {
-    case .assign(let name, let value):
-        return .assign(name, name == "pc" || name == "stack" ? controlValue(value) : value)
-    case .unchanged, .chooseAction:
-        return action
-    case .guard_(let condition):
-        return .guard_(controlGuard(condition))
-    case .existsAction(let name, let set, let body):
-        return .existsAction(name, set, renderControlReferences(in: body, visibleNames: visibleNames))
-    case .ifElse(let condition, let then, let otherwise):
-        return .ifElse(controlGuard(condition), renderControlReferences(in: then, visibleNames: visibleNames), renderControlReferences(in: otherwise, visibleNames: visibleNames))
-    case .define(let name, let value, let body):
-        return .define(name, value, renderControlReferences(in: body, visibleNames: visibleNames))
-    case .and(let lhs, let rhs):
-        return .and(renderControlReferences(in: lhs, visibleNames: visibleNames), renderControlReferences(in: rhs, visibleNames: visibleNames))
-    case .or(let lhs, let rhs):
-        return .or(renderControlReferences(in: lhs, visibleNames: visibleNames), renderControlReferences(in: rhs, visibleNames: visibleNames))
     }
 }
 
