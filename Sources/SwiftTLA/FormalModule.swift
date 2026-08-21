@@ -201,6 +201,11 @@ public struct FormalModuleConfiguration: Sendable, Equatable {
 /// retained edge records its declared relationship instead of flattening
 /// imports and named instances into a name-only module list.
 package struct FormalModuleClosure: Sendable {
+  struct ModulePlanContext: Sendable {
+    let closure: FormalModuleClosure
+    let incomingModuleParameters: [FormalModuleReplacement]
+  }
+
   struct LinkedOperatorPlan: Sendable {
     let recursiveFunctions: [RecursiveFunc]
     let formalOperatorDefinitions: [FormalOperatorDefinition]
@@ -229,6 +234,36 @@ package struct FormalModuleClosure: Sendable {
   let entries: [Entry]
   let edges: [Edge]
   let linkedOperators: LinkedOperatorPlan
+
+  func planContext(for entry: Entry) -> ModulePlanContext {
+    var reachable = Set([entry.module.name])
+    var pending = [entry.module.name]
+    while let module = pending.popLast() {
+      for edge in edges where edge.fromModule == module {
+        if reachable.insert(edge.toModule).inserted {
+          pending.append(edge.toModule)
+        }
+      }
+    }
+    let entries = entries.filter { reachable.contains($0.module.name) }
+    let edges = edges.filter {
+      reachable.contains($0.fromModule) && reachable.contains($0.toModule)
+    }
+    let incomingModuleParameters = self.edges.flatMap { edge -> [FormalModuleReplacement] in
+      guard edge.toModule == entry.module.name,
+            case .importModule(let configuration) = edge.kind else { return [] }
+      return configuration?.replacements ?? []
+    }
+    return .init(
+      closure: .init(
+        root: entry,
+        entries: entries,
+        edges: edges,
+        linkedOperators: Self.makeLinkedOperatorPlan(root: entry, entries: entries, edges: edges)
+      ),
+      incomingModuleParameters: incomingModuleParameters
+    )
+  }
 
   private static func makeLinkedOperatorPlan(
     root: Entry,

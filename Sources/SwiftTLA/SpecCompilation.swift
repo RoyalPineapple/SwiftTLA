@@ -604,18 +604,9 @@ public extension TLASpec {
                 moduleSectionPlans[entry.module.name] = directModuleSections
                 continue
             }
-            let importedCompilation = try entry.module.compile()
-            guard let sectionPlan = importedCompilation.moduleSectionPlans[entry.module.name] else {
-                throw CompilationDiagnostic(
-                    code: .compilationIdentityMismatch,
-                    stage: .linking,
-                    path: "formalModuleClosure.\(entry.module.name)",
-                    expected: "a compiled declaration plan",
-                    actual: "no declaration plan",
-                    nextSafeAction: "Compile the source model again."
-                )
-            }
-            moduleSectionPlans[entry.module.name] = sectionPlan
+            moduleSectionPlans[entry.module.name] = try entry.module.directModuleSectionPlan(
+                in: closure.planContext(for: entry)
+            )
         }
         let formalRenderer = CompiledTLARenderer(layout: layout, bindings: bindings)
         let renderedRefinements = try compiledRefinements.map { try formalRenderer.refinement($0) }
@@ -754,6 +745,43 @@ public extension TLASpec {
                 semantics: semantics
             ),
             renderedConfiguration: renderedTLCConfiguration(semantics: semantics)
+        )
+    }
+
+    private func directModuleSectionPlan(
+        in context: FormalModuleClosure.ModulePlanContext
+    ) throws -> DirectModuleSectionPlan {
+        let source = try loweredSourceModel()
+        try source.validateUnique(source.variables.map(\.name), code: .duplicateVariable, path: "variables")
+        try source.validateUnique(source.actions.map(\.name), code: .duplicateAction, path: "actions")
+        try source.validateUnique(source.invariants.map(\.name), code: .duplicateInvariant, path: "invariants")
+        try source.validateSymmetricCollectionDeclarations()
+        try source.validateRefinements()
+        let layout = CompiledLayout(spec: source, closure: context.closure)
+        var validator = BindingValidator(
+            spec: source,
+            layout: layout,
+            closure: context.closure,
+            incomingModuleParameters: context.incomingModuleParameters
+        )
+        _ = try validator.validate(spec: source)
+        try validator.validateRefinementMappings(source.refinements)
+        let bindings = validator.bindingTable()
+        let semantics = try CompiledLowerer(
+            bindings: bindings,
+            closure: context.closure,
+            layout: layout
+        ).lower(spec: source)
+        let refinements = try source.compiledRefinements(
+            bindings: bindings,
+            closure: context.closure,
+            layout: layout
+        )
+        return try source.directModuleSectionPlan(
+            layout: layout,
+            bindings: bindings,
+            semantics: semantics,
+            refinements: refinements
         )
     }
 

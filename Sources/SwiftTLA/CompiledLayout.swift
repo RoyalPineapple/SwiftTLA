@@ -586,6 +586,7 @@ struct BindingValidator {
     private let closure: FormalModuleClosure
     private let constants: [ConstantDecl]
     private let formalConstants: Set<String>
+    private let incomingModuleParameters: [FormalModuleReplacement]
     private var operators: [String: OperatorID]
     private var operatorNames: [OperatorID: String]
     private var nextBinderOrdinal = 0
@@ -594,13 +595,19 @@ struct BindingValidator {
     private var binders: [BinderID: String] = [:]
     private var references: [String: CompiledReference] = [:]
 
-    init(spec: TLASpec, layout: CompiledLayout, closure: FormalModuleClosure) {
+    init(
+        spec: TLASpec,
+        layout: CompiledLayout,
+        closure: FormalModuleClosure,
+        incomingModuleParameters: [FormalModuleReplacement] = []
+    ) {
         self.layout = layout
         self.closure = closure
         constants = spec.constants
         formalConstants = Set(spec.formalParameters.compactMap { parameter in
             parameter.kind == .constant ? parameter.name : nil
         })
+        self.incomingModuleParameters = incomingModuleParameters
         let names = spec.formalOperatorDefinitions.map(\.name)
             + spec.recursiveFuncs.map(\.name)
             + closure.linkedOperators.formalOperatorDefinitions.map(\.name)
@@ -985,6 +992,10 @@ struct BindingValidator {
             return
         }
         if formalConstants.contains(name) {
+            references[path] = .constant(.constant(name))
+            return
+        }
+        if incomingModuleParameters.contains(where: { $0.operatorName == name }) {
             references[path] = .constant(.constant(name))
             return
         }
