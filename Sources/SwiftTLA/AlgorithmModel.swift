@@ -106,7 +106,7 @@ internal struct AlgorithmModel: Sendable {
     }
 
     func plusCalProjection() -> AlgorithmModel {
-        let localRoots = Set(processes.flatMap { process in
+        let localRoots: Set<String> = Set(processes.flatMap { process in
             process.components.compactMap { component in
                 guard case .local(let declaration) = component else { return nil }
                 return declaration.root
