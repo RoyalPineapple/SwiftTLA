@@ -18,7 +18,6 @@ let package = Package(
     products: [
         .library(name: "SwiftTLA", targets: ["SwiftTLA"]),
         .library(name: "SwiftTLAMacros", targets: ["SwiftTLAMacros"]),
-        .library(name: "SwiftTLAModels", targets: ["SwiftTLAModels"]),
         .library(name: "UpstreamParity", targets: ["UpstreamParity"])
     ],
     dependencies: [
@@ -41,7 +40,6 @@ let package = Package(
             .product(name: "SwiftDiagnostics", package: "swift-syntax"),
             .product(name: "SwiftParser", package: "swift-syntax")
         ], swiftSettings: settings),
-        .target(name: "SwiftTLAModels", dependencies: ["SwiftTLA", "SwiftTLAMacros"], swiftSettings: settings),
         // The externally qualified upstream backbone is its own source target
         // so its exact models can be exported without compiling the full
         // example gallery. UpstreamParity re-exports these public types.
@@ -94,13 +92,11 @@ let package = Package(
         // Fast semantic witnesses compile and run without the parity corpus.
         .testTarget(name: "SwiftTLATests", dependencies: [
             "SwiftTLA",
-            "SwiftTLAModels",
             "SwiftTLAMacros"
         ], swiftSettings: settings),
         // Slower corpus, oracle, governance, and public-workflow tests.
         .testTarget(name: "SwiftTLAParityTests", dependencies: [
             "SwiftTLA",
-            "SwiftTLAModels",
             "SwiftTLAMacros",
             "UpstreamParity",
             "PublicWorkflowGeneratedFixtures"

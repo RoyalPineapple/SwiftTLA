@@ -436,12 +436,6 @@ graph TD
         EXPORTER --> EVIDENCE
     end
 
-    subgraph Self["Self-Proof"]
-        BFSGEN["TLASpec.bfsChecker(maxStates:)<br/>generates BFS lifecycle spec"]
-        BFSCK["@TLAModel struct BFSChecker<br/>hardcoded maxStates=20"]
-        BFSGEN --> CHECK
-        BFSCK --> CHECK
-    end
 ```
 
 ## Component Inventory
@@ -475,9 +469,6 @@ SwiftTLA (library)
 │
 ├── SwiftTLAMacros (library)
 │   └── @attached(member) @attached(extension) macro TLAModel
-│
-├── SwiftTLAModels (library)
-│   └── BFSChecker (@TLAModel), BFSExplorer
 │
 ├── UpstreamParity (library)
 │   └── direct-TLA examples and canonical upstream corpus
