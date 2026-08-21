@@ -18,7 +18,7 @@ private func compiledSuccessors(
     invariants: []
   )
   let compilation = try spec.compile()
-  let state = try FormalState(
+  let state = try CompiledState(
     projection: projection(values),
     compilation: compilation
   )

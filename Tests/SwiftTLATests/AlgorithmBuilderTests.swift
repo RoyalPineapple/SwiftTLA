@@ -4,7 +4,7 @@ import SwiftTLAMacros
 
 @Suite("PlusCal algorithm builders")
 struct AlgorithmBuilderTests {
-    private func initialState(of spec: TLASpec) throws -> (CompiledSpecification, FormalState) {
+    private func initialState(of spec: TLASpec) throws -> (CompiledSpecification, CompiledState) {
         let compilation = try spec.compile()
         let state = try #require(try CompiledRuntime(compilation: compilation).initialStates().first)
         return (compilation, state)
@@ -14,8 +14,8 @@ struct AlgorithmBuilderTests {
         named name: String,
         arguments: [TLAValue] = [],
         in compilation: CompiledSpecification,
-        from state: FormalState
-    ) throws -> FormalState {
+        from state: CompiledState
+    ) throws -> CompiledState {
         try #require(successors(named: name, arguments: arguments, in: compilation, from: state).first)
     }
 
@@ -23,8 +23,8 @@ struct AlgorithmBuilderTests {
         named name: String,
         arguments: [TLAValue]? = nil,
         in compilation: CompiledSpecification,
-        from state: FormalState
-    ) throws -> [FormalState] {
+        from state: CompiledState
+    ) throws -> [CompiledState] {
         let action = try #require(compilation.layout.actionID(named: name))
         return try CompiledRuntime(compilation: compilation)
             .successors(for: action, from: state)
@@ -34,7 +34,7 @@ struct AlgorithmBuilderTests {
 
     private func value(
         named name: String,
-        in state: FormalState,
+        in state: CompiledState,
         compilation: CompiledSpecification
     ) throws -> TLAValue {
         let variable = try #require(compilation.layout.variableID(named: name))

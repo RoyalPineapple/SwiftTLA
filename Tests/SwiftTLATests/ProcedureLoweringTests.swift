@@ -206,13 +206,13 @@ struct ProcedureLoweringTests {
         #expect(try functionValue("pc", key: .int(2), in: oneFinished, compilation: compilation) == .string("procedure.outer.enter"))
     }
 
-    private func initialState(of spec: TLASpec) throws -> (CompiledSpecification, FormalState) {
+    private func initialState(of spec: TLASpec) throws -> (CompiledSpecification, CompiledState) {
         let compilation = try spec.compile()
         let state = try #require(try CompiledRuntime(compilation: compilation).initialStates().first)
         return (compilation, state)
     }
 
-    private func apply(_ label: String, in compilation: CompiledSpecification, to state: FormalState) throws -> FormalState {
+    private func apply(_ label: String, in compilation: CompiledSpecification, to state: CompiledState) throws -> CompiledState {
         try #require(try successors(label, in: compilation, from: state).first)
     }
 
@@ -220,8 +220,8 @@ struct ProcedureLoweringTests {
         _ label: String,
         process: TLAValue,
         in compilation: CompiledSpecification,
-        to state: FormalState
-    ) throws -> FormalState {
+        to state: CompiledState
+    ) throws -> CompiledState {
         try #require(try successors(label, arguments: [process], in: compilation, from: state).first)
     }
 
@@ -229,8 +229,8 @@ struct ProcedureLoweringTests {
         _ label: String,
         arguments: [TLAValue]? = nil,
         in compilation: CompiledSpecification,
-        from state: FormalState
-    ) throws -> [FormalState] {
+        from state: CompiledState
+    ) throws -> [CompiledState] {
         let action = try #require(compilation.layout.actionID(named: label))
         return try CompiledRuntime(compilation: compilation)
             .successors(for: action, from: state)
@@ -238,7 +238,7 @@ struct ProcedureLoweringTests {
             .map(\.state)
     }
 
-    private func value(named name: String, in state: FormalState, compilation: CompiledSpecification) throws -> TLAValue {
+    private func value(named name: String, in state: CompiledState, compilation: CompiledSpecification) throws -> TLAValue {
         let variable = try #require(compilation.layout.variableID(named: name))
         return try state.value(for: variable).rendered(using: compilation.layout)
     }
@@ -246,7 +246,7 @@ struct ProcedureLoweringTests {
     private func functionValue(
         _ root: String,
         key: TLAValue,
-        in state: FormalState,
+        in state: CompiledState,
         compilation: CompiledSpecification
     ) throws -> TLAValue {
         let formalValue = try value(named: root, in: state, compilation: compilation)

@@ -1,10 +1,10 @@
 struct CompiledActionEnumerator {
-    let state: FormalState
+    let state: CompiledState
     let model: CompiledModel
     let enabledActions: Set<ActionID>
 
     init(
-        state: FormalState,
+        state: CompiledState,
         model: CompiledModel,
         enabledActions: Set<ActionID> = []
     ) {
@@ -13,7 +13,7 @@ struct CompiledActionEnumerator {
         self.enabledActions = enabledActions
     }
 
-    func enumerate(_ action: CompiledAction) throws -> [FormalState] {
+    func enumerate(_ action: CompiledAction) throws -> [CompiledState] {
         try enumerateResults(action).map(\.state)
     }
 
@@ -35,7 +35,7 @@ struct CompiledActionEnumerator {
 
     private func execute(
         _ action: CompiledActionExpr,
-        state: FormalState,
+        state: CompiledState,
         bindings: CompiledBindings
     ) throws -> [CompiledActionDelta] {
         let evaluator = CompiledEvaluator(
@@ -138,7 +138,7 @@ struct CompiledActionEnumerator {
 }
 
 struct CompiledActionResult: Sendable {
-    let state: FormalState
+    let state: CompiledState
     let arguments: [TLAValue]
 }
 
