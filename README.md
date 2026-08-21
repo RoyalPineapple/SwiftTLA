@@ -11,49 +11,22 @@ outcome in tests and produce TLA+ and PlusCal for independent TLC validation.
 
 **One specification. Production behavior. Formal evidence.**
 
-See [the supported language fragment](Documentation/Design.md), the [generated-machine guide](Documentation/GeneratedMachines.md), the [live-machine guide](Documentation/LiveMachines.md), and the [symmetric collections guide](Documentation/SymmetricCollections.md). The generated-machine API reference is in [SwiftTLA DocC](Sources/SwiftTLA/SwiftTLA.docc/SwiftTLA.md).
+## What you get
 
-## Live machines
+SwiftTLA gives one specification three jobs:
 
-For shared, running machine state, create one `TLALiveMachineOwner` and pass
-its `TLALiveMachine` handle to generated `Live`, actor, observable, and
-generic inspector surfaces. The live runtime is the sole mutable source for
-that identity. Direct generated-model values are non-live value semantics; do
-not use `apply(_:)` or a value copy as a handle for a running runtime. See
-[Live Machines](Documentation/LiveMachines.md).
+- A typed Swift state machine for your application.
+- Exhaustive exploration of reachable behavior in tests.
+- TLA+ and PlusCal artifacts for TLC validation.
 
-## Demonstrations app
+The generated machine gives your application typed state and action cases.
+The model checker explores the same compiled specification. For declared finite
+cases, SwiftTLA compares its graph with TLC's graph exactly.
 
-The macOS demonstration app is a separate Swift package in
-[`Examples/SwiftTLADemoApp`](Examples/SwiftTLADemoApp). It consumes the root
-package's public `SwiftTLA` and `SwiftTLADemos` products. The formal models
-live in [`Examples/SwiftTLADemos`](Examples/SwiftTLADemos), so the app imports
-the same generated machines that the package verifies.
+## Define a model. Use it in your app.
 
-Run it from the repository root:
-
-```bash
-cd Examples/SwiftTLADemoApp
-swift run SwiftTLADemoApp
-```
-
-It includes the Two Buckets puzzle, the Duck, Duck, Leader Chang–Roberts
-election, and the Elevator Bank model.
-
-## Compiler pipeline
-
-```text
-typed Swift authoring ──► source model ──► compile() ──► CompiledSpecification
-                                                           ├──► typed generated machine
-                                                           ├──► local exploration
-                                                           └──► rendered TLA+ and PlusCal bundles
-```
-
-The release-facing macro examples use the same model-checking pipeline before they generate code. `@TLAModel` produces an executable model type. `@TLAActor` produces an actor or a nested actor adapter. `@TLAObservable` produces an observable model or a nested main-actor adapter with typed callbacks. The runtime behavior, the compile-time check, and the TLA+ export all come from one DSL model. The current public-workflow evidence covers only the bounded fixtures and package matrix described in [public workflow conformance](Documentation/PublicWorkflowConformance.md); it is not a claim about every accepted macro input.
-
-## Usage
-
-### @TLAModel — executable struct
+Define the model with `#spec` and `Algorithm`. Then use its generated machine
+as ordinary Swift code.
 
 ```swift
 import Foundation
@@ -100,82 +73,45 @@ let result = try clock.apply(.tick)
 print(result.after.hour)
 ```
 
-## Symmetric collections
+## Validate the same model
 
-Symmetric-collection verification is a formal-engine/parity facility for the
-declared finite fixtures. Application models use `#spec`, `Algorithm`,
-`SharedVar`, and typed `Function`, `SetExpr`, and `Record` values. See the
-[language fragment](Documentation/Design.md) for the supported boundary.
+In tests, SwiftTLA explores the reachable graph from the model's initial state.
+It validates the invariants and properties in that specification.
 
-## Examples and TLC checks
+Core Conformance runs the declared finite cases through SwiftTLA and TLC. It
+compares the complete canonical state graph and labeled transition graph.
+The [Core Graph Conformance guide](Documentation/CoreGraphConformance.md)
+describes the retained evidence and comparison results.
 
-Core ports live under `Sources/UpstreamParity/Examples/` (HourClock, DieHard, CoffeeCan, MovingCat, Majority, Allocator, and more). State counts for core specifications are regression-tested.
+The separate ValidationEvidence workflow translates the canonical PlusCal
+corpus with the official PlusCal translator and runs TLC. It supplies
+independent evidence for selected upstream models.
 
-For selected finite core models, the repository can compare the complete labeled
-transition relation with a pinned TLC run. The support gate admits only the
-behavior and bounds named in its register. See [core graph
-conformance](Documentation/CoreGraphConformance.md) and [core
-support](Documentation/CoreSupport.md).
+## Use live state when you need it
 
-GitHub Actions runs the core-support gate. Exit `0` means all requested
-support entries were admitted from one current run. Exit `1` means the
-evidence was complete but requested support was blocked. Exit `2` means setup,
-execution, governance, or evidence validation failed. The gate retains its
-current report at
-`.build/core-support-gate/support-admission.json` and each run below
-`.build/core-support-gate/runs/`.
+Use generated `State` and action cases for value-based application state. For
+shared running state, create one `TLALiveMachineOwner` and use its generated
+live, actor, or observable surface. See [Live Machines](Documentation/LiveMachines.md)
+and [Generated Machines](Documentation/GeneratedMachines.md).
 
-Use `scripts/local-validation.sh` only for local, focused diagnosis. It does
-not create admission evidence. GitHub Actions owns broad validation and
-release qualification.
+## See it running
 
-### Temporal and symmetry support
+The macOS demonstration app is in
+[`Examples/SwiftTLADemoApp`](Examples/SwiftTLADemoApp). It uses the generated
+machines from [`Examples/SwiftTLADemos`](Examples/SwiftTLADemos).
 
-Temporal and symmetry support is report-derived. Do not advertise a requested
-entry unless the current P3 admission report marks it `admitted`.
+```bash
+cd Examples/SwiftTLADemoApp
+swift run SwiftTLADemoApp
+```
 
-GitHub Actions creates
-`.build/temporal-symmetry-support-gate/support-admission.json`. It exits `0`
-only when every requested entry is admitted. Exit `1` means a complete
-evaluation blocks a claim. Exit `2` means the evaluation is unavailable or
-unsafe. Both nonzero results remain failures.
+## Learn more
 
-The declared entries are finite temporal cases and one binary-valued
-`SymmetricCollection` at exact scopes 2, 3, and 4. The report does not claim
-arbitrary temporal formulas, unbounded fairness or liveness, larger symmetry
-scopes, combined temporal symmetry reduction, multiple collection declarations,
-or nested member values. See [temporal and symmetry conformance](Documentation/TemporalSymmetryConformance.md).
-
-### Public workflow validation
-
-The hosted aggregate P4 diagnostic checks the declared parser-builder and
-generated two-state counters, the
-valid/invalid `@TLAModel`, `@TLAActor`, and `@TLAObservable` fixtures, and the
-`SwiftTLA-Package` public-library build for the declared macOS destination.
-It makes no cross-platform or demo-product claim. Exit `0` means those exact bounded checks matched;
-exit `1` means a completed difference; exit `2` means unavailable or unsafe
-evaluation. A local report is diagnostic only. The checked-in GitHub workflow
-produces explicit hosted-candidate evidence and retains its logs and artifacts,
-but does not turn the bounded result into general public support.
-
-The current report is `.build/public-workflow-support-gate/support-admission.json`,
-with immutable evidence under `.build/public-workflow-support-gate/runs/<run-id>/`.
-`@TypedVar` and `@TLAValidated` were removed and have no public contract.
-See [public workflow conformance](Documentation/PublicWorkflowConformance.md)
-for fixture identities, report fields, workflow artifact locations, authority
-labels, and limits.
-
-State counts alone do not establish behavioral equivalence. A successful
-bounded check does not prove arbitrary population sizes, liveness, or
-unsupported TLA+ constructs. GitHub Actions runs exact finite graph comparison
-with the pinned toolchain; see [core graph conformance](Documentation/CoreGraphConformance.md).
-
-## Local validation
-
-Use `scripts/local-validation.sh static` or a focused wrapper test during
-normal development. GitHub Actions runs the broad PR and release qualification
-workflows, including coverage and external conformance gates. Local broad
-validation requires explicit authorization.
+- [Supported language fragment](Documentation/Design.md)
+- [Generated machines](Documentation/GeneratedMachines.md)
+- [Core graph conformance](Documentation/CoreGraphConformance.md)
+- [Temporal and symmetry conformance](Documentation/TemporalSymmetryConformance.md)
+- [SwiftTLA DocC](Sources/SwiftTLA/SwiftTLA.docc/SwiftTLA.md)
 
 ## Requirements
 
