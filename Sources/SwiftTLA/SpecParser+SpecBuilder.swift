@@ -598,7 +598,7 @@ extension ParserSession {
               let base = member.base
         else { return nil }
         guard let type = typedFacadeType(base), type.name == "SetExpr" else { return nil }
-        return type.argument(at: 0).flatMap(sourceTypeSpelling)
+        return type.argument(at: 0).flatMap(Self.sourceTypeSpelling)
     }
 
     /// Extracts the lower bound from a range expression like `1...12`.
