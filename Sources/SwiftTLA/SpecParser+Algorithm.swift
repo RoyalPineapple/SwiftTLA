@@ -95,7 +95,7 @@ extension ParserSession {
         }
 
         // Keep the source-level IR before the one and only parser lowering.
-        // It is source fidelity evidence, not a second formal model.
+        // Retain the authored Algorithm in the source model.
         result.algorithmFidelityTokens.append(AlgorithmFidelityToken(model: model))
 
         result.sourceAlgorithms.append(Algorithm(model: model))
