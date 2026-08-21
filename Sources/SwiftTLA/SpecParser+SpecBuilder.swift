@@ -6,9 +6,8 @@ extension ParserSession {
     // MARK: - Unified spec builder parser
 
     public struct ParsedSpecComponents {
-        /// A canonical formal variable plus the Swift-only type fact used by
-        /// generated surface code. The parser does not retain a second
-        /// variable representation.
+        /// Canonical formal variables and Swift-only type facts for generated
+        /// surface code.
         public var variables: [ParsedVariable] = []
         public var actions: [ParsedAction] = []
         public var symmetricCollections: [ParsedSymmetricCollection] = []
@@ -27,8 +26,7 @@ extension ParserSession {
         public var definitions: [DirectModuleDefinition] = []
         public var authoredPlusCalDeclarations: [AuthoredPlusCalDeclaration] = []
         public var symmetrySets: [SymmetrySet] = []
-        /// Opaque, pre-lowering Algorithm evidence retained independently of
-        /// the ordinary parsed specification tree.
+        /// Authored algorithms in the source model.
         public var algorithmFidelityTokens: [AlgorithmFidelityToken] = []
         public var constants: [ConstantDecl] = []
 
