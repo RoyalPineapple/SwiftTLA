@@ -385,13 +385,13 @@ Fragment B v1 — 2026-08-07
 graph TD
     subgraph Compile["Compile Time"]
         direction TB
-        DSL["@TLAModel struct { var spec: TLASpec { ... } }"]
-        PARSER["SpecParser.parseSpecClosure()<br/>→ ParsedSpecComponents<br/>variables, actions, invariants, constants, temporal, fairness"]
-        SPEC["TLASpec init<br/>14 SpecComponent types handled<br/>auto-UNCHANGED via completeAction"]
-        CHECK["ModelChecker.check()<br/>maxStates=10k, BFS"]
-        EMIT["emit: runtime property"]
-        DSL --> PARSER --> SPEC --> CHECK -->|pass| EMIT
-        CHECK -->|fail| ERROR["compile error + invariant trace"]
+        DSL["@TLAModel source with #spec"]
+        PARSER["SpecParser<br/>→ typed source model"]
+        COMPILE["compile()<br/>bind + link + lower"]
+        SPEC["CompiledSpecification<br/>layout + compiled machine"]
+        EMIT["emit typed machine API"]
+        DSL --> PARSER --> COMPILE --> SPEC --> EMIT
+        COMPILE -->|diagnostic| ERROR["compile diagnostic"]
     end
 
     subgraph Data["Data Types"]
@@ -451,8 +451,8 @@ graph TD
 | `ModelChecker` | ModelChecker.swift | TLASpec | CheckResult + StateGraph |
 | `CompiledRuntime` | CompiledRuntime.swift | CompiledSpecification | CompiledState successors and invariant results |
 | `SpecParser` | SpecParser.swift | SwiftSyntax | DSL types (7 public methods) |
-| `ModelMacro` | ModelMacro.swift | struct source | extension + runtime property |
-| `PrettyPrint` | TLASpec+PrettyPrint.swift | TLASpec | .tla string (13-step generation) |
+| `ModelMacro` | ModelMacro.swift | struct source | generated typed machine API |
+| `PrettyPrint` | TLASpec+PrettyPrint.swift | CompiledSpecification | rendered TLA+ bundle |
 | `distributeOr` | TLASpec+PrettyPrint.swift | ActionExpr | [[ActionExpr]] disjuncts |
 | `completeAction` | TLASpec+PrettyPrint.swift | ActionExpr + vars | completed ActionExpr with per-branch UNCHANGED |
 | `substituteConstants` | TLASpec.swift | TLASpec | TLASpec with constants inlined |

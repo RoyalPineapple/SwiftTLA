@@ -14,8 +14,7 @@ its `TLALiveMachine` handle to generated `Live`, actor, observable, and
 generic inspector surfaces. The live runtime is the sole mutable source for
 that identity. Direct generated-model values are non-live value semantics; do
 not use `apply(_:)` or a value copy as a handle for a running runtime. See
-[Live Machines](Documentation/LiveMachines.md) and the
-[migration guide](Documentation/LiveMachineMigration.md).
+[Live Machines](Documentation/LiveMachines.md).
 
 ## Demonstrations app
 
@@ -38,11 +37,10 @@ election, and the Elevator Bank model.
 ## Compiler pipeline
 
 ```text
-source #spec ──► parser AST ──► checker / TLA+ output / generated machine
-     │
-     └─────────► constrained runtime builder ──► independent TLASpec
-                                                    │
-                           semantic alpha-equivalence gate ◄─┘
+typed Swift authoring ──► source model ──► compile() ──► CompiledSpecification
+                                                           ├──► typed generated machine
+                                                           ├──► local exploration
+                                                           └──► rendered TLA+ and PlusCal bundles
 ```
 
 The release-facing macro examples use the same model-checking pipeline before they generate code. `@TLAModel` produces an executable model type. `@TLAActor` produces an actor or a nested actor adapter. `@TLAObservable` produces an observable model or a nested main-actor adapter with typed callbacks. The runtime behavior, the compile-time check, and the TLA+ export all come from one DSL model. The current public-workflow evidence covers only the bounded fixtures and package matrix described in [public workflow conformance](Documentation/PublicWorkflowConformance.md); it is not a claim about every accepted macro input.
@@ -91,34 +89,17 @@ public struct HourClock {
     }
 }
 
-var clock = HourClock()
+var clock = try HourClock.makeMachine()
 let result = try clock.apply(.tick)
 print(result.after.hour)
 ```
 
 ## Symmetric collections
 
-Symmetric-collection verification remains a formal-engine/parity facility for
-existing finite fixtures. New application models use `#spec`, `Algorithm`,
-`SharedVar`, and typed `Function`, `SetExpr`, and `Record` values; do not start
-a model with `SymmetricCollectionVar`. The legacy API remains only while
-equivalent canonical symmetry evidence is established. See the [language
-fragment](Documentation/Design.md) for the supported boundary.
-
-## Bootstrap
-
-The checker lifecycle is also represented as a TLA model:
-
-```swift
-import SwiftTLA
-import SwiftTLAModels
-
-let checker = TLASpec.bfsChecker(maxStates: 5)
-let result = try ModelChecker.checkComposed(user: hourClockSpec)
-let machine = BFSChecker.StateMachine.initial
-```
-
-Production exploration is plain BFS. Composition is for self-proof, not a controller inside the exploration loop.
+Symmetric-collection verification is a formal-engine/parity facility for the
+declared finite fixtures. Application models use `#spec`, `Algorithm`,
+`SharedVar`, and typed `Function`, `SetExpr`, and `Record` values. See the
+[language fragment](Documentation/Design.md) for the supported boundary.
 
 ## Examples and TLC checks
 
@@ -156,7 +137,7 @@ unsafe. Both nonzero results remain failures.
 The declared entries are finite temporal cases and one binary-valued
 `SymmetricCollection` at exact scopes 2, 3, and 4. The report does not claim
 arbitrary temporal formulas, unbounded fairness or liveness, larger symmetry
-scopes, combined temporal symmetry reduction, multiple or legacy collections,
+scopes, combined temporal symmetry reduction, multiple collection declarations,
 or nested member values. See [temporal and symmetry conformance](Documentation/TemporalSymmetryConformance.md).
 
 ### Public workflow validation

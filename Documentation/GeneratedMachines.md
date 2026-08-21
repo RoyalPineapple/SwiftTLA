@@ -89,7 +89,7 @@ That value has no live-runtime identity or observer connection.
 import SwiftTLA
 
 func runDirectAction() throws {
-    var machine = BoundedCounter()
+    var machine = try BoundedCounter.makeMachine()
     let actions = try machine.availableActions()
     let result = try machine.apply(.advance)
 
@@ -292,7 +292,7 @@ model-checking claim beyond the model's declared finite bounds.
 import SwiftTLA
 
 func runGeneratedMachineTesting() async throws {
-    var machine = BoundedCounter()
+    var machine = try BoundedCounter.makeMachine()
     let initial = try await machine.machineObservation()
     let result = try machine.apply(.advance)
     let beforeFailure = machine.state
@@ -422,15 +422,11 @@ The following table is the public inventory for this guide. Sources identify the
 | Generated `Live.execute(_:)` | Executes a typed label through the existing live runtime and returns an explicit live outcome. | [MacroExpander+LiveMachine.swift](../Sources/SwiftTLAPlugin/MacroExpander+LiveMachine.swift) |
 | Generated `synchronousMachineObservation()` | Returns current state and availability without an async boundary on a canonical generated model. | [MacroExpander+CanonicalMachine.swift](../Sources/SwiftTLAPlugin/MacroExpander+CanonicalMachine.swift) |
 
-This guide explicitly excludes removed `@TypedVar` and `@TLAValidated`, private
-`_machine` storage, underscored generated helpers such as `_<action>`, and
-unsupported annotation combinations. Do not use them as stable public APIs.
-
 ## Stable contract
 
-The documented names and observable outcomes in this guide form the current generated-machine documentation contract.
-
-Generated source layout, private storage, underscored helpers, callback scheduling outside stated isolation, and unsupported annotation combinations are not part of this contract.
+The documented types and observable outcomes in this guide are the generated
+machine contract. `State`, `ActionLabel`, `TransitionResult`, `Live`, actor,
+and observable adapters are the application-facing generated API.
 
 
 ## Claim sources
