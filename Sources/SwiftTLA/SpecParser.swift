@@ -44,7 +44,7 @@ public final class ParserSession {
             bindings.last(where: { $0.sourceName == reference.baseName.text })?.value
         }
 
-        private func extending(
+        func extending(
             _ bindings: [(sourceName: String, value: StateExpr)]
         ) -> Self {
             Self(bindings: self.bindings + bindings.map {
@@ -1110,11 +1110,11 @@ public final class ParserSession {
         }
 
         func terminalArgumentName(at index: Int) -> String? {
-            argument(at: index).flatMap(terminalTypeName)
+            argument(at: index).flatMap(ParserSession.terminalTypeName)
         }
 
         var renderedSourceName: String? {
-            let renderedArguments = arguments.compactMap(sourceTypeSpelling)
+            let renderedArguments = arguments.compactMap(ParserSession.sourceTypeSpelling)
             guard renderedArguments.count == arguments.count else { return nil }
             return "\(name)<\(renderedArguments.joined(separator: ", "))>"
         }
@@ -1123,19 +1123,19 @@ public final class ParserSession {
     /// Preserves a supported type's Swift spelling for generated Swift output.
     /// Semantic recognition uses the syntax nodes above; this conversion runs
     /// only after the parser has identified the type form.
-    func sourceTypeSpelling(_ type: TypeSyntax) -> String? {
+    static func sourceTypeSpelling(_ type: TypeSyntax) -> String? {
         if let identifier = type.as(IdentifierTypeSyntax.self) {
             let arguments = identifier.genericArgumentClause?.arguments.map(\.argument) ?? []
-            let renderedArguments = arguments.compactMap(sourceTypeSpelling)
+            let renderedArguments = arguments.compactMap(Self.sourceTypeSpelling)
             guard renderedArguments.count == arguments.count else { return nil }
             return renderedArguments.isEmpty
                 ? identifier.name.text
                 : "\(identifier.name.text)<\(renderedArguments.joined(separator: ", "))>"
         }
         if let member = type.as(MemberTypeSyntax.self),
-           let base = sourceTypeSpelling(member.baseType) {
+           let base = Self.sourceTypeSpelling(member.baseType) {
             let arguments = member.genericArgumentClause?.arguments.map(\.argument) ?? []
-            let renderedArguments = arguments.compactMap(sourceTypeSpelling)
+            let renderedArguments = arguments.compactMap(Self.sourceTypeSpelling)
             guard renderedArguments.count == arguments.count else { return nil }
             let name = "\(base).\(member.name.text)"
             return renderedArguments.isEmpty
@@ -1155,7 +1155,7 @@ public final class ParserSession {
         )
     }
 
-    func terminalTypeName(_ type: TypeSyntax) -> String? {
+    static func terminalTypeName(_ type: TypeSyntax) -> String? {
         if let identifier = type.as(IdentifierTypeSyntax.self) {
             return identifier.name.text
         }

@@ -44,8 +44,8 @@ extension ParserSession {
               let scope = Int(scopeLiteral.literal.text),
               let initialExpression = arguments.first(where: { $0.label?.text == "initial" })?.expression,
               let initial = parseLiteralValue(initialExpression),
-              let elementType = sourceTypeSpelling(types.element),
-              let valueType = sourceTypeSpelling(types.value)
+              let elementType = Self.sourceTypeSpelling(types.element),
+              let valueType = Self.sourceTypeSpelling(types.value)
         else {
             result.diagnostics.append(.init(
                 message: "Symmetric collections require SymmetricCollectionVar<Element, Value>, "

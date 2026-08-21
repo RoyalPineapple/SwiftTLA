@@ -440,7 +440,7 @@ extension ParserSession {
                     else {
                         result.diagnostics.append(.init(
                             message: "SharedVar requires a supported initial formal expression.",
-                            source: call
+                            source: fc
                         ))
                         continue
                     }
@@ -458,7 +458,7 @@ extension ParserSession {
                     guard let parsed = parsedInitialValue(args[1].expression) else {
                         result.diagnostics.append(.init(
                             message: "Var requires a supported initial formal value.",
-                            source: call
+                            source: fc
                         ))
                         continue
                     }
@@ -474,7 +474,7 @@ extension ParserSession {
                 guard let initial = parsedInitialValue(args[0].expression) else {
                     result.diagnostics.append(.init(
                         message: "Var requires a supported initial formal value.",
-                        source: call
+                        source: fc
                     ))
                     continue
                 }
@@ -497,7 +497,7 @@ extension ParserSession {
            let name = terminalTypeName(in: generic.expression) {
             guard name == "Var" else { return nil }
             let typeArgs = Array(generic.genericArgumentClause.arguments)
-            let swiftTypeName = typeArgs.first.flatMap { sourceTypeSpelling($0.argument) }
+            let swiftTypeName = typeArgs.first.flatMap { Self.sourceTypeSpelling($0.argument) }
             return (name, swiftTypeName)
         }
         return nil
@@ -514,7 +514,7 @@ extension ParserSession {
             return nil
         }
         let typeArgs = Array(generic.genericArgumentClause.arguments)
-        return typeArgs.first.flatMap { sourceTypeSpelling($0.argument) }
+        return typeArgs.first.flatMap { Self.sourceTypeSpelling($0.argument) }
     }
 
     /// Extracts the value type from a variable declaration annotation without
@@ -525,14 +525,14 @@ extension ParserSession {
         if let generic = type.as(IdentifierTypeSyntax.self),
            ["SharedVariable", "LocalVariable"].contains(generic.name.text),
            let argument = generic.genericArgumentClause?.arguments.first?.argument {
-            return sourceTypeSpelling(argument)
+            return Self.sourceTypeSpelling(argument)
         }
         if let generic = type.as(MemberTypeSyntax.self),
            ["SharedVariable", "LocalVariable"].contains(generic.name.text),
            let argument = generic.genericArgumentClause?.arguments.first?.argument {
-            return sourceTypeSpelling(argument)
+            return Self.sourceTypeSpelling(argument)
         }
-        return sourceTypeSpelling(type)
+        return Self.sourceTypeSpelling(type)
     }
 
     func isDefaultConstructibleVarType(_ call: FunctionCallExprSyntax) -> Bool {
@@ -723,7 +723,7 @@ extension ParserSession {
         into result: inout ParsedSpecComponents,
         loopVar: String? = nil,
         loopValue: Int? = nil,
-        collectionTypes: [String: (element: String, value: String)] = [:]
+        collectionTypes: [String: SymmetricCollectionSourceTypes] = [:]
     ) {
         guard let name = call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text else {
             result.diagnostics.append(.init(
@@ -1230,10 +1230,15 @@ extension ParserSession {
             }
             if let body = decodeActionFromClosure(closure) {
                 result.actions.append(.init(name: actionName, body: body))
+            } else if let expression = unsupportedActionExpression(in: closure) {
+                result.diagnostics.append(.init(
+                    message: "Action '\(actionName)' contains an unsupported action expression.",
+                    source: expression
+                ))
             } else {
                 result.diagnostics.append(.init(
                     message: "Action '\(actionName)' contains an unsupported action expression.",
-                    source: unsupportedActionExpression(in: closure) ?? closure
+                    source: closure
                 ))
             }
             return
@@ -1463,13 +1468,21 @@ extension ParserSession {
             closure,
             symmetricCollections: Set(result.symmetricCollections.map(\.name))
         ) else {
+            let symmetricCollections = Set(result.symmetricCollections.map(\.name))
+            if let expression = unsupportedInvariantExpression(
+                in: closure,
+                symmetricCollections: symmetricCollections
+            ) {
+                result.diagnostics.append(.init(
+                    message: "Invariant '\(name)' contains an unsupported invariant expression.",
+                    source: expression
+                ))
+            } else {
             result.diagnostics.append(.init(
                 message: "Invariant '\(name)' contains an unsupported invariant expression.",
-                source: unsupportedInvariantExpression(
-                    in: closure,
-                    symmetricCollections: Set(result.symmetricCollections.map(\.name))
-                ) ?? closure
+                source: closure
             ))
+            }
             return
         }
         result.invariants.append((name, body))
