@@ -30,11 +30,11 @@ package final class TLALiveMachineObservableReducer<State: Sendable & Equatable,
     public private(set) var current: TLALiveMachineAdapterSnapshot<State>?
 
     private let identity: TLALiveMachineIdentity
-    private let decode: @Sendable (GeneratedMachineStorage.State) throws -> State
+    private let decode: @Sendable (_GeneratedMachineStorage.State) throws -> State
 
     public init(
         identity: TLALiveMachineIdentity,
-        decode: @escaping @Sendable (GeneratedMachineStorage.State) throws -> State
+        decode: @escaping @Sendable (_GeneratedMachineStorage.State) throws -> State
     ) {
         self.identity = identity
         self.decode = decode

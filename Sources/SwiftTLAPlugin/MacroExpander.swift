@@ -65,8 +65,8 @@ enum MacroExpander {
             "\($0.formalName): IdentifiedModelCollection<\($0.elementType), \($0.valueType)>"
         }
         let machineInitializerParameters = ([
-            "storage: GeneratedMachineStorage",
-            "storageState: GeneratedMachineStorage.State"
+            "storage: _GeneratedMachineStorage",
+            "storageState: _GeneratedMachineStorage.State"
         ] + collectionParameters)
             .joined(separator: ", ")
         let collectionAssignments = plan.symmetricCollections.map {
@@ -87,8 +87,8 @@ enum MacroExpander {
                 )"""
         }.joined()
 
-        decls.append(DeclSyntax(stringLiteral: "private let _storage: GeneratedMachineStorage"))
-        decls.append(DeclSyntax(stringLiteral: "private var _storageState: GeneratedMachineStorage.State"))
+        decls.append(DeclSyntax(stringLiteral: "private let _storage: _GeneratedMachineStorage"))
+        decls.append(DeclSyntax(stringLiteral: "private var _storageState: _GeneratedMachineStorage.State"))
         decls.append(DeclSyntax(stringLiteral: "private var _state: State"))
         decls.append(DeclSyntax(stringLiteral: """
         private init(\(machineInitializerParameters)) throws {
@@ -126,13 +126,13 @@ enum MacroExpander {
         decls.append(contentsOf: generateCompilationIdentityCheck(model: model))
         decls.append(DeclSyntax(stringLiteral: """
         private static func _makeMachine(
-            storage: GeneratedMachineStorage,
-            storageState: GeneratedMachineStorage.State
+            storage: _GeneratedMachineStorage,
+            storageState: _GeneratedMachineStorage.State
         ) throws -> Self {
             try Self(storage: storage, storageState: storageState\(collectionInitializers))
         }
         public static func makeMachine() throws -> Self {
-            let storage = GeneratedMachineStorage(compilation: try _compiledSpecification())
+            let storage = _GeneratedMachineStorage(compilation: try _compiledSpecification())
             let initialStates = try storage.initialStates()
             guard initialStates.count == 1 else {
                 if initialStates.isEmpty {
@@ -146,7 +146,7 @@ enum MacroExpander {
             )
         }
         public static func makeMachine(_ initial: State) throws -> Self {
-            let storage = GeneratedMachineStorage(compilation: try _compiledSpecification())
+            let storage = _GeneratedMachineStorage(compilation: try _compiledSpecification())
             return try _makeMachine(
                 storage: storage,
                 storageState: try storage.initialState { candidate in
@@ -358,11 +358,11 @@ extension MacroExpander {
                         parameterClause: FunctionParameterClauseSyntax {
                             FunctionParameterSyntax(
                                 firstName: "storage",
-                                type: TypeSyntax(stringLiteral: "GeneratedMachineStorage")
+                                type: TypeSyntax(stringLiteral: "_GeneratedMachineStorage")
                             )
                             FunctionParameterSyntax(
                                 firstName: "storageState",
-                                type: TypeSyntax(stringLiteral: "GeneratedMachineStorage.State")
+                                type: TypeSyntax(stringLiteral: "_GeneratedMachineStorage.State")
                             )
                         },
                         effectSpecifiers: FunctionEffectSpecifiersSyntax(

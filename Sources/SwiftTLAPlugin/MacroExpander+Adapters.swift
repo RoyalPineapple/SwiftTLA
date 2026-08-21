@@ -42,17 +42,17 @@ extension MacroExpander {
         var declarations = commonAdapterAliases(modelTypeName: modelTypeName) + observableCallbacks()
         declarations += [
             DeclSyntax(stringLiteral: "@MainActor private let _live: Live"),
-            DeclSyntax(stringLiteral: "@MainActor private let _reducer: GeneratedMachineStorage.LiveObservableReducer<State, \(actionType)>"),
-            DeclSyntax(stringLiteral: "@MainActor private let _subscription: GeneratedMachineStorage.LiveSubscription<\(actionType)>"),
+            DeclSyntax(stringLiteral: "@MainActor private let _reducer: _GeneratedMachineStorage.LiveObservableReducer<State, \(actionType)>"),
+            DeclSyntax(stringLiteral: "@MainActor private let _subscription: _GeneratedMachineStorage.LiveSubscription<\(actionType)>"),
             DeclSyntax(stringLiteral: "@MainActor private var _observationTask: Task<Void, Never>?"),
             DeclSyntax(stringLiteral: """
             @MainActor public init(live: Live) async throws {
                 _live = live
-                _reducer = GeneratedMachineStorage.LiveObservableReducer<State, \(actionType)>(
+                _reducer = _GeneratedMachineStorage.LiveObservableReducer<State, \(actionType)>(
                     identity: live.identity,
                     decode: { try State(storage: live._storage, storageState: $0) }
                 )
-                let subscription: GeneratedMachineStorage.LiveSubscription<\(actionType)>
+                let subscription: _GeneratedMachineStorage.LiveSubscription<\(actionType)>
                 switch await live._observe() {
                 case .attached(let attachment): subscription = attachment
                 case .unavailable(let reason): throw GeneratedMachineError.liveMachineUnavailable(String(describing: reason))
@@ -104,7 +104,7 @@ extension MacroExpander {
 
     static func observableReducerMethod() -> String {
         return """
-        @MainActor private func _reduce(_ event: GeneratedMachineStorage.LiveEvent<ActionLabel>, subscription: GeneratedMachineStorage.LiveSubscription<ActionLabel>) async {
+        @MainActor private func _reduce(_ event: _GeneratedMachineStorage.LiveEvent<ActionLabel>, subscription: _GeneratedMachineStorage.LiveSubscription<ActionLabel>) async {
             let contiguousCommit = _reducer.reduce(event)
             if case .loss = event { _ = await subscription.resynchronize() }
             guard let commit = contiguousCommit,
@@ -170,7 +170,7 @@ extension MacroExpander {
     static func observableConversions() -> String {
         """
         @MainActor private static func _snapshot(
-            _ value: GeneratedMachineStorage.LiveAdapterSnapshot<State>
+            _ value: _GeneratedMachineStorage.LiveAdapterSnapshot<State>
         ) -> Snapshot {
             .init(
                 identity: .init(value: value.identity.value),
@@ -180,7 +180,7 @@ extension MacroExpander {
         }
 
         @MainActor private static func _loss(
-            _ value: GeneratedMachineStorage.LiveObservationLoss
+            _ value: _GeneratedMachineStorage.LiveObservationLoss
         ) -> ObservationLoss {
             .init(
                 identity: .init(value: value.identity.value),
@@ -190,7 +190,7 @@ extension MacroExpander {
         }
 
         @MainActor private static func _termination(
-            _ value: GeneratedMachineStorage.LiveTermination
+            _ value: _GeneratedMachineStorage.LiveTermination
         ) -> Termination {
             let reason: Live.Unavailability
             switch value.reason {
@@ -204,7 +204,7 @@ extension MacroExpander {
         }
 
         @MainActor private static func _status(
-            _ value: GeneratedMachineStorage.LiveAdapterStatus
+            _ value: _GeneratedMachineStorage.LiveAdapterStatus
         ) -> Status {
             switch value {
             case .attaching: return .attaching

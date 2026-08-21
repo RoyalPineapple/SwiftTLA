@@ -51,12 +51,12 @@ public struct TLALiveMachinePosition: Comparable, Codable, Sendable, CustomStrin
 package struct TLALiveMachineSnapshot: Sendable, Equatable {
     public let identity: TLALiveMachineIdentity
     public let position: TLALiveMachinePosition
-    public let state: GeneratedMachineStorage.State
+    public let state: _GeneratedMachineStorage.State
 
     public init(
         identity: TLALiveMachineIdentity,
         position: TLALiveMachinePosition,
-        state: GeneratedMachineStorage.State
+        state: _GeneratedMachineStorage.State
     ) {
         self.identity = identity
         self.position = position
@@ -215,14 +215,14 @@ package enum TLALiveActionOutcome<Action: Sendable & Equatable>: Sendable, Equat
 
 /// The typed transition behavior of a live runtime.
 package struct TLALiveMachineTransitionDriver<Action: Sendable & Equatable>: Sendable {
-    public let successors: @Sendable (GeneratedMachineStorage.State, Action) throws -> [GeneratedMachineStorage.State]
+    public let successors: @Sendable (_GeneratedMachineStorage.State, Action) throws -> [_GeneratedMachineStorage.State]
     public let validateAction: @Sendable (Action) -> TLALiveActionRejection<Action>.Reason?
-    public let decodeState: @Sendable (GeneratedMachineStorage.State) throws -> Void
+    public let decodeState: @Sendable (_GeneratedMachineStorage.State) throws -> Void
 
     public init(
-        successors: @escaping @Sendable (GeneratedMachineStorage.State, Action) throws -> [GeneratedMachineStorage.State],
+        successors: @escaping @Sendable (_GeneratedMachineStorage.State, Action) throws -> [_GeneratedMachineStorage.State],
         validateAction: @escaping @Sendable (Action) -> TLALiveActionRejection<Action>.Reason?,
-        decodeState: @escaping @Sendable (GeneratedMachineStorage.State) throws -> Void
+        decodeState: @escaping @Sendable (_GeneratedMachineStorage.State) throws -> Void
     ) {
         self.successors = successors
         self.validateAction = validateAction
@@ -281,7 +281,7 @@ package final class TLALiveMachineOwner<Action: Sendable & Equatable>: Sendable 
     /// Creates a new runtime with a fresh identity, an initial committed
     /// state, and the supplied formal transition driver.
     public static func create(
-        initial: GeneratedMachineStorage.State,
+        initial: _GeneratedMachineStorage.State,
         driver: TLALiveMachineTransitionDriver<Action>
     ) -> TLALiveMachineOwner<Action> {
         let identity = TLALiveMachineIdentity()
@@ -295,7 +295,7 @@ package final class TLALiveMachineOwner<Action: Sendable & Equatable>: Sendable 
     /// the fixed delivery policy. This internal seam exists only to make loss
     /// behavior deterministic in the package's contract tests.
     static func create(
-        initial: GeneratedMachineStorage.State,
+        initial: _GeneratedMachineStorage.State,
         driver: TLALiveMachineTransitionDriver<Action>,
         observationMailboxCapacity: Int
     ) -> TLALiveMachineOwner<Action> {
@@ -329,7 +329,7 @@ package final class TLALiveMachineOwner<Action: Sendable & Equatable>: Sendable 
 actor TLALiveMachineStorage<Action: Sendable & Equatable> {
     let identity: TLALiveMachineIdentity
     let driver: TLALiveMachineTransitionDriver<Action>
-    var state: GeneratedMachineStorage.State
+    var state: _GeneratedMachineStorage.State
     var position = TLALiveMachinePosition(value: 0)
     private var isEnded = false
     private let observationMailboxCapacity: Int
@@ -338,7 +338,7 @@ actor TLALiveMachineStorage<Action: Sendable & Equatable> {
 
     init(
         identity: TLALiveMachineIdentity,
-        initial: GeneratedMachineStorage.State,
+        initial: _GeneratedMachineStorage.State,
         driver: TLALiveMachineTransitionDriver<Action>,
         observationMailboxCapacity: Int = 64
     ) {
@@ -444,7 +444,7 @@ actor TLALiveMachineStorage<Action: Sendable & Equatable> {
         if let reason = driver.validateAction(action) {
             return rejected(reason, action: action, requestID: requestID, current: before)
         }
-        let candidates: [GeneratedMachineStorage.State]
+        let candidates: [_GeneratedMachineStorage.State]
         do {
             candidates = try driver.successors(state, action)
         } catch {

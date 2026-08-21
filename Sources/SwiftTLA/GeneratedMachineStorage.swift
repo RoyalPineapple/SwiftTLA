@@ -1,11 +1,7 @@
 import Foundation
 
-/// Storage shared by the private implementation of a generated Swift machine.
-///
-/// A storage value owns one compiled specification. Generated code addresses
-/// declarations by its emitted ordinal and converts formal values at its own
-/// typed boundary.
-public struct GeneratedMachineStorage: Sendable {
+/// Storage for one generated Swift machine and its compiled specification.
+public struct _GeneratedMachineStorage: Sendable {
     /// An opaque state from this storage's compiled specification.
     public struct State: Hashable, Sendable {
         fileprivate let compiled: CompiledState
@@ -140,7 +136,7 @@ public struct GeneratedMachineStorage: Sendable {
     }
 }
 
-public extension GeneratedMachineStorage {
+public extension _GeneratedMachineStorage {
     struct LiveSnapshot: Sendable, Equatable {
         public let identity: TLALiveMachineIdentity
         public let position: TLALiveMachinePosition

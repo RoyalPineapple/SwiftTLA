@@ -124,8 +124,8 @@ extension MacroExpander {
                 }
 
                 private static func _snapshot(
-                    _ value: GeneratedMachineStorage.LiveSnapshot,
-                    storage: GeneratedMachineStorage
+                    _ value: _GeneratedMachineStorage.LiveSnapshot,
+                    storage: _GeneratedMachineStorage
                 ) throws -> Snapshot {
                     try .init(
                         identity: _identity(value.identity),
@@ -135,8 +135,8 @@ extension MacroExpander {
                 }
 
                 private static func _rejection(
-                    _ value: GeneratedMachineStorage.LiveRejection<ActionLabel>,
-                    storage: GeneratedMachineStorage
+                    _ value: _GeneratedMachineStorage.LiveRejection<ActionLabel>,
+                    storage: _GeneratedMachineStorage
                 ) throws -> Rejection {
                     let reason: RejectionReason
                     switch value.reason {
@@ -153,8 +153,8 @@ extension MacroExpander {
                 }
 
                 private static func _failure(
-                    _ value: GeneratedMachineStorage.LiveFailure<ActionLabel>,
-                    storage: GeneratedMachineStorage
+                    _ value: _GeneratedMachineStorage.LiveFailure<ActionLabel>,
+                    storage: _GeneratedMachineStorage
                 ) throws -> Failure {
                     let code: FailureCode
                     switch value.code {
@@ -175,8 +175,8 @@ extension MacroExpander {
 
         let liveDriver = hasActions ? """
             private static func _makeLiveRuntime(
-                storage: GeneratedMachineStorage
-            ) throws -> GeneratedMachineStorage.LiveRuntime<ActionLabel> {
+                storage: _GeneratedMachineStorage
+            ) throws -> _GeneratedMachineStorage.LiveRuntime<ActionLabel> {
                 guard let initial = try storage.initialStates().first else {
                     throw GeneratedMachineError.noInitialState
                 }
@@ -201,8 +201,8 @@ extension MacroExpander {
             }
             """ : """
             private static func _makeLiveRuntime(
-                storage: GeneratedMachineStorage
-            ) throws -> GeneratedMachineStorage.LiveRuntime<ActionLabel> {
+                storage: _GeneratedMachineStorage
+            ) throws -> _GeneratedMachineStorage.LiveRuntime<ActionLabel> {
                 guard let initial = try storage.initialStates().first else {
                     throw GeneratedMachineError.noInitialState
                 }
@@ -217,11 +217,11 @@ extension MacroExpander {
 
         let liveMembers = ([
             """
-                private let _runtime: GeneratedMachineStorage.LiveRuntime<\(actionType)>
-                fileprivate let _storage: GeneratedMachineStorage
+                private let _runtime: _GeneratedMachineStorage.LiveRuntime<\(actionType)>
+                fileprivate let _storage: _GeneratedMachineStorage
 
                 fileprivate init() throws {
-                    let storage = GeneratedMachineStorage(compilation: try \(typeName)._compiledSpecification())
+                    let storage = _GeneratedMachineStorage(compilation: try \(typeName)._compiledSpecification())
                     _runtime = try \(typeName)._makeLiveRuntime(storage: storage)
                     _storage = storage
                 }
@@ -232,7 +232,7 @@ extension MacroExpander {
                     await _runtime.end()
                 }
 
-                fileprivate func _observe() async -> GeneratedMachineStorage.LiveAttachment<\(actionType)> {
+                fileprivate func _observe() async -> _GeneratedMachineStorage.LiveAttachment<\(actionType)> {
                     await _runtime.observe()
                 }
 

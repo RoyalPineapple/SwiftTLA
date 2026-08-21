@@ -66,7 +66,7 @@ extension MacroExpander {
                 """),
                 DeclSyntax(stringLiteral: "private static let _identityRoutedActionOrdinals: Set<Int> = [\(identityRoutedOrdinals)]"),
                 DeclSyntax(stringLiteral: """
-                private func _stateWithLiveCollections() throws -> GeneratedMachineStorage.State {
+                private func _stateWithLiveCollections() throws -> _GeneratedMachineStorage.State {
                     \(stateWithLiveCollections)
                 }
                 """),
