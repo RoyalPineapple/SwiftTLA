@@ -33,6 +33,19 @@ struct CompiledDeclaration: Hashable, Sendable {
     let kind: Kind
     let name: String
     let sourceOffset: Int?
+    let origin: VariableOrigin
+
+    init(
+        kind: Kind,
+        name: String,
+        sourceOffset: Int?,
+        origin: VariableOrigin = .source
+    ) {
+        self.kind = kind
+        self.name = name
+        self.sourceOffset = sourceOffset
+        self.origin = origin
+    }
 }
 
 struct CompiledVariableLayout: Hashable, Sendable {
@@ -122,7 +135,12 @@ struct CompiledLayout: Hashable, Sendable {
         variables = spec.variables.enumerated().map { ordinal, variable in
             CompiledVariableLayout(
                 id: VariableID(ordinal: ordinal),
-                declaration: .init(kind: .variable, name: variable.name, sourceOffset: nil)
+                declaration: .init(
+                    kind: .variable,
+                    name: variable.name,
+                    sourceOffset: nil,
+                    origin: variable.origin
+                )
             )
         }
         actions = spec.actions.enumerated().map { ordinal, action in
@@ -218,7 +236,12 @@ struct CompiledLayout: Hashable, Sendable {
         let declarationEncoding = declarations.enumerated().map { ordinal, declaration in
             let kind = declaration.kind.rawValue
             let name = declaration.name
-            return "\(ordinal):\(kind.utf8.count):\(kind)\(name.utf8.count):\(name)"
+            let origin: String
+            switch declaration.origin {
+            case .source: origin = "source"
+            case .compiler: origin = "compiler"
+            }
+            return "\(ordinal):\(kind.utf8.count):\(kind)\(name.utf8.count):\(name)\(origin.utf8.count):\(origin)"
         }.joined(separator: "|")
         let controlEncoding = controlLocations.map { label in
             let owner = label.owner.canonicalEncoding

@@ -111,18 +111,57 @@ enum MacroExpander {
         ))
         decls.append(contentsOf: generateCompilationIdentityCheck(model: model))
         decls.append(DeclSyntax(stringLiteral: """
-        public static func makeMachine() throws -> Self {
-            let compilation = try compiledSpecification()
-            guard let projection = try compilation.initialStateProjections().first else {
-                throw GeneratedMachineError.noInitialState
+        private static func _matchingInitialState(
+            for initial: State,
+            compilation: CompiledSpecification
+        ) throws -> TLAStateProjection {
+            let requested = try initial.formalProjection()
+            let candidates = try compilation.initialStateProjections()
+            let matches = candidates.filter { candidate in
+                requested.entries.allSatisfy { entry in
+                    candidate.value(for: entry.token) == entry.value
+                }
             }
-            let initial = try State(projection: projection)
+            guard matches.count == 1 else {
+                if matches.isEmpty {
+                    throw GeneratedMachineError.invalidInitialState
+                }
+                throw GeneratedMachineError.ambiguousInitialState
+            }
+            return matches[0]
+        }
+        private static func _makeMachine(
+            compilation: CompiledSpecification,
+            formalState: TLAStateProjection
+        ) throws -> Self {
+            let initial = try State(projection: formalState)
             return Self(machine: CanonicalMachine(
                 compilation: compilation,
                 initial: initial,
-                projectionForSnapshot: { try $0.formalProjection() },
+                formalState: formalState,
                 snapshotFromProjection: { try State(projection: $0) }
             ))
+        }
+        public static func makeMachine() throws -> Self {
+            let compilation = try compiledSpecification()
+            let initialStates = try compilation.initialStateProjections()
+            guard initialStates.count == 1 else {
+                if initialStates.isEmpty {
+                    throw GeneratedMachineError.noInitialState
+                }
+                throw GeneratedMachineError.ambiguousInitialState
+            }
+            return try _makeMachine(
+                compilation: compilation,
+                formalState: initialStates[0]
+            )
+        }
+        public static func makeMachine(_ initial: State) throws -> Self {
+            let compilation = try compiledSpecification()
+            return try _makeMachine(
+                compilation: compilation,
+                formalState: try _matchingInitialState(for: initial, compilation: compilation)
+            )
         }
         """))
         decls.append(contentsOf: generateSpecTest())
@@ -820,7 +859,7 @@ extension MacroExpander {
                     do {
                         targetKey = try projection.key(for: id, collection: "\(collection.formalName)", action: "\(action.formalName)")
                     } catch {
-                        throw GeneratedMachineError.unexpected(error)
+                        throw GeneratedMachineError.unexpected(String(describing: error))
                     }
                     let formalState = try _stateWithLiveCollections()
                     guard let token = TLAStateProjection.Token(validating: \(String(reflecting: collection.formalName))),
@@ -853,7 +892,7 @@ extension MacroExpander {
                     do {
                         try \(collection.formalName).update(id: id, to: nextValue, action: "\(action.formalName)")
                     } catch {
-                        throw GeneratedMachineError.unexpected(error)
+                        throw GeneratedMachineError.unexpected(String(describing: error))
                     }
                     return TransitionResult(
                         action: .\(action.swiftIdentifier),

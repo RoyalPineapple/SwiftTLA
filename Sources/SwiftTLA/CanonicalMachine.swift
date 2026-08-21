@@ -167,15 +167,17 @@ public struct CanonicalTransitionEvidence<Snapshot: Equatable & Sendable, Action
 }
 
 /// Reports a generated-machine execution failure.
-public enum GeneratedMachineError: Error {
+public enum GeneratedMachineError: Error, Sendable {
     case noInitialState
+    case ambiguousInitialState
+    case invalidInitialState
     case noMatchingSuccessor
     case liveMachineSchemaMismatch(expected: String, actual: String)
     case liveMachineUnavailable(TLALiveMachineUnavailableReason)
     /// The formal successor could not be decoded into the generated Swift
     /// state. The canonical snapshot remains unchanged.
     case stateDecodingFailed(TLAStateProjectionDiagnostic)
-    case unexpected(any Error)
+    case unexpected(String)
     /// This action selects a live identified collection member and must use
     /// the generated `action(id:)` API rather than generic execution.
     case identityRoutedActionRequiresID
@@ -183,37 +185,28 @@ public enum GeneratedMachineError: Error {
 
 public struct CanonicalMachine<Snapshot: Equatable & Sendable>: Sendable {
     public let compilation: CompiledSpecification
-    private let projectionForSnapshot: @Sendable (Snapshot) throws -> TLAStateProjection
     private let snapshotFromProjection: @Sendable (TLAStateProjection) throws -> Snapshot
+    private var formalState: TLAStateProjection
     public private(set) var snapshot: Snapshot
 
     public init(
         compilation: CompiledSpecification,
         initial: Snapshot,
-        projectionForSnapshot: @escaping @Sendable (Snapshot) throws -> TLAStateProjection,
+        formalState: TLAStateProjection,
         snapshotFromProjection: @escaping @Sendable (TLAStateProjection) throws -> Snapshot
     ) {
         self.compilation = compilation
         self.snapshot = initial
-        self.projectionForSnapshot = projectionForSnapshot
+        self.formalState = formalState
         self.snapshotFromProjection = snapshotFromProjection
     }
 
     package func tlaSnapshot() throws -> TLAStateProjection {
-        try projectionForSnapshot(snapshot)
+        formalState
     }
 
     public func stateProjection() -> TLAStateProjectionResult {
-        do {
-            return .projected(try tlaSnapshot())
-        } catch let diagnostic as TLAStateProjectionDiagnostic {
-            return .unavailable(diagnostic)
-        } catch {
-            return .unavailable(.projectionUnavailable(
-                path: "state",
-                reason: String(describing: error)
-            ))
-        }
+        .projected(formalState)
     }
 
     public mutating func apply<Label>(
@@ -243,7 +236,7 @@ public struct CanonicalMachine<Snapshot: Equatable & Sendable>: Sendable {
         do {
             before = try snapshotFromProjection(state)
         } catch {
-            throw GeneratedMachineError.unexpected(error)
+            throw GeneratedMachineError.unexpected(String(describing: error))
         }
         for projection in successors {
             guard successor(projection) else { continue }
@@ -253,9 +246,10 @@ public struct CanonicalMachine<Snapshot: Equatable & Sendable>: Sendable {
             } catch let diagnostic as TLAStateProjectionDiagnostic {
                 throw GeneratedMachineError.stateDecodingFailed(diagnostic)
             } catch {
-                throw GeneratedMachineError.unexpected(error)
+                throw GeneratedMachineError.unexpected(String(describing: error))
             }
             snapshot = after
+            formalState = projection
             return CanonicalTransitionEvidence(action: action, before: before, after: after)
         }
         throw GeneratedMachineError.noMatchingSuccessor

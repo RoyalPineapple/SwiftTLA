@@ -95,7 +95,8 @@ enum AlgorithmLowerer {
                     NamedVar(
                         name: state.root,
                         initial: .int(0),
-                        initExpr: constantFunction(domain: process.domain, value: state.initial)
+                        initExpr: constantFunction(domain: process.domain, value: state.initial),
+                        origin: .compiler
                     ))
             }
         }
@@ -127,7 +128,8 @@ enum AlgorithmLowerer {
                     controlDomain,
                     controlBinding,
                     .caseExpr(controlCases, nil)
-                )
+                ),
+                origin: .compiler
             ), at: 0)
         }
         if !procedures.isEmpty {
@@ -135,13 +137,15 @@ enum AlgorithmLowerer {
                 variables.append(NamedVar(
                     name: slot.root,
                     initial: .int(0),
-                    initExpr: constantFunction(domain: controlDomainValues(processes), value: slot.initial)
+                    initExpr: constantFunction(domain: controlDomainValues(processes), value: slot.initial),
+                    origin: .compiler
                 ))
             }
             variables.append(NamedVar(
                 name: stackVariable,
                 initial: .int(0),
-                initExpr: constantFunction(domain: controlDomainValues(processes), value: .tupleLiteral([]))
+                initExpr: constantFunction(domain: controlDomainValues(processes), value: .tupleLiteral([])),
+                origin: .compiler
             ))
         }
 
@@ -376,14 +380,16 @@ enum AlgorithmLowerer {
                 procedureVariables.append(NamedVar(
                     name: parameter.root,
                     initial: .int(0),
-                    initExpr: parameter.initial
+                    initExpr: parameter.initial,
+                    origin: .compiler
                 ))
             }
             for local in procedure.locals {
                 procedureVariables.append(NamedVar(
                     name: local.root,
                     initial: .int(0),
-                    initExpr: local.initial
+                    initExpr: local.initial,
+                    origin: .compiler
                 ))
             }
         }
@@ -405,10 +411,10 @@ enum AlgorithmLowerer {
         }
         // Match PlusCal's declaration order so TLC emits comparable frame
         // records in its retained DOT graph.
-        var variables = [NamedVar(name: controlVariable, initial: .string(first.label.name))]
+        var variables = [NamedVar(name: controlVariable, initial: .string(first.label.name), origin: .compiler)]
             + sharedVariables
         if !procedures.isEmpty {
-            variables.append(NamedVar(name: stackVariable, initial: .tuple([])))
+            variables.append(NamedVar(name: stackVariable, initial: .tuple([]), origin: .compiler))
         }
         variables += procedureVariables
         let variableNames = variables.map(\.name)

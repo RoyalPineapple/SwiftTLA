@@ -216,7 +216,9 @@ public struct MachineSurfacePlan: Sendable, Equatable {
         }
 
         let variablesByName = Dictionary(uniqueKeysWithValues: spec.variables.map { ($0.name, $0) })
-        let variables = try compilation.layout.variables.map { layout in
+        let variables = try compilation.layout.variables.filter {
+            $0.declaration.origin == .source
+        }.map { layout in
             guard let variable = variablesByName[layout.declaration.name] else {
                 throw Self.unknownFact("compiledLayout.variables.\(layout.declaration.name)")
             }
