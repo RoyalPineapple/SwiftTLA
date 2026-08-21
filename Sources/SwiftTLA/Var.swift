@@ -390,7 +390,7 @@ extension StateExpr {
   public static func tuple(_ elements: [some StateExprConvertible]) -> StateExpr {
     .tupleLiteral(elements.map(\.stateExpr))
   }
-  public static func record(_ fields: [String: StateExpr]) -> StateExpr { .recordLiteral(fields) }
+  public static func record(_ fields: [String: StateExpr]) -> StateExpr { .recordLiteral(.init(fields)) }
   public static func enabled(_ name: String) -> StateExpr { .enabledAction(name) }
 
   // MARK: - Var-based bound variables

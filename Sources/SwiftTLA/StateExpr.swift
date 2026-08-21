@@ -136,6 +136,32 @@ public struct FormalOperatorDefinition: Hashable, Sendable {
     }
 }
 
+public struct StateRecordExpression: Hashable, Sendable {
+    public struct Field: Hashable, Sendable {
+        public let name: String
+        public let value: StateExpr
+
+        public init(name: String, value: StateExpr) {
+            self.name = name
+            self.value = value
+        }
+    }
+
+    public let fields: [Field]
+
+    public init(_ fields: [Field]) {
+        self.fields = fields.sorted { $0.name < $1.name }
+    }
+
+    public init(_ fields: [String: StateExpr]) {
+        self.init(fields.map { .init(name: $0.key, value: $0.value) })
+    }
+
+    public func value(named name: String) -> StateExpr? {
+        fields.first { $0.name == name }?.value
+    }
+}
+
 public indirect enum StateExpr: Hashable, Sendable, CustomStringConvertible {
     case value(TLAValue)
     case variable(String)
@@ -183,7 +209,7 @@ public indirect enum StateExpr: Hashable, Sendable, CustomStringConvertible {
     case tupleTail(StateExpr)
     case tupleConcatenate(StateExpr, StateExpr)
 
-    case recordLiteral([String: StateExpr])
+    case recordLiteral(StateRecordExpression)
     case recordAccess(StateExpr, String)
     case domain(StateExpr)
     case functionLiteral(StateExpr, String, StateExpr)
@@ -257,13 +283,15 @@ public indirect enum StateExpr: Hashable, Sendable, CustomStringConvertible {
         case .tupleConcatenate(let a, let b): return "(\(a) \\o \(b))"
         case .recordLiteral(let fields):
             let orderedKeys: [String]
-            if fields["procedure"] != nil, fields["pc"] != nil {
+            if fields.value(named: "procedure") != nil, fields.value(named: "pc") != nil {
                 orderedKeys = ["procedure", "pc"]
-                    + fields.keys.filter { $0 != "procedure" && $0 != "pc" }.sorted()
+                    + fields.fields.map(\.name).filter { $0 != "procedure" && $0 != "pc" }
             } else {
-                orderedKeys = fields.keys.sorted()
+                orderedKeys = fields.fields.map(\.name)
             }
-            let entries = orderedKeys.map { "\($0) |-> \(fields[$0]!)" }
+            let entries = orderedKeys.compactMap { name in
+                fields.value(named: name).map { "\(name) |-> \($0)" }
+            }
             return "[\(entries.joined(separator: ", "))]"
         case .recordAccess(let r, let f): return "(\(r)).\(f)"
         case .domain(let f): return "DOMAIN \(f)"
@@ -389,7 +417,7 @@ private func localOperatorCalls(in expression: StateExpr) -> Set<String> {
     case .tupleAccess(let tuple, _), .recordAccess(let tuple, _):
         return localOperatorCalls(in: tuple)
     case .recordLiteral(let fields):
-        return fields.values.reduce(into: Set<String>()) { $0.formUnion(localOperatorCalls(in: $1)) }
+        return fields.fields.reduce(into: Set<String>()) { $0.formUnion(localOperatorCalls(in: $1.value)) }
     case .functionLiteral(let domain, _, let body), .setFilter(let domain, _, let body),
          .forAll(let domain, _, let body), .exists(let domain, _, let body), .choose(let domain, _, let body):
         return localOperatorCalls(in: domain).union(localOperatorCalls(in: body))

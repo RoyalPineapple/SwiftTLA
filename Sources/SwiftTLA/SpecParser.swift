@@ -1085,7 +1085,7 @@ public final class ParserSession {
             else { return nil }
             fields[field] = value
         }
-        return .recordLiteral(fields)
+        return StateExpr.record(fields)
     }
 
     /// A record literal can omit an enum type when the field's Swift context
@@ -1220,7 +1220,7 @@ public final class ParserSession {
                 guard let label = arg.label?.text, let val = decodeStateExpr(arg.expression) else { return nil }
                 fields[label] = val
             }
-            return .recordLiteral(fields)
+            return StateExpr.record(fields)
         case "variable":
             guard memberAccess.base?.as(DeclReferenceExprSyntax.self)?.baseName.text == "StateExpr",
                   let name = args.first?.expression.as(StringLiteralExprSyntax.self)?.segments.description

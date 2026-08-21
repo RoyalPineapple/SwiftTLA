@@ -444,7 +444,9 @@ private func substituteInState(_ expr: StateExpr, constants: [ConstantDecl]) -> 
     return .tupleConcatenate(
       substituteInState(a, constants: constants), substituteInState(b, constants: constants))
   case .recordLiteral(let fields):
-    return .recordLiteral(fields.mapValues { substituteInState($0, constants: constants) })
+    return .recordLiteral(.init(fields.fields.map {
+      .init(name: $0.name, value: substituteInState($0.value, constants: constants))
+    }))
   case .recordAccess(let a, let f):
     return .recordAccess(substituteInState(a, constants: constants), f)
   case .domain(let a): return .domain(substituteInState(a, constants: constants))

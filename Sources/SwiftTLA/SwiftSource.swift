@@ -88,8 +88,7 @@ extension StateExpr {
     case .tupleAppend(let t, let e): return "\(t.swiftSource).appending(\(e.swiftSource))"
     case .tupleConcatenate(let a, let b): return "\(a.swiftSource).concatenating(\(b.swiftSource))"
     case .recordLiteral(let fields):
-      let sorted = fields.sorted(by: { $0.key < $1.key })
-      let args = sorted.map { "\($0.key): \($0.value.swiftSource)" }.joined(separator: ", ")
+      let args = fields.fields.map { "\($0.name): \($0.value.swiftSource)" }.joined(separator: ", ")
       return "StateExpr.record(\(args))"
     case .recordAccess(let r, let f): return "\(r.swiftSource).\(f)"
     // Preserve binder identity in the formal source codec. The ergonomic

@@ -170,8 +170,8 @@ struct CompiledLowerer {
         case .tupleLiteral(let values): return try .tupleLiteral(lower(values, at: path))
         case .tupleAccess(let value, let index): return try .tupleAccess(lower(value, at: path), index)
         case .recordLiteral(let fields):
-            return try .recordLiteral(.init(fields.map { item in
-                .init(name: item.key, value: try lower(item.value, at: "\(path).\(item.key)"))
+            return try .recordLiteral(.init(fields.fields.map { item in
+                .init(name: item.name, value: try lower(item.value, at: "\(path).\(item.name)"))
             }))
         case .recordAccess(let value, let field): return try .recordAccess(lower(value, at: path), field)
         case .except(let function, let key, let value):
@@ -380,26 +380,26 @@ struct CompiledLowerer {
                 )
             })
         case .recordLiteral(let fields):
-            return try .recordLiteral(.init(fields.map { field in
+            return try .recordLiteral(.init(fields.fields.map { field in
                 let value: CompiledStateExpr
-                if stackFrame, field.key == "pc" {
+                if stackFrame, field.name == "pc" {
                     value = try lowerControlValue(
                         field.value,
-                        at: "\(path).\(field.key)",
+                        at: "\(path).\(field.name)",
                         owner: owner,
                         algorithm: algorithm
                     )
                 } else if stackFrame {
-                    value = try lower(field.value, at: "\(path).\(field.key)")
+                    value = try lower(field.value, at: "\(path).\(field.name)")
                 } else {
                     value = try lowerControlValue(
                         field.value,
-                        at: "\(path).\(field.key)",
+                        at: "\(path).\(field.name)",
                         owner: owner,
                         algorithm: algorithm
                     )
                 }
-                return .init(name: field.key, value: value)
+                return .init(name: field.name, value: value)
             }))
         case .functionLiteral(let domain, let binder, let body):
             return .functionLiteral(

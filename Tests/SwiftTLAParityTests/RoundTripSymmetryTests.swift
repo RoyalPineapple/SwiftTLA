@@ -340,7 +340,8 @@ extension StateExpr {
     case .tupleTail(let t): return .tupleTail(t.normalized)
     case .tupleAppend(let t, let e): return .tupleAppend(t.normalized, e.normalized)
     case .tupleConcatenate(let a, let b): return .tupleConcatenate(a.normalized, b.normalized)
-    case .recordLiteral(let f): return .recordLiteral(f.mapValues(\.normalized))
+    case .recordLiteral(let record):
+      return .recordLiteral(.init(record.fields.map { .init(name: $0.name, value: $0.value.normalized) }))
     case .recordAccess(let r, let f): return .recordAccess(r.normalized, f)
     case .caseExpr(let pairs, let fallback):
       return .caseExpr(pairs.map(\.normalized), fallback?.normalized)
@@ -389,7 +390,7 @@ extension StateExpr {
       ("cardinality", StateExpr.cardinality(.setLiteral([.int(1)]))),
       ("powerSet", StateExpr.powerSet(.setLiteral([.int(1)]))),
       ("unionAll", StateExpr.unionAll(.setLiteral([.setLiteral([.int(1)])]))),
-      ("domain", StateExpr.domain(.recordLiteral(["k": .int(1)]))),
+      ("domain", StateExpr.domain(StateExpr.record(["k": .int(1)]))),
       ("functionApply", StateExpr.functionApply(.variable("f"), .int(1))),
       ("except", StateExpr.except(.variable("f"), .int(1), .int(2))),
       ("tupleLiteral", StateExpr.tupleLiteral([.int(1), .int(2)])),
@@ -402,8 +403,8 @@ extension StateExpr {
         "tupleConcatenate",
         StateExpr.tupleConcatenate(.tupleLiteral([.int(1)]), .tupleLiteral([.int(2)]))
       ),
-      ("recordLiteral", StateExpr.recordLiteral(["k": .int(1)])),
-      ("recordAccess", StateExpr.recordAccess(.recordLiteral(["k": .int(1)]), "k")),
+      ("recordLiteral", StateExpr.record(["k": .int(1)])),
+      ("recordAccess", StateExpr.recordAccess(StateExpr.record(["k": .int(1)]), "k")),
       (
         "setFilter",
         StateExpr.setFilter(.setLiteral([.int(1)]), "x0", .equal(.variable("x0"), .int(1)))

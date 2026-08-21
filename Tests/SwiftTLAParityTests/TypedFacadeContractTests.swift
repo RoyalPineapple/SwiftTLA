@@ -102,7 +102,7 @@ struct TypedFacadeContractTests {
     let literal = SetExpr<Record<CarSchema>>.literal(closed, open)
 
     #expect(
-      closed.raw == .recordLiteral(["floor": .value(.int(0)), "doorsOpen": .value(.bool(false))]))
+      closed.raw == StateExpr.record(["floor": .value(.int(0)), "doorsOpen": .value(.bool(false))]))
     #expect(literal.raw == .setLiteral([closed.raw, open.raw]))
     #expect(
       calls.inserting(closed)

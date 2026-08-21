@@ -31,10 +31,10 @@ public enum ClientCentric {
     Definition("TypeOKT(transactions) == transactions \\subseteq Transaction")
     Definition("TypeOK(transactions, execution) == /\\ TypeOKT(transactions) /\\ execution \\in Execution")
 
-    FormalDefinition("r", parameters: [.value("k"), .value("v")], body: .recordLiteral([
+    FormalDefinition("r", parameters: [.value("k"), .value("v")], body: StateExpr.record([
       "op": .value(.string("read")), "key": .variable("k"), "value": .variable("v")
     ]))
-    FormalDefinition("w", parameters: [.value("k"), .value("v")], body: .recordLiteral([
+    FormalDefinition("w", parameters: [.value("k"), .value("v")], body: StateExpr.record([
       "op": .value(.string("write")), "key": .variable("k"), "value": .variable("v")
     ]))
     FormalDefinition("executionStates", parameters: [.value("execution")], body: .functionLiteral(
@@ -175,7 +175,7 @@ public enum ClientCentric {
     FormalDefinition("executions", parameters: [.value("initialState"), .value("transactions")], body: .letValue(
       "orderings", call("PermSeqs", .variable("transactions")),
       .letValue(
-        "accummulator", .recordLiteral([
+        "accummulator", StateExpr.record([
           "execution": .tupleLiteral([]), "nextState": .variable("initialState")
         ]),
         .setMap(
@@ -183,10 +183,10 @@ public enum ClientCentric {
             "executionAcc",
             .operatorApplication(
               op("ReduceSeq", arity: 3), [
-                .operator(.lambda(FormalLambda(parameters: ["t", "acc"], body: .recordLiteral([
+                .operator(.lambda(FormalLambda(parameters: ["t", "acc"], body: StateExpr.record([
                 "execution": .tupleAppend(
                   .recordAccess(.variable("acc"), "execution"),
-                  .recordLiteral([
+                  StateExpr.record([
                     "parentState": .recordAccess(.variable("acc"), "nextState"),
                     "transaction": .variable("t")
                   ])

@@ -110,14 +110,14 @@ struct SymmetricCollectionCanonicalizationTests {
   func nestedValuesUseFullStatePermutations() throws {
     let members = SymmetricCollectionVar<Device, TLAValue>("members")
     let selected = "selected"
-    let nestedValue = StateExpr.recordLiteral([
+    let nestedValue = StateExpr.record([
       "member": .variable(selected),
       "nested": .tupleLiteral([
         .setLiteral([.variable(selected)]),
         .functionLiteral(
           .setLiteral([.variable(selected)]),
           "functionKey",
-          .recordLiteral(["key": .variable("functionKey")])
+          StateExpr.record(["key": .variable("functionKey")])
         )
       ])
     ])

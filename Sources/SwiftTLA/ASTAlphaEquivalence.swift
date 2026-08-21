@@ -487,7 +487,8 @@ func stateKey(_ expression: StateExpr, environment: [String: String], next: inou
     case .tupleHead(let tuple): return "tupleHead(\(key(tuple)))"
     case .tupleTail(let tuple): return "tupleTail(\(key(tuple)))"
     case .tupleConcatenate(let a, let b): return pair("tupleConcat", a, b)
-    case .recordLiteral(let fields): return "record[\(fields.keys.sorted().map { "\($0):\(key(fields[$0]!))" }.joined(separator: ","))]"
+    case .recordLiteral(let fields):
+        return "record[\(fields.fields.map { "\($0.name):\(key($0.value))" }.joined(separator: ","))]"
     case .recordAccess(let record, let field): return "recordAccess(\(key(record)),\(field))"
     case .domain(let function): return "domain(\(key(function)))"
     case .functionLiteral(let domain, let variable, let body):

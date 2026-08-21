@@ -77,7 +77,7 @@ struct EvaluatorCoverage {
 
   @Test("records and functions")
   func recordsAndFunctions() throws {
-    #expect(try evaluate(.recordLiteral(["k": .int(1)])) == .record(["k": .int(1)]))
+    #expect(try evaluate(StateExpr.record(["k": .int(1)])) == .record(["k": .int(1)]))
     #expect(try evaluate(.recordAccess(.variable("r"), "a")) == .int(1))
     #expect(try evaluate(.domain(.variable("f"))) == .set([.int(1), .int(2)]))
     #expect(try evaluate(.functionApply(.variable("f"), .int(1))) == .string("a"))

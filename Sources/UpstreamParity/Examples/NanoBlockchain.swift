@@ -48,13 +48,13 @@ public struct NanoBlockchainModel: Sendable {
                 Action("CreateGenesis_\(priv)") {
                     lastHash == "NoHash"
                         && ActionExpr.exists("h", from: StateExpr.setLiteral(hashes.map { .value(.string($0)) })) { h in
-                            let sb = StateExpr.recordLiteral([
-                                "block": .recordLiteral([
+                            let sb = StateExpr.record([
+                                "block": StateExpr.record([
                                     "type": .value(.string("genesis")),
                                     "account": .value(.string(priv)),
                                     "balance": .value(.int(genesisBal))
                                 ]),
-                                "signature": .recordLiteral(["data": h, "signedWith": .value(.string(priv))])
+                                "signature": StateExpr.record(["data": h, "signedWith": .value(.string(priv))])
                             ])
                             return lastHash.becomes(Expr<String>(h))
                                 && .assign(distributedLedger.name, distributedLedger.stateExpr
@@ -73,14 +73,14 @@ public struct NanoBlockchainModel: Sendable {
                             distributedLedger.stateExpr.applying(n).applying(prev) != noBlock
                                 && ActionExpr.exists("dest", from: StateExpr.setLiteral(["pub1", "pub2"].map { .value(.string($0)) })) { dest in
                                     ActionExpr.exists("h", from: StateExpr.setLiteral(hashes.map { .value(.string($0)) })) { h in
-                                        let sb = StateExpr.recordLiteral([
-                                            "block": .recordLiteral([
+                                        let sb = StateExpr.record([
+                                            "block": StateExpr.record([
                                                 "type": .value(.string("send")),
                                                 "previous": prev,
                                                 "balance": .value(.int(1)),
                                                 "destination": dest
                                             ]),
-                                            "signature": .recordLiteral(["data": h, "signedWith": .value(.string(priv))])
+                                            "signature": StateExpr.record(["data": h, "signedWith": .value(.string(priv))])
                                         ])
                                         return distributedLedger.stays
                                             && .assign(received.name, received.stateExpr

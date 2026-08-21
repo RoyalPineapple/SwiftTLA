@@ -387,6 +387,7 @@ public struct CompilationDiagnostic: Error, Sendable, Hashable, CustomStringConv
         case duplicateVariable
         case duplicateAction
         case duplicateInvariant
+        case duplicateRecordField
         case unresolvedImport
         case compilationIdentityMismatch
         case cyclicFormalModule
@@ -716,7 +717,7 @@ private func renderControlReferences(
         case .tupleConcatenate(let lhs, let rhs):
             return .tupleConcatenate(controlValue(lhs), controlValue(rhs))
         case .recordLiteral(let fields):
-            return .recordLiteral(fields.mapValues(controlValue))
+            return .recordLiteral(.init(fields.fields.map { .init(name: $0.name, value: controlValue($0.value)) }))
         default:
             return expression
         }
@@ -958,7 +959,8 @@ private struct CanonicalSpecificationEncoder {
         case .tupleHead(let value): return unary("tupleHead", value)
         case .tupleTail(let value): return unary("tupleTail", value)
         case .tupleConcatenate(let a, let b): return binary("tupleConcatenate", a, b)
-        case .recordLiteral(let fields): return node("recordLiteral", fields.keys.sorted().map { node($0, [canonicalExpression(fields[$0]!)]) })
+        case .recordLiteral(let fields):
+            return node("recordLiteral", fields.fields.map { node($0.name, [canonicalExpression($0.value)]) })
         case .recordAccess(let record, let field): return node("recordAccess", [canonicalExpression(record), field])
         case .domain(let value): return unary("domain", value)
         case .functionLiteral(let domain, let binding, let body): return node("functionLiteral", [canonicalExpression(domain), binding, canonicalExpression(body)])
