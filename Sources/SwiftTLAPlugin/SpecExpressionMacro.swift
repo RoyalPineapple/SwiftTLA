@@ -74,7 +74,7 @@ private final class SpecDeclarationRegistration {
             items.append(rewritten)
             guard let reference = declaredVariableReference(in: item) else { continue }
             items.append(
-                .init(item: .expr(ExprSyntax(reference)))
+                .init(item: .expr(reference))
             )
         }
         return closure.with(\.statements, .init(items))
@@ -87,7 +87,7 @@ private final class SpecDeclarationRegistration {
         return true
     }
 
-    private func declaredVariableReference(in item: CodeBlockItemSyntax) -> DeclReferenceExprSyntax? {
+    private func declaredVariableReference(in item: CodeBlockItemSyntax) -> ExprSyntax? {
         guard case .decl(let declaration) = item.item,
               let variable = declaration.as(VariableDeclSyntax.self),
               variable.bindings.count == 1,
@@ -97,7 +97,11 @@ private final class SpecDeclarationRegistration {
               let constructor = initializer.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text,
               constructor == "SharedVar" || constructor == "LocalVar"
         else { return nil }
-        return .init(baseName: name)
+        return ExprSyntax(MemberAccessExprSyntax(
+            base: ExprSyntax(DeclReferenceExprSyntax(baseName: name)),
+            period: .periodToken(),
+            declName: .init(baseName: .identifier("algorithmDeclaration"))
+        ))
     }
 }
 

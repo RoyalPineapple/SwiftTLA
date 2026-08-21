@@ -990,6 +990,28 @@ public struct AlgorithmElement: Sendable {
     fileprivate let model: AlgorithmComponentModel
 }
 
+extension SharedVariable {
+    public var algorithmDeclaration: AlgorithmElement {
+        AlgorithmElement(model: .shared(.init(
+            root: name,
+            initial: initial,
+            initialSet: initialSet,
+            swiftTypeName: swiftTypeName
+        )))
+    }
+}
+
+extension LocalVariable {
+    public var algorithmDeclaration: AlgorithmElement {
+        AlgorithmElement(model: .local(.init(
+            root: name,
+            initial: initial,
+            initialSet: initialSet,
+            swiftTypeName: swiftTypeName
+        )))
+    }
+}
+
 public struct StepStatement: Sendable {
     fileprivate let model: AlgorithmStatementModel
 }
@@ -1021,21 +1043,11 @@ public enum AlgorithmBuilder {
     }
 
     public static func buildExpression<Value>(_ variable: SharedVariable<Value>) -> [AlgorithmElement] {
-        [AlgorithmElement(model: .shared(.init(
-            root: variable.name,
-            initial: variable.initial,
-            initialSet: variable.initialSet,
-            swiftTypeName: variable.swiftTypeName
-        )))]
+        [variable.algorithmDeclaration]
     }
 
     public static func buildExpression<Value>(_ variable: LocalVariable<Value>) -> [AlgorithmElement] {
-        [AlgorithmElement(model: .local(.init(
-            root: variable.name,
-            initial: variable.initial,
-            initialSet: variable.initialSet,
-            swiftTypeName: variable.swiftTypeName
-        )))]
+        [variable.algorithmDeclaration]
     }
 
     public static func buildExpression(_ component: InvDecl) -> [AlgorithmElement] {
