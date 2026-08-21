@@ -711,7 +711,7 @@ public enum GeneratedMachineContractVerifier {
             status: .exact,
             initialStateCount: expectedInitial.count,
             transitionCount: transitionCount,
-            invariantCheckCount: graph.states.count * compilation.model.invariants.count
+            invariantCheckCount: graph.states.count * compilation.semantics.invariants.count
         )
     }
 

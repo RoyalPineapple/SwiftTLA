@@ -1,17 +1,17 @@
 struct CompiledActionEnumerator {
     let state: CompiledState
-    let model: CompiledModel
+    let semantics: CompiledSemantics
     let layout: CompiledLayout
     let enabledActions: Set<ActionID>
 
     init(
         state: CompiledState,
-        model: CompiledModel,
+        semantics: CompiledSemantics,
         layout: CompiledLayout,
         enabledActions: Set<ActionID> = []
     ) {
         self.state = state
-        self.model = model
+        self.semantics = semantics
         self.layout = layout
         self.enabledActions = enabledActions
     }
@@ -43,7 +43,7 @@ struct CompiledActionEnumerator {
     ) throws -> [CompiledActionDelta] {
         let evaluator = CompiledEvaluator(
             state: state,
-            model: model,
+            semantics: semantics,
             layout: layout,
             bindings: bindings,
             enabledActions: enabledActions
@@ -113,7 +113,7 @@ struct CompiledActionEnumerator {
                 let selectionState = try state.updating(selection)
                 let evaluator = CompiledEvaluator(
                     state: selectionState,
-                    model: model,
+                    semantics: semantics,
                     layout: layout,
                     bindings: bindings,
                     enabledActions: enabledActions

@@ -2,11 +2,11 @@ struct CompiledRuntime {
     let compilation: CompiledSpecification
 
     private var layout: CompiledLayout { compilation.layout }
-    private var model: CompiledModel { compilation.model }
+    private var semantics: CompiledSemantics { compilation.semantics }
 
     func initialStates() throws -> [CompiledState] {
         let initialValues = try layout.variables.map { variable in
-            guard let value = model.initialValues[variable.id] else {
+            guard let value = semantics.initialValues[variable.id] else {
                 throw CompiledEvaluationError.invalidVariableID(variable.id)
             }
             return value
@@ -14,10 +14,10 @@ struct CompiledRuntime {
         var states = [try CompiledState(values: initialValues, compilation: compilation)]
 
         for variable in layout.variables {
-            guard let initializer = model.variableInitializers[variable.id] else { continue }
+            guard let initializer = semantics.variableInitializers[variable.id] else { continue }
             guard let set = initializer.lazySet ?? initializer.initialSet else { continue }
             states = try states.flatMap { state in
-                guard case .set(let values) = try CompiledEvaluator(state: state, model: model, layout: layout).evaluate(set) else {
+                guard case .set(let values) = try CompiledEvaluator(state: state, semantics: semantics, layout: layout).evaluate(set) else {
                     throw EvalError.typeMismatch("Variable initialization requires a set")
                 }
                 return try CompiledValue.sorted(values).map { value in
@@ -27,13 +27,13 @@ struct CompiledRuntime {
         }
 
         for variable in layout.variables {
-            guard let initializer = model.variableInitializers[variable.id], let expression = initializer.initExpr else {
+            guard let initializer = semantics.variableInitializers[variable.id], let expression = initializer.initExpr else {
                 continue
             }
             states = try states.map { state in
                 try state.updating(
                     variable.id,
-                    to: CompiledEvaluator(state: state, model: model, layout: layout).evaluate(expression)
+                    to: CompiledEvaluator(state: state, semantics: semantics, layout: layout).evaluate(expression)
                 )
             }
         }
@@ -43,7 +43,7 @@ struct CompiledRuntime {
     func successors(from state: CompiledState) throws -> [CompiledSuccessor] {
         try state.requireIdentity(compilation.identity)
         let enabledActions = try enabledActions(in: state)
-        return try model.actions.flatMap { action in
+        return try semantics.actions.flatMap { action in
             try successors(for: action.id, from: state, enabledActions: enabledActions)
         }
     }
@@ -58,10 +58,10 @@ struct CompiledRuntime {
         from state: CompiledState,
         enabledActions: Set<ActionID>
     ) throws -> [CompiledSuccessor] {
-        guard let action = model.actions.first(where: { $0.id == actionID }) else {
+        guard let action = semantics.actions.first(where: { $0.id == actionID }) else {
             throw CompiledEvaluationError.unresolvedOperator
         }
-        return try CompiledActionEnumerator(state: state, model: model, layout: layout, enabledActions: enabledActions)
+        return try CompiledActionEnumerator(state: state, semantics: semantics, layout: layout, enabledActions: enabledActions)
             .enumerateResults(action)
             .filter { successor in try constraintHolds(in: successor.state) }
             .map { .init(action: actionID, arguments: $0.arguments, state: $0.state) }
@@ -69,7 +69,7 @@ struct CompiledRuntime {
 
     func assumeHolds(in state: CompiledState) throws -> Bool {
         try state.requireIdentity(compilation.identity)
-        guard let assume = model.assume else { return true }
+        guard let assume = semantics.assume else { return true }
         return try boolean(assume, in: state)
     }
 
@@ -85,7 +85,7 @@ struct CompiledRuntime {
 
     func canonicalState(_ state: CompiledState) throws -> CompiledState {
         try state.requireIdentity(compilation.identity)
-        let groups = model.symmetricCollections.map {
+        let groups = semantics.symmetricCollections.map {
             SymmetricCollectionPermutationGroup(members: $0.members)
         }
         let candidates = groups.reduce([state]) { candidates, group in
@@ -98,7 +98,7 @@ struct CompiledRuntime {
         let base = try candidates.min {
             try $0.canonicalEncoding(using: layout) < $1.canonicalEncoding(using: layout)
         } ?? state
-        return model.symmetrySets.reduce(base) { current, symmetry in
+        return semantics.symmetrySets.reduce(base) { current, symmetry in
             let present = TLAValue.sorted(symmetry.values).filter(current.contains)
             guard let canonical = present.first else { return current }
             let mapping: [TLAValue: TLAValue] = Dictionary(
@@ -109,14 +109,14 @@ struct CompiledRuntime {
     }
 
     private func constraintHolds(in state: CompiledState) throws -> Bool {
-        guard let constraint = model.constraint else { return true }
+        guard let constraint = semantics.constraint else { return true }
         return try boolean(constraint, in: state)
     }
 
     private func enabledActions(in state: CompiledState) throws -> Set<ActionID> {
         var result = Set<ActionID>()
-        for action in model.actions {
-            if try CompiledActionEnumerator(state: state, model: model, layout: layout).enumerate(action).isEmpty == false {
+        for action in semantics.actions {
+            if try CompiledActionEnumerator(state: state, semantics: semantics, layout: layout).enumerate(action).isEmpty == false {
                 result.insert(action.id)
             }
         }
@@ -130,7 +130,7 @@ struct CompiledRuntime {
     ) throws -> Bool {
         guard case .boolean(let result) = try CompiledEvaluator(
             state: state,
-            model: model,
+            semantics: semantics,
             layout: layout,
             enabledActions: enabledActions
         ).evaluate(expression) else {

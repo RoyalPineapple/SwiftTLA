@@ -50,7 +50,7 @@ public struct CompiledActionExecutor<Label: Hashable & Sendable>: Sendable {
     private func compiledAction(for label: Label) throws -> CompiledAction {
         let ordinal = actionOrdinal(label)
         guard compilation.layout.actions.indices.contains(ordinal),
-              let action = compilation.model.actions.first(where: { $0.id == compilation.layout.actions[ordinal].id })
+              let action = compilation.semantics.actions.first(where: { $0.id == compilation.layout.actions[ordinal].id })
         else {
             throw GeneratedMachineError.noMatchingSuccessor
         }
