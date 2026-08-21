@@ -692,8 +692,8 @@ public extension TLASpec {
             definitionsAfterInstances,
             declared: Set(definitionsBeforeInstances.compactMap(\.name)).union(instanceNames)
         )
-        let renderedActions = try actions.enumerated().map { index, declaration in
-            .init(
+        let renderedActions: [DirectModuleAction] = try actions.enumerated().map { index, declaration in
+            DirectModuleAction(
                 declaration: declaration,
                 renderedBody: try CompiledTLARenderer(layout: layout, bindings: bindings)
                     .action(semantics.actions[index].body)
@@ -1020,8 +1020,7 @@ public extension TLASpec {
     private func validateRefinements() throws {
         try validateUnique(refinements.map(\.name), code: .duplicateRefinement, path: "refinements")
         var linkedInstances: Set<String> = []
-        let declarationNames = Set(definitions.compactMap(\.name))
-            .union(formalOperatorDefinitions.map(\.name))
+        let declarationNames = Set(formalOperatorDefinitions.map(\.name))
             .union(invariants.map(\.name))
             .union(temporalProperties.map(\.name))
             .union(recursiveFuncs.map(\.name))

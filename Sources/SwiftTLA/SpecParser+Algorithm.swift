@@ -142,7 +142,7 @@ extension ParserSession {
                 scope: .empty
             )
         case "Invariant":
-            guard let invariant = parseAlgorithmInvariant(call) else { return nil }
+            guard let invariant = parseAlgorithmInvariant(call, scope: .empty) else { return nil }
             return .invariant(invariant)
         case "LeadsTo", "Eventually", "Always", "AlwaysEventually", "EventuallyAlways":
             guard let temporal = parseAlgorithmTemporal(call, named: name) else { return nil }
@@ -238,8 +238,7 @@ extension ParserSession {
         guard let metatype = expression.as(MemberAccessExprSyntax.self),
               metatype.declName.baseName.text == "self",
               let type = metatype.base,
-              let terminalName = terminalTypeName(in: type),
-              let renderedName = Self.sourceTypeSpelling(type)
+              let terminalName = terminalTypeName(in: type)
         else { return nil }
         let defaultValue: StateExpr
         switch terminalName {
@@ -249,7 +248,7 @@ extension ParserSession {
         default: defaultValue = .value(.constant("default_\(terminalName)"))
         }
         return .init(
-            renderedName: renderedName,
+            renderedName: terminalName,
             defaultValue: defaultValue
         )
     }
@@ -525,7 +524,7 @@ extension ParserSession {
            let member = call.calledExpression.as(MemberAccessExprSyntax.self),
            member.declName.baseName.text == "literal",
            let base = member.base {
-            return Self.sourceTypeSpelling(base)
+            return terminalTypeName(in: base)
         }
         return initialValueTypeName(from: expression)
     }

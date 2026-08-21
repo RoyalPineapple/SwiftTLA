@@ -99,7 +99,7 @@ struct RefinementChecker {
     }
 }
 
-private extension TLASpec {
+extension TLASpec {
     func specializing(parameters: [String: StateExpr]) -> TLASpec {
         func state(_ expression: StateExpr) -> StateExpr {
             parameters.reduce(expression) { result, binding in
