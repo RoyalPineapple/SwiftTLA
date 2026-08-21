@@ -107,12 +107,19 @@ struct StructuredAlgorithmTests {
         let compilation = try spec.compile()
         let initial = try #require(try CompiledRuntime(compilation: compilation).initialStates().first)
         let cars = try #require(compilation.layout.variableID(named: "cars"))
-        let values = try initial.value(for: cars).rendered(using: compilation.layout).functionValue
+        guard case .function(let values) = initial.value(for: cars).rendered(using: compilation.layout) else {
+            Issue.record("Expected a formal function for cars.")
+            return
+        }
 
         for car in StructuredCarModel.Car.allCases {
-            let record = try #require(Record<StructuredCarModel.CarRecord>(formalValue: values[car.tlaValue]))
+            guard let value = values[car.tlaValue],
+                  let record = Record<StructuredCarModel.CarRecord>(formalValue: value) else {
+                Issue.record("Expected a typed car record.")
+                return
+            }
             #expect(record[StructuredCarModel.CarRecord.floor] == 4)
-            #expect(record[StructuredCarModel.CarRecord.door] == .closed)
+            #expect(record[StructuredCarModel.CarRecord.door] == StructuredCarModel.Door.closed)
         }
     }
 }
