@@ -205,7 +205,7 @@ struct TypedFacadeContractTests {
 
   @Test("bounded elevator source model checks successfully")
   func boundedElevatorSourceModelChecksSuccessfully() throws {
-    let checker = try ModelChecker(spec: MultiCarElevatorModel.spec, maxStates: 30_000)
+    let checker = try ModelChecker(spec: MultiCarElevator.spec, maxStates: 30_000)
     guard case .ok(let stateCount) = try checker.check() else {
       Issue.record("Bounded MultiCarElevator safety model did not complete successfully")
       return
