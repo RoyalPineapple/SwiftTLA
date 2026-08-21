@@ -1,7 +1,7 @@
 import SwiftTLA
 import SwiftTLAMacros
 
-@TLAModel
+@SwiftTLAMacros.TLAModel
 struct ObservableHost {
   static var spec: TLASpec {
     TLASpec("StandaloneObservableSendable") {
@@ -11,7 +11,7 @@ struct ObservableHost {
     }
   }
 
-  @TLAObservable
+  @SwiftTLAMacros.TLAObservable
   final class Observable {}
 }
 

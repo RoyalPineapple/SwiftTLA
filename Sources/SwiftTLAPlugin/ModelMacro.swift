@@ -415,7 +415,7 @@ private func enclosingModelDeclarations(in context: some MacroExpansionContext) 
 private func hasTLAModelAttribute(_ attributes: AttributeListSyntax) -> Bool {
     attributes.contains { element in
         guard let attribute = element.as(AttributeSyntax.self) else { return false }
-        return attribute.attributeName.trimmedDescription == "TLAModel"
+        return attribute.hasTerminalName("TLAModel")
     }
 }
 
@@ -447,9 +447,21 @@ private func hasNestedLiveAdapter(in members: MemberBlockItemListSyntax) -> Bool
         }
         return attributes?.contains { element in
             guard let attribute = element.as(AttributeSyntax.self) else { return false }
-            let name = attribute.attributeName.trimmedDescription
-            return name == "TLAActor" || name == "TLAObservable"
+            return attribute.hasTerminalName("TLAActor")
+                || attribute.hasTerminalName("TLAObservable")
         } == true
+    }
+}
+
+private extension AttributeSyntax {
+    func hasTerminalName(_ expectedName: String) -> Bool {
+        if let identifier = attributeName.as(IdentifierTypeSyntax.self) {
+            return identifier.name.text == expectedName
+        }
+        if let member = attributeName.as(MemberTypeSyntax.self) {
+            return member.name.text == expectedName
+        }
+        return false
     }
 }
 
