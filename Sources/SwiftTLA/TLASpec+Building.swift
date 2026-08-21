@@ -54,37 +54,8 @@ extension TLASpec {
       } else if let a = comp as? ActionDecl {
         actions.append(NamedAction(name: a.name, body: a.body, bindings: a.bindings))
       } else if let algorithm = comp as? Algorithm {
-        // Retain source-level evidence directly from the builder model; do
-        // not lower a second time merely to form a fidelity token.
         algorithmFidelityTokens.append(AlgorithmFidelityToken(model: algorithm.model))
         sourceAlgorithms.append(algorithm)
-        do {
-          let lowered = try algorithm.lower(
-            formalOperatorDefinitions: formalOperatorDefinitions
-          )
-          variables += lowered.variables
-          actions += lowered.actions
-          invariants += lowered.invariants
-          temporalProperties += lowered.temporalProperties
-          fairness += lowered.fairness
-          formalOperatorDefinitions += algorithm.model.formalOperatorDefinitions
-          for definition in algorithm.model.formalOperatorDefinitions {
-            let text = FormalOperatorDecl(definition).tlaText
-            definitions.append(.init(
-              name: definition.name, text: text, dependencies: definition.plusCalDependencies
-            ))
-            authoredPlusCalDeclarations.append(AuthoredPlusCalDeclaration(
-              name: definition.name, text: text,
-              phase: definition.plusCalPhase,
-              dependencies: definition.plusCalDependencies
-            ))
-          }
-          if let loweredConstraint = lowered.constraint {
-            constraint = constraint.map { .and($0, loweredConstraint) } ?? loweredConstraint
-          }
-        } catch {
-          preconditionFailure("Invalid algorithm '\(algorithm.model.name)': \(error)")
-        }
       } else if let i = comp as? InvDecl {
         invariants.append(NamedInvariant(name: i.name, body: i.body))
       } else if let t = comp as? TemporalDecl {
@@ -142,12 +113,6 @@ extension TLASpec {
       }
     }
 
-    // Auto-UNCHANGED: push into OR branches so TLC sees complete assignments
-    let vn = variables.map(\.name)
-    actions = actions.map { a in
-      NamedAction(name: a.name, body: completeAction(a.body, allVars: vn), bindings: a.bindings)
-    }
-
     self.name = name
     self.variables = variables
     self.constants = constants
@@ -175,10 +140,94 @@ extension TLASpec {
     self.symmetricCollections = symmetricCollections
     self.algorithmFidelityTokens = algorithmFidelityTokens
     self.sourceAlgorithms = sourceAlgorithms
+    self.algorithmPhase = sourceAlgorithms.isEmpty ? .lowered : .source
   }
 }
 
 extension TLASpec {
+  func loweredSourceModel() throws -> TLASpec {
+    guard algorithmPhase == .source else { return self }
+    var variables = variables
+    var actions = actions
+    var invariants = invariants
+    var temporalProperties = temporalProperties
+    var fairness = fairness
+    var definitions = definitions
+    var authoredPlusCalDeclarations = authoredPlusCalDeclarations
+    var constraint = constraint
+    var formalOperatorDefinitions = formalOperatorDefinitions
+
+    for algorithm in sourceAlgorithms {
+      let lowered = try algorithm.lower(
+        formalOperatorDefinitions: formalOperatorDefinitions
+      )
+      variables += lowered.variables
+      actions += lowered.actions
+      invariants += lowered.invariants
+      temporalProperties += lowered.temporalProperties
+      fairness += lowered.fairness
+      formalOperatorDefinitions += algorithm.model.formalOperatorDefinitions
+      for definition in algorithm.model.formalOperatorDefinitions {
+        let text = FormalOperatorDecl(definition).tlaText
+        definitions.append(.init(
+          name: definition.name,
+          text: text,
+          dependencies: definition.plusCalDependencies
+        ))
+        authoredPlusCalDeclarations.append(AuthoredPlusCalDeclaration(
+          name: definition.name,
+          text: text,
+          phase: definition.plusCalPhase,
+          dependencies: definition.plusCalDependencies
+        ))
+      }
+      if let loweredConstraint = lowered.constraint {
+        constraint = constraint.map { .and($0, loweredConstraint) } ?? loweredConstraint
+      }
+    }
+
+    let variableNames = variables.map(\.name)
+    actions = actions.map { action in
+      NamedAction(
+        name: action.name,
+        body: completeAction(action.body, allVars: variableNames),
+        bindings: action.bindings
+      )
+    }
+
+    var lowered = TLASpec(
+      name: name,
+      variables: variables,
+      constants: constants,
+      formalParameters: formalParameters,
+      actions: actions,
+      invariants: invariants,
+      temporalProperties: temporalProperties,
+      fairness: fairness,
+      assume: assume,
+      checkDeadlock: checkDeadlock,
+      definitions: definitions,
+      theorems: theorems,
+      extendsModules: extendsModules,
+      constraint: constraint,
+      recursiveDefs: recursiveDefs,
+      recursiveFuncs: recursiveFuncs,
+      formalOperatorDefinitions: formalOperatorDefinitions,
+      imports: imports,
+      importConfigurations: importConfigurations,
+      moduleInstances: moduleInstances,
+      symmetrySets: symmetrySets,
+      symmetricCollections: symmetricCollections,
+      algorithmFidelityTokens: algorithmFidelityTokens,
+      sourceAlgorithms: sourceAlgorithms,
+      authoredPlusCalDeclarations: authoredPlusCalDeclarations
+    )
+    lowered.algorithmPhase = .lowered
+    lowered.runtimeFuncs = runtimeFuncs
+    lowered.runtimeFuncBodies = runtimeFuncBodies
+    return lowered
+  }
+
   func authoredPlusCalModule() throws -> AuthoredPlusCalModule? {
     guard sourceAlgorithms.count == 1, let algorithm = sourceAlgorithms.first else {
       return nil
@@ -336,6 +385,7 @@ public func substituteConstants(_ spec: TLASpec) -> TLASpec {
     algorithmFidelityTokens: spec.algorithmFidelityTokens,
     sourceAlgorithms: spec.sourceAlgorithms
   )
+  resolved.algorithmPhase = spec.algorithmPhase
   resolved.runtimeFuncs = spec.runtimeFuncs
   resolved.runtimeFuncBodies = spec.runtimeFuncBodies
   return resolved

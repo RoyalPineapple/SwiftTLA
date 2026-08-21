@@ -1,6 +1,5 @@
 extension Algorithm {
-    /// Lowers a validated bounded algorithm into the ordinary executable TLA+ model.
-    public func lower(
+    func lower(
         formalOperatorDefinitions: [FormalOperatorDefinition] = []
     ) throws -> TLASpec {
         try requireValid()
@@ -24,6 +23,12 @@ enum AlgorithmLowerer {
     private static let builderProcessIdentifier = "__pcal_self"
     private static let doneLabel = "Done"
     private static let terminatingAction = "Terminating"
+
+    private static func lowered(_ specification: TLASpec) -> TLASpec {
+        var specification = specification
+        specification.algorithmPhase = .lowered
+        return specification
+    }
 
     static func lower(
         _ algorithm: AlgorithmModel,
@@ -261,7 +266,7 @@ enum AlgorithmLowerer {
             actions.append(NamedAction(name: terminatingAction, body: unchanged))
         }
 
-        return TLASpec(
+        return lowered(TLASpec(
             name: algorithm.name,
             variables: variables,
             actions: actions,
@@ -273,7 +278,7 @@ enum AlgorithmLowerer {
             },
             constraint: declaredConstraint,
             formalOperatorDefinitions: resolvedFormalOperators,
-            sourceAlgorithms: [Algorithm(model: algorithm)])
+            sourceAlgorithms: [Algorithm(model: algorithm)]))
     }
 
     private static func constantFunction(domain: [TLAValue], value: StateExpr) -> StateExpr {
@@ -388,7 +393,7 @@ enum AlgorithmLowerer {
             }
         }
         guard let first = steps.first else {
-            return TLASpec(
+            return lowered(TLASpec(
                 name: algorithm.name,
                 variables: sharedVariables + procedureVariables,
                 actions: [],
@@ -401,7 +406,7 @@ enum AlgorithmLowerer {
                 constraint: declaredConstraint,
                 formalOperatorDefinitions: formalOperatorDefinitions,
                 sourceAlgorithms: [Algorithm(model: algorithm)]
-            )
+            ))
         }
         // Match PlusCal's declaration order so TLC emits comparable frame
         // records in its retained DOT graph.
@@ -463,7 +468,7 @@ enum AlgorithmLowerer {
             )
         actions.append(NamedAction(name: terminatingAction, body: terminate))
 
-        return TLASpec(
+        return lowered(TLASpec(
             name: algorithm.name,
             variables: variables,
             actions: actions,
@@ -476,7 +481,7 @@ enum AlgorithmLowerer {
             constraint: declaredConstraint,
             formalOperatorDefinitions: formalOperatorDefinitions,
             sourceAlgorithms: [Algorithm(model: algorithm)]
-        )
+        ))
     }
 
     private static func sequentialTransfer(to label: String) -> ActionExpr {
