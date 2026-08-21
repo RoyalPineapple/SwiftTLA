@@ -997,6 +997,11 @@ public final class ParserSession {
                   let other = decodeTypedFacadeValue(otherSyntax, scope: scope)
             else { return nil }
             return .union(base, other)
+        case "intersection":
+            guard let otherSyntax = call.arguments.first?.expression,
+                  let other = decodeTypedFacadeValue(otherSyntax, scope: scope)
+            else { return nil }
+            return .intersection(base, other)
         case "concatenating":
             guard let otherSyntax = call.arguments.first?.expression,
                   let other = decodeTypedFacadeValue(otherSyntax, scope: scope)
