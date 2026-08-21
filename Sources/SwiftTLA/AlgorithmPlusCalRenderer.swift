@@ -61,17 +61,11 @@ internal struct AlgorithmPlusCalRenderer {
         self.module = module
     }
 
-    /// Source-level properties are kept outside the PlusCal comment, where
-    /// the official translator leaves TLA+ operators intact.  They come from
-    /// the retained Algorithm model rather than the lowered specification.
     func sourcePropertyDefinitions() throws -> [(name: String, definition: String)] {
         let model = module.algorithm
         return try properties(in: model.components, path: "components")
     }
 
-    /// PlusCal's translator defines this temporal operator for a single
-    /// process family.  Emitting the equivalent authored spelling after the
-    /// comment would redeclare the translator-owned name.
     func translatorOwnedPropertyNames() -> Set<String> {
         let model = module.algorithm
         return Set(temporals(in: model.components).compactMap { temporal in
