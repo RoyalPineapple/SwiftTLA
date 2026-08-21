@@ -4,29 +4,27 @@
 
 **SwiftTLA generates typed Swift state machines and exhaustively validates all reachable behavior against your specification.**
 
-Write the rules of a system once: its data, actions, algorithms, invariants,
-and temporal properties. SwiftTLA turns those rules into production Swift code
-that your app can run. The same specification can explore every reachable
-outcome in tests and produce TLA+ and PlusCal for independent TLC validation.
+Define a system's state, actions, algorithms, invariants, and temporal
+properties in Swift. SwiftTLA compiles that one source model into a machine
+your app can run, a model checker for your tests, and TLA+/PlusCal artifacts
+for TLC.
 
 **One specification. Production behavior. Formal evidence.**
 
-## What you get
+```text
+Swift source model
+        │
+        ▼
+Compiled specification
+ ├── Generated Swift machine
+ ├── Model checker
+ └── TLA+ and PlusCal bundles
+```
 
-SwiftTLA gives one specification three jobs:
+## Write the system rules
 
-- A typed Swift state machine for your application.
-- Exhaustive exploration of reachable behavior in tests.
-- TLA+ and PlusCal artifacts for TLC validation.
-
-The generated machine gives your application typed state and action cases.
-The model checker explores the same compiled specification. SwiftTLA compares
-its graph with TLC's graph exactly.
-
-## Define a model. Use it in your app.
-
-Define the model with `#spec` and `Algorithm`. Then use its generated machine
-as ordinary Swift code.
+Use `#spec` and `Algorithm` to define the behavior that matters. The DSL
+expresses data, transitions, procedures, invariants, and temporal properties.
 
 ```swift
 import Foundation
@@ -67,51 +65,51 @@ public struct HourClock {
         }
     }
 }
+```
 
+## Run the generated machine
+
+The generated API gives your application typed state and action cases.
+
+```swift
 var clock = try HourClock.makeMachine()
 let result = try clock.apply(.tick)
 print(result.after.hour)
 ```
 
-## Validate the same model
+## Validate the same specification
 
-In tests, SwiftTLA explores the reachable graph from the model's initial state.
-It validates the invariants and properties in that specification.
+The model checker explores the complete reachable graph from the model's
+initial state. It validates the invariants and properties that you define.
 
-Core Conformance runs the same model through SwiftTLA and TLC. It compares the
-complete canonical state graph and labeled transition graph.
-The [Core Graph Conformance guide](Documentation/CoreGraphConformance.md)
-describes the retained evidence and comparison results.
-
-The separate ValidationEvidence workflow translates the canonical PlusCal
-corpus with the official PlusCal translator and runs TLC. It supplies
-independent evidence for the upstream models in that corpus.
-
-## Use live state when you need it
-
-Use generated `State` and action cases for value-based application state. For
-shared running state, create one `TLALiveMachineOwner` and use its generated
-live, actor, or observable surface. See [Live Machines](Documentation/LiveMachines.md)
-and [Generated Machines](Documentation/GeneratedMachines.md).
-
-## See it running
-
-The macOS demonstration app is in
-[`Examples/SwiftTLADemoApp`](Examples/SwiftTLADemoApp). It uses the generated
-machines from [`Examples/SwiftTLADemos`](Examples/SwiftTLADemos).
-
-```bash
-cd Examples/SwiftTLADemoApp
-swift run SwiftTLADemoApp
+```swift
+let compilation = try HourClock.spec.compile()
+let result = try ModelChecker(compilation: compilation).check()
 ```
+
+The same compilation renders the TLA+ and PlusCal bundle. Core Conformance
+compares SwiftTLA's canonical graph with TLC's graph exactly. The separate
+ValidationEvidence workflow translates the canonical PlusCal corpus with the
+official translator and retains the independent TLC evidence.
+
+## Use it where state order matters
+
+SwiftTLA is for systems where correct operations can still fail in the wrong
+order: concurrent tasks, retries, cancellation, sync, background work,
+permissions, protocols, and distributed systems.
+
+Use generated `State` and action cases for value-based state. For shared
+running state, use the generated live, actor, or observable surface. See
+[Generated Machines](Documentation/GeneratedMachines.md) and
+[Live Machines](Documentation/LiveMachines.md).
 
 ## Learn more
 
 - [Supported language fragment](Documentation/Design.md)
-- [Generated machines](Documentation/GeneratedMachines.md)
 - [Core graph conformance](Documentation/CoreGraphConformance.md)
 - [Temporal and symmetry conformance](Documentation/TemporalSymmetryConformance.md)
 - [SwiftTLA DocC](Sources/SwiftTLA/SwiftTLA.docc/SwiftTLA.md)
+- [Demonstrations app](Examples/SwiftTLADemoApp)
 
 ## Requirements
 
