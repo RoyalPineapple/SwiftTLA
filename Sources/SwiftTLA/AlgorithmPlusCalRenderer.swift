@@ -342,11 +342,8 @@ internal struct AlgorithmPlusCalRenderer {
     }
 
     func expression(_ value: StateExpr, path: String) throws -> String {
-        let sourceValue = localFamilyRoots.reduce(value) { expression, root in
-            renameVar("__pcal_local_family:\(root)", to: root, in: expression)
-        }
         guard let renderedExpression = StateExpr.plusCalExpression(
-            from: renameVar("__pcal_self", to: "self", in: sourceValue),
+            from: value,
             using: { $0 }
         ) else {
             throw unsupported(
@@ -356,15 +353,6 @@ internal struct AlgorithmPlusCalRenderer {
             )
         }
         return renderedExpression.description
-    }
-
-    private var localFamilyRoots: [String] {
-        module.algorithm.processes.flatMap { process in
-            process.components.compactMap { component in
-                guard case .local(let declaration) = component else { return nil }
-                return declaration.root
-            }
-        }
     }
 
     private func properties(

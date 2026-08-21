@@ -95,6 +95,25 @@ struct AlgorithmPlusCalRendererTests {
         #expect(rendered.contains("} *)"))
     }
 
+    @Test("compilation prepares process identifiers for PlusCal")
+    func preparesProcessIdentifiers() throws {
+        let algorithm = Algorithm("ProcessIdentifier") {
+            let flags = SharedVar("flags", initial: Function<Node, Bool>.literal((.left, false), (.right, false)))
+            flags
+            Each(Node.all) { node in
+                Do(ProcessStep.done) {
+                    Assign(flags, to: flags.updating(node, to: true))
+                    Stop()
+                }
+            }
+        }
+
+        let rendered = try renderedSourceAlgorithmPlusCal(algorithm)
+
+        #expect(rendered.contains("flags := [flags EXCEPT ![self] = TRUE];"))
+        #expect(!rendered.contains("__pcal_self"))
+    }
+
     @Test("imports Integers when rendering a negative formal value")
     func rendersNegativeFormalValue() throws {
         let algorithm = Algorithm("Negative") {

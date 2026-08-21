@@ -104,6 +104,120 @@ internal struct AlgorithmModel: Sendable {
         collect(components, into: &result)
         return result
     }
+
+    func plusCalProjection() -> AlgorithmModel {
+        let localRoots = Set(processes.flatMap { process in
+            process.components.compactMap { component in
+                guard case .local(let declaration) = component else { return nil }
+                return declaration.root
+            }
+        })
+
+        func expression(_ value: StateExpr) -> StateExpr {
+            let family = localRoots.reduce(value) { result, root in
+                StateExpr.substituteVariable(
+                    "\(algorithmLocalFamilyPrefix)\(root)",
+                    with: .variable(root),
+                    in: result
+                )
+            }
+            return StateExpr.substituteVariable("__pcal_self", with: .variable("self"), in: family)
+        }
+
+        func temporal(_ value: TemporalExpr) -> TemporalExpr {
+            switch value {
+            case .always(let predicate): return .always(expression(predicate))
+            case .eventually(let predicate): return .eventually(expression(predicate))
+            case .alwaysEventually(let predicate): return .alwaysEventually(expression(predicate))
+            case .eventuallyAlways(let predicate): return .eventuallyAlways(expression(predicate))
+            case .leadsTo(let source, let destination): return .leadsTo(expression(source), expression(destination))
+            }
+        }
+
+        func state(_ value: AlgorithmStateModel) -> AlgorithmStateModel {
+            .init(
+                root: value.root,
+                initial: expression(value.initial),
+                initialSet: value.initialSet.map(expression),
+                swiftTypeName: value.swiftTypeName,
+                isTuple: value.isTuple
+            )
+        }
+
+        func statements(_ values: [AlgorithmStatementModel]) -> [AlgorithmStatementModel] {
+            values.map {
+                $0.substitutingVariable(
+                    "__pcal_self",
+                    with: .variable("self"),
+                    assignmentTargets: .preserve
+                )
+            }.map { statement in
+                localRoots.reduce(statement) { result, root in
+                    result.substitutingVariable(
+                        "\(algorithmLocalFamilyPrefix)\(root)",
+                        with: .variable(root),
+                        assignmentTargets: .preserve
+                    )
+                }
+            }
+        }
+
+        func step(_ value: AlgorithmStepModel) -> AlgorithmStepModel {
+            .init(
+                label: value.label,
+                statements: statements(value.statements),
+                loopCondition: value.loopCondition.map(expression)
+            )
+        }
+
+        func component(_ value: AlgorithmComponentModel) -> AlgorithmComponentModel {
+            switch value {
+            case .shared(let declaration): return .shared(state(declaration))
+            case .process(let process):
+                return .process(
+                    .init(
+                        typeName: process.typeName,
+                        domain: process.domain,
+                        fairness: process.fairness,
+                        components: process.components.map(component)
+                    )
+                )
+            case .procedure(let procedure):
+                return .procedure(
+                    .init(
+                        name: procedure.name,
+                        parameters: procedure.parameters.map {
+                            .init(root: $0.root, initial: expression($0.initial), swiftTypeName: $0.swiftTypeName)
+                        },
+                        locals: procedure.locals.map(state),
+                        steps: procedure.steps.map(step)
+                    )
+                )
+            case .invariant(let invariant):
+                return .invariant(.init(name: invariant.name, body: expression(invariant.body)))
+            case .temporal(let declaration):
+                return .temporal(.init(name: declaration.name, expr: temporal(declaration.expr)))
+            case .fairness:
+                return value
+            case .formalOperator(let definition):
+                return .formalOperator(
+                    .init(
+                        name: definition.name,
+                        parameters: definition.parameters,
+                        body: expression(definition.body),
+                        plusCalPhase: definition.plusCalPhase,
+                        plusCalDependencies: definition.plusCalDependencies
+                    )
+                )
+            case .stateConstraint(let constraint): return .stateConstraint(expression(constraint))
+            case .local(let declaration): return .local(state(declaration))
+            case .step(let declaration): return .step(step(declaration))
+            case .propertyBoundary: return .propertyBoundary
+            }
+        }
+
+        return .init(name: name, components: components.map(component))
+    }
 }
 
 /// Opaque pre-lowering evidence for an authored `Algorithm`.

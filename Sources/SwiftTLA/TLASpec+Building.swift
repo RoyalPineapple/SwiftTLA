@@ -180,6 +180,7 @@ extension TLASpec {
     guard sourceAlgorithms.count == 1, let algorithm = sourceAlgorithms.first else {
       return nil
     }
+    let plusCalAlgorithm = algorithm.model.plusCalProjection()
     let declarationSections = try authoredPlusCalDeclarationSections(
       semantics: semantics,
       formalRenderer: formalRenderer
@@ -192,7 +193,7 @@ extension TLASpec {
       instances: moduleInstances,
       instanceArguments: Dictionary(uniqueKeysWithValues: moduleInstances.map { ($0.name, instanceArguments(for: $0)) }),
       definitionsAfterInstances: [],
-      algorithm: algorithm.model,
+      algorithm: plusCalAlgorithm,
       defineDeclarations: declarationSections.define,
       postTranslationDeclarations: [],
       refinements: renderedRefinements
@@ -239,7 +240,7 @@ extension TLASpec {
       instances: moduleInstances,
       instanceArguments: Dictionary(uniqueKeysWithValues: moduleInstances.map { ($0.name, instanceArguments(for: $0)) }),
       definitionsAfterInstances: [],
-      algorithm: algorithm.model,
+      algorithm: plusCalAlgorithm,
       defineDeclarations: declarationSections.define,
       postTranslationDeclarations: (sourceProperties + topLevelProperties).map(\.definition)
         + authoredPlusCalSymmetry,
