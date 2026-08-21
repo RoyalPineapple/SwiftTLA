@@ -299,7 +299,8 @@ extension ParserSession {
         var expressions: [StateExpr] = []
         for (index, statement) in closure.statements.enumerated() {
             if case .decl(let declaration) = statement.item,
-               let binding = parseFormalLet(declaration, scope: bodyScope) {
+               let variable = declaration.as(VariableDeclSyntax.self),
+               let binding = parseFormalLet(variable, scope: bodyScope) {
                 bodyScope = typedFacadeScope(bodyScope, binding: binding.name, to: binding.value)
                 continue
             }
