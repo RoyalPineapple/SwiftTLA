@@ -595,6 +595,9 @@ public final class ParserSession {
         _ expression: ExprSyntax,
         scope: TypedFacadeScope
     ) -> StateExpr? {
+        if let quantifier = decodeAlgorithmDomainQuantifier(expression, scope: scope) {
+            return quantifier
+        }
         if let controlLocation = decodeControlLocation(expression, scope: scope) {
             return controlLocation
         }

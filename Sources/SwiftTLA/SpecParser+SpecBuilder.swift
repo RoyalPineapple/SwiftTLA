@@ -940,6 +940,12 @@ extension ParserSession {
                 return
             }
             var parsed: [RefinementMapping] = []
+            let scope = typedFacadeScope(
+                .empty,
+                bindings: result.sourceValues.keys.sorted().compactMap { name in
+                    result.sourceValues[name].map { (name, $0) }
+                }
+            )
             for element in array.elements {
                 guard let mapping = element.expression.as(FunctionCallExprSyntax.self),
                       (mapping.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "RefinementMapping"
@@ -947,7 +953,7 @@ extension ParserSession {
                       let target = mapping.arguments.first?.expression,
                       let mappedName = refinementTargetName(target),
                       let source = mapping.arguments.first(where: { $0.label?.text == "from" })?.expression,
-                      let expression = decodeTypedFacadeValue(source, scope: .empty) ?? decodeStateExpr(source)
+                      let expression = decodeTypedFacadeValue(source, scope: scope) ?? decodeStateExpr(source)
                 else {
                     result.diagnostics.append(.init(
                         message: "Each refinement mapping must name an abstract declaration and provide a source expression.",
