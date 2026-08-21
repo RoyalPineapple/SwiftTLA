@@ -65,8 +65,8 @@ struct SimultaneousUpdateSemanticsTests {
         #expect(try value("mirror", in: initial) == .int(0))
     }
 
-    @Test("a failed later right-hand side does not partially commit a canonical machine")
-    func failedRightHandSideLeavesCanonicalSnapshotUnchanged() throws {
+    @Test("an undefined right-hand side blocks compilation")
+    func undefinedRightHandSideBlocksCompilation() {
         let left = Var<Int>("left")
         let right = Var<Int>("right")
         let spec = TLASpec("RejectedUpdate") {
@@ -77,20 +77,14 @@ struct SimultaneousUpdateSemanticsTests {
                 ActionExpr.assign(right.name, .variable("missing"))
             }
         }
-        let compilation = try spec.compile()
-        let action = try #require(compilation.layout.actionID(named: "reject"))
-        let initial = try TLAStateProjection(validating: [
-            .init(token: try #require(TLAStateProjection.Token(validating: "left")), value: .int(1)),
-            .init(token: try #require(TLAStateProjection.Token(validating: "right")), value: .int(2))
-        ])
         do {
-            _ = try compilation.successors(for: action, arguments: [], from: initial)
-            Issue.record("Expected the undefined right-hand side to reject the transition")
-        } catch let error as EvalError {
-            guard case .undefinedVariable("missing") = error else {
-                Issue.record("Expected the missing right-hand side, found \(error)")
-                return
-            }
+            _ = try spec.compile()
+            Issue.record("Expected a binding diagnostic")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.code == .unknownReference)
+            #expect(diagnostic.stage == .binding)
+        } catch {
+            Issue.record("Expected CompilationDiagnostic, got \(error)")
         }
     }
 }

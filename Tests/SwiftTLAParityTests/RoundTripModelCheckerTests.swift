@@ -388,27 +388,22 @@ private func value(
     #expect(try compilation.successors(for: action, arguments: [.int(3)], from: initial).isEmpty)
   }
 
-  @Test("compiled execution propagates invalid action evaluation")
-  func compiledExecutionPropagatesInvalidActionEvaluation() throws {
+  @Test("free action reference blocks compilation")
+  func freeActionReferenceBlocksCompilation() {
     let counter = Var<Int>("counter")
     let spec = TLASpec("InvalidAvailability") {
       Variable(counter, 0)
       Action("advance") { counter.becomes(counter + 1).when(StateExpr.variable("missing")) }
     }
-    let compilation = try spec.compile()
-    let state = try #require(try compilation.initialStateProjections().first)
-
     do {
-      _ = try successors(compilation, from: state)
-      Issue.record("Expected availability evaluation failure")
-    } catch let error as EvalError {
-      guard case .undefinedVariable("missing") = error else {
-        Issue.record("Expected missing-variable evaluator error, got \(error)")
-        return
-      }
+      _ = try spec.compile()
+      Issue.record("Expected a binding diagnostic")
+    } catch let diagnostic as CompilationDiagnostic {
+      #expect(diagnostic.code == .unknownReference)
+      #expect(diagnostic.stage == .binding)
+    } catch {
+      Issue.record("Expected CompilationDiagnostic, got \(error)")
     }
-
-    #expect(compilation.layout.actionID(named: "unknown") == nil)
   }
 
   @Test("compiled execution applies a declared action")
