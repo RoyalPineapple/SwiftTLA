@@ -100,9 +100,10 @@ struct SymmetricCollectionCanonicalizationTests {
     case .set(let values): return "set:[\(values.map(encode).sorted().joined(separator: ","))]"
     case .tuple(let values): return "tuple:[\(values.map(encode).joined(separator: ","))]"
     case .record(let fields):
-      return "record:[\(fields.sorted { $0.key < $1.key }.map {
-        "\(String(reflecting: $0.key)):\(encode($0.value))"
-      }.joined(separator: ","))]"
+      let entries = fields.sorted { $0.key < $1.key }.map { field in
+        "\(String(reflecting: field.key)):\(encode(field.value))"
+      }.joined(separator: ",")
+      return "record:[\(entries)]"
     case .function(let entries):
       return "function:[\(entries.map { "\(encode($0.key)):\(encode($0.value))" }.sorted().joined(separator: ","))]"
     }
