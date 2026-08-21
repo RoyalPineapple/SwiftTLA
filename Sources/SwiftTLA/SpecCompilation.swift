@@ -473,14 +473,13 @@ public extension SpecParser.ParsedSpecComponents {
             }
             return module
         }
-        let variableNames = variables.map(\.name)
         let spec = TLASpec(
             name: specificationName,
             variables: variables.map(\.formal),
             constants: constants,
             formalParameters: formalParameters,
             actions: actions.map {
-                NamedAction(name: $0.name, body: completeAction($0.body, allVars: variableNames), bindings: $0.bindings)
+                NamedAction(name: $0.name, body: $0.body, bindings: $0.bindings)
             },
             invariants: invariants.map { NamedInvariant(name: $0.name, body: $0.body) } + additionalInvariants,
             temporalProperties: temporal.map { NamedTemporal(name: $0.name, expr: $0.expr) },
@@ -504,6 +503,10 @@ public extension TLASpec {
     /// Validates and identifies this specification before it reaches a formal
     /// consumer. Structural module linking is added to this gate by the linker.
     func compile() throws -> CompiledSpecification {
+        try loweredSourceModel().compileLowered()
+    }
+
+    private func compileLowered() throws -> CompiledSpecification {
         guard !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             throw CompilationDiagnostic(
                 code: .emptySpecificationName,

@@ -159,6 +159,10 @@ public struct DirectModuleDefinition: Sendable, Equatable {
   }
 }
 public struct TLASpec: Sendable {
+  enum AlgorithmPhase: Sendable, Equatable {
+    case source
+    case lowered
+  }
   public let name: String
   public let variables: [NamedVar]
   public let constants: [ConstantDecl]
@@ -198,6 +202,7 @@ public struct TLASpec: Sendable {
   /// Keeping these declarations lets a tooling boundary render the exact
   /// authored Algorithm as PlusCal without reconstructing it from TLA+ AST.
   let sourceAlgorithms: [Algorithm]
+  var algorithmPhase: AlgorithmPhase
   let authoredPlusCalDeclarations: [AuthoredPlusCalDeclaration]
   public init(
     name: String, variables: [NamedVar], constants: [ConstantDecl] = [],
@@ -239,6 +244,7 @@ public struct TLASpec: Sendable {
     self.symmetricCollections = symmetricCollections
     self.algorithmFidelityTokens = algorithmFidelityTokens
     self.sourceAlgorithms = sourceAlgorithms
+    self.algorithmPhase = sourceAlgorithms.isEmpty ? .lowered : .source
     self.authoredPlusCalDeclarations = authoredPlusCalDeclarations
   }
 

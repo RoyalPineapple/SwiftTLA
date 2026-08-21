@@ -41,6 +41,21 @@ struct AlgorithmBuilderTests {
         return try state.value(for: variable).rendered(using: compilation.layout)
     }
 
+    @Test("compiler lowers an authored algorithm")
+    func compilerLowersAuthoredAlgorithm() throws {
+        let algorithm = Algorithm("CompileAtGate") {
+            let count = SharedVar("count", initial: 0)
+            count
+            Do("advance") { Assign(count, to: count + 1) }
+        }
+        let source = TLASpec("CompileAtGate") { algorithm }
+
+        #expect(source.variables.isEmpty)
+        let compilation = try source.compile()
+        #expect(compilation.spec.variables.map(\.name) == ["pc", "count"])
+        #expect(compilation.spec.actions.map(\.name).contains("advance"))
+    }
+
     @Test("statement macros expand into their surrounding atomic block")
     func expandsTypedStatementMacro() throws {
         let algorithm = Algorithm("MacroLock") {
@@ -123,8 +138,9 @@ struct AlgorithmBuilderTests {
         }
 
         #expect(algorithm.validate().map(\.code).contains(.statementMacroAssignmentTarget))
+        let spec = TLASpec("RejectedMacroTarget") { algorithm }
         #expect(throws: AlgorithmValidationError.self) {
-            try algorithm.lower()
+            try spec.compile()
         }
     }
 
