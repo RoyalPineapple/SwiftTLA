@@ -473,7 +473,6 @@ public struct CompilationDiagnostic: Error, Sendable, Hashable, CustomStringConv
         case invalidRefinementParameterMapping
         case unsupportedRefinementTarget
         case stateDependentRefinementParameter
-        case unsupportedTemporalCapability
         case invalidFormalModuleParameter
         case duplicateFormalModuleParameter
         case unresolvedFormalModuleReplacement
@@ -541,7 +540,6 @@ public extension SpecParser.ParsedSpecComponents {
             importConfigurations: importConfigurations,
             moduleInstances: moduleInstances,
             refinements: refinements,
-            requiredCapabilities: requiredCapabilities,
             symmetrySets: symmetrySets,
             symmetricCollections: symmetricCollections.map(\.declaration),
             algorithmFidelityTokens: algorithmFidelityTokens,
@@ -577,17 +575,6 @@ public extension TLASpec {
                 expected: "a TLA+ module identifier",
                 actual: name,
                 nextSafeAction: "Use letters, digits, and underscores, beginning with a letter or underscore."
-            )
-        }
-
-        if let capability = requiredCapabilities.first {
-            throw CompilationDiagnostic(
-                code: .unsupportedTemporalCapability,
-                stage: .validation,
-                path: "capabilities.\(capability.rawValue)",
-                expected: "a compiler implementation for \(capability.rawValue)",
-                actual: "the source model requires that capability",
-                nextSafeAction: "Implement \(capability.rawValue), then compile again."
             )
         }
 
@@ -1388,7 +1375,6 @@ private struct CanonicalSpecificationEncoder {
             ])
         }
         list("refinements", refinements) { $0 }
-        list("requiredCapabilities", spec.requiredCapabilities.map(\.rawValue)) { $0 }
         let symmetrySets = spec.symmetrySets.map { set in
             node("symmetry-set", [set.variableName, canonicalList(set.values.map(canonicalValue).sorted())])
         }

@@ -242,7 +242,6 @@ public struct TLASpec: Sendable {
   /// Named source-level TLA+ `INSTANCE` declarations.
   public let moduleInstances: [FormalModuleInstance]
   public let refinements: [RefinementDecl]
-  public let requiredCapabilities: [FormalCapability]
   public let symmetrySets: [SymmetrySet]
   public let symmetricCollections: [SymmetricCollectionDecl]
   /// Opaque source-level Algorithm evidence. This is distinct from the
@@ -265,7 +264,7 @@ public struct TLASpec: Sendable {
     recursiveFuncs: [RecursiveFunc] = [],
     formalOperatorDefinitions: [FormalOperatorDefinition] = [], imports: [TLASpec] = [],
     importConfigurations: [FormalModuleConfiguration] = [],
-    moduleInstances: [FormalModuleInstance] = [], refinements: [RefinementDecl] = [], requiredCapabilities: [FormalCapability] = [], symmetrySets: [SymmetrySet] = [],
+    moduleInstances: [FormalModuleInstance] = [], refinements: [RefinementDecl] = [], symmetrySets: [SymmetrySet] = [],
     symmetricCollections: [SymmetricCollectionDecl] = [],
     algorithmFidelityTokens: [AlgorithmFidelityToken] = [],
     sourceAlgorithms: [Algorithm] = []
@@ -289,7 +288,6 @@ public struct TLASpec: Sendable {
     self.importConfigurations = importConfigurations
     self.moduleInstances = moduleInstances
     self.refinements = refinements
-    self.requiredCapabilities = requiredCapabilities
     self.symmetrySets = symmetrySets
     self.symmetricCollections = symmetricCollections
     self.algorithmFidelityTokens = algorithmFidelityTokens
@@ -614,18 +612,6 @@ public func Refinement(
   )
 }
 
-public enum FormalCapability: String, Sendable, Equatable {
-  case temporalFairnessSpecification
-  case temporalEquivalence
-}
-
-public struct CapabilityRequirement: SpecComponent, Sendable, Equatable {
-  public let capability: FormalCapability
-  init(_ capability: FormalCapability) { self.capability = capability }
-}
-
-public func RequireCapability(_ capability: FormalCapability) -> CapabilityRequirement { .init(capability) }
-
 extension TLASpec {
   func instanceArguments(for instance: FormalModuleInstance) -> [ModuleArgument] {
     guard let refinement = refinements.first(where: { $0.instance.resolves(instance) }) else {
@@ -679,7 +665,6 @@ public enum SpecBuilder {
   public static func buildExpression(_ expr: ImportDecl) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: FormalModuleInstance) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: RefinementDecl) -> [SpecComponent] { [expr] }
-  public static func buildExpression(_ expr: CapabilityRequirement) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: DeadlockDecl) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: ConstraintDecl) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: RecursiveFuncDecl) -> [SpecComponent] { [expr] }

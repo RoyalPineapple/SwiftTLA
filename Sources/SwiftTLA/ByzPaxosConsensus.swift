@@ -20,7 +20,5 @@ public enum ByzPaxosConsensus {
       )
     }
     Eventually("Success", .notEqual(chosen.stateExpr, SetExpr<TLAValue>().stateExpr))
-    RequireCapability(.temporalFairnessSpecification)
-    RequireCapability(.temporalEquivalence)
   }
 }

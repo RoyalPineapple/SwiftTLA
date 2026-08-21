@@ -48,7 +48,6 @@ extension ParserSession {
         public var importConfigurations: [FormalModuleConfiguration] = []
         public var moduleInstances: [FormalModuleInstance] = []
         public var refinements: [RefinementDecl] = []
-        public var requiredCapabilities: [FormalCapability] = []
         public var extendsModules: [StandardModule] = []
         public var sourceAlgorithms: [Algorithm] = []
         public var formalParameters: [FormalModuleParameter] = []
@@ -870,8 +869,6 @@ extension ParserSession {
             parseFormalModuleInstance(call, into: &result)
         case "Refinement":
             parseRefinement(call, into: &result)
-        case "RequireCapability":
-            parseCapabilityRequirement(call, into: &result)
         case "Symmetry":
             parseSymmetry(call, into: &result)
         default:
@@ -986,21 +983,6 @@ extension ParserSession {
             return member.declName.baseName.text
         }
         return nil
-    }
-
-    private func parseCapabilityRequirement(
-        _ call: FunctionCallExprSyntax,
-        into result: inout ParsedSpecComponents
-    ) {
-        guard let name = call.arguments.first?.expression.as(MemberAccessExprSyntax.self)?.declName.baseName.text,
-              let capability = FormalCapability(rawValue: name) else {
-            result.diagnostics.append(.init(
-                message: "RequireCapability requires a declared FormalCapability case.",
-                source: call
-            ))
-            return
-        }
-        result.requiredCapabilities.append(capability)
     }
 
     private func parseSymmetryValues(_ expression: ExprSyntax) -> [TLAValue]? {

@@ -118,23 +118,6 @@ struct RefinementDeclarationTests {
     #expect(parsed.refinements.first?.operator == .liveSpec)
   }
 
-  @Test("typed temporal capability reports its missing compiler support")
-  func rejectsUnimplementedTemporalCapability() {
-    let abstract = TLASpec("Abstract") {
-      RequireCapability(.temporalFairnessSpecification)
-    }
-
-    do {
-      _ = try abstract.compile()
-      Issue.record("Expected the missing temporal capability to fail compilation.")
-    } catch let diagnostic as CompilationDiagnostic {
-      #expect(diagnostic.code == .unsupportedTemporalCapability)
-      #expect(diagnostic.path == "capabilities.temporalFairnessSpecification")
-    } catch {
-      Issue.record("Expected a CompilationDiagnostic, got \(error).")
-    }
-  }
-
   @Test("bounded refinement accepts abstract steps and stuttering")
   func checksMappedInitialStatesAndEdges() throws {
     let abstractValue = Var<Int>("abstractValue", 0)

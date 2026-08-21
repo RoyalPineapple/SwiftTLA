@@ -23,7 +23,6 @@ extension TLASpec {
     let importConfigurations = imports.compactMap(\.configuration)
     let moduleInstances = components.compactMap { $0 as? FormalModuleInstance }
     let refinements = components.compactMap { $0 as? RefinementDecl }
-    let requiredCapabilities = components.compactMap { ($0 as? CapabilityRequirement)?.capability }
     var symmetrySets: [SymmetrySet] = []
     var symmetricCollections: [SymmetricCollectionDecl] = []
     var algorithmFidelityTokens: [AlgorithmFidelityToken] = []
@@ -99,7 +98,6 @@ extension TLASpec {
     self.importConfigurations = importConfigurations
     self.moduleInstances = moduleInstances
     self.refinements = refinements
-    self.requiredCapabilities = requiredCapabilities
     self.symmetrySets = symmetrySets
     self.symmetricCollections = symmetricCollections
     self.algorithmFidelityTokens = algorithmFidelityTokens
@@ -165,7 +163,6 @@ extension TLASpec {
       importConfigurations: importConfigurations,
       moduleInstances: moduleInstances,
       refinements: refinements,
-      requiredCapabilities: requiredCapabilities,
       symmetrySets: symmetrySets,
       symmetricCollections: symmetricCollections,
       algorithmFidelityTokens: algorithmFidelityTokens,

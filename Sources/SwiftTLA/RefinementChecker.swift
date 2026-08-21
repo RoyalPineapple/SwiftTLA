@@ -120,7 +120,7 @@ extension TLASpec {
             theorems: theorems, extendsModules: extendsModules, constraint: constraint.map(state),
             recursiveFuncs: recursiveFuncs.map { .init(name: $0.name, params: $0.params, body: state($0.body)) },
             formalOperatorDefinitions: formalOperatorDefinitions.map { .init(name: $0.name, parameters: $0.parameters, body: state($0.body), plusCalPhase: $0.plusCalPhase, plusCalDependencies: $0.plusCalDependencies) },
-            imports: imports, importConfigurations: importConfigurations, moduleInstances: moduleInstances, refinements: [], requiredCapabilities: requiredCapabilities,
+            imports: imports, importConfigurations: importConfigurations, moduleInstances: moduleInstances, refinements: [],
             symmetrySets: symmetrySets, symmetricCollections: symmetricCollections, algorithmFidelityTokens: algorithmFidelityTokens,
             sourceAlgorithms: sourceAlgorithms
         )
