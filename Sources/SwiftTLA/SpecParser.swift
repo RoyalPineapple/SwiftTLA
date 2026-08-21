@@ -870,7 +870,8 @@ public final class ParserSession {
         }
         if let member = expression.as(MemberAccessExprSyntax.self),
            let baseSyntax = member.base,
-           let base = decodeTypedFacadeValue(baseSyntax, scope: scope) {
+           let base = decodeTypedFacadeValue(baseSyntax, scope: scope)
+                ?? decodeStateExpr(baseSyntax) {
             switch member.declName.baseName.text {
             case "raw", "stateExpr", "expr": return base
             case "cardinality": return .cardinality(base)
