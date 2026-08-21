@@ -745,7 +745,7 @@ public func Variable(_ name: String, _ initial: some TLAValueConvertible) -> Var
   if let issue = initial.sourceIssue {
     return VarDecl(name, initExpr: .sourceIssue(issue))
   }
-  VarDecl(name, initial.tlaValue)
+    return VarDecl(name, initial.tlaValue)
 }
 @discardableResult
 public func Variable(_ name: String, in values: some Sequence<some TLAValueConvertible>) -> VarDecl {
@@ -758,14 +758,14 @@ public func Variable<T>(_ ref: Var<T>) -> VarDecl {
   if let issue = ref.sourceIssue {
     return VarDecl(ref.name, initExpr: .sourceIssue(issue))
   }
-  VarDecl(ref.name, ref.initial ?? .int(0))
+    return VarDecl(ref.name, ref.initial ?? .int(0))
 }
 @discardableResult
 public func Variable<T>(_ ref: Var<T>, _ initial: some TLAValueConvertible) -> VarDecl {
   if let issue = initial.sourceIssue {
     return VarDecl(ref.name, initExpr: .sourceIssue(issue))
   }
-  VarDecl(ref.name, initial.tlaValue)
+    return VarDecl(ref.name, initial.tlaValue)
 }
 @discardableResult
 public func Variable<T>(_ ref: Var<T>, in values: some Sequence<some TLAValueConvertible>)
