@@ -417,8 +417,10 @@ extension ParserSession {
                 isTuple: isTupleInitialValue(initialSyntax)
             )
         } else if expectedKind == "LocalVar",
-                  initializer.arguments.isEmpty,
-                  let generic = initializer.calledExpression.as(GenericSpecializationExprSyntax.self),
+                  let initialSyntax = initializer.arguments.first(where: { $0.label?.text == "initial" })?.expression,
+                  let emptySet = initialSyntax.as(FunctionCallExprSyntax.self),
+                  emptySet.arguments.isEmpty,
+                  let generic = emptySet.calledExpression.as(GenericSpecializationExprSyntax.self),
                   terminalTypeName(in: generic.expression) == "SetExpr",
                   let element = generic.genericArgumentClause.arguments.first?.argument,
                   let typeName = Self.sourceTypeSpelling(element) {
