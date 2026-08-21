@@ -416,6 +416,17 @@ extension ParserSession {
                 swiftTypeName: algorithmInitialTypeName(initialSyntax),
                 isTuple: isTupleInitialValue(initialSyntax)
             )
+        } else if expectedKind == "LocalVar",
+                  initializer.arguments.isEmpty,
+                  let generic = initializer.calledExpression.as(GenericSpecializationExprSyntax.self),
+                  terminalTypeName(in: generic.expression) == "SetExpr",
+                  let element = generic.genericArgumentClause.arguments.first?.argument,
+                  let typeName = Self.sourceTypeSpelling(element) {
+            state = AlgorithmStateModel(
+                root: declaredName,
+                initial: .value(.set([])),
+                swiftTypeName: "SetExpr<\(typeName)>"
+            )
         } else if expectedKind == "SharedVar",
                   let rangeSyntax = initializer.arguments.first(where: { $0.label?.text == "in" })?.expression,
                   let range = parseIntegerClosedRange(rangeSyntax) {
