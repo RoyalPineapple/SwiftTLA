@@ -82,6 +82,7 @@ struct DirectModuleAction: Sendable, Equatable {
 struct CompiledRefinement: Sendable {
     let name: String
     let instance: ModuleInstanceID
+    let `operator`: RefinementDecl.Operator
     let abstract: CompiledSpecification
     let variableMappings: [CompiledStateExpr]
 }
@@ -594,7 +595,8 @@ public extension TLASpec {
         let directModuleSections = try directModuleSectionPlan(
             layout: layout,
             bindings: bindings,
-            semantics: semantics
+            semantics: semantics,
+            refinements: compiledRefinements
         )
         var moduleSectionPlans: [String: DirectModuleSectionPlan] = [:]
         for entry in closure.entries {
@@ -632,7 +634,8 @@ public extension TLASpec {
     private func directModuleSectionPlan(
         layout: CompiledLayout,
         bindings: CompiledBindingTable,
-        semantics: CompiledSemantics
+        semantics: CompiledSemantics,
+        refinements: [CompiledRefinement]
     ) throws -> DirectModuleSectionPlan {
         guard actions.count == semantics.actions.count,
               formalOperatorDefinitions.count <= semantics.formalOperatorDefinitions.count,
@@ -647,6 +650,7 @@ public extension TLASpec {
             )
         }
         let renderer = CompiledTLARenderer(layout: layout, bindings: bindings)
+        let renderedRefinements = try refinements.map(renderer.refinement)
         let formalDefinitions = try formalOperatorDefinitions.enumerated()
             .map { index, definition in
                 RenderedModuleDefinition(
@@ -734,6 +738,7 @@ public extension TLASpec {
                 emittedActionNames: emittedActionNames,
                 emittedActionNamesByID: emittedActionNamesByID,
                 emittedActionCallNames: emittedActionCallNames,
+                renderedRefinements: renderedRefinements,
                 renderer: renderer,
                 semantics: semantics
             ),
@@ -762,6 +767,7 @@ public extension TLASpec {
         emittedActionNames: [String: String],
         emittedActionNamesByID: [ActionID: String],
         emittedActionCallNames: [CompiledActionCall: String],
+        renderedRefinements: [String],
         renderer: CompiledTLARenderer,
         semantics: CompiledSemantics
     ) throws -> String {
@@ -853,8 +859,8 @@ public extension TLASpec {
             lines.append(definition.text)
             lines.append("")
         }
-        for refinement in refinements {
-            lines.append(refinement.renderedFormalDeclaration)
+        for refinement in renderedRefinements {
+            lines.append(refinement)
             lines.append("")
         }
 
@@ -1231,6 +1237,7 @@ public extension TLASpec {
             return .init(
                 name: refinement.name,
                 instance: instanceID,
+                operator: refinement.operator,
                 abstract: try specialized.compile(),
                 variableMappings: try abstractModule.variables.map { variable in
                     guard let source = mappings[variable.name] else {

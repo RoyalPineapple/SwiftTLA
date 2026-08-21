@@ -70,6 +70,19 @@ struct CompiledTLARenderer {
         return "\(condition.isStrong ? "SF" : "WF")_\(vars)(\(action))"
     }
 
+    func refinement(_ refinement: CompiledRefinement) throws -> String {
+        guard let instance = layout.moduleInstances.first(where: { $0.id == refinement.instance }) else {
+            throw missing("module instance", refinement.instance.ordinal)
+        }
+        let target: String
+        switch refinement.operator {
+        case .spec: target = "Spec"
+        case .liveSpec: target = "LiveSpec"
+        case .liveSpecEquals: target = "LiveSpecEquals"
+        }
+        return "\(refinement.name) == \(instance.namespace)!\(target)"
+    }
+
     func state(_ expression: CompiledStateExpr) throws -> String {
         switch expression {
         case .value(let value): return value.description
