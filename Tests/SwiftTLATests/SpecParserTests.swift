@@ -335,7 +335,7 @@ private func parserEnum(
         #expect(diagnostic.contains("Next safe action"))
     }
 
-    @Test("parser lowers readable procedure bindings to deterministic formal slots")
+    @Test("source model compiles procedure bindings to deterministic formal slots")
     func parsesTypedProcedureBindings() throws {
         let source = """
         {
@@ -533,7 +533,7 @@ private func parserEnum(
         #expect(specification.actions.first?.body.description.contains("_typedFunctionEntry") == true)
     }
 
-    @Test("parser resolves a static formal selection before algorithm lowering")
+    @Test("source model compiles a static formal selection")
     func parsesStaticFormalSelection() throws {
         let source = """
         {
