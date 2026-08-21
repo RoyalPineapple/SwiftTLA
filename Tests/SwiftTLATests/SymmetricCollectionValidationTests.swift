@@ -213,7 +213,7 @@ struct SymmetricCollectionValidationTests {
       SymmetricCollection(right, verificationScope: 3, initial: 0)
     }
 
-    let result = try ModelChecker(compilation: try spec.compile(), permutationProductBudget: 35, configuration: .standard).check()
+    let result = try ModelChecker(compilation: try spec.compile(), configuration: .standard, permutationProductBudget: 35).check()
     guard case .bounded(_, let outcome) = result,
           case .error(let message) = outcome else {
       Issue.record("Expected bounded budget error, got \(result)")

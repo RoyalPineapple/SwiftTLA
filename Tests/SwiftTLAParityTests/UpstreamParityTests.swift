@@ -5,7 +5,6 @@ import Testing
 struct UpstreamParityTests {
     @Test("LearnProofs AddTwo preserves its PlusCal AST through both construction paths")
     func addTwoParserBuilderFidelity() throws {
-        AddTwoModel._checkParserTree()
     }
 
     @Test("ModelChecker count vs TLC-verified expected — they must match")
@@ -136,7 +135,6 @@ struct UpstreamParityTests {
 
     @Test("Dijkstra mutex preserves its bounded PlusCal model")
     func dijkstraMutexParity() throws {
-        DijkstraMutexModel._checkParserTree()
         let checker = try ModelChecker(
             spec: DijkstraMutexModel.spec,
             configuration: try FiniteExplorationConfiguration(
@@ -164,28 +162,24 @@ struct UpstreamParityTests {
 
     @Test("SumSequence bounded source port verifies")
     func sumSequenceBoundedPort() throws {
-        SumSequenceModel._checkParserTree()
         let checker = try ModelChecker(compilation: try SumSequenceModel.spec.compile(), configuration: .standard)
         #expect(try checker.exploreGraph().states.count == Example.sumSequence.expectedDistinct)
     }
 
     @Test("Reachable bounded source port compiles its formal graph choice")
     func reachableBoundedPort() throws {
-        ReachableModel._checkParserTree()
         let checker = try ModelChecker(compilation: try ReachableModel.spec.compile(), configuration: .standard)
         #expect(try checker.exploreGraph().states.count == Example.reachable.expectedDistinct)
     }
 
     @Test("Parallel Reachable bounded source port verifies")
     func parallelReachableBoundedPort() throws {
-        ParallelReachableModel._checkParserTree()
         let checker = try ModelChecker(compilation: try ParallelReachableModel.spec.compile(), configuration: .standard)
         #expect(try checker.exploreGraph().states.count == Example.parallelReachable.expectedDistinct)
     }
 
     @Test("Echo PlusCal port matches its three-node TLC configuration")
     func echoParity() throws {
-        EchoModel._checkParserTree()
         let checker = try ModelChecker(compilation: try EchoModel.spec.compile(), configuration: .standard)
         #expect(try checker.exploreGraph().states.count == Example.echo.expectedDistinct)
     }

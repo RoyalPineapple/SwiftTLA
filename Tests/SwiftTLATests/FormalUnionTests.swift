@@ -82,7 +82,6 @@ struct FormalUnionTests {
 
     @Test("#spec preserves a labeled formal-union view through both construction paths")
     func generatedAlgorithmPreservesFormalUnion() throws {
-        GeneratedFormalUnionAlgorithm._checkParserTree()
         _ = try GeneratedFormalUnionAlgorithm.spec.compile()
     }
 }

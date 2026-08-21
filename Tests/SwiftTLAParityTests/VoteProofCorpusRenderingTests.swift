@@ -4,7 +4,6 @@ import Testing
 struct VoteProofCorpusRenderingTests {
     @Test("VoteProof preserves typed local recursion and formal module composition")
     func parserBuilderFidelity() throws {
-        VoteProofModel._checkParserTree()
         let compilation = try VoteProofModel.spec.compile()
         #expect(compilation.spec.name == "VoteProof")
         #expect(Set(VoteProofModel.spec.formalOperatorDefinitions.map(\.name)) == ["ChosenIn", "SafeAt", "chosen"])

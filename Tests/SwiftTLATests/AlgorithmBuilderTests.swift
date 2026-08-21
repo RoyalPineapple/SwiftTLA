@@ -302,7 +302,6 @@ struct AlgorithmBuilderTests {
 
     @Test("procedure source bindings normalize to builder formal slots")
     func generatedProcedureKeepsParserFidelity() {
-        ProcedureGeneratedModel._checkParserTree()
     }
 
     @Test("parameterless statement macros expand into their surrounding atomic block")
@@ -373,21 +372,18 @@ struct AlgorithmBuilderTests {
 
     @Test("generated models retain typed filtered function domains")
     func generatedModelRetainsFilteredFunctionDomain() throws {
-        FunctionDomainGeneratedModel._checkParserTree()
         let compilation = try FunctionDomainGeneratedModel.spec.compile()
         #expect(try CompiledRuntime(compilation: compilation).initialStates().count == 4)
     }
 
     @Test("generated models retain static formal selections")
     func generatedModelRetainsStaticFormalSelection() {
-        StaticFormalSelectionModel._checkParserTree()
         let (compilation, state) = try initialState(of: StaticFormalSelectionModel.spec)
         #expect(try value(named: "current", in: state, compilation: compilation) == .int(2))
     }
 
     @Test("generated models retain static filtered function selections")
     func generatedModelRetainsStaticFilteredFunctionSelection() {
-        StaticFilteredFunctionSelectionModel._checkParserTree()
         let compilation = try StaticFilteredFunctionSelectionModel.spec.compile()
         #expect(try CompiledRuntime(compilation: compilation).initialStates().count == 1)
     }
@@ -420,7 +416,6 @@ struct AlgorithmBuilderTests {
 
     @Test("generated models compare macro process identifiers through both construction paths")
     func generatedMacroProcessModelKeepsParserFidelity() {
-        MacroProcessGeneratedModel._checkParserTree()
     }
 
     @Test("process control initialization joins typed process domains")

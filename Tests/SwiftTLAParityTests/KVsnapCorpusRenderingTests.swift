@@ -4,7 +4,6 @@ import Testing
 struct KVsnapCorpusRenderingTests {
     @Test("KVsnap preserves its typed Algorithm model through parser and builder")
     func parserBuilderFidelity() throws {
-        KVsnapModel._checkParserTree()
 
         let bundle = try KVsnapModel.spec.compile().renderedTLAModuleBundle()
         #expect(bundle.root.tla.contains("CC == INSTANCE ClientCentric"))

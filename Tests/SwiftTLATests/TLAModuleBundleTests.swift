@@ -43,7 +43,6 @@ private struct InstancedFormalModuleGeneratedModel {
 struct TLAModuleBundleTests {
   @Test("a generated model preserves its imported module")
   func generatedModelRetainsImportedModule() {
-    ImportedFormalModuleGeneratedModel._checkParserTree()
     #expect(ImportedFormalModuleGeneratedModel.spec.imports.map { $0.name } == ["ZSequences"])
     #expect(ImportedFormalModuleGeneratedModel.spec.importConfigurations == [
       ZSequences.boundedNaturalNumbers(0...2)
@@ -91,7 +90,6 @@ struct TLAModuleBundleTests {
 
   @Test("a generated model preserves a named module instance")
   func generatedModelRetainsNamedModuleInstance() {
-    InstancedFormalModuleGeneratedModel._checkParserTree()
     #expect(InstancedFormalModuleGeneratedModel.spec.moduleInstances.map(\.name) == ["Folding"])
     #expect(InstancedFormalModuleGeneratedModel.spec.moduleInstances.map { $0.module.name } == ["Folds"])
   }

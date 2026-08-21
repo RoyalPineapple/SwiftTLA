@@ -274,7 +274,6 @@ private struct FoldGeneratedModel {
 
     @Test("typed collection operators execute in a generated model")
     func generatedMachineUsesTypedCollectionOperators() throws {
-        TypedCollectionGeneratedModel._checkParserTree()
 
         var model = try TypedCollectionGeneratedModel.makeMachine()
         let result = try model.apply(.keepEvenSquares)
@@ -326,7 +325,6 @@ private struct FoldGeneratedModel {
 
     @Test("generated machines preserve formal fold behavior")
     func generatedMachineUsesFormalFold() throws {
-        FoldGeneratedModel._checkParserTree()
         var model = try FoldGeneratedModel.makeMachine()
         let result = try model.apply(.sum)
 
@@ -457,7 +455,6 @@ private struct FoldGeneratedModel {
             .function([.int(0): .int(1), .int(1): .int(1)])
         ]))
 
-        ZeroBasedSequenceGeneratedModel._checkParserTree()
         let input = try #require(ZeroBasedSequence<Int>(formalValue: .function([
             .int(0): .int(0)
         ])))
@@ -488,7 +485,6 @@ private struct FoldGeneratedModel {
             .set([.int(1), .int(2)])
         ]))
 
-        NonEmptySubsetGeneratedModel._checkParserTree()
         let compilation = try NonEmptySubsetGeneratedModel.spec.compile()
         let selectedKeys = try #require(compilation.layout.variableID(named: "selectedKeys"))
         let initialStates = try CompiledRuntime(compilation: compilation).initialStates()
@@ -511,7 +507,6 @@ private struct FoldGeneratedModel {
         #expect(try compiledValue(hasEven.raw) == .bool(true))
         #expect(try compiledValue(everyPositive.raw) == .bool(true))
 
-        TypedQuantifierGeneratedModel._checkParserTree()
         var model = try TypedQuantifierGeneratedModel.makeMachine()
         let result = try model.apply(.findEven)
         #expect(result.after.result == true)

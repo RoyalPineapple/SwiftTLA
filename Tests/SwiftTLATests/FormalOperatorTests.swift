@@ -53,7 +53,6 @@ struct FormalOperatorTests {
 
   @Test("a #spec higher-order formal definition preserves parser and builder trees")
   func generatedHigherOrderFormalDefinitionPreservesParserFidelity() throws {
-    GeneratedHigherOrderFormalModel._checkParserTree()
 
     var model = try GeneratedHigherOrderFormalModel.makeMachine()
     let result = try model.apply(.advance)

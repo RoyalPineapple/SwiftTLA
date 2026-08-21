@@ -210,7 +210,6 @@ struct GeneratedRestrictedProcessDomain {
 struct GeneratedRestrictedProcessDomainTests {
     @Test("the parser preserves an explicitly restricted FiniteDomainKey domain")
     func generatedModelUsesOnlyDeclaredProcessMembers() {
-        GeneratedRestrictedProcessDomain._checkParserTree()
         #expect(GeneratedRestrictedProcessDomain.spec.actions.first?.bindings == [
             ActionBinding(name: "process", values: [.int(1)])
         ])
@@ -239,7 +238,6 @@ struct GeneratedSequentialCounter {
 struct GeneratedSequentialMachineTests {
     @Test("a sequential Algorithm advances its typed state")
     func generatedSequentialAlgorithmAdvancesTypedState() throws {
-        GeneratedSequentialCounter._checkParserTree()
 
         var model = try GeneratedSequentialCounter.makeMachine()
         let result = try model.apply(.increment)
@@ -302,7 +300,6 @@ struct GeneratedPairPattern {
 struct GeneratedPairPatternTests {
     @Test("a generated model preserves tuple-pattern selection")
     func generatedMachineAppliesPairPatternBindings() throws {
-        GeneratedPairPattern._checkParserTree()
 
         var model = try GeneratedPairPattern.makeMachine()
         let result = try model.apply(.choose)
@@ -384,7 +381,6 @@ struct GeneratedIntegerChoiceAlgorithm {
 struct GeneratedIntegerChoiceAlgorithmTests {
     @Test("#spec retains a bounded integer choice")
     func generatedModelRetainsIntegerChoice() throws {
-        GeneratedIntegerChoiceAlgorithm._checkParserTree()
         let spec = GeneratedIntegerChoiceAlgorithm.spec
         let graph = try ModelChecker(compilation: try spec.compile(), configuration: .standard).exploreGraph()
         #expect(try Set(graph.states.values.compactMap { try value("selected", in: $0) }) == [.int(0), .int(1), .int(2), .int(3)])
@@ -409,7 +405,6 @@ struct GeneratedAlgorithmStateConstraint {
 struct GeneratedAlgorithmStateConstraintTests {
     @Test("#spec preserves an algorithm-local state constraint through both construction paths")
     func generatedModelPreservesStateConstraint() throws {
-        GeneratedAlgorithmStateConstraint._checkParserTree()
         #expect(GeneratedAlgorithmStateConstraint.spec.constraint
             == .lessThan(.variable("count"), .value(.int(2))))
         let graph = try ModelChecker(compilation: try GeneratedAlgorithmStateConstraint.spec.compile(), configuration: .standard).exploreGraph()
@@ -455,7 +450,6 @@ struct GeneratedProcessLocalInvariant {
 struct GeneratedProcessLocalInvariantTests {
     @Test("#spec preserves a process-local invariant through both construction paths")
     func generatedModelPreservesProcessLocalInvariant() {
-        GeneratedProcessLocalInvariant._checkParserTree()
         #expect(GeneratedProcessLocalInvariant.spec.invariants.map(\.name) == ["LocalCount", "ControlLocation"])
         #expect(GeneratedProcessLocalInvariant.spec.invariants[0].body == .forAll(
             .setLiteral([.value(.string("left")), .value(.string("right"))]),

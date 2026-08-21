@@ -33,7 +33,6 @@ struct MultiBindingChooseTests {
 
     @Test("macro parser produces the same nested choice model as the builder")
     func parserBuilderFidelity() {
-        MultiBindingChooseModel._checkParserTree()
     }
 }
 

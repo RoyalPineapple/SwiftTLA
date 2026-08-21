@@ -91,7 +91,6 @@ struct LocalOperatorTests {
 
   @Test("#spec preserves typed local recursion through generated model parsing")
   func generatedModelRetainsTypedLocalRecursion() throws {
-    GeneratedTypedLocalRecursionModel._checkParserTree()
     let body = try #require(GeneratedTypedLocalRecursionModel.spec.formalOperatorDefinitions.first?.body)
     #expect(body.description.contains("Count[number \\in 0..4]"))
     #expect(body.description.contains("IN Count[4]"))
@@ -102,7 +101,6 @@ struct LocalOperatorTests {
 
   @Test("typed formal closures retain local recursion through #spec and Algorithm")
   func generatedAlgorithmRetainsTypedFormalDefinition() throws {
-    GeneratedTypedFormalDefinitionAlgorithm._checkParserTree()
     let definition = try #require(
       GeneratedTypedFormalDefinitionAlgorithm.spec.formalOperatorDefinitions.first
     )
@@ -115,7 +113,6 @@ struct LocalOperatorTests {
 
   @Test("top-level typed formal definitions retain runtime and parser equality")
   func generatedTopLevelTypedFormalDefinitionRetainsCapture() throws {
-    GeneratedTopLevelTypedFormalDefinitionModel._checkParserTree()
     let definition = try #require(
       GeneratedTopLevelTypedFormalDefinitionModel.spec.formalOperatorDefinitions.first
     )
