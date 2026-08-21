@@ -595,7 +595,8 @@ public final class ParserSession {
         _ expression: ExprSyntax,
         scope: TypedFacadeScope
     ) -> StateExpr? {
-        if let family = decodeProcessLocalFamily(expression) {
+        if let call = expression.as(FunctionCallExprSyntax.self),
+           let family = decodeProcessLocalFamily(call) {
             return family
         }
         if let quantifier = decodeAlgorithmDomainQuantifier(expression, scope: scope) {
@@ -1356,9 +1357,8 @@ public final class ParserSession {
         )
     }
 
-    private func decodeProcessLocalFamily(_ expression: ExprSyntax) -> StateExpr? {
-        guard let call = expression.as(FunctionCallExprSyntax.self),
-              let member = call.calledExpression.as(MemberAccessExprSyntax.self),
+    private func decodeProcessLocalFamily(_ call: FunctionCallExprSyntax) -> StateExpr? {
+        guard let member = call.calledExpression.as(MemberAccessExprSyntax.self),
               member.declName.baseName.text == "family",
               call.arguments.count == 1,
               call.arguments.first?.label?.text == "for",

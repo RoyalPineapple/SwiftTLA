@@ -558,6 +558,7 @@ struct CompiledBindingTable: Sendable {
     init(
         layout: CompiledLayout,
         operators: [String: OperatorID] = [:],
+        operatorNames: [OperatorID: String]? = nil,
         binders: [BinderID: String] = [:],
         references: [String: CompiledReference] = [:]
     ) {
@@ -569,7 +570,9 @@ struct CompiledBindingTable: Sendable {
         )
         self.operators = operators
         self.binders = binders
-        operatorNames = Dictionary(uniqueKeysWithValues: operators.map { ($0.value, $0.key) })
+        self.operatorNames = operatorNames ?? Dictionary(
+            uniqueKeysWithValues: operators.map { ($0.value, $0.key) }
+        )
         self.references = references
     }
 
@@ -584,6 +587,7 @@ struct BindingValidator {
     private let constants: [ConstantDecl]
     private let formalConstants: Set<String>
     private var operators: [String: OperatorID]
+    private var operatorNames: [OperatorID: String]
     private var nextBinderOrdinal = 0
     private var nextOperatorOrdinal = 0
     private var knownBinderNames: Set<String> = []
@@ -605,6 +609,7 @@ struct BindingValidator {
             guard result[name] == nil else { return }
             result[name] = OperatorID(ordinal: result.count)
         }
+        operatorNames = Dictionary(uniqueKeysWithValues: operators.map { ($0.value, $0.key) })
         nextOperatorOrdinal = operators.count
     }
 
@@ -674,6 +679,7 @@ struct BindingValidator {
         return CompiledBindingTable(
             layout: layout,
             operators: operators,
+            operatorNames: operatorNames,
             binders: binders,
             references: references
         )
@@ -695,6 +701,7 @@ struct BindingValidator {
         CompiledBindingTable(
             layout: layout,
             operators: operators,
+            operatorNames: operatorNames,
             binders: binders,
             references: references
         )
@@ -916,6 +923,7 @@ struct BindingValidator {
         nextOperatorOrdinal += localOperators.count
         for local in localOperators {
             self.operators[local.0] = local.1
+            operatorNames[local.1] = local.0
         }
         defer { self.operators = outerOperators }
         for operation in operators {
@@ -1066,6 +1074,7 @@ struct BindingValidator {
                 let id = OperatorID(ordinal: nextOperatorOrdinal)
                 nextOperatorOrdinal += 1
                 operators[name] = id
+                operatorNames[id] = name
                 references["\(path).\(name)"] = .operator(id)
             }
         }
