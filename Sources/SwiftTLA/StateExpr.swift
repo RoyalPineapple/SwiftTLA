@@ -1,17 +1,12 @@
-import Foundation
-
-public enum FreshVarName {
-    private static let _lock = NSLock()
-    private nonisolated(unsafe) static var _counter = 0
-
-    public static func fresh() -> String {
-        let c = _lock.withLock { () -> Int in
-            _counter += 1
-            return _counter
-        }
-        return "x\(c)"
-    }
-    public static func resetCounter() { _lock.withLock { _counter = 0 } }
+func generatedBinderName(
+    file: StaticString = #fileID,
+    line: UInt = #line,
+    column: UInt = #column
+) -> String {
+    let fileID = String(describing: file)
+    let component = fileID.split(separator: "/").last ?? "binder"
+    let stem = component.split(separator: ".").first ?? component
+    return "__binder_\(stem)_\(line)_\(column)"
 }
 
 /// A local TLA+ operator declared inside a `LET … IN` expression.

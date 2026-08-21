@@ -310,7 +310,7 @@ private func formalOperatorDefinitionKey(_ definition: FormalOperatorDefinition)
     return "definition(\(definition.name),parameters:[\(parameters.joined(separator: ","))],body:\(stateKey(definition.body, environment: environment, next: &next)))"
 }
 
-private func alphaKey(_ action: ActionExpr) -> String {
+func alphaKey(_ action: ActionExpr) -> String {
     var next = 0
     let branches = semanticBranches(action)
     return "or[\(branches.map { actionKey($0, environment: [:], next: &next) }.joined(separator: ","))]"
@@ -366,7 +366,7 @@ func alphaKey(_ expression: StateExpr) -> String {
     return stateKey(expression, environment: [:], next: &next)
 }
 
-private func alphaKey(_ expression: TemporalExpr) -> String {
+func alphaKey(_ expression: TemporalExpr) -> String {
     switch expression {
     case .always(let state): return "always(\(alphaKey(state)))"
     case .eventually(let state): return "eventually(\(alphaKey(state)))"

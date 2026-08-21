@@ -70,6 +70,24 @@ private struct CompilerPipelineCollectionModel {
 
 @Suite("Compiler pipeline canonicalization")
 struct CompilerPipelineCanonicalizationTests {
+    @Test("equivalent source models retain stable binder names")
+    func equivalentSourceModelsRetainStableBinderNames() throws {
+        func sourceModel() -> TLASpec {
+            TLASpec("StableBinders") {
+                Invariant("allPositive") {
+                    SetExpr<Int>.literal(1, 2).allSatisfy { value in value >= 1 }
+                }
+            }
+        }
+
+        let first = try sourceModel().compile()
+        _ = sourceModel()
+        let second = try sourceModel().compile()
+
+        #expect(first.identity == second.identity)
+        #expect(try first.renderedTLAModuleBundle().root.tla == second.renderedTLAModuleBundle().root.tla)
+    }
+
     @Test("macro compilation uses the explicit formal module name")
     func macroUsesExplicitFormalModuleName() throws {
         let compilation = try CompilerPipelineExplicitFormalNameModel.compiledSpecification()

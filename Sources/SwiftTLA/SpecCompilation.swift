@@ -923,91 +923,15 @@ private struct CanonicalSpecificationEncoder {
     }
 
     private func canonicalExpression(_ expression: StateExpr) -> String {
-        switch expression {
-        case .value(let value): return node("value", [canonicalValue(value)])
-        case .variable(let name): return node("variable", [name])
-        case .add(let a, let b): return binary("add", a, b)
-        case .subtract(let a, let b): return binary("subtract", a, b)
-        case .multiply(let a, let b): return binary("multiply", a, b)
-        case .divide(let a, let b): return binary("divide", a, b)
-        case .modulo(let a, let b): return binary("modulo", a, b)
-        case .integerDivide(let a, let b): return binary("integerDivide", a, b)
-        case .negate(let value): return unary("negate", value)
-        case .equal(let a, let b): return binary("equal", a, b)
-        case .notEqual(let a, let b): return binary("notEqual", a, b)
-        case .lessThan(let a, let b): return binary("lessThan", a, b)
-        case .lessOrEqual(let a, let b): return binary("lessOrEqual", a, b)
-        case .greaterThan(let a, let b): return binary("greaterThan", a, b)
-        case .greaterOrEqual(let a, let b): return binary("greaterOrEqual", a, b)
-        case .and(let a, let b): return binary("and", a, b)
-        case .or(let a, let b): return binary("or", a, b)
-        case .not(let value): return unary("not", value)
-        case .ifThenElse(let c, let t, let f): return node("if", [canonicalExpression(c), canonicalExpression(t), canonicalExpression(f)])
-        case .setLiteral(let values): return node("setLiteral", values.map(canonicalExpression))
-        case .in(let a, let b): return binary("in", a, b)
-        case .subset(let a, let b): return binary("subset", a, b)
-        case .union(let a, let b): return binary("union", a, b)
-        case .intersection(let a, let b): return binary("intersection", a, b)
-        case .setDifference(let a, let b): return binary("setDifference", a, b)
-        case .cardinality(let value): return unary("cardinality", value)
-        case .setFilter(let set, let binding, let predicate): return node("setFilter", [canonicalExpression(set), binding, canonicalExpression(predicate)])
-        case .setMap(let value, let binding, let set): return node("setMap", [canonicalExpression(value), binding, canonicalExpression(set)])
-        case .powerSet(let value): return unary("powerSet", value)
-        case .unionAll(let value): return unary("unionAll", value)
-        case .integerRange(let a, let b): return binary("integerRange", a, b)
-        case .tupleLiteral(let values): return node("tupleLiteral", values.map(canonicalExpression))
-        case .tupleAccess(let tuple, let index): return node("tupleAccess", [canonicalExpression(tuple), String(index)])
-        case .tupleDynamicAccess(let tuple, let index): return binary("tupleDynamicAccess", tuple, index)
-        case .tupleLength(let value): return unary("tupleLength", value)
-        case .tupleAppend(let a, let b): return binary("tupleAppend", a, b)
-        case .tupleHead(let value): return unary("tupleHead", value)
-        case .tupleTail(let value): return unary("tupleTail", value)
-        case .tupleConcatenate(let a, let b): return binary("tupleConcatenate", a, b)
-        case .recordLiteral(let fields):
-            return node("recordLiteral", fields.fields.map { node($0.name, [canonicalExpression($0.value)]) })
-        case .recordAccess(let record, let field): return node("recordAccess", [canonicalExpression(record), field])
-        case .domain(let value): return unary("domain", value)
-        case .functionLiteral(let domain, let binding, let body): return node("functionLiteral", [canonicalExpression(domain), binding, canonicalExpression(body)])
-        case .functionApply(let function, let argument): return binary("functionApply", function, argument)
-        case .except(let function, let key, let value): return node("except", [canonicalExpression(function), canonicalExpression(key), canonicalExpression(value)])
-        case .caseExpr(let branches, let otherwise): return node("case", [canonicalList(branches.map(canonicalExpression)), otherwise.map(canonicalExpression) ?? "none"])
-        case .forAll(let set, let binding, let predicate): return quantified("forAll", set, binding, predicate)
-        case .exists(let set, let binding, let predicate): return quantified("exists", set, binding, predicate)
-        case .choose(let set, let binding, let predicate): return quantified("choose", set, binding, predicate)
-        case .enabledAction(let name): return node("enabledAction", [name])
-        case .sequenceFromSet(let value): return unary("sequenceFromSet", value)
-        case .setSum(let function, let values): return binary("setSum", function, values)
-        case .functionSet(let domain, let range): return binary("functionSet", domain, range)
-        case .foldFunction(let lambda, let initial, let sequence): return node("foldFunction", [canonicalLambda(lambda), canonicalExpression(initial), canonicalExpression(sequence)])
-        case .operatorApplication(let operation, let arguments): return node("operatorApplication", [canonicalOperator(operation), canonicalList(arguments.map(canonicalCallArgument))])
-        case .recursiveCall(let name, let arguments): return node("recursiveCall", [name, canonicalList(arguments.map(canonicalExpression))])
-        case .letValue(let name, let value, let body): return node("letValue", [name, canonicalExpression(value), canonicalExpression(body)])
-        case .letIn(let definitions, let body): return node("letIn", [canonicalList(definitions.map(canonicalLocalOperator)), canonicalExpression(body)])
-        }
+        node("expression", [alphaKey(expression)])
     }
 
     private func canonicalActionExpression(_ expression: ActionExpr) -> String {
-        switch expression {
-        case .assign(let name, let value): return node("assign", [name, canonicalExpression(value)])
-        case .unchanged(let name): return node("unchanged", [name])
-        case .guard_(let value): return node("guard", [canonicalExpression(value)])
-        case .chooseAction(let name, let set): return node("chooseAction", [name, canonicalExpression(set)])
-        case .existsAction(let name, let set, let body): return node("existsAction", [name, canonicalExpression(set), canonicalActionExpression(body)])
-        case .ifElse(let condition, let then, let otherwise): return node("actionIf", [canonicalExpression(condition), canonicalActionExpression(then), canonicalActionExpression(otherwise)])
-        case .define(let name, let value, let body): return node("actionDefine", [name, canonicalExpression(value), canonicalActionExpression(body)])
-        case .and(let a, let b): return node("actionAnd", [canonicalActionExpression(a), canonicalActionExpression(b)])
-        case .or(let a, let b): return node("actionOr", [canonicalActionExpression(a), canonicalActionExpression(b)])
-        }
+        node("action", [alphaKey(expression)])
     }
 
     private func canonicalTemporal(_ expression: TemporalExpr) -> String {
-        switch expression {
-        case .always(let value): return unary("always", value)
-        case .eventually(let value): return unary("eventually", value)
-        case .alwaysEventually(let value): return unary("alwaysEventually", value)
-        case .eventuallyAlways(let value): return unary("eventuallyAlways", value)
-        case .leadsTo(let a, let b): return binary("leadsTo", a, b)
-        }
+        node("temporal", [alphaKey(expression)])
     }
 
     private func canonicalFairness(_ value: FairnessCondition) -> String {
@@ -1025,24 +949,7 @@ private struct CanonicalSpecificationEncoder {
         case .operator(let name, let arity): return node("operatorParameter", [name, String(arity)])
         }
     }
-    private func canonicalOperator(_ value: FormalOperator) -> String {
-        switch value {
-        case .lambda(let lambda): return node("lambda", [canonicalLambda(lambda)])
-        case .reference(let name, let arity): return node("reference", [name, String(arity)])
-        }
-    }
-    private func canonicalCallArgument(_ value: FormalCallArgument) -> String {
-        switch value {
-        case .value(let expression): return node("valueArgument", [canonicalExpression(expression)])
-        case .operator(let operation): return node("operatorArgument", [canonicalOperator(operation)])
-        }
-    }
-    private func canonicalLambda(_ value: FormalLambda) -> String { node("lambda", [canonicalList(value.parameters), canonicalExpression(value.body)]) }
-    private func canonicalLocalOperator(_ value: LocalOperator) -> String { node("localOperator", [value.name, canonicalList(value.parameters), canonicalOptional(value.domain.map(canonicalExpression)), canonicalExpression(value.body)]) }
     private func canonicalActionCall(_ value: FormalActionCall) -> String { node("actionCall", [value.name, canonicalList(value.arguments.map(canonicalValue))]) }
-    private func unary(_ tag: String, _ value: StateExpr) -> String { node(tag, [canonicalExpression(value)]) }
-    private func binary(_ tag: String, _ lhs: StateExpr, _ rhs: StateExpr) -> String { node(tag, [canonicalExpression(lhs), canonicalExpression(rhs)]) }
-    private func quantified(_ tag: String, _ set: StateExpr, _ binding: String, _ predicate: StateExpr) -> String { node(tag, [canonicalExpression(set), binding, canonicalExpression(predicate)]) }
     private func canonicalList(_ values: [String]) -> String { node("list", values) }
     private func canonicalOptional(_ value: String?) -> String {
         value.map { node("some", [$0]) } ?? node("none", [])

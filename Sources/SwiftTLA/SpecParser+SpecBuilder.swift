@@ -1274,7 +1274,7 @@ extension ParserSession {
               let parameter = Self.collectionPredicateParameter(in: closure)
         else { return nil }
 
-        let member = FreshVarName.fresh()
+        let member = generatedBinderName()
         let rewrittenStatements = closure.statements.map { statement in
             PredicateValueRewriter(
                 parameter: parameter,
