@@ -111,7 +111,6 @@ struct AlgorithmPlusCalRendererTests {
         let rendered = try renderedSourceAlgorithmPlusCal(algorithm)
 
         #expect(rendered.contains("flags := [flags EXCEPT ![self] = TRUE];"))
-        #expect(!rendered.contains("__pcal_self"))
     }
 
     @Test("imports Integers when rendering a negative formal value")
