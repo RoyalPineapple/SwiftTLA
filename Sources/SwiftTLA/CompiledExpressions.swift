@@ -150,6 +150,21 @@ struct CompiledTemporal: Sendable {
     let expression: CompiledTemporalExpr
 }
 
+struct CompiledActionCall: Hashable, Sendable {
+    let action: ActionID
+    let arguments: [TLAValue]
+}
+
+struct CompiledFairnessCondition: Sendable {
+    enum Scope: Hashable, Sendable {
+        case action(ActionID)
+        case actionCall(CompiledActionCall)
+    }
+
+    let scope: Scope
+    let isStrong: Bool
+}
+
 struct CompiledFormalOperatorDefinition: Sendable {
     let id: OperatorID
     let parameters: [CompiledFormalParameter]
@@ -187,6 +202,7 @@ struct CompiledSemantics: Sendable {
     let actions: [CompiledAction]
     let invariants: [CompiledInvariant]
     let temporalProperties: [CompiledTemporal]
+    let fairness: [CompiledFairnessCondition]
     let constraint: CompiledStateExpr?
     let assume: CompiledStateExpr?
     let formalOperatorDefinitions: [CompiledFormalOperatorDefinition]

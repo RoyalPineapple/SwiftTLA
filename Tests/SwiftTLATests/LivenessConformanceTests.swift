@@ -383,6 +383,27 @@ struct LivenessConformanceTests {
         }
     }
 
+    @Test("compilation binds each fairness condition to a declared action")
+    func fairnessRequiresDeclaredAction() {
+        let spec = TLASpec(
+            name: "fairness-binding",
+            variables: [NamedVar(name: "x", initial: .int(0))],
+            actions: [action("known")],
+            invariants: [],
+            fairness: [.weakFairness("missing")]
+        )
+        do {
+            _ = try spec.compile()
+            Issue.record("Expected fairness binding to fail")
+        } catch let error as CompilationDiagnostic {
+            #expect(error.code == .unknownReference)
+            #expect(error.path == "fairness[0]")
+            #expect(error.actual == "fairness references 'missing'")
+        } catch {
+            Issue.record("Expected a compilation diagnostic, got \(error)")
+        }
+    }
+
     @Test("ModelChecker keeps liveness and incomplete-exploration results compatible")
     func modelCheckerCompatibility() throws {
         let x = Var<Int>("x")
