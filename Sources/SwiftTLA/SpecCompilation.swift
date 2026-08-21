@@ -634,12 +634,25 @@ public extension TLASpec {
         bindings: CompiledBindingTable,
         semantics: CompiledSemantics
     ) throws -> DirectModuleSectionPlan {
-        let formalDefinitions = formalOperatorDefinitions
-            .map {
+        guard actions.count == semantics.actions.count,
+              formalOperatorDefinitions.count <= semantics.formalOperatorDefinitions.count,
+              recursiveFuncs.count <= semantics.recursiveFunctions.count else {
+            throw CompilationDiagnostic(
+                code: .compilationIdentityMismatch,
+                stage: .rendering,
+                path: "directModuleSectionPlan",
+                expected: "compiled declarations aligned with this source model",
+                actual: "actions \(semantics.actions.count)/\(actions.count), definitions \(semantics.formalOperatorDefinitions.count)/\(formalOperatorDefinitions.count), recursive functions \(semantics.recursiveFunctions.count)/\(recursiveFuncs.count)",
+                nextSafeAction: "Compile the model again from its current source."
+            )
+        }
+        let renderer = CompiledTLARenderer(layout: layout, bindings: bindings)
+        let formalDefinitions = try formalOperatorDefinitions.enumerated()
+            .map { index, definition in
                 RenderedModuleDefinition(
-                    name: $0.name,
-                    text: FormalOperatorDecl($0).tlaText,
-                    dependencies: $0.plusCalDependencies
+                    name: definition.name,
+                    text: try renderer.formalDefinition(semantics.formalOperatorDefinitions[index]),
+                    dependencies: definition.plusCalDependencies
                 )
             }
         let allDefinitions = formalDefinitions
@@ -682,16 +695,17 @@ public extension TLASpec {
         let renderedActions: [DirectModuleAction] = try actions.enumerated().map { index, declaration in
             DirectModuleAction(
                 declaration: declaration,
-                renderedBody: try CompiledTLARenderer(layout: layout, bindings: bindings)
-                    .action(semantics.actions[index].body)
+                renderedBody: try renderer.action(semantics.actions[index].body)
             )
         }
         return DirectModuleSectionPlan(
-            renderedModuleSource: renderedDirectModuleSource(
+            renderedModuleSource: try renderedDirectModuleSource(
                 definitionsBeforeInstances: orderedDefinitionsBeforeInstances,
                 definitionsAfterInstances: orderedDefinitionsAfterInstances,
                 renderedActions: renderedActions,
-                emittedActionNames: emittedActionNames
+                emittedActionNames: emittedActionNames,
+                renderer: renderer,
+                semantics: semantics
             ),
             renderedConfiguration: renderedTLCConfiguration()
         )
@@ -715,8 +729,10 @@ public extension TLASpec {
         definitionsBeforeInstances: [RenderedModuleDefinition],
         definitionsAfterInstances: [RenderedModuleDefinition],
         renderedActions: [DirectModuleAction],
-        emittedActionNames: [String: String]
-    ) -> String {
+        emittedActionNames: [String: String],
+        renderer: CompiledTLARenderer,
+        semantics: CompiledSemantics
+    ) throws -> String {
         let varNames = variables.map(\.name)
         let renderedActionsByName = renderedActions.map(\.declaration)
         let varsTuple = varNames.count == 1 ? varNames[0] : "<<\(varNames.joined(separator: ", "))>>"
@@ -767,8 +783,8 @@ public extension TLASpec {
         }
         if !symmetricCollections.isEmpty || !symmetrySets.isEmpty { lines.append("") }
 
-        if let assume {
-            lines.append("ASSUME \(assume.tlaModuleSource)")
+        if let assume = semantics.assume {
+            lines.append("ASSUME \(try renderer.state(assume))")
             lines.append("")
         }
 
@@ -787,10 +803,10 @@ public extension TLASpec {
             lines.append(definition.text)
             lines.append("")
         }
-        for function in recursiveFuncs {
-            let underscores = function.params.map { _ in "_" }.joined(separator: ", ")
-            lines.append("RECURSIVE \(function.name)(\(underscores))")
-            lines.append("\(function.name)(\(function.params.joined(separator: ", "))) == \(function.body)")
+        for function in semantics.recursiveFunctions.prefix(recursiveFuncs.count) {
+            let rendered = try renderer.recursiveFunction(function)
+            lines.append(rendered.declaration)
+            lines.append(rendered.body)
             lines.append("")
         }
         for instance in moduleInstances {
@@ -814,12 +830,12 @@ public extension TLASpec {
             lines.append("vars == \(varsTuple)")
             lines.append("")
         }
-        for invariant in invariants {
-            lines.append("\(invariant.name) == \(invariant.body.tlaModuleSource)")
+        for invariant in semantics.invariants {
+            lines.append("\(invariant.name) == \(try renderer.state(invariant.body))")
         }
-        if !invariants.isEmpty { lines.append("") }
-        if let constraint {
-            lines.append("StateConstraint == \(constraint.tlaModuleSource)")
+        if !semantics.invariants.isEmpty { lines.append("") }
+        if let constraint = semantics.constraint {
+            lines.append("StateConstraint == \(try renderer.state(constraint))")
             lines.append("")
         }
         guard !isLibraryModule else {
@@ -884,10 +900,10 @@ public extension TLASpec {
             lines.append("  /\\ \(renderedFairnessForm(condition, vars: varsTuple, actions: renderedActionsByName, emittedActionNames: emittedActionNames))")
         }
         lines.append("")
-        for temporal in temporalProperties {
-            lines.append("\(temporal.name) == \(temporal.expr.tlaModuleSource)")
+        for temporal in semantics.temporalProperties {
+            lines.append("\(temporal.name) == \(try renderer.temporal(temporal.expression))")
         }
-        if !temporalProperties.isEmpty { lines.append("") }
+        if !semantics.temporalProperties.isEmpty { lines.append("") }
         for theorem in theorems {
             lines.append("THEOREM \(renderedTheorem(theorem))")
             lines.append("")
