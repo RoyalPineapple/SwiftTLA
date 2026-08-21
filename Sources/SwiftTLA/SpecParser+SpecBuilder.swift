@@ -653,7 +653,7 @@ extension ParserSession {
             if let expr = decodeTemporal(call) {
                 result.temporal.append((name, expr))
             }
-        case "WeakFairness", "StrongFairness":
+        case "WeakFairness", "StrongFairness", "WeakFairnessNext", "StrongFairnessNext":
             if let fc = decodeFairness(call) {
                 result.fairness.append(fc)
             }

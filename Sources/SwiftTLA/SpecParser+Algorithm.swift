@@ -141,7 +141,7 @@ extension ParserSession {
         case "LeadsTo", "Eventually", "Always", "AlwaysEventually", "EventuallyAlways":
             guard let temporal = parseAlgorithmTemporal(call, named: name) else { return nil }
             return .temporal(temporal)
-        case "WeakFairness", "StrongFairness":
+        case "WeakFairness", "StrongFairness", "WeakFairnessNext", "StrongFairnessNext":
             guard let fairness = decodeFairness(call) else { return nil }
             return .fairness(fairness)
         case "StateConstraint":
