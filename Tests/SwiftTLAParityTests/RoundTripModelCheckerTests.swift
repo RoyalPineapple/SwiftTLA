@@ -275,7 +275,7 @@ private func value(
       .map { successor in
         (
           action: compilation.layout.actions[successor.action.ordinal].declaration.name,
-          arguments: successor.arguments,
+          arguments: try successor.arguments.map { try $0.rendered(using: compilation.layout) },
           state: try successor.state.projection(using: compilation.layout)
         )
       }

@@ -97,7 +97,7 @@ struct CompiledActionEnumerator {
                 try binding.values.map { value in
                     .init(
                         values: current.values.binding(try .init(formal: value, using: layout), to: binding.binder),
-                        arguments: current.arguments + [value]
+                        arguments: current.arguments + [try .init(formal: value, using: layout)]
                     )
                 }
             }
@@ -144,12 +144,12 @@ struct CompiledActionEnumerator {
 
 struct CompiledActionResult: Sendable {
     let state: CompiledState
-    let arguments: [TLAValue]
+    let arguments: [CompiledValue]
 }
 
 private struct CompiledActionBindingValues {
     let values: CompiledBindings
-    let arguments: [TLAValue]
+    let arguments: [CompiledValue]
 }
 
 private struct CompiledActionDelta {

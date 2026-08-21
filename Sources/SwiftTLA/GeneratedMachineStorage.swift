@@ -83,7 +83,7 @@ public struct GeneratedMachineStorage: Sendable {
         let request = try request(actionOrdinal: actionOrdinal, formalArguments: formalArguments)
         return try CompiledRuntime(compilation: compilation)
             .successors(for: request.action, from: state.compiled)
-            .filter { try compilation.matches($0.arguments, request: request) }
+            .filter { compilation.matches($0.arguments, request: request) }
             .map { State($0.state) }
     }
 
@@ -114,9 +114,9 @@ public struct GeneratedMachineStorage: Sendable {
         return try CompiledRuntime(compilation: compilation)
             .successors(from: state.compiled)
             .compactMap { successor in
-                let request = try compilation.actionRequest(
+                let request = CompiledActionRequest(
                     action: successor.action,
-                    formalArguments: successor.arguments
+                    arguments: successor.arguments
                 )
                 let input = try compilation.generatedActionLabelInput(for: request)
                 guard let action = try resolve(input.ordinal, input.formalArguments) else {

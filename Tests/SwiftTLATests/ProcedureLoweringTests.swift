@@ -233,7 +233,7 @@ struct ProcedureLoweringTests {
         let action = try #require(compilation.layout.actionID(named: label))
         return try CompiledRuntime(compilation: compilation)
             .successors(for: action, from: state)
-            .filter { arguments == nil || $0.arguments == arguments }
+            .filter { arguments == nil || try $0.arguments.map { try $0.rendered(using: compilation.layout) } == arguments }
             .map(\.state)
     }
 

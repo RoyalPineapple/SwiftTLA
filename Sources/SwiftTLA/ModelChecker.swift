@@ -255,6 +255,7 @@ private func compiledBFS(
         }
 
         for successor in successors {
+            let formalArguments = try successor.arguments.map { try $0.rendered(using: layout) }
             let successorKey = try runtime.canonicalState(successor.state)
             let targetID: StateGraph.StateID
             if let existing = stateToID[successorKey] {
@@ -266,7 +267,7 @@ private func compiledBFS(
                 let actionName = layout.actions[successor.action.ordinal].declaration.name
                 predecessors[successor.state] = (
                     current,
-                    formalActionCall(named: actionName, arguments: successor.arguments)
+                    formalActionCall(named: actionName, arguments: formalArguments)
                 )
                 queue.append(successor.state)
                 nextID += 1
@@ -277,7 +278,7 @@ private func compiledBFS(
                     label: .init(
                         action: successor.action,
                         formalName: actionName,
-                        arguments: successor.arguments
+                        arguments: formalArguments
                     ),
                     target: targetID
                 )

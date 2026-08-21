@@ -56,7 +56,7 @@ struct LiveMachineRuntimeTests {
             let action = compilation.layout.actions[ordinal].id
             return try CompiledRuntime(compilation: compilation)
                 .successors(for: action, from: formalState)
-                .filter { $0.arguments == arguments }
+                .filter { try $0.arguments.map { try $0.rendered(using: compilation.layout) } == arguments }
                 .map { try $0.state.projection(using: compilation.layout) }
         }
     }

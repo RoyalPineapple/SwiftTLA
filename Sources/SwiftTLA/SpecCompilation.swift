@@ -172,11 +172,8 @@ public struct CompiledSpecification: Sendable {
         )
     }
 
-    func matches(
-        _ formalArguments: [TLAValue],
-        request: CompiledActionRequest
-    ) throws -> Bool {
-        try formalArguments.map { try CompiledValue(formal: $0, using: layout) } == request.arguments
+    func matches(_ arguments: [CompiledValue], request: CompiledActionRequest) -> Bool {
+        arguments == request.arguments
     }
 
     package func generatedActionLabelInput(
@@ -199,7 +196,7 @@ public struct CompiledSpecification: Sendable {
         let formalState = try CompiledState(projection: state, compilation: self)
         return try CompiledRuntime(compilation: self)
             .successors(for: action, from: formalState)
-            .filter { $0.arguments == arguments }
+            .filter { try $0.arguments.map { try $0.rendered(using: layout) } == arguments }
             .map { try $0.state.projection(using: layout) }
     }
 
