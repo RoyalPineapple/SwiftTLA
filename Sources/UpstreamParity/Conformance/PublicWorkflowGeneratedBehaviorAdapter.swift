@@ -226,32 +226,33 @@ public struct PublicWorkflowGeneratedBehaviorToolchain: Equatable, Codable, Send
 
 struct PublicWorkflowGeneratedMachineHarness {
   let initialStates: [TLAStateProjection]
-  let actionNames: [String]
-  let apply: (TLAStateProjection, String) -> GeneratedActionResult
+  let actions: [PublicWorkflowGeneratedAction]
+  let apply: (TLAStateProjection, ActionID) -> GeneratedActionResult
   let propertyOutcomes: (TLAStateProjection) -> [CompiledPropertyOutcome]
 
   init(
     initialStates: [TLAStateProjection],
-    actionNames: [String],
-    apply: @escaping (TLAStateProjection, String) -> GeneratedActionResult,
+    actions: [PublicWorkflowGeneratedAction],
+    apply: @escaping (TLAStateProjection, ActionID) -> GeneratedActionResult,
     propertyOutcomes: @escaping (TLAStateProjection) -> [CompiledPropertyOutcome]
   ) {
     self.initialStates = initialStates
-    self.actionNames = actionNames
+    self.actions = actions
     self.apply = apply
     self.propertyOutcomes = propertyOutcomes
   }
 }
 
-/// The harness-local result of asking a generated machine about one action.
-/// It is owned by the generated-behavior comparison boundary, not by the
-/// public runtime surface.
+struct PublicWorkflowGeneratedAction: Hashable, Sendable {
+  let id: ActionID
+  let renderedName: String
+}
+
 enum GeneratedActionResult: Equatable, Sendable {
-  case enabled(actionName: String, successors: [TLAStateProjection])
-  case disabled(actionName: String)
-  case actionNotFound(actionName: String)
-  case evaluationFailed(actionName: String, diagnostic: GeneratedActionDiagnostic)
-  case evaluationUnavailable(actionName: String, diagnostic: GeneratedActionDiagnostic)
+  case enabled(successors: [TLAStateProjection])
+  case disabled
+  case evaluationFailed(GeneratedActionDiagnostic)
+  case evaluationUnavailable(GeneratedActionDiagnostic)
 }
 
 struct GeneratedActionDiagnostic: Equatable, Sendable {
@@ -349,7 +350,7 @@ public struct PublicWorkflowGeneratedBehaviorAdapter: Sendable {
     }
 
     let compiledFixture = try PublicWorkflowGeneratedFixtureRegistry.fixture(id: fixture.id)
-    guard compiledFixture.machine.actionNames.sorted() == fixture.actionNames.sorted(),
+    guard compiledFixture.machine.actions.map(\.renderedName).sorted() == fixture.actionNames.sorted(),
           !compiledFixture.machine.initialStates.isEmpty else {
       throw PublicWorkflowGovernanceError.inconsistentReference(record: fixture.id, field: "compiled generated fixture")
     }
@@ -604,28 +605,25 @@ public struct PublicWorkflowGeneratedBehaviorAdapter: Sendable {
       let state = queue[index]
       index += 1
       let source = try canonicalState(from: state)
-      for actionName in machine.actionNames.sorted() {
-        switch machine.apply(state, actionName) {
-        case .enabled(_, let successors):
+      for action in machine.actions.sorted(by: { $0.renderedName < $1.renderedName }) {
+        switch machine.apply(state, action.id) {
+        case .enabled(let successors):
           for successor in successors {
             let target = try canonicalState(from: successor)
-            edges.append(CanonicalEdge(source: source.key, action: actionName, target: target.key))
+            edges.append(CanonicalEdge(source: source.key, action: action.renderedName, target: target.key))
             if seen.insert(target.key).inserted {
               states[target.key] = target
-              predecessors[target.key] = (source.key, actionName)
+              predecessors[target.key] = (source.key, action.renderedName)
               queue.append(successor)
             }
           }
         case .disabled:
           continue
-        case .actionNotFound(let actionName):
-          failures.append("generated:actionNotFound:\(actionName)")
-          diagnostics.append("generated:action not found")
-        case .evaluationFailed(let actionName, let diagnostic):
-          failures.append("generated:evaluationFailed:\(actionName):\(diagnostic.code.rawValue):\(diagnostic.message)")
+        case .evaluationFailed(let diagnostic):
+          failures.append("generated:evaluationFailed:\(action.renderedName):\(diagnostic.code.rawValue):\(diagnostic.message)")
           diagnostics.append("generated:evaluation failed")
-        case .evaluationUnavailable(let actionName, let diagnostic):
-          failures.append("generated:evaluationUnavailable:\(actionName):\(diagnostic.code.rawValue):\(diagnostic.message)")
+        case .evaluationUnavailable(let diagnostic):
+          failures.append("generated:evaluationUnavailable:\(action.renderedName):\(diagnostic.code.rawValue):\(diagnostic.message)")
           diagnostics.append("generated:evaluation unavailable")
         }
         if failureTrace == nil, !failures.isEmpty {
