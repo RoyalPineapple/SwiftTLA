@@ -22,6 +22,10 @@ struct CanonicalGraphReceiptTests {
     #expect(forwardReceipt.stateCount == 2)
     #expect(forwardReceipt.edgeCount == 3)
     #expect(forwardReceipt == receipt(reversed))
+    #expect(
+      CanonicalGraphReceipt.graphRecordDigest(for: forward)
+        == CanonicalGraphReceipt.graphRecordDigest(for: reversed)
+    )
   }
 
   @Test("canonical graph receipt changes for graph and identity changes")
@@ -46,6 +50,10 @@ struct CanonicalGraphReceiptTests {
     ])
 
     #expect(receipt(base).graphDigest != receipt(changedAction).graphDigest)
+    #expect(
+      CanonicalGraphReceipt.graphRecordDigest(for: base)
+        != CanonicalGraphReceipt.graphRecordDigest(for: changedAction)
+    )
     #expect(receipt(base).graphDigest != receipt(removedRepeatedEdge).graphDigest)
     #expect(receipt(base).graphDigest != receipt(changedStateGraph).graphDigest)
     #expect(receipt(base, configuration: "config-2").graphDigest != receipt(base).graphDigest)

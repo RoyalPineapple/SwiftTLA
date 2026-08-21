@@ -126,9 +126,9 @@ public struct TLCTemporalAdapter: Sendable {
         run = try processAdapter.run(input.request, replay: .none)
       } catch {
         if let completed = completedRun(from: error) {
-          try? retain(run: completed, input: input)
-          try? retainPrimaryResult(completed.primary, input: input)
-          _ = try? retainGraphEvents(from: input.request, to: input.outputDirectory)
+          try retain(run: completed, input: input)
+          try retainPrimaryResult(completed.primary, input: input)
+          _ = try retainGraphEvents(from: input.request, to: input.outputDirectory)
         }
         throw error
       }
@@ -182,15 +182,7 @@ public struct TLCTemporalAdapter: Sendable {
   }
 
   public static func graphID(_ graph: CanonicalRun) -> String {
-    let projection: [String: Any] = [
-      "initialStates": graph.graph.initialStateKeys.sorted().map(\.canonicalEncoding),
-      "states": graph.graph.states.keys.sorted().map(\.canonicalEncoding),
-      "edges": graph.graph.edgeOccurrences.keys.sorted().map { edge in
-        ["edge": edge.canonicalEncoding, "count": graph.graph.edgeOccurrences[edge] ?? 0]
-      }
-    ]
-    let data = try! JSONSerialization.data(withJSONObject: projection, options: [.sortedKeys])
-    return SHA256.hex(data)
+    CanonicalGraphReceipt.graphRecordDigest(for: graph.graph)
   }
 
   private func validate(_ input: TLCTemporalCaptureInput) throws {

@@ -136,6 +136,10 @@ struct CanonicalGraphReceipt: Hashable, Sendable {
     }
   }
 
+  static func graphRecordDigest(for graph: CanonicalGraph) -> String {
+    digest(initialRecords(for: graph) + stateRecords(for: graph) + edgeRecords(for: graph))
+  }
+
   private static func initialRecords(for graph: CanonicalGraph) -> [String] {
     graph.initialStateKeys.sorted().map { "initial:\($0.canonicalEncoding)" }
   }
