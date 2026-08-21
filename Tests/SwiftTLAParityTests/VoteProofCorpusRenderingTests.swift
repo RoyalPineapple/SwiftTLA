@@ -6,6 +6,7 @@ struct VoteProofCorpusRenderingTests {
     func specMacroCompilationPreservesFormalStructure() throws {
         let compilation = try VoteProofModel.spec.compile()
         #expect(compilation.spec.name == "VoteProof")
+        #expect(Set(compilation.description.variables.map(\.name)).isSuperset(of: Set(["votes", "maxBal"])))
         #expect(Set(VoteProofModel.spec.formalOperatorDefinitions.map(\.name)) == ["ChosenIn", "SafeAt", "chosen"])
         #expect(Set(VoteProofModel.spec.invariants.map(\.name)) == ["TypeOK", "VInv1", "VInv2", "VInv3", "VInv4"])
         #expect(VoteProofModel.spec.refinements.map(\.name) == ["Refines"])
