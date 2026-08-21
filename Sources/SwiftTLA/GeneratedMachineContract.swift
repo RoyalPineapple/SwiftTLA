@@ -649,7 +649,7 @@ public enum GeneratedMachineContractVerifier {
                 do {
                     expectedTargets = try transitions
                         .filter {
-                            $0.label.actionOrdinal == input.ordinal
+                            $0.label.actionID?.ordinal == input.ordinal
                                 && $0.label.arguments == input.arguments
                         }
                         .map { transition in

@@ -277,8 +277,7 @@ public struct LivenessChecker {
     }
 
     private func compiledAction(for label: StateGraph.TransitionLabel) -> CompiledActionCall? {
-        let action = label.actionID ?? compilation.layout.actionID(named: label.action)
-        guard let action else { return nil }
+        guard let action = label.actionID else { return nil }
         return .init(action: action, arguments: label.arguments)
     }
 
