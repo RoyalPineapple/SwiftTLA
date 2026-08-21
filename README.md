@@ -20,8 +20,8 @@ SwiftTLA gives one specification three jobs:
 - TLA+ and PlusCal artifacts for TLC validation.
 
 The generated machine gives your application typed state and action cases.
-The model checker explores the same compiled specification. For declared finite
-cases, SwiftTLA compares its graph with TLC's graph exactly.
+The model checker explores the same compiled specification. SwiftTLA compares
+its graph with TLC's graph exactly.
 
 ## Define a model. Use it in your app.
 
@@ -78,14 +78,14 @@ print(result.after.hour)
 In tests, SwiftTLA explores the reachable graph from the model's initial state.
 It validates the invariants and properties in that specification.
 
-Core Conformance runs the declared finite cases through SwiftTLA and TLC. It
-compares the complete canonical state graph and labeled transition graph.
+Core Conformance runs the same model through SwiftTLA and TLC. It compares the
+complete canonical state graph and labeled transition graph.
 The [Core Graph Conformance guide](Documentation/CoreGraphConformance.md)
 describes the retained evidence and comparison results.
 
 The separate ValidationEvidence workflow translates the canonical PlusCal
 corpus with the official PlusCal translator and runs TLC. It supplies
-independent evidence for selected upstream models.
+independent evidence for the upstream models in that corpus.
 
 ## Use live state when you need it
 
