@@ -223,7 +223,7 @@ package struct MachineSurfacePlan: Sendable, Equatable {
             return Action(
                 formalName: layout.declaration.name,
                 swiftIdentifier: identifier,
-                bindings: action.bindings.map { binding in
+                bindings: try action.bindings.map { binding in
                     Binding(
                         formalName: binding.name,
                         swiftType: try Self.generatedSwiftType(

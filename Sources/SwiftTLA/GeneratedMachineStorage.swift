@@ -34,7 +34,7 @@ public struct _GeneratedMachineStorage: Sendable {
             }
             throw GeneratedMachineError.ambiguousInitialState
         }
-        return State(matches[0])
+        return matches[0]
     }
 
     /// Resolves one formal projection to a state owned by this storage.
@@ -237,7 +237,7 @@ public extension _GeneratedMachineStorage {
 
             public mutating func next() async -> LiveEvent<Action>? {
                 guard let event = await base.next() else { return nil }
-                return LiveRuntime.convert(event)
+                return LiveRuntime<Action>.convert(event)
             }
         }
 
@@ -248,7 +248,7 @@ public extension _GeneratedMachineStorage {
         public func resynchronize() async -> LiveResynchronization {
             switch await base.resynchronize() {
             case .resumed(let position): return .resumed(at: position)
-            case .terminated(let termination): return .terminated(LiveRuntime.convert(termination))
+            case .terminated(let termination): return .terminated(LiveRuntime<Action>.convert(termination))
             case .cancelled: return .cancelled
             }
         }
