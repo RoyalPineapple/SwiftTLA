@@ -174,7 +174,7 @@ extension TLASpec {
 
   func authoredPlusCalModule(
     semantics: CompiledSemantics,
-    renderer: CompiledTLARenderer,
+    formalRenderer: CompiledTLARenderer,
     renderedRefinements: [String]
   ) throws -> AuthoredPlusCalModule? {
     guard sourceAlgorithms.count == 1, let algorithm = sourceAlgorithms.first else {
@@ -182,7 +182,7 @@ extension TLASpec {
     }
     let declarationSections = try authoredPlusCalDeclarationSections(
       semantics: semantics,
-      renderer: renderer
+      formalRenderer: formalRenderer
     )
     let declarationPlan = AuthoredPlusCalModule(
       name: name,
@@ -200,10 +200,20 @@ extension TLASpec {
     let renderer = AlgorithmPlusCalRenderer(module: declarationPlan)
     let sourceProperties = try renderer.sourcePropertyDefinitions()
     let sourcePropertyNames = sourceProperties.map(\.name)
-    let topLevelProperties = invariants
+    let topLevelProperties = try invariants
       .filter { sourcePropertyNames.contains($0.name) == false }
-      .map { invariant in
-        (name: invariant.name, definition: "\(invariant.name) == \(invariant.body.tlaModuleSource)")
+      .map { invariant -> (name: String, definition: String) in
+        guard let compiled = semantics.invariants.first(where: { $0.name == invariant.name }) else {
+          throw CompilationDiagnostic(
+            code: .compilationIdentityMismatch,
+            stage: .rendering,
+            path: "authoredPlusCal.invariants.\(invariant.name)",
+            expected: "a compiled invariant",
+            actual: "no compiled invariant",
+            nextSafeAction: "Compile the model again from its current source."
+          )
+        }
+        return (name: invariant.name, definition: "\(invariant.name) == \(try formalRenderer.state(compiled.body))")
       }
     let topLevelPropertyNames = topLevelProperties.map(\.name)
     let loweredPropertyNames = invariants.map(\.name) + temporalProperties.map(\.name)
@@ -262,7 +272,7 @@ extension TLASpec {
 
   private func authoredPlusCalDeclarationSections(
     semantics: CompiledSemantics,
-    renderer: CompiledTLARenderer
+    formalRenderer: CompiledTLARenderer
   ) throws -> AuthoredPlusCalDeclarationSections {
     guard formalOperatorDefinitions.count <= semantics.formalOperatorDefinitions.count else {
       throw CompilationDiagnostic(
@@ -277,7 +287,7 @@ extension TLASpec {
     let definitions = try formalOperatorDefinitions.enumerated().map { index, definition in
       AuthoredPlusCalDeclaration(
         name: definition.name,
-        text: try renderer.formalDefinition(semantics.formalOperatorDefinitions[index]),
+        text: try formalRenderer.formalDefinition(semantics.formalOperatorDefinitions[index]),
         phase: definition.plusCalPhase,
         dependencies: definition.plusCalDependencies
       )
