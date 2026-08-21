@@ -219,8 +219,8 @@ enum MacroExpander {
             return [
                 DeclSyntax(stringLiteral: "public enum ActionLabel: Hashable, Sendable {}"),
                 DeclSyntax(stringLiteral: "private static func _actionOrdinal(for action: ActionLabel) -> Int { switch action {} }"),
-                DeclSyntax(stringLiteral: "private static func _formalArguments(for action: ActionLabel) -> [TLAValue] { switch action {} }"),
-                DeclSyntax(stringLiteral: "private static func _actionLabel(actionAt ordinal: Int, arguments: [TLAValue]) -> ActionLabel? { nil }")
+                DeclSyntax(stringLiteral: "private static func _actionArguments(for action: ActionLabel) -> [any TLAValueConvertible] { switch action {} }"),
+                DeclSyntax(stringLiteral: "private static func _actionLabel(actionAt ordinal: Int, arguments: _GeneratedMachineStorage.ActionArguments) -> ActionLabel? { nil }")
             ]
         }
         func argumentConstructor(for binding: MachineSurfacePlan.Binding) -> String {
@@ -237,19 +237,18 @@ enum MacroExpander {
             codegenTLAValue(binding.domain[0])
         }
 
-        func actionArgumentPattern(
+        func actionArgumentBinding(
             for binding: MachineSurfacePlan.Binding,
             index: Int,
             in arguments: String
         ) -> String {
-            let argument = "\(arguments)[\(index)]"
             switch binding.swiftType {
-            case "Int": return "case .int(let \(binding.formalName)) = \(argument)"
-            case "Bool": return "case .bool(let \(binding.formalName)) = \(argument)"
-            case "String": return "case .string(let \(binding.formalName)) = \(argument)"
-            case "TLAValue": return "let \(binding.formalName) = \(argument)"
+            case "Int": return "let \(binding.formalName) = try? \(arguments).value(at: \(index), as: Int.self)"
+            case "Bool": return "let \(binding.formalName) = try? \(arguments).value(at: \(index), as: Bool.self)"
+            case "String": return "let \(binding.formalName) = try? \(arguments).value(at: \(index), as: String.self)"
+            case "TLAValue": return "let \(binding.formalName) = try? \(arguments).value(at: \(index), as: TLAValue.self)"
             default:
-                return "let \(binding.formalName) = \(binding.swiftType)(formalValue: \(argument))"
+                return "let \(binding.formalName) = try? \(arguments).value(at: \(index), as: \(binding.swiftType).self)"
             }
         }
 
@@ -284,9 +283,9 @@ enum MacroExpander {
             }
             let patterns = action.bindings.enumerated().map { index, binding -> String in
                 if binding.isPublic {
-                    return actionArgumentPattern(for: binding, index: index, in: "arguments")
+                    return actionArgumentBinding(for: binding, index: index, in: "arguments")
                 }
-                return "\(codegenTLAValue(binding.domain[0])) == arguments[\(index)]"
+                return "arguments.matches(\(codegenTLAValue(binding.domain[0])), at: \(index))"
             }.joined(separator: ", ")
             let arguments = publicBindings.map { "\($0.formalName): \($0.formalName)" }.joined(separator: ", ")
             return "case \(ordinal) where arguments.count == \(action.bindings.count): "
@@ -307,14 +306,14 @@ enum MacroExpander {
         }
         """),
             DeclSyntax(stringLiteral: """
-        private static func _formalArguments(for action: ActionLabel) -> [TLAValue] {
+        private static func _actionArguments(for action: ActionLabel) -> [any TLAValueConvertible] {
             switch action {
             \(actionArgumentCases)
             }
         }
         """),
             DeclSyntax(stringLiteral: """
-        private static func _actionLabel(actionAt ordinal: Int, arguments: [TLAValue]) -> ActionLabel? {
+        private static func _actionLabel(actionAt ordinal: Int, arguments: _GeneratedMachineStorage.ActionArguments) -> ActionLabel? {
             switch ordinal {
             \(labelCases)
             default: return nil
@@ -427,57 +426,37 @@ extension MacroExpander {
     ) -> String {
         variables.enumerated().map { index, variable in
             let key = String(reflecting: variable.formalName)
-            let rawValue = "try storage.formalValue(at: \(index), in: storageState)"
             let typeName = stateType(for: variable, enumInfos: enumInfos)
             if let info = enumInfos.first(where: { $0.typeName == typeName }) {
                 let cases = info.cases.map { "case \"\($0.name)\": self.\(variable.formalName) = \(typeName).\($0.name)" }
                     .joined(separator: "\n")
                 return """
-                let rawValue = \(rawValue)
-                guard case .string(let value) = rawValue else {
-                    throw GeneratedMachineStateDiagnostic.typeMismatch(path: \(key), expected: "\(typeName) encoded as a formal string", actual: String(describing: rawValue))
-                }
+                let value = try storage.value(at: \(index), as: String.self, in: storageState)
                 switch value {
                 \(cases)
                 default:
-                    throw GeneratedMachineStateDiagnostic.typeMismatch(path: \(key), expected: "a declared \(typeName) case", actual: String(describing: rawValue))
+                    throw GeneratedMachineStateDiagnostic.typeMismatch(path: \(key), expected: "a declared \(typeName) case", actual: value)
                 }
                 """
             }
             let type = typeName
             if type == "TLAValue" {
                 return """
-                let value = \(rawValue)
+                let value = try storage.value(at: \(index), as: TLAValue.self, in: storageState)
                 self.\(variable.formalName) = value
                 """
             }
             if !["Int", "Bool", "String", "TLAValue"].contains(typeName) {
                 return """
-                let rawValue = \(rawValue)
-                guard let value = \(typeName)(formalValue: rawValue) else {
-                    throw GeneratedMachineStateDiagnostic.typeMismatch(path: \(key), expected: "\(typeName)", actual: String(describing: rawValue))
-                }
+                let value = try storage.value(at: \(index), as: \(typeName).self, in: storageState)
                 self.\(variable.formalName) = value
                 """
             }
-            let pattern = tlaValuePattern(forSwiftType: type, binding: "value")
             return """
-            let rawValue = \(rawValue)
-            guard \(pattern) else {
-                throw GeneratedMachineStateDiagnostic.typeMismatch(path: \(key), expected: "\(type)", actual: String(describing: rawValue))
-            }
+            let value = try storage.value(at: \(index), as: \(type).self, in: storageState)
             self.\(variable.formalName) = value
             """
         }.joined(separator: "\n")
-    }
-
-    static func tlaValuePattern(forSwiftType swiftType: String, binding: String) -> String {
-        switch swiftType {
-        case "Int": "case .int(let \(binding)) = rawValue"
-        case "Bool": "case .bool(let \(binding)) = rawValue"
-        case "String": "case .string(let \(binding)) = rawValue"
-        default: "let \(binding) = rawValue"
-        }
     }
 
     static func generateActionMethods(
@@ -503,8 +482,9 @@ extension MacroExpander {
                         throw error
                     }
                     let storageState = try _stateWithLiveCollections()
-                    guard case .function(let originalValues) = try _storage.formalValue(
+                    guard case .function(let originalValues) = try _storage.value(
                         at: \(variableOrdinal),
+                        as: TLAValue.self,
                         in: storageState
                     ) else {
                         throw GeneratedMachineStateDiagnostic.missingRequiredValue(
@@ -515,7 +495,7 @@ extension MacroExpander {
                     let before = _state
                     let afterStorageState = try _storage.apply(
                         actionOrdinal: Self._actionOrdinal(for: .\(action.swiftIdentifier)),
-                        formalArguments: Self._formalArguments(for: .\(action.swiftIdentifier)),
+                        arguments: Self._actionArguments(for: .\(action.swiftIdentifier)),
                         from: storageState
                     ) { candidate in
                         let candidate = try State(storage: _storage, storageState: candidate)
@@ -526,7 +506,11 @@ extension MacroExpander {
                         }
                     }
                     let after = try State(storage: _storage, storageState: afterStorageState)
-                    let afterValue = try _storage.formalValue(at: \(variableOrdinal), in: afterStorageState)
+                    let afterValue = try _storage.value(
+                        at: \(variableOrdinal),
+                        as: TLAValue.self,
+                        in: afterStorageState
+                    )
                     guard case .function(let nextValues) = afterValue,
                           let nextFormalValue = nextValues[targetKey],
                           let nextValue = \(collection.valueType)(formalValue: nextFormalValue) else {

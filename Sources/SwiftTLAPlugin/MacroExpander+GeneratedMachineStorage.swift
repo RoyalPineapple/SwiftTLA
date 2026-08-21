@@ -29,7 +29,7 @@ extension MacroExpander {
             }
             return """
             state = try _storage.replacing(
-                formalValue: \(collection.formalName).projection().modelValue,
+                value: \(collection.formalName).projection().modelValue,
                 at: \(ordinal),
                 in: state
             )
@@ -94,7 +94,7 @@ extension MacroExpander {
                 let before = _state
                 let afterStorageState = try _storage.apply(
                     actionOrdinal: Self._actionOrdinal(for: action),
-                    formalArguments: Self._formalArguments(for: action),
+                    arguments: Self._actionArguments(for: action),
                     from: _stateWithLiveCollections()
                 )
                 let after = try State(storage: _storage, storageState: afterStorageState)

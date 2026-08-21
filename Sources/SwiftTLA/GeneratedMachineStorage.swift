@@ -11,6 +11,30 @@ public struct _GeneratedMachineStorage: Sendable {
         }
     }
 
+    /// Opaque action arguments passed between generated members and storage.
+    public struct ActionArguments: Sendable {
+        fileprivate let values: [TLAValue]
+
+        public var count: Int { values.count }
+
+        public func value<Value: TLAValueType>(
+            at index: Int,
+            as _: Value.Type = Value.self
+        ) throws -> Value {
+            guard values.indices.contains(index) else {
+                throw GeneratedMachineError.invalidGeneratedActionOrdinal
+            }
+            return try _GeneratedMachineStorage.decode(values[index], at: "action argument \(index)")
+        }
+
+        public func matches<Value: TLAValueConvertible>(
+            _ value: Value,
+            at index: Int
+        ) -> Bool {
+            values.indices.contains(index) && values[index] == value.tlaValue
+        }
+    }
+
     private let compilation: CompiledSpecification
 
     /// Creates generated-machine storage from one successful compilation.
@@ -48,8 +72,8 @@ public struct _GeneratedMachineStorage: Sendable {
     }
 
     /// Replaces one generated variable value in a storage state.
-    public func replacing(
-        formalValue: TLAValue,
+    public func replacing<Value: TLAValueConvertible>(
+        value: Value,
         at variableOrdinal: Int,
         in state: State
     ) throws -> State {
@@ -57,26 +81,31 @@ public struct _GeneratedMachineStorage: Sendable {
             throw GeneratedMachineError.invalidGeneratedVariableOrdinal
         }
         let variable = compilation.layout.variables[variableOrdinal]
-        let value = try CompiledValue(formal: formalValue, using: compilation.layout)
-        return State(try state.compiled.updating(variable.id, to: value))
+        let compiledValue = try CompiledValue(formal: value.tlaValue, using: compilation.layout)
+        return State(try state.compiled.updating(variable.id, to: compiledValue))
     }
 
     /// Returns the formal value at one generated variable ordinal.
-    public func formalValue(at variableOrdinal: Int, in state: State) throws -> TLAValue {
+    public func value<Value: TLAValueType>(
+        at variableOrdinal: Int,
+        as _: Value.Type = Value.self,
+        in state: State
+    ) throws -> Value {
         guard compilation.layout.variables.indices.contains(variableOrdinal) else {
             throw GeneratedMachineError.invalidGeneratedVariableOrdinal
         }
         let variable = compilation.layout.variables[variableOrdinal]
-        return try state.compiled.value(for: variable.id).rendered(using: compilation.layout)
+        let formalValue = try state.compiled.value(for: variable.id).rendered(using: compilation.layout)
+        return try Self.decode(formalValue, at: variable.formalName)
     }
 
     /// Returns every successor for one generated action call.
     public func successors(
         actionOrdinal: Int,
-        formalArguments: [TLAValue],
+        arguments: [any TLAValueConvertible],
         from state: State
     ) throws -> [State] {
-        let request = try request(actionOrdinal: actionOrdinal, formalArguments: formalArguments)
+        let request = try request(actionOrdinal: actionOrdinal, arguments: arguments)
         return try CompiledRuntime(compilation: compilation)
             .successors(for: request.action, from: state.compiled)
             .filter { compilation.matches($0.arguments, request: request) }
@@ -86,13 +115,13 @@ public struct _GeneratedMachineStorage: Sendable {
     /// Applies the first compiled successor for one generated action call.
     public func apply(
         actionOrdinal: Int,
-        formalArguments: [TLAValue],
+        arguments: [any TLAValueConvertible],
         from state: State,
         selecting successor: (State) throws -> Bool = { _ in true }
     ) throws -> State {
         for after in try successors(
             actionOrdinal: actionOrdinal,
-            formalArguments: formalArguments,
+            arguments: arguments,
             from: state
         ) {
             guard try successor(after) else { continue }
@@ -104,7 +133,7 @@ public struct _GeneratedMachineStorage: Sendable {
     /// Resolves the generated actions enabled in one stored state.
     public func availableActions<Action: Hashable>(
         in state: State,
-        resolve: (Int, [TLAValue]) throws -> Action?
+        resolve: (Int, ActionArguments) throws -> Action?
     ) throws -> [Action] {
         var seen = Set<Action>()
         return try CompiledRuntime(compilation: compilation)
@@ -115,7 +144,7 @@ public struct _GeneratedMachineStorage: Sendable {
                     arguments: successor.arguments
                 )
                 let input = try compilation.generatedActionLabelInput(for: request)
-                guard let action = try resolve(input.ordinal, input.formalArguments) else {
+                guard let action = try resolve(input.ordinal, .init(values: input.formalArguments)) else {
                     return nil
                 }
                 return seen.insert(action).inserted ? action : nil
@@ -124,15 +153,29 @@ public struct _GeneratedMachineStorage: Sendable {
 
     private func request(
         actionOrdinal: Int,
-        formalArguments: [TLAValue]
+        arguments: [any TLAValueConvertible]
     ) throws -> CompiledActionRequest {
         guard compilation.layout.actions.indices.contains(actionOrdinal) else {
             throw GeneratedMachineError.invalidGeneratedActionOrdinal
         }
         return try compilation.actionRequest(
             ordinal: actionOrdinal,
-            formalArguments: formalArguments
+            formalArguments: arguments.map(\.tlaValue)
         )
+    }
+
+    private static func decode<Value: TLAValueType>(
+        _ formalValue: TLAValue,
+        at path: String
+    ) throws -> Value {
+        guard let value = Value(formalValue: formalValue) else {
+            throw GeneratedMachineStateDiagnostic.typeMismatch(
+                path: path,
+                expected: String(reflecting: Value.self),
+                actual: String(describing: formalValue)
+            )
+        }
+        return value
     }
 }
 

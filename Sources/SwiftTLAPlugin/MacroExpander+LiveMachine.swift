@@ -185,7 +185,7 @@ extension MacroExpander {
                     successors: { state, action in
                         return try storage.successors(
                             actionOrdinal: Self._actionOrdinal(for: action),
-                            formalArguments: Self._formalArguments(for: action),
+                            arguments: Self._actionArguments(for: action),
                             from: state
                         )
                     },
