@@ -95,7 +95,7 @@ struct CompiledTLARenderer {
         case .setSum(let function, let set): return "Sum(\(try state(function)), \(try state(set)))"
         case .functionSet(let domain, let range): return "[\(try state(domain)) -> \(try state(range))]"
         case .foldFunction(let operation, let initial, let sequence):
-            return "FoldFunction(\(try formalOperator(operation)), \(try state(initial)), \(try state(sequence)))"
+            return "FoldFunction(\(try formalLambda(operation)), \(try state(initial)), \(try state(sequence)))"
         case .operatorApplication(let operation, let arguments):
             let arguments = try arguments.map(formalArgument).joined(separator: ", ")
             let operation = try formalOperator(operation)
@@ -124,6 +124,10 @@ struct CompiledTLARenderer {
             return "LAMBDA \(try lambda.parameters.map(binderName).joined(separator: ", ")) : \(try state(lambda.body))"
         case .reference(let id, _): return try operatorName(id)
         }
+    }
+
+    private func formalLambda(_ lambda: CompiledFormalLambda) throws -> String {
+        "LAMBDA \(try lambda.parameters.map(binderName).joined(separator: ", ")) : \(try state(lambda.body))"
     }
 
     private func localOperator(_ operation: CompiledLocalOperator) throws -> String {
