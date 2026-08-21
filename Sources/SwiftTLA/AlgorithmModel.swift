@@ -121,7 +121,7 @@ internal struct AlgorithmModel: Sendable {
                     in: result
                 )
             }
-            return StateExpr.substituteVariable("__pcal_self", with: .variable("self"), in: family)
+            return family.replacingCurrentProcess(with: .variable("self"))
         }
 
         func temporal(_ value: TemporalExpr) -> TemporalExpr {
@@ -145,12 +145,8 @@ internal struct AlgorithmModel: Sendable {
         }
 
         func statements(_ values: [AlgorithmStatementModel]) -> [AlgorithmStatementModel] {
-            values.map {
-                $0.substitutingVariable(
-                    "__pcal_self",
-                    with: .variable("self"),
-                    assignmentTargets: .preserve
-                )
+            values.map { statement in
+                statement.replacingCurrentProcess(with: .variable("self"))
             }.map { statement in
                 localRoots.reduce(statement) { result, root in
                     result.substitutingVariable(
@@ -299,10 +295,8 @@ private func algorithmCanonicalEncoding(_ model: AlgorithmModel) -> String {
         case .step(let step):
             result = "step(\(step.label.name),\(step.loopCondition.map { state($0, environment) } ?? "nil"),[\(statements(step.statements, environment, path: "\(path).statements"))])"
         case .process(let process):
-            var processEnvironment = environment
-            processEnvironment["__pcal_self"] = "@process"
             let components = process.components.enumerated().map { index, child in
-                component(child, processEnvironment, path: "\(path).components[\(index)]")
+                component(child, environment, path: "\(path).components[\(index)]")
             }.joined(separator: ",")
             result = "process(\(process.typeName),[\(process.domain.map(\.description).joined(separator: ","))],\(process.fairness),[\(components)])"
         case .procedure(let procedure):

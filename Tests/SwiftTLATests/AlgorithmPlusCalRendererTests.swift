@@ -44,7 +44,7 @@ struct AlgorithmPlusCalRendererTests {
         let algorithm = Algorithm("RenderedProcess") {
             let count = SharedVar("count", initial: 0)
             let flags = SharedVar("flags", initial: Function<Node, Bool>.literal((.left, false), (.right, false)))
-            let sentinel = SharedVar("sentinel", initial: "__pcal_self")
+            let sentinel = SharedVar("sentinel", initial: "author text")
             count
             flags
             sentinel
@@ -78,7 +78,7 @@ struct AlgorithmPlusCalRendererTests {
 
         #expect(rendered.contains("---- MODULE RenderedProcess ----"))
         #expect(rendered.contains("count = 0"))
-        #expect(rendered.contains("sentinel = \"__pcal_self\""))
+        #expect(rendered.contains("sentinel = \"author text\""))
         #expect(rendered.contains("(*--algorithm Rendered Process {"))
         #expect(rendered.contains("fair+ process (pcalProcess1 \\in {\"left\", \"right\"})"))
         #expect(rendered.contains("local = 0"))
