@@ -863,7 +863,6 @@ private struct CanonicalSpecificationEncoder {
             ])
         }
         list("moduleInstances", moduleInstances) { $0 }
-        list("runtimeFuncBodies", spec.runtimeFuncBodies) { $0 }
         let symmetrySets = spec.symmetrySets.map { set in
             node("symmetry-set", [set.variableName, canonicalList(set.values.map(canonicalValue).sorted())])
         }

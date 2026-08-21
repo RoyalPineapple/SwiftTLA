@@ -25,8 +25,6 @@ extension TLASpec {
     let importedModules = imports.map(\.module)
     let importConfigurations = imports.compactMap(\.configuration)
     let moduleInstances = components.compactMap { $0 as? FormalModuleInstance }
-    var runtimeFuncCollector: [String: @Sendable ([TLAValue]) -> TLAValue] = [:]
-    var runtimeFuncBodiesCollector: [String] = []
     var symmetrySets: [SymmetrySet] = []
     var symmetricCollections: [SymmetricCollectionDecl] = []
     var algorithmFidelityTokens: [AlgorithmFidelityToken] = []
@@ -104,10 +102,6 @@ extension TLASpec {
         constraint = constraint.map { .and($0, c.body) } ?? c.body
       } else if let rf = comp as? RecursiveFuncDecl {
         recursiveFuncs.append(rf.funcDef)
-      } else if let rtf = comp as? RuntimeFuncDecl {
-        runtimeFuncCollector[rtf.name] = rtf.implementation
-        runtimeFuncBodiesCollector.append(rtf.tlaBody)
-        runtimeFuncBodies.append(rtf.tlaBody)
       } else if let s = comp as? SymmetrySetDecl {
         symmetrySets.append(SymmetrySet(variableName: s.variableName, values: s.values))
       }
@@ -134,8 +128,6 @@ extension TLASpec {
     self.imports = importedModules
     self.importConfigurations = importConfigurations
     self.moduleInstances = moduleInstances
-    self.runtimeFuncs = runtimeFuncCollector
-    self.runtimeFuncBodies = runtimeFuncBodiesCollector
     self.symmetrySets = symmetrySets
     self.symmetricCollections = symmetricCollections
     self.algorithmFidelityTokens = algorithmFidelityTokens
@@ -225,8 +217,6 @@ extension TLASpec {
       authoredPlusCalDeclarations: authoredPlusCalDeclarations
     )
     lowered.algorithmPhase = .lowered
-    lowered.runtimeFuncs = runtimeFuncs
-    lowered.runtimeFuncBodies = runtimeFuncBodies
     return lowered
   }
 
@@ -388,8 +378,6 @@ public func substituteConstants(_ spec: TLASpec) -> TLASpec {
     sourceAlgorithms: spec.sourceAlgorithms
   )
   resolved.algorithmPhase = spec.algorithmPhase
-  resolved.runtimeFuncs = spec.runtimeFuncs
-  resolved.runtimeFuncBodies = spec.runtimeFuncBodies
   return resolved
 }
 

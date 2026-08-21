@@ -161,7 +161,6 @@ internal initializers — only the builder function can create them.
 | `Extends("Naturals")` | `ExtendsDecl` | `ExtendsDecl` |
 | `DefineRecursive("F", params:) { ... }` | `RecursiveFuncDecl` | `RecursiveFuncDecl` |
 | `Recursive(tlaText)` | `RecursiveDecl` | `RecursiveDecl` |
-| `RuntimeFunc("F", tla:, impl:)` | `RuntimeFuncDecl` | `RuntimeFuncDecl` |
 | `DeadlockCheck()` | `DeadlockDecl` | `DeadlockDecl` |
 
 ## Validation rule: upstream parity or oracle twin

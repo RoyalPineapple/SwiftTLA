@@ -100,11 +100,6 @@ extension TLASpec {
             lines.append("")
         }
 
-        for body in runtimeFuncBodies {
-            lines.append(body)
-            lines.append("")
-        }
-
         // An INSTANCE's default substitutions resolve against declarations
         // already in scope.  Emit local definitions first so a same-named
         // refinement mapping, such as VoteProof's `chosen`, is available.
