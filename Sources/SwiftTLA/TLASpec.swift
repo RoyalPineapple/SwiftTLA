@@ -71,7 +71,18 @@ public struct NamedAction: Sendable, CustomStringConvertible, Equatable {
   public let name: String
   public let body: ActionExpr
   public let bindings: [ActionBinding]
+  let controlOwner: ControlOwner?
+
   public init(name: String, body: ActionExpr, bindings: [ActionBinding] = []) {
+    self.init(name: name, body: body, bindings: bindings, controlOwner: nil)
+  }
+
+  init(
+    name: String,
+    body: ActionExpr,
+    bindings: [ActionBinding] = [],
+    controlOwner: ControlOwner?
+  ) {
     for binding in bindings {
       precondition(
         !binding.name.isEmpty, "Parameterized action '\(name)' requires a parameter name")
@@ -91,6 +102,7 @@ public struct NamedAction: Sendable, CustomStringConvertible, Equatable {
     self.name = name
     self.body = body
     self.bindings = bindings
+    self.controlOwner = controlOwner
   }
   public var description: String {
     let parameters = bindings.map(\.name).joined(separator: ", ")

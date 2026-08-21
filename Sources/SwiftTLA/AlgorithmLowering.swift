@@ -151,6 +151,11 @@ enum AlgorithmLowerer {
         var fairness: [FairnessCondition] = []
         var actions = processes.enumerated().flatMap { processIndex, process in
             process.steps.enumerated().map { index, atomic in
+                let controlOwner = ControlOwner.process(
+                    algorithm: algorithm.name,
+                    ordinal: processIndex,
+                    typeName: process.typeName
+                )
                 let nextLabel = process.steps.indices.contains(index + 1)
                     ? process.steps[index + 1].label.name
                     : doneLabel
@@ -188,7 +193,8 @@ enum AlgorithmLowerer {
                             : body,
                         allVars: variableNames
                     ),
-                    bindings: [ActionBinding(name: processBinding, values: process.domain)]
+                    bindings: [ActionBinding(name: processBinding, values: process.domain)],
+                    controlOwner: controlOwner
                 )
                 if requiresProgramCounter {
                     let actionAssertions = assertionInvariants(
@@ -229,7 +235,8 @@ enum AlgorithmLowerer {
                 return NamedAction(
                     name: label,
                     body: completeAction(.and(.guard_(guardExpression), body), allVars: variableNames),
-                    bindings: [ActionBinding(name: processBinding, values: controlDomainValues(processes))]
+                    bindings: [ActionBinding(name: processBinding, values: controlDomainValues(processes))],
+                    controlOwner: .procedure(algorithm: algorithm.name, name: procedure.name)
                 )
             }
         }
@@ -437,7 +444,10 @@ enum AlgorithmLowerer {
                 body: completeAction(
                     .and(.guard_(.equal(.variable(controlVariable), .value(.string(label)))), body),
                     allVars: variableNames
-                )
+                ),
+                controlOwner: owner.map {
+                    .procedure(algorithm: algorithm.name, name: $0.name)
+                } ?? .sequential(algorithm: algorithm.name)
             ))
             generatedAssertionInvariants += sequentialAssertionInvariants(
                 in: atomic.statements,
