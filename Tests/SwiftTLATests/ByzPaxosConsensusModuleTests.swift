@@ -13,8 +13,6 @@ struct ByzPaxosConsensusModuleTests {
       Definition("Refines == C!Spec", named: "Refines", dependsOn: ["C"])
     }
 
-    #expect(FormalModuleRegistry.lookup("Consensus") == ByzPaxosConsensus.module)
-    #expect(FormalModuleRegistry.lookup("ByzPaxosConsensus") == ByzPaxosConsensus.module)
     let consumerModule = try consumer.compile().renderedTLAModuleBundle().tla
     #expect(consumerModule.contains("C == INSTANCE Consensus"))
     let chosenRange = try #require(consumerModule.range(of: "chosen == {}"))

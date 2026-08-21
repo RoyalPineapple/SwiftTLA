@@ -17,7 +17,7 @@ extension ParserSession {
         public var temporal: [(name: String, expr: TemporalExpr)] = []
         public var fairness: [FairnessCondition] = []
         public var constraint: StateExpr?
-        public var imports: [String] = []
+        public var imports: [TLASpec] = []
         public var importConfigurations: [FormalModuleConfiguration] = []
         public var moduleInstances: [FormalModuleInstance] = []
         public var sourceAlgorithms: [Algorithm] = []
@@ -666,12 +666,14 @@ extension ParserSession {
                 result.diagnostics.append(.init(message: "Import requires a named formal module.", source: call))
                 return
             }
-            let resolvedModuleName = FormalModuleRegistry.lookup(String(moduleName))?.name
-                ?? String(moduleName)
-            result.imports.append(resolvedModuleName)
+            guard let module = BuiltInFormalModules.resolve(String(moduleName)) else {
+                result.diagnostics.append(.init(message: "Import requires a built-in formal module.", source: call))
+                return
+            }
+            result.imports.append(module)
             if let configuration = parseFormalModuleConfiguration(
                 call,
-                moduleName: resolvedModuleName
+                moduleName: module.name
             ) {
                 result.importConfigurations.append(configuration)
             }
@@ -858,9 +860,9 @@ extension ParserSession {
         }
         let source = moduleArgument.description.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let moduleName = source.split(separator: ".").first.map(String.init),
-              let module = FormalModuleRegistry.lookup(moduleName)
+              let module = BuiltInFormalModules.resolve(moduleName)
         else {
-            result.diagnostics.append(.init(message: "Instance requires a registered formal module.", source: call))
+            result.diagnostics.append(.init(message: "Instance requires a built-in formal module.", source: call))
             return
         }
         let arguments: [ModuleArgument]

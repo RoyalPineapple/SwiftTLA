@@ -117,7 +117,7 @@ struct TLAModuleBundleTests {
       importConfigurations: parsed.importConfigurations
     )
     let runtimeTree = canonicalTestSpec(
-      variables: [], actions: [], invariants: [], imports: runtime.imports.map(\.name),
+      variables: [], actions: [], invariants: [], imports: runtime.imports,
       importConfigurations: runtime.importConfigurations
     )
 

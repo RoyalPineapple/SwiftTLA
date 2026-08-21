@@ -19,7 +19,7 @@ func canonicalTestSpec(
     temporal: [(name: String, expr: TemporalExpr)] = [],
     fairness: [FairnessCondition] = [],
     constraint: StateExpr? = nil,
-    imports: [String] = [],
+    imports: [TLASpec] = [],
     importConfigurations: [FormalModuleConfiguration] = [],
     moduleInstances: [FormalModuleInstance] = [],
     formalParameters: [FormalModuleParameter] = [],
@@ -42,7 +42,7 @@ func canonicalTestSpec(
         definitions: definitions,
         constraint: constraint,
         formalOperatorDefinitions: formalOperatorDefinitions,
-        imports: imports.compactMap(FormalModuleRegistry.lookup),
+        imports: imports,
         importConfigurations: importConfigurations,
         moduleInstances: moduleInstances,
         symmetrySets: symmetrySets
