@@ -113,8 +113,11 @@ enum MacroExpander {
         }
         """))
 
+        let symmetricCollectionNames = Set(plan.symmetricCollections.map(\.formalName))
+        let ordinaryVariables = plan.variables.filter { !symmetricCollectionNames.contains($0.formalName) }
+
         decls.append(contentsOf: generateActionLabel(actions: plan.actions))
-        decls.append(DeclSyntax(generateStateStruct(variables: plan.variables, enumInfos: model.enumInfos)))
+        decls.append(DeclSyntax(generateStateStruct(variables: ordinaryVariables, enumInfos: model.enumInfos)))
         decls.append(contentsOf: generateGeneratedMachineStorageMembers(
             isActor: isActor,
             hasActions: !plan.actions.isEmpty,
@@ -127,8 +130,6 @@ enum MacroExpander {
             decls.append(contentsOf: generateLiveMachineMembers(model: model))
         }
         decls.append(contentsOf: generateCollectionRuntimeMembers(plan.symmetricCollections))
-        let symmetricCollectionNames = Set(plan.symmetricCollections.map(\.formalName))
-        let ordinaryVariables = plan.variables.filter { !symmetricCollectionNames.contains($0.formalName) }
         decls.append(contentsOf: generateVariableProperties(
             variables: ordinaryVariables,
             enumInfos: model.enumInfos
@@ -138,7 +139,7 @@ enum MacroExpander {
             actions: plan.actions,
             collectionActions: plan.collectionActions,
             symmetricCollections: Dictionary(uniqueKeysWithValues: plan.symmetricCollections.map { ($0.formalName, $0) }),
-            variableOrdinals: Dictionary(uniqueKeysWithValues: plan.variables.enumerated().map { ($0.element.formalName, $0.offset) })
+            variableOrdinals: Dictionary(uniqueKeysWithValues: plan.variables.map { ($0.formalName, $0.storageOrdinal) })
         ))
         decls.append(contentsOf: generateCompilationIdentityCheck(model: model))
         decls.append(DeclSyntax(stringLiteral: """
@@ -424,37 +425,36 @@ extension MacroExpander {
         variables: [MachineSurfacePlan.Variable],
         enumInfos: [ParsedEnumInfo]
     ) -> String {
-        variables.enumerated().map { index, variable in
+        variables.map { variable in
             let key = String(reflecting: variable.formalName)
             let typeName = stateType(for: variable, enumInfos: enumInfos)
             if let info = enumInfos.first(where: { $0.typeName == typeName }) {
                 let cases = info.cases.map { "case \"\($0.name)\": self.\(variable.formalName) = \(typeName).\($0.name)" }
                     .joined(separator: "\n")
                 return """
-                let value = try storage.value(at: \(index), as: String.self, in: storageState)
+                do {
+                let value = try storage.value(at: \(variable.storageOrdinal), as: String.self, in: storageState)
                 switch value {
                 \(cases)
                 default:
                     throw GeneratedMachineStateDiagnostic.typeMismatch(path: \(key), expected: "a declared \(typeName) case", actual: value)
+                }
                 }
                 """
             }
             let type = typeName
             if type == "TLAValue" {
                 return """
-                let value = try storage.value(at: \(index), as: TLAValue.self, in: storageState)
-                self.\(variable.formalName) = value
+                self.\(variable.formalName) = try storage.value(at: \(variable.storageOrdinal), as: TLAValue.self, in: storageState)
                 """
             }
             if !["Int", "Bool", "String", "TLAValue"].contains(typeName) {
                 return """
-                let value = try storage.value(at: \(index), as: \(typeName).self, in: storageState)
-                self.\(variable.formalName) = value
+                self.\(variable.formalName) = try storage.value(at: \(variable.storageOrdinal), as: \(typeName).self, in: storageState)
                 """
             }
             return """
-            let value = try storage.value(at: \(index), as: \(type).self, in: storageState)
-            self.\(variable.formalName) = value
+            self.\(variable.formalName) = try storage.value(at: \(variable.storageOrdinal), as: \(type).self, in: storageState)
             """
         }.joined(separator: "\n")
     }

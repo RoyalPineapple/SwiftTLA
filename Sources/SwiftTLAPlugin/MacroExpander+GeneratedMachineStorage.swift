@@ -24,7 +24,7 @@ extension MacroExpander {
                 }
             """
         let liveProjection = symmetricCollections.compactMap { collection in
-            guard let ordinal = variables.firstIndex(where: { $0.formalName == collection.formalName }) else {
+            guard let ordinal = variables.first(where: { $0.formalName == collection.formalName })?.storageOrdinal else {
                 return nil
             }
             return """

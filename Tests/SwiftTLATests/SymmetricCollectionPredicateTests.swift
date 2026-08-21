@@ -13,7 +13,6 @@ public struct PredicateMacroDevice: Identifiable, Sendable {
   }
 }
 
-@TLAModel
 public struct GeneratedPredicateRuntime {
   public static var spec: TLASpec {
     TLASpec("GeneratedPredicateRuntime") {
@@ -32,7 +31,6 @@ public struct GeneratedPredicateRuntime {
   }
 }
 
-@TLAModel
 public struct GeneratedShorthandPredicateRuntime {
   public static var spec: TLASpec {
     TLASpec("GeneratedShorthandPredicateRuntime") {

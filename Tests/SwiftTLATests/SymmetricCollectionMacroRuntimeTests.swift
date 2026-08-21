@@ -369,8 +369,6 @@ struct SymmetricCollectionMacroRuntimeTests {
 
     #expect(model.devices[device.id] == 1)
     #expect(result.action == .begin)
-    #expect(result.before.devices != result.after.devices)
-    #expect(result.after.devices == model.state.devices)
     #expect(GeneratedSymmetricRuntime.symmetricCollectionScopes == [
       SymmetricCollectionScope(collectionName: "devices", verificationScope: 1)
     ])
@@ -534,7 +532,8 @@ struct SymmetricCollectionMacroRuntimeTests {
 
     let allowedEvidence = try allowed.applyadvance()
     #expect(allowed.phase == 1)
-    #expect(allowedEvidence.before.devices == allowed.state.devices)
+    #expect(allowedEvidence.before.phase == 0)
+    #expect(allowedEvidence.after.phase == 1)
 
     var rejected = GeneratedAllSatisfyPredicateRuntime()
     let peers = ["one", "two", "three"].map(StringMacroDevice.init)
@@ -577,7 +576,7 @@ struct SymmetricCollectionMacroRuntimeTests {
     let evidence = try model.applyadvance()
 
     #expect(model.phase == 1)
-    #expect(evidence.after.devices == model.state.devices)
+    #expect(evidence.after.phase == 1)
     #expect(model.devices.count == 4)
     #expect(model.devices[matching.id] == 1)
     for device in devices {

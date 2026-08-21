@@ -93,17 +93,20 @@ package struct MachineSurfacePlan: Sendable, Equatable {
 
     package struct Variable: Sendable, Equatable {
         package let formalName: String
+        package let storageOrdinal: Int
         package let swiftType: String
         package let valueShape: FormalValueShape
         package let collectionType: CollectionVarType
 
         package init(
             formalName: String,
+            storageOrdinal: Int,
             swiftType: String,
             valueShape: FormalValueShape,
             collectionType: CollectionVarType
         ) {
             self.formalName = formalName
+            self.storageOrdinal = storageOrdinal
             self.swiftType = swiftType
             self.valueShape = valueShape
             self.collectionType = collectionType
@@ -204,13 +207,20 @@ package struct MachineSurfacePlan: Sendable, Equatable {
             guard let variable = variablesByName[layout.declaration.name] else {
                 throw Self.unknownFact("compiledLayout.variables.\(layout.declaration.name)")
             }
-            return Variable(
-                formalName: layout.declaration.name,
-                swiftType: try Self.generatedSwiftType(
+            let swiftType: String
+            if let collection = swiftFacts.symmetricCollections[layout.declaration.name] {
+                swiftType = "IdentifiedModelCollection<\(collection.elementType), \(collection.valueType)>"
+            } else {
+                swiftType = try Self.generatedSwiftType(
                     explicit: swiftFacts.variableTypes[layout.declaration.name],
                     fallback: variable.initial,
                     path: "variables.\(layout.declaration.name)"
-                ),
+                )
+            }
+            return Variable(
+                formalName: layout.declaration.name,
+                storageOrdinal: layout.id.ordinal,
+                swiftType: swiftType,
                 valueShape: .init(variable.initial),
                 collectionType: variable.collectionType
             )

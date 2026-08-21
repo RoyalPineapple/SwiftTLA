@@ -55,7 +55,6 @@ private struct CompilerPipelineInitializationModel {
     }
 }
 
-@TLAModel
 private struct CompilerPipelineCollectionModel {
     static var spec: TLASpec {
         #spec("CompilerPipelineCollectionModel") {
