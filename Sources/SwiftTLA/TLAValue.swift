@@ -557,12 +557,6 @@ extension TLAValue {
         }
     }
 
-    public subscript(field: String) -> TLAValue {
-        switch self {
-        case .record(let r): return r.value(named: field) ?? .int(0)
-        default: return .int(0)
-        }
-    }
 }
 
 // MARK: - Tuple subscript
