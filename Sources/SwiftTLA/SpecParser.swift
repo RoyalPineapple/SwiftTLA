@@ -881,13 +881,6 @@ public final class ParserSession {
             default: break
             }
         }
-        if let member = expression.as(MemberAccessExprSyntax.self),
-           let base = member.base.flatMap(decodeStateExpr) {
-            switch member.declName.baseName.text {
-            case "raw", "stateExpr", "expr": return base
-            default: break
-            }
-        }
         // A `SetExpr` initializer is a closed typed value, unlike
         // `SetExpr.literal`, which is an expression form.  Constants need the
         // former so the builder and macro both retain a concrete TLA+ set.

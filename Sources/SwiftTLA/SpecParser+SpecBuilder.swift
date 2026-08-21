@@ -1063,9 +1063,7 @@ extension ParserSession {
                 (sourceName: $0, value: StateExpr.variable($1.name))
             }
         )
-        guard let body = decodeTypedFacadeValue(bodySyntax, scope: scope)
-            ?? decodeStateExpr(bodySyntax)
-        else { return nil }
+        guard let body = decodeTypedFacadeValue(bodySyntax, scope: scope) else { return nil }
         return FormalOperatorDefinition(
             name: name,
             parameters: formalParameters,
