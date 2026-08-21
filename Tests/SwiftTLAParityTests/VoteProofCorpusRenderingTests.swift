@@ -2,8 +2,8 @@ import Testing
 @testable import UpstreamParity
 
 struct VoteProofCorpusRenderingTests {
-    @Test("VoteProof preserves typed local recursion and formal module composition")
-    func parserBuilderFidelity() throws {
+    @Test("VoteProof #spec macro compiles and preserves typed local recursion and formal module composition")
+    func specMacroCompilationPreservesFormalStructure() throws {
         let compilation = try VoteProofModel.spec.compile()
         #expect(compilation.spec.name == "VoteProof")
         #expect(Set(VoteProofModel.spec.formalOperatorDefinitions.map(\.name)) == ["ChosenIn", "SafeAt", "chosen"])
