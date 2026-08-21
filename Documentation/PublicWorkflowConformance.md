@@ -52,9 +52,8 @@ conditions. They are not supported behaviors and do not enlarge the positive
 scope.
 
 Generated behavior uses the application-facing typed surface. A fixture reads
-generated `State` and `TransitionResult` values. It does not read an unguarded
-formal state map. The formal engine can use its internal map representation
-only within its parser, evaluator, renderer, and verification boundary.
+generated `State` and `TransitionResult` values. Formal tooling inspects state
+through `TLAStateProjection`.
 
 ### Annotation availability
 
