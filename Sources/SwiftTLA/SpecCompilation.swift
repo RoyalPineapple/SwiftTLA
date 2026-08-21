@@ -651,6 +651,7 @@ public extension TLASpec {
         }
         let renderer = CompiledTLARenderer(layout: layout, bindings: bindings)
         let renderedRefinements = try refinements.map(renderer.refinement)
+        let renderedTheorems = try semantics.theorems.map(renderer.theorem)
         let formalDefinitions = try formalOperatorDefinitions.enumerated()
             .map { index, definition in
                 RenderedModuleDefinition(
@@ -739,6 +740,7 @@ public extension TLASpec {
                 emittedActionNamesByID: emittedActionNamesByID,
                 emittedActionCallNames: emittedActionCallNames,
                 renderedRefinements: renderedRefinements,
+                renderedTheorems: renderedTheorems,
                 renderer: renderer,
                 semantics: semantics
             ),
@@ -768,6 +770,7 @@ public extension TLASpec {
         emittedActionNamesByID: [ActionID: String],
         emittedActionCallNames: [CompiledActionCall: String],
         renderedRefinements: [String],
+        renderedTheorems: [String],
         renderer: CompiledTLARenderer,
         semantics: CompiledSemantics
     ) throws -> String {
@@ -954,22 +957,12 @@ public extension TLASpec {
             lines.append("\(temporal.name) == \(try renderer.temporal(temporal.expression))")
         }
         if !semantics.temporalProperties.isEmpty { lines.append("") }
-        for theorem in theorems {
-            lines.append("THEOREM \(renderedTheorem(theorem))")
+        for theorem in renderedTheorems {
+            lines.append("THEOREM \(theorem)")
             lines.append("")
         }
         lines.append("====")
         return lines.joined(separator: "\n") + "\n"
-    }
-
-    private func renderedTheorem(_ theorem: TheoremDecl) -> String {
-        if let temporal = theorem.temporalBody {
-            return "\(theorem.name) == Spec => \(temporal.tlaModuleSource)"
-        }
-        if let state = theorem.stateBody {
-            return "\(theorem.name) == Spec => []\(state.tlaModuleSource)"
-        }
-        return theorem.name
     }
 
     private func renderedTLCConfiguration() -> String {

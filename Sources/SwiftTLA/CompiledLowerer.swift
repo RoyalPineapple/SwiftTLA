@@ -29,6 +29,28 @@ struct CompiledLowerer {
                 expression: try lower($0.expr, at: "temporalProperties.\($0.name)")
             )
         }
+        let theorems = try spec.theorems.map { theorem in
+            if let temporal = theorem.temporalBody {
+                return CompiledTheorem(
+                    name: theorem.name,
+                    body: .temporal(try lower(temporal, at: "theorems.\(theorem.name)"))
+                )
+            }
+            if let state = theorem.stateBody {
+                return CompiledTheorem(
+                    name: theorem.name,
+                    body: .state(try lower(state, at: "theorems.\(theorem.name)"))
+                )
+            }
+            throw CompilationDiagnostic(
+                code: .invalidFormalDeclaration,
+                stage: .lowering,
+                path: "theorems.\(theorem.name)",
+                expected: "a temporal or state theorem body",
+                actual: "no theorem body",
+                nextSafeAction: "Declare a theorem with a supported temporal or state expression."
+            )
+        }
         let fairness = try spec.fairness.enumerated().map { offset, condition in
             try lower(condition, actions: spec.actions, at: "fairness[\(offset)]")
         }
@@ -76,6 +98,7 @@ struct CompiledLowerer {
             actions: actions,
             invariants: invariants,
             temporalProperties: temporalProperties,
+            theorems: theorems,
             fairness: fairness,
             constraint: try lowerOptional(spec.constraint, at: "constraint"),
             assume: try lowerOptional(spec.assume, at: "assume"),

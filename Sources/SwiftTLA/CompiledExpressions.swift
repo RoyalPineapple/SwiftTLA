@@ -186,6 +186,16 @@ struct CompiledTemporal: Sendable {
     let expression: CompiledTemporalExpr
 }
 
+enum CompiledTheoremBody: Sendable {
+    case temporal(CompiledTemporalExpr)
+    case state(CompiledStateExpr)
+}
+
+struct CompiledTheorem: Sendable {
+    let name: String
+    let body: CompiledTheoremBody
+}
+
 struct CompiledActionCall: Hashable, Sendable {
     let action: ActionID
     let arguments: [TLAValue]
@@ -239,6 +249,7 @@ struct CompiledSemantics: Sendable {
     let actions: [CompiledAction]
     let invariants: [CompiledInvariant]
     let temporalProperties: [CompiledTemporal]
+    let theorems: [CompiledTheorem]
     let fairness: [CompiledFairnessCondition]
     let constraint: CompiledStateExpr?
     let assume: CompiledStateExpr?
