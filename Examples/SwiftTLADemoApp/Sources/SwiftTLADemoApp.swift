@@ -39,39 +39,51 @@ private struct DemoHomeView: View {
 }
 
 private struct TwoBucketsView: View {
-    @State private var machine = TwoBuckets.Observable()
+    @State private var machine: TwoBuckets.Observable?
     @State private var error: String?
 
-    private var state: TwoBuckets.State { machine.state }
-
     var body: some View {
-        DemoScreen(title: "Two Buckets", subtitle: "Measure exactly 4 gallons.") {
-            TwoBucketsScene(state: state, error: error)
-            TwoBucketsControls(
-                fillThree: { perform { _ = try await machine._fillThree() } },
-                emptyThree: { perform { _ = try await machine._emptyThree() } },
-                pourThreeIntoFive: { perform { _ = try await machine._pourThreeIntoFive() } },
-                pourFiveIntoThree: { perform { _ = try await machine._pourFiveIntoThree() } },
-                fillFive: { perform { _ = try await machine._fillFive() } },
-                emptyFive: { perform { _ = try await machine._emptyFive() } },
-                reset: {
-                    machine = TwoBuckets.Observable()
-                    error = nil
+        Group {
+            if let machine {
+                DemoScreen(title: "Two Buckets", subtitle: "Measure exactly 4 gallons.") {
+                    TwoBucketsScene(state: machine.state, error: error)
+                    TwoBucketsControls(
+                        fillThree: { perform(machine, .fillThree) },
+                        emptyThree: { perform(machine, .emptyThree) },
+                        pourThreeIntoFive: { perform(machine, .pourThreeIntoFive) },
+                        pourFiveIntoThree: { perform(machine, .pourFiveIntoThree) },
+                        fillFive: { perform(machine, .fillFive) },
+                        emptyFive: { perform(machine, .emptyFive) },
+                        reset: start
+                    )
                 }
-            )
+            } else {
+                ProgressView()
+            }
+        }
+        .task { if machine == nil { start() } }
+    }
+
+    private func start() {
+        Task { @MainActor in
+            do {
+                machine = try await TwoBuckets.Observable(live: try TwoBuckets.makeLive())
+                error = nil
+            }
+            catch let failure { error = failure.localizedDescription }
         }
     }
 
-    private func perform(_ action: @escaping () async throws -> Void) {
+    private func perform(_ machine: TwoBuckets.Observable, _ action: TwoBuckets.ActionLabel) {
         Task { @MainActor in
-            do { try await action(); error = nil }
+            do { _ = try await machine.apply(action); error = nil }
             catch let failure { error = failure.localizedDescription }
         }
     }
 }
 
 private struct DuckDuckLeaderView: View {
-    @State private var actor = ChangRoberts.Actor()
+    @State private var actor: ChangRoberts.Actor?
     @State private var state = ChangRoberts().state
     @State private var error: String?
     @State private var delivery: DuckDelivery?
@@ -103,6 +115,7 @@ private struct DuckDuckLeaderView: View {
                 togglePlayback: togglePlayback
             )
         }
+        .task { if actor == nil { reset() } }
     }
 
     private func shuffleSchedule() {
@@ -115,11 +128,15 @@ private struct DuckDuckLeaderView: View {
         isPlaying = false
         isDelivering = false
         deliveryOrder = ring
-        actor = ChangRoberts.Actor()
+        actor = nil
         state = ChangRoberts().state
         delivery = nil
         lastMove = message
         error = nil
+        Task { @MainActor in
+            do { actor = ChangRoberts.Actor(live: try ChangRoberts.makeLive()) }
+            catch let failure { error = failure.localizedDescription }
+        }
     }
 
     private func togglePlayback() {
@@ -146,6 +163,7 @@ private struct DuckDuckLeaderView: View {
     private func deliverNext(runID: UUID) async -> Bool {
         guard !isDelivering,
               runID == simulationID,
+              let actor,
               let node = deliveryOrder.first(where: { node in
                   state.messages.elements.contains { $0[ChangRoberts.MessageSchema.to] == node }
               }),
@@ -155,8 +173,7 @@ private struct DuckDuckLeaderView: View {
         isDelivering = true
         defer { isDelivering = false }
         do {
-            let runningActor = actor
-            let result = try await runningActor.apply(.deliver(process: node))
+            let result = try await actor.apply(.deliver(process: node))
             guard runID == simulationID else { return false }
             let forwarded = result.after.messages.elements.first {
                 $0[ChangRoberts.MessageSchema.candidate] == message[ChangRoberts.MessageSchema.candidate] &&
@@ -207,29 +224,31 @@ private struct DuckDuckLeaderView: View {
 }
 
 private struct ElevatorBankView: View {
-    @State private var machine = ElevatorBank.Observable()
+    @State private var machine: ElevatorBank.Observable?
     @State private var error: String?
 
-    private var state: ElevatorBank.State { machine.state }
-
     var body: some View {
-        DemoScreen(
-            title: "Elevator Bank",
-            subtitle: "Two riders, two cars, and doors that make every handoff explicit."
-        ) {
-            ElevatorBankScene(state: state, riderSummary: riderSummary, error: error)
-            ElevatorBankControls(
-                operateCarA: { operate(.carA) },
-                operateCarB: { operate(.carB) },
-                reset: {
-                    machine = ElevatorBank.Observable()
-                    error = nil
+        Group {
+            if let machine {
+                DemoScreen(
+                    title: "Elevator Bank",
+                    subtitle: "Two riders, two cars, and doors that make every handoff explicit."
+                ) {
+                    ElevatorBankScene(state: machine.state, riderSummary: riderSummary(machine.state), error: error)
+                    ElevatorBankControls(
+                        operateCarA: { operate(machine, .carA) },
+                        operateCarB: { operate(machine, .carB) },
+                        reset: start
+                    )
                 }
-            )
+            } else {
+                ProgressView()
+            }
         }
+        .task { if machine == nil { start() } }
     }
 
-    private var riderSummary: String {
+    private func riderSummary(_ state: ElevatorBank.State) -> String {
         let riders = ElevatorBank.Rider.formalDomain.filter { $0 != .none }
         return riders.map { rider in
             let passenger = state.riders[rider]
@@ -237,9 +256,19 @@ private struct ElevatorBankView: View {
         }.joined(separator: "\n")
     }
 
-    private func operate(_ car: ElevatorBank.CarID) {
+    private func start() {
         Task { @MainActor in
-            do { _ = try await machine._operate(process: car); error = nil }
+            do {
+                machine = try await ElevatorBank.Observable(live: try ElevatorBank.makeLive())
+                error = nil
+            }
+            catch let failure { error = failure.localizedDescription }
+        }
+    }
+
+    private func operate(_ machine: ElevatorBank.Observable, _ action: ElevatorBank.ActionLabel) {
+        Task { @MainActor in
+            do { _ = try await machine.apply(action); error = nil }
             catch let failure { error = failure.localizedDescription }
         }
     }

@@ -35,7 +35,7 @@ struct GeneratedActorExecutionContractTests {
     @Test("actor preserves canonical arbitrary-length evidence")
     func actorMatchesCanonicalSchedule() async throws {
         var canonical = DuckDuckLeaderCanonical()
-        let actor = DuckDuckLeaderCanonical.Actor()
+        let actor = DuckDuckLeaderCanonical.Actor(live: try DuckDuckLeaderCanonical.makeLive())
         let schedule: [DuckDuckLeaderCanonical.ActionLabel] = [
             .pass(from: 1, to: 2, round: 1),
             .pass(from: 2, to: 1, round: 2),
@@ -61,7 +61,7 @@ struct GeneratedActorExecutionContractTests {
 
     @Test("actor rejects unavailable invocations without mutation")
     func unavailableActionPreservesActorSnapshot() async throws {
-        let actor = DuckDuckLeaderCanonical.Actor()
+        let actor = DuckDuckLeaderCanonical.Actor(live: try DuckDuckLeaderCanonical.makeLive())
         let unavailable = DuckDuckLeaderCanonical.Actor.ActionLabel.pass(from: 2, to: 1, round: 1)
         let before = await actor.state
 
@@ -76,7 +76,7 @@ struct GeneratedActorExecutionContractTests {
 
     @Test("actor serializes concurrent duplicate submissions")
     func concurrentSubmissionsMatchActualCanonicalEvidence() async throws {
-        let actor = DuckDuckLeaderCanonical.Actor()
+        let actor = DuckDuckLeaderCanonical.Actor(live: try DuckDuckLeaderCanonical.makeLive())
         let label = DuckDuckLeaderCanonical.Actor.ActionLabel.pass(from: 1, to: 2, round: 1)
 
         async let first = submit(actor, label: label)

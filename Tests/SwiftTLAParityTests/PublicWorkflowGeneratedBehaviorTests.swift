@@ -15,13 +15,14 @@ struct PublicWorkflowGeneratedBehaviorTests {
 
   @Test("public workflow fixture executes through nested generated adapters")
   @MainActor
-  func nestedFixtureAdaptersMatchTheCanonicalCounter() async throws {
+    func nestedFixtureAdaptersMatchTheCanonicalCounter() async throws {
     var model = try P4GeneratedCounter.makeMachine()
-    let observable = P4GeneratedCounter.Observable()
-    let actor = P4GeneratedCounter.Actor()
+    let live = try P4GeneratedCounter.makeLive()
+    let observable = try await P4GeneratedCounter.Observable(live: live)
+    let actor = P4GeneratedCounter.Actor(live: live)
 
     let modelEvidence = try model.apply(.advance)
-    let observableEvidence = try observable.apply(.advance)
+    let observableEvidence = try await observable.apply(.advance)
     let actorEvidence = try await actor.apply(.advance)
 
     #expect(modelEvidence.action == .advance)

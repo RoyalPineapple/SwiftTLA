@@ -45,13 +45,14 @@ struct NestedComposableMacroConformanceTests {
     @MainActor
     func nestedSurfacesShareCanonicalExecution() async throws {
         var model = try NestedComposedCounter.makeMachine()
-        var observable = NestedComposedCounter.Observable()
-        var actor = NestedComposedCounter.Actor()
+        let live = try NestedComposedCounter.makeLive()
+        let observable = try await NestedComposedCounter.Observable(live: live)
+        let actor = NestedComposedCounter.Actor(live: live)
 
         let modelBefore = try await model.machineObservation()
         _ = try model.apply(.advance)
         let modelAfter = try await model.machineObservation()
-        _ = try observable.apply(.advance)
+        _ = try await observable.apply(.advance)
         _ = try await actor.apply(.advance)
         #expect(modelBefore.state.count == 0)
         #expect(modelAfter.state.count == 1)
@@ -67,8 +68,9 @@ struct NestedComposableMacroConformanceTests {
         let first = EndToEndThreeParameterActionMachine.ActionLabel.board(person: 1, elevator: 10, direction: 100)
         let selected = EndToEndThreeParameterActionMachine.ActionLabel.board(person: 2, elevator: 20, direction: 200)
         let available = try EndToEndThreeParameterActionMachine.makeMachine().availableActions()
-        let observable = ThreeParameterActionMachine.Observable()
-        let actor = ThreeParameterActionMachine.Actor()
+        let live = try ThreeParameterActionMachine.makeLive()
+        let observable = try await ThreeParameterActionMachine.Observable(live: live)
+        let actor = ThreeParameterActionMachine.Actor(live: live)
 
         #expect(first != selected)
         #expect(Set(available).count == 8)
@@ -77,7 +79,7 @@ struct NestedComposableMacroConformanceTests {
         var machine = try EndToEndThreeParameterActionMachine.makeMachine()
         let result = try machine.apply(.board(person: 2, elevator: 20, direction: 200))
         #expect(result.after.floor == 222)
-        #expect(try observable.apply(.board(person: 2, elevator: 20, direction: 200)).action == .board(person: 2, elevator: 20, direction: 200))
+        #expect((try await observable.apply(.board(person: 2, elevator: 20, direction: 200))).action == .board(person: 2, elevator: 20, direction: 200))
         #expect((try await actor.apply(.board(person: 2, elevator: 20, direction: 200)).action) == .board(person: 2, elevator: 20, direction: 200))
     }
 
