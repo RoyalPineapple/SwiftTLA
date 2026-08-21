@@ -1,14 +1,14 @@
 # SwiftTLA DSL Patterns
 
-## Core rule: the DSL is the runtime
+## Core rule: source models compile once
 
-Every construct in the DSL serves **two roles**:
-1. **TLA+ output** — `try spec.compile().renderedTLAModuleBundle()` provides the
-   linked TLA+ source bundle
-2. **Runtime evaluation** — `Evaluator` interprets it against an internal formal state
+Every accepted DSL construct becomes one typed source declaration. Compilation
+binds, links, lowers, and allocates the declaration into one
+`CompiledSpecification`.
 
-There is never a raw TLA+ string where a DSL construct could express the same thing.
-The DSL body IS the implementation.
+`try spec.compile()` produces the source for local exploration, generated
+machines, direct TLA+ bundles, and authored PlusCal bundles. Each output reads
+the same compiled specification.
 
 ## Compiler rule: verified models become executable behavior
 
@@ -128,7 +128,7 @@ Every known set of identifiers uses a `String`-backed enum:
 | State method calls | `StateMethod` | SpecParser |
 | Temporal constructors | `TemporalMethod` | SpecParser |
 | Fairness constructors | `FairnessMethod` | SpecParser |
-| Recursive function builtins | `RecursiveFunction` | Evaluator |
+| Recursive function declarations | `CompiledRecursiveFunction` | Compiled runtime |
 
 No bare string literals in pattern-matching switches.
 
