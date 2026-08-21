@@ -433,6 +433,8 @@ enum MacroExpander {
         switch expr {
         case .variable(let v): return "StateExpr.variable(\"\(v)\")"
         case .value(let v): return "StateExpr.value(\(codegenTLAValue(v)))"
+        case .programCounter: return "StateExpr.programCounter"
+        case .controlLocation(let reference): return "StateExpr.controlLocation(.init(\(String(reflecting: reference.sourceName))))"
         case .add(let a, let b): return "StateExpr.add(\(cg(a)), \(cg(b)))"
         case .subtract(let a, let b): return "StateExpr.subtract(\(cg(a)), \(cg(b)))"
         case .multiply(let a, let b): return "StateExpr.multiply(\(cg(a)), \(cg(b)))"
@@ -859,12 +861,12 @@ extension MacroExpander {
                     do {
                         targetKey = try projection.key(for: id, collection: "\(collection.formalName)", action: "\(action.formalName)")
                     } catch {
-                        throw GeneratedMachineError.unexpected(String(describing: error))
+                        throw error
                     }
                     let formalState = try _stateWithLiveCollections()
                     guard let token = TLAStateProjection.Token(validating: \(String(reflecting: collection.formalName))),
                           case .function(let originalValues) = formalState.value(for: token) else {
-                        throw GeneratedMachineError.stateDecodingFailed(.missingRequiredValue(
+                        throw TLAStateProjectionDiagnostic.missingRequiredValue(
                             path: \(String(reflecting: collection.formalName)),
                             expected: "a formal collection function"
                         ))
@@ -883,7 +885,7 @@ extension MacroExpander {
                     guard case .function(let nextValues) = evidence.after.\(collection.formalName),
                           let nextFormalValue = nextValues[targetKey],
                           let nextValue = \(collection.valueType)(formalValue: nextFormalValue) else {
-                        throw GeneratedMachineError.stateDecodingFailed(.typeMismatch(
+                        throw TLAStateProjectionDiagnostic.typeMismatch(
                             path: \(String(reflecting: collection.formalName)),
                             expected: "\(collection.valueType)",
                             actual: evidence.after.\(collection.formalName)
@@ -892,7 +894,7 @@ extension MacroExpander {
                     do {
                         try \(collection.formalName).update(id: id, to: nextValue, action: "\(action.formalName)")
                     } catch {
-                        throw GeneratedMachineError.unexpected(String(describing: error))
+                        throw error
                     }
                     return TransitionResult(
                         action: .\(action.swiftIdentifier),

@@ -10,22 +10,15 @@ struct CompiledLowerer {
             guard let id = bindings.variables[variable.name] else {
                 throw diagnostic(path: "variables.\(variable.name)")
             }
-            initialValues[id] = try initialValue(
-                for: variable,
-                algorithm: spec.sourceAlgorithms.first?.model.name
-            )
+            initialValues[id] = try initialValue(for: variable)
             initializers[id] = .init(
                 initialSet: try lowerOptional(variable.initialSet, at: "variables.\(variable.name).initialSet"),
-                initExpr: try initialExpression(
-                    for: variable,
-                    algorithm: spec.sourceAlgorithms.first?.model.name
-                ),
+                initExpr: try initialExpression(for: variable),
                 lazySet: try lowerOptional(variable.lazySet, at: "variables.\(variable.name).lazySet")
             )
         }
-        let sourceAlgorithm = spec.sourceAlgorithms.first?.model.name
         let actions: [CompiledAction] = try spec.actions.map {
-            try lower($0, algorithm: sourceAlgorithm)
+            try lower($0)
         }
         let invariants: [CompiledInvariant] = try spec.invariants.map {
             CompiledInvariant(name: $0.name, body: try lower($0.body, at: "invariants.\($0.name).body"))
@@ -148,7 +141,7 @@ struct CompiledLowerer {
         return .init(scope: scope, isStrong: condition.isStrong)
     }
 
-    private func lower(_ action: NamedAction, algorithm: String?) throws -> CompiledAction {
+    private func lower(_ action: NamedAction) throws -> CompiledAction {
         guard let id = bindings.actions[action.name] else {
             throw diagnostic(path: "actions.\(action.name)")
         }
@@ -160,12 +153,7 @@ struct CompiledLowerer {
                     values: $0.values
                 )
             },
-            body: try lower(
-                action.body,
-                at: "actions.\(action.name).body",
-                controlOwner: action.controlOwner,
-                algorithm: algorithm
-            )
+            body: try lower(action.body, at: "actions.\(action.name).body")
         )
     }
 
@@ -178,6 +166,8 @@ struct CompiledLowerer {
     private func lower(_ expression: StateExpr, at path: String) throws -> CompiledStateExpr {
         switch expression {
         case .value(let value): return .value(value)
+        case .programCounter: return try valueReference(at: path)
+        case .controlLocation: return .controlLocation(try controlLocation(at: path))
         case .variable: return try valueReference(at: path)
         case .enabledAction: return .enabledAction(try action(at: path))
         case .negate(let value): return .negate(try lower(value, at: path))
@@ -307,235 +297,58 @@ struct CompiledLowerer {
         }
     }
 
-    private func lower(
-        _ action: ActionExpr,
-        at path: String,
-        controlOwner: ControlOwner?,
-        algorithm: String?
-    ) throws -> CompiledActionExpr {
+    private func lower(_ action: ActionExpr, at path: String) throws -> CompiledActionExpr {
         switch action {
-        case .assign(let name, let value):
+        case .assign(_, let value):
             let variable = try variable(at: "\(path).assign")
-            let compiledValue = name == "pc" || name == "stack"
-                ? try lowerControlValue(
-                    value,
-                    at: "\(path).value",
-                    owner: controlOwner,
-                    algorithm: algorithm,
-                    stackFrame: name == "stack"
-                )
-                : try lower(value, at: "\(path).value")
-            return .assign(variable, compiledValue)
+            return try .assign(variable, lower(value, at: "\(path).value"))
         case .unchanged: return try .unchanged(variable(at: "\(path).unchanged"))
-        case .guard_(let condition):
-            return try .guard_(lowerControlGuard(condition, at: "\(path).guard", owner: controlOwner, algorithm: algorithm))
+        case .guard_(let condition): return try .guard_(lower(condition, at: "\(path).guard"))
         case .chooseAction(_, let set): return try .chooseAction(variable(at: "\(path).choose"), lower(set, at: "\(path).set"))
         case .existsAction(let name, let set, let body):
             return try .existsAction(
                 binder(at: "\(path).binder.\(name)"),
                 lower(set, at: "\(path).set"),
-                lower(body, at: "\(path).body", controlOwner: controlOwner, algorithm: algorithm)
+                lower(body, at: "\(path).body")
             )
         case .define(let name, let value, let body):
             return try .define(
                 binder(at: "\(path).binder.\(name)"),
                 lower(value, at: "\(path).value"),
-                lower(body, at: "\(path).body", controlOwner: controlOwner, algorithm: algorithm)
+                lower(body, at: "\(path).body")
             )
         case .ifElse(let condition, let then, let otherwise):
             return try .ifElse(
-                lowerControlGuard(condition, at: "\(path).condition", owner: controlOwner, algorithm: algorithm),
-                lower(then, at: "\(path).then", controlOwner: controlOwner, algorithm: algorithm),
-                lower(otherwise, at: "\(path).else", controlOwner: controlOwner, algorithm: algorithm)
+                lower(condition, at: "\(path).condition"),
+                lower(then, at: "\(path).then"),
+                lower(otherwise, at: "\(path).else")
             )
         case .and(let lhs, let rhs):
             return try .and(
-                lower(lhs, at: "\(path).left", controlOwner: controlOwner, algorithm: algorithm),
-                lower(rhs, at: "\(path).right", controlOwner: controlOwner, algorithm: algorithm)
+                lower(lhs, at: "\(path).left"),
+                lower(rhs, at: "\(path).right")
             )
         case .or(let lhs, let rhs):
             return try .or(
-                lower(lhs, at: "\(path).left", controlOwner: controlOwner, algorithm: algorithm),
-                lower(rhs, at: "\(path).right", controlOwner: controlOwner, algorithm: algorithm)
+                lower(lhs, at: "\(path).left"),
+                lower(rhs, at: "\(path).right")
             )
         }
     }
 
-    private func initialValue(
-        for variable: NamedVar,
-        algorithm: String?
-    ) throws -> CompiledValue {
-        guard variable.name == "pc" else {
-            return try .init(formal: variable.initial, using: layout)
+    private func initialValue(for variable: NamedVar) throws -> CompiledValue {
+        if case .some(.controlLocation) = variable.initExpr {
+            guard case .controlLocation(let id) = try reference(at: "variables.\(variable.name).initExpr") else {
+                throw diagnostic(path: "variables.\(variable.name).initExpr")
+            }
+            return .controlLocation(id)
         }
-        return try controlValue(variable.initial, owner: nil, algorithm: algorithm)
+        return try CompiledValue(formal: variable.initial, using: layout)
     }
 
-    private func initialExpression(
-        for variable: NamedVar,
-        algorithm: String?
-    ) throws -> CompiledStateExpr? {
+    private func initialExpression(for variable: NamedVar) throws -> CompiledStateExpr? {
         guard let expression = variable.initExpr else { return nil }
-        guard variable.name == "pc" else {
-            return try lower(expression, at: "variables.\(variable.name).initExpr")
-        }
-        return try lowerControlValue(
-            expression,
-            at: "variables.\(variable.name).initExpr",
-            owner: nil,
-            algorithm: algorithm
-        )
-    }
-
-    private func controlValue(
-        _ value: TLAValue,
-        owner: ControlOwner?,
-        algorithm: String?
-    ) throws -> CompiledValue {
-        switch value {
-        case .string(let name):
-            guard let label = layout.controlLocationID(named: name, owner: owner, algorithm: algorithm) else {
-                throw controlLocationDiagnostic(name: name)
-            }
-            return .controlLocation(label)
-        case .set(let values):
-            return .set(try Set(values.map { try controlValue($0, owner: owner, algorithm: algorithm) }))
-        case .tuple(let values):
-            return .tuple(try values.map { try controlValue($0, owner: owner, algorithm: algorithm) })
-        case .record(let values):
-            return .record(CompiledRecord(try values.fields.map { entry in
-                .init(
-                    key: .string(entry.name),
-                    value: entry.name == "pc"
-                        ? try controlValue(entry.value, owner: owner, algorithm: algorithm)
-                        : try .init(formal: entry.value, using: layout)
-                )
-            }))
-        case .function(let values):
-            return .function(try values.reduce(into: [:]) { result, entry in
-                result[try .init(formal: entry.key, using: layout)] = try controlValue(entry.value, owner: owner, algorithm: algorithm)
-            })
-        default:
-            return try .init(formal: value, using: layout)
-        }
-    }
-
-    private func lowerControlValue(
-        _ expression: StateExpr,
-        at path: String,
-        owner: ControlOwner?,
-        algorithm: String?,
-        stackFrame: Bool = false
-    ) throws -> CompiledStateExpr {
-        switch expression {
-        case .value(.string(let name)):
-            guard let label = layout.controlLocationID(named: name, owner: owner, algorithm: algorithm) else {
-                throw controlLocationDiagnostic(name: name)
-            }
-            return .controlLocation(label)
-        case .tupleLiteral(let values):
-            return .tupleLiteral(try values.enumerated().map { index, value in
-                try lowerControlValue(
-                    value,
-                    at: "\(path)[\(index)]",
-                    owner: owner,
-                    algorithm: algorithm,
-                    stackFrame: stackFrame
-                )
-            })
-        case .recordLiteral(let fields):
-            return try .recordLiteral(.init(fields.fields.map { field in
-                let value: CompiledStateExpr
-                if stackFrame, field.name == "pc" {
-                    value = try lowerControlValue(
-                        field.value,
-                        at: "\(path).\(field.name)",
-                        owner: owner,
-                        algorithm: algorithm
-                    )
-                } else if stackFrame {
-                    value = try lower(field.value, at: "\(path).\(field.name)")
-                } else {
-                    value = try lowerControlValue(
-                        field.value,
-                        at: "\(path).\(field.name)",
-                        owner: owner,
-                        algorithm: algorithm
-                    )
-                }
-                return .init(
-                    id: try self.field(named: field.name, at: "\(path).\(field.name)"),
-                    key: .string(field.name),
-                    value: value
-                )
-            }))
-        case .functionLiteral(let domain, let binder, let body):
-            return .functionLiteral(
-                try lower(domain, at: "\(path).domain"),
-                try self.binder(at: "\(path).binder.\(binder)"),
-                try lowerControlValue(body, at: "\(path).body", owner: owner, algorithm: algorithm, stackFrame: stackFrame)
-            )
-        case .except(let function, let key, let replacement):
-            return .except(
-                try lower(function, at: "\(path).function"),
-                try lower(key, at: "\(path).key"),
-                try lowerControlValue(replacement, at: "\(path).replacement", owner: owner, algorithm: algorithm, stackFrame: stackFrame)
-            )
-        default:
-            return try lower(expression, at: path)
-        }
-    }
-
-    private func lowerControlGuard(
-        _ expression: StateExpr,
-        at path: String,
-        owner: ControlOwner?,
-        algorithm: String?
-    ) throws -> CompiledStateExpr {
-        switch expression {
-        case .equal(let lhs, let rhs) where isControlReference(lhs):
-            return .equal(
-                try lower(lhs, at: "\(path).left"),
-                try lowerControlValue(rhs, at: "\(path).right", owner: owner, algorithm: algorithm)
-            )
-        case .equal(let lhs, let rhs) where isControlReference(rhs):
-            return .equal(
-                try lowerControlValue(lhs, at: "\(path).left", owner: owner, algorithm: algorithm),
-                try lower(rhs, at: "\(path).right")
-            )
-        case .notEqual(let lhs, let rhs) where isControlReference(lhs):
-            return .notEqual(
-                try lower(lhs, at: "\(path).left"),
-                try lowerControlValue(rhs, at: "\(path).right", owner: owner, algorithm: algorithm)
-            )
-        case .notEqual(let lhs, let rhs) where isControlReference(rhs):
-            return .notEqual(
-                try lowerControlValue(lhs, at: "\(path).left", owner: owner, algorithm: algorithm),
-                try lower(rhs, at: "\(path).right")
-            )
-        default:
-            return try lower(expression, at: path)
-        }
-    }
-
-    private func isControlReference(_ expression: StateExpr) -> Bool {
-        switch expression {
-        case .variable("pc"), .functionApply(.variable("pc"), _):
-            return true
-        default:
-            return false
-        }
-    }
-
-    private func controlLocationDiagnostic(name: String) -> CompilationDiagnostic {
-        .init(
-            code: .unknownControlLocation,
-            stage: .binding,
-            path: "controlLocations.\(name)",
-            expected: "a control location declared by the source algorithm",
-            actual: "no matching control location",
-            nextSafeAction: "Use a label declared by this algorithm, then compile again."
-        )
+        return try lower(expression, at: "variables.\(variable.name).initExpr")
     }
 
     private func lower(_ operation: LocalOperator, at path: String) throws -> CompiledLocalOperator {
@@ -613,6 +426,7 @@ struct CompiledLowerer {
         switch try reference(at: path) {
         case .variable(let id): return .stateVariable(id)
         case .binder(let id): return .boundValue(id)
+        case .controlLocation(let id): return .controlLocation(id)
         case .constant(let value): return .value(value)
         case .operator(let id): return .operatorReference(id)
         case .action: throw diagnostic(path: path)
@@ -631,6 +445,11 @@ struct CompiledLowerer {
 
     private func action(at path: String) throws -> ActionID {
         guard case .action(let id) = try reference(at: path) else { throw diagnostic(path: path) }
+        return id
+    }
+
+    private func controlLocation(at path: String) throws -> ControlLocationID {
+        guard case .controlLocation(let id) = try reference(at: path) else { throw diagnostic(path: path) }
         return id
     }
 

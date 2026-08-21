@@ -605,8 +605,7 @@ extension ParserSession {
         case "CollectionAction":
             parseCollectionAction(call, into: &result)
         case "Variable":
-            let existingVariable = call.arguments.first?.expression
-                .as(DeclReferenceExprSyntax.self)?.baseName.text
+            let existingVariable = call.arguments.first.flatMap { parsedVariableName($0.expression) }
             parseVariableDecl(call, into: &result)
             if let existingVariable {
                 mergeVariableDeclaration(named: existingVariable, into: &result)
@@ -1276,7 +1275,7 @@ extension ParserSession {
               let parameter = Self.collectionPredicateParameter(in: closure)
         else { return nil }
 
-        let member = generatedBinderName()
+        let member = parameter
         let rewrittenStatements = closure.statements.map { statement in
             PredicateValueRewriter(
                 parameter: parameter,

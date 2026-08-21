@@ -80,7 +80,7 @@ extension ParserSession {
             ))
             return
         }
-        let member = generatedBinderName()
+        let member = memberName
         let diagnosticCount = result.diagnostics.count
         validateMemberUses(
             memberName,

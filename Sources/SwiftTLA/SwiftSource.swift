@@ -43,6 +43,8 @@ extension StateExpr {
     switch self {
     case .value(let v): return v.swiftLiteral
     case .variable(let n): return n
+    case .programCounter: return "StateExpr.programCounter"
+    case .controlLocation(let reference): return "\"\(reference.sourceName)\""
     case .add(let a, let b): return "\(a.swiftSource) + \(b.swiftSource)"
     case .subtract(let a, let b): return "\(a.swiftSource) - \(b.swiftSource)"
     case .multiply(let a, let b): return "\(a.swiftSource) * \(b.swiftSource)"

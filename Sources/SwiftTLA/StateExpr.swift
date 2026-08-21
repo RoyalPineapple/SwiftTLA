@@ -160,6 +160,8 @@ public struct StateRecordExpression: Hashable, Sendable {
 public indirect enum StateExpr: Hashable, Sendable, CustomStringConvertible {
     case value(TLAValue)
     case variable(String)
+    case programCounter
+    case controlLocation(ControlLocationReference)
 
     case add(StateExpr, StateExpr)
     case subtract(StateExpr, StateExpr)
@@ -234,6 +236,8 @@ public indirect enum StateExpr: Hashable, Sendable, CustomStringConvertible {
         switch self {
         case .value(let v): return v.description
         case .variable(let n): return n
+        case .programCounter: return "pc"
+        case .controlLocation(let reference): return TLAValue.string(reference.sourceName).description
         case .add(let a, let b): return "(\(a) + \(b))"
         case .subtract(let a, let b): return "(\(a) - \(b))"
         case .multiply(let a, let b): return "(\(a) * \(b))"
@@ -378,7 +382,7 @@ private extension FormalCallArgument {
 
 private func localOperatorCalls(in expression: StateExpr) -> Set<String> {
     switch expression {
-    case .value, .variable, .enabledAction:
+    case .value, .variable, .programCounter, .controlLocation, .enabledAction:
         return []
     case .recursiveCall(let name, let arguments):
         return Set([name]).union(

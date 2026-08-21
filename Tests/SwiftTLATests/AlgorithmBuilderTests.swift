@@ -166,7 +166,7 @@ struct AlgorithmBuilderTests {
         let (compilation, initial) = try initialState(of: spec)
         let afterCall = try successor(named: "start", in: compilation, from: initial)
         #expect(try value(named: "parameter0", in: afterCall, compilation: compilation) == .int(7))
-        #expect(try value(named: "pc", in: afterCall, compilation: compilation) == .string("procedure.work.enter"))
+        #expect(try value(named: "pc", in: afterCall, compilation: compilation) == .string("enter"))
 
         let rendered = try TLASpec("ProcedureBuilderExport") {
             Definition("Marker == \"procedure.work.enter\"")
@@ -344,6 +344,12 @@ struct AlgorithmBuilderTests {
         #expect(spec.actions.allSatisfy { $0.bindings.isEmpty })
 
         let (compilation, initial) = try initialState(of: spec)
+        let programCounter = try #require(compilation.layout.programCounterID())
+        guard case .controlLocation(let initialLocation) = try initial.value(for: programCounter) else {
+            Issue.record("Expected the compiled program counter to store a control location")
+            return
+        }
+        #expect(compilation.layout.controlLocation(initialLocation)?.sourceName == "increment")
         #expect(try value(named: "pc", in: initial, compilation: compilation) == .string("increment"))
         let next = try successor(named: "increment", in: compilation, from: initial)
         #expect(try value(named: "value", in: next, compilation: compilation) == .int(1))
@@ -447,9 +453,28 @@ struct AlgorithmBuilderTests {
             return
         }
         #expect(controlLocation == .or(
-            .equal(.functionApply(.variable("pc"), .variable("process")), .value(.string("receive"))),
-            .equal(.functionApply(.variable("pc"), .variable("process")), .value(.string("Done")))
+            .equal(.functionApply(.programCounter, .variable("process")), .controlLocation(.init("receive"))),
+            .equal(.functionApply(.programCounter, .variable("process")), .controlLocation(.done))
         ))
+    }
+
+    @Test("an authored control label must bind to an algorithm location")
+    func rejectsUnknownControlLocation() {
+        let algorithm = Algorithm("UnknownControlLocation") {
+            Each(Node.all) { selfID in
+                Do(AlgorithmLabel.receive) { Skip() }
+                Invariant("AtMissing") { At(MissingAlgorithmLabel.missing, selfID) }
+            }
+        }
+
+        do {
+            _ = try TLASpec("UnknownControlLocation") { algorithm }.compile()
+            Issue.record("Expected unknown control-location diagnostic")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.code == .unknownControlLocation)
+        } catch {
+            Issue.record("Expected compilation diagnostic, got \(error)")
+        }
     }
 
     @Test("validation fails closed for invalid bounded algorithms")
@@ -1071,6 +1096,10 @@ private enum AlgorithmLabel: String, PlusCalLabel {
     case receive
     case forward
     case done
+}
+
+private enum MissingAlgorithmLabel: String, PlusCalLabel {
+    case missing
 }
 
 @TLAModel

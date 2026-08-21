@@ -201,7 +201,7 @@ struct CompiledTLARenderer {
 
     private func controlLocationName(_ id: ControlLocationID) throws -> String {
         guard let location = layout.controlLocation(id) else { throw missing("control location", id.ordinal) }
-        return "\"\(location.renderedName)\""
+        return "\"\(location.sourceName)\""
     }
 
     private func missing(_ kind: String, _ ordinal: Int) -> CompilationDiagnostic {

@@ -675,12 +675,12 @@ private func value(
 
   @Test("raw function AST construction remains explicit")
   func rawFunctionASTConstruction() {
-    let pc = Var<TLAValue>("pc")
+    let rawFunction = Var<TLAValue>("rawFunction")
     let selfProcess = Var<Int>("self")
-    let read = StateExpr.functionApply(pc.stateExpr, selfProcess.stateExpr)
-    let result = StateExpr.except(pc.stateExpr, selfProcess.stateExpr, .value(.string("done")))
-    #expect(read == .functionApply(.variable("pc"), .variable("self")))
-    let expected: StateExpr = .except(.variable("pc"), .variable("self"), .value(.string("done")))
+    let read = StateExpr.functionApply(rawFunction.stateExpr, selfProcess.stateExpr)
+    let result = StateExpr.except(rawFunction.stateExpr, selfProcess.stateExpr, .value(.string("done")))
+    #expect(read == .functionApply(.variable("rawFunction"), .variable("self")))
+    let expected: StateExpr = .except(.variable("rawFunction"), .variable("self"), .value(.string("done")))
     #expect(result == expected)
   }
 

@@ -461,8 +461,9 @@ internal struct AlgorithmPlusCalRenderer {
               domain == .setLiteral(model.processes[0].domain.map(StateExpr.value))
         else { return false }
         switch predicate {
-        case .equal(.functionApply(.variable("pc"), .variable(let process)), .value(.string("Done"))),
-             .equal(.value(.string("Done")), .functionApply(.variable("pc"), .variable(let process))):
+        case .equal(.functionApply(.programCounter, .variable(let process)), .controlLocation(let location)),
+             .equal(.controlLocation(let location), .functionApply(.programCounter, .variable(let process))):
+            guard location.sourceName == "Done" else { return false }
             return process == binding
         default:
             return false
