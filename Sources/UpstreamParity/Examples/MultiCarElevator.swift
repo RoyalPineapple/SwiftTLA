@@ -373,7 +373,7 @@ public struct MultiCarElevatorMacroFixture: Sendable {
                 ActionParameter("car", values: CarID.finiteValues),
                 ActionParameter("direction", values: Direction.finiteValues)
             ]) {
-                let person = Expr<String>(.variable("person"))
+                let person = Expr<PersonID>(.variable("person"))
                 let car = Expr<CarID>(.variable("car"))
                 calls.stateExpr.cardinality == 1
                     && (cars[.carA][CarSchema.rider].raw != person
@@ -413,14 +413,13 @@ public struct MultiCarElevatorMacroFixture: Sendable {
                 ActionParameter("car", values: CarID.finiteValues),
                 ActionParameter("floor", values: FloorID.finiteValues)
             ]) {
-                let person = Expr<String>(.variable("person"))
-                let callPerson = Expr<PersonID>(.variable("person"))
+                let person = Expr<PersonID>(.variable("person"))
                 let car = Expr<CarID>(.variable("car"))
                 let floor = Expr<FloorID>(.variable("floor"))
                 cars[car][CarSchema.doorsOpen].raw == true
                     && cars[car][CarSchema.rider].raw == person
                     && calls.removing(Record<CallSchema>.literal(
-                        .init(CallSchema.person, callPerson),
+                        .init(CallSchema.person, person),
                         .init(CallSchema.floor, floor),
                         .init(CallSchema.direction, .up)
                     ))
@@ -441,7 +440,7 @@ public struct MultiCarElevatorMacroFixture: Sendable {
                 ActionParameter("car", values: CarID.finiteValues),
                 ActionParameter("floor", values: FloorID.finiteValues)
             ]) {
-                let person = Expr<String>(.variable("person"))
+                let person = Expr<PersonID>(.variable("person"))
                 let car = Expr<CarID>(.variable("car"))
                 let floor = Expr<FloorID>(.variable("floor"))
                 cars[car][CarSchema.doorsOpen].raw == true
