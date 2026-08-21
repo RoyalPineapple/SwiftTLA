@@ -20,24 +20,24 @@ struct NestedComposableMacroConformanceTests {
         let compilation = try spec.compile()
 
         for (sourceID, source) in graph.states {
-            let checked = (graph.transitions[sourceID] ?? []).compactMap { transition -> (TLAActionInvocation, TLAStateProjection)? in
+            let checked = (graph.transitions[sourceID] ?? []).compactMap { transition -> (action: String, arguments: [TLAValue], state: TLAStateProjection)? in
                 guard let successor = graph.states[transition.target] else { return nil }
-                return (transition.label.invocation, successor)
+                return (transition.label.action, transition.label.arguments, successor)
             }
             let state = try FormalState(projection: source, compilation: compilation)
             let runtimeSuccessors = try CompiledRuntime(compilation: compilation)
                 .successors(from: state)
                 .map { successor in
-                    let invocation = TLAActionInvocation(
-                        name: compilation.layout.actions[successor.action.ordinal].declaration.name,
-                        arguments: successor.arguments
+                    (
+                        action: compilation.layout.actions[successor.action.ordinal].declaration.name,
+                        arguments: successor.arguments,
+                        state: try successor.state.projection(using: compilation.layout)
                     )
-                    return (invocation, try successor.state.projection(using: compilation.layout))
                 }
 
             #expect(multiset(runtimeSuccessors) == multiset(checked))
             let value = try #require(TLAStateProjection.Token(validating: "value"))
-            #expect(runtimeSuccessors.contains { $0.1.value(for: value) == .int(3) } == false)
+            #expect(runtimeSuccessors.contains { $0.state.value(for: value) == .int(3) } == false)
         }
     }
 
@@ -276,10 +276,10 @@ struct NestedComposableMacroConformanceTests {
     }
 
     private func multiset(
-        _ transitions: [(TLAActionInvocation, TLAStateProjection)]
+        _ transitions: [(action: String, arguments: [TLAValue], state: TLAStateProjection)]
     ) -> [String: Int] {
         Dictionary(
-            transitions.map { ("\($0.0.description) -> \($0.1)", 1) },
+            transitions.map { ("\($0.action):\($0.arguments) -> \($0.state)", 1) },
             uniquingKeysWith: +
         )
     }

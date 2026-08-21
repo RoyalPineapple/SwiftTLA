@@ -51,6 +51,10 @@ public struct ActionParameter<Domain: TLAValueType & Sendable>: Sendable {
   }
 }
 extension ActionParameter: ActionParameterDescriptor {}
+func formalActionCall(named name: String, arguments: [TLAValue]) -> String {
+  arguments.isEmpty ? name : "\(name)(\(arguments.map(\.description).joined(separator: ", ")))"
+}
+
 public struct TLAActionInvocation: Sendable, Hashable, CustomStringConvertible {
   public let name: String
   public let arguments: [TLAValue]
@@ -59,7 +63,7 @@ public struct TLAActionInvocation: Sendable, Hashable, CustomStringConvertible {
     self.arguments = arguments
   }
   public var description: String {
-    arguments.isEmpty ? name : "\(name)(\(arguments.map(\.description).joined(separator: ", ")))"
+    formalActionCall(named: name, arguments: arguments)
   }
 }
 public struct NamedAction: Sendable, CustomStringConvertible, Equatable {
@@ -92,14 +96,14 @@ public struct NamedAction: Sendable, CustomStringConvertible, Equatable {
     return "\(name)\(parameters.isEmpty ? "" : "(\(parameters))"): \(body)"
   }
 }
-func actionInvocations(_ action: NamedAction) -> [(
-  invocation: TLAActionInvocation, body: ActionExpr, indices: [Int]
+func actionVariants(_ action: NamedAction) -> [(
+  arguments: [TLAValue], body: ActionExpr, indices: [Int]
 )] {
   func expand(_ position: Int, _ arguments: [TLAValue], _ indices: [Int], _ body: ActionExpr) -> [(
-    TLAActionInvocation, ActionExpr, [Int]
+    [TLAValue], ActionExpr, [Int]
   )] {
     guard position < action.bindings.count else {
-      return [(TLAActionInvocation(name: action.name, arguments: arguments), body, indices)]
+      return [(arguments, body, indices)]
     }
     let binding = action.bindings[position]
     return binding.values.enumerated().flatMap { index, value in

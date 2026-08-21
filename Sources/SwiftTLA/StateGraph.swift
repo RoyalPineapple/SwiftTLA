@@ -2,22 +2,19 @@ public struct StateGraph: Sendable {
     public let specName: String
     public let variableNames: [String]
     public struct TransitionLabel: Hashable, Sendable, CustomStringConvertible {
-        public let invocation: TLAActionInvocation
+        public let action: String
+        public let arguments: [TLAValue]
         let actionOrdinal: Int?
 
-        public init(_ invocation: TLAActionInvocation) {
-            self.invocation = invocation
-            self.actionOrdinal = nil
-        }
-
         init(action: ActionID, formalName: String, arguments: [TLAValue]) {
-            self.invocation = .init(name: formalName, arguments: arguments)
+            self.action = formalName
+            self.arguments = arguments
             self.actionOrdinal = action.ordinal
         }
 
-        public var action: String { invocation.name }
-        public var arguments: [TLAValue] { invocation.arguments }
-        public var description: String { invocation.description }
+        public var description: String {
+            formalActionCall(named: action, arguments: arguments)
+        }
     }
 
     public struct Transition: Sendable {

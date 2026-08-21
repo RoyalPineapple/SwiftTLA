@@ -254,7 +254,10 @@ private func compiledBFS(
                 stateToID[successorKey] = targetID
                 idToState[targetID] = successor.state
                 let actionName = layout.actions[successor.action.ordinal].declaration.name
-                predecessors[successor.state] = (current, TLAActionInvocation(name: actionName, arguments: successor.arguments).description)
+                predecessors[successor.state] = (
+                    current,
+                    formalActionCall(named: actionName, arguments: successor.arguments)
+                )
                 queue.append(successor.state)
                 nextID += 1
             }

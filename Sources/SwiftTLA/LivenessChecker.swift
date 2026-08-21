@@ -183,7 +183,9 @@ public struct LivenessChecker {
         let names = Set(actions.map(\.name))
         let referencedNames = Set(fairness.map(\.actionIdentity))
         let knownIdentities = names.union(Set(actions.flatMap { action in
-            actionInvocations(action).map { $0.invocation.description }
+            actionVariants(action).map {
+                formalActionCall(named: action.name, arguments: $0.arguments)
+            }
         }))
         guard referencedNames.isSubset(of: knownIdentities), graphHasOnlyKnownActions(knownIdentities) else {
             return .init(status: .unavailable, reason: .unknownAction)
@@ -265,8 +267,8 @@ public struct LivenessChecker {
     private func enabledness(for actions: [NamedAction]) -> [String: [StateGraph.StateID: Bool]] {
         Dictionary(
             uniqueKeysWithValues: actions.flatMap { action in
-                actionInvocations(action).map { variant in
-                    let identity = variant.invocation.description
+                actionVariants(action).map { variant in
+                    let identity = formalActionCall(named: action.name, arguments: variant.arguments)
                     let states = Dictionary(uniqueKeysWithValues: graph.states.keys.map { state in
                         (state, explicitEdges(from: state).contains { $0.action == identity && $0.target != state })
                     })
