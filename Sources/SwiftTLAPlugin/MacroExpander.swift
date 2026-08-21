@@ -60,9 +60,6 @@ enum MacroExpander {
         }
     }
 
-    /// A finite binding with one possible value is a scheduler detail, not a
-    /// useful public argument. Keep it in the formal invocation while hiding
-    /// it from the generated Swift surface.
     static func publicBindings(for action: NamedAction) -> [ActionBinding] {
         action.bindings.filter { $0.values.count > 1 }
     }
