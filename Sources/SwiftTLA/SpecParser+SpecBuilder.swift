@@ -1317,17 +1317,11 @@ extension ParserSession {
             ))
             return
         }
-        guard closure.statements.allSatisfy({
-            if case .expr = $0.item { return true }
-            return false
-        }) else {
-            result.diagnostics.append(.init(
-                message: "Parameterized action '\(actionName)' contains an unsupported action expression.",
-                source: closure
-            ))
-            return
-        }
-        guard let body = decodeActionFromClosure(closure) else {
+        let actionScope = typedFacadeScope(
+            .empty,
+            bindings: bindings.map { (sourceName: $0.name, value: .variable($0.name)) }
+        )
+        guard let body = decodeActionFromClosure(closure, scope: actionScope) else {
             if let expression = unsupportedActionExpression(in: closure),
                let typedUpdate = typedUpdateExpression(in: expression) {
                 let message = "Parameterized action '\(actionName)' contains an unsupported typed update; "

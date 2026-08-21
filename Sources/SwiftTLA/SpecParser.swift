@@ -658,6 +658,13 @@ public final class ParserSession {
                     return .value(formalValue)
                 }
         }
+        if let call = expression.as(FunctionCallExprSyntax.self),
+           let member = call.calledExpression.as(MemberAccessExprSyntax.self),
+           member.base == nil,
+           member.declName.baseName.text == "variable",
+           let name = extractStringArg(call, index: 0) {
+            return .variable(name)
+        }
         if let localRecursion = decodeLocalRecursion(expression, scope: scope) {
             return localRecursion
         }
@@ -1734,14 +1741,24 @@ public enum SpecParser {
 }
 
 extension ParserSession {
-    func decodeActionExpr(_ expression: ExprSyntax) -> ActionExpr? {
+    private func decodeActionState(
+        _ expression: ExprSyntax,
+        scope: TypedFacadeScope
+    ) -> StateExpr? {
+        decodeTypedFacadeValue(expression, scope: scope) ?? decodeStateExpr(expression)
+    }
+
+    func decodeActionExpr(
+        _ expression: ExprSyntax,
+        scope: TypedFacadeScope = .empty
+    ) -> ActionExpr? {
         if let call = expression.as(FunctionCallExprSyntax.self),
            let access = call.calledExpression.as(MemberAccessExprSyntax.self),
            access.declName.baseName.text == "becomes",
            let baseRef = access.base?.as(DeclReferenceExprSyntax.self) {
             let varName = baseRef.baseName.text
             if let arg = call.arguments.first?.expression,
-               let state = decodeStateExpr(arg) {
+               let state = decodeActionState(arg, scope: scope) {
                 if case .choose(let chosenSet, _, _) = state {
                     return .chooseAction(.named(varName), chosenSet)
                 }
@@ -1753,7 +1770,7 @@ extension ParserSession {
            let access = call.calledExpression.as(MemberAccessExprSyntax.self),
            let baseRef = access.base?.as(DeclReferenceExprSyntax.self),
            let elementSyntax = call.arguments.first?.expression,
-           let element = decodeStateExpr(elementSyntax) {
+           let element = decodeActionState(elementSyntax, scope: scope) {
             switch access.declName.baseName.text {
             case "inserting":
                 return .assign(
@@ -1777,8 +1794,8 @@ extension ParserSession {
         if let call = expression.as(FunctionCallExprSyntax.self),
            let access = call.calledExpression.as(MemberAccessExprSyntax.self),
            access.declName.baseName.text == "when" {
-            let outerCondition = call.arguments.first.flatMap { decodeStateExpr($0.expression) }
-            guard let inner = access.base.flatMap({ decodeActionExpr($0) }) else { return nil }
+            let outerCondition = call.arguments.first.flatMap { decodeActionState($0.expression, scope: scope) }
+            guard let inner = access.base.flatMap({ decodeActionExpr($0, scope: scope) }) else { return nil }
             guard let outer = outerCondition else { return inner }
             // Merge: inner is always .and(.guard_(innerConditions), innerAction) or just .guard_ + .assign
             // We want: .and(.guard_(outer && innerConditions), innerAction)
@@ -1792,18 +1809,18 @@ extension ParserSession {
            ref.baseName.text == "choose",
            let varArg = call.arguments.first?.expression.as(DeclReferenceExprSyntax.self),
            let fromArg = call.arguments.dropFirst().first?.expression,
-           let setExpr = decodeStateExpr(fromArg) {
+           let setExpr = decodeActionState(fromArg, scope: scope) {
             return .chooseAction(.named(varArg.baseName.text), setExpr)
         }
         if let seq = expression.as(SequenceExprSyntax.self) {
-            return decodeActionSequence(Array(seq.elements))
+            return decodeActionSequence(Array(seq.elements), scope: scope)
         }
         if let infix = expression.as(InfixOperatorExprSyntax.self),
            let opText = infix.operator.as(BinaryOperatorExprSyntax.self)?.operator.text {
-            let leftAction = decodeActionExpr(infix.leftOperand)
-            let rightAction = decodeActionExpr(infix.rightOperand)
-            let leftState = decodeStateExpr(infix.leftOperand)
-            let rightState = decodeStateExpr(infix.rightOperand)
+            let leftAction = decodeActionExpr(infix.leftOperand, scope: scope)
+            let rightAction = decodeActionExpr(infix.rightOperand, scope: scope)
+            let leftState = decodeActionState(infix.leftOperand, scope: scope)
+            let rightState = decodeActionState(infix.rightOperand, scope: scope)
             if opText == "||" {
                 let l = leftAction ?? leftState.map(ActionExpr.guard_)
                 let r = rightAction ?? rightState.map(ActionExpr.guard_)
@@ -1817,38 +1834,41 @@ extension ParserSession {
         }
         if let tuple = expression.as(TupleExprSyntax.self),
            let single = tuple.elements.first?.expression {
-            return decodeActionExpr(single)
+            return decodeActionExpr(single, scope: scope)
         }
-        if let state = decodeStateExpr(expression) {
+        if let state = decodeActionState(expression, scope: scope) {
             return .guard_(state)
         }
         return nil
     }
 
-    func decodeActionSequence(_ elements: [ExprSyntax]) -> ActionExpr? {
+    func decodeActionSequence(
+        _ elements: [ExprSyntax],
+        scope: TypedFacadeScope = .empty
+    ) -> ActionExpr? {
         guard elements.count >= 1 else { return nil }
-        if elements.count == 1 { return decodeActionExpr(elements[0]) }
+        if elements.count == 1 { return decodeActionExpr(elements[0], scope: scope) }
         if let orIdx = stride(from: 1, to: elements.count, by: 2).first(where: {
             elements[$0].as(BinaryOperatorExprSyntax.self)?.operator.text == "||"
         }) {
-            guard let left = decodeActionSequence(Array(elements[0..<orIdx])),
-                  let right = decodeActionSequence(Array(elements[(orIdx + 1)..<elements.count]))
+            guard let left = decodeActionSequence(Array(elements[0..<orIdx]), scope: scope),
+                  let right = decodeActionSequence(Array(elements[(orIdx + 1)..<elements.count]), scope: scope)
             else { return nil }
             return .or(left, right)
         }
         if let andIdx = stride(from: 1, to: elements.count, by: 2).first(where: {
             elements[$0].as(BinaryOperatorExprSyntax.self)?.operator.text == "&&"
         }) {
-            guard let left = decodeActionSequence(Array(elements[0..<andIdx])),
-                  let right = decodeActionSequence(Array(elements[(andIdx + 1)..<elements.count]))
+            guard let left = decodeActionSequence(Array(elements[0..<andIdx]), scope: scope),
+                  let right = decodeActionSequence(Array(elements[(andIdx + 1)..<elements.count]), scope: scope)
             else { return nil }
             return .and(left, right)
         }
         if elements.count >= 3 {
             guard let opText = elements[1].as(BinaryOperatorExprSyntax.self)?.operator.text else { return nil }
             if opText == "||" || opText == "&&" {
-                guard let left = decodeActionExpr(elements[0]),
-                      let right = decodeActionExpr(elements[2]) else { return nil }
+                guard let left = decodeActionExpr(elements[0], scope: scope),
+                      let right = decodeActionExpr(elements[2], scope: scope) else { return nil }
                 return opText == "||" ? .or(left, right) : .and(left, right)
             }
             if let state = decodeInfixExpr(elements) { return .guard_(state) }
@@ -1865,15 +1885,42 @@ extension ParserSession {
         return expression
     }
 
-    func decodeActionFromClosure(_ closure: ClosureExprSyntax) -> ActionExpr? {
+    func decodeActionFromClosure(
+        _ closure: ClosureExprSyntax,
+        scope initialScope: TypedFacadeScope = .empty
+    ) -> ActionExpr? {
         var actions: [ActionExpr] = []
+        var scope = initialScope
         for statement in closure.statements {
-            guard case .expr(let expression) = statement.item else { continue }
-            guard let action = decodeActionExpr(expression) else { return nil }
-            actions.append(action)
+            switch statement.item {
+            case .decl(let declaration):
+                guard let binding = actionLocalBinding(declaration, scope: scope) else { return nil }
+                scope = typedFacadeScope(scope, binding: binding.name, to: binding.value)
+            case .expr(let expression):
+                guard let action = decodeActionExpr(expression, scope: scope) else { return nil }
+                actions.append(action)
+            default:
+                return nil
+            }
         }
         guard let first = actions.first else { return .guard_(.value(.bool(true))) }
         return actions.dropFirst().reduce(first) { .and($0, $1) }
+    }
+
+    private func actionLocalBinding(
+        _ declaration: DeclSyntax,
+        scope: TypedFacadeScope
+    ) -> (name: String, value: StateExpr)? {
+        guard let variable = declaration.as(VariableDeclSyntax.self),
+              variable.bindingSpecifier.tokenKind == .keyword(.let),
+              variable.bindings.count == 1,
+              let binding = variable.bindings.first,
+              let name = binding.pattern.as(IdentifierPatternSyntax.self)?.identifier.text,
+              let initializer = binding.initializer?.value,
+              let value = decodeTypedFacadeValue(initializer, scope: scope)
+                ?? decodeStateExpr(initializer)
+        else { return nil }
+        return (name, value)
     }
 
     func decodeCollectionPredicate(_ call: FunctionCallExprSyntax) -> StateExpr? {

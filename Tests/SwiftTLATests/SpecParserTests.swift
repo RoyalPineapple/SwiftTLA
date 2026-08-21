@@ -1798,6 +1798,32 @@ private let cameraModeDefinition = parserEnum(
         #expect(parsed.actions[0].body == .assign(.named("floor"), .value(.int(1))))
     }
 
+    @Test func parsesParameterizedActionLocalBindingsInLexicalScope() throws {
+        let source = """
+        {
+            Action("pass", parameters: [
+                ActionParameter("from", values: [1, 2]),
+                ActionParameter("to", values: [1, 2]),
+                ActionParameter("round", values: [1, 2])
+            ]) {
+                let from = Expr<Int>(.variable("from"))
+                let to = Expr<Int>(.variable("to"))
+                let round = Expr<Int>(.variable("round"))
+                leader == from && leader.becomes(to + round)
+            }
+        }
+        """
+
+        let parsed = SpecParser.parseSpecClosure(try parseClosure(source))
+
+        #expect(parsed.diagnostics.isEmpty)
+        #expect(parsed.actions[0].bindings.map(\.name) == ["from", "to", "round"])
+        #expect(parsed.actions[0].body == .and(
+            .guard_(.equal(.variable("leader"), .variable("from"))),
+            .assign(.named("leader"), .add(.variable("to"), .variable("round")))
+        ))
+    }
+
     @Test func diagnosesInvalidDomainsAtEveryParameterPosition() throws {
         let source = """
         {
