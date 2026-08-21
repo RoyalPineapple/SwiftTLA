@@ -276,10 +276,10 @@ public struct CompiledSpecification: Sendable {
             }
             return TLAModuleFile(
                 name: entry.module.name,
-                tla: entry.module.renderTLAModuleSource(sectionPlan: sectionPlan),
+                tla: sectionPlan.renderedModuleSource,
                 cfg: entry.module.name == spec.name
-                    ? entry.module.renderTLCConfiguration(sectionPlan: sectionPlan)
-                : nil
+                    ? sectionPlan.renderedConfiguration
+                    : nil
             )
         }
         guard let rootFile = files.last else {
