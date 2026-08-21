@@ -22,8 +22,9 @@ requireSendable(ObservableHost.Observable.State.self)
 requireSendable(ObservableHost.Observable.ActionLabel.self)
 requireSendable(ObservableHost.Observable.TransitionResult.self)
 
-let observable = await MainActor.run { ObservableHost.Observable() }
-let result = try await observable._advance()
+let live = try ObservableHost.makeLive()
+let observable = try await ObservableHost.Observable(live: live)
+let result = try await observable.apply(.advance)
 
 precondition(result.action == .advance)
 precondition(result.before.count == 0)
@@ -33,7 +34,7 @@ precondition(stateCount == 1)
 
 let beforeRejectedAction = observable.state
 do {
-  _ = try await observable._advance()
+  _ = try await observable.apply(.advance)
   fatalError("Expected disabled action")
 } catch {
   let stateAfterRejectedAction = observable.state

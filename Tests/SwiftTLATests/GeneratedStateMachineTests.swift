@@ -432,8 +432,9 @@ struct NestedAdapterConcurrencyTests {
         let observableLabel: NestedComposedCounter.Observable.ActionLabel = .advance
         let actorLabel: NestedComposedCounter.Actor.ActionLabel = .advance
         var model = try NestedComposedCounter.makeMachine()
-        let observable = NestedComposedCounter.Observable()
-        let actor = NestedComposedCounter.Actor()
+        let live = try NestedComposedCounter.makeLive()
+        let observable = try await NestedComposedCounter.Observable(live: live)
+        let actor = NestedComposedCounter.Actor(live: live)
         let callbackRecorder = NestedCallbackRecorder()
         observable.onAdvance = { before, after in
             await callbackRecorder.record(before: before, after: after)
@@ -446,7 +447,7 @@ struct NestedAdapterConcurrencyTests {
         #expect(expectedBefore.availableActions == [.advance])
 
         let expected = try model.apply(.advance)
-        let observed = try observable.apply(.advance)
+        let observed = try await observable.apply(.advance)
         let acted = try await actor.apply(.advance)
 
         #expect(observed.before == expected.before)
@@ -464,7 +465,7 @@ struct NestedAdapterConcurrencyTests {
 
     @Test("Nested actor commits overlapping executions without stale write-back")
     func nestedActorExecutesOverlappingTransitionsAtomically() async throws {
-        let actor = NestedComposedCounter.Actor()
+        let actor = NestedComposedCounter.Actor(live: try NestedComposedCounter.makeLive())
         async let first = actor.apply(.advance)
         async let second = actor.apply(.advance)
         _ = try await (first, second)
@@ -475,17 +476,17 @@ struct NestedAdapterConcurrencyTests {
     @Test("Nested observable rejects disabled execution without notification")
     @MainActor
     func nestedObservableSuppressesCallbackAfterFailedExecution() async throws {
-        let observable = NestedComposedCounter.Observable()
+        let observable = try await NestedComposedCounter.Observable(live: try NestedComposedCounter.makeLive())
         let recorder = NestedCallbackRecorder()
         observable.onAdvance = { before, after in
             await recorder.record(before: before, after: after)
         }
 
-        _ = try observable.apply(.advance)
-        _ = try observable.apply(.advance)
+        _ = try await observable.apply(.advance)
+        _ = try await observable.apply(.advance)
         let beforeFailure = observable.state
         await #expect(throws: GeneratedMachineError.self) {
-            try observable.apply(.advance)
+            try await observable.apply(.advance)
         }
 
         #expect(observable.state == beforeFailure)
@@ -674,7 +675,7 @@ struct GeneratedStateMachineTests {
     @Test("Observable parameterized action applies its selected finite-domain argument")
     @MainActor
     func observableParameterizedAction() async throws {
-        let elevator = TwoCarElevatorMachine.Observable()
+        let elevator = try await TwoCarElevatorMachine.Observable(live: try TwoCarElevatorMachine.makeLive())
         let callbackID = LockedValue<Int?>(nil)
         elevator.onMoveElevator = { id, _, _ in callbackID.value = id }
         _ = try await elevator._moveElevator(id: 2)
@@ -848,7 +849,7 @@ struct GeneratedStateMachineTests {
         var model = try ThreeParameterActionMachine.makeMachine()
         let expected = try model.apply(.board(person: 2, elevator: 20, direction: 200))
 
-        let observable = ThreeParameterActionMachine.Observable()
+        let observable = try await ThreeParameterActionMachine.Observable(live: try ThreeParameterActionMachine.makeLive())
         let callback = LockedValue<BoardCallback?>(nil)
         observable.onBoard = { person, elevator, direction, before, after in
             callback.value = .init(
@@ -859,9 +860,9 @@ struct GeneratedStateMachineTests {
                 after: after
             )
         }
-        let observed = try observable.apply(.board(person: 2, elevator: 20, direction: 200))
+        let observed = try await observable.apply(.board(person: 2, elevator: 20, direction: 200))
 
-        let actor = ThreeParameterActionMachine.Actor()
+        let actor = ThreeParameterActionMachine.Actor(live: try ThreeParameterActionMachine.makeLive())
         let acted = try await actor.apply(.board(person: 2, elevator: 20, direction: 200))
 
         #expect(observed.action == expected.action)
@@ -890,12 +891,12 @@ struct GeneratedStateMachineTests {
         }
         #expect(model.state == modelBefore)
 
-        let observable = ThreeParameterActionMachine.Observable()
+        let observable = try await ThreeParameterActionMachine.Observable(live: try ThreeParameterActionMachine.makeLive())
         let callbackCount = LockedValue(0)
         observable.onBoard = { _, _, _, _, _ in callbackCount.value += 1 }
         let observableBefore = observable.state
         do {
-            _ = try observable.apply(.board(person: 2, elevator: 30, direction: 200))
+            _ = try await observable.apply(.board(person: 2, elevator: 30, direction: 200))
             Issue.record("Expected rejected observable action")
         } catch {
             #expect(error is GeneratedMachineError)
@@ -903,7 +904,7 @@ struct GeneratedStateMachineTests {
         #expect(observable.state == observableBefore)
         #expect(callbackCount.value == 0)
 
-        let actor = ThreeParameterActionMachine.Actor()
+        let actor = ThreeParameterActionMachine.Actor(live: try ThreeParameterActionMachine.makeLive())
         let actorBefore = await actor.state
         do {
             _ = try await actor.apply(.board(person: 2, elevator: 30, direction: 200))

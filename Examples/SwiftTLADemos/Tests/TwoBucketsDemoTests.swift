@@ -25,7 +25,8 @@ struct TwoBucketsDemoTests {
     @Test("two buckets provides a generated observable adapter")
     @MainActor
     func providesObservableAdapter() async throws {
-        let machine = TwoBuckets.Observable()
+        let live = try TwoBuckets.makeLive()
+        let machine = try await TwoBuckets.Observable(live: live)
         _ = try await machine.apply(.fillFive)
 
         #expect(machine.state.five == 5)
