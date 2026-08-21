@@ -1,9 +1,15 @@
 # SwiftTLA
 
-SwiftTLA is a compile-time spec validator and behavioral compiler. Swift types constrain which models you can construct. The `@TLAModel`, `@TLAActor`, and `@TLAObservable` macros parse the model. They model-check supported finite safety behavior during compilation. A successful check generates an executable state machine or an actor API.
+**SwiftTLA brings formal programming into Swift.**
 
-It also exports TLA+ and a TLC configuration. For declared finite cases, TLC is a
-pinned executable reference. Published TLA+ semantics remain authoritative.
+**SwiftTLA generates typed Swift state machines and exhaustively validates all reachable behavior against your specification.**
+
+Write the rules of a system once: its data, actions, algorithms, invariants,
+and temporal properties. SwiftTLA turns those rules into production Swift code
+that your app can run. The same specification can explore every reachable
+outcome in tests and produce TLA+ and PlusCal for independent TLC validation.
+
+**One specification. Production behavior. Formal evidence.**
 
 See [the supported language fragment](Documentation/Design.md), the [generated-machine guide](Documentation/GeneratedMachines.md), the [live-machine guide](Documentation/LiveMachines.md), and the [symmetric collections guide](Documentation/SymmetricCollections.md). The generated-machine API reference is in [SwiftTLA DocC](Sources/SwiftTLA/SwiftTLA.docc/SwiftTLA.md).
 
