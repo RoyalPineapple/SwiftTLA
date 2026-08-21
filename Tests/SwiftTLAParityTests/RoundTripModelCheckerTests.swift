@@ -269,16 +269,16 @@ private func value(
   private func successors(
     _ compilation: CompiledSpecification,
     from state: TLAStateProjection
-  ) throws -> [(TLAActionInvocation, TLAStateProjection)] {
+  ) throws -> [(action: String, arguments: [TLAValue], state: TLAStateProjection)] {
     let formalState = try FormalState(projection: state, compilation: compilation)
     return try CompiledRuntime(compilation: compilation)
       .successors(from: formalState)
       .map { successor in
-        let invocation = TLAActionInvocation(
-          name: compilation.layout.actions[successor.action.ordinal].declaration.name,
-          arguments: successor.arguments
+        (
+          action: compilation.layout.actions[successor.action.ordinal].declaration.name,
+          arguments: successor.arguments,
+          state: try successor.state.projection(using: compilation.layout)
         )
-        return (invocation, try successor.state.projection(using: compilation.layout))
       }
   }
 
@@ -325,8 +325,8 @@ private func value(
     }
     let compilation = try spec.compile()
     let state = try #require(try compilation.initialStateProjections().first)
-    let available = try successors(compilation, from: state).map(\.0)
-    #expect(available.contains(.init(name: "Tick")))
+    let available = try successors(compilation, from: state).map(\.action)
+    #expect(available.contains("Tick"))
   }
 
   @Test("compiled successor relation matches checked transitions from every reachable state")
@@ -345,9 +345,9 @@ private func value(
     let compilation = try spec.compile()
 
     for (sourceID, source) in graph.states {
-      let checked = (graph.transitions[sourceID] ?? []).compactMap { transition -> (TLAActionInvocation, TLAStateProjection)? in
+      let checked = (graph.transitions[sourceID] ?? []).compactMap { transition -> (action: String, arguments: [TLAValue], state: TLAStateProjection)? in
         guard let successor = graph.states[transition.target] else { return nil }
-        return (transition.label.invocation, successor)
+        return (transition.label.action, transition.label.arguments, successor)
       }
       let runtimeSuccessors = try successors(compilation, from: source)
 
@@ -382,9 +382,9 @@ private func value(
     let compilation = try spec.compile()
 
     for (sourceID, source) in graph.states {
-      let checked = (graph.transitions[sourceID] ?? []).compactMap { transition -> (TLAActionInvocation, TLAStateProjection)? in
+      let checked = (graph.transitions[sourceID] ?? []).compactMap { transition -> (action: String, arguments: [TLAValue], state: TLAStateProjection)? in
         guard let successor = graph.states[transition.target] else { return nil }
-        return (transition.label.invocation, successor)
+        return (transition.label.action, transition.label.arguments, successor)
       }
       let runtimeSuccessors = try successors(compilation, from: source)
 
@@ -394,10 +394,10 @@ private func value(
   }
 
   private func multiset(
-    _ transitions: [(TLAActionInvocation, TLAStateProjection)]
+    _ transitions: [(action: String, arguments: [TLAValue], state: TLAStateProjection)]
   ) -> [String: Int] {
     Dictionary(
-      transitions.map { ("\($0.0.description) -> \($0.1)", 1) },
+      transitions.map { ("\($0.action):\($0.arguments) -> \($0.state)", 1) },
       uniquingKeysWith: +
     )
   }
@@ -415,11 +415,11 @@ private func value(
     let compilation = try spec.compile()
     let initial = try #require(try compilation.initialStateProjections().first)
     let available = [
-      TLAActionInvocation(name: "advance", arguments: [.int(1)]),
-      TLAActionInvocation(name: "advance", arguments: [.int(2)])
+      (action: "advance", arguments: [.int(1)]),
+      (action: "advance", arguments: [.int(2)])
     ]
 
-    #expect(try successors(compilation, from: initial).map(\.0) == available)
+    #expect(try successors(compilation, from: initial).map { ($0.action, $0.arguments) } == available)
 
     let advanced = try successor(compilation, named: "advance", arguments: [.int(1)], from: initial)
     let action = try #require(compilation.layout.actionID(named: "advance"))
@@ -518,7 +518,7 @@ private func value(
     let phase = try #require(TLAStateProjection.Token(validating: "phase"))
     #expect(state.value(for: phase) == .int(0))
     let transition = try #require(graph.transitions[initial]?.first(where: {
-      $0.label.invocation.name == "StepDiscover"
+      $0.label.action == "StepDiscover"
     }))
     let next = try #require(graph.states[transition.target])
     let processed = try #require(TLAStateProjection.Token(validating: "processed"))

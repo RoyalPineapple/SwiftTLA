@@ -1004,9 +1004,13 @@ enum AlgorithmLowerer {
         case .none:
             []
         case .weak:
-            actionInvocations(action).map { .weakFairnessInvocation($0.invocation) }
+            actionVariants(action).map {
+                .weakFairnessInvocation(.init(name: action.name, arguments: $0.arguments))
+            }
         case .strong:
-            actionInvocations(action).map { .strongFairnessInvocation($0.invocation) }
+            actionVariants(action).map {
+                .strongFairnessInvocation(.init(name: action.name, arguments: $0.arguments))
+            }
         }
     }
 

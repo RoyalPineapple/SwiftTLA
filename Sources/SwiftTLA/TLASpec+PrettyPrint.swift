@@ -165,16 +165,16 @@ extension TLASpec {
             let emittedName = emittedActionNames[action.name] ?? action.name
             let header = parameters.isEmpty ? emittedName : "\(emittedName)(\(parameters))"
             lines.append("\(header) == \(action.body.tlaModuleSource)")
-            for variant in actionInvocations(action) where !variant.indices.isEmpty {
+            for variant in actionVariants(action) where !variant.indices.isEmpty {
                 let suffix = variant.indices.map(String.init).joined(separator: "_")
-                lines.append("\(emittedName)__\(suffix) == \(variant.invocation)")
+                lines.append("\(emittedName)__\(suffix) == \(formalActionCall(named: action.name, arguments: variant.arguments))")
             }
         }
         lines.append("")
 
         let actionNames = actions.filter { !$0.name.isEmpty }
         let invocations = actionNames.flatMap { action in
-            actionInvocations(action).map { variant -> String in
+            actionVariants(action).map { variant -> String in
                 let emittedName = emittedActionNames[action.name] ?? action.name
                 guard !variant.indices.isEmpty else { return emittedName }
                 return "\(emittedName)__\(variant.indices.map(String.init).joined(separator: "_"))"
@@ -225,9 +225,14 @@ extension TLASpec {
             return condition.tlaForm(vars: vars)
         case .weakFairnessInvocation(let invocation), .strongFairnessInvocation(let invocation):
             let operatorName = actions.lazy
-                .flatMap(actionInvocations)
-                .first(where: { $0.invocation == invocation })
-                .map { variant in
+                .flatMap { action in
+                    actionVariants(action).map { (action, $0) }
+                }
+                .first(where: {
+                    $0.0.name == invocation.name && $0.1.arguments == invocation.arguments
+                })
+                .map { pair in
+                    let variant = pair.1
                     let emittedName = emittedActionNames[invocation.name] ?? invocation.name
                     guard !variant.indices.isEmpty else { return emittedName }
                     return "\(emittedName)__\(variant.indices.map(String.init).joined(separator: "_"))"
