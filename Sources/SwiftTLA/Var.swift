@@ -183,13 +183,6 @@ extension ActionExpr {
   }
 }
 
-extension Dictionary where Key == String, Value == TLAValue {
-  public subscript<T: TLAValueType>(_ variable: Var<T>) -> TLAValue? {
-    get { self[variable.name] }
-    set { self[variable.name] = newValue }
-  }
-}
-
 public protocol StateExprConvertible { var stateExpr: StateExpr { get } }
 extension StateExpr: StateExprConvertible { public var stateExpr: StateExpr { self } }
 extension Int: StateExprConvertible { public var stateExpr: StateExpr { .value(.int(self)) } }
