@@ -707,9 +707,9 @@ extension ParserSession {
                 // PlusCal's `with <<first, second>> \in Pairs`. Keep one
                 // formal selection, then bind both tuple positions inside its
                 // scope so the emitted TLA+ and runtime builder agree.
-                let tupleBinding = FreshVarName.fresh()
-                let firstBinding = FreshVarName.fresh()
-                let secondBinding = FreshVarName.fresh()
+                let tupleBinding = generatedBinderName()
+                let firstBinding = generatedBinderName()
+                let secondBinding = generatedBinderName()
                 let replacedBody = body
                     .map { replaceAlgorithmVariable($0, from: bindings[0], to: firstBinding) }
                     .map { replaceAlgorithmVariable($0, from: bindings[1], to: secondBinding) }
@@ -757,7 +757,7 @@ extension ParserSession {
                   let bound = closureParameterNames(in: closure).first,
                   let body = parseAlgorithmStatements(closure.statements, processParameter: processParameter, macros: macros)
             else { return nil }
-            let replacement = FreshVarName.fresh()
+            let replacement = generatedBinderName()
             return .letBinding(
                 variable: replacement,
                 value: replacingProcessParameter(in: value, named: processParameter),
@@ -968,8 +968,8 @@ extension ParserSession {
         guard variable == replacement else {
             return (variable, body.map { replaceAlgorithmVariable($0, from: parameter, to: replacement) })
         }
-        let fresh = FreshVarName.fresh()
-        let renamed = body.map { replaceAlgorithmVariable($0, from: variable, to: fresh) }
-        return (fresh, renamed.map { replaceAlgorithmVariable($0, from: parameter, to: replacement) })
+        let binderName = generatedBinderName()
+        let renamed = body.map { replaceAlgorithmVariable($0, from: variable, to: binderName) }
+        return (binderName, renamed.map { replaceAlgorithmVariable($0, from: parameter, to: replacement) })
     }
 }

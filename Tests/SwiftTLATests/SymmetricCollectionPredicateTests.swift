@@ -60,20 +60,27 @@ public struct GeneratedShorthandPredicateRuntime {
 struct SymmetricCollectionPredicateTests {
   @Test("Parser lowers collection predicates to the direct invariant AST")
   func parserMatchesDirectCollectionPredicateInvariants() throws {
-    FreshVarName.resetCounter()
     let parsed = SpecParser.parseSpecClosure(predicateClosure())
-    FreshVarName.resetCounter()
     let direct = directPredicateSpec()
     let parsedSpec = spec(from: parsed)
 
     #expect(parsed.diagnostics.isEmpty)
     #expect(parsed.symmetricCollections.map(\.declaration.metadata)
       == direct.symmetricCollections.map(\.metadata))
-    #expect(normalized(parsed.invariants.map(\.body.description))
-      == normalized(direct.invariants.map(\.body.description)))
+    #expect(_tlaAlphaEquivalent(parsedSpec, direct))
     #expect(try parsedSpec.compile().initialStateProjections() == direct.compile().initialStateProjections())
     #expect(try ModelChecker(spec: parsedSpec).check().description
       == ModelChecker(spec: direct).check().description)
+  }
+
+  @Test("macro and source-model compilation share collection binder identity")
+  func macroAndSourceModelCompilationShareCollectionBinderIdentity() throws {
+    let macroCompilation = try GeneratedPredicateRuntime.compiledSpecification()
+    let sourceCompilation = try GeneratedPredicateRuntime.spec.compile()
+
+    #expect(macroCompilation.identity == sourceCompilation.identity)
+    #expect(try macroCompilation.renderedTLAModuleBundle().root.tla
+      == sourceCompilation.renderedTLAModuleBundle().root.tla)
   }
 
   @Test("Macro expansion retains collection predicate invariants and runtime parity")
@@ -287,9 +294,4 @@ struct SymmetricCollectionPredicateTests {
     )
   }
 
-  private func normalized(_ invariants: [String]) -> [String] {
-    invariants.map {
-      $0.replacingOccurrences(of: "x[0-9]+", with: "member", options: .regularExpression)
-    }
-  }
 }

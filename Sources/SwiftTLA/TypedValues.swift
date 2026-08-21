@@ -799,7 +799,7 @@ extension Expr {
   public func filtering<Element: TLAValueType>(
     _ predicate: (WithValue<Element>) -> StateExpr
   ) -> Expr<SetExpr<Element>> where T == SetExpr<Element> {
-    let binding = FreshVarName.fresh()
+    let binding = generatedBinderName()
     let element = WithValue<Element>(expression: .variable(binding))
     return Expr<SetExpr<Element>>(.setFilter(raw, binding, predicate(element)))
   }
@@ -808,7 +808,7 @@ extension Expr {
   public func mapping<Element: TLAValueType, Result: TLAValueType>(
     _ transform: (WithValue<Element>) -> Expr<Result>
   ) -> Expr<SetExpr<Result>> where T == SetExpr<Element> {
-    let binding = FreshVarName.fresh()
+    let binding = generatedBinderName()
     let element = WithValue<Element>(expression: .variable(binding))
     return Expr<SetExpr<Result>>(.setMap(transform(element).raw, binding, raw))
   }
@@ -831,8 +831,8 @@ public func Fold<Element: TLAValueType, Result: TLAValueType>(
   startingWith initial: Expr<Result>,
   _ combine: (Expr<Element>, Expr<Result>) -> Expr<Result>
 ) -> Expr<Result> {
-  let elementName = FreshVarName.fresh()
-  let resultName = FreshVarName.fresh()
+  let elementName = generatedBinderName()
+  let resultName = generatedBinderName()
   let element = Expr<Element>(.variable(elementName))
   let accumulated = Expr<Result>(.variable(resultName))
   return Expr<Result>(

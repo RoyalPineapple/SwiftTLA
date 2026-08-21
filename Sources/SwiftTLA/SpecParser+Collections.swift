@@ -80,7 +80,7 @@ extension ParserSession {
             ))
             return
         }
-        let member = FreshVarName.fresh()
+        let member = generatedBinderName()
         let diagnosticCount = result.diagnostics.count
         validateMemberUses(
             memberName,

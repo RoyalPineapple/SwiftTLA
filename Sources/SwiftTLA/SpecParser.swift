@@ -1187,8 +1187,8 @@ public final class ParserSession {
             case "subtracting": return .setDifference(selfExpr, argExpr)
             case "isSubset": return .subset(selfExpr, argExpr)
             case "applying": return .functionApply(selfExpr, argExpr)
-            case "filtering": return .setFilter(selfExpr, FreshVarName.fresh(), argExpr)
-            case "mapping": return .setMap(argExpr, FreshVarName.fresh(), selfExpr)
+            case "filtering": return .setFilter(selfExpr, generatedBinderName(), argExpr)
+            case "mapping": return .setMap(argExpr, generatedBinderName(), selfExpr)
             case "appending": return .tupleAppend(selfExpr, argExpr)
             case "concatenating": return .tupleConcatenate(selfExpr, argExpr)
             default: return .integerDivide(selfExpr, argExpr)
@@ -1311,11 +1311,11 @@ public final class ParserSession {
             }
             let exprs = args.compactMap { decodeStateExpr($0.expression) }
             switch methodName {
-            case "function", "functionLiteral": return exprs.count >= 2 ? .functionLiteral(exprs[0], FreshVarName.fresh(), exprs[1]) : nil
-            case "for": return exprs.count >= 2 ? .forAll(exprs[0], FreshVarName.fresh(), exprs[1]) : nil
-            case "exists": return exprs.count >= 2 ? .exists(exprs[0], FreshVarName.fresh(), exprs[1]) : nil
-            case "choose": return exprs.count >= 2 ? .choose(exprs[0], FreshVarName.fresh(), exprs[1]) : nil
-            case "any": return exprs.count >= 1 ? .choose(exprs[0], FreshVarName.fresh(), .value(.bool(true))) : nil
+            case "function", "functionLiteral": return exprs.count >= 2 ? .functionLiteral(exprs[0], generatedBinderName(), exprs[1]) : nil
+            case "for": return exprs.count >= 2 ? .forAll(exprs[0], generatedBinderName(), exprs[1]) : nil
+            case "exists": return exprs.count >= 2 ? .exists(exprs[0], generatedBinderName(), exprs[1]) : nil
+            case "choose": return exprs.count >= 2 ? .choose(exprs[0], generatedBinderName(), exprs[1]) : nil
+            case "any": return exprs.count >= 1 ? .choose(exprs[0], generatedBinderName(), .value(.bool(true))) : nil
             default: return nil
             }
         case "firstMatch":
@@ -1687,7 +1687,7 @@ extension ParserSession {
                 ?? call.arguments.first?.expression.as(ClosureExprSyntax.self),
               let parameter = Self.collectionPredicateParameter(in: closure)
         else { return nil }
-        let member = FreshVarName.fresh()
+        let member = generatedBinderName()
         let rewrittenStatements = closure.statements.map { statement in
             PredicateValueRewriter(
                 parameter: parameter,

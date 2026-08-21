@@ -483,9 +483,9 @@ private func captureSafeMacroBody(
     guard replacement.freeVariableNames.contains(variable) else {
         return (variable, body.map { substituteMacroParameter($0, from: parameter, with: replacement) })
     }
-    let fresh = FreshVarName.fresh()
-    let renamed = body.map { substituteMacroParameter($0, from: variable, with: .variable(fresh)) }
-    return (fresh, renamed.map { substituteMacroParameter($0, from: parameter, with: replacement) })
+    let binderName = generatedBinderName()
+    let renamed = body.map { substituteMacroParameter($0, from: variable, with: .variable(binderName)) }
+    return (binderName, renamed.map { substituteMacroParameter($0, from: parameter, with: replacement) })
 }
 
 /// A typed shared algorithm variable.
@@ -1492,7 +1492,7 @@ public func With<Value: TLAValueType>(
     _ source: Expr<SetExpr<Value>>,
     @DoBuilder _ body: (WithValue<Value>) -> [StepStatement]
 ) -> StepStatement {
-    let variable = FreshVarName.fresh()
+    let variable = generatedBinderName()
     let value = WithValue<Value>(expression: .variable(variable))
     return StepStatement(model: .with(variable: variable, source: source.raw, body(value).map(\.model)))
 }
@@ -1571,7 +1571,7 @@ public func Let<Value: TLAValueType>(
     _ value: Expr<Value>,
     @DoBuilder _ body: (WithValue<Value>) -> [StepStatement]
 ) -> StepStatement {
-    let variable = FreshVarName.fresh()
+    let variable = generatedBinderName()
     let bound = WithValue<Value>(expression: .variable(variable))
     return StepStatement(model: .letBinding(variable: variable, value: value.raw, body(bound).map(\.model)))
 }
@@ -1591,7 +1591,7 @@ public func Exists<Value: TLAValueType, Predicate: StateExprConvertible>(
     in domain: Expr<SetExpr<Value>>,
     where predicate: (WithValue<Value>) -> Predicate
 ) -> Expr<Bool> {
-    let variable = FreshVarName.fresh()
+    let variable = generatedBinderName()
     return Expr(.exists(domain.raw, variable, predicate(WithValue(expression: .variable(variable))).stateExpr))
 }
 
@@ -1619,7 +1619,7 @@ public func ForAll<Value: TLAValueType, Predicate: StateExprConvertible>(
     in domain: Expr<SetExpr<Value>>,
     where predicate: (WithValue<Value>) -> Predicate
 ) -> Expr<Bool> {
-    let variable = FreshVarName.fresh()
+    let variable = generatedBinderName()
     return Expr(.forAll(domain.raw, variable, predicate(WithValue(expression: .variable(variable))).stateExpr))
 }
 
@@ -1644,7 +1644,7 @@ public func All<Value: TLAValueType, Predicate: StateExprConvertible>(
     in domain: Expr<SetExpr<Value>>,
     where predicate: (WithValue<Value>) -> Predicate
 ) -> StateExpr {
-    let variable = FreshVarName.fresh()
+    let variable = generatedBinderName()
     return .forAll(domain.raw, variable, predicate(WithValue(expression: .variable(variable))).stateExpr)
 }
 
@@ -1673,7 +1673,7 @@ public func All<Value: FiniteDomainKey>(
     _ domain: FiniteDomain<Value>,
     where predicate: (WithValue<Value>) -> StateExpr
 ) -> StateExpr {
-    let variable = FreshVarName.fresh()
+    let variable = generatedBinderName()
     return .forAll(
         .setLiteral(domain.values.map { .value($0.tlaValue) }),
         variable,
@@ -1759,7 +1759,7 @@ public func With<Value: FiniteDomainKey>(
     _ source: FiniteDomain<Value>,
     @DoBuilder _ body: (WithValue<Value>) -> [StepStatement]
 ) -> StepStatement {
-    let variable = FreshVarName.fresh()
+    let variable = generatedBinderName()
     let value = WithValue<Value>(expression: .variable(variable))
     return StepStatement(model: .with(
         variable: variable,
@@ -1868,7 +1868,7 @@ public func Choose<Value: FiniteDomainKey>(
     _ domain: FiniteDomain<Value>,
     @DoBuilder _ body: (ProcessIdentifier<Value>) -> [StepStatement]
 ) -> StepStatement {
-    let name = FreshVarName.fresh()
+    let name = generatedBinderName()
     let value = ProcessIdentifier<Value>(expression: .variable(name))
     return StepStatement(model: .choose(variable: name, domain: domain.values.map(\.tlaValue), body(value).map(\.model)))
 }
@@ -1880,8 +1880,8 @@ public func Choose<First: FiniteDomainKey, Second: FiniteDomainKey>(
     _ secondDomain: FiniteDomain<Second>,
     @DoBuilder _ body: (ProcessIdentifier<First>, ProcessIdentifier<Second>) -> [StepStatement]
 ) -> StepStatement {
-    let firstName = FreshVarName.fresh()
-    let secondName = FreshVarName.fresh()
+    let firstName = generatedBinderName()
+    let secondName = generatedBinderName()
     let first = ProcessIdentifier<First>(expression: .variable(firstName))
     let second = ProcessIdentifier<Second>(expression: .variable(secondName))
     return StepStatement(model: .choose(
@@ -1900,7 +1900,7 @@ public func Choose(
     _ domain: ClosedRange<Int>,
     @DoBuilder _ body: (WithValue<Int>) -> [StepStatement]
 ) -> StepStatement {
-    let name = FreshVarName.fresh()
+    let name = generatedBinderName()
     let value = WithValue<Int>(expression: .variable(name))
     return StepStatement(model: .choose(
         variable: name,
@@ -1915,8 +1915,8 @@ public func Choose(
     _ secondDomain: ClosedRange<Int>,
     @DoBuilder _ body: (WithValue<Int>, WithValue<Int>) -> [StepStatement]
 ) -> StepStatement {
-    let firstName = FreshVarName.fresh()
-    let secondName = FreshVarName.fresh()
+    let firstName = generatedBinderName()
+    let secondName = generatedBinderName()
     let first = WithValue<Int>(expression: .variable(firstName))
     let second = WithValue<Int>(expression: .variable(secondName))
     return StepStatement(model: .choose(
