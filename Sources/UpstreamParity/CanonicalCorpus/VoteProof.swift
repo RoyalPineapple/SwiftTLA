@@ -103,7 +103,7 @@ public struct VoteProofModel: Sendable {
                 )
                 let ballots = SetExpr<Int>.literal(0, 1, 2)
 
-                FormalDefinition("SafeAt", taking: Int.self, Value.self, plusCalPhase: .define) { ballot, value in
+                FormalDefinition("SafeAt", taking: Int.self, Value.self, plusCalPhase: .define) { ballot, value -> Expr<Bool> in
                     LetRec("SA", over: ballots, taking: Int.self, { (recursion: LocalRecursion<Int, Bool>, currentBallot) in
                         currentBallot == 0 || Exists(in: quorums) { quorum in
                             ForAll(in: quorum.expr) { acceptor in
@@ -131,7 +131,7 @@ public struct VoteProofModel: Sendable {
                     })
                 }
 
-                FormalDefinition("ChosenIn", taking: Int.self, Value.self, plusCalPhase: .define) { ballot, value in
+                FormalDefinition("ChosenIn", taking: Int.self, Value.self, plusCalPhase: .define) { ballot, value -> Expr<Bool> in
                     Exists(in: quorums) { quorum in
                         ForAll(in: quorum.expr) { acceptor in
                             votes[acceptor].contains(Pair.literal(ballot.expr, value.expr))
