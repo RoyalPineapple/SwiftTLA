@@ -56,7 +56,8 @@ private final class DeclarationRegistrationRewriter: SyntaxRewriter {
               variable.bindings.count == 1,
               let binding = variable.bindings.first,
               let name = binding.pattern.as(IdentifierPatternSyntax.self)?.identifier.text,
-              let initializer = binding.initializer?.value.as(FunctionCallExprSyntax.self),
+              let initializerClause = binding.initializer,
+              let initializer = initializerClause.value.as(FunctionCallExprSyntax.self),
               let called = initializer.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text,
               called == "SharedVar" || called == "LocalVar"
         else { return (item, nil) }
@@ -75,7 +76,7 @@ private final class DeclarationRegistrationRewriter: SyntaxRewriter {
             at: arguments.startIndex
         )
         let rewrittenCall = initializer.with(\.arguments, arguments)
-        let rewrittenInitializer = binding.initializer!.with(\.value, ExprSyntax(rewrittenCall))
+        let rewrittenInitializer = initializerClause.with(\.value, ExprSyntax(rewrittenCall))
         let rewrittenBinding = binding.with(\.initializer, rewrittenInitializer)
         let rewrittenVariable = variable.with(\.bindings, PatternBindingListSyntax([rewrittenBinding]))
         return (item.with(\.item, .decl(DeclSyntax(rewrittenVariable))), name)

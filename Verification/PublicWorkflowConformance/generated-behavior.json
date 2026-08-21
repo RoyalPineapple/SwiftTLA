@@ -112,9 +112,10 @@
     "dependencies": [
       { "id": "package", "evidence": { "path": "Package.swift", "sha256": "b0b438a2d9202d9dd84ab6b9b4c25411690ae4018753802ea148cd481df4beec" } },
       { "id": "packageResolved", "evidence": { "path": "Package.resolved", "sha256": "cfdc69e87cdcea8681bfa8b117d599eef34e6f986fe23d9ad5eb4a320a1a18d7" } },
-      { "id": "adapter", "evidence": { "path": "Sources/UpstreamParity/Conformance/PublicWorkflowGeneratedBehaviorAdapter.swift", "sha256": "4105b5a4a10c2410abb261a5a8d26e14936ec275478791dfb92e8db1f4dfd42b" } },
+      { "id": "adapter", "evidence": { "path": "Sources/UpstreamParity/Conformance/PublicWorkflowGeneratedBehaviorAdapter.swift", "sha256": "a4bf67408772a49c3b422bf3143b55cfefa5351377264ba205ea38640d9ae65a" } },
       { "id": "macro", "evidence": { "path": "Sources/SwiftTLAPlugin/ModelMacro.swift", "sha256": "dc8a3f105006145fdb16617b1b931d9f04a722bad17662155f478709980fad4b" } },
-      { "id": "macroExpander", "evidence": { "path": "Sources/SwiftTLAPlugin/MacroExpander.swift", "sha256": "26d164d05624dc883c9ed2686a858457a30875000383897765f9b5fdbad8d655" } }
+      { "id": "macroExpander", "evidence": { "path": "Sources/SwiftTLAPlugin/MacroExpander.swift", "sha256": "3830877fc13188b98bd7b05c5dbb721d2d2be53077206f45dbc2b748644da14d" } },
+      { "id": "specExpressionMacro", "evidence": { "path": "Sources/SwiftTLAPlugin/SpecExpressionMacro.swift", "sha256": "3f327363ecce315360a6d410366c6e8d36b4b23415a49df5a69c802e190930b5" } }
     ],
     "notApplicable": [
       { "id": "tlc", "evidence": { "path": "Verification/PublicWorkflowConformance/Generated/not-applicable.json", "sha256": "85e2bbc1780a85584d2ff1542914cd72515682ca16f11eb13f495ea95aefd359" } },

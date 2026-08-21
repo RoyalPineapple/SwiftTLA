@@ -207,8 +207,8 @@ public struct PublicWorkflowGeneratedBehaviorToolchain: Equatable, Codable, Send
 
   public func validate() throws {
     guard schema == Self.schema,
-          Set(dependencies.map(\.id)) == ["adapter", "macro", "macroExpander", "package", "packageResolved"],
-          dependencies.count == 5,
+          Set(dependencies.map(\.id)) == ["adapter", "macro", "macroExpander", "package", "packageResolved", "specExpressionMacro"],
+          dependencies.count == 6,
           Set(notApplicable.map(\.id)) == ["bridge", "java", "tlc"],
           notApplicable.count == 3 else {
       throw PublicWorkflowGovernanceError.invalidField(record: "generated behavior toolchain", field: "identity coverage")
