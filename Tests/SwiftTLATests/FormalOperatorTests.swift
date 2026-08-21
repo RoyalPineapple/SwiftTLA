@@ -84,7 +84,7 @@ struct FormalOperatorTests {
       variables: [.init(name: "counter", initial: .int(0))],
       actions: [.init(
         name: "advance",
-        body: .assign("counter", .operatorApplication(lambda, [.value(.variable("counter"))]))
+        body: .assign(.named("counter"), .operatorApplication(lambda, [.value(.variable("counter"))]))
       )],
       invariants: []
     )
@@ -177,7 +177,7 @@ struct FormalOperatorTests {
       actions: [NamedAction(
         name: "advance",
         body: .assign(
-          "counter",
+          .named("counter"),
           .operatorApplication(
             .reference("applyTwice", arity: 2),
             [.operator(increment), .value(.variable("counter"))]
@@ -231,7 +231,7 @@ struct FormalOperatorTests {
       actions: [NamedAction(
         name: "advance",
         body: .assign(
-          "counter",
+          .named("counter"),
           .operatorApplication(
             .reference("applyTwice", arity: 2),
             [.operator(increment), .value(.variable("counter"))]

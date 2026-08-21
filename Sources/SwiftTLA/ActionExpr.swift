@@ -1,8 +1,22 @@
+public enum ActionTarget: Hashable, Sendable, CustomStringConvertible {
+    case named(String)
+    case programCounter
+    case procedureStack
+
+    public var description: String {
+        switch self {
+        case .named(let name): return name
+        case .programCounter: return CompilerControlSymbol.programCounter.rawValue
+        case .procedureStack: return CompilerControlSymbol.stack.rawValue
+        }
+    }
+}
+
 public indirect enum ActionExpr: Hashable, Sendable, CustomStringConvertible {
-    case assign(String, StateExpr)
-    case unchanged(String)
+    case assign(ActionTarget, StateExpr)
+    case unchanged(ActionTarget)
     case guard_(StateExpr)
-    case chooseAction(String, StateExpr)
+    case chooseAction(ActionTarget, StateExpr)
     case existsAction(String, StateExpr, ActionExpr)
     case ifElse(StateExpr, ActionExpr, ActionExpr)
     case define(String, StateExpr, ActionExpr)
@@ -11,14 +25,14 @@ public indirect enum ActionExpr: Hashable, Sendable, CustomStringConvertible {
 
     public var description: String {
         switch self {
-        case .assign(let v, let e):
-            return "\(v)' = \(e)"
-        case .unchanged(let v):
-            return "UNCHANGED \(v)"
+        case .assign(let target, let e):
+            return "\(target)' = \(e)"
+        case .unchanged(let target):
+            return "UNCHANGED \(target)"
         case .guard_(let e):
             return "\(e)"
-        case .chooseAction(let v, let s):
-            return "\(v)' \\in \(s)"
+        case .chooseAction(let target, let s):
+            return "\(target)' \\in \(s)"
         case .existsAction(let v, let s, let b):
             return "\\E \(v) \\in \(s): \(b)"
         case .define(let v, let e, let b):
@@ -50,14 +64,14 @@ extension ActionExpr {
     /// TLA+ export spelling, distinct from the lossless authoring spelling.
     var tlaModuleSource: String {
         switch self {
-        case .assign(let variable, let value):
-            "\(variable)' = \(value.tlaModuleSource)"
-        case .unchanged(let variable):
-            "UNCHANGED \(variable)"
+        case .assign(let target, let value):
+            "\(target)' = \(value.tlaModuleSource)"
+        case .unchanged(let target):
+            "UNCHANGED \(target)"
         case .guard_(let condition):
             condition.tlaModuleSource
-        case .chooseAction(let variable, let set):
-            "\(variable)' \\in \(set.tlaModuleSource)"
+        case .chooseAction(let target, let set):
+            "\(target)' \\in \(set.tlaModuleSource)"
         case .existsAction(let variable, let set, let body):
             "\\E \(variable) \\in \(set.tlaModuleSource): \(body.tlaModuleSource)"
         case .define(let variable, let value, let body):
@@ -110,10 +124,10 @@ package func renameVar(_ from: String, to: String, in action: ActionExpr) -> Act
     func r(_ s: StateExpr) -> StateExpr { renameVar(from, to: to, in: s) }
     func ra(_ a: ActionExpr) -> ActionExpr { renameVar(from, to: to, in: a) }
     switch action {
-    case .assign(let v, let e): return .assign(v == from ? to : v, r(e))
-    case .unchanged(let v): return .unchanged(v == from ? to : v)
+    case .assign(let target, let e): return .assign(rename(target), r(e))
+    case .unchanged(let target): return .unchanged(rename(target))
     case .guard_(let e): return .guard_(r(e))
-    case .chooseAction(let v, let s): return .chooseAction(v == from ? to : v, r(s))
+    case .chooseAction(let target, let s): return .chooseAction(rename(target), r(s))
     case .existsAction(let v, let s, let b):
         return .existsAction(v, r(s), v == from ? b : ra(b))
     case .ifElse(let c, let t, let e): return .ifElse(r(c), ra(t), ra(e))
@@ -121,5 +135,10 @@ package func renameVar(_ from: String, to: String, in action: ActionExpr) -> Act
         return .define(v, r(expr), v == from ? b : ra(b))
     case .and(let a, let b): return .and(ra(a), ra(b))
     case .or(let a, let b): return .or(ra(a), ra(b))
+    }
+
+    func rename(_ target: ActionTarget) -> ActionTarget {
+        guard case .named(let name) = target, name == from else { return target }
+        return .named(to)
     }
 }

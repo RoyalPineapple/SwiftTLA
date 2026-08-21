@@ -41,17 +41,17 @@ public struct SimpleAllocatorModel: Sendable {
                     let subset = StateExpr.value(sVal)
                     Action("Request_\(c)_S\(si)") {
                         unsatOf(c).cardinality == 0 && allocOf(c).cardinality == 0
-                            && .assign(unsat.name, unsat.stateExpr.updated(at: c, to: subset))
+                            && .assign(.named(unsat.name), unsat.stateExpr.updated(at: c, to: subset))
                     }
                     Action("Allocate_\(c)_S\(si)") {
                         subset.cardinality > 0
                             && subset.isSubset(of: available.intersection(unsatOf(c)))
-                            && .assign(alloc.name, alloc.stateExpr.updated(at: c, to: allocOf(c).union(subset)))
-                            && .assign(unsat.name, unsat.stateExpr.updated(at: c, to: unsatOf(c).subtracting(subset)))
+                            && .assign(.named(alloc.name), alloc.stateExpr.updated(at: c, to: allocOf(c).union(subset)))
+                            && .assign(.named(unsat.name), unsat.stateExpr.updated(at: c, to: unsatOf(c).subtracting(subset)))
                     }
                     Action("Return_\(c)_S\(si)") {
                         subset.cardinality > 0 && subset.isSubset(of: allocOf(c))
-                            && .assign(alloc.name, alloc.stateExpr.updated(at: c, to: allocOf(c).subtracting(subset)))
+                            && .assign(.named(alloc.name), alloc.stateExpr.updated(at: c, to: allocOf(c).subtracting(subset)))
                     }
                 }
             }

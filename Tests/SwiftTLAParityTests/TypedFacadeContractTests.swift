@@ -57,7 +57,7 @@ struct TypedFacadeContractTests {
     #expect(
       calls.inserting(.alice)
         == .assign(
-          "calls",
+          .named("calls"),
           .union(.variable("calls"), .setLiteral([.value(.string("alice"))]))
         ))
 
@@ -108,10 +108,10 @@ struct TypedFacadeContractTests {
     #expect(literal.raw == .setLiteral([closed.raw, open.raw]))
     #expect(
       calls.inserting(closed)
-        == .assign("calls", .union(.variable("calls"), .setLiteral([closed.raw]))))
+        == .assign(.named("calls"), .union(.variable("calls"), .setLiteral([closed.raw]))))
     #expect(
       calls.removing(closed)
-        == .assign("calls", .setDifference(.variable("calls"), .setLiteral([closed.raw]))))
+        == .assign(.named("calls"), .setDifference(.variable("calls"), .setLiteral([closed.raw]))))
     #expect(calls.contains(closed) == .in(closed.raw, .variable("calls")))
     guard case .functionLiteral = cars.raw else {
       Issue.record("Expected the typed function literal to lower to StateExpr.functionLiteral")
@@ -207,12 +207,12 @@ struct TypedFacadeContractTests {
   func explicitCoreASTBoundariesRemainAvailable() {
     let raw = Var<TLAValue>("raw")
     let expression = StateExpr.variable(raw.name)
-    let action = ActionExpr.assign(raw.name, expression.updated(at: 1, to: 2))
+    let action = ActionExpr.assign(.named(raw.name), expression.updated(at: 1, to: 2))
 
     #expect(
       action
         == .assign(
-          "raw",
+          .named("raw"),
           .except(.variable("raw"), .value(.int(1)), .value(.int(2)))
         ))
   }

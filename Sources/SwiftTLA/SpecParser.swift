@@ -1678,9 +1678,9 @@ extension ParserSession {
             if let arg = call.arguments.first?.expression,
                let state = decodeStateExpr(arg) {
                 if case .choose(let chosenSet, _, _) = state {
-                    return .chooseAction(varName, chosenSet)
+                    return .chooseAction(.named(varName), chosenSet)
                 }
-                return .assign(varName, state)
+                return .assign(.named(varName), state)
             }
             return nil
         }
@@ -1692,12 +1692,12 @@ extension ParserSession {
             switch access.declName.baseName.text {
             case "inserting":
                 return .assign(
-                    baseRef.baseName.text,
+                    .named(baseRef.baseName.text),
                     .union(.variable(baseRef.baseName.text), .setLiteral([element]))
                 )
             case "removing":
                 return .assign(
-                    baseRef.baseName.text,
+                    .named(baseRef.baseName.text),
                     .setDifference(.variable(baseRef.baseName.text), .setLiteral([element]))
                 )
             default:
@@ -1707,7 +1707,7 @@ extension ParserSession {
         if let access = expression.as(MemberAccessExprSyntax.self),
            access.declName.baseName.text == "stays",
            let baseRef = access.base?.as(DeclReferenceExprSyntax.self) {
-            return .unchanged(baseRef.baseName.text)
+            return .unchanged(.named(baseRef.baseName.text))
         }
         if let call = expression.as(FunctionCallExprSyntax.self),
            let access = call.calledExpression.as(MemberAccessExprSyntax.self),
@@ -1728,7 +1728,7 @@ extension ParserSession {
            let varArg = call.arguments.first?.expression.as(DeclReferenceExprSyntax.self),
            let fromArg = call.arguments.dropFirst().first?.expression,
            let setExpr = decodeStateExpr(fromArg) {
-            return .chooseAction(varArg.baseName.text, setExpr)
+            return .chooseAction(.named(varArg.baseName.text), setExpr)
         }
         if let seq = expression.as(SequenceExprSyntax.self) {
             return decodeActionSequence(Array(seq.elements))

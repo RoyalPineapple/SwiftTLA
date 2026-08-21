@@ -618,7 +618,7 @@ public enum TemporalSymmetryModelCatalog {
     let memberSet = StateExpr.setLiteral(members.map(StateExpr.value))
     let choose = ActionExpr.existsAction(
       "m", memberSet,
-      .assign("chosen", .union(.variable("chosen"), .setLiteral([.variable("m")])))
+      .assign(.named("chosen"), .union(.variable("chosen"), .setLiteral([.variable("m")])))
     )
     let spec = TLASpec(
       name: "SymmetricCollectionScope\(scope)",

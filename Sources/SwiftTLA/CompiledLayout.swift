@@ -921,15 +921,15 @@ struct BindingValidator {
 
     private mutating func actionExpression(_ action: ActionExpr, at path: String, scope: [String: BinderID]) throws {
         switch action {
-        case .assign(let name, let value):
-            try assignmentTarget(name, at: "\(path).assign", scope: scope)
+        case .assign(let target, let value):
+            try assignmentTarget(target, at: "\(path).assign", scope: scope)
             try validateExpression(value, at: "\(path).value", scope: scope)
-        case .unchanged(let name):
-            try assignmentTarget(name, at: "\(path).unchanged", scope: scope)
+        case .unchanged(let target):
+            try assignmentTarget(target, at: "\(path).unchanged", scope: scope)
         case .guard_(let condition):
             try validateExpression(condition, at: "\(path).guard", scope: scope)
-        case .chooseAction(let name, let set):
-            try assignmentTarget(name, at: "\(path).choose", scope: scope)
+        case .chooseAction(let target, let set):
+            try assignmentTarget(target, at: "\(path).choose", scope: scope)
             try validateExpression(set, at: "\(path).set", scope: scope)
         case .existsAction(let name, let set, let body):
             try validateExpression(set, at: "\(path).set", scope: scope)
@@ -973,7 +973,36 @@ struct BindingValidator {
         try unresolved(name, at: path, expected: "a declared variable, scoped binder, or linked symbol")
     }
 
-    private mutating func assignmentTarget(_ name: String, at path: String, scope: [String: BinderID]) throws {
+    private mutating func assignmentTarget(_ target: ActionTarget, at path: String, scope: [String: BinderID]) throws {
+        switch target {
+        case .programCounter:
+            guard let id = layout.programCounterID() else {
+                throw diagnostic(
+                    code: .unknownReference,
+                    path: path,
+                    expected: "a compiler-owned program counter",
+                    actual: "this model has no program counter"
+                )
+            }
+            references[path] = .variable(id)
+            return
+        case .procedureStack:
+            guard let id = layout.procedureStackID() else {
+                throw diagnostic(
+                    code: .unknownReference,
+                    path: path,
+                    expected: "a compiler-owned procedure stack",
+                    actual: "this model has no procedure stack"
+                )
+            }
+            references[path] = .variable(id)
+            return
+        case .named(let name):
+            try assignmentTarget(named: name, at: path, scope: scope)
+        }
+    }
+
+    private mutating func assignmentTarget(named name: String, at path: String, scope: [String: BinderID]) throws {
         if scope[name] != nil || knownBinderNames.contains(name) {
             throw diagnostic(
                 code: .assignmentToBinder,

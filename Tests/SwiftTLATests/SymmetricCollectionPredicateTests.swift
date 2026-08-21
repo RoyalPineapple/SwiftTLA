@@ -104,7 +104,7 @@ struct SymmetricCollectionPredicateTests {
     #expect(parsed.actions.count == 2)
     guard case .and(
       .guard_(.forAll(.domain(.variable("devices")), let member, let body)),
-      .assign("phase", .value(.int(1)))
+      .assign(.named("phase"), .value(.int(1)))
     ) = parsed.actions[0].body else {
       Issue.record("Expected an allSatisfy guard followed by phase assignment, got: \(parsed.actions[0].body)")
       return
@@ -115,7 +115,7 @@ struct SymmetricCollectionPredicateTests {
     ))
     guard case .and(
       .guard_(.exists(.domain(.variable("devices")), let selected, let selectedBody)),
-      .assign("phase", .value(.int(0)))
+      .assign(.named("phase"), .value(.int(0)))
     ) = parsed.actions[1].body else {
       Issue.record("Expected a contains(where:) guard followed by phase assignment, got: \(parsed.actions[1].body)")
       return

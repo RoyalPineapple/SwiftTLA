@@ -206,7 +206,7 @@ extension ParserSession {
         }
         if let update = collectionUpdate(expression, collection: collection, member: member) {
             guard let value = decodeStateExpr(update.expression) else { return nil }
-            return .assign(collection, .except(.variable(collection), .variable(binding), value))
+            return .assign(.named(collection), .except(.variable(collection), .variable(binding), value))
         }
         if let infix = expression.as(InfixOperatorExprSyntax.self),
            let op = infix.operator.as(BinaryOperatorExprSyntax.self)?.operator.text,

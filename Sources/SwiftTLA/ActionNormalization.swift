@@ -4,8 +4,8 @@ enum ActionNormalization {
             let assigned = assignedVars(branch)
             let explicit = explicitUnchanged(branch)
             var completedBranch = branch
-            for variable in variables where !assigned.contains(variable) && !explicit.contains(variable) {
-                completedBranch = .and(completedBranch, .unchanged(variable))
+            for variable in variables where !assigned.contains(.named(variable)) && !explicit.contains(.named(variable)) {
+                completedBranch = .and(completedBranch, .unchanged(.named(variable)))
             }
             return completedBranch
         }

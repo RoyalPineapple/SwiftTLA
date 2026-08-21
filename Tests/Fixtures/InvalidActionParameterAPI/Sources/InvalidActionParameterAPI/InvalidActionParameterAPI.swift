@@ -1,13 +1,13 @@
 import SwiftTLA
 import SwiftTLAMacros
 
-let namedAction = NamedAction(name: "named", body: .unchanged("floor"))
+let namedAction = NamedAction(name: "named", body: .unchanged(.named("floor")))
 let namedActionBinding = namedAction.binding
-let actionDeclaration = Action("declared") { .unchanged("floor") }
+let actionDeclaration = Action("declared") { .unchanged(.named("floor")) }
 let actionDeclarationBinding = actionDeclaration.binding
 let namedActionWithBinding = NamedAction(
   name: "namedWithBinding",
-  body: .unchanged("floor"),
+  body: .unchanged(.named("floor")),
   binding: ActionBinding(name: "id", values: [.int(1), .int(2)])
 )
 

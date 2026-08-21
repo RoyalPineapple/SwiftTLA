@@ -880,7 +880,7 @@ struct AlgorithmBuilderTests {
             .define(
                 "middle",
                 .tupleDynamicAccess(.variable("sequence"), .value(.int(0))),
-                .assign("result", .variable("middle"))
+                .assign(.named("result"), .variable("middle"))
             )
         )
 

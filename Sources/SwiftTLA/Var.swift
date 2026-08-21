@@ -162,15 +162,15 @@ public struct Var<T: TLAValueType>: Sendable, CustomStringConvertible, SpecCompo
   public var description: String { name }
   /// Type-safe assignment: `Var<Int>.becomes(5)` — only values matching T.
   @discardableResult
-  public func becomes(_ value: T) -> ActionExpr { .assign(name, .value(value.tlaValue)) }
+  public func becomes(_ value: T) -> ActionExpr { .assign(.named(name), .value(value.tlaValue)) }
   /// Type-safe assignment: `Var<Int>.becomes(x + 1)` — only Expr<T>.
   @discardableResult
-  public func becomes(_ expr: Expr<T>) -> ActionExpr { .assign(name, expr.raw) }
+  public func becomes(_ expr: Expr<T>) -> ActionExpr { .assign(.named(name), expr.raw) }
   /// Assign the value of another Var: `y0.becomes(x1)`.
   @discardableResult
-  public func becomes(_ other: Var<T>) -> ActionExpr { .assign(name, other.stateExpr) }
+  public func becomes(_ other: Var<T>) -> ActionExpr { .assign(.named(name), other.stateExpr) }
   /// Returns `UNCHANGED x` — the variable stays the same in the next state.
-  public var stays: ActionExpr { .unchanged(name) }
+  public var stays: ActionExpr { .unchanged(.named(name)) }
 
 }
 
@@ -450,7 +450,7 @@ extension StateExpr {
 
 extension ActionExpr {
   public static func choose(_ variable: String, from set: StateExpr) -> ActionExpr {
-    .chooseAction(variable, set)
+    .chooseAction(.named(variable), set)
   }
 
   public static func exists(
@@ -495,7 +495,7 @@ extension StateExpr {
 @discardableResult
 public func choose(_ variable: Var<some TLAValueType>, from set: some StateExprConvertible)
   -> ActionExpr {
-  .chooseAction(variable.name, set.stateExpr)
+  .chooseAction(.named(variable.name), set.stateExpr)
 }
 
 extension StateExpr {

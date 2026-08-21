@@ -9,10 +9,13 @@ public enum ByzPaxosConsensus {
     Action("Next") {
       .and(
         .guard_(chosen.stateExpr == SetExpr<TLAValue>()),
-        .existsAction(
+        ActionExpr.existsAction(
           "candidate",
-          from: Value.stateExpr,
-          .assign(chosen.name, .singleton(.variable("candidate")))
+          Value.stateExpr,
+          ActionExpr.assign(
+            .named(chosen.name),
+            StateExpr.singleton(StateExpr.variable("candidate"))
+          )
         )
       )
     }

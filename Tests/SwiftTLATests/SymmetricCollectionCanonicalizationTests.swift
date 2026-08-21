@@ -129,7 +129,7 @@ struct SymmetricCollectionCanonicalizationTests {
         .existsAction(
           selected,
           .domain(.variable(members.name)),
-          .assign(members.name, .except(.variable(members.name), .variable(selected), nestedValue))
+          .assign(.named(members.name), .except(.variable(members.name), .variable(selected), nestedValue))
         )
       }
     }

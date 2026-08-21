@@ -57,7 +57,7 @@ public struct NanoBlockchainModel: Sendable {
                                 "signature": StateExpr.record(["data": h, "signedWith": .value(.string(priv))])
                             ])
                             return lastHash.becomes(Expr<String>(h))
-                                && .assign(distributedLedger.name, distributedLedger.stateExpr
+                                && .assign(.named(distributedLedger.name), distributedLedger.stateExpr
                                     .updated(at: "n1", to: distributedLedger.stateExpr.applying("n1").updated(at: h, to: sb))
                                     .updated(at: "n2", to: distributedLedger.stateExpr.applying("n2").updated(at: h, to: sb)))
                                 && received.stays
@@ -82,7 +82,7 @@ public struct NanoBlockchainModel: Sendable {
                                             "signature": StateExpr.record(["data": h, "signedWith": .value(.string(priv))])
                                         ])
                                         return distributedLedger.stays
-                                            && .assign(received.name, received.stateExpr
+                                            && .assign(.named(received.name), received.stateExpr
                                                 .updated(at: n, to: StateExpr.union(received.stateExpr.applying(n),
                                                     StateExpr.singleton(sb))))
                                             && lastHash.stays

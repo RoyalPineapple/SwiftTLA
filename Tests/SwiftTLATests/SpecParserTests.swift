@@ -1553,21 +1553,21 @@ private enum ParserNode: String, FiniteDomainKey {
 
 @Suite(.serialized) struct ActionExprBasicTests {
     @Test func parseBecomes() throws {
-        #expect(SpecParser.decodeActionExpr(try parseExpression("x.becomes(5)")) == ActionExpr.assign("x", .value(.int(5))))
+        #expect(SpecParser.decodeActionExpr(try parseExpression("x.becomes(5)")) == ActionExpr.assign(.named("x"), .value(.int(5))))
         #expect(
             SpecParser.decodeActionExpr(try parseExpression("x.becomes(x + 1)"))
-                == ActionExpr.assign("x", StateExpr.add(.variable("x"), .value(.int(1))))
+                == ActionExpr.assign(.named("x"), StateExpr.add(.variable("x"), .value(.int(1))))
         )
     }
 
     @Test func parseStays() throws {
-        #expect(SpecParser.decodeActionExpr(try parseExpression("x.stays")) == ActionExpr.unchanged("x"))
+        #expect(SpecParser.decodeActionExpr(try parseExpression("x.stays")) == ActionExpr.unchanged(.named("x")))
     }
 
     @Test func parseGuardedBecomes() throws {
         #expect(SpecParser.decodeActionExpr(try parseExpression("x.becomes(1).when(x == 0)")) == ActionExpr.and(
             ActionExpr.guard_(StateExpr.equal(.variable("x"), .value(.int(0)))),
-            ActionExpr.assign("x", .value(.int(1)))
+            ActionExpr.assign(.named("x"), .value(.int(1)))
         ))
     }
 
@@ -1578,7 +1578,7 @@ private enum ParserNode: String, FiniteDomainKey {
                 StateExpr.lessThan(.variable("x"), .value(.int(5))),
                 StateExpr.greaterThan(.variable("x"), .value(.int(0)))
             )),
-            ActionExpr.assign("x", .value(.int(1)))
+            ActionExpr.assign(.named("x"), .value(.int(1)))
         ))
     }
 
@@ -1587,7 +1587,7 @@ private enum ParserNode: String, FiniteDomainKey {
             try parseExpression("x.becomes(StateExpr.any(from: StateExpr.set([1, 2, 3])))")
         )
         let expectedSet = StateExpr.setLiteral([.value(.int(1)), .value(.int(2)), .value(.int(3))])
-        #expect(result == ActionExpr.chooseAction("x", expectedSet))
+        #expect(result == ActionExpr.chooseAction(.named("x"), expectedSet))
     }
 }
 
@@ -1596,28 +1596,28 @@ private enum ParserNode: String, FiniteDomainKey {
 @Suite(.serialized) struct ActionExprCombinatorTests {
     @Test func parseAndOfTwoActions() throws {
         #expect(SpecParser.decodeActionExpr(try parseExpression("x.becomes(1) && y.becomes(2)")) == ActionExpr.and(
-            ActionExpr.assign("x", .value(.int(1))),
-            ActionExpr.assign("y", .value(.int(2)))
+            ActionExpr.assign(.named("x"), .value(.int(1))),
+            ActionExpr.assign(.named("y"), .value(.int(2)))
         ))
     }
 
     @Test func parseOrOfTwoActions() throws {
         #expect(SpecParser.decodeActionExpr(try parseExpression("x.becomes(1) || x.becomes(2)")) == ActionExpr.or(
-            ActionExpr.assign("x", .value(.int(1))),
-            ActionExpr.assign("x", .value(.int(2)))
+            ActionExpr.assign(.named("x"), .value(.int(1))),
+            ActionExpr.assign(.named("x"), .value(.int(2)))
         ))
     }
 
     @Test func parseGuardAndAction() throws {
         #expect(SpecParser.decodeActionExpr(try parseExpression("x > 0 && x.becomes(x - 1)")) == ActionExpr.and(
             ActionExpr.guard_(StateExpr.greaterThan(.variable("x"), .value(.int(0)))),
-            ActionExpr.assign("x", StateExpr.subtract(.variable("x"), .value(.int(1))))
+            ActionExpr.assign(.named("x"), StateExpr.subtract(.variable("x"), .value(.int(1))))
         ))
     }
 
     @Test func parseActionAndGuard() throws {
         #expect(SpecParser.decodeActionExpr(try parseExpression("x.becomes(0) && x == 0")) == ActionExpr.and(
-            ActionExpr.assign("x", .value(.int(0))),
+            ActionExpr.assign(.named("x"), .value(.int(0))),
             ActionExpr.guard_(StateExpr.equal(.variable("x"), .value(.int(0))))
         ))
     }
@@ -1625,7 +1625,7 @@ private enum ParserNode: String, FiniteDomainKey {
     @Test func parseStateOrAction() throws {
         #expect(SpecParser.decodeActionExpr(try parseExpression("x == 0 || x.becomes(1)")) == ActionExpr.or(
             ActionExpr.guard_(StateExpr.equal(.variable("x"), .value(.int(0)))),
-            ActionExpr.assign("x", .value(.int(1)))
+            ActionExpr.assign(.named("x"), .value(.int(1)))
         ))
     }
 
@@ -1635,11 +1635,11 @@ private enum ParserNode: String, FiniteDomainKey {
         )
         let left = ActionExpr.and(
             ActionExpr.guard_(StateExpr.notEqual(.variable("x"), .value(.int(12)))),
-            ActionExpr.assign("x", StateExpr.add(.variable("x"), .value(.int(1))))
+            ActionExpr.assign(.named("x"), StateExpr.add(.variable("x"), .value(.int(1))))
         )
         let right = ActionExpr.and(
             ActionExpr.guard_(StateExpr.equal(.variable("x"), .value(.int(12)))),
-            ActionExpr.assign("x", .value(.int(1)))
+            ActionExpr.assign(.named("x"), .value(.int(1)))
         )
         #expect(result == ActionExpr.or(left, right))
     }
@@ -1655,14 +1655,14 @@ private enum ParserNode: String, FiniteDomainKey {
 
     @Test func parseSingleStatementClosure() throws {
         let closure = try parseClosure("{ x.becomes(1) }")
-        #expect(SpecParser.decodeActionFromClosure(closure) == ActionExpr.assign("x", .value(.int(1))))
+        #expect(SpecParser.decodeActionFromClosure(closure) == ActionExpr.assign(.named("x"), .value(.int(1))))
     }
 
     @Test func parseMultiStatementClosure() throws {
         let closure = try parseClosure("{ x.becomes(1) ; y.stays }")
         #expect(SpecParser.decodeActionFromClosure(closure) == ActionExpr.and(
-            ActionExpr.assign("x", .value(.int(1))),
-            ActionExpr.unchanged("y")
+            ActionExpr.assign(.named("x"), .value(.int(1))),
+            ActionExpr.unchanged(.named("y"))
         ))
     }
 }
@@ -1773,7 +1773,7 @@ private let cameraModeDefinition = parserEnum(
         let closure = try parseClosure(source)
         let parsed = SpecParser.parseSpecClosure(closure, enumDefinitions: [cameraModeDefinition])
         #expect(parsed.actions.count == 1)
-        #expect(parsed.actions[0].body == .assign("mode", .value(.string("live"))))
+        #expect(parsed.actions[0].body == .assign(.named("mode"), .value(.string("live"))))
     }
 
     @Test func parsesVariadicActionParametersInDeclarationOrder() throws {
@@ -1795,7 +1795,7 @@ private let cameraModeDefinition = parserEnum(
         #expect(parsed.actions[0].bindings.map(\.values) == [
             [.int(1), .int(2)], [.int(10), .int(20)], [.int(100), .int(200)]
         ])
-        #expect(parsed.actions[0].body == .assign("floor", .value(.int(1))))
+        #expect(parsed.actions[0].body == .assign(.named("floor"), .value(.int(1))))
     }
 
     @Test func diagnosesInvalidDomainsAtEveryParameterPosition() throws {

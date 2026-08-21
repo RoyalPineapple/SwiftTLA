@@ -533,7 +533,7 @@ enum AlgorithmLowerer {
     }
 
     private static func sequentialTransfer(to location: StateExpr) -> ActionExpr {
-        .assign(CompilerControlSymbol.programCounter.rawValue, location)
+        .assign(.programCounter, location)
     }
 
     private static func emittedLabel(_ label: String, owner: AlgorithmProcedureModel?) -> String {
@@ -544,7 +544,7 @@ enum AlgorithmLowerer {
     private static func completingSequentialControl(_ action: ActionExpr, fallthrough location: StateExpr) -> ActionExpr {
         let branches = ActionNormalization.branches(of: action)
         let completed = branches.map { branch in
-            assignedVars(branch).contains(CompilerControlSymbol.programCounter.rawValue)
+            assignedVars(branch).contains(.programCounter)
                 ? branch
                 : .and(branch, sequentialTransfer(to: location))
         }
@@ -594,8 +594,8 @@ enum AlgorithmLowerer {
         case .assert: return .guard_(.value(.bool(true)))
         case .set(let target, let value):
             switch target {
-            case .root(let root): return .assign(root, value)
-            case .function(let root, let key): return .assign(root, .except(.variable(root), key, value))
+            case .root(let root): return .assign(.named(root), value)
+            case .function(let root, let key): return .assign(.named(root), .except(.variable(root), key, value))
             }
         case .letBinding(let variable, let value, let body):
             return .define(variable, value, lowerSequential(body, nextLabel: nextLabel, procedures: procedures, owner: owner, control: control))
@@ -640,13 +640,13 @@ enum AlgorithmLowerer {
         ]
             + procedureSlots(procedures).map { ($0.root, StateExpr.variable($0.root)) }
         let push = ActionExpr.assign(
-            CompilerControlSymbol.stack.rawValue,
+            .procedureStack,
             .tupleConcatenate(.tupleLiteral([StateExpr.record(Dictionary(uniqueKeysWithValues: frameFields))]), .procedureStack)
         )
         let parameterAssignments = zip(procedure.parameters, arguments).map {
-            ActionExpr.assign($0.0.root, $0.1)
+            ActionExpr.assign(.named($0.0.root), $0.1)
         }
-        let localAssignments = procedure.locals.map { ActionExpr.assign($0.root, $0.initial) }
+        let localAssignments = procedure.locals.map { ActionExpr.assign(.named($0.root), $0.initial) }
         return (parameterAssignments + localAssignments + [push, sequentialTransfer(to: control.procedure(procedure, location: entry))])
             .reduce(.guard_(.value(.bool(true))), ActionExpr.and)
     }
@@ -658,10 +658,10 @@ enum AlgorithmLowerer {
         guard owner != nil else { return .guard_(.value(.bool(false))) }
         let stack = StateExpr.procedureStack
         let frame = StateExpr.tupleHead(stack)
-        let restore = (procedureSlots(procedures).map { ActionExpr.assign($0.root, .recordAccess(frame, $0.root)) }
+        let restore = (procedureSlots(procedures).map { ActionExpr.assign(.named($0.root), .recordAccess(frame, $0.root)) }
             + [
-                .assign(CompilerControlSymbol.stack.rawValue, .tupleTail(stack)),
-                .assign(CompilerControlSymbol.programCounter.rawValue, .recordAccess(frame, CompilerControlSymbol.programCounter.rawValue))
+                .assign(.procedureStack, .tupleTail(stack)),
+                .assign(.programCounter, .recordAccess(frame, CompilerControlSymbol.programCounter.rawValue))
             ])
         return restore.reduce(
             .guard_(.greaterThan(.tupleLength(stack), .int(0))),
@@ -680,9 +680,9 @@ enum AlgorithmLowerer {
             return .guard_(.value(.bool(false)))
         }
         let parameterAssignments = zip(procedure.parameters, arguments).map {
-            ActionExpr.assign($0.0.root, $0.1)
+            ActionExpr.assign(.named($0.0.root), $0.1)
         }
-        let localAssignments = procedure.locals.map { ActionExpr.assign($0.root, $0.initial) }
+        let localAssignments = procedure.locals.map { ActionExpr.assign(.named($0.root), $0.initial) }
         return (parameterAssignments + localAssignments + [sequentialTransfer(to: control.procedure(procedure, location: entry))])
             .reduce(.guard_(.value(.bool(true))), ActionExpr.and)
     }
@@ -708,7 +708,7 @@ enum AlgorithmLowerer {
                 ($0.root, StateExpr.functionApply(.variable($0.root), process))
             }
         let push = ActionExpr.assign(
-            CompilerControlSymbol.stack.rawValue,
+            .procedureStack,
             .except(
                 .procedureStack,
                 process,
@@ -716,11 +716,11 @@ enum AlgorithmLowerer {
             )
         )
         let parameterAssignments = zip(procedure.parameters, arguments).map {
-            ActionExpr.assign($0.0.root, .except(.variable($0.0.root), process, $0.1))
+            ActionExpr.assign(.named($0.0.root), .except(.variable($0.0.root), process, $0.1))
         }
         let localRoots = Set(procedureSlots(procedures).map(\.root))
         let localAssignments = procedure.locals.map {
-            ActionExpr.assign($0.root, .except(.variable($0.root), process, rewrite($0.initial, localRoots: localRoots)))
+            ActionExpr.assign(.named($0.root), .except(.variable($0.root), process, rewrite($0.initial, localRoots: localRoots)))
         }
         return (parameterAssignments + localAssignments + [push, transfer(to: control.procedure(procedure, location: entry))])
             .reduce(.guard_(.value(.bool(true))), ActionExpr.and)
@@ -735,9 +735,9 @@ enum AlgorithmLowerer {
         let stack = StateExpr.functionApply(.procedureStack, process)
         let frame = StateExpr.tupleHead(stack)
         let restore = procedureSlots(procedures).map {
-            ActionExpr.assign($0.root, .except(.variable($0.root), process, .recordAccess(frame, $0.root)))
+            ActionExpr.assign(.named($0.root), .except(.variable($0.root), process, .recordAccess(frame, $0.root)))
         } + [
-            .assign(CompilerControlSymbol.stack.rawValue, .except(.procedureStack, process, .tupleTail(stack))),
+            .assign(.procedureStack, .except(.procedureStack, process, .tupleTail(stack))),
             transfer(toExpression: .recordAccess(frame, CompilerControlSymbol.programCounter.rawValue))
         ]
         return restore.reduce(
@@ -758,11 +758,11 @@ enum AlgorithmLowerer {
         }
         let process = StateExpr.variable(processBinding)
         let parameterAssignments = zip(procedure.parameters, arguments).map {
-            ActionExpr.assign($0.0.root, .except(.variable($0.0.root), process, $0.1))
+            ActionExpr.assign(.named($0.0.root), .except(.variable($0.0.root), process, $0.1))
         }
         let localRoots = Set(procedureSlots(procedures).map(\.root))
         let localAssignments = procedure.locals.map {
-            ActionExpr.assign($0.root, .except(.variable($0.root), process, rewrite($0.initial, localRoots: localRoots)))
+            ActionExpr.assign(.named($0.root), .except(.variable($0.root), process, rewrite($0.initial, localRoots: localRoots)))
         }
         return (parameterAssignments + localAssignments + [transfer(to: control.procedure(procedure, location: entry))])
             .reduce(.guard_(.value(.bool(true))), ActionExpr.and)
@@ -872,7 +872,7 @@ enum AlgorithmLowerer {
 
     private static func transfer(toExpression label: StateExpr) -> ActionExpr {
         .assign(
-            CompilerControlSymbol.programCounter.rawValue,
+            .programCounter,
             .except(
                 .programCounter,
                 .variable(processBinding),
@@ -884,7 +884,7 @@ enum AlgorithmLowerer {
     private static func completingControl(_ action: ActionExpr, fallthrough location: StateExpr) -> ActionExpr {
         let branches = ActionNormalization.branches(of: action)
         let completed = branches.map { branch in
-            assignedVars(branch).contains(CompilerControlSymbol.programCounter.rawValue)
+            assignedVars(branch).contains(.programCounter)
                 ? branch
                 : .and(branch, transfer(to: location))
         }
@@ -914,13 +914,13 @@ enum AlgorithmLowerer {
             switch target {
             case .root(let root) where localRoots.contains(root):
                 return .assign(
-                    root,
+                    .named(root),
                     .except(.variable(root), .variable(processBinding), value))
             case .root(let root):
-                return .assign(root, value)
+                return .assign(.named(root), value)
             case .function(let root, let key):
                 return .assign(
-                    root,
+                    .named(root),
                     .except(
                         .variable(root),
                         rewrite(key, localRoots: localRoots),

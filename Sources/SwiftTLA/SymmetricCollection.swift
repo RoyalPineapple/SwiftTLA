@@ -22,9 +22,9 @@ public struct SymmetricCollectionVar<Element: Identifiable, Value: TLAValueType>
 
   public func update(_ member: SymmetricMember<Element>, to value: Expr<Value>) -> ActionExpr {
     guard member.owner == name else {
-      return .assign(name, .sourceIssue(.symmetricMember(collection: name, owner: member.owner)))
+      return .assign(.named(name), .sourceIssue(.symmetricMember(collection: name, owner: member.owner)))
     }
-    return .assign(name, .except(.variable(name), member.binding, value.raw))
+    return .assign(.named(name), .except(.variable(name), member.binding, value.raw))
   }
 
   public func allSatisfy(_ predicate: (Expr<Value>) -> StateExpr) -> StateExpr {

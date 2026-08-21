@@ -1004,22 +1004,22 @@ extension Var {
 
   public func inserting<Element: TLAValueType>(_ element: Element) -> ActionExpr
   where T == SetExpr<Element> {
-    .assign(name, .union(stateExpr, .setLiteral([.value(element.tlaValue)])))
+    .assign(.named(name), .union(stateExpr, .setLiteral([.value(element.tlaValue)])))
   }
 
   public func inserting<Element: TLAValueType>(_ element: Expr<Element>) -> ActionExpr
   where T == SetExpr<Element> {
-    .assign(name, .union(stateExpr, .setLiteral([element.raw])))
+    .assign(.named(name), .union(stateExpr, .setLiteral([element.raw])))
   }
 
   public func removing<Element: TLAValueType>(_ element: Element) -> ActionExpr
   where T == SetExpr<Element> {
-    .assign(name, .setDifference(stateExpr, .setLiteral([.value(element.tlaValue)])))
+    .assign(.named(name), .setDifference(stateExpr, .setLiteral([.value(element.tlaValue)])))
   }
 
   public func removing<Element: TLAValueType>(_ element: Expr<Element>) -> ActionExpr
   where T == SetExpr<Element> {
-    .assign(name, .setDifference(stateExpr, .setLiteral([element.raw])))
+    .assign(.named(name), .setDifference(stateExpr, .setLiteral([element.raw])))
   }
 
   public func contains<Element: TLAValueType>(_ element: Element) -> StateExpr

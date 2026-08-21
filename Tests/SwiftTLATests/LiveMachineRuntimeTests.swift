@@ -27,7 +27,7 @@ struct LiveMachineRuntimeTests {
             Variable(count, 0)
             Action("advance") { count.becomes(count + 1).when(count < 3) }
             Action("step", parameters: [ActionParameter<Int>("delta", values: [1, 2])]) {
-                ActionExpr.assign("count", .add(.variable("count"), .variable("delta")))
+                ActionExpr.assign(.named("count"), .add(.variable("count"), .variable("delta")))
             }
         }
     }

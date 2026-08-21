@@ -89,11 +89,11 @@ public struct SingleLaneBridgeModel: Sendable {
                 let leavingBridge = (isRight(c) && nl == eb + 1) || (!isRight(c) && nl == sb - 1)
 
                 let changeLocWithQ: ActionExpr = .and(.guard_(leavingBridge),
-                    .and(.assign("Location", l.updated(at: c, to: nl)),
-                        .assign("WaitingBeforeBridge", w.appending(c))))
+                    .and(.assign(.named("Location"), l.updated(at: c, to: nl)),
+                        .assign(.named("WaitingBeforeBridge"), w.appending(c))))
                 let changeLocNoQ: ActionExpr = .and(.guard_(StateExpr.not(leavingBridge)),
-                    .and(.assign("Location", l.updated(at: c, to: nl)),
-                        .unchanged("WaitingBeforeBridge")))
+                    .and(.assign(.named("Location"), l.updated(at: c, to: nl)),
+                        .unchanged(.named("WaitingBeforeBridge"))))
                 let changeLoc: ActionExpr = .or(changeLocWithQ, changeLocNoQ)
 
                 Action("MoveOutside_\(carName)") {
@@ -117,12 +117,12 @@ public struct SingleLaneBridgeModel: Sendable {
 
                 let enterBridge1: ActionExpr = .and(.guard_(
                     inBrSet.cardinality == 0 && w.count > 0 && h == c),
-                    .and(.assign("Location", l.updated(at: c, to: nl)),
-                        .assign("WaitingBeforeBridge", w.tail)))
+                    .and(.assign(.named("Location"), l.updated(at: c, to: nl)),
+                        .assign(.named("WaitingBeforeBridge"), w.tail)))
                 let enterBridge2: ActionExpr = .and(.guard_(
                     w.count > 0 && h == c && !h.isIn(inBrSet) && sameDir && noCollision),
-                    .and(.assign("Location", l.updated(at: c, to: nl)),
-                        .assign("WaitingBeforeBridge", w.tail)))
+                    .and(.assign(.named("Location"), l.updated(at: c, to: nl)),
+                        .assign(.named("WaitingBeforeBridge"), w.tail)))
                 let enterBridge: ActionExpr = .or(enterBridge1, enterBridge2)
 
                 Action("Enter_\(carName)") {

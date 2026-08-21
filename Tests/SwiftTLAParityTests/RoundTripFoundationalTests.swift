@@ -96,14 +96,14 @@ private func compiledInitialProjections(_ spec: TLASpec) throws -> [TLAStateProj
     let s: [(String, TLAValue)] = [("x", .int(0)), ("y", .int(0))]
     let action: ActionExpr
     switch variant {
-    case "simpleAssign": action = .assign("x", .value(.int(42)))
+    case "simpleAssign": action = .assign(.named("x"), .value(.int(42)))
     case "guardTrue":
-      action = .and(.guard_(.equal(.variable("x"), .value(.int(0)))), .assign("x", .value(.int(1))))
+      action = .and(.guard_(.equal(.variable("x"), .value(.int(0)))), .assign(.named("x"), .value(.int(1))))
     case "guardFalse":
-      action = .and(.guard_(.equal(.variable("x"), .value(.int(1)))), .assign("x", .value(.int(2))))
-    case "orBranches": action = .or(.assign("x", .value(.int(1))), .assign("x", .value(.int(2))))
-    case "twoVars": action = .and(.assign("x", .value(.int(1))), .assign("y", .value(.int(2))))
-    default: action = .assign("x", .value(.int(0)))
+      action = .and(.guard_(.equal(.variable("x"), .value(.int(1)))), .assign(.named("x"), .value(.int(2))))
+    case "orBranches": action = .or(.assign(.named("x"), .value(.int(1))), .assign(.named("x"), .value(.int(2))))
+    case "twoVars": action = .and(.assign(.named("x"), .value(.int(1))), .assign(.named("y"), .value(.int(2))))
+    default: action = .assign(.named("x"), .value(.int(0)))
     }
     let r = try compiledSuccessors(action, from: s, variables: ["x", "y"])
     #expect(r.count == expected)
@@ -114,7 +114,7 @@ private func compiledInitialProjections(_ spec: TLASpec) throws -> [TLAStateProj
     // This is deliberately large enough to exercise a lowered atomic block,
     // while keeping the recursive value-type teardown itself bounded.
     let depth = 256
-    let assignment = ActionExpr.assign("x", .value(.int(1)))
+    let assignment = ActionExpr.assign(.named("x"), .value(.int(1)))
     let action = (0..<depth).reduce(assignment) { partial, _ in
       .and(partial, assignment)
     }
@@ -213,45 +213,45 @@ private func compiledInitialProjections(_ spec: TLASpec) throws -> [TLAStateProj
   let s2: [(String, TLAValue)] = [("a", .int(0)), ("b", .int(0))]
 
   @Test func simpleAssign() throws {
-    let r = try compiledSuccessors(.assign("x", .value(.int(42))), from: s0, variables: ["x"])
+    let r = try compiledSuccessors(.assign(.named("x"), .value(.int(42))), from: s0, variables: ["x"])
     #expect(r.count == 1 && try value("x", in: r[0]) == .int(42))
   }
 
   @Test func unchanged() throws {
-    let r = try compiledSuccessors(.unchanged("x"), from: s0, variables: ["x"])
+    let r = try compiledSuccessors(.unchanged(.named("x")), from: s0, variables: ["x"])
     #expect(r.count == 1 && try value("x", in: r[0]) == .int(0))
   }
 
   @Test func guardTrue() throws {
     let a: ActionExpr = .and(
-      .guard_(.equal(.variable("x"), .value(.int(0)))), .assign("x", .value(.int(1))))
+      .guard_(.equal(.variable("x"), .value(.int(0)))), .assign(.named("x"), .value(.int(1))))
     let r = try compiledSuccessors(a, from: s0, variables: ["x"])
     #expect(r.count == 1)
   }
 
   @Test func guardFalse() throws {
     let a: ActionExpr = .and(
-      .guard_(.equal(.variable("x"), .value(.int(1)))), .assign("x", .value(.int(2))))
+      .guard_(.equal(.variable("x"), .value(.int(1)))), .assign(.named("x"), .value(.int(2))))
     let r = try compiledSuccessors(a, from: s0, variables: ["x"])
     #expect(r.isEmpty)
   }
 
   @Test func twoVars() throws {
-    let a: ActionExpr = .and(.assign("a", .value(.int(1))), .assign("b", .value(.int(2))))
+    let a: ActionExpr = .and(.assign(.named("a"), .value(.int(1))), .assign(.named("b"), .value(.int(2))))
     let r = try compiledSuccessors(a, from: s2, variables: ["a", "b"])
     #expect(r.count == 1 && try value("a", in: r[0]) == .int(1) && try value("b", in: r[0]) == .int(2))
   }
 
   @Test func orBranches() throws {
-    let a: ActionExpr = .or(.assign("x", .value(.int(1))), .assign("x", .value(.int(2))))
+    let a: ActionExpr = .or(.assign(.named("x"), .value(.int(1))), .assign(.named("x"), .value(.int(2))))
     let r = try compiledSuccessors(a, from: s0, variables: ["x"])
     #expect(r.count == 2)
   }
 
   @Test func nestedOr() throws {
     let a: ActionExpr = .or(
-      .or(.assign("x", .value(.int(1))), .assign("x", .value(.int(2)))),
-      .assign("x", .value(.int(3))))
+      .or(.assign(.named("x"), .value(.int(1))), .assign(.named("x"), .value(.int(2)))),
+      .assign(.named("x"), .value(.int(3))))
     let r = try compiledSuccessors(a, from: s0, variables: ["x"])
     #expect(r.count == 3)
   }
@@ -262,7 +262,7 @@ private func compiledInitialProjections(_ spec: TLASpec) throws -> [TLAStateProj
       .existsAction(
         "candidate",
         .setLiteral([.value(.int(1))]),
-        .assign("x", .variable("candidate"))
+        .assign(.named("x"), .variable("candidate"))
       )
     )
 
@@ -278,9 +278,9 @@ private func compiledInitialProjections(_ spec: TLASpec) throws -> [TLAStateProj
       .existsAction(
         "candidate",
         .setLiteral([.value(.int(1))]),
-        .assign("x", .variable("candidate"))
+        .assign(.named("x"), .variable("candidate"))
       ),
-      .assign("x", .value(.int(1)))
+      .assign(.named("x"), .value(.int(1)))
     )
 
     let successors = try compiledSuccessors(action, from: s0, variables: ["x"])
@@ -375,12 +375,12 @@ private func compiledInitialProjections(_ spec: TLASpec) throws -> [TLAStateProj
   @Test(
     "Every ActionExpr case enumerates correctly",
     arguments: [
-      ("assign", ActionExpr.assign("x", .int(1)), 1),
-      ("unchanged", ActionExpr.unchanged("x"), 1),
-      ("simpleAnd", ActionExpr.and(.assign("x", .int(1)), .assign("y", .int(2))), 1),
-      ("or", ActionExpr.or(.assign("x", .int(1)), .assign("x", .int(2))), 2),
+      ("assign", ActionExpr.assign(.named("x"), .int(1)), 1),
+      ("unchanged", ActionExpr.unchanged(.named("x")), 1),
+      ("simpleAnd", ActionExpr.and(.assign(.named("x"), .int(1)), .assign(.named("y"), .int(2))), 1),
+      ("or", ActionExpr.or(.assign(.named("x"), .int(1)), .assign(.named("x"), .int(2))), 2),
       (
-        "guarded", ActionExpr.and(.guard_(.equal(.variable("x"), .int(0))), .assign("x", .int(1))),
+        "guarded", ActionExpr.and(.guard_(.equal(.variable("x"), .int(0))), .assign(.named("x"), .int(1))),
         1
       )
     ] as [(String, ActionExpr, Int)])
@@ -818,7 +818,7 @@ private func compiledInitialProjections(_ spec: TLASpec) throws -> [TLAStateProj
     let statement = try #require(Parser.parse(source: source).statements.first)
     let expr = try #require(statement.item.as(ExprSyntax.self))
     let result = SpecParser.decodeActionExpr(expr)
-    #expect(result == ActionExpr.chooseAction("picked", .variable("q")))
+    #expect(result == ActionExpr.chooseAction(.named("picked"), .variable("q")))
   }
 
   @Test("SpecParser parses singleton()")

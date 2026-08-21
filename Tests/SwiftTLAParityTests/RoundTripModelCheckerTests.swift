@@ -237,8 +237,8 @@ private func value(
   @Test("Multi-choose is Cartesian product")
   func multiChooseProduct() throws {
     let action: ActionExpr = .and(
-      .chooseAction("x", .setLiteral([.value(.int(1)), .value(.int(2))])),
-      .chooseAction("y", .setLiteral([.value(.int(10)), .value(.int(20))]))
+      .chooseAction(.named("x"), .setLiteral([.value(.int(1)), .value(.int(2))])),
+      .chooseAction(.named("y"), .setLiteral([.value(.int(10)), .value(.int(20))]))
     )
     let (compilation, states) = try compiledSuccessors(
       for: action,
@@ -484,10 +484,10 @@ private func value(
   @Test("3-level nested OR in AND")
   func nestedOrL3() throws {
     let a: ActionExpr = .and(
-      .assign("x", .value(.int(1))),
+      .assign(.named("x"), .value(.int(1))),
       .or(
-        .or(.assign("y", .value(.int(2))), .assign("y", .value(.int(3)))),
-        .assign("y", .value(.int(4))))
+        .or(.assign(.named("y"), .value(.int(2))), .assign(.named("y"), .value(.int(3)))),
+        .assign(.named("y"), .value(.int(4))))
     )
     let (_, successors) = try compiledSuccessors(
       for: a,
@@ -554,17 +554,17 @@ private func value(
   @Test("CHOOSE + functionApply + EXCEPT in single action enumerates correctly")
   func chooseWithFunctionApply() throws {
     let chosenProcess: ActionExpr = .chooseAction(
-      "process", .setLiteral([.value(.int(1)), .value(.int(2))]))
+      .named("process"), .setLiteral([.value(.int(1)), .value(.int(2))]))
     let readState: ActionExpr = .guard_(
       .equal(
         .functionApply(.variable("programCounter"), .variable("process")),
         .value(.string("initial"))
       ))
     let updateState: ActionExpr = .assign(
-      "programCounter",
+      .named("programCounter"),
       .except(.variable("programCounter"), .variable("process"), .value(.string("done")))
     )
-    let unchanged: ActionExpr = .unchanged("sent")
+    let unchanged: ActionExpr = .unchanged(.named("sent"))
     let action = ActionExpr.and(
       chosenProcess, ActionExpr.and(readState, ActionExpr.and(updateState, unchanged)))
     let (compilation, successors) = try compiledSuccessors(for: action, from: [
@@ -654,7 +654,7 @@ private func value(
         choose(selfProcess, from: StateExpr.set([1, 2]))
           && StateExpr.functionApply(programCounter.stateExpr, selfProcess.stateExpr) == "initial"
           && .assign(
-            programCounter.name,
+            .named(programCounter.name),
             .except(programCounter.stateExpr, selfProcess.stateExpr, .value(.string("done")))
           )
       }

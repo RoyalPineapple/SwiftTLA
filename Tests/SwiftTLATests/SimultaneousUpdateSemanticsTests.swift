@@ -74,7 +74,7 @@ struct SimultaneousUpdateSemanticsTests {
             Variable(right, 2)
             Action("reject") {
                 left.becomes(left + 1)
-                ActionExpr.assign(right.name, .variable("missing"))
+                ActionExpr.assign(.named(right.name), .variable("missing"))
             }
         }
         do {

@@ -386,29 +386,29 @@ public struct SharedVariable<Value: TLAValueType>: StateExprConvertible, Sendabl
 
     @discardableResult
     public func becomes(_ value: Value) -> ActionExpr {
-        .assign(name, .value(value.tlaValue))
+        .assign(.named(name), .value(value.tlaValue))
     }
 
     @discardableResult
     public func becomes(_ value: Expr<Value>) -> ActionExpr {
-        .assign(name, value.raw)
+        .assign(.named(name), value.raw)
     }
 
     /// Assigns the current value of another shared formal variable of the
     /// same type. This keeps direct PlusCal-style state transfer typed.
     @discardableResult
     public func becomes(_ other: SharedVariable<Value>) -> ActionExpr {
-        .assign(name, other.stateExpr)
+        .assign(.named(name), other.stateExpr)
     }
 
     /// Assigns the current value of a process-local formal variable of the
     /// same type.
     @discardableResult
     public func becomes(_ other: LocalVariable<Value>) -> ActionExpr {
-        .assign(name, other.stateExpr)
+        .assign(.named(name), other.stateExpr)
     }
 
-    public var stays: ActionExpr { .unchanged(name) }
+    public var stays: ActionExpr { .unchanged(.named(name)) }
 }
 
 /// A typed process-local algorithm variable.
@@ -442,25 +442,25 @@ public struct LocalVariable<Value: TLAValueType>: StateExprConvertible, Sendable
 
     @discardableResult
     public func becomes(_ value: Value) -> ActionExpr {
-        .assign(name, .value(value.tlaValue))
+        .assign(.named(name), .value(value.tlaValue))
     }
 
     @discardableResult
     public func becomes(_ value: Expr<Value>) -> ActionExpr {
-        .assign(name, value.raw)
+        .assign(.named(name), value.raw)
     }
 
     @discardableResult
     public func becomes(_ other: SharedVariable<Value>) -> ActionExpr {
-        .assign(name, other.stateExpr)
+        .assign(.named(name), other.stateExpr)
     }
 
     @discardableResult
     public func becomes(_ other: LocalVariable<Value>) -> ActionExpr {
-        .assign(name, other.stateExpr)
+        .assign(.named(name), other.stateExpr)
     }
 
-    public var stays: ActionExpr { .unchanged(name) }
+    public var stays: ActionExpr { .unchanged(.named(name)) }
 }
 
 // `SharedVariable` is an authoring handle, but it must read like the typed

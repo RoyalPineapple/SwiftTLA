@@ -150,8 +150,8 @@ struct CompilerPipelineCanonicalizationTests {
                 .init(name: "second", initial: .int(1))
             ],
             actions: [
-                .init(name: "advance", body: .unchanged("first")),
-                .init(name: "hold", body: .unchanged("second"))
+                .init(name: "advance", body: .unchanged(.named("first"))),
+                .init(name: "hold", body: .unchanged(.named("second")))
             ],
             invariants: [.init(name: "Safe", body: .value(.bool(true)))]
         )
@@ -283,7 +283,7 @@ struct CompilerPipelineCanonicalizationTests {
                     body: .existsAction(
                         "current",
                         .setLiteral([.int(1)]),
-                        .assign("counter", .variable("current"))
+                        .assign(.named("counter"), .variable("current"))
                     )
                 )
             ],
@@ -305,7 +305,7 @@ struct CompilerPipelineCanonicalizationTests {
         let spec = TLASpec(
             name: "CompiledTemporal",
             variables: [.init(name: "counter", initial: .int(0))],
-            actions: [.init(name: "stay", body: .unchanged("counter"))],
+            actions: [.init(name: "stay", body: .unchanged(.named("counter")))],
             invariants: [],
             temporalProperties: [
                 .init(name: "EventuallyZero", expr: .eventually(.equal(.variable("counter"), .value(.int(0)))))
@@ -326,7 +326,7 @@ struct CompilerPipelineCanonicalizationTests {
         let spec = TLASpec(
             name: "InvalidTemporal",
             variables: [.init(name: "counter", initial: .int(0))],
-            actions: [.init(name: "stay", body: .unchanged("counter"))],
+            actions: [.init(name: "stay", body: .unchanged(.named("counter")))],
             invariants: [],
             temporalProperties: [
                 .init(name: "Missing", expr: .always(.variable("missing")))
@@ -349,9 +349,9 @@ struct CompilerPipelineCanonicalizationTests {
             actions: [
                 .init(
                     name: "select",
-                    body: .chooseAction("candidate", .setLiteral([.int(1), .int(2)]))
+                    body: .chooseAction(.named("candidate"), .setLiteral([.int(1), .int(2)]))
                         && .guard_(.equal(.variable("candidate"), .int(2)))
-                        && .assign("counter", .variable("candidate"))
+                        && .assign(.named("counter"), .variable("candidate"))
                 )
             ],
             invariants: []
@@ -376,7 +376,7 @@ struct CompilerPipelineCanonicalizationTests {
             actions: [
                 .init(
                     name: "advance",
-                    body: .assign("counter", .variable("increment")),
+                    body: .assign(.named("counter"), .variable("increment")),
                     bindings: [.init(name: "increment", values: [.int(1), .int(2)])]
                 )
             ],
@@ -407,7 +407,7 @@ struct CompilerPipelineCanonicalizationTests {
                 .init(
                     name: "advance",
                     body: .assign(
-                        "counter",
+                        .named("counter"),
                         .operatorApplication(.reference("Double", arity: 1), [.value(.int(2))])
                     )
                 )
@@ -454,7 +454,7 @@ struct CompilerPipelineCanonicalizationTests {
                 .init(
                     name: "advance",
                     body: .assign(
-                        "counter",
+                        .named("counter"),
                         .operatorApplication(
                             .reference("ApplyTwice", arity: 2),
                             [.operator(increment), .value(.int(4))]
@@ -487,7 +487,7 @@ struct CompilerPipelineCanonicalizationTests {
                 .init(
                     name: "advance",
                     body: .guard_(.lessThan(.variable("counter"), .variable("choice")))
-                        && .assign("counter", .add(.variable("counter"), .int(1)))
+                        && .assign(.named("counter"), .add(.variable("counter"), .int(1)))
                 )
             ],
             invariants: [.init(name: "Bounded", body: .lessOrEqual(.variable("counter"), .variable("choice")))]
@@ -515,7 +515,7 @@ struct CompilerPipelineCanonicalizationTests {
         let spec = TLASpec(
             name: "CompiledLambda",
             variables: [.init(name: "counter", initial: .int(0))],
-            actions: [.init(name: "step", body: .guard_(call) && .unchanged("counter"))],
+            actions: [.init(name: "step", body: .guard_(call) && .unchanged(.named("counter")))],
             invariants: []
         )
 
@@ -704,7 +704,7 @@ struct CompilerPipelineCanonicalizationTests {
         let spec = TLASpec(
             name: "CompiledActionExecution",
             variables: [.init(name: "counter", initial: .int(0))],
-            actions: [.init(name: "step", body: .assign("counter", .add(.variable("counter"), .int(1))))],
+            actions: [.init(name: "step", body: .assign(.named("counter"), .add(.variable("counter"), .int(1))))],
             invariants: []
         )
         let compilation = try spec.compile()
@@ -751,7 +751,7 @@ struct CompilerPipelineCanonicalizationTests {
                     name: "step",
                     body: .and(
                         .guard_(.equal(.functionApply(.variable("state"), .variable("key")), .int(1))),
-                        .assign("state", .except(.variable("state"), .variable("key"), .int(2)))
+                        .assign(.named("state"), .except(.variable("state"), .variable("key"), .int(2)))
                     )
                 )
             ],
@@ -800,7 +800,7 @@ struct CompilerPipelineCanonicalizationTests {
                 .init(name: "count", initial: .int(0)),
                 .init(name: "limit", initial: .int(10))
             ],
-            actions: [.init(name: "advance", body: .unchanged("count"))],
+            actions: [.init(name: "advance", body: .unchanged(.named("count")))],
             invariants: []
         ).compile()
 
@@ -846,7 +846,7 @@ struct CompilerPipelineCanonicalizationTests {
         let spec = TLASpec(
             name: "Binding",
             variables: [.init(name: "counter", initial: .int(0))],
-            actions: [.init(name: "step", body: .guard_(quantified) && .unchanged("counter"))],
+            actions: [.init(name: "step", body: .guard_(quantified) && .unchanged(.named("counter")))],
             invariants: []
         )
 
@@ -862,7 +862,7 @@ struct CompilerPipelineCanonicalizationTests {
         let spec = TLASpec(
             name: "FreeReference",
             variables: [.init(name: "counter", initial: .int(0))],
-            actions: [.init(name: "step", body: .assign("counter", .variable("missing")))],
+            actions: [.init(name: "step", body: .assign(.named("counter"), .variable("missing")))],
             invariants: []
         )
 
@@ -885,7 +885,7 @@ struct CompilerPipelineCanonicalizationTests {
             actions: [
                 .init(
                     name: "step",
-                    body: .existsAction("current", .setLiteral([.int(1)]), .assign("current", .int(1)))
+                    body: .existsAction("current", .setLiteral([.int(1)]), .assign(.named("current"), .int(1)))
                 )
             ],
             invariants: []
@@ -911,7 +911,7 @@ struct CompilerPipelineCanonicalizationTests {
                 .init(
                     name: "step",
                     body: .guard_(.operatorApplication(.reference("Missing", arity: 0), []))
-                        && .unchanged("counter")
+                        && .unchanged(.named("counter"))
                 )
             ],
             invariants: []
@@ -944,7 +944,7 @@ struct CompilerPipelineCanonicalizationTests {
         let spec = TLASpec(
             name: "LocalRecursion",
             variables: [.init(name: "counter", initial: .int(0))],
-            actions: [.init(name: "step", body: .guard_(recursive) && .unchanged("counter"))],
+            actions: [.init(name: "step", body: .guard_(recursive) && .unchanged(.named("counter")))],
             invariants: []
         )
 
@@ -989,7 +989,7 @@ struct CompilerPipelineCanonicalizationTests {
         let base = TLASpec(
             name: "Fingerprint",
             variables: [NamedVar(name: "value", initial: .int(0))],
-            actions: [NamedAction(name: "step", body: .assign("value", .int(1)))],
+            actions: [NamedAction(name: "step", body: .assign(.named("value"), .int(1)))],
             invariants: []
         )
         let variants = [
@@ -1011,7 +1011,7 @@ struct CompilerPipelineCanonicalizationTests {
         let base = TLASpec(
             name: "StructuralFingerprint",
             variables: [NamedVar(name: "value", initial: .int(0))],
-            actions: [NamedAction(name: "step", body: .assign("value", .int(1)), bindings: [
+            actions: [NamedAction(name: "step", body: .assign(.named("value"), .int(1)), bindings: [
                 .init(name: "choice", values: [.int(0), .int(1)])
             ])],
             invariants: []
@@ -1019,18 +1019,18 @@ struct CompilerPipelineCanonicalizationTests {
         let importedA = TLASpec(
             name: "Imported",
             variables: [NamedVar(name: "inner", initial: .int(0))],
-            actions: [NamedAction(name: "stay", body: .unchanged("inner"))],
+            actions: [NamedAction(name: "stay", body: .unchanged(.named("inner")))],
             invariants: []
         )
         let importedB = TLASpec(
             name: "Imported",
             variables: [NamedVar(name: "inner", initial: .int(1))],
-            actions: [NamedAction(name: "stay", body: .unchanged("inner"))],
+            actions: [NamedAction(name: "stay", body: .unchanged(.named("inner")))],
             invariants: []
         )
         let variants = [
             TLASpec(name: "StructuralFingerprint", variables: base.variables, actions: [
-                .init(name: "step", body: .assign("value", .int(1)), bindings: [.init(name: "choice", values: [.int(0), .int(2)])])
+                .init(name: "step", body: .assign(.named("value"), .int(1)), bindings: [.init(name: "choice", values: [.int(0), .int(2)])])
             ], invariants: []),
             TLASpec(name: "StructuralFingerprint", variables: [
                 .init(name: "value", initial: .int(0), initExpr: .value(.int(1)))
@@ -1079,7 +1079,7 @@ struct CompilerPipelineCanonicalizationTests {
             actions: [
                 .init(
                     name: "advance",
-                    body: .assign("value", .int(1)),
+                    body: .assign(.named("value"), .int(1)),
                     bindings: [.init(name: "", values: [.int(1)])]
                 )
             ],
