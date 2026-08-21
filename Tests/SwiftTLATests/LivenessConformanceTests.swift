@@ -47,7 +47,31 @@ struct LivenessConformanceTests {
             temporalProperties: [NamedTemporal(name: "property", expr: property)],
             fairness: fairness
         )
-        let checker = LivenessChecker(compilation: try spec.compile(), graph: graph)
+        let compilation = try spec.compile()
+        let transitions = graph.transitions.mapValues { transitions in
+            transitions.map { transition in
+                guard let action = compilation.layout.actionID(named: transition.label.action) else {
+                    return transition
+                }
+                return .init(
+                    label: .init(
+                        action: action,
+                        formalName: transition.label.action,
+                        arguments: transition.label.arguments
+                    ),
+                    target: transition.target
+                )
+            }
+        }
+        let checker = LivenessChecker(
+            compilation: compilation,
+            graph: .init(
+                specName: graph.specName,
+                variableNames: graph.variableNames,
+                transitions: transitions,
+                states: graph.states
+            )
+        )
         return try #require(checker.analyze(
             initialStateIDs: initialStateIDs,
             isComplete: isComplete
@@ -381,6 +405,29 @@ struct LivenessConformanceTests {
             #expect(result.status == .unavailable, "Expected \(name) to be unavailable")
             #expect(result.reason == reason)
         }
+    }
+
+    @Test("liveness requires compiled action identities")
+    func livenessRequiresCompiledActionIdentity() throws {
+        let sourceGraph = graph(
+            transitions: [initial: [.init(label: .init(.init(name: "known")), target: initial)]],
+            values: [initial: 0]
+        )
+        let specification = TLASpec(
+            name: sourceGraph.specName,
+            variables: [NamedVar(name: "x", initial: .int(0))],
+            actions: [action("known")],
+            invariants: [],
+            temporalProperties: [NamedTemporal(name: "property", expr: .eventually(predicate(1)))]
+        )
+        let result = try #require(
+            LivenessChecker(compilation: try specification.compile(), graph: sourceGraph)
+                .analyze(initialStateIDs: [initial])
+                .first
+        )
+
+        #expect(result.status == .unavailable)
+        #expect(result.reason == .unknownAction)
     }
 
     @Test("compilation binds each fairness condition to a declared action")

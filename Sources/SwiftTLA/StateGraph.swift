@@ -4,22 +4,18 @@ public struct StateGraph: Sendable {
     public struct TransitionLabel: Hashable, Sendable, CustomStringConvertible {
         public let action: String
         public let arguments: [TLAValue]
-        let actionOrdinal: Int?
+        let actionID: ActionID?
 
         public init(_ formalActionCall: FormalActionCall) {
             self.action = formalActionCall.name
             self.arguments = formalActionCall.arguments
-            self.actionOrdinal = nil
+            self.actionID = nil
         }
 
         init(action: ActionID, formalName: String, arguments: [TLAValue]) {
             self.action = formalName
             self.arguments = arguments
-            self.actionOrdinal = action.ordinal
-        }
-
-        var actionID: ActionID? {
-            actionOrdinal.map(ActionID.init(ordinal:))
+            self.actionID = action
         }
 
         public var description: String {
