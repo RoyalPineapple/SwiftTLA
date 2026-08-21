@@ -100,6 +100,7 @@ private func parserEnum(
                         }
                     }
                 }
+                WeakFairnessNext()
             }
         }
         """
@@ -114,7 +115,8 @@ private func parserEnum(
         #expect(specification.invariants.map(\.name) == ["__pcal_assert_increment_0_0", "__pcal_assert_increment_0_1"])
         #expect(specification.fairness == [
             .strongFairnessActionCall(.init(name: "increment", arguments: [.string("left")])),
-            .strongFairnessActionCall(.init(name: "increment", arguments: [.string("right")]))
+            .strongFairnessActionCall(.init(name: "increment", arguments: [.string("right")])),
+            .weakFairnessNext
         ])
     }
 
