@@ -382,7 +382,10 @@ public final class ParserSession {
     /// `Finished(process)` for an `Each` process family. The public DSL keeps
     /// the generated program counter private; both spellings lower to its
     /// canonical formal representation here.
-    private func decodeFinishedControlLocation(_ expression: ExprSyntax) -> StateExpr? {
+    private func decodeFinishedControlLocation(
+        _ expression: ExprSyntax,
+        scope: TypedFacadeScope = .empty
+    ) -> StateExpr? {
         guard let call = expression.as(FunctionCallExprSyntax.self),
               call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "Finished"
         else { return nil }
@@ -391,7 +394,8 @@ public final class ParserSession {
             return .equal(.programCounter, .controlLocation(.done))
         }
         guard call.arguments.count == 1,
-              let process = call.arguments.first.map(\.expression).flatMap(decodeStateExpr)
+              let processSyntax = call.arguments.first?.expression,
+              let process = decodeTypedFacadeValue(processSyntax, scope: scope)
         else { return nil }
         return .equal(
             .functionApply(.programCounter, process),
@@ -604,6 +608,9 @@ public final class ParserSession {
         }
         if let controlLocation = decodeControlLocation(expression, scope: scope) {
             return controlLocation
+        }
+        if let finished = decodeFinishedControlLocation(expression, scope: scope) {
+            return finished
         }
         if let precedingMembers = decodePrecedingFormalMembers(expression, scope: scope) {
             return precedingMembers

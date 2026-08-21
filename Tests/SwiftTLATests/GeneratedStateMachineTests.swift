@@ -660,11 +660,18 @@ struct MultiVar {
 @TLAModel
 struct BuilderOnlyClock {
     static var spec: TLASpec {
-        TLASpec("BuilderOnlyClock") {
-            let hr = Var<Int>("hr", 1)
-            hr
-            Action("tick") { (hr < 12 && hr.becomes(hr + 1)) || (hr == 12 && hr.becomes(1)) }
-            Invariant("valid") { hr >= 1 && hr <= 12 }
+        #spec("BuilderOnlyClock") {
+            Algorithm("BuilderOnlyClock") {
+                let hr = SharedVar("hr", initial: 1)
+                Do(TestControlLabel.tick) {
+                    If(hr < 12) {
+                        Assign(hr, to: hr + 1)
+                    } else: {
+                        Assign(hr, to: 1)
+                    }
+                }
+                Invariant("valid") { hr >= 1 && hr <= 12 }
+            }
         }
     }
 }
@@ -1064,14 +1071,9 @@ struct GeneratedStateMachineTests {
         #expect(result.output.contains("incorrect argument label in call (have 'name:body:binding:', expected 'name:body:bindings:')"))
     }
 
-    @Test("Builder path: TLASpec from Var with initial, no explicit Variable")
+    @Test("Algorithm builder preserves an initialized clock")
     func builderOnlyClockRuntime() throws {
-        let spec = TLASpec("BuilderOnlyClock") {
-            let hr = Var<Int>("hr", 1)
-            hr
-            Action("tick") { (hr < 12 && hr.becomes(hr + 1)) || (hr == 12 && hr.becomes(1)) }
-            Invariant("valid") { hr >= 1 && hr <= 12 }
-        }
+        let spec = BuilderOnlyClock.spec
         #expect(spec.variables.count == 1)
         #expect(spec.variables[0].name == "hr")
         #expect(spec.variables[0].initial == .int(1))

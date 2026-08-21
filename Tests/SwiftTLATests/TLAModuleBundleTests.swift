@@ -30,7 +30,7 @@ private struct ImportedFormalModuleGeneratedModel {
 private struct InstancedFormalModuleGeneratedModel {
   static var spec: TLASpec {
     #spec("InstancedFormalModuleGeneratedModel") {
-      Instance("Sequences", of: ZSequences.module)
+      Instance("Folding", of: Folds.module)
       Algorithm("InstancedFormalModuleGeneratedModel") {
         let value = SharedVar("value", initial: 0)
         Do(TestControlLabel.keep) { Assign(value, to: value.expr) }
@@ -92,8 +92,8 @@ struct TLAModuleBundleTests {
   @Test("a generated model preserves a named module instance")
   func generatedModelRetainsNamedModuleInstance() {
     InstancedFormalModuleGeneratedModel._checkParserTree()
-    #expect(InstancedFormalModuleGeneratedModel.spec.moduleInstances.map(\.name) == ["Sequences"])
-    #expect(InstancedFormalModuleGeneratedModel.spec.moduleInstances.map { $0.module.name } == ["ZSequences"])
+    #expect(InstancedFormalModuleGeneratedModel.spec.moduleInstances.map(\.name) == ["Folding"])
+    #expect(InstancedFormalModuleGeneratedModel.spec.moduleInstances.map { $0.module.name } == ["Folds"])
   }
 
   @Test("the parser preserves qualified ZSequences calls")
@@ -109,9 +109,12 @@ struct TLAModuleBundleTests {
   func zeroBasedSequenceModuleIsExecutable() throws {
     let sequence = ZeroBasedSequence<Int>.literal(3, 1, 2)
     let rotated = ZSequences.rotation(of: sequence, leftBy: Expr(.int(1)))
+    let configured = TLASpec("ConfiguredZSequences") {
+      Import(ZSequences.module, configuring: ZSequences.boundedNaturalNumbers(0...2))
+    }
     let result = try compiledValue(
       rotated.raw,
-      recursiveFunctions: try ZSequences.module.compile().formalModuleClosure.linkedOperators.recursiveFunctions
+      recursiveFunctions: try configured.compile().formalModuleClosure.linkedOperators.recursiveFunctions
     )
     #expect(result == .function([
       .int(0): .int(1), .int(1): .int(2), .int(2): .int(3)

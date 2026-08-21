@@ -2086,7 +2086,7 @@ private struct DefinePhaseGeneratedModel {
                 let mode: SharedVariable<Mode> = SharedVar("mode", initial: .define)
                 Do(TestControlLabel.stay) { Assign(mode, to: mode) }
             }
-            FormalDefinition("Visible", parameters: [], body: .value(.bool(true)), plusCalPhase: .define)
+            FormalDefinition("Visible", parameters: [], body: true, plusCalPhase: .define)
         }
     }
 }
@@ -2107,7 +2107,7 @@ private struct FormalDefinitionFidelityMacro {
         TLASpec("FormalDefinitionFidelityMacro") {
             let value = Var<Int>("value")
             Variable(value, 0)
-            FormalDefinition("Refines", parameters: [], body: .value(.bool(true)))
+            FormalDefinition("Refines", parameters: [], body: true)
             Action("stay") { value.stays }
         }
     }
