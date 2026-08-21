@@ -331,7 +331,9 @@ extension ParserSession {
                 parseFormalModuleInstance(
                     call,
                     into: &result,
-                    scope: typedFacadeScope(.empty, bindings: result.sourceValues.map { ($0.key, $0.value) })
+                    scope: typedFacadeScope(.empty, bindings: result.sourceValues.keys.sorted().compactMap { name in
+                        result.sourceValues[name].map { (name, $0) }
+                    })
                 )
                 guard result.moduleInstances.count == count + 1,
                       let instance = result.moduleInstances.last
@@ -341,7 +343,9 @@ extension ParserSession {
                 containsVariableConstructor = true
             } else if let value = decodeTypedFacadeValue(
                 call,
-                scope: typedFacadeScope(.empty, bindings: result.sourceValues.map { ($0.key, $0.value) })
+                scope: typedFacadeScope(.empty, bindings: result.sourceValues.keys.sorted().compactMap { name in
+                    result.sourceValues[name].map { (name, $0) }
+                })
             ) {
                 result.sourceValues[sourceName] = value
             } else {
