@@ -60,6 +60,7 @@ extension ParserSession {
         /// The parser's top-level declaration facts for generated Swift.
         public var sourceContext = BoundSourceContext()
         var instanceBindings: [String: FormalModuleInstance] = [:]
+        var sourceValues: [String: StateExpr] = [:]
 
         public func swiftVariableTypes() -> [String: String] {
             var types = sourceContext.swiftVariableTypes
@@ -327,16 +328,22 @@ extension ParserSession {
             }
             if call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "Instance" {
                 let count = result.moduleInstances.count
-                parseFormalModuleInstance(call, into: &result)
+                parseFormalModuleInstance(
+                    call,
+                    into: &result,
+                    scope: typedFacadeScope(.empty, bindings: result.sourceValues.map { ($0.key, $0.value) })
+                )
                 guard result.moduleInstances.count == count + 1,
                       let instance = result.moduleInstances.last
                 else { continue }
                 result.instanceBindings[sourceName] = instance
             } else if resolveVarCall(call) != nil {
                 containsVariableConstructor = true
-            } else if call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "FormalCall"
-                        || call.calledExpression.as(GenericSpecializationExprSyntax.self) != nil {
-                continue
+            } else if let value = decodeTypedFacadeValue(
+                call,
+                scope: typedFacadeScope(.empty, bindings: result.sourceValues.map { ($0.key, $0.value) })
+            ) {
+                result.sourceValues[sourceName] = value
             } else {
                 result.diagnostics.append(.init(
                     message: "Specification body contains an unsupported local declaration.",
@@ -1094,7 +1101,8 @@ extension ParserSession {
 
     private func parseFormalModuleInstance(
         _ call: FunctionCallExprSyntax,
-        into result: inout ParsedSpecComponents
+        into result: inout ParsedSpecComponents,
+        scope: TypedFacadeScope = .empty
     ) {
         guard let name = extractStringArg(call, index: 0),
               let moduleArgument = call.arguments.first(where: { $0.label?.text == "of" })?.expression
@@ -1121,7 +1129,7 @@ extension ParserSession {
                         || argumentCall.calledExpression.as(MemberAccessExprSyntax.self)?.declName.baseName.text == "init"),
                       let parameter = extractStringArg(argumentCall, index: 0),
                       let valueSyntax = argumentCall.arguments.first(where: { $0.label?.text == "value" })?.expression,
-                      let value = decodeTypedFacadeValue(valueSyntax, scope: .empty) ?? decodeStateExpr(valueSyntax)
+                      let value = decodeTypedFacadeValue(valueSyntax, scope: scope) ?? decodeStateExpr(valueSyntax)
                 else {
                     result.diagnostics.append(.init(
                         message: "Each Instance argument must be ModuleArgument(\"parameter\", value: expression).",
