@@ -41,16 +41,6 @@ public struct AlgorithmPlusCalRenderDiagnostic: Error, Sendable, Hashable, Custo
     }
 }
 
-/// Prints the canonical Algorithm IR as a self-contained TLA+ module with a
-/// PlusCal algorithm comment. This is deliberately a syntax renderer: it does
-/// not invoke `AlgorithmLowerer`, construct a `TLASpec`, or introduce any
-/// generated program-counter semantics.
-extension Algorithm {
-    func renderPlusCalModule() throws -> String {
-        try AlgorithmPlusCalRenderer(model: model).render()
-    }
-}
-
 /// Ordered module-link layout for the final PlusCal renderer.
 ///
 /// Literal source definitions remain a deliberate formal-source boundary, but

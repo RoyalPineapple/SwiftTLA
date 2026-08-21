@@ -148,7 +148,7 @@ struct CompilerPipelineCanonicalizationTests {
             }
         }
 
-        let compilation = try algorithm.lower().compile()
+        let compilation = try compiledSourceSpecification(algorithm).compile()
         let description = compilation.description
 
         #expect(description.procedures.map { "\($0.algorithm).\($0.name)" } == [
@@ -163,7 +163,7 @@ struct CompilerPipelineCanonicalizationTests {
             .procedure(algorithm: "ControlLayout", name: "second"),
             .generated(algorithm: "ControlLayout", purpose: "Done")
         ])
-        #expect(compilation.identity != try Algorithm("ControlLayout") {
+        let changed = Algorithm("ControlLayout") {
             let value = SharedVar("value", initial: 0)
             value
             Each(Node.all) { _ in
@@ -181,7 +181,8 @@ struct CompilerPipelineCanonicalizationTests {
                     Return()
                 }
             }
-        }.lower().compile().identity)
+        }
+        #expect(compilation.identity != try compiledSourceSpecification(changed).compile().identity)
     }
 
     @Test("compiled algorithm control state uses control-location identities")
@@ -199,7 +200,7 @@ struct CompilerPipelineCanonicalizationTests {
                 }
             }
         }
-        let compilation = try algorithm.lower().compile()
+        let compilation = try compiledSourceSpecification(algorithm).compile()
         let runtime = CompiledRuntime(compilation: compilation)
         let pc = try #require(compilation.layout.variableID(named: "pc"))
         let initial = try #require(runtime.initialStates().first)
