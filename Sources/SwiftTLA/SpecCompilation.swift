@@ -861,6 +861,8 @@ private struct CanonicalSpecificationEncoder {
         switch value {
         case .weakFairness(let action): return node("weakFairness", [action])
         case .strongFairness(let action): return node("strongFairness", [action])
+        case .weakFairnessNext: return node("weakFairnessNext", [])
+        case .strongFairnessNext: return node("strongFairnessNext", [])
         case .weakFairnessActionCall(let action): return node("weakFairnessActionCall", [canonicalActionCall(action)])
         case .strongFairnessActionCall(let action): return node("strongFairnessActionCall", [canonicalActionCall(action)])
         }

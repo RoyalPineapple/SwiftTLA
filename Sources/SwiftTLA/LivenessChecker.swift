@@ -249,6 +249,8 @@ public struct LivenessChecker {
 
     private func renderedName(for scope: CompiledFairnessCondition.Scope) -> String {
         switch scope {
+        case .next:
+            return "Next"
         case .action(let action):
             return compilation.layout.actions[action.ordinal].declaration.name
         case .actionCall(let call):
@@ -569,6 +571,8 @@ private struct GraphEdge: Hashable {
     func matches(_ scope: CompiledFairnessCondition.Scope) -> Bool {
         guard let action else { return false }
         switch scope {
+        case .next:
+            return true
         case .action(let id):
             return action.action == id
         case .actionCall(let call):

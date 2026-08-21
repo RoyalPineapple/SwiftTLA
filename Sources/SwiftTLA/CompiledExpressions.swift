@@ -158,6 +158,7 @@ struct CompiledActionCall: Hashable, Sendable {
 
 struct CompiledFairnessCondition: Sendable {
     enum Scope: Hashable, Sendable {
+        case next
         case action(ActionID)
         case actionCall(CompiledActionCall)
     }

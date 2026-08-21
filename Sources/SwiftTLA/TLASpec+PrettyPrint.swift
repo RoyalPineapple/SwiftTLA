@@ -218,7 +218,7 @@ extension TLASpec {
         emittedActionNames: [String: String]
     ) -> String {
         switch condition {
-        case .weakFairness, .strongFairness:
+        case .weakFairness, .strongFairness, .weakFairnessNext, .strongFairnessNext:
             return condition.tlaForm(vars: vars)
         case .weakFairnessActionCall(let invocation), .strongFairnessActionCall(let invocation):
             let operatorName = actions.lazy

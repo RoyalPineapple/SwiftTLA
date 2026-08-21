@@ -1736,6 +1736,8 @@ extension ParserSession {
         switch name {
         case "weakFairness", "WeakFairness": return .weakFairness(actionName)
         case "strongFairness", "StrongFairness": return .strongFairness(actionName)
+        case "weakFairnessNext", "WeakFairnessNext": return .weakFairnessNext
+        case "strongFairnessNext", "StrongFairnessNext": return .strongFairnessNext
         default: return nil
         }
     }

@@ -359,6 +359,8 @@ enum MacroExpander {
         switch fairness {
         case .weakFairness(let action): return ".weakFairness(\"\(action)\")"
         case .strongFairness(let action): return ".strongFairness(\"\(action)\")"
+        case .weakFairnessNext: return ".weakFairnessNext"
+        case .strongFairnessNext: return ".strongFairnessNext"
         case .weakFairnessActionCall(let action):
             return ".weakFairnessActionCall(\(codegenActionCall(action)))"
         case .strongFairnessActionCall(let action):

@@ -51,7 +51,7 @@ public struct ConsensusModel: Sendable {
                     chosen.cardinality <= 1
                 }
                 Eventually("Success", !chosen.isEmpty)
-                WeakFairness("Next")
+                WeakFairnessNext()
             }
         }
     }
