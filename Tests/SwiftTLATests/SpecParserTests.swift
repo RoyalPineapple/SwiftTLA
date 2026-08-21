@@ -102,8 +102,8 @@ private func parserEnum(
         #expect(parsed.diagnostics.isEmpty)
         #expect(parsed.invariants.map(\.name) == ["__pcal_assert_increment_0_0", "__pcal_assert_increment_0_1"])
         #expect(parsed.fairness == [
-            .strongFairnessInvocation(.init(name: "increment", arguments: [.string("left")])),
-            .strongFairnessInvocation(.init(name: "increment", arguments: [.string("right")]))
+            .strongFairnessActionCall(.init(name: "increment", arguments: [.string("left")])),
+            .strongFairnessActionCall(.init(name: "increment", arguments: [.string("right")]))
         ])
     }
 

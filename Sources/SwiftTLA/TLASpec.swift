@@ -55,7 +55,8 @@ func formalActionCall(named name: String, arguments: [TLAValue]) -> String {
   arguments.isEmpty ? name : "\(name)(\(arguments.map(\.description).joined(separator: ", ")))"
 }
 
-public struct TLAActionInvocation: Sendable, Hashable, CustomStringConvertible {
+/// One formal action with concrete argument values at a source or tool boundary.
+public struct FormalActionCall: Sendable, Hashable, CustomStringConvertible {
   public let name: String
   public let arguments: [TLAValue]
   public init(name: String, arguments: [TLAValue] = []) {

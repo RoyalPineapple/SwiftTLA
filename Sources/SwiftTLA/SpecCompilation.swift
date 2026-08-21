@@ -1010,8 +1010,8 @@ private struct CanonicalSpecificationEncoder {
         switch value {
         case .weakFairness(let action): return node("weakFairness", [action])
         case .strongFairness(let action): return node("strongFairness", [action])
-        case .weakFairnessInvocation(let invocation): return node("weakFairnessInvocation", [canonicalInvocation(invocation)])
-        case .strongFairnessInvocation(let invocation): return node("strongFairnessInvocation", [canonicalInvocation(invocation)])
+        case .weakFairnessActionCall(let action): return node("weakFairnessActionCall", [canonicalActionCall(action)])
+        case .strongFairnessActionCall(let action): return node("strongFairnessActionCall", [canonicalActionCall(action)])
         }
     }
 
@@ -1035,7 +1035,7 @@ private struct CanonicalSpecificationEncoder {
     }
     private func canonicalLambda(_ value: FormalLambda) -> String { node("lambda", [canonicalList(value.parameters), canonicalExpression(value.body)]) }
     private func canonicalLocalOperator(_ value: LocalOperator) -> String { node("localOperator", [value.name, canonicalList(value.parameters), canonicalOptional(value.domain.map(canonicalExpression)), canonicalExpression(value.body)]) }
-    private func canonicalInvocation(_ value: TLAActionInvocation) -> String { node("invocation", [value.name, canonicalList(value.arguments.map(canonicalValue))]) }
+    private func canonicalActionCall(_ value: FormalActionCall) -> String { node("actionCall", [value.name, canonicalList(value.arguments.map(canonicalValue))]) }
     private func unary(_ tag: String, _ value: StateExpr) -> String { node(tag, [canonicalExpression(value)]) }
     private func binary(_ tag: String, _ lhs: StateExpr, _ rhs: StateExpr) -> String { node(tag, [canonicalExpression(lhs), canonicalExpression(rhs)]) }
     private func quantified(_ tag: String, _ set: StateExpr, _ binding: String, _ predicate: StateExpr) -> String { node(tag, [canonicalExpression(set), binding, canonicalExpression(predicate)]) }
