@@ -73,7 +73,7 @@ indirect enum CompiledValue: Hashable, Sendable {
             guard let label = layout.controlLocation(id) else {
                 throw CompiledEvaluationError.invalidControlLocationID(id)
             }
-            return .string(label.renderedName)
+            return .string(label.sourceName)
         case .set(let values):
             return .set(try Set(values.map { try $0.rendered(using: layout) }))
         case .tuple(let values):

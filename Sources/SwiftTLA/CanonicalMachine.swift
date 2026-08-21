@@ -174,10 +174,6 @@ public enum GeneratedMachineError: Error, Sendable {
     case noMatchingSuccessor
     case liveMachineSchemaMismatch(expected: String, actual: String)
     case liveMachineUnavailable(TLALiveMachineUnavailableReason)
-    /// The formal successor could not be decoded into the generated Swift
-    /// state. The canonical snapshot remains unchanged.
-    case stateDecodingFailed(TLAStateProjectionDiagnostic)
-    case unexpected(String)
     /// This action selects a live identified collection member and must use
     /// the generated `action(id:)` API rather than generic execution.
     case identityRoutedActionRequiresID
@@ -232,22 +228,10 @@ public struct CanonicalMachine<Snapshot: Equatable & Sendable>: Sendable {
         selecting successor: (TLAStateProjection) -> Bool
     ) throws -> CanonicalTransitionEvidence<Snapshot, Action>
     where Action: Equatable & Sendable {
-        let before: Snapshot
-        do {
-            before = try snapshotFromProjection(state)
-        } catch {
-            throw GeneratedMachineError.unexpected(String(describing: error))
-        }
+        let before = try snapshotFromProjection(state)
         for projection in successors {
             guard successor(projection) else { continue }
-            let after: Snapshot
-            do {
-                after = try snapshotFromProjection(projection)
-            } catch let diagnostic as TLAStateProjectionDiagnostic {
-                throw GeneratedMachineError.stateDecodingFailed(diagnostic)
-            } catch {
-                throw GeneratedMachineError.unexpected(String(describing: error))
-            }
+            let after = try snapshotFromProjection(projection)
             snapshot = after
             formalState = projection
             return CanonicalTransitionEvidence(action: action, before: before, after: after)

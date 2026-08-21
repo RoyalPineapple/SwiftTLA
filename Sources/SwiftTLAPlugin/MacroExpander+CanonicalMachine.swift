@@ -10,7 +10,6 @@ extension MacroExpander {
         identityRoutedActions: Set<String> = []
     ) -> [DeclSyntax] {
         let modifier = isActor ? "" : "mutating "
-        let labelField = hasActions ? "public let label: ActionLabel" : ""
         let identityRoutedOrdinals = identityRoutedActions.isEmpty
             ? ""
             : identityRoutedActions.sorted().compactMap { name in
@@ -23,24 +22,6 @@ extension MacroExpander {
                     throw GeneratedMachineError.identityRoutedActionRequiresID
                 }
             """
-        let typedApply = hasActions ? """
-            public \(modifier)func apply(_ action: ActionLabel) throws -> TransitionResult {
-                try _apply(action)
-            }
-            """ : ""
-        let observation = hasActions ? """
-            public struct MachineObservation: Sendable, Equatable {
-                public let state: State
-                public let availableActions: [ActionLabel]
-            }
-            """ : ""
-        let availableActions = hasActions ? """
-            public func availableActions() throws -> [ActionLabel] {
-                try _actionExecutor().availableLabels(in: _stateWithLiveCollections()).filter {
-                    !Self._identityRoutedActionOrdinals.contains(Self._actionOrdinal(for: $0))
-                }
-            }
-            """ : ""
         let liveProjection = symmetricCollections.map {
             """
             guard let token = TLAStateProjection.Token(validating: \(String(reflecting: $0.formalName))) else {
@@ -56,29 +37,47 @@ extension MacroExpander {
                             \(liveProjection)
                             return state
             """
-        return [
-            DeclSyntax(stringLiteral: """
-            public struct TransitionResult: Sendable, Equatable {
-                \(labelField.replacingOccurrences(of: "label", with: "action"))
-                public let before: State
-                public let after: State
-            }
-            """),
-            DeclSyntax(stringLiteral: observation),
+        var members: [DeclSyntax] = [
             DeclSyntax(stringLiteral: """
             public var state: State {
                 _machine.snapshot
             }
             """),
-            DeclSyntax(stringLiteral: "private static let _identityRoutedActionOrdinals: Set<Int> = [\(identityRoutedOrdinals)]"),
-            DeclSyntax(stringLiteral: """
-            private func _stateWithLiveCollections() throws -> TLAStateProjection {
-                \(stateWithLiveCollections)
-            }
-            """),
-            DeclSyntax(stringLiteral: availableActions),
-            DeclSyntax(stringLiteral: typedApply),
-            DeclSyntax(stringLiteral: """
+        ]
+        if hasActions {
+            members += [
+                DeclSyntax(stringLiteral: """
+                public struct TransitionResult: Sendable, Equatable {
+                    public let action: ActionLabel
+                    public let before: State
+                    public let after: State
+                }
+                """),
+                DeclSyntax(stringLiteral: """
+                public struct MachineObservation: Sendable, Equatable {
+                    public let state: State
+                    public let availableActions: [ActionLabel]
+                }
+                """),
+                DeclSyntax(stringLiteral: "private static let _identityRoutedActionOrdinals: Set<Int> = [\(identityRoutedOrdinals)]"),
+                DeclSyntax(stringLiteral: """
+                private func _stateWithLiveCollections() throws -> TLAStateProjection {
+                    \(stateWithLiveCollections)
+                }
+                """),
+                DeclSyntax(stringLiteral: """
+                public func availableActions() throws -> [ActionLabel] {
+                    try _actionExecutor().availableLabels(in: _stateWithLiveCollections()).filter {
+                        !Self._identityRoutedActionOrdinals.contains(Self._actionOrdinal(for: $0))
+                    }
+                }
+                """),
+                DeclSyntax(stringLiteral: """
+                public \(modifier)func apply(_ action: ActionLabel) throws -> TransitionResult {
+                    try _apply(action)
+                }
+                """),
+                DeclSyntax(stringLiteral: """
             private \(modifier)func _apply(_ action: ActionLabel) throws -> TransitionResult {
                 \(identityRoutedGuard)
                 let evidence = try _machine.apply(
@@ -93,16 +92,18 @@ extension MacroExpander {
                 )
             }
             """),
-            DeclSyntax(stringLiteral: hasActions ? """
-            public func synchronousMachineObservation() throws -> MachineObservation {
-                .init(state: state, availableActions: try availableActions())
-            }
-            """ : ""),
-            DeclSyntax(stringLiteral: hasActions ? """
-            public func machineObservation() async throws -> MachineObservation {
-                try synchronousMachineObservation()
-            }
-            """ : ""),
-        ]
+                DeclSyntax(stringLiteral: """
+                public func synchronousMachineObservation() throws -> MachineObservation {
+                    .init(state: state, availableActions: try availableActions())
+                }
+                """),
+                DeclSyntax(stringLiteral: """
+                public func machineObservation() async throws -> MachineObservation {
+                    try synchronousMachineObservation()
+                }
+                """),
+            ]
+        }
+        return members
     }
 }

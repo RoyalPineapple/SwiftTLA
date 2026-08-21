@@ -89,6 +89,23 @@ enum ControlOwner: Hashable, Sendable {
     }
 }
 
+public struct ControlLocationReference: Hashable, Sendable {
+    let owner: ControlOwner?
+    public let sourceName: String
+
+    public static let done = Self("Done")
+
+    public init(_ sourceName: String) {
+        self.owner = nil
+        self.sourceName = sourceName
+    }
+
+    init(owner: ControlOwner, sourceName: String) {
+        self.owner = owner
+        self.sourceName = sourceName
+    }
+}
+
 extension ControlOwner {
     var description: ControlOwnerDescription {
         switch self {
@@ -174,6 +191,12 @@ struct CompiledLayout: Hashable, Sendable {
         variables.first { $0.declaration.name == name }?.id
     }
 
+    func programCounterID() -> VariableID? {
+        variables.first {
+            $0.declaration.origin == .compiler && $0.declaration.name == "pc"
+        }?.id
+    }
+
     func actionID(named name: String) -> ActionID? {
         actions.first { $0.declaration.name == name }?.id
     }
@@ -196,38 +219,11 @@ struct CompiledLayout: Hashable, Sendable {
         controlLocations.first { $0.id == id }
     }
 
-    func controlLocationID(named name: String, owner: ControlOwner?, algorithm: String?) -> ControlLocationID? {
-        if name == "Done" {
-            let doneLabels = controlLocations.filter {
-                if case .generated(_, "Done") = $0.owner {
-                    return $0.sourceName == name
-                }
-                return false
-            }
-            if let algorithm {
-                return doneLabels.first {
-                    $0.owner == .generated(algorithm: algorithm, purpose: "Done")
-                }?.id
-            }
-            if doneLabels.count == 1 {
-                return doneLabels.first?.id
-            }
+    func controlLocationID(for reference: ControlLocationReference) -> ControlLocationID? {
+        if let owner = reference.owner {
+            return controlLocationID(owner: owner, named: reference.sourceName)
         }
-        if let owner, let id = controlLocationID(owner: owner, named: name) {
-            return id
-        }
-        let processMatches = controlLocations.filter {
-            if case .process = $0.owner {
-                return $0.sourceName == name
-            }
-            return false
-        }
-        if processMatches.count == 1 {
-            return processMatches.first?.id
-        }
-        let matches = controlLocations.filter {
-            $0.sourceName == name || $0.renderedName == name
-        }
+        let matches = controlLocations.filter { $0.sourceName == reference.sourceName }
         guard matches.count == 1 else { return nil }
         return matches.first?.id
     }
@@ -290,7 +286,7 @@ struct CompiledLayout: Hashable, Sendable {
             switch expression {
             case .value(let value):
                 visit(value)
-            case .variable, .enabledAction:
+            case .variable, .programCounter, .controlLocation, .enabledAction:
                 return
             case .negate(let value), .not(let value), .cardinality(let value), .powerSet(let value),
                  .unionAll(let value), .tupleLength(let value), .tupleHead(let value), .tupleTail(let value),
@@ -518,6 +514,7 @@ enum CompiledReference: Hashable, Sendable {
     case variable(VariableID)
     case binder(BinderID)
     case action(ActionID)
+    case controlLocation(ControlLocationID)
     case constant(TLAValue)
     case `operator`(OperatorID)
 }
@@ -670,6 +667,26 @@ struct BindingValidator {
         switch expression {
         case .value:
             return
+        case .programCounter:
+            guard let id = layout.programCounterID() else {
+                throw diagnostic(
+                    code: .unknownReference,
+                    path: path,
+                    expected: "a compiler-owned program counter",
+                    actual: "this model has no program counter"
+                )
+            }
+            references[path] = .variable(id)
+        case .controlLocation(let reference):
+            guard let id = layout.controlLocationID(for: reference) else {
+                throw diagnostic(
+                    code: .unknownControlLocation,
+                    path: path,
+                    expected: "a control location declared by the source algorithm",
+                    actual: "unresolved control location '\(reference.sourceName)'"
+                )
+            }
+            references[path] = .controlLocation(id)
         case .variable(let name):
             try resolveValue(name, at: path, scope: scope)
         case .enabledAction(let name):

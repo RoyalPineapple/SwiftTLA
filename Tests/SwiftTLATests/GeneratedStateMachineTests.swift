@@ -228,7 +228,7 @@ struct GeneratedSimultaneousSwap {
 struct GeneratedSimultaneousSwapTests {
     @Test("generated updates read one old state and commit together")
     func generatedMachineSwapsValues() throws {
-        var model = GeneratedSimultaneousSwap()
+        var model = try GeneratedSimultaneousSwap.makeMachine()
 
         let result = try model.apply(.swap)
 
@@ -266,7 +266,7 @@ struct GeneratedPairPatternTests {
     func generatedMachineAppliesPairPatternBindings() throws {
         GeneratedPairPattern._checkParserTree()
 
-        var model = GeneratedPairPattern()
+        var model = try GeneratedPairPattern.makeMachine()
         let result = try model.apply(.choose)
 
         #expect([1, 2].contains(result.after.selected))
@@ -500,17 +500,15 @@ struct NestedAdapterConcurrencyTests {
         #expect(expectedBefore.availableActions == [.advance])
 
         let expected = try model.apply(.advance)
-        let observed = try await observable.apply(.advance)
-        let acted = try await actor.apply(.advance)
+        let observed = try committed(try await observable.apply(.advance))
+        let acted = try committed(try await actor.apply(.advance))
 
         #expect(observed.before == expected.before)
         #expect(observed.after == expected.after)
         #expect(acted.before == expected.before)
         #expect(acted.after == expected.after)
-        #expect(observable.state.count == 1)
-        #expect(await actor.state.count == 1)
-        #expect(observable.state.count == 1)
-        #expect(await actor.state.count == 1)
+        #expect(try #require(observable.state).count == 1)
+        #expect(try await actorState(actor).count == 1)
         #expect(await callbackRecorder.transitions.count == 1)
         #expect(await callbackRecorder.transitions.first?.0 == expected.before)
         #expect(await callbackRecorder.transitions.first?.1 == expected.after)
@@ -523,7 +521,7 @@ struct NestedAdapterConcurrencyTests {
         async let second = actor.apply(.advance)
         _ = try await (first, second)
 
-        #expect(await actor.state.count == 2)
+        #expect(try await actorState(actor).count == 2)
     }
 
     @Test("Nested observable rejects disabled execution without notification")
@@ -535,15 +533,35 @@ struct NestedAdapterConcurrencyTests {
             await recorder.record(before: before, after: after)
         }
 
-        _ = try await observable.apply(.advance)
-        _ = try await observable.apply(.advance)
+        _ = try committed(try await observable.apply(.advance))
+        _ = try committed(try await observable.apply(.advance))
         let beforeFailure = observable.state
-        await #expect(throws: GeneratedMachineError.self) {
-            try await observable.apply(.advance)
+        let outcome = try await observable.apply(.advance)
+        if case .rejected = outcome {
+        } else {
+            Issue.record("Expected unavailable observable action")
         }
 
         #expect(observable.state == beforeFailure)
         #expect(await recorder.transitions.count == 2)
+    }
+
+    private func committed(
+        _ outcome: NestedComposedCounter.Live.Outcome
+    ) throws -> NestedComposedCounter.TransitionResult {
+        switch outcome {
+        case .committed(let result): return result
+        case .rejected, .failed: throw GeneratedMachineError.noMatchingSuccessor
+        }
+    }
+
+    private func actorState(
+        _ actor: NestedComposedCounter.Actor
+    ) async throws -> NestedComposedCounter.State {
+        switch try await actor.current() {
+        case .snapshot(let snapshot): return snapshot.state
+        case .unavailable(let reason): throw GeneratedMachineError.liveMachineUnavailable(reason)
+        }
     }
 }
 
@@ -958,14 +976,22 @@ struct GeneratedStateMachineTests {
         #expect(callbackCount.value == 0)
 
         let actor = ThreeParameterActionMachine.Actor(live: try ThreeParameterActionMachine.makeLive())
-        let actorBefore = await actor.state
-        do {
-            _ = try await actor.apply(.board(person: 2, elevator: 30, direction: 200))
+        let actorBefore = try await actorState(actor)
+        let outcome = try await actor.apply(.board(person: 2, elevator: 30, direction: 200))
+        if case .rejected = outcome {
+        } else {
             Issue.record("Expected rejected actor action")
-        } catch {
-            #expect(error is GeneratedMachineError)
         }
-        #expect(await actor.state == actorBefore)
+        #expect(try await actorState(actor) == actorBefore)
+    }
+
+    private func actorState(
+        _ actor: ThreeParameterActionMachine.Actor
+    ) async throws -> ThreeParameterActionMachine.State {
+        switch try await actor.current() {
+        case .snapshot(let snapshot): return snapshot.state
+        case .unavailable(let reason): throw GeneratedMachineError.liveMachineUnavailable(reason)
+        }
     }
 
     @Test("Removed fixed-arity action syntax does not type check")

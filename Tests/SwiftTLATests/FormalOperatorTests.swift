@@ -84,7 +84,7 @@ struct FormalOperatorTests {
       variables: [.init(name: "counter", initial: .int(0))],
       actions: [.init(
         name: "advance",
-        body: .assign("counter", .operatorApplication(lambda, [.value(.variable("counter"))])
+        body: .assign("counter", .operatorApplication(lambda, [.value(.variable("counter"))]))
       )],
       invariants: []
     )

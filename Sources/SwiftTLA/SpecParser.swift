@@ -294,8 +294,8 @@ public final class ParserSession {
               let process = call.arguments.dropFirst().first.map(\.expression).flatMap(decodeStateExpr)
         else { return nil }
         return .equal(
-            .functionApply(.variable("pc"), process),
-            .value(.string(label))
+            .functionApply(.programCounter, process),
+            .controlLocation(.init(label))
         )
     }
 
@@ -309,14 +309,14 @@ public final class ParserSession {
         else { return nil }
 
         if call.arguments.isEmpty {
-            return .equal(.variable("pc"), .value(.string("Done")))
+            return .equal(.programCounter, .controlLocation(.done))
         }
         guard call.arguments.count == 1,
               let process = call.arguments.first.map(\.expression).flatMap(decodeStateExpr)
         else { return nil }
         return .equal(
-            .functionApply(.variable("pc"), process),
-            .value(.string("Done"))
+            .functionApply(.programCounter, process),
+            .controlLocation(.done)
         )
     }
 
@@ -489,8 +489,8 @@ public final class ParserSession {
            let argument = finished.arguments.first?.expression,
            decodeTypedFacadeValue(argument, substitutions: [parameter: binding]) != nil {
             predicate = .equal(
-                .functionApply(.variable("pc"), binding),
-                .value(.string("Done"))
+                .functionApply(.programCounter, binding),
+                .controlLocation(.done)
             )
         } else {
             predicate = decodeTypedFacadeValue(bodySyntax, substitutions: [parameter: binding])
@@ -1687,7 +1687,7 @@ extension ParserSession {
                 ?? call.arguments.first?.expression.as(ClosureExprSyntax.self),
               let parameter = Self.collectionPredicateParameter(in: closure)
         else { return nil }
-        let member = generatedBinderName()
+        let member = parameter
         let rewrittenStatements = closure.statements.map { statement in
             PredicateValueRewriter(
                 parameter: parameter,

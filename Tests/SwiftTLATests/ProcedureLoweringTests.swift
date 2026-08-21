@@ -72,10 +72,13 @@ struct ProcedureLoweringTests {
         let spec = try AlgorithmLowerer.lower(model)
         let (compilation, initial) = try initialState(of: spec)
         let afterCall = try apply("start", in: compilation, to: initial)
-        #expect(try value(named: "pc", in: afterCall, compilation: compilation) == .string("procedure.work.enter"))
+        #expect(try value(named: "pc", in: afterCall, compilation: compilation) == .string("enter"))
         #expect(try value(named: "workValue", in: afterCall, compilation: compilation) == .int(7))
         #expect(try value(named: "workOffset", in: afterCall, compilation: compilation) == .int(1))
         #expect(try value(named: "stack", in: afterCall, compilation: compilation) != .tuple([]))
+        let rendered = try compilation.renderedTLAModuleBundle().tla
+        #expect(rendered.contains("pc' = \"enter\""))
+        #expect(rendered.contains("pc' = \"procedure.work.enter\"") == false)
 
         let afterReturn = try apply("procedure.work.enter", in: compilation, to: afterCall)
         #expect(try value(named: "output", in: afterReturn, compilation: compilation) == .int(8))
@@ -121,7 +124,7 @@ struct ProcedureLoweringTests {
         let (compilation, initial) = try initialState(of: spec)
         let inOuter = try apply("start", in: compilation, to: initial)
         let inInner = try apply("procedure.outer.enter", in: compilation, to: inOuter)
-        #expect(try value(named: "pc", in: inInner, compilation: compilation) == .string("procedure.inner.enter"))
+        #expect(try value(named: "pc", in: inInner, compilation: compilation) == .string("enter"))
         let outerStack = try value(named: "stack", in: inOuter, compilation: compilation)
         let innerStack = try value(named: "stack", in: inInner, compilation: compilation)
         #expect(innerStack == outerStack)
@@ -199,11 +202,11 @@ struct ProcedureLoweringTests {
         #expect(try functionValue("innerValue", key: .int(1), in: oneReturned, compilation: compilation) == .int(0))
         #expect(try functionValue("outerValue", key: .int(1), in: oneReturned, compilation: compilation) == .int(1))
         #expect(try functionValue("outerValue", key: .int(2), in: oneReturned, compilation: compilation) == .int(2))
-        #expect(try functionValue("pc", key: .int(1), in: oneReturned, compilation: compilation) == .string("procedure.outer.return"))
+        #expect(try functionValue("pc", key: .int(1), in: oneReturned, compilation: compilation) == .string("return"))
 
         let oneFinished = try apply("procedure.outer.return", process: .int(1), in: compilation, to: oneReturned)
         #expect(try functionValue("pc", key: .int(1), in: oneFinished, compilation: compilation) == .string("finished"))
-        #expect(try functionValue("pc", key: .int(2), in: oneFinished, compilation: compilation) == .string("procedure.outer.enter"))
+        #expect(try functionValue("pc", key: .int(2), in: oneFinished, compilation: compilation) == .string("enter"))
     }
 
     private func initialState(of spec: TLASpec) throws -> (CompiledSpecification, CompiledState) {

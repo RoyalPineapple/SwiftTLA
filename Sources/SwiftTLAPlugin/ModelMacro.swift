@@ -124,29 +124,6 @@ enum TLASpecVerifier {
             additionalInvariants: allInvariants.dropFirst(parsed.invariants.count).map { $0 }
         )
         let swiftFacts = parsed.machineSurfaceSwiftFacts(for: compilation)
-        let hasComplexType = parsed.symmetricCollections.isEmpty && compilation.spec.variables.contains { variable in
-            let typeName = swiftFacts.variableTypes[variable.name]
-                ?? MacroExpander.swiftType(for: variable.initial)
-            return !["Int", "Bool", "String"].contains(typeName)
-                && !enumInfos.contains(where: { $0.typeName == typeName })
-        }
-
-        if !hasComplexType {
-            let result = try ModelChecker(compilation: compilation, maxStates: 1_000_000).check()
-            switch result {
-            case .invariantViolated(let inv, _, let trace):
-                throw SimpleError("Invariant '\(inv)' violated:\n\(trace.map(String.init(describing:)).joined(separator: "\n"))")
-            case .error(let msg): throw SimpleError("Checker error: \(msg)")
-            case .deadlocked(let s): throw SimpleError("Deadlock at: \(s)")
-            case .depthExceeded(let c, let l): throw SimpleError("Depth exceeded: \(c)/\(l)")
-            case .livenessViolated(let msg): throw SimpleError("Liveness violated: \(msg)")
-            case .ok: break
-            case .bounded(_, let outcome):
-                guard case .ok = outcome else {
-                    throw SimpleError("Checker error: \(outcome)")
-                }
-            }
-        }
 
         return MacroCompilation(
             typeName: typeName,

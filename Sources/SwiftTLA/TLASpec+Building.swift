@@ -400,7 +400,8 @@ private func substituteInValue(_ value: TLAValue, constants: [ConstantDecl]) -> 
 private func substituteInState(_ expr: StateExpr, constants: [ConstantDecl]) -> StateExpr {
   switch expr {
   case .value(let v): return .value(substituteInValue(v, constants: constants))
-  case .variable: return expr
+  case .variable, .programCounter: return expr
+  case .controlLocation: return expr
   case .add(let a, let b):
     return .add(
       substituteInState(a, constants: constants), substituteInState(b, constants: constants))

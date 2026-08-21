@@ -444,6 +444,9 @@ func stateKey(_ expression: StateExpr, environment: [String: String], next: inou
     switch expression {
     case .value(let value): return "value(\(value))"
     case .variable(let name): return "var(\(environment[name] ?? name))"
+    case .programCounter: return "programCounter"
+    case .controlLocation(let reference):
+        return "control(\(reference.owner?.canonicalEncoding ?? "source"),\(reference.sourceName))"
     case .add(let a, let b): return pair("add", a, b)
     case .subtract(let a, let b): return pair("subtract", a, b)
     case .multiply(let a, let b): return pair("multiply", a, b)

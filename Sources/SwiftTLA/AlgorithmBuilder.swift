@@ -1685,7 +1685,7 @@ public func All<Value: FiniteDomainKey>(
 /// The program counter remains lowerer-owned; this avoids raw string-keyed
 /// inspection of generated control state.
 public func Finished() -> StateExpr {
-    .equal(.variable("pc"), .value(.string("Done")))
+    .equal(.programCounter, .controlLocation(.done))
 }
 
 /// True when one member of a process family has reached `Done`.
@@ -1693,16 +1693,16 @@ public func Finished() -> StateExpr {
 /// inspection of generated control state.
 public func Finished<Value: FiniteDomainKey>(_ process: WithValue<Value>) -> StateExpr {
     .equal(
-        .functionApply(.variable("pc"), process.stateExpr),
-        .value(.string("Done"))
+        .functionApply(.programCounter, process.stateExpr),
+        .controlLocation(.done)
     )
 }
 
 /// True when the current `Each` process has reached `Done`.
 public func Finished<Value: FiniteDomainKey>(_ process: ProcessIdentifier<Value>) -> StateExpr {
     .equal(
-        .functionApply(.variable("pc"), process.stateExpr),
-        .value(.string("Done"))
+        .functionApply(.programCounter, process.stateExpr),
+        .controlLocation(.done)
     )
 }
 
@@ -1715,8 +1715,8 @@ public func At<Label: PlusCalLabel & RawRepresentable, Value: FiniteDomainKey>(
     _ process: WithValue<Value>
 ) -> StateExpr where Label.RawValue == String {
     .equal(
-        .functionApply(.variable("pc"), process.stateExpr),
-        .value(.string(label.rawValue))
+        .functionApply(.programCounter, process.stateExpr),
+        .controlLocation(.init(label.rawValue))
     )
 }
 
@@ -1726,8 +1726,8 @@ public func At<Label: PlusCalLabel & RawRepresentable, Value: FiniteDomainKey>(
     _ process: ProcessIdentifier<Value>
 ) -> StateExpr where Label.RawValue == String {
     .equal(
-        .functionApply(.variable("pc"), process.stateExpr),
-        .value(.string(label.rawValue))
+        .functionApply(.programCounter, process.stateExpr),
+        .controlLocation(.init(label.rawValue))
     )
 }
 
