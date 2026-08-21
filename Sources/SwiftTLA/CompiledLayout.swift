@@ -469,8 +469,19 @@ struct BindingValidator {
         case .tupleAccess(let value, _), .recordAccess(let value, _):
             try validateExpression(value, at: path, scope: scope)
         case .recordLiteral(let values):
-            for (name, value) in values {
-                try validateExpression(value, at: "\(path).\(name)", scope: scope)
+            var names = Set<String>()
+            for field in values.fields {
+                guard names.insert(field.name).inserted else {
+                    throw CompilationDiagnostic(
+                        code: .duplicateRecordField,
+                        stage: .validation,
+                        path: "\(path).\(field.name)",
+                        expected: "one declaration for each record field",
+                        actual: "a repeated record field",
+                        nextSafeAction: "Give each record field a distinct name."
+                    )
+                }
+                try validateExpression(field.value, at: "\(path).\(field.name)", scope: scope)
             }
         case .except(let function, let key, let value):
             try validateExpression(function, at: "\(path).function", scope: scope)

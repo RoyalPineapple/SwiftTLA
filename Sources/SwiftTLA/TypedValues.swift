@@ -103,7 +103,7 @@ public struct Record<Schema: TLARecordSchema>: TLAValueType, Hashable, Sendable 
       Set(names) == Schema.fieldNames,
       "\(Schema.self) record literal must contain every declared field")
     return Expr(
-      .recordLiteral(Dictionary(uniqueKeysWithValues: fields.map { ($0.name, $0.value) })))
+      StateExpr.record(Dictionary(uniqueKeysWithValues: fields.map { ($0.name, $0.value) })))
   }
 }
 

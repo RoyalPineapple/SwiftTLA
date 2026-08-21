@@ -8,7 +8,7 @@ func recordMessage(_ fields: [String: String]) -> TLAValue {
     }
 
 func recordMessageExpr(_ fields: [String: StateExpr]) -> StateExpr {
-        .recordLiteral(fields)
+        StateExpr.record(fields)
     }
 
 func coffeeCans(maxBeanCount: Int) -> [TLAValue] {

@@ -582,6 +582,39 @@ struct CompilerPipelineCanonicalizationTests {
         #expect(record.fields.map(\.name) == ["a", "z"])
     }
 
+    @Test("source record expressions have canonical field order")
+    func sourceRecordExpressionsHaveCanonicalFieldOrder() {
+        let record = StateRecordExpression([
+            .init(name: "z", value: .int(1)),
+            .init(name: "a", value: .int(2))
+        ])
+
+        #expect(record.fields.map(\.name) == ["a", "z"])
+    }
+
+    @Test("duplicate source record fields fail compilation")
+    func duplicateSourceRecordFieldsFailCompilation() {
+        let record = StateRecordExpression([
+            .init(name: "value", value: .int(1)),
+            .init(name: "value", value: .int(2))
+        ])
+        let spec = TLASpec(
+            name: "DuplicateRecordField",
+            variables: [],
+            actions: [.init(name: "step", body: .guard_(.equal(.recordLiteral(record), .recordLiteral(record)))],
+            invariants: []
+        )
+
+        do {
+            _ = try spec.compile()
+            Issue.record("Expected a duplicate record field diagnostic")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.code == .duplicateRecordField)
+        } catch {
+            Issue.record("Expected a duplicate record field diagnostic, received \(error)")
+        }
+    }
+
     @Test("compiled evaluator executes local operators through bound values")
     func compiledEvaluatorExecutesLocalOperators() throws {
         let expression = StateExpr.letIn(

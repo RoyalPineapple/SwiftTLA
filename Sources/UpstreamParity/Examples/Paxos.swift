@@ -28,7 +28,7 @@ private func paxosSpec() -> TLASpec {
     let initFunc: TLAValue = .function(["a1": sentinel])
     let initValFunc: TLAValue = .function(["a1": none])
 
-    func rec(_ fields: [String: StateExpr]) -> StateExpr { .recordLiteral(fields) }
+    func rec(_ fields: [String: StateExpr]) -> StateExpr { StateExpr.record(fields) }
     func sv(_ str: String) -> StateExpr { .value(.string(str)) }
 
     func msg1a(_ b: Int) -> StateExpr { rec(["type": sv("1a"), "bal": .value(.int(b))]) }

@@ -128,7 +128,7 @@ public enum ZSequences {
         .equal(sequence, .tupleLiteral([])),
         .setLiteral([]),
         .setMap(
-          .recordLiteral([
+          StateExpr.record([
             "shift": .variable(shift),
             "seq": .recursiveCall("Rotation", [sequence, .variable(shift)])
           ]),

@@ -577,7 +577,7 @@ enum AlgorithmLowerer {
             + procedureSlots(procedures).map { ($0.root, StateExpr.variable($0.root)) }
         let push = ActionExpr.assign(
             stackVariable,
-            .tupleConcatenate(.tupleLiteral([.recordLiteral(Dictionary(uniqueKeysWithValues: frameFields))]), .variable(stackVariable))
+            .tupleConcatenate(.tupleLiteral([StateExpr.record(Dictionary(uniqueKeysWithValues: frameFields))]), .variable(stackVariable))
         )
         let parameterAssignments = zip(procedure.parameters, arguments).map {
             ActionExpr.assign($0.0.root, $0.1)
@@ -646,7 +646,7 @@ enum AlgorithmLowerer {
             .except(
                 .variable(stackVariable),
                 process,
-                .tupleConcatenate(.tupleLiteral([.recordLiteral(Dictionary(uniqueKeysWithValues: frameFields))]), stack)
+                .tupleConcatenate(.tupleLiteral([StateExpr.record(Dictionary(uniqueKeysWithValues: frameFields))]), stack)
             )
         )
         let parameterAssignments = zip(procedure.parameters, arguments).map {
@@ -1142,7 +1142,10 @@ enum AlgorithmLowerer {
             case .tupleHead(let tuple): return .tupleHead(rewritten(tuple, localRoots: localRoots))
             case .tupleTail(let tuple): return .tupleTail(rewritten(tuple, localRoots: localRoots))
             case .tupleConcatenate(let lhs, let rhs): return .tupleConcatenate(rewritten(lhs, localRoots: localRoots), rewritten(rhs, localRoots: localRoots))
-            case .recordLiteral(let fields): return .recordLiteral(fields.mapValues { rewritten($0, localRoots: localRoots) })
+            case .recordLiteral(let fields):
+                return .recordLiteral(.init(fields.fields.map {
+                    .init(name: $0.name, value: rewritten($0.value, localRoots: localRoots))
+                }))
             case .recordAccess(let record, let field): return .recordAccess(rewritten(record, localRoots: localRoots), field)
             case .domain(let function): return .domain(rewritten(function, localRoots: localRoots))
             case .functionLiteral(let domain, let variable, let body):

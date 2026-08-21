@@ -408,8 +408,8 @@ enum MacroExpander {
         case .integerRange(let lower, let upper): return "StateExpr.integerRange(\(cg(lower)), \(cg(upper)))"
         case .tupleLiteral(let es): return "StateExpr.tupleLiteral([\(es.map(cg).joined(separator: ", "))])"
         case .recordLiteral(let fs):
-            let fields = fs.map { "\"\($0.key)\": \(cg($0.value))" }.joined(separator: ", ")
-            return "StateExpr.recordLiteral([\(fields)])"
+            let fields = fs.fields.map { "\"\($0.name)\": \(cg($0.value))" }.joined(separator: ", ")
+            return "StateExpr.record([\(fields)])"
         case .setLiteral(let es): return "StateExpr.setLiteral([\(es.map(cg).joined(separator: ", "))])"
         case .functionLiteral(let d, let qv, let b): return "StateExpr.functionLiteral(\(cg(d)), \"\(qv)\", \(cg(b)))"
         case .functionSet(let domain, let range):

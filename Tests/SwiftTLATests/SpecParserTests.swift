@@ -1313,7 +1313,7 @@ private enum ParserNode: String, FiniteDomainKey {
     @Test func parseStaticRecord() {
         #expect(
             SpecParser.decodeStateExpr(parseExpression("StateExpr.record(name: x, age: 42)"))
-                == StateExpr.recordLiteral(["name": .variable("x"), "age": .value(.int(42))])
+                == StateExpr.record(["name": .variable("x"), "age": .value(.int(42))])
         )
     }
 

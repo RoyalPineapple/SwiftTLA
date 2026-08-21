@@ -8,10 +8,10 @@ public struct LamportMutexModel: Sendable {
         let nodes = Array(1...N)
 
         func reqMsg(_ c: Int) -> StateExpr {
-            .recordLiteral(["type": .value(.string("req")), "clock": .value(.int(c))])
+            StateExpr.record(["type": .value(.string("req")), "clock": .value(.int(c))])
         }
-        let ackMsg: StateExpr = .recordLiteral(["type": .value(.string("ack")), "clock": .value(.int(0))])
-        let relMsg: StateExpr = .recordLiteral(["type": .value(.string("rel")), "clock": .value(.int(0))])
+        let ackMsg: StateExpr = StateExpr.record(["type": .value(.string("ack")), "clock": .value(.int(0))])
+        let relMsg: StateExpr = StateExpr.record(["type": .value(.string("rel")), "clock": .value(.int(0))])
 
         let dict: [TLAValue: TLAValue] = [
             .int(1): TLAValue.function([.int(1): 0, .int(2): 0]),
