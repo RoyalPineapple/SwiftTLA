@@ -342,7 +342,7 @@ extension ParserSession {
             } else if resolveVarCall(call) != nil {
                 containsVariableConstructor = true
             } else if let value = decodeTypedFacadeValue(
-                call,
+                ExprSyntax(call),
                 scope: typedFacadeScope(.empty, bindings: result.sourceValues.keys.sorted().compactMap { name in
                     result.sourceValues[name].map { (name, $0) }
                 })
