@@ -330,7 +330,7 @@ struct CompilerPipelineCanonicalizationTests {
         )
         let compilation = try spec.compile()
         let state = try CompiledState(formalValues: [.int(0), .int(0)], compilation: compilation)
-        let nextStates = try CompiledActionEnumerator(state: state, model: compilation.model)
+        let nextStates = try CompiledActionEnumerator(state: state, model: compilation.model, layout: compilation.layout)
             .enumerate(try #require(compilation.model.actions.first))
 
         #expect(nextStates.count == 1)
@@ -354,7 +354,7 @@ struct CompilerPipelineCanonicalizationTests {
         )
         let compilation = try spec.compile()
         let state = try CompiledState(formalValues: [.int(0)], compilation: compilation)
-        let next = try CompiledActionEnumerator(state: state, model: compilation.model)
+        let next = try CompiledActionEnumerator(state: state, model: compilation.model, layout: compilation.layout)
             .enumerate(try #require(compilation.model.actions.first))
 
         let values = try next.map { try $0.value(for: .init(ordinal: 0)) }
@@ -385,7 +385,7 @@ struct CompilerPipelineCanonicalizationTests {
         )
         let compilation = try spec.compile()
         let state = try CompiledState(formalValues: [.int(0)], compilation: compilation)
-        let next = try CompiledActionEnumerator(state: state, model: compilation.model)
+        let next = try CompiledActionEnumerator(state: state, model: compilation.model, layout: compilation.layout)
             .enumerate(try #require(compilation.model.actions.first))
 
         guard case .assign(_, .operatorApplication(.reference(let id, _), _)) = compilation.model.actions[0].body else {
@@ -433,7 +433,7 @@ struct CompilerPipelineCanonicalizationTests {
         )
         let compilation = try spec.compile()
         let state = try CompiledState(formalValues: [.int(0)], compilation: compilation)
-        let next = try CompiledActionEnumerator(state: state, model: compilation.model)
+        let next = try CompiledActionEnumerator(state: state, model: compilation.model, layout: compilation.layout)
             .enumerate(try #require(compilation.model.actions.first))
 
         #expect(try #require(next.first).value(for: .init(ordinal: 0)) == .integer(6))
@@ -585,6 +585,7 @@ struct CompilerPipelineCanonicalizationTests {
         let result = try CompiledEvaluator(
             state: state,
             model: compilation.model,
+            layout: compilation.layout,
             bindings: .init().binding(.integer(1), to: binder)
         ).evaluate(expression)
 
@@ -592,13 +593,19 @@ struct CompilerPipelineCanonicalizationTests {
     }
 
     @Test("compiled record expressions have canonical field order")
-    func compiledRecordExpressionsHaveCanonicalFieldOrder() {
-        let record = CompiledRecordExpression([
-            .init(name: "z", value: .value(.int(1))),
-            .init(name: "a", value: .value(.int(2)))
+    func compiledRecordExpressionsHaveCanonicalFieldOrder() throws {
+        let record = StateRecordExpression([
+            .init(name: "z", value: .int(1)),
+            .init(name: "a", value: .int(2))
         ])
+        let compilation = try TLASpec(
+            name: "RecordFields",
+            variables: [],
+            actions: [.init(name: "step", body: .guard_(.equal(.recordLiteral(record), .recordLiteral(record)))],
+            invariants: []
+        ).compile()
 
-        #expect(record.fields.map(\.name) == ["a", "z"])
+        #expect(compilation.layout.fields.map(\.renderedName) == ["a", "z"])
     }
 
     @Test("source record expressions have canonical field order")
@@ -653,7 +660,7 @@ struct CompilerPipelineCanonicalizationTests {
             Issue.record("Expected a compiled guard")
             return
         }
-        #expect(try CompiledEvaluator(state: state, model: compilation.model).evaluate(compiled) == .boolean(true))
+        #expect(try CompiledEvaluator(state: state, model: compilation.model, layout: compilation.layout).evaluate(compiled) == .boolean(true))
     }
 
     @Test("compiled actions update formal state by variable identity")
@@ -667,10 +674,33 @@ struct CompilerPipelineCanonicalizationTests {
         let compilation = try spec.compile()
         let state = try CompiledState(formalValues: [.int(1)], compilation: compilation)
 
-        let successors = try CompiledActionEnumerator(state: state, model: compilation.model).enumerate(compilation.model.actions[0])
+        let successors = try CompiledActionEnumerator(
+            state: state,
+            model: compilation.model,
+            layout: compilation.layout
+        ).enumerate(compilation.model.actions[0])
 
         #expect(successors.count == 1)
         #expect(try successors[0].value(for: compilation.layout.variables[0].id) == .integer(2))
+    }
+
+    @Test("compiled record access uses a field identity")
+    func compiledRecordAccessUsesFieldIdentity() throws {
+        let spec = TLASpec(
+            name: "CompiledRecordAccess",
+            variables: [.init(name: "state", initial: .record(["count": .int(1)]))],
+            actions: [.init(name: "step", body: .guard_(.equal(.recordAccess(.variable("state"), "count"), .int(1)))],
+            invariants: []
+        )
+        let compilation = try spec.compile()
+
+        guard case .guard_(.equal(.recordAccess(_, let field), _)) = compilation.model.actions[0].body else {
+            Issue.record("Expected a compiled record access")
+            return
+        }
+        #expect(compilation.layout.field(field)?.renderedName == "count")
+        let initial = try #require(try CompiledRuntime(compilation: compilation).initialStates().first)
+        #expect(try CompiledRuntime(compilation: compilation).successors(from: initial).count == 1)
     }
 
     @Test("declaration order changes the compilation identity")

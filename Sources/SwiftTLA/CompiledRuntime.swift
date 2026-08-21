@@ -17,7 +17,7 @@ struct CompiledRuntime {
             guard let initializer = model.variableInitializers[variable.id] else { continue }
             guard let set = initializer.lazySet ?? initializer.initialSet else { continue }
             states = try states.flatMap { state in
-                guard case .set(let values) = try CompiledEvaluator(state: state, model: model).evaluate(set) else {
+                guard case .set(let values) = try CompiledEvaluator(state: state, model: model, layout: layout).evaluate(set) else {
                     throw EvalError.typeMismatch("Variable initialization requires a set")
                 }
                 return try CompiledValue.sorted(values).map { value in
@@ -33,7 +33,7 @@ struct CompiledRuntime {
             states = try states.map { state in
                 try state.updating(
                     variable.id,
-                    to: CompiledEvaluator(state: state, model: model).evaluate(expression)
+                    to: CompiledEvaluator(state: state, model: model, layout: layout).evaluate(expression)
                 )
             }
         }
@@ -61,7 +61,7 @@ struct CompiledRuntime {
         guard let action = model.actions.first(where: { $0.id == actionID }) else {
             throw CompiledEvaluationError.unresolvedOperator
         }
-        return try CompiledActionEnumerator(state: state, model: model, enabledActions: enabledActions)
+        return try CompiledActionEnumerator(state: state, model: model, layout: layout, enabledActions: enabledActions)
             .enumerateResults(action)
             .filter { successor in try constraintHolds(in: successor.state) }
             .map { .init(action: actionID, arguments: $0.arguments, state: $0.state) }
@@ -116,7 +116,7 @@ struct CompiledRuntime {
     private func enabledActions(in state: CompiledState) throws -> Set<ActionID> {
         var result = Set<ActionID>()
         for action in model.actions {
-            if try !CompiledActionEnumerator(state: state, model: model).enumerate(action).isEmpty {
+            if try CompiledActionEnumerator(state: state, model: model, layout: layout).enumerate(action).isEmpty == false {
                 result.insert(action.id)
             }
         }
@@ -131,6 +131,7 @@ struct CompiledRuntime {
         guard case .boolean(let result) = try CompiledEvaluator(
             state: state,
             model: model,
+            layout: layout,
             enabledActions: enabledActions
         ).evaluate(expression) else {
             throw EvalError.typeMismatch("Expected a boolean")

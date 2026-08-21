@@ -24,12 +24,14 @@ public struct CompiledActionExecutor<Label: Hashable & Sendable>: Sendable {
     ) throws -> [TLAStateProjection] {
         let formalState = try CompiledState(projection: state, compilation: compilation)
         let compiledAction = try compiledAction(for: action)
-        let expectedArguments = arguments(action).map(CompiledValue.init(formal:))
-        guard argumentSets(for: compiledAction).contains(expectedArguments) else {
+        let expectedArguments = try arguments(action).map { try CompiledValue(formal: $0, using: compilation.layout) }
+        guard try argumentSets(for: compiledAction).contains(expectedArguments) else {
             throw GeneratedMachineError.noMatchingSuccessor
         }
         return try runtime.successors(for: compiledAction.id, from: formalState)
-            .filter { $0.arguments.map(CompiledValue.init(formal:)) == expectedArguments }
+            .filter { successor in
+                try successor.arguments.map { try CompiledValue(formal: $0, using: compilation.layout) } == expectedArguments
+            }
             .map { try $0.state.projection(using: compilation.layout) }
     }
 
@@ -55,9 +57,13 @@ public struct CompiledActionExecutor<Label: Hashable & Sendable>: Sendable {
         return action
     }
 
-    private func argumentSets(for action: CompiledAction) -> [[CompiledValue]] {
-        action.bindings.reduce([[]]) { arguments, binding in
-            arguments.flatMap { prefix in binding.values.map { prefix + [.init(formal: $0)] } }
+    private func argumentSets(for action: CompiledAction) throws -> [[CompiledValue]] {
+        try action.bindings.reduce([[]]) { arguments, binding in
+            try arguments.flatMap { prefix in
+                try binding.values.map { value in
+                    prefix + [try .init(formal: value, using: compilation.layout)]
+                }
+            }
         }
     }
 

@@ -17,6 +17,7 @@ enum EvalError: Error, CustomStringConvertible {
 struct CompiledEvaluator {
     let state: CompiledState
     let model: CompiledModel
+    let layout: CompiledLayout
     let bindings: CompiledBindings
     let enabledActions: Set<ActionID>
     let localOperators: [OperatorID: CompiledLocalOperator]
@@ -26,6 +27,7 @@ struct CompiledEvaluator {
     init(
         state: CompiledState,
         model: CompiledModel,
+        layout: CompiledLayout,
         bindings: CompiledBindings = .init(),
         enabledActions: Set<ActionID> = [],
         localOperators: [OperatorID: CompiledLocalOperator] = [:],
@@ -34,6 +36,7 @@ struct CompiledEvaluator {
     ) {
         self.state = state
         self.model = model
+        self.layout = layout
         self.bindings = bindings
         self.enabledActions = enabledActions
         self.localOperators = localOperators
@@ -67,7 +70,7 @@ struct CompiledEvaluator {
 
         switch expression {
         case .value(let value):
-            return .init(formal: value)
+            return try .init(formal: value, using: layout)
         case .stateVariable(let variable):
             return try state.value(for: variable)
         case .boundValue(let binder):
@@ -234,11 +237,11 @@ struct CompiledEvaluator {
             return .tuple(left + right)
         case .recordLiteral(let fields):
             return .record(CompiledRecord(try fields.fields.map {
-                .init(name: $0.name, value: try value($0.value))
+                .init(id: $0.id, value: try value($0.value))
             }))
         case .recordAccess(let record, let field):
-            guard case .record(let values) = try value(record), let result = values.value(named: field) else {
-                throw EvalError.typeMismatch("Expected record field \(field)")
+            guard case .record(let values) = try value(record), let result = values.value(for: field) else {
+                throw EvalError.typeMismatch("Expected record field \(field.ordinal)")
             }
             return result
         case .domain(let function):
@@ -246,7 +249,12 @@ struct CompiledEvaluator {
             case .function(let values):
                 return .set(Set(values.keys))
             case .record(let values):
-                return .set(Set(values.fields.map { .string($0.name) }))
+                return .set(try Set(values.fields.map { field in
+                    guard let name = layout.field(field.id)?.renderedName else {
+                        throw CompiledEvaluationError.invalidFieldID(field.id)
+                    }
+                    return .string(name)
+                }))
             case .tuple(let values):
                 return .set(Set((1...values.count).map(CompiledValue.integer)))
             default:
@@ -276,7 +284,10 @@ struct CompiledEvaluator {
                 }
                 return values[index - 1]
             case .record(let values):
-                guard case .string(let field) = key, let result = values.value(named: field) else {
+                guard case .string(let name) = key,
+                      let field = layout.fieldID(named: name),
+                      let result = values.value(for: field)
+                else {
                     throw EvalError.typeMismatch("Record field is unavailable")
                 }
                 return result
@@ -290,7 +301,9 @@ struct CompiledEvaluator {
                 values[try value(key)] = replacementValue
                 return .function(values)
             case .record(let values):
-                guard case .string(let field) = try value(key) else {
+                guard case .string(let name) = try value(key),
+                      let field = layout.fieldID(named: name)
+                else {
                     throw EvalError.typeMismatch("Expected a record field")
                 }
                 return .record(values.replacing(replacementValue, for: field))
@@ -405,6 +418,7 @@ struct CompiledEvaluator {
                 return try CompiledEvaluator(
                     state: state,
                     model: model,
+                    layout: layout,
                     bindings: callBindings,
                     enabledActions: enabledActions,
                     localOperators: localOperators,
@@ -442,6 +456,7 @@ struct CompiledEvaluator {
                 return try CompiledEvaluator(
                     state: state,
                     model: model,
+                    layout: layout,
                     bindings: callBindings,
                     enabledActions: enabledActions,
                     localOperators: localOperators,
@@ -459,6 +474,7 @@ struct CompiledEvaluator {
             return try CompiledEvaluator(
                 state: state,
                 model: model,
+                layout: layout,
                 bindings: bindings,
                 enabledActions: enabledActions,
                 localOperators: nested,
@@ -480,6 +496,7 @@ struct CompiledEvaluator {
                 if let domain = operation.domain, case .boolean(false) = try CompiledEvaluator(
                     state: state,
                     model: model,
+                    layout: layout,
                     bindings: callBindings,
                     enabledActions: enabledActions,
                     localOperators: localOperators,
@@ -491,6 +508,7 @@ struct CompiledEvaluator {
                 return try CompiledEvaluator(
                     state: state,
                     model: model,
+                    layout: layout,
                     bindings: callBindings,
                     enabledActions: enabledActions,
                     localOperators: localOperators,
@@ -509,6 +527,7 @@ struct CompiledEvaluator {
                 return try CompiledEvaluator(
                     state: state,
                     model: model,
+                    layout: layout,
                     bindings: callBindings,
                     enabledActions: enabledActions,
                     localOperators: localOperators,
@@ -532,7 +551,7 @@ package func evaluateClosed(_ expression: StateExpr) throws -> TLAValue {
     guard let invariant = compilation.model.invariants.first else {
         throw CompiledEvaluationError.unresolvedOperator
     }
-    return try CompiledEvaluator(state: state, model: compilation.model)
+    return try CompiledEvaluator(state: state, model: compilation.model, layout: compilation.layout)
         .evaluate(invariant.body)
         .rendered(using: compilation.layout)
 }
