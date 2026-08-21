@@ -6,10 +6,20 @@ public struct StateGraph: Sendable {
         public let arguments: [TLAValue]
         let actionOrdinal: Int?
 
+        public init(_ formalActionCall: FormalActionCall) {
+            self.action = formalActionCall.name
+            self.arguments = formalActionCall.arguments
+            self.actionOrdinal = nil
+        }
+
         init(action: ActionID, formalName: String, arguments: [TLAValue]) {
             self.action = formalName
             self.arguments = arguments
             self.actionOrdinal = action.ordinal
+        }
+
+        var actionID: ActionID? {
+            actionOrdinal.map(ActionID.init(ordinal:))
         }
 
         public var description: String {

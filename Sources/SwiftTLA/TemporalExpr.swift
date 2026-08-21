@@ -61,13 +61,6 @@ public enum FairnessCondition: Hashable, Sendable, CustomStringConvertible {
         }
     }
 
-    internal var actionIdentity: String {
-        switch self {
-        case .weakFairness(let action), .strongFairness(let action): action
-        case .weakFairnessActionCall(let action), .strongFairnessActionCall(let action): action.description
-        }
-    }
-
     internal var isStrong: Bool {
         switch self {
         case .strongFairness, .strongFairnessActionCall: true
