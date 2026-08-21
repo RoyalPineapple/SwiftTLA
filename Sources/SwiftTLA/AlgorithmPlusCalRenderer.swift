@@ -40,7 +40,7 @@ internal struct AuthoredPlusCalModule: Sendable {
     let algorithm: AlgorithmModel
     let defineDeclarations: [String]
     let postTranslationDeclarations: [String]
-    let refinements: [RefinementDecl]
+    let refinements: [String]
 
     var supportDeclarations: [String] {
         constants
@@ -162,7 +162,7 @@ internal struct AlgorithmPlusCalRenderer {
             lines.append("StateConstraint == \(constraints.map { "(\($0))" }.joined(separator: " /\\ "))")
         }
         lines += module.postTranslationDeclarations
-        lines += module.refinements.map(\.renderedFormalDeclaration)
+        lines += module.refinements
         lines.append("====")
         return lines.joined(separator: "\n") + "\n"
     }

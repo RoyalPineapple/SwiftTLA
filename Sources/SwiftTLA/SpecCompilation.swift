@@ -617,7 +617,9 @@ public extension TLASpec {
             }
             moduleSectionPlans[entry.module.name] = sectionPlan
         }
-        let authoredPlusCalModule = try authoredPlusCalModule()
+        let formalRenderer = CompiledTLARenderer(layout: layout, bindings: bindings)
+        let renderedRefinements = try compiledRefinements.map { try formalRenderer.refinement($0) }
+        let authoredPlusCalModule = try authoredPlusCalModule(renderedRefinements: renderedRefinements)
         return CompiledSpecification(
             spec: self,
             formalModuleClosure: closure,

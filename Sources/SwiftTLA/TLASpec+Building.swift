@@ -172,7 +172,7 @@ extension TLASpec {
     return lowered
   }
 
-  func authoredPlusCalModule() throws -> AuthoredPlusCalModule? {
+  func authoredPlusCalModule(renderedRefinements: [String]) throws -> AuthoredPlusCalModule? {
     guard sourceAlgorithms.count == 1, let algorithm = sourceAlgorithms.first else {
       return nil
     }
@@ -188,7 +188,7 @@ extension TLASpec {
       algorithm: algorithm.model,
       defineDeclarations: declarationSections.define,
       postTranslationDeclarations: [],
-      refinements: refinements
+      refinements: renderedRefinements
     )
     let renderer = AlgorithmPlusCalRenderer(module: declarationPlan)
     let sourceProperties = try renderer.sourcePropertyDefinitions()
@@ -226,7 +226,7 @@ extension TLASpec {
       defineDeclarations: declarationSections.define,
       postTranslationDeclarations: (sourceProperties + topLevelProperties).map(\.definition)
         + authoredPlusCalSymmetry,
-      refinements: refinements
+      refinements: renderedRefinements
     )
     return module
   }
