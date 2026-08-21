@@ -108,7 +108,7 @@ enum MacroExpander {
             actions: plan.actions,
             collectionActions: plan.collectionActions,
             symmetricCollections: Dictionary(uniqueKeysWithValues: plan.symmetricCollections.map { ($0.formalName, $0) })
-        ).map(DeclSyntax.init))
+        ))
         decls.append(contentsOf: generateCompilationIdentityCheck(model: model))
         decls.append(DeclSyntax(stringLiteral: """
         public static func makeMachine() throws -> Self {
@@ -310,14 +310,15 @@ enum MacroExpander {
         func quoted(_ value: String) -> String { String(reflecting: value) }
         func dictionary(_ values: [String: String]) -> String {
             guard !values.isEmpty else { return "[:]" }
-            return "[" + values.keys.sorted().map { "\(quoted($0)): \(quoted(values[$0]!))" }.joined(separator: ", ") + "]"
+            return "[" + values.sorted { $0.key < $1.key }
+                .map { "\(quoted($0.key)): \(quoted($0.value))" }
+                .joined(separator: ", ") + "]"
         }
-        let actionBindings = facts.actionBindingTypes.isEmpty ? "[:]" : "[" + facts.actionBindingTypes.keys.sorted().map { action in
-            "\(quoted(action)): \(dictionary(facts.actionBindingTypes[action]!))"
+        let actionBindings = facts.actionBindingTypes.isEmpty ? "[:]" : "[" + facts.actionBindingTypes.sorted { $0.key < $1.key }.map { action in
+            "\(quoted(action.key)): \(dictionary(action.value))"
         }.joined(separator: ", ") + "]"
-        let collections = facts.symmetricCollections.isEmpty ? "[:]" : "[" + facts.symmetricCollections.keys.sorted().map { name in
-            let fact = facts.symmetricCollections[name]!
-            return "\(quoted(name)): .init(elementType: \(quoted(fact.elementType)), valueType: \(quoted(fact.valueType)))"
+        let collections = facts.symmetricCollections.isEmpty ? "[:]" : "[" + facts.symmetricCollections.sorted { $0.key < $1.key }.map { collection in
+            "\(quoted(collection.key)): .init(elementType: \(quoted(collection.value.elementType)), valueType: \(quoted(collection.value.valueType)))"
         }.joined(separator: ", ") + "]"
         return "MachineSurfaceSwiftFacts(variableTypes: \(dictionary(facts.variableTypes)), actionBindingTypes: \(actionBindings), symmetricCollections: \(collections), collectionActions: \(dictionary(facts.collectionActions)))"
     }
@@ -804,8 +805,8 @@ extension MacroExpander {
         actions: [MachineSurfacePlan.Action],
         collectionActions: [String: String],
         symmetricCollections: [String: MachineSurfacePlan.SymmetricCollection]
-    ) -> [FunctionDeclSyntax] {
-        let methods = actions.map { action -> FunctionDeclSyntax in
+    ) -> [DeclSyntax] {
+        let methods = actions.map { action -> DeclSyntax in
             if action.bindings.isEmpty,
                let collectionName = collectionActions[action.formalName],
                let collection = symmetricCollections[collectionName] {
@@ -859,7 +860,7 @@ extension MacroExpander {
                     )
                 }
                 """
-                return DeclSyntax(stringLiteral: source).as(FunctionDeclSyntax.self)!
+                return DeclSyntax(stringLiteral: source)
             }
             let bindings = action.bindings.filter(\.isPublic)
             let parameters = bindings.map { binding in
@@ -873,7 +874,7 @@ extension MacroExpander {
                     try apply(.\(action.swiftIdentifier))
                 }
                 """
-                return DeclSyntax(stringLiteral: source).as(FunctionDeclSyntax.self)!
+                return DeclSyntax(stringLiteral: source)
             }
             let modifier = isActor ? "fileprivate" : "public mutating"
             let source = """
@@ -881,7 +882,7 @@ extension MacroExpander {
                 try apply(.\(action.swiftIdentifier)\(labels.isEmpty ? "" : "(\(labels))"))
             }
             """
-            return DeclSyntax(stringLiteral: source).as(FunctionDeclSyntax.self)!
+            return DeclSyntax(stringLiteral: source)
         }
         return methods
     }
