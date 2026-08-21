@@ -73,7 +73,7 @@ extension MacroExpander {
                 private let _owner: TLALiveMachineOwner<\(actionType)>
                 private let _handle: TLALiveMachine<\(actionType)>
 
-                private init() throws {
+                fileprivate init() throws {
                     let owner = try \(typeName)._makeLiveOwner()
                     _owner = owner
                     _handle = owner.handle

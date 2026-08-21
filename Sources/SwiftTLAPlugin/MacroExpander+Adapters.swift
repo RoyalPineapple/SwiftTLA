@@ -46,10 +46,10 @@ extension MacroExpander {
         let actionType = model.machineSurface.actions.isEmpty ? "Never" : "ActionLabel"
         var declarations = commonAdapterAliases(model: model) + observableCallbacks(model: model)
         declarations += [
-            DeclSyntax(stringLiteral: "private let _live: Live"),
-            DeclSyntax(stringLiteral: "private let _reducer: TLALiveMachineObservableReducer<State, \(actionType)>"),
-            DeclSyntax(stringLiteral: "private let _subscription: TLALiveMachineObservationSubscription<\(actionType)>"),
-            DeclSyntax(stringLiteral: "private var _observationTask: Task<Void, Never>?"),
+            DeclSyntax(stringLiteral: "@MainActor private let _live: Live"),
+            DeclSyntax(stringLiteral: "@MainActor private let _reducer: TLALiveMachineObservableReducer<State, \(actionType)>"),
+            DeclSyntax(stringLiteral: "@MainActor private let _subscription: TLALiveMachineObservationSubscription<\(actionType)>"),
+            DeclSyntax(stringLiteral: "@MainActor private var _observationTask: Task<Void, Never>?"),
             DeclSyntax(stringLiteral: """
             @MainActor public init(live: Live) async throws {
                 _live = live
@@ -58,11 +58,13 @@ extension MacroExpander {
                     schemaIdentifier: live.schema.identifier,
                     decode: { try State(projection: $0) }
                 )
+                let subscription: TLALiveMachineObservationSubscription<\(actionType)>
                 switch await live._observe() {
-                case .attached(let subscription): _subscription = subscription
+                case .attached(let attachment): subscription = attachment
                 case .unavailable(let reason): throw GeneratedMachineError.liveMachineUnavailable(reason)
                 }
-                _observationTask = Task { [weak self, subscription = _subscription] in
+                _subscription = subscription
+                _observationTask = Task { [weak self, subscription] in
                     var iterator = subscription.makeAsyncIterator()
                     while let event = await iterator.next() {
                         guard let self else { return }
@@ -72,26 +74,31 @@ extension MacroExpander {
             }
             """),
             DeclSyntax(stringLiteral: "deinit { _observationTask?.cancel() }"),
-            DeclSyntax(stringLiteral: "public var identity: TLALiveMachineIdentity { _live.identity }"),
-            DeclSyntax(stringLiteral: "public var status: TLALiveMachineAdapterStatus { _reducer.status }"),
-            DeclSyntax(stringLiteral: "public var current: TLALiveMachineAdapterSnapshot<State>? { _reducer.current }"),
-            DeclSyntax(stringLiteral: "public var state: State? { _reducer.current?.state }"),
+            DeclSyntax(stringLiteral: "@MainActor public var identity: TLALiveMachineIdentity { _live.identity }"),
+            DeclSyntax(stringLiteral: "@MainActor public var status: TLALiveMachineAdapterStatus { _reducer.status }"),
+            DeclSyntax(stringLiteral: "@MainActor public var current: TLALiveMachineAdapterSnapshot<State>? { _reducer.current }"),
+            DeclSyntax(stringLiteral: "@MainActor public var state: State? { _reducer.current?.state }"),
             DeclSyntax(stringLiteral: """
-            public func cancelObservation() async {
+            @MainActor public func cancelObservation() async {
                 _observationTask?.cancel()
                 await _subscription.cancel()
             }
             """),
             DeclSyntax(stringLiteral: observableReducerMethod(model: model))
         ]
-        declarations += typedAdapterExecution(model: model, receiver: "_live")
+        declarations += typedAdapterExecution(model: model, receiver: "_live", actorIsolated: true)
         return declarations
     }
 
-    static func typedAdapterExecution(model: MacroCompilation, receiver: String) -> [DeclSyntax] {
+    static func typedAdapterExecution(
+        model: MacroCompilation,
+        receiver: String,
+        actorIsolated: Bool = false
+    ) -> [DeclSyntax] {
         guard model.machineSurface.actions.isEmpty == false else { return [] }
+        let isolation = actorIsolated ? "@MainActor " : ""
         return [DeclSyntax(stringLiteral: """
-        public func apply(_ action: ActionLabel, requestID: Foundation.UUID = Foundation.UUID()) async throws -> Outcome {
+        \(isolation)public func apply(_ action: ActionLabel, requestID: Foundation.UUID = Foundation.UUID()) async throws -> Outcome {
             try await \(receiver).execute(action, requestID: requestID)
         }
         """)]
@@ -109,7 +116,7 @@ extension MacroExpander {
     static func observableReducerMethod(model: MacroCompilation) -> String {
         guard model.machineSurface.actions.isEmpty == false else {
             return """
-            private func _reduce(_ event: TLALiveMachineObservationEvent<Never>, subscription: TLALiveMachineObservationSubscription<Never>) async {
+            @MainActor private func _reduce(_ event: TLALiveMachineObservationEvent<Never>, subscription: TLALiveMachineObservationSubscription<Never>) async {
                 _ = _reducer.reduce(event)
                 if case .loss = event { _ = await subscription.resynchronize() }
             }
@@ -123,14 +130,13 @@ extension MacroExpander {
             return "case \(pattern): if let \(callbackName) { await \(callbackName)(\(arguments)) }"
         }.joined(separator: "\n")
         return """
-        private func _reduce(_ event: TLALiveMachineObservationEvent<ActionLabel>, subscription: TLALiveMachineObservationSubscription<ActionLabel>) async {
+        @MainActor private func _reduce(_ event: TLALiveMachineObservationEvent<ActionLabel>, subscription: TLALiveMachineObservationSubscription<ActionLabel>) async {
             let contiguousCommit = _reducer.reduce(event)
             if case .loss = event { _ = await subscription.resynchronize() }
             guard let commit = contiguousCommit,
-                  let action = commit.action,
                   let before = try? State(projection: commit.before.state),
                   let after = try? State(projection: commit.after.state) else { return }
-            switch action {
+            switch commit.action {
             \(notifications)
             }
         }

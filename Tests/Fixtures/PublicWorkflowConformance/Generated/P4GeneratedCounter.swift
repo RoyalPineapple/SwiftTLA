@@ -3,8 +3,6 @@ import SwiftTLAMacros
 
 @TLAModel
 public struct P4GeneratedCounter {
-    public init() {}
-
     public static var spec: TLASpec {
         #spec("P4GeneratedCounter") {
             let value = Var<Int>("value")
@@ -18,9 +16,7 @@ public struct P4GeneratedCounter {
     public final class Observable {}
 
     @TLAActor
-    public actor Actor {
-        public init() {}
-    }
+    public actor Actor {}
 }
 
 @TLAModel
