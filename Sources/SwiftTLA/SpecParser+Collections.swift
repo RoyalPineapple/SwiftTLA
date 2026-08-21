@@ -209,12 +209,7 @@ extension ParserSession {
             return split.operatorText == "&&" ? .and(left, right) : .or(left, right)
         }
         if let update = collectionUpdate(expression, collection: collection, member: member) {
-            let rewritten = CollectionReadRewriter(
-                collection: collection,
-                member: member,
-                replacement: binding
-            ).visit(update.expression)
-            guard let value = decodeStateExpr(rewritten) else { return nil }
+            guard let value = decodeStateExpr(update.expression) else { return nil }
             return .assign(collection, .except(.variable(collection), .variable(binding), value))
         }
         if let infix = expression.as(InfixOperatorExprSyntax.self),
@@ -224,12 +219,7 @@ extension ParserSession {
             if op == "&&" { return .and(left, right) }
             if op == "||" { return .or(left, right) }
         }
-        let rewritten = CollectionReadRewriter(
-            collection: collection,
-            member: member,
-            replacement: binding
-        ).visit(expression)
-        return decodeStateExpr(rewritten).map(ActionExpr.guard_)
+        return decodeStateExpr(expression).map(ActionExpr.guard_)
     }
 
     func collectionActionSequenceSplit(
@@ -268,30 +258,6 @@ extension ParserSession {
               selector.baseName.text == member
         else { return nil }
         return call.arguments.first(where: { $0.label?.text == "to" })
-    }
-
-    private final class CollectionReadRewriter: SyntaxRewriter {
-        let collection: String
-        let member: String
-        let replacement: String
-
-        init(
-            collection: String,
-            member: String,
-            replacement: String
-        ) {
-            self.collection = collection
-            self.member = member
-            self.replacement = replacement
-        }
-
-        override func visit(_ node: SubscriptCallExprSyntax) -> ExprSyntax {
-            guard node.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == collection,
-                  node.arguments.count == 1,
-                  node.arguments.first?.expression.as(DeclReferenceExprSyntax.self)?.baseName.text == member
-            else { return super.visit(node) }
-            return ExprSyntax(stringLiteral: "\(collection).applying(\(replacement))")
-        }
     }
 
     private final class CollectionMemberUseValidator: SyntaxVisitor {

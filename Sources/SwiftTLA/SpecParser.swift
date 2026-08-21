@@ -190,6 +190,13 @@ public final class ParserSession {
         if let typedFacadeExpr = decodeTypedFacadeExpr(expression, substitutions: [:]) {
             return typedFacadeExpr
         }
+        if let subscriptCall = expression.as(SubscriptCallExprSyntax.self),
+           subscriptCall.arguments.count == 1,
+           let function = decodeStateExpr(subscriptCall.calledExpression),
+           let argumentSyntax = subscriptCall.arguments.first?.expression,
+           let argument = decodeStateExpr(argumentSyntax) {
+            return .functionApply(function, argument)
+        }
         if let intLit = expression.as(IntegerLiteralExprSyntax.self) {
             return .value(.int(Int(intLit.literal.text) ?? 0))
         }

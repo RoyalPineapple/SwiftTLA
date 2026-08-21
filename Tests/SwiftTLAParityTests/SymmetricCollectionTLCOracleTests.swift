@@ -88,7 +88,9 @@ struct SymmetricCollectionTLCOracleTests {
       }
     }
     """
-    let closure = Parser.parse(source: source).statements.first!.item.as(ClosureExprSyntax.self)!
+    let closure = try #require(
+      Parser.parse(source: source).statements.first?.item.as(ClosureExprSyntax.self)
+    )
     let parsed = SpecParser.parseSpecClosure(closure)
     let runtime = parserParitySpec(scope: 2)
     let parsedSpec = TLASpec(
@@ -109,7 +111,7 @@ struct SymmetricCollectionTLCOracleTests {
   }
 
   @Test("Every opaque member identity misuse family produces symmetry guidance")
-  func everyIdentityMisuseIsDiagnosed() {
+  func everyIdentityMisuseIsDiagnosed() throws {
     let cases = [
       "member == member",
       "member < member",
@@ -126,7 +128,7 @@ struct SymmetricCollectionTLCOracleTests {
     ]
 
     for body in cases {
-      let parsed = parseCollectionAction(body)
+      let parsed = try parseCollectionAction(body)
       #expect(!parsed.diagnostics.isEmpty, "Expected opaque-member diagnostic for: \(body)")
       #expect(parsed.diagnostics.contains {
         $0.message.contains("opaque") && $0.message.contains("non-symmetric collection")
@@ -135,7 +137,7 @@ struct SymmetricCollectionTLCOracleTests {
   }
 
   @Test("Bounded claims, ordinary results, lazy initial states, and Game of Life remain stable")
-  func backwardsCompatibleBehaviorRemainsStable() throws {
+  func boundedAndOrdinaryBehaviorRemainStable() throws {
     let bounded = try ModelChecker(spec: oracleSpec(scope: 2)).check()
     #expect(bounded.description.contains("devices: 2 exchangeable members"))
     #expect(bounded.description.contains("does not prove larger populations"))
@@ -183,7 +185,7 @@ struct SymmetricCollectionTLCOracleTests {
     }
   }
 
-  private func parseCollectionAction(_ body: String) -> SpecParser.ParsedSpecComponents {
+  private func parseCollectionAction(_ body: String) throws -> SpecParser.ParsedSpecComponents {
     let source = """
     {
       let devices = SymmetricCollectionVar<Device, Int>("devices")
@@ -195,7 +197,9 @@ struct SymmetricCollectionTLCOracleTests {
       }
     }
     """
-    let closure = Parser.parse(source: source).statements.first!.item.as(ClosureExprSyntax.self)!
+    let closure = try #require(
+      Parser.parse(source: source).statements.first?.item.as(ClosureExprSyntax.self)
+    )
     return SpecParser.parseSpecClosure(closure)
   }
 
