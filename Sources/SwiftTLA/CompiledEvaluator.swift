@@ -237,11 +237,11 @@ struct CompiledEvaluator {
             return .tuple(left + right)
         case .recordLiteral(let fields):
             return .record(CompiledRecord(try fields.fields.map {
-                .init(id: $0.id, value: try value($0.value))
+                .init(key: $0.key, value: try value($0.value))
             }))
-        case .recordAccess(let record, let field):
-            guard case .record(let values) = try value(record), let result = values.value(for: field) else {
-                throw EvalError.typeMismatch("Expected record field \(field.ordinal)")
+        case .recordAccess(let record, _, let key):
+            guard case .record(let values) = try value(record), let result = values.value(for: key) else {
+                throw EvalError.typeMismatch("Expected record field")
             }
             return result
         case .domain(let function):
@@ -249,12 +249,7 @@ struct CompiledEvaluator {
             case .function(let values):
                 return .set(Set(values.keys))
             case .record(let values):
-                return .set(try Set(values.fields.map { field in
-                    guard let name = layout.field(field.id)?.renderedName else {
-                        throw CompiledEvaluationError.invalidFieldID(field.id)
-                    }
-                    return .string(name)
-                }))
+                return .set(Set(values.fields.map(\.key)))
             case .tuple(let values):
                 return .set(Set((1...values.count).map(CompiledValue.integer)))
             default:
@@ -284,9 +279,8 @@ struct CompiledEvaluator {
                 }
                 return values[index - 1]
             case .record(let values):
-                guard case .string(let name) = key,
-                      let field = layout.fieldID(named: name),
-                      let result = values.value(for: field)
+                guard case .string = key,
+                      let result = values.value(for: key)
                 else {
                     throw EvalError.typeMismatch("Record field is unavailable")
                 }
@@ -301,12 +295,12 @@ struct CompiledEvaluator {
                 values[try value(key)] = replacementValue
                 return .function(values)
             case .record(let values):
-                guard case .string(let name) = try value(key),
-                      let field = layout.fieldID(named: name)
+                let recordKey = try value(key)
+                guard case .string = recordKey
                 else {
                     throw EvalError.typeMismatch("Expected a record field")
                 }
-                return .record(values.replacing(replacementValue, for: field))
+                return .record(values.replacing(replacementValue, for: recordKey))
             default:
                 throw EvalError.typeMismatch("Expected a function")
             }

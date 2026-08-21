@@ -74,7 +74,7 @@ struct CompiledTLARenderer {
         case .tupleConcatenate(let lhs, let rhs): return "(\(try state(lhs)) \\o \(try state(rhs)))"
         case .recordLiteral(let record):
             return "[\(try record.fields.map { "\(try fieldName($0.id)) |-> \(try state($0.value))" }.joined(separator: ", "))]"
-        case .recordAccess(let record, let field): return "(\(try state(record))).\(try fieldName(field))"
+        case .recordAccess(let record, let field, _): return "(\(try state(record))).\(try fieldName(field))"
         case .domain(let function): return "DOMAIN \(try state(function))"
         case .functionLiteral(let domain, let binder, let body):
             return "[\(try binderName(binder)) \\in \(try state(domain)) |-> \(try state(body))]"
