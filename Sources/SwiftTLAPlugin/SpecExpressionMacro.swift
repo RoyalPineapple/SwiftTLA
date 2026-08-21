@@ -46,24 +46,32 @@ public struct SpecExpressionMacro: ExpressionMacro {
     }
 }
 
-private final class SpecDeclarationRegistration: SyntaxRewriter {
+private final class SpecDeclarationRegistration {
     func rewrite(_ closure: ClosureExprSyntax) -> ClosureExprSyntax {
-        register(super.visit(closure).as(ClosureExprSyntax.self) ?? closure)
+        closure.with(\.statements, rewriteSpecStatements(closure.statements))
     }
 
-    override func visit(_ node: FunctionCallExprSyntax) -> ExprSyntax {
-        let rewritten = super.visit(node)
-        guard let call = rewritten.as(FunctionCallExprSyntax.self),
+    private func rewriteSpecStatements(_ statements: CodeBlockItemListSyntax) -> CodeBlockItemListSyntax {
+        .init(statements.map { rewriteBuilderCall($0) })
+    }
+
+    private func rewriteBuilderCall(_ item: CodeBlockItemSyntax) -> CodeBlockItemSyntax {
+        guard case .expr(let expression) = item.item,
+              let call = expression.as(FunctionCallExprSyntax.self),
               isBuilderCall(call),
               let closure = call.trailingClosure
-        else { return rewritten }
-        return ExprSyntax(call.with(\.trailingClosure, register(closure)))
+        else { return item }
+        return item.with(
+            \.item,
+            .expr(ExprSyntax(call.with(\.trailingClosure, register(closure))))
+        )
     }
 
     private func register(_ closure: ClosureExprSyntax) -> ClosureExprSyntax {
         var items: [CodeBlockItemSyntax] = []
         for item in closure.statements {
-            items.append(item)
+            let rewritten = rewriteBuilderCall(item)
+            items.append(rewritten)
             guard let reference = declaredVariableReference(in: item) else { continue }
             items.append(
                 .init(item: .expr(ExprSyntax(reference)))
