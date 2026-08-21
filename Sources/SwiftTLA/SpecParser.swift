@@ -1631,7 +1631,6 @@ public final class ParserSession {
 /// Stateless public parser entry points. Every call owns a fresh parser
 /// session, while a full specification parse creates one session explicitly.
 public enum SpecParser {
-    public typealias BoundSourceContext = ParserSession.BoundSourceContext
     public typealias ParsedSpecComponents = ParserSession.ParsedSpecComponents
     public typealias SymmetricCollectionParseDiagnostic = ParserSession.SymmetricCollectionParseDiagnostic
 
