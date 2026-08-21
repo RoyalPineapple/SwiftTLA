@@ -1,0 +1,187 @@
+struct CompiledTLARenderer {
+    let layout: CompiledLayout
+    let bindings: CompiledBindingTable
+
+    func action(_ expression: CompiledActionExpr) throws -> String {
+        switch expression {
+        case .assign(let variable, let value):
+            return "\(try variableName(variable))' = \(try state(value))"
+        case .unchanged(let variable):
+            return "UNCHANGED \(try variableName(variable))"
+        case .guard_(let condition):
+            return try state(condition)
+        case .chooseAction(let variable, let set):
+            return "\(try variableName(variable))' \\in \(try state(set))"
+        case .existsAction(let binder, let set, let body):
+            return "\\E \(try binderName(binder)) \\in \(try state(set)): \(try action(body))"
+        case .ifElse(let condition, let then, let otherwise):
+            return "IF \(try state(condition)) THEN (\(try action(then))) ELSE (\(try action(otherwise)))"
+        case .define(let binder, let value, let body):
+            return "LET \(try binderName(binder)) == \(try state(value)) IN \(try action(body))"
+        case .and(let lhs, let rhs):
+            return "(\(try action(lhs)) /\\ \(try action(rhs)))"
+        case .or(let lhs, let rhs):
+            return "(\(try action(lhs)) \\/ \(try action(rhs)))"
+        }
+    }
+
+    func state(_ expression: CompiledStateExpr) throws -> String {
+        switch expression {
+        case .value(let value): return value.description
+        case .stateVariable(let variable): return try variableName(variable)
+        case .boundValue(let binder): return try binderName(binder)
+        case .controlLocation(let location): return try controlLocationName(location)
+        case .operatorReference(let operation): return try operatorName(operation)
+        case .add(let lhs, let rhs): return "(\(try state(lhs)) + \(try state(rhs)))"
+        case .subtract(let lhs, let rhs): return "(\(try state(lhs)) - \(try state(rhs)))"
+        case .multiply(let lhs, let rhs): return "(\(try state(lhs)) * \(try state(rhs)))"
+        case .divide(let lhs, let rhs), .integerDivide(let lhs, let rhs): return "(\(try state(lhs)) \\div \(try state(rhs)))"
+        case .modulo(let lhs, let rhs): return "(\(try state(lhs)) % \(try state(rhs)))"
+        case .negate(let value): return "(-\(try state(value)))"
+        case .equal(let lhs, let rhs): return "(\(try state(lhs)) = \(try state(rhs)))"
+        case .notEqual(let lhs, let rhs): return "(\(try state(lhs)) /= \(try state(rhs)))"
+        case .lessThan(let lhs, let rhs): return "(\(try state(lhs)) < \(try state(rhs)))"
+        case .lessOrEqual(let lhs, let rhs): return "(\(try state(lhs)) <= \(try state(rhs)))"
+        case .greaterThan(let lhs, let rhs): return "(\(try state(lhs)) > \(try state(rhs)))"
+        case .greaterOrEqual(let lhs, let rhs): return "(\(try state(lhs)) >= \(try state(rhs)))"
+        case .and(let lhs, let rhs): return "(\(try state(lhs)) /\\ \(try state(rhs)))"
+        case .or(let lhs, let rhs): return "(IF \(try state(lhs)) THEN TRUE ELSE \(try state(rhs)))"
+        case .not(let value): return "(~\(try state(value)))"
+        case .ifThenElse(let condition, let then, let otherwise):
+            return "(IF \(try state(condition)) THEN \(try state(then)) ELSE \(try state(otherwise)))"
+        case .setLiteral(let values):
+            return values.isEmpty ? "{}" : "{\(try values.map(state).joined(separator: ", "))}"
+        case .in(let member, let set): return "(\(try state(member)) \\in \(try state(set)))"
+        case .subset(let lhs, let rhs): return "(\(try state(lhs)) \\subseteq \(try state(rhs)))"
+        case .union(let lhs, let rhs): return "(\(try state(lhs)) \\cup \(try state(rhs)))"
+        case .intersection(let lhs, let rhs): return "(\(try state(lhs)) \\cap \(try state(rhs)))"
+        case .setDifference(let lhs, let rhs): return "(\(try state(lhs)) \\ \(try state(rhs)))"
+        case .cardinality(let value): return "Cardinality(\(try state(value)))"
+        case .setFilter(let set, let binder, let predicate):
+            return "{\(try binderName(binder)) \\in \(try state(set)) : \(try state(predicate))}"
+        case .setMap(let value, let binder, let set):
+            return "{\(try state(value)) : \(try binderName(binder)) \\in \(try state(set))}"
+        case .powerSet(let value): return "SUBSET \(try state(value))"
+        case .unionAll(let value): return "UNION \(try state(value))"
+        case .integerRange(let lower, let upper): return "\(try state(lower))..\(try state(upper))"
+        case .tupleLiteral(let values): return "<<\(try values.map(state).joined(separator: ", "))>>"
+        case .tupleAccess(let tuple, let index): return "\(try state(tuple))[\(index)]"
+        case .tupleDynamicAccess(let tuple, let index): return "\(try state(tuple))[\(try state(index))]"
+        case .tupleLength(let tuple): return "Len(\(try state(tuple)))"
+        case .tupleAppend(let tuple, let value): return "Append(\(try state(tuple)), \(try state(value)))"
+        case .tupleHead(let tuple): return "Head(\(try state(tuple)))"
+        case .tupleTail(let tuple): return "Tail(\(try state(tuple)))"
+        case .tupleConcatenate(let lhs, let rhs): return "(\(try state(lhs)) \\o \(try state(rhs)))"
+        case .recordLiteral(let record):
+            return "[\(try record.fields.map { "\(try fieldName($0.id)) |-> \(try state($0.value))" }.joined(separator: ", "))]"
+        case .recordAccess(let record, let field): return "(\(try state(record))).\(try fieldName(field))"
+        case .domain(let function): return "DOMAIN \(try state(function))"
+        case .functionLiteral(let domain, let binder, let body):
+            return "[\(try binderName(binder)) \\in \(try state(domain)) |-> \(try state(body))]"
+        case .functionApply(let function, let argument): return "\(try state(function))[\(try state(argument))]"
+        case .except(let function, let key, let value):
+            return "[\(try state(function)) EXCEPT \u{21}[\(try state(key))] = \(try state(value))]"
+        case .caseExpr(let pairs, let otherwise):
+            let cases = try stride(from: 0, to: pairs.count, by: 2).map {
+                "\(try state(pairs[$0])) -> \(try state(pairs[$0 + 1]))"
+            }.joined(separator: " [] ")
+            if let otherwise { return "CASE \(cases) [] OTHER -> \(try state(otherwise))" }
+            return "CASE \(cases)"
+        case .forAll(let set, let binder, let predicate): return "\\A \(try binderName(binder)) \\in \(try state(set)) : \(try state(predicate))"
+        case .exists(let set, let binder, let predicate): return "\\E \(try binderName(binder)) \\in \(try state(set)) : \(try state(predicate))"
+        case .choose(let set, let binder, let predicate): return "CHOOSE \(try binderName(binder)) \\in \(try state(set)) : \(try state(predicate))"
+        case .enabledAction(let action): return "ENABLED \(try actionName(action))"
+        case .sequenceFromSet(let value): return "SeqFromSet(\(try state(value)))"
+        case .setSum(let function, let set): return "Sum(\(try state(function)), \(try state(set)))"
+        case .functionSet(let domain, let range): return "[\(try state(domain)) -> \(try state(range))]"
+        case .foldFunction(let operation, let initial, let sequence):
+            return "FoldFunction(\(try formalLambda(operation)), \(try state(initial)), \(try state(sequence)))"
+        case .operatorApplication(let operation, let arguments):
+            let arguments = try arguments.map(formalArgument).joined(separator: ", ")
+            let renderedOperation = try formalOperator(operation)
+            switch operation {
+            case .lambda:
+                return "(\(renderedOperation))(\(arguments))"
+            case .reference:
+                return arguments.isEmpty ? renderedOperation : "\(renderedOperation)(\(arguments))"
+            }
+        case .recursiveCall(let operation, let arguments):
+            let name = try operatorName(operation)
+            return arguments.isEmpty ? name : "\(name)(\(try arguments.map(state).joined(separator: ", ")))"
+        case .letValue(let binder, let value, let body):
+            return "LET \(try binderName(binder)) == \(try state(value)) IN \(try state(body))"
+        case .letIn(let operations, let body):
+            let declarations = try operations.map(localOperator).joined(separator: "\n    ")
+            return "LET \(declarations)\nIN \(try state(body))"
+        }
+    }
+
+    private func formalArgument(_ argument: CompiledFormalCallArgument) throws -> String {
+        switch argument {
+        case .value(let value): return try state(value)
+        case .operator(let operation): return try formalOperator(operation)
+        }
+    }
+
+    private func formalOperator(_ operation: CompiledFormalOperator) throws -> String {
+        switch operation {
+        case .lambda(let lambda):
+            return try formalLambda(lambda)
+        case .reference(let id, _): return try operatorName(id)
+        }
+    }
+
+    private func formalLambda(_ lambda: CompiledFormalLambda) throws -> String {
+        "LAMBDA \(try lambda.parameters.map(binderName).joined(separator: ", ")) : \(try state(lambda.body))"
+    }
+
+    private func localOperator(_ operation: CompiledLocalOperator) throws -> String {
+        let name = try operatorName(operation.id)
+        let parameters = try operation.parameters.map(binderName).joined(separator: ", ")
+        if let domain = operation.domain, let parameter = operation.parameters.first {
+            return "\(name)[\(try binderName(parameter)) \\in \(try state(domain))] == \(try state(operation.body))"
+        }
+        return "\(name)\(parameters.isEmpty ? "" : "(\(parameters))") == \(try state(operation.body))"
+    }
+
+    private func variableName(_ id: VariableID) throws -> String {
+        guard layout.variables.indices.contains(id.ordinal) else { throw missing("variable", id.ordinal) }
+        return layout.variables[id.ordinal].declaration.name
+    }
+
+    private func actionName(_ id: ActionID) throws -> String {
+        guard layout.actions.indices.contains(id.ordinal) else { throw missing("action", id.ordinal) }
+        return layout.actions[id.ordinal].declaration.name
+    }
+
+    private func binderName(_ id: BinderID) throws -> String {
+        guard let name = bindings.binderName(id) else { throw missing("binder", id.ordinal) }
+        return name
+    }
+
+    private func fieldName(_ id: FieldID) throws -> String {
+        guard let field = layout.field(id) else { throw missing("field", id.ordinal) }
+        return field.renderedName
+    }
+
+    private func operatorName(_ id: OperatorID) throws -> String {
+        guard let name = bindings.operatorName(id) else { throw missing("operator", id.ordinal) }
+        return name
+    }
+
+    private func controlLocationName(_ id: ControlLocationID) throws -> String {
+        guard let location = layout.controlLocation(id) else { throw missing("control location", id.ordinal) }
+        return "\"\(location.renderedName)\""
+    }
+
+    private func missing(_ kind: String, _ ordinal: Int) -> CompilationDiagnostic {
+        .init(
+            code: .unknownReference,
+            stage: .rendering,
+            path: "compiledRenderer.\(kind)[\(ordinal)]",
+            expected: "a rendered declaration name",
+            actual: "no declaration",
+            nextSafeAction: "Compile the source model again before rendering."
+        )
+    }
+}
