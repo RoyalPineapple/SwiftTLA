@@ -915,7 +915,7 @@ public extension TLASpec {
             if let set = initializer.lazySet { return "\(variable.name) \\in \(try renderer.state(set))" }
             if let set = initializer.initialSet { return "\(variable.name) \\in \(try renderer.state(set))" }
             if let expression = initializer.initExpr { return "\(variable.name) = \(try renderer.state(expression))" }
-            return "\(variable.name) = \(try renderer.state(.value(initialValue)))"
+            return "\(variable.name) = \(try renderer.state(.value(initialValue.rendered(using: layout))))"
         }
         if initialPredicates.count == 1 {
             lines.append("Init == \(initialPredicates[0])")

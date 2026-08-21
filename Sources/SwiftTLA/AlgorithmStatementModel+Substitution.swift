@@ -66,11 +66,15 @@ extension AlgorithmStatementModel {
         case .set(let originalTarget, let value):
             .set(target: target(originalTarget), value: expression(value))
         case .letBinding(let variable, let value, let body):
-            let scoped = scopedBody(variable: variable, body: body)
-            .letBinding(variable: scoped.variable, value: expression(value), scoped.body)
+            { () -> AlgorithmStatementModel in
+                let scoped = scopedBody(variable: variable, body: body)
+                return .letBinding(variable: scoped.variable, value: expression(value), scoped.body)
+            }()
         case .with(let variable, let source, let body):
-            let scoped = scopedBody(variable: variable, body: body)
-            .with(variable: scoped.variable, source: expression(source), scoped.body)
+            { () -> AlgorithmStatementModel in
+                let scoped = scopedBody(variable: variable, body: body)
+                return .with(variable: scoped.variable, source: expression(source), scoped.body)
+            }()
         case .ifElse(let condition, let then, let otherwise):
             .ifElse(
                 expression(condition),
@@ -83,8 +87,10 @@ extension AlgorithmStatementModel {
                 second.map { $0.replacingExpressions(with: replacement, transform) }
             )
         case .choose(let variable, let domain, let body):
-            let scoped = scopedBody(variable: variable, body: body)
-            .choose(variable: scoped.variable, domain: expression(domain), scoped.body)
+            { () -> AlgorithmStatementModel in
+                let scoped = scopedBody(variable: variable, body: body)
+                return .choose(variable: scoped.variable, domain: domain, scoped.body)
+            }()
         case .call(let target, let arguments):
             .call(target: target, arguments: arguments.map(expression))
         }

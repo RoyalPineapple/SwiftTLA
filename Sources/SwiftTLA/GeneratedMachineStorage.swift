@@ -16,6 +16,7 @@ public struct _GeneratedMachineStorage: Sendable {
         fileprivate let values: [TLAValue]
 
         public var count: Int { values.count }
+        public var isEmpty: Bool { values.isEmpty }
 
         public func value<Value: TLAValueType>(
             at index: Int,

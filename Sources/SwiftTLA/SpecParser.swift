@@ -595,6 +595,9 @@ public final class ParserSession {
         _ expression: ExprSyntax,
         scope: TypedFacadeScope
     ) -> StateExpr? {
+        if let family = decodeProcessLocalFamily(expression) {
+            return family
+        }
         if let quantifier = decodeAlgorithmDomainQuantifier(expression, scope: scope) {
             return quantifier
         }
@@ -1353,16 +1356,26 @@ public final class ParserSession {
         )
     }
 
+    private func decodeProcessLocalFamily(_ expression: ExprSyntax) -> StateExpr? {
+        guard let call = expression.as(FunctionCallExprSyntax.self),
+              let member = call.calledExpression.as(MemberAccessExprSyntax.self),
+              member.declName.baseName.text == "family",
+              call.arguments.count == 1,
+              call.arguments.first?.label?.text == "for",
+              let local = member.base?.as(DeclReferenceExprSyntax.self)?.baseName.text
+        else {
+            return nil
+        }
+        return .processLocalFamily(local)
+    }
+
     func decodeMethodCall(_ memberAccess: MemberAccessExprSyntax, _ call: FunctionCallExprSyntax) -> StateExpr? {
+        if let family = decodeProcessLocalFamily(call) {
+            return family
+        }
         let methodName = memberAccess.declName.baseName.text
         let args = Array(call.arguments)
         let base = memberAccess.base
-        if methodName == "family",
-           args.count == 1,
-           args[0].label?.text == "for",
-           let local = base?.as(DeclReferenceExprSyntax.self)?.baseName.text {
-            return .processLocalFamily(local)
-        }
         if base?.as(DeclReferenceExprSyntax.self)?.baseName.text == "ZSequences" {
             switch methodName {
             case "indices":
