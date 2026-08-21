@@ -369,9 +369,8 @@ public final class ParserSession {
               call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "At",
               call.arguments.count == 2,
               let label = controlLocation(call.arguments.first?.expression),
-              let process = call.arguments.dropFirst().first.map(\.expression).flatMap {
-                decodeTypedFacadeValue($0, scope: scope)
-              }
+              let processSyntax = call.arguments.dropFirst().first?.expression,
+              let process = decodeTypedFacadeValue(processSyntax, scope: scope)
         else { return nil }
         return .equal(
             .functionApply(.programCounter, process),
