@@ -1082,12 +1082,10 @@ extension SpecBuilder {
     /// Lets a `#spec` body use the same typed shared declaration whether it
     /// contains a PlusCal `Algorithm` or an ordinary TLA+ action specification.
     public static func buildExpression<Value>(_ variable: SharedVariable<Value>) -> [SpecComponent] {
-        return [VarDecl(
-            variable.name,
-            .int(0),
-            initialSet: variable.initialSet,
-            initExpr: variable.initialSet == nil ? variable.initial : nil
-        )]
+        if let initialSet = variable.initialSet {
+            return [VarDecl(variable.name, .int(0), initialSet: initialSet)]
+        }
+        return [VarDecl(variable.name, initExpr: variable.initial)]
     }
 }
 

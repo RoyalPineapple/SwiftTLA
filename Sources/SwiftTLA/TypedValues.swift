@@ -37,7 +37,7 @@ public struct TLAField<Schema: TLARecordSchema, Value: TLAValueType>: Hashable, 
     self.sourceIssue = sourceIssue
   }
 
-  fileprivate func recordAccess(_ record: StateExpr) -> StateExpr {
+  func recordAccess(_ record: StateExpr) -> StateExpr {
     sourceIssue.map(StateExpr.sourceIssue) ?? .recordAccess(record, name)
   }
 
