@@ -17,7 +17,6 @@ extension MacroExpander {
 
     static func commonAdapterAliases(modelTypeName: String) -> [DeclSyntax] {
         [
-            DeclSyntax(stringLiteral: "public typealias CanonicalModel = \(modelTypeName)"),
             DeclSyntax(stringLiteral: "public typealias State = \(modelTypeName).State"),
             DeclSyntax(stringLiteral: "public typealias Live = \(modelTypeName).Live"),
             DeclSyntax(stringLiteral: "public typealias ActionLabel = \(modelTypeName).ActionLabel"),
