@@ -223,7 +223,7 @@ extension TLASpec {
         switch condition {
         case .weakFairness, .strongFairness:
             return condition.tlaForm(vars: vars)
-        case .weakFairnessInvocation(let invocation), .strongFairnessInvocation(let invocation):
+        case .weakFairnessActionCall(let invocation), .strongFairnessActionCall(let invocation):
             let operatorName = actions.lazy
                 .flatMap { action in
                     actionVariants(action).map { (action, $0) }

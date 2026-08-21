@@ -114,7 +114,7 @@
       { "id": "packageResolved", "evidence": { "path": "Package.resolved", "sha256": "cfdc69e87cdcea8681bfa8b117d599eef34e6f986fe23d9ad5eb4a320a1a18d7" } },
       { "id": "adapter", "evidence": { "path": "Sources/UpstreamParity/Conformance/PublicWorkflowGeneratedBehaviorAdapter.swift", "sha256": "a4bf67408772a49c3b422bf3143b55cfefa5351377264ba205ea38640d9ae65a" } },
       { "id": "macro", "evidence": { "path": "Sources/SwiftTLAPlugin/ModelMacro.swift", "sha256": "dc8a3f105006145fdb16617b1b931d9f04a722bad17662155f478709980fad4b" } },
-      { "id": "macroExpander", "evidence": { "path": "Sources/SwiftTLAPlugin/MacroExpander.swift", "sha256": "3830877fc13188b98bd7b05c5dbb721d2d2be53077206f45dbc2b748644da14d" } },
+      { "id": "macroExpander", "evidence": { "path": "Sources/SwiftTLAPlugin/MacroExpander.swift", "sha256": "827d25c0aac825995567b49a570e3bf7e9e0dc1510c0392323788b04cfdd0381" } },
       { "id": "specExpressionMacro", "evidence": { "path": "Sources/SwiftTLAPlugin/SpecExpressionMacro.swift", "sha256": "3f327363ecce315360a6d410366c6e8d36b4b23415a49df5a69c802e190930b5" } }
     ],
     "notApplicable": [

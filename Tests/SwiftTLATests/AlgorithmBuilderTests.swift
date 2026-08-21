@@ -745,8 +745,8 @@ struct AlgorithmBuilderTests {
         #expect(algorithm.validate().isEmpty)
         let spec = try algorithm.lower()
         #expect(spec.invariants.map(\.name) == ["__pcal_assert_choose_0_0", "__pcal_assert_choose_0_1"])
-        #expect(spec.fairness == [FairnessCondition.weakFairnessInvocation(.init(name: "choose", arguments: [.string("first")])),
-            .weakFairnessInvocation(.init(name: "choose", arguments: [.string("second")]))
+        #expect(spec.fairness == [FairnessCondition.weakFairnessActionCall(.init(name: "choose", arguments: [.string("first")])),
+            .weakFairnessActionCall(.init(name: "choose", arguments: [.string("second")]))
         ])
         let rendered = try spec.compile().renderedTLAModuleBundle().tla
         #expect(rendered.contains("WF_<<count, selected, pc>>(choose__0)"))

@@ -40,15 +40,15 @@ public enum FairnessCondition: Hashable, Sendable, CustomStringConvertible {
     /// Fairness for one concrete finite parameterization of an action.
     /// Algorithm lowering uses this form so each process receives its own
     /// PlusCal-equivalent fairness obligation.
-    case weakFairnessInvocation(TLAActionInvocation)
-    case strongFairnessInvocation(TLAActionInvocation)
+    case weakFairnessActionCall(FormalActionCall)
+    case strongFairnessActionCall(FormalActionCall)
 
     public var description: String {
         switch self {
         case .weakFairness(let a): return "WF(\(a))"
         case .strongFairness(let a): return "SF(\(a))"
-        case .weakFairnessInvocation(let action): return "WF(\(action))"
-        case .strongFairnessInvocation(let action): return "SF(\(action))"
+        case .weakFairnessActionCall(let action): return "WF(\(action))"
+        case .strongFairnessActionCall(let action): return "SF(\(action))"
         }
     }
 
@@ -56,22 +56,22 @@ public enum FairnessCondition: Hashable, Sendable, CustomStringConvertible {
         switch self {
         case .weakFairness(let a): return "WF_\(vars)(\(a))"
         case .strongFairness(let a): return "SF_\(vars)(\(a))"
-        case .weakFairnessInvocation(let action): return "WF_\(vars)(\(action))"
-        case .strongFairnessInvocation(let action): return "SF_\(vars)(\(action))"
+        case .weakFairnessActionCall(let action): return "WF_\(vars)(\(action))"
+        case .strongFairnessActionCall(let action): return "SF_\(vars)(\(action))"
         }
     }
 
     internal var actionIdentity: String {
         switch self {
         case .weakFairness(let action), .strongFairness(let action): action
-        case .weakFairnessInvocation(let action), .strongFairnessInvocation(let action): action.description
+        case .weakFairnessActionCall(let action), .strongFairnessActionCall(let action): action.description
         }
     }
 
     internal var isStrong: Bool {
         switch self {
-        case .strongFairness, .strongFairnessInvocation: true
-        case .weakFairness, .weakFairnessInvocation: false
+        case .strongFairness, .strongFairnessActionCall: true
+        case .weakFairness, .weakFairnessActionCall: false
         }
     }
 }

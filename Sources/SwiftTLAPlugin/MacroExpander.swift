@@ -359,15 +359,15 @@ enum MacroExpander {
         switch fairness {
         case .weakFairness(let action): return ".weakFairness(\"\(action)\")"
         case .strongFairness(let action): return ".strongFairness(\"\(action)\")"
-        case .weakFairnessInvocation(let invocation):
-            return ".weakFairnessInvocation(\(codegenInvocation(invocation)))"
-        case .strongFairnessInvocation(let invocation):
-            return ".strongFairnessInvocation(\(codegenInvocation(invocation)))"
+        case .weakFairnessActionCall(let action):
+            return ".weakFairnessActionCall(\(codegenActionCall(action)))"
+        case .strongFairnessActionCall(let action):
+            return ".strongFairnessActionCall(\(codegenActionCall(action)))"
         }
     }
 
-    static func codegenInvocation(_ invocation: TLAActionInvocation) -> String {
-        ".init(name: \"\(invocation.name)\", arguments: [\(invocation.arguments.map(codegenTLAValue).joined(separator: ", "))])"
+    static func codegenActionCall(_ action: FormalActionCall) -> String {
+        ".init(name: \"\(action.name)\", arguments: [\(action.arguments.map(codegenTLAValue).joined(separator: ", "))])"
     }
 
     static func codegenTLAValue(_ value: TLAValue) -> String {
