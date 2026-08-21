@@ -5,21 +5,7 @@ import SwiftSyntax
 import Testing
 import UpstreamParity
 
-struct SymmetryReductionTests { @Test("Symmetry reduces ChangRoberts state count")
-  func changRobertsSymmetryReduction() throws {
-    let specNoSym = Example.changRobertsN3.spec
-    let mcNoSym = try ModelChecker(spec: specNoSym, maxStates: 500)
-    let graphNoSym = try mcNoSym.exploreGraph()
-    #expect(graphNoSym.states.count == 137)
-    let specWithSym = specNoSym.extending(TLASpec("ChangRobertsSym") {
-      Symmetry("pc", [1, 2, 3] as Set<Int>)
-    })
-    let mcWithSym = try ModelChecker(spec: specWithSym, maxStates: 500)
-    let graphWithSym = try mcWithSym.exploreGraph()
-    #expect(graphWithSym.states.count < 137)
-    #expect(graphWithSym.states.count > 0)
-  }
-
+struct SymmetryReductionTests {
   @Test("Symmetry with direct-value variable reduces state count")
   func directValueSymmetry() throws {
     let spec = TLASpec("SymTest") {

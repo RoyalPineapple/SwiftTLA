@@ -264,66 +264,6 @@ public struct TLASpec: Sendable {
     }
     return lines.joined(separator: "\n")
   }
-  public func extending(_ other: TLASpec, prefix: String? = nil) -> TLASpec {
-    let prefixedName = prefix.map { "\($0)!\(name)" } ?? self.name
-    let otherVars = other.variables.filter { v in !variables.contains(where: { $0.name == v.name })
-    }
-    return TLASpec(
-      name: prefixedName,
-      variables: self.variables + otherVars,
-      constants: self.constants.replacing(with: other.constants),
-      formalParameters: self.formalParameters + other.formalParameters,
-      actions: self.actions + other.actions,
-      invariants: self.invariants + other.invariants,
-      temporalProperties: self.temporalProperties + other.temporalProperties,
-      fairness: self.fairness + other.fairness,
-      assume: {
-        if let a = assume, let b = other.assume { return .and(a, b) }
-        return assume ?? other.assume
-      }(),
-      checkDeadlock: self.checkDeadlock || other.checkDeadlock,
-      definitions: self.definitions + other.definitions,
-      theorems: self.theorems + other.theorems,
-      extendsModules: self.extendsModules,
-      constraint: {
-        if let a = constraint, let b = other.constraint { return .and(a, b) }
-        return constraint ?? other.constraint
-      }(),
-      recursiveDefs: self.recursiveDefs + other.recursiveDefs,
-      recursiveFuncs: self.recursiveFuncs + other.recursiveFuncs,
-      formalOperatorDefinitions: self.formalOperatorDefinitions + other.formalOperatorDefinitions,
-      imports: self.imports + other.imports,
-      moduleInstances: self.moduleInstances + other.moduleInstances,
-      symmetrySets: self.symmetrySets + other.symmetrySets,
-      symmetricCollections: self.symmetricCollections + other.symmetricCollections
-    )
-  }
-  public func instantiating(_ constants: [ConstantDecl]) -> TLASpec {
-    let constants = self.constants.replacing(with: constants)
-    return TLASpec(
-      name: self.name,
-      variables: self.variables,
-      constants: constants,
-      formalParameters: self.formalParameters,
-      actions: self.actions,
-      invariants: self.invariants,
-      temporalProperties: self.temporalProperties,
-      fairness: self.fairness,
-      assume: self.assume,
-      checkDeadlock: self.checkDeadlock,
-      definitions: self.definitions,
-      theorems: self.theorems,
-      extendsModules: self.extendsModules,
-      constraint: self.constraint,
-      recursiveDefs: self.recursiveDefs,
-      recursiveFuncs: self.recursiveFuncs,
-      formalOperatorDefinitions: self.formalOperatorDefinitions,
-      imports: self.imports,
-      moduleInstances: self.moduleInstances,
-      symmetrySets: self.symmetrySets,
-      symmetricCollections: self.symmetricCollections
-    )
-  }
 }
 public protocol SpecComponent {}
 /// The legal source section for a declaration in an authored PlusCal module.
