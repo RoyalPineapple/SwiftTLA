@@ -209,6 +209,31 @@ private func parserEnum(
         ])
     }
 
+    @Test("Algorithm parser decodes each temporal declaration")
+    func parsesAlgorithmTemporalDeclarations() throws {
+        let source = """
+        {
+            Algorithm("Temporal") {
+                let value = SharedVar("value", initial: 0)
+                Do("advance") {
+                    Assign(value, to: value + 1)
+                }
+                LeadsTo("progress", value == 0, value > 0)
+                Eventually("eventual", value > 0)
+                Always("safe", value >= 0)
+                AlwaysEventually("recurs", value > 0)
+                EventuallyAlways("settles", value >= 0)
+            }
+        }
+        """
+        let parsed = SpecParser.parseSpecClosure(try parseClosure(source))
+
+        #expect(parsed.diagnostics.isEmpty)
+        #expect(try compile(parsed, named: "Temporal").spec.temporalProperties.map(\.name) == [
+            "progress", "eventual", "safe", "recurs", "settles"
+        ])
+    }
+
     @Test("Algorithm parser preserves a process-bound formal lambda application")
     func parsesProcessScopedFormalLambdaApplication() throws {
         let source = """

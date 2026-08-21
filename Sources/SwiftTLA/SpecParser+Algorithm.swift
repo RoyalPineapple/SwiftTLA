@@ -6,6 +6,100 @@ private struct AlgorithmMacroDefinition: Sendable {
     let assignmentParameters: Set<String>
 }
 
+private enum AlgorithmStateDeclarationKind: Equatable {
+    case shared
+    case local
+
+    var sourceName: String {
+        switch self {
+        case .shared: "SharedVar"
+        case .local: "LocalVar"
+        }
+    }
+}
+
+private enum AlgorithmSourceConstruct: Equatable {
+    case formalDefinition
+    case macro
+    case state(AlgorithmStateDeclarationKind)
+    case procedure
+    case each
+    case doStep
+    case whileStep
+    case invariant
+    case leadsTo
+    case eventually
+    case always
+    case alwaysEventually
+    case eventuallyAlways
+    case fairness
+    case stateConstraint
+    case awaitCondition
+    case assert
+    case assign
+    case goto
+    case call
+    case `return`
+    case stop
+    case skip
+    case ifElse
+    case either
+    case choose
+    case with
+    case letBinding
+
+    init?(_ expression: ExprSyntax) {
+        guard let reference = Self.reference(in: expression) else { return nil }
+        self.init(reference)
+    }
+
+    static func referenceName(in expression: ExprSyntax) -> String? {
+        reference(in: expression)?.baseName.text
+    }
+
+    private init?(_ reference: DeclReferenceExprSyntax) {
+        switch reference.baseName.text {
+        case "FormalDefinition": self = .formalDefinition
+        case "Macro": self = .macro
+        case "SharedVar": self = .state(.shared)
+        case "LocalVar": self = .state(.local)
+        case "Procedure": self = .procedure
+        case "Each": self = .each
+        case "Do": self = .doStep
+        case "While": self = .whileStep
+        case "Invariant": self = .invariant
+        case "LeadsTo": self = .leadsTo
+        case "Eventually": self = .eventually
+        case "Always": self = .always
+        case "AlwaysEventually": self = .alwaysEventually
+        case "EventuallyAlways": self = .eventuallyAlways
+        case "WeakFairness", "StrongFairness", "WeakFairnessNext", "StrongFairnessNext":
+            self = .fairness
+        case "StateConstraint": self = .stateConstraint
+        case "Await", "When": self = .awaitCondition
+        case "Assert": self = .assert
+        case "Assign": self = .assign
+        case "Goto": self = .goto
+        case "Call": self = .call
+        case "Return": self = .return
+        case "Stop": self = .stop
+        case "Skip": self = .skip
+        case "If": self = .ifElse
+        case "Either": self = .either
+        case "Choose": self = .choose
+        case "With": self = .with
+        case "Let": self = .letBinding
+        default: return nil
+        }
+    }
+
+    private static func reference(in expression: ExprSyntax) -> DeclReferenceExprSyntax? {
+        expression.as(DeclReferenceExprSyntax.self)
+            ?? expression.as(GenericSpecializationExprSyntax.self)?
+                .expression.as(DeclReferenceExprSyntax.self)
+    }
+}
+
 extension ParserSession {
     /// Parses the bounded PlusCal-shaped authoring layer into an `AlgorithmModel`.
     func parseAlgorithm(
@@ -48,7 +142,7 @@ extension ParserSession {
             }
             if case .decl(let declaration) = statement.item,
                let variable = declaration.as(VariableDeclSyntax.self),
-               let component = parseAlgorithmVariableDeclaration(variable, expectedKind: "SharedVar") {
+               let component = parseAlgorithmVariableDeclaration(variable, kind: .shared) {
                 components.append(component)
                 if case .shared(let state) = component,
                    state.isTuple {
@@ -75,11 +169,33 @@ extension ParserSession {
                 ))
                 return
             }
-            if let definition = parseAlgorithmFormalDefinition(expression) {
+            guard let call = expression.as(FunctionCallExprSyntax.self),
+                  let construct = AlgorithmSourceConstruct(call.calledExpression)
+            else {
+                let detail = algorithmParseFailure.map { " \($0)" } ?? ""
+                result.diagnostics.append(.init(
+                    message: "Unsupported Algorithm declaration '\(expression.description.trimmingCharacters(in: .whitespacesAndNewlines))'. "
+                        + "Supported declarations are SharedVar, Macro, Procedure, Each, Do, While, and properties.\(detail)",
+                    source: expression
+                ))
+                return
+            }
+            if case .formalDefinition = construct {
+                guard let definition = decodeFormalDefinition(call) else {
+                    algorithmParseFailure = algorithmParseFailure
+                        ?? "FormalDefinition could not decode its typed parameters or formal body."
+                    let detail = algorithmParseFailure.map { " \($0)" } ?? ""
+                    result.diagnostics.append(.init(
+                        message: "Unsupported Algorithm declaration '\(expression.description.trimmingCharacters(in: .whitespacesAndNewlines))'. "
+                            + "Supported declarations are SharedVar, Macro, Procedure, Each, Do, While, and properties.\(detail)",
+                        source: expression
+                    ))
+                    return
+                }
                 components.append(.formalOperator(definition))
                 continue
             }
-            guard let component = parseAlgorithmComponent(expression, macros: macros) else {
+            guard let component = parseAlgorithmComponent(call, construct: construct, macros: macros) else {
                 let detail = algorithmParseFailure.map { " \($0)" } ?? ""
                 result.diagnostics.append(.init(
                     message: "Unsupported Algorithm declaration '\(expression.description.trimmingCharacters(in: .whitespacesAndNewlines))'. "
@@ -108,54 +224,38 @@ extension ParserSession {
         result.sourceAlgorithms.append(Algorithm(model: model))
     }
 
-    private func parseAlgorithmFormalDefinition(
-        _ expression: ExprSyntax
-    ) -> FormalOperatorDefinition? {
-        guard let call = expression.as(FunctionCallExprSyntax.self),
-              call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "FormalDefinition"
-        else { return nil }
-        guard let definition = decodeFormalDefinition(call) else {
-            algorithmParseFailure = algorithmParseFailure
-                ?? "FormalDefinition could not decode its typed parameters or formal body."
-            return nil
-        }
-        return definition
-    }
-
     private func parseAlgorithmComponent(
-        _ expression: ExprSyntax,
+        _ call: FunctionCallExprSyntax,
+        construct: AlgorithmSourceConstruct,
         macros: [String: AlgorithmMacroDefinition]
     ) -> AlgorithmComponentModel? {
-        guard let call = expression.as(FunctionCallExprSyntax.self),
-              let name = call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text
-        else { return nil }
-
-        switch name {
-        case "Procedure":
+        switch construct {
+        case .procedure:
             return parseProcedure(call, macros: macros, scope: .empty)
-        case "Each":
+        case .each:
             let component = parseEach(call, macros: macros, scope: .empty)
             if component == nil, algorithmParseFailure == nil {
                 algorithmParseFailure = "Each requires a finite enum domain and a decodable process body."
             }
             return component
-        case "Do", "While":
+        case .doStep, .whileStep:
             return parseEachComponent(
-                expression,
+                call,
+                construct: construct,
                 processParameter: "__pcal_sequential",
                 macros: macros,
                 scope: .empty
             )
-        case "Invariant":
+        case .invariant:
             guard let invariant = parseAlgorithmInvariant(call, scope: .empty) else { return nil }
             return .invariant(invariant)
-        case "LeadsTo", "Eventually", "Always", "AlwaysEventually", "EventuallyAlways":
-            guard let temporal = parseAlgorithmTemporal(call, named: name) else { return nil }
+        case .leadsTo, .eventually, .always, .alwaysEventually, .eventuallyAlways:
+            guard let temporal = parseAlgorithmTemporal(call, construct: construct) else { return nil }
             return .temporal(temporal)
-        case "WeakFairness", "StrongFairness", "WeakFairnessNext", "StrongFairnessNext":
+        case .fairness:
             guard let fairness = decodeFairness(call) else { return nil }
             return .fairness(fairness)
-        case "StateConstraint":
+        case .stateConstraint:
             guard let argument = call.arguments.first,
                   let condition = decodeStateExpr(argument.expression)
             else { return nil }
@@ -205,7 +305,7 @@ extension ParserSession {
                let variable = declaration.as(VariableDeclSyntax.self),
                let component = parseAlgorithmVariableDeclaration(
                     variable,
-                    expectedKind: "LocalVar",
+                    kind: .local,
                     scope: procedureScope
                ),
                case .local(let local) = component {
@@ -219,8 +319,11 @@ extension ParserSession {
                 continue
             }
             guard case .expr(let expression) = item.item,
+                  let call = expression.as(FunctionCallExprSyntax.self),
+                  let construct = AlgorithmSourceConstruct(call.calledExpression),
                   let component = parseEachComponent(
-                    expression,
+                    call,
+                    construct: construct,
                     processParameter: "__pcal_sequential",
                     macros: macros,
                     scope: procedureScope
@@ -261,28 +364,28 @@ extension ParserSession {
 
     private func parseAlgorithmTemporal(
         _ call: FunctionCallExprSyntax,
-        named kind: String
+        construct: AlgorithmSourceConstruct
     ) -> NamedTemporal? {
         guard let name = extractStringArg(call, index: 0) else { return nil }
         let arguments = Array(call.arguments).map(\.expression)
         let expression: TemporalExpr?
-        switch kind {
-        case "LeadsTo":
+        switch construct {
+        case .leadsTo:
             guard arguments.count == 3,
                   let from = decodeStateExpr(arguments[1]),
                   let to = decodeStateExpr(arguments[2])
             else { return nil }
             expression = .leadsTo(from, to)
-        case "Eventually":
+        case .eventually:
             expression = arguments.count == 2 ? formalAlgorithmProperty(arguments[1], scope: .empty).map(TemporalExpr.eventually) : nil
-        case "Always":
+        case .always:
             expression = arguments.count == 2 ? formalAlgorithmProperty(arguments[1], scope: .empty).map(TemporalExpr.always) : nil
-        case "AlwaysEventually":
+        case .alwaysEventually:
             expression = arguments.count == 2 ? formalAlgorithmProperty(arguments[1], scope: .empty).map(TemporalExpr.alwaysEventually) : nil
-        case "EventuallyAlways":
+        case .eventuallyAlways:
             expression = arguments.count == 2 ? formalAlgorithmProperty(arguments[1], scope: .empty).map(TemporalExpr.eventuallyAlways) : nil
         default:
-            expression = nil
+            return nil
         }
         return expression.map { .init(name: name, expr: $0) }
     }
@@ -364,7 +467,7 @@ extension ParserSession {
                let variable = declaration.as(VariableDeclSyntax.self),
                let component = parseAlgorithmVariableDeclaration(
                     variable,
-                    expectedKind: "LocalVar",
+                    kind: .local,
                     scope: processScope
                ) {
                 guard case .local(let state) = component else { return nil }
@@ -383,11 +486,14 @@ extension ParserSession {
                 continue
             }
             guard case .expr(let expression) = statement.item else { return nil }
-            guard let component = parseEachComponent(
-                expression,
+            guard let componentCall = expression.as(FunctionCallExprSyntax.self),
+                  let construct = AlgorithmSourceConstruct(componentCall.calledExpression),
+                  let component = parseEachComponent(
+                componentCall,
+                construct: construct,
                 processParameter: parameter,
                 macros: macros,
-                scope: processScope
+                    scope: processScope
             ) else {
                 if algorithmParseFailure == nil {
                     algorithmParseFailure = "Process component \(index + 1) could not be decoded: "
@@ -415,14 +521,14 @@ extension ParserSession {
     /// Parses one PlusCal-shaped state declaration into the source model.
     private func parseAlgorithmVariableDeclaration(
         _ declaration: VariableDeclSyntax,
-        expectedKind: String,
+        kind: AlgorithmStateDeclarationKind,
         scope: TypedFacadeScope = .empty
     ) -> AlgorithmComponentModel? {
         guard declaration.bindings.count == 1,
               let binding = declaration.bindings.first,
               let declaredName = binding.pattern.as(IdentifierPatternSyntax.self)?.identifier.text,
               let initializer = binding.initializer?.value.as(FunctionCallExprSyntax.self),
-              initializer.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == expectedKind
+              AlgorithmSourceConstruct(initializer.calledExpression) == .state(kind)
         else { return nil }
 
         if let literalName = extractStringArg(initializer, index: 0), literalName != declaredName {
@@ -439,7 +545,7 @@ extension ParserSession {
                 swiftTypeName: algorithmInitialTypeName(initialSyntax),
                 isTuple: isTupleInitialValue(initialSyntax)
             )
-        } else if expectedKind == "LocalVar",
+        } else if kind == .local,
                   let initialSyntax = initializer.arguments.first(where: { $0.label?.text == "initial" })?.expression,
                   let emptySet = initialSyntax.as(FunctionCallExprSyntax.self),
                   emptySet.arguments.isEmpty,
@@ -452,7 +558,7 @@ extension ParserSession {
                 initial: .value(.set([])),
                 swiftTypeName: "SetExpr<\(typeName)>"
             )
-        } else if expectedKind == "SharedVar",
+        } else if kind == .shared,
                   let rangeSyntax = initializer.arguments.first(where: { $0.label?.text == "in" })?.expression,
                   let range = parseIntegerClosedRange(rangeSyntax) {
             state = AlgorithmStateModel(
@@ -461,7 +567,7 @@ extension ParserSession {
                 initialSet: .setLiteral(range.map { .value(.int($0)) }),
                 swiftTypeName: "Int"
             )
-        } else if expectedKind == "SharedVar",
+        } else if kind == .shared,
                   let setSyntax = initializer.arguments.first(where: { $0.label?.text == "in" })?.expression {
             guard let initialSet = decodeStateExpr(setSyntax),
                   case .set(let elements) = try? evaluateClosed(initialSet),
@@ -481,10 +587,10 @@ extension ParserSession {
                 swiftTypeName: typeName
             )
         } else {
-            algorithmParseFailure = "\(expectedKind) declaration must use an explicit initial value or finite domain."
+            algorithmParseFailure = "\(kind.sourceName) declaration must use an explicit initial value or finite domain."
             return nil
         }
-        return expectedKind == "SharedVar" ? .shared(state) : .local(state)
+        return kind == .shared ? .shared(state) : .local(state)
     }
 
     private func parseAlgorithmMacroDeclaration(
@@ -545,14 +651,7 @@ extension ParserSession {
     }
 
     private func isAlgorithmMacroInitializer(_ initializer: FunctionCallExprSyntax) -> Bool {
-        if initializer.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "Macro" {
-            return true
-        }
-        return initializer.calledExpression
-            .as(GenericSpecializationExprSyntax.self)?
-            .expression
-            .as(DeclReferenceExprSyntax.self)?
-            .baseName.text == "Macro"
+        AlgorithmSourceConstruct(initializer.calledExpression) == .macro
     }
 
     private func algorithmInitialTypeName(_ expression: ExprSyntax) -> String? {
@@ -581,17 +680,14 @@ extension ParserSession {
     }
 
     private func parseEachComponent(
-        _ expression: ExprSyntax,
+        _ call: FunctionCallExprSyntax,
+        construct: AlgorithmSourceConstruct,
         processParameter: String,
         macros: [String: AlgorithmMacroDefinition],
         scope: TypedFacadeScope
     ) -> AlgorithmComponentModel? {
-        guard let call = expression.as(FunctionCallExprSyntax.self),
-              let name = call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text
-        else { return nil }
-
-        switch name {
-        case "Do", "While":
+        switch construct {
+        case .doStep, .whileStep:
             guard let label = algorithmLabel(call.arguments.first?.expression),
                   let closure = call.trailingClosure,
                   let statements = parseAlgorithmStatements(
@@ -602,7 +698,7 @@ extension ParserSession {
                   )
             else { return nil }
             let loopCondition: StateExpr?
-            if name == "While" {
+            if construct == .whileStep {
                 guard let conditionSyntax = call.arguments.dropFirst().first?.expression,
                       let condition = decodeAlgorithmStateExpression(conditionSyntax, scope: scope)
                 else { return nil }
@@ -611,7 +707,7 @@ extension ParserSession {
                 loopCondition = nil
             }
             return .step(.init(label: .init(name: label), statements: statements, loopCondition: loopCondition))
-        case "Invariant":
+        case .invariant:
             guard let invariant = parseAlgorithmInvariant(call, scope: scope) else { return nil }
             return .invariant(invariant)
         default:
@@ -704,30 +800,30 @@ extension ParserSession {
         scope: TypedFacadeScope
     ) -> AlgorithmStatementModel? {
         guard let call = expression.as(FunctionCallExprSyntax.self),
-              let name = call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text
+              let construct = AlgorithmSourceConstruct(call.calledExpression)
         else { return nil }
 
-        switch name {
-        case "Await", "When":
+        switch construct {
+        case .awaitCondition:
             guard let expression = call.arguments.first?.expression,
                   let condition = decodeAlgorithmStateExpression(expression, scope: scope)
             else { return nil }
             return .await(condition)
-        case "Assert":
+        case .assert:
             guard let expression = call.arguments.first?.expression,
                   let condition = decodeAlgorithmStateExpression(expression, scope: scope)
             else { return nil }
             return .assert(condition)
-        case "Assign":
+        case .assign:
             guard let target = algorithmTarget(call.arguments.first?.expression, scope: scope),
                   let valueSyntax = call.arguments.first(where: { $0.label?.text == "to" })?.expression,
                   let value = decodeAlgorithmStateExpression(valueSyntax, scope: scope)
             else { return nil }
             return .set(target: target, value: value)
-        case "Goto":
+        case .goto:
             guard let label = algorithmLabel(call.arguments.first?.expression) else { return nil }
             return .goto(.init(name: label))
-        case "Call":
+        case .call:
             guard let target = extractStringArg(call, index: 0) else {
                 algorithmParseFailure = "Call requires a procedure name string literal."
                 return nil
@@ -740,17 +836,17 @@ extension ParserSession {
                 return nil
             }
             return .call(target: target, arguments: arguments)
-        case "Return":
+        case .return:
             guard call.arguments.isEmpty else {
                 algorithmParseFailure = "Return takes no arguments."
                 return nil
             }
             return .return
-        case "Stop":
+        case .stop:
             return .stop
-        case "Skip":
+        case .skip:
             return .skip
-        case "If":
+        case .ifElse:
             guard let conditionSyntax = call.arguments.first?.expression,
                   let condition = decodeAlgorithmStateExpression(conditionSyntax, scope: scope),
                   let thenClosure = call.trailingClosure,
@@ -772,7 +868,7 @@ extension ParserSession {
                 )
             } ?? []
             return .ifElse(condition, then, otherwise)
-        case "Either":
+        case .either:
             guard let first = call.trailingClosure.flatMap({
                 parseAlgorithmStatements(
                     $0.statements,
@@ -791,7 +887,7 @@ extension ParserSession {
                   )
             else { return nil }
             return .either(first, second)
-        case "Choose":
+        case .choose:
             guard let closure = call.trailingClosure,
                   !call.arguments.isEmpty
             else { return nil }
@@ -816,7 +912,7 @@ extension ParserSession {
                 nestedBody = [.choose(variable: replacement, domain: domains[index], nestedBody)]
             }
             return nestedBody[0]
-        case "With":
+        case .with:
             guard let closure = call.trailingClosure
             else { return nil }
             let sources = call.arguments.compactMap { algorithmWithSource($0.expression, scope: scope) }
@@ -904,7 +1000,7 @@ extension ParserSession {
                 }
                 return boundBody[0]
             }
-        case "Let":
+        case .letBinding:
             guard let valueSyntax = call.arguments.first?.expression,
                   let value = decodeAlgorithmStateExpression(valueSyntax, scope: scope),
                   let closure = call.trailingClosure,
@@ -951,7 +1047,7 @@ extension ParserSession {
         scope: TypedFacadeScope
     ) -> [AlgorithmStatementModel]? {
         guard let call = expression.as(FunctionCallExprSyntax.self),
-              let name = call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text,
+              let name = AlgorithmSourceConstruct.referenceName(in: call.calledExpression),
               let macro = macros[name]
         else { return nil }
 
