@@ -79,7 +79,7 @@ struct CompiledSpecificationRendererTests {
             formalModuleClosure: compilation.formalModuleClosure,
             identity: .init(value: "stale"),
             bindings: compilation.bindings,
-            model: compilation.model,
+            semantics: compilation.semantics,
             directModuleSections: compilation.directModuleSections
         )
 
@@ -118,7 +118,7 @@ struct CompiledSpecificationRendererTests {
             formalModuleClosure: compilation.formalModuleClosure,
             identity: .init(value: "stale"),
             bindings: compilation.bindings,
-            model: compilation.model,
+            semantics: compilation.semantics,
             directModuleSections: compilation.directModuleSections
         )
         #expect(throws: CompilationDiagnostic.self) {
@@ -150,7 +150,7 @@ struct CompiledSpecificationRendererTests {
             formalModuleClosure: incompleteClosure,
             identity: compilation.identity,
             bindings: compilation.bindings,
-            model: compilation.model,
+            semantics: compilation.semantics,
             directModuleSections: compilation.directModuleSections
         )
 

@@ -264,7 +264,7 @@ struct CompilerPipelineCanonicalizationTests {
 
         let compilation = try spec.compile()
 
-        guard case .existsAction(let binder, _, .assign(let variable, .boundValue(let value))) = compilation.model.actions[0].body else {
+        guard case .existsAction(let binder, _, .assign(let variable, .boundValue(let value))) = compilation.semantics.actions[0].body else {
             Issue.record("Expected a compiled binder assignment")
             return
         }
@@ -286,7 +286,7 @@ struct CompilerPipelineCanonicalizationTests {
 
         let compilation = try spec.compile()
 
-        guard case .eventually(.equal(.stateVariable(let variable), .value(.int(0)))) = compilation.model.temporalProperties[0].expression else {
+        guard case .eventually(.equal(.stateVariable(let variable), .value(.int(0)))) = compilation.semantics.temporalProperties[0].expression else {
             Issue.record("Expected a compiled temporal predicate")
             return
         }
@@ -330,8 +330,8 @@ struct CompilerPipelineCanonicalizationTests {
         )
         let compilation = try spec.compile()
         let state = try CompiledState(formalValues: [.int(0), .int(0)], compilation: compilation)
-        let nextStates = try CompiledActionEnumerator(state: state, model: compilation.model, layout: compilation.layout)
-            .enumerate(try #require(compilation.model.actions.first))
+        let nextStates = try CompiledActionEnumerator(state: state, semantics: compilation.semantics, layout: compilation.layout)
+            .enumerate(try #require(compilation.semantics.actions.first))
 
         #expect(nextStates.count == 1)
         #expect(try nextStates[0].value(for: .init(ordinal: 0)) == .integer(2))
@@ -354,8 +354,8 @@ struct CompilerPipelineCanonicalizationTests {
         )
         let compilation = try spec.compile()
         let state = try CompiledState(formalValues: [.int(0)], compilation: compilation)
-        let next = try CompiledActionEnumerator(state: state, model: compilation.model, layout: compilation.layout)
-            .enumerate(try #require(compilation.model.actions.first))
+        let next = try CompiledActionEnumerator(state: state, semantics: compilation.semantics, layout: compilation.layout)
+            .enumerate(try #require(compilation.semantics.actions.first))
 
         let values = try next.map { try $0.value(for: .init(ordinal: 0)) }
         #expect(Set(values) == [.integer(1), .integer(2)])
@@ -385,10 +385,10 @@ struct CompilerPipelineCanonicalizationTests {
         )
         let compilation = try spec.compile()
         let state = try CompiledState(formalValues: [.int(0)], compilation: compilation)
-        let next = try CompiledActionEnumerator(state: state, model: compilation.model, layout: compilation.layout)
-            .enumerate(try #require(compilation.model.actions.first))
+        let next = try CompiledActionEnumerator(state: state, semantics: compilation.semantics, layout: compilation.layout)
+            .enumerate(try #require(compilation.semantics.actions.first))
 
-        guard case .assign(_, .operatorApplication(.reference(let id, _), _)) = compilation.model.actions[0].body else {
+        guard case .assign(_, .operatorApplication(.reference(let id, _), _)) = compilation.semantics.actions[0].body else {
             Issue.record("Expected an operator identity")
             return
         }
@@ -433,8 +433,8 @@ struct CompilerPipelineCanonicalizationTests {
         )
         let compilation = try spec.compile()
         let state = try CompiledState(formalValues: [.int(0)], compilation: compilation)
-        let next = try CompiledActionEnumerator(state: state, model: compilation.model, layout: compilation.layout)
-            .enumerate(try #require(compilation.model.actions.first))
+        let next = try CompiledActionEnumerator(state: state, semantics: compilation.semantics, layout: compilation.layout)
+            .enumerate(try #require(compilation.semantics.actions.first))
 
         #expect(try #require(next.first).value(for: .init(ordinal: 0)) == .integer(6))
     }
@@ -463,7 +463,7 @@ struct CompilerPipelineCanonicalizationTests {
         #expect(initial.count == 2)
         let firstSuccessor = try runtime.successors(from: try #require(initial.first))
         #expect(firstSuccessor.count == 1)
-        #expect(try runtime.invariantHolds(compilation.model.invariants[0], in: firstSuccessor[0].state))
+        #expect(try runtime.invariantHolds(compilation.semantics.invariants[0], in: firstSuccessor[0].state))
 
         let exploration = try ModelChecker(compilation: compilation, maxStates: 10).explore()
         #expect(exploration.graph.states.count == 5)
@@ -485,7 +485,7 @@ struct CompilerPipelineCanonicalizationTests {
 
         let compilation = try spec.compile()
 
-        guard case .and(.guard_(.operatorApplication(.lambda(let lambda), _)), .unchanged) = compilation.model.actions[0].body else {
+        guard case .and(.guard_(.operatorApplication(.lambda(let lambda), _)), .unchanged) = compilation.semantics.actions[0].body else {
             Issue.record("Expected a compiled higher-order call")
             return
         }
@@ -507,7 +507,7 @@ struct CompilerPipelineCanonicalizationTests {
 
         let compilation = try spec.compile()
 
-        guard case .guard_(.in(_, .integerRange(.stateVariable(let value), _))) = compilation.model.actions[0].body else {
+        guard case .guard_(.in(_, .integerRange(.stateVariable(let value), _))) = compilation.semantics.actions[0].body else {
             Issue.record("Expected a compiled integer range")
             return
         }
@@ -578,13 +578,13 @@ struct CompilerPipelineCanonicalizationTests {
         let compilation = try spec.compile()
         let state = try CompiledState(formalValues: [.int(1)], compilation: compilation)
 
-        guard case .existsAction(let binder, _, .guard_(let expression)) = compilation.model.actions[0].body else {
+        guard case .existsAction(let binder, _, .guard_(let expression)) = compilation.semantics.actions[0].body else {
             Issue.record("Expected a compiled action binder")
             return
         }
         let result = try CompiledEvaluator(
             state: state,
-            model: compilation.model,
+            semantics: compilation.semantics,
             layout: compilation.layout,
             bindings: .init().binding(.integer(1), to: binder)
         ).evaluate(expression)
@@ -656,11 +656,11 @@ struct CompilerPipelineCanonicalizationTests {
         let compilation = try spec.compile()
         let state = try CompiledState(formalValues: [], compilation: compilation)
 
-        guard case .guard_(let compiled) = compilation.model.actions[0].body else {
+        guard case .guard_(let compiled) = compilation.semantics.actions[0].body else {
             Issue.record("Expected a compiled guard")
             return
         }
-        #expect(try CompiledEvaluator(state: state, model: compilation.model, layout: compilation.layout).evaluate(compiled) == .boolean(true))
+        #expect(try CompiledEvaluator(state: state, semantics: compilation.semantics, layout: compilation.layout).evaluate(compiled) == .boolean(true))
     }
 
     @Test("compiled actions update formal state by variable identity")
@@ -676,9 +676,9 @@ struct CompilerPipelineCanonicalizationTests {
 
         let successors = try CompiledActionEnumerator(
             state: state,
-            model: compilation.model,
+            semantics: compilation.semantics,
             layout: compilation.layout
-        ).enumerate(compilation.model.actions[0])
+        ).enumerate(compilation.semantics.actions[0])
 
         #expect(successors.count == 1)
         #expect(try successors[0].value(for: compilation.layout.variables[0].id) == .integer(2))
@@ -694,7 +694,7 @@ struct CompilerPipelineCanonicalizationTests {
         )
         let compilation = try spec.compile()
 
-        guard case .guard_(.equal(.recordAccess(_, let field), _)) = compilation.model.actions[0].body else {
+        guard case .guard_(.equal(.recordAccess(_, let field), _)) = compilation.semantics.actions[0].body else {
             Issue.record("Expected a compiled record access")
             return
         }

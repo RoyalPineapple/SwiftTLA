@@ -21,8 +21,8 @@ private func compiledSuccessors(
     projection: projection(values),
     compilation: compilation
   )
-  let action = try #require(compilation.model.actions.first)
-  return try CompiledActionEnumerator(state: state, model: compilation.model, layout: compilation.layout)
+  let action = try #require(compilation.semantics.actions.first)
+  return try CompiledActionEnumerator(state: state, semantics: compilation.semantics, layout: compilation.layout)
     .enumerate(action)
     .map { try $0.projection(using: compilation.layout) }
 }

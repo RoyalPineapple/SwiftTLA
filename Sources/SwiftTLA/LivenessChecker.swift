@@ -82,7 +82,7 @@ public struct LivenessChecker {
         initialStateIDs: [StateGraph.StateID],
         isComplete: Bool = true
     ) -> [TemporalAnalysisResult] {
-        return compilation.model.temporalProperties.map {
+        return compilation.semantics.temporalProperties.map {
             analyze(
                 $0.expression,
                 fairness: compilation.spec.fairness,

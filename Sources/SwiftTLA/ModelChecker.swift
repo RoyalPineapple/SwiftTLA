@@ -205,7 +205,7 @@ private func compiledBFS(
         let key = try runtime.canonicalState(current)
         guard let currentID = stateToID[key] else { continue }
 
-        for invariant in runtime.compilation.model.invariants {
+        for invariant in runtime.compilation.semantics.invariants {
             guard try runtime.invariantHolds(invariant, in: current) else {
                 return .init(
                     graph: try graph(),

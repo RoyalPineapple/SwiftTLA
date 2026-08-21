@@ -181,7 +181,7 @@ struct CompiledSymmetricCollection: Sendable {
     let members: [TLAValue]
 }
 
-struct CompiledModel: Sendable {
+struct CompiledSemantics: Sendable {
     let initialValues: [VariableID: CompiledValue]
     let variableInitializers: [VariableID: CompiledVariableInitializer]
     let actions: [CompiledAction]

@@ -3,7 +3,7 @@ struct CompiledLowerer {
     let closure: FormalModuleClosure
     let layout: CompiledLayout
 
-    func lower(spec: TLASpec) throws -> CompiledModel {
+    func lower(spec: TLASpec) throws -> CompiledSemantics {
         var initialValues: [VariableID: CompiledValue] = [:]
         var initializers: [VariableID: CompiledVariableInitializer] = [:]
         for variable in spec.variables {
@@ -74,7 +74,7 @@ struct CompiledLowerer {
                     body: try lower(function.body, at: "linkedRecursiveFunctions.\(function.name).body")
                 )
             }
-        return CompiledModel(
+        return CompiledSemantics(
             initialValues: initialValues,
             variableInitializers: initializers,
             actions: actions,

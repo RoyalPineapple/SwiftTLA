@@ -849,11 +849,11 @@ struct AlgorithmBuilderTests {
         let spec = try compiledSourceSpecification(algorithm)
         let (compilation, initial) = try initialState(of: spec)
         let count = try #require(compilation.layout.variableID(named: "count"))
-        #expect(try compilation.model.invariants.allSatisfy {
+        #expect(try compilation.semantics.invariants.allSatisfy {
             try CompiledRuntime(compilation: compilation).invariantHolds($0, in: initial)
         })
         let alternate = try initial.updating(count, to: .integer(1))
-        #expect(try compilation.model.invariants.allSatisfy {
+        #expect(try compilation.semantics.invariants.allSatisfy {
             try CompiledRuntime(compilation: compilation).invariantHolds($0, in: alternate)
         })
     }

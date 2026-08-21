@@ -16,7 +16,7 @@ enum EvalError: Error, CustomStringConvertible {
 
 struct CompiledEvaluator {
     let state: CompiledState
-    let model: CompiledModel
+    let semantics: CompiledSemantics
     let layout: CompiledLayout
     let bindings: CompiledBindings
     let enabledActions: Set<ActionID>
@@ -26,7 +26,7 @@ struct CompiledEvaluator {
 
     init(
         state: CompiledState,
-        model: CompiledModel,
+        semantics: CompiledSemantics,
         layout: CompiledLayout,
         bindings: CompiledBindings = .init(),
         enabledActions: Set<ActionID> = [],
@@ -35,7 +35,7 @@ struct CompiledEvaluator {
         remainingRecursionDepth: Int = 1_000
     ) {
         self.state = state
-        self.model = model
+        self.semantics = semantics
         self.layout = layout
         self.bindings = bindings
         self.enabledActions = enabledActions
@@ -417,7 +417,7 @@ struct CompiledEvaluator {
                 }
                 return try CompiledEvaluator(
                     state: state,
-                    model: model,
+                    semantics: semantics,
                     layout: layout,
                     bindings: callBindings,
                     enabledActions: enabledActions,
@@ -432,7 +432,7 @@ struct CompiledEvaluator {
                     }
                     return try evaluate(.operatorApplication(supplied, arguments), bindings: bindings)
                 }
-                guard let definition = model.formalOperatorDefinitions.first(where: { $0.id == id }) else {
+                guard let definition = semantics.formalOperatorDefinitions.first(where: { $0.id == id }) else {
                     throw CompiledEvaluationError.unresolvedOperator
                 }
                 guard definition.parameters.count == arity, definition.parameters.count == arguments.count else {
@@ -455,7 +455,7 @@ struct CompiledEvaluator {
                 }
                 return try CompiledEvaluator(
                     state: state,
-                    model: model,
+                    semantics: semantics,
                     layout: layout,
                     bindings: callBindings,
                     enabledActions: enabledActions,
@@ -473,7 +473,7 @@ struct CompiledEvaluator {
             }
             return try CompiledEvaluator(
                 state: state,
-                model: model,
+                semantics: semantics,
                 layout: layout,
                 bindings: bindings,
                 enabledActions: enabledActions,
@@ -495,7 +495,7 @@ struct CompiledEvaluator {
                 }
                 if let domain = operation.domain, case .boolean(false) = try CompiledEvaluator(
                     state: state,
-                    model: model,
+                    semantics: semantics,
                     layout: layout,
                     bindings: callBindings,
                     enabledActions: enabledActions,
@@ -507,7 +507,7 @@ struct CompiledEvaluator {
                 }
                 return try CompiledEvaluator(
                     state: state,
-                    model: model,
+                    semantics: semantics,
                     layout: layout,
                     bindings: callBindings,
                     enabledActions: enabledActions,
@@ -516,7 +516,7 @@ struct CompiledEvaluator {
                     remainingRecursionDepth: remainingRecursionDepth - 1
                 ).evaluate(operation.body)
             }
-            if let function = model.recursiveFunctions.first(where: { $0.id == id }) {
+            if let function = semantics.recursiveFunctions.first(where: { $0.id == id }) {
                 guard function.parameters.count == arguments.count else {
                     throw EvalError.typeMismatch("Recursive operator argument count differs")
                 }
@@ -526,7 +526,7 @@ struct CompiledEvaluator {
                 }
                 return try CompiledEvaluator(
                     state: state,
-                    model: model,
+                    semantics: semantics,
                     layout: layout,
                     bindings: callBindings,
                     enabledActions: enabledActions,
@@ -548,10 +548,10 @@ package func evaluateClosed(_ expression: StateExpr) throws -> TLAValue {
         invariants: [.init(name: "value", body: expression)]
     ).compile()
     let state = try CompiledState(values: [CompiledValue](), compilation: compilation)
-    guard let invariant = compilation.model.invariants.first else {
+    guard let invariant = compilation.semantics.invariants.first else {
         throw CompiledEvaluationError.unresolvedOperator
     }
-    return try CompiledEvaluator(state: state, model: compilation.model, layout: compilation.layout)
+    return try CompiledEvaluator(state: state, semantics: compilation.semantics, layout: compilation.layout)
         .evaluate(invariant.body)
         .rendered(using: compilation.layout)
 }

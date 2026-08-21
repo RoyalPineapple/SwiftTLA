@@ -38,7 +38,7 @@ struct SymmetryParserFidelityTests {
             SymmetrySet(variableName: "TxId", values: [.string("t1"), .string("t2")])
         ])
         let compilation = try GeneratedSymmetryModel.spec.compile()
-        #expect(compilation.model.symmetrySets.map(\.values) == [
+        #expect(compilation.semantics.symmetrySets.map(\.values) == [
             [.string("t1"), .string("t2")]
         ])
     }

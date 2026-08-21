@@ -78,7 +78,7 @@ public struct CompiledSpecification: Sendable {
     public let identity: CompilationIdentity
     let layout: CompiledLayout
     let bindings: CompiledBindingTable
-    let model: CompiledModel
+    let semantics: CompiledSemantics
     let directModuleSections: DirectModuleSectionPlan
     let authoredPlusCalModule: AuthoredPlusCalModule?
 
@@ -146,14 +146,14 @@ public struct CompiledSpecification: Sendable {
         do {
             formalState = try CompiledState(projection: state, compilation: self)
         } catch {
-            return model.invariants.map {
+            return semantics.invariants.map {
                 .evaluationFailed(
                     name: $0.name,
                     diagnostic: .init(code: .evaluationError, message: String(describing: error))
                 )
             }
         }
-        let invariants = model.invariants.map { invariant -> CompiledPropertyOutcome in
+        let invariants = semantics.invariants.map { invariant -> CompiledPropertyOutcome in
             do {
                 return try runtime.invariantHolds(invariant, in: formalState)
                     ? .satisfied(name: invariant.name)
@@ -165,7 +165,7 @@ public struct CompiledSpecification: Sendable {
                 )
             }
         }
-        return invariants + model.temporalProperties.map {
+        return invariants + semantics.temporalProperties.map {
             .evaluationUnavailable(
                 name: $0.name,
                 diagnostic: .init(
@@ -182,7 +182,7 @@ public struct CompiledSpecification: Sendable {
         identity: CompilationIdentity,
         layout: CompiledLayout,
         bindings: CompiledBindingTable,
-        model: CompiledModel,
+        semantics: CompiledSemantics,
         directModuleSections: DirectModuleSectionPlan,
         authoredPlusCalModule: AuthoredPlusCalModule? = nil
     ) {
@@ -191,17 +191,12 @@ public struct CompiledSpecification: Sendable {
         self.identity = identity
         self.layout = layout
         self.bindings = bindings
-        self.model = model
+        self.semantics = semantics
         self.directModuleSections = directModuleSections
         self.authoredPlusCalModule = authoredPlusCalModule
     }
 
     /// Renders a complete TLA+/CFG bundle from the already-linked closure.
-    ///
-    /// This is the rendering boundary for compiled models. It neither reparses
-    /// source nor discovers module dependencies from rendered text. Additional
-    /// externally staged inputs participate in that final validation but make
-    /// the resulting bundle untrusted because the compiler cannot own them.
     public func renderedTLAModuleBundle(
         additionalImports: [TLAModuleFile] = []
     ) throws -> TLAModuleBundle {
@@ -526,7 +521,7 @@ public extension TLASpec {
         let layout = CompiledLayout(spec: self, closure: closure)
         var validator = BindingValidator(spec: self, layout: layout, closure: closure)
         let bindings = try validator.validate(spec: self)
-        let model = try CompiledLowerer(bindings: bindings, closure: closure, layout: layout).lower(spec: self)
+        let semantics = try CompiledLowerer(bindings: bindings, closure: closure, layout: layout).lower(spec: self)
         let directModuleSections = try directModuleSectionPlan(layout: layout)
         let authoredPlusCalModule = try authoredPlusCalModule()
         return CompiledSpecification(
@@ -535,7 +530,7 @@ public extension TLASpec {
             identity: .init(value: compilationFingerprint),
             layout: layout,
             bindings: bindings,
-            model: model,
+            semantics: semantics,
             directModuleSections: directModuleSections,
             authoredPlusCalModule: authoredPlusCalModule
         )
@@ -771,7 +766,7 @@ private func renderControlReferences(
     }
 }
 
-/// Canonicalizes the formal data model with unambiguous field boundaries.
+/// Canonicalizes formal data with unambiguous field boundaries.
 ///
 /// Do not substitute a display description here. The encoder deliberately
 /// visits fields which presentation APIs omit, including action domains,
