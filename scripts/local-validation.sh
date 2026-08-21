@@ -129,30 +129,22 @@ tree_rss_mib() {
     '
 }
 
-available_memory_mib() {
-    vm_stat | awk '
-        match($0, /page size of [0-9]+ bytes/) {
-            page_size = $0
-            sub(/.*page size of /, "", page_size)
-            sub(/ bytes.*/, "", page_size)
-        }
-        $1 == "Pages" && ($2 == "free:" || $2 == "speculative:") {
-            pages = $3
-            gsub("\\.", "", pages)
-            available += pages
-        }
-        END { printf "%d\n", available * page_size / 1048576 }
-    '
+reclaimable_memory_mib() {
+    local total_bytes free_percent
+    total_bytes="$(sysctl -n hw.memsize)"
+    free_percent="$(memory_pressure -Q | awk '/System-wide memory free percentage:/ { gsub(/[^0-9]/, "", $NF); print $NF }')"
+    [[ "$free_percent" =~ ^[0-9]+$ ]] || return 1
+    printf '%d\n' "$((total_bytes * free_percent / 100 / 1048576))"
 }
 
 watchdog() {
-    local rss_mib available_mib reason
+    local rss_mib reclaimable_mib reason
     while kill -0 "$command_pid" 2>/dev/null; do
         rss_mib="$(tree_rss_mib "$command_pid")"
-        available_mib="$(available_memory_mib)"
+        reclaimable_mib="$(reclaimable_memory_mib)"
         reason=""
         [[ "$rss_mib" -le "$max_rss_mib" ]] || reason="process-tree-rss"
-        [[ "$available_mib" -ge "$min_available_mib" ]] || reason="available-memory"
+        [[ "$reclaimable_mib" -ge "$min_available_mib" ]] || reason="reclaimable-memory"
         if [[ -n "$reason" ]]; then
             terminate_group
             printf '%s\n' \
@@ -160,7 +152,7 @@ watchdog() {
                 "reason=$reason" \
                 "root_pid=$command_pid" \
                 "tree_rss_mib=$rss_mib" \
-                "available_memory_mib=$available_mib" \
+                "reclaimable_memory_mib=$reclaimable_mib" \
                 "limits=max_rss_mib:$max_rss_mib,min_available_mib:$min_available_mib" >&2
             return
         fi
