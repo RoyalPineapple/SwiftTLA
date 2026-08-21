@@ -427,6 +427,11 @@ package struct TLCProcessAdapter: Sendable {
   package func capture(_ request: TLCProcessRequest, replay: TLCReplayPolicy) throws
     -> TLCProcessCapture {
     let run = try run(request, replay: replay)
+    return try capture(run, request: request)
+  }
+
+  package func capture(_ run: TLCProcessRun, request: TLCProcessRequest) throws
+    -> TLCProcessCapture {
     let graphEvents = try Data(contentsOf: request.graphEvents)
     let parser = TLCGraphEventParser(expectedCase: request.expectedCase)
     let stream = try parser.parse(graphEvents)
@@ -440,11 +445,20 @@ package struct TLCProcessAdapter: Sendable {
     )
   }
 
-  package func retainRawOutput(
+  package func retain(request: TLCProcessRequest, in directory: URL) throws {
+    try writeProcessRecord(request: request, results: [:], failures: [:], to: directory)
+    try retainRawArtifacts(from: request, in: directory)
+  }
+
+  package func retain(
     _ run: TLCProcessRun,
     request: TLCProcessRequest,
     in directory: URL
   ) throws {
+    var results: [TLCInvocationPhase: TLCProcessResult] = [.primary: run.primary]
+    if let trace = run.trace { results[.trace] = trace }
+    if let replay = run.replay { results[.replay] = replay }
+    try writeProcessRecord(request: request, results: results, failures: [:], to: directory)
     let logs = try ConformanceEvidence.createDirectory(
       directory.appendingPathComponent("logs"), beneath: directory)
     try retain(run.primary, phase: .primary, in: logs)
@@ -453,11 +467,14 @@ package struct TLCProcessAdapter: Sendable {
     try retainRawArtifacts(from: request, in: directory)
   }
 
-  package func retainRawOutput(
-    from error: Error,
+  package func retain(
+    _ error: Error,
     request: TLCProcessRequest,
     in directory: URL
   ) throws {
+    let lifecycle = processLifecycle(for: error)
+    try writeProcessRecord(
+      request: request, results: lifecycle.results, failures: lifecycle.failures, to: directory)
     let logs = try ConformanceEvidence.createDirectory(
       directory.appendingPathComponent("logs"), beneath: directory)
     switch error {
@@ -519,6 +536,55 @@ package struct TLCProcessAdapter: Sendable {
     )
   }
 
+  private func processLifecycle(
+    for error: Error
+  ) -> (
+    results: [TLCInvocationPhase: TLCProcessResult],
+    failures: [TLCInvocationPhase: TLCProcessExecutionFailure]
+  ) {
+    switch error {
+    case TLCProcessError.traceCaptureFailed(let completed, let failed):
+      return ([.primary: completed.primary, .trace: failed], [:])
+    case TLCProcessError.requiredReplayFailed(let completed, let failed):
+      var results: [TLCInvocationPhase: TLCProcessResult] = [.primary: completed.primary, .replay: failed]
+      if let trace = completed.trace { results[.trace] = trace }
+      return (results, [:])
+    case TLCProcessError.traceCaptureExecutionFailed(let completed, let failure):
+      return ([.primary: completed.primary], [.trace: failure])
+    case TLCProcessError.requiredReplayExecutionFailed(let completed, let failure):
+      var results: [TLCInvocationPhase: TLCProcessResult] = [.primary: completed.primary]
+      if let trace = completed.trace { results[.trace] = trace }
+      return (results, [.replay: failure])
+    default:
+      return ([:], [.primary: TLCProcessExecutionFailure(error)])
+    }
+  }
+
+  private func writeProcessRecord(
+    request: TLCProcessRequest,
+    results: [TLCInvocationPhase: TLCProcessResult],
+    failures: [TLCInvocationPhase: TLCProcessExecutionFailure],
+    to directory: URL
+  ) throws {
+    let phases: [TLCInvocationPhase] = [.primary, .trace, .replay]
+    var record: [String: Any] = [
+      "request": processRequestJSON(request),
+      "attempted": phases.compactMap { phase in
+        results[phase] != nil || failures[phase] != nil ? phase.rawValue : nil
+      }
+    ]
+    for phase in phases {
+      if let result = results[phase] {
+        record[phase.rawValue] = processJSON(result)
+      } else if let failure = failures[phase] {
+        record[phase.rawValue] = ["executionError": sanitized(failure.message)]
+      } else {
+        record[phase.rawValue] = NSNull()
+      }
+    }
+    try ConformanceEvidence.writeJSON(record, to: directory.appendingPathComponent("tlc-process.json"))
+  }
+
   private func retain(_ result: TLCProcessResult, phase: TLCInvocationPhase, in directory: URL) throws {
     try ConformanceEvidence.writeText(sanitized(result.stdout), to: directory.appendingPathComponent(phase.stdoutLog))
     try ConformanceEvidence.writeText(sanitized(result.stderr), to: directory.appendingPathComponent(phase.stderrLog))
@@ -552,6 +618,106 @@ func processJSON(_ result: TLCProcessResult) -> [String: Any] {
     "status": result.status,
     "isViolation": result.isViolation,
     "reportedExhaustiveCompletion": result.reportedExhaustiveCompletion
+  ]
+}
+
+private func processRequestJSON(_ request: TLCProcessRequest) -> [String: Any] {
+  [
+    "correlation": [
+      "caseID": request.caseID,
+      "runID": request.runID.uuidString.lowercased(),
+      "engine": CoreConformanceEngine.tlc.rawValue
+    ],
+    "case": conformanceCaseJSON(request.expectedCase),
+    "toolchain": toolchainJSON(request),
+    "arguments": request.arguments,
+    "bundle": [
+      "root": request.bundle.root.name,
+      "files": request.bundle.files.map {
+        ["name": $0.name, "tlaSHA256": SHA256.hex(Data($0.tla.utf8))]
+      }
+    ],
+    "module": request.moduleFileName,
+    "configuration": request.configurationFileName,
+    "timeout": request.timeout
+  ]
+}
+
+private func conformanceCaseJSON(_ declaredCase: CoreConformanceCase) -> [String: Any] {
+  var record: [String: Any] = [
+    "id": declaredCase.id,
+    "moduleSHA256": declaredCase.moduleSHA256,
+    "cfgSHA256": declaredCase.cfgSHA256,
+    "arguments": declaredCase.arguments,
+    "argumentsSHA256": declaredCase.argumentsSHA256,
+    "workers": declaredCase.workers,
+    "fingerprintPolynomial": declaredCase.fingerprintPolynomial,
+    "deadlock": declaredCase.deadlock,
+    "operatingSystem": declaredCase.operatingSystem,
+    "architecture": declaredCase.architecture,
+    "environment": declaredCase.environment,
+    "pin": pinJSON(declaredCase.pin),
+    "invocationMappings": declaredCase.invocationMappings.map { mapping in
+      [
+        "wrapper": mapping.wrapper,
+        "action": mapping.action,
+        "arguments": mapping.arguments,
+        "indices": mapping.indices
+      ]
+    },
+    "valueNormalizations": declaredCase.valueNormalizations.map { normalization in
+      [
+        "binding": normalization.binding,
+        "functionKeys": normalization.functionKeys
+      ]
+    }
+  ]
+  if let governance = declaredCase.governance {
+    record["governance"] = [
+      "finiteBounds": [
+        "summary": governance.finiteBounds.summary,
+        "limits": governance.finiteBounds.limits
+      ],
+      "semanticCitations": governance.semanticCitations
+    ]
+  }
+  return record
+}
+
+private func toolchainJSON(_ request: TLCProcessRequest) -> [String: Any] {
+  var record: [String: Any] = ["declaredPin": pinJSON(request.expectedCase.pin)]
+  if let referencePin = request.referencePin {
+    record["referencePin"] = pinJSON(referencePin)
+  }
+  if let artifacts = request.referenceArtifacts {
+    record["referenceArtifacts"] = [
+      "jar": artifacts.jar.path,
+      "javaArchive": artifacts.javaArchive.path,
+      "bridgeSource": artifacts.bridgeSource.path,
+      "bridgeBinary": artifacts.bridgeBinary.path,
+      "jarManifest": artifacts.jarManifest,
+      "runtime": [
+        "version": artifacts.runtime.version,
+        "vendor": artifacts.runtime.vendor,
+        "architecture": artifacts.runtime.architecture,
+        "properties": artifacts.runtime.properties
+      ]
+    ]
+  }
+  return record
+}
+
+private func pinJSON(_ pin: TLCReferencePin) -> [String: String] {
+  [
+    "tag": pin.tag,
+    "commit": pin.commit,
+    "jarSHA256": pin.jarSHA256,
+    "javaDistribution": pin.javaDistribution,
+    "javaVersion": pin.javaVersion,
+    "javaArchiveSHA256": pin.javaArchiveSHA256,
+    "bridgeClass": pin.bridgeClass,
+    "bridgeSourceSHA256": pin.bridgeSourceSHA256,
+    "bridgeBinarySHA256": pin.bridgeBinarySHA256
   ]
 }
 

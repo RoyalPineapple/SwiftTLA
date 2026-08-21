@@ -31,9 +31,13 @@ struct CoreConformanceRunnerTests {
     #expect(fileManager.fileExists(atPath: output.appendingPathComponent("comparison.json").path))
     #expect(fileManager.fileExists(atPath: output.appendingPathComponent("comparison-diagnostics.json").path))
     #expect(fileManager.fileExists(atPath: output.appendingPathComponent("run.json").path))
-    #expect(fileManager.fileExists(atPath: output.appendingPathComponent("case.json").path))
-    #expect(fileManager.fileExists(atPath: output.appendingPathComponent("toolchain.json").path))
-    #expect(fileManager.fileExists(atPath: output.appendingPathComponent("arguments.json").path))
+    let process = try json(at: output.appendingPathComponent("tlc-process.json"))
+    let processRequest = try #require(process["request"] as? [String: Any])
+    #expect((processRequest["case"] as? [String: Any])?["id"] as? String == request.expectedCase.id)
+    #expect(processRequest["arguments"] as? [String] == request.expectedCase.arguments)
+    #expect((processRequest["toolchain"] as? [String: Any])?["declaredPin"] != nil)
+    #expect((processRequest["bundle"] as? [String: Any])?["root"] as? String == "Fixture")
+    #expect(!fileManager.fileExists(atPath: output.appendingPathComponent("case.json").path))
     let swift = try json(at: output.appendingPathComponent("swift-run.json"))
     let tlc = try json(at: output.appendingPathComponent("tlc-run.json"))
     let comparison = try json(at: output.appendingPathComponent("comparison.json"))
@@ -88,15 +92,13 @@ struct CoreConformanceRunnerTests {
     #expect(fileManager.fileExists(atPath: output.appendingPathComponent("swift-run.json").path))
     #expect(fileManager.fileExists(atPath: output.appendingPathComponent("diagnostic.json").path))
     #expect(fileManager.fileExists(atPath: output.appendingPathComponent("run.json").path))
-    #expect(fileManager.fileExists(atPath: output.appendingPathComponent("case.json").path))
-    #expect(fileManager.fileExists(atPath: output.appendingPathComponent("toolchain.json").path))
-    #expect(fileManager.fileExists(atPath: output.appendingPathComponent("arguments.json").path))
+    #expect(fileManager.fileExists(atPath: output.appendingPathComponent("tlc-process.json").path))
     #expect(
       fileManager.fileExists(atPath: output.appendingPathComponent("logs/tlc.stdout.log").path))
     #expect(
       fileManager.fileExists(atPath: output.appendingPathComponent("logs/tlc.stderr.log").path))
     let diagnostic = try json(at: output.appendingPathComponent("diagnostic.json"))
-    let arguments = try json(at: output.appendingPathComponent("arguments.json"))
+    let process = try json(at: output.appendingPathComponent("tlc-process.json"))
     #expect(diagnostic["code"] as? String == "tlc-execution-failed")
     #expect(diagnostic["phase"] as? String == "tlc-execution")
     let report = try #require(diagnostic["report"] as? [String: Any])
@@ -105,7 +107,7 @@ struct CoreConformanceRunnerTests {
     #expect((report["actual"] as? String)?.contains("terminated") == true)
     #expect((report["nextSafeAction"] as? String)?.contains("retained stdout") == true)
     #expect((report["toolOutput"] as? [[String: Any]])?.count == 2)
-    #expect(arguments["arguments"] as? [String] == request.arguments)
+    #expect((process["request"] as? [String: Any])?["arguments"] as? [String] == request.arguments)
     #expect(
       (try String(contentsOf: output.appendingPathComponent("logs/tlc.stdout.log"))).contains(
         "partial stdout"))
@@ -139,7 +141,7 @@ struct CoreConformanceRunnerTests {
     #expect(result.evidenceDirectory == output)
     let diagnostic = try json(at: output.appendingPathComponent("diagnostic.json"))
     #expect(diagnostic["code"] as? String == "swift-adaptation-failed")
-    #expect(fileManager.fileExists(atPath: output.appendingPathComponent("case.json").path))
+    #expect(fileManager.fileExists(atPath: output.appendingPathComponent("tlc-process.json").path))
   }
   @Test("runner isolates a stale staging directory and retains trace replay evidence")
   func isolatesStagingAndRetainsTraceReplayEvidence() throws {
@@ -272,8 +274,7 @@ struct CoreConformanceRunnerTests {
 
     #expect(result.exitCode == .exact)
     #expect(fileManager.fileExists(atPath: output.appendingPathComponent("receipts.json").path))
-    #expect(fileManager.fileExists(atPath: output.appendingPathComponent("case.json").path))
-    #expect(fileManager.fileExists(atPath: output.appendingPathComponent("arguments.json").path))
+    #expect(fileManager.fileExists(atPath: output.appendingPathComponent("tlc-process.json").path))
     #expect(!fileManager.fileExists(atPath: output.appendingPathComponent("swift-run.json").path))
     #expect(!fileManager.fileExists(atPath: output.appendingPathComponent("tlc-run.json").path))
     #expect(!fileManager.fileExists(atPath: output.appendingPathComponent("comparison.json").path))
@@ -470,7 +471,7 @@ extension CoreConformanceRunnerTests {
     #expect(fileManager.fileExists(atPath: output.appendingPathComponent("existing.txt").path))
     #expect(fileManager.fileExists(atPath: evidence.appendingPathComponent("diagnostic.json").path))
     #expect(fileManager.fileExists(atPath: evidence.appendingPathComponent("run.json").path))
-    #expect(fileManager.fileExists(atPath: evidence.appendingPathComponent("case.json").path))
+    #expect(fileManager.fileExists(atPath: evidence.appendingPathComponent("tlc-process.json").path))
     #expect(fileManager.fileExists(atPath: evidence.appendingPathComponent("graph-events.jsonl").path))
     #expect(fileManager.fileExists(atPath: evidence.appendingPathComponent("graph-events.trace.jsonl").path))
   }

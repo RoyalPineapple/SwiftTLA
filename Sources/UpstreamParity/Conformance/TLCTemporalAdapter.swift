@@ -122,25 +122,21 @@ public struct TLCTemporalAdapter: Sendable {
       let completeGraph = try captureCompleteGraph(input)
       try clearTraceOutput(for: input.request)
 
-      let capture: TLCProcessCapture
+      let run: TLCProcessRun
       do {
-        capture = try processAdapter.capture(input.request, replay: .none)
+        run = try processAdapter.run(input.request, replay: .none)
       } catch {
-        if let completed = completedRun(from: error) {
-          try retain(run: completed, input: input)
-          try retainPrimaryResult(completed.primary, input: input)
-        }
+        try processAdapter.retain(error, request: input.request, in: input.outputDirectory)
         throw error
       }
-      let run = capture.run
-      try retain(run: run, input: input)
-      try retainPrimaryResult(run.primary, input: input)
+      try processAdapter.retain(run, request: input.request, in: input.outputDirectory)
+      let capture = try processAdapter.capture(run, request: input.request)
       let propertyGraph = capture.graph
       let graph = completeGraph?.graph ?? propertyGraph
-      let graphID = Self.graphID(graph)
+      let graphID = CanonicalGraphReceipt.graphRecordDigest(for: graph.graph)
       let initialStateIDs = graph.graph.initialStateKeys.sorted().map(\.canonicalEncoding)
       let tlcEvidence = try ConformanceEvidence.reference(
-        for: input.outputDirectory.appendingPathComponent("tlc-result.json"),
+        for: input.outputDirectory.appendingPathComponent("tlc-process.json"),
         beneath: input.outputDirectory,
         pathPrefix: input.relativeOutputDirectory)
       let result = try temporalResult(
@@ -180,10 +176,6 @@ public struct TLCTemporalAdapter: Sendable {
       return TLCTemporalCaptureResult(
         status: .unavailable, comparison: nil, evidenceDirectory: directory, diagnostic: diagnostic)
     }
-  }
-
-  public static func graphID(_ graph: CanonicalRun) -> String {
-    CanonicalGraphReceipt.graphRecordDigest(for: graph.graph)
   }
 
   private func validate(_ input: TLCTemporalCaptureInput) throws {
@@ -282,13 +274,18 @@ public struct TLCTemporalAdapter: Sendable {
       throw TLCTemporalAdapterError.correlationMismatch
     }
     try clearTraceOutput(for: request)
-    let capture = try processAdapter.capture(request, replay: .none)
-    let run = capture.run
-    guard run.primary.reportedExhaustiveCompletion else { throw TLCTemporalAdapterError.graphEvidenceInvalid }
     let directory = input.outputDirectory.appendingPathComponent("complete-graph-pass", isDirectory: true)
     try ConformanceEvidence.createDirectory(directory, beneath: input.outputDirectory)
-    try processAdapter.retainRawOutput(run, request: request, in: directory)
-    try ConformanceEvidence.writeJSON(processJSON(run.primary), to: directory.appendingPathComponent("tlc-result.json"))
+    let run: TLCProcessRun
+    do {
+      run = try processAdapter.run(request, replay: .none)
+    } catch {
+      try processAdapter.retain(error, request: request, in: directory)
+      throw error
+    }
+    try processAdapter.retain(run, request: request, in: directory)
+    guard run.primary.reportedExhaustiveCompletion else { throw TLCTemporalAdapterError.graphEvidenceInvalid }
+    let capture = try processAdapter.capture(run, request: request)
     try ConformanceEvidence.writeJSON([
       "caseID": request.caseID,
       "graphRunID": request.runID.uuidString.lowercased(),
@@ -296,7 +293,7 @@ public struct TLCTemporalAdapter: Sendable {
       "configurationSHA256": request.expectedCase.cfgSHA256
     ], to: directory.appendingPathComponent("invocation.json"))
     let graphURL = directory.appendingPathComponent("graph-events.jsonl")
-    let resultURL = directory.appendingPathComponent("tlc-result.json")
+    let processURL = directory.appendingPathComponent("tlc-process.json")
     let graph = capture.graph
     let evidence = try TemporalCompleteGraphEvidence(
       propertyRunID: input.request.runID,
@@ -314,17 +311,9 @@ public struct TLCTemporalAdapter: Sendable {
         path: "\(input.relativeOutputDirectory)/complete-graph-pass/graph-events.jsonl",
         sha256: SHA256.hex(Data(contentsOf: graphURL))),
       result: try CoreEvidenceReference(
-        path: "\(input.relativeOutputDirectory)/complete-graph-pass/tlc-result.json",
-        sha256: SHA256.hex(Data(contentsOf: resultURL))))
+        path: "\(input.relativeOutputDirectory)/complete-graph-pass/tlc-process.json",
+        sha256: SHA256.hex(Data(contentsOf: processURL))))
     return (graph, evidence)
-  }
-
-  private func retain(run: TLCProcessRun, input: TLCTemporalCaptureInput) throws {
-    try processAdapter.retainRawOutput(run, request: input.request, in: input.outputDirectory)
-  }
-
-  private func retainPrimaryResult(_ result: TLCProcessResult, input: TLCTemporalCaptureInput) throws {
-    try ConformanceEvidence.writeJSON(processJSON(result), to: input.outputDirectory.appendingPathComponent("tlc-result.json"))
   }
 
 }
@@ -435,18 +424,6 @@ extension TLCTemporalAdapter {
       graph.graph.edgeOccurrences[transition.edge] != nil
         || (transition.source == transition.target
           && (transition.name == "UnnamedAction" || allowsImplicitStuttering))
-    }
-  }
-
-  private func completedRun(from error: Error) -> TLCProcessRun? {
-    switch error {
-    case TLCProcessError.traceCaptureFailed(let completed, _),
-      TLCProcessError.traceCaptureExecutionFailed(let completed, _),
-      TLCProcessError.requiredReplayFailed(let completed, _),
-      TLCProcessError.requiredReplayExecutionFailed(let completed, _):
-      return completed
-    default:
-      return nil
     }
   }
 

@@ -397,7 +397,8 @@ extension TemporalSymmetryConformanceRunner {
     _ configurationSHA256: String, _ graphURL: URL, _ projectRoot: URL
   ) throws -> SymmetryExploration {
     try SymmetryExploration(
-      engine: engine, reduced: reduced, runID: runID, graphID: TLCTemporalAdapter.graphID(run),
+      engine: engine, reduced: reduced, runID: runID,
+      graphID: CanonicalGraphReceipt.graphRecordDigest(for: run.graph),
       initialStateIDs: run.graph.initialStateKeys.map(\.canonicalEncoding), stateIDs: run.graph.states.keys.map(\.canonicalEncoding),
       transitions: try run.graph.edgeOccurrences.map {
         try SymmetryRawTransitionWitness(
@@ -440,7 +441,7 @@ extension TemporalSymmetryConformanceRunner {
       "caseID": declaredCase.id,
       "correlation": correlation.tlcRunID.uuidString.lowercased(),
       "status": String(describing: analysis.status),
-      "graphID": TLCTemporalAdapter.graphID(swiftRun)
+      "graphID": CanonicalGraphReceipt.graphRecordDigest(for: swiftRun.graph)
     ], to: resultURL)
     try ConformanceEvidence.writeJSON([
       "caseID": declaredCase.id,
@@ -453,7 +454,7 @@ extension TemporalSymmetryConformanceRunner {
     case .satisfied:
       return try TemporalPropertyResult(
         availability: .evaluated, outcome: .satisfied,
-        graphID: TLCTemporalAdapter.graphID(swiftRun), initialStateIDs: initial,
+        graphID: CanonicalGraphReceipt.graphRecordDigest(for: swiftRun.graph), initialStateIDs: initial,
         traceAvailability: .notApplicable)
     case .violated:
       guard let witness = analysis.witness else {
@@ -471,12 +472,12 @@ extension TemporalSymmetryConformanceRunner {
       try ConformanceEvidence.writeCanonical(lasso, to: traceURL)
       return try TemporalPropertyResult(
         availability: .evaluated, outcome: .violated,
-        graphID: TLCTemporalAdapter.graphID(swiftRun), initialStateIDs: initial,
+        graphID: CanonicalGraphReceipt.graphRecordDigest(for: swiftRun.graph), initialStateIDs: initial,
         traceAvailability: .available, traceEvidence: try ConformanceEvidence.reference(for: traceURL, beneath: projectRoot), lasso: lasso)
     case .unavailable:
       return try TemporalPropertyResult(
         availability: .unavailable, outcome: nil,
-        graphID: TLCTemporalAdapter.graphID(swiftRun), initialStateIDs: initial,
+        graphID: CanonicalGraphReceipt.graphRecordDigest(for: swiftRun.graph), initialStateIDs: initial,
         traceAvailability: .unavailable)
     }
   }

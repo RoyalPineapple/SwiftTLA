@@ -11,7 +11,8 @@ struct TLCTemporalAdapterTests {
     let graph = try TLCGraphEventParser(expectedCase: fixture.coreCase).parseCanonicalRun(
       stream, result: Fixture.success)
     let swiftResult = try TemporalPropertyResult(
-      availability: .evaluated, outcome: .satisfied, graphID: TLCTemporalAdapter.graphID(graph),
+      availability: .evaluated, outcome: .satisfied,
+      graphID: CanonicalGraphReceipt.graphRecordDigest(for: graph.graph),
       initialStateIDs: graph.graph.initialStateKeys.sorted().map(\.canonicalEncoding), traceAvailability: .notApplicable)
     let input = try fixture.input(swiftResult: swiftResult)
     let result = TLCTemporalAdapter(
@@ -55,7 +56,8 @@ struct TLCTemporalAdapterTests {
     let graph = try TLCGraphEventParser(expectedCase: fixture.coreCase).parseCanonicalRun(
       stream, result: Fixture.success)
     let swiftResult = try TemporalPropertyResult(
-      availability: .evaluated, outcome: .satisfied, graphID: TLCTemporalAdapter.graphID(graph),
+      availability: .evaluated, outcome: .satisfied,
+      graphID: CanonicalGraphReceipt.graphRecordDigest(for: graph.graph),
       initialStateIDs: graph.graph.initialStateKeys.sorted().map(\.canonicalEncoding), traceAvailability: .notApplicable)
     let temporalViolation = TLCProcessResult(status: 12, stdout: "Error: Temporal property is violated.", stderr: "")
     let result = TLCTemporalAdapter(
@@ -76,7 +78,8 @@ struct TLCTemporalAdapterTests {
       stream, result: Fixture.temporalViolation)
     let ids = graph.graph.states.keys.sorted().map(\.canonicalEncoding)
     let swiftResult = try TemporalPropertyResult(
-      availability: .evaluated, outcome: .violated, graphID: TLCTemporalAdapter.graphID(graph),
+      availability: .evaluated, outcome: .violated,
+      graphID: CanonicalGraphReceipt.graphRecordDigest(for: graph.graph),
       initialStateIDs: graph.graph.initialStateKeys.sorted().map(\.canonicalEncoding), traceAvailability: .available,
       traceEvidence: try Fixture.reference(fixture.module, path: "runs/swift-lasso.json"),
       lasso: try TemporalLassoWitness(prefixStateIDs: [], cycleStateIDs: ids + [ids[0]]))
@@ -98,7 +101,8 @@ struct TLCTemporalAdapterTests {
       stream, result: Fixture.temporalViolation)
     let state = try #require(graph.graph.initialStateKeys.first).canonicalEncoding
     let swiftResult = try TemporalPropertyResult(
-      availability: .evaluated, outcome: .violated, graphID: TLCTemporalAdapter.graphID(graph),
+      availability: .evaluated, outcome: .violated,
+      graphID: CanonicalGraphReceipt.graphRecordDigest(for: graph.graph),
       initialStateIDs: [state], traceAvailability: .available,
       traceEvidence: try Fixture.reference(fixture.module, path: "runs/swift-lasso.json"),
       lasso: try TemporalLassoWitness(prefixStateIDs: [], cycleStateIDs: [state, state]))
@@ -119,7 +123,8 @@ struct TLCTemporalAdapterTests {
       stream, result: Fixture.temporalViolation)
     let state = try #require(graph.graph.initialStateKeys.first).canonicalEncoding
     let swiftResult = try TemporalPropertyResult(
-      availability: .evaluated, outcome: .violated, graphID: TLCTemporalAdapter.graphID(graph),
+      availability: .evaluated, outcome: .violated,
+      graphID: CanonicalGraphReceipt.graphRecordDigest(for: graph.graph),
       initialStateIDs: [state], traceAvailability: .available,
       traceEvidence: try Fixture.reference(rejectedFixture.module, path: "runs/swift-lasso.json"),
       lasso: try TemporalLassoWitness(prefixStateIDs: [], cycleStateIDs: [state, state]))
@@ -135,7 +140,8 @@ struct TLCTemporalAdapterTests {
       admittedStream, result: Fixture.temporalViolation)
     let admittedState = try #require(admittedGraph.graph.initialStateKeys.first).canonicalEncoding
     let admittedSwiftResult = try TemporalPropertyResult(
-      availability: .evaluated, outcome: .violated, graphID: TLCTemporalAdapter.graphID(admittedGraph),
+      availability: .evaluated, outcome: .violated,
+      graphID: CanonicalGraphReceipt.graphRecordDigest(for: admittedGraph.graph),
       initialStateIDs: [admittedState], traceAvailability: .available,
       traceEvidence: try Fixture.reference(admittedFixture.module, path: "runs/swift-lasso.json"),
       lasso: try TemporalLassoWitness(prefixStateIDs: [], cycleStateIDs: [admittedState, admittedState]))
@@ -154,7 +160,8 @@ struct TLCTemporalAdapterTests {
       stream, result: Fixture.temporalViolation)
     let ids = graph.graph.states.keys.sorted().map(\.canonicalEncoding)
     let swiftResult = try TemporalPropertyResult(
-      availability: .evaluated, outcome: .violated, graphID: TLCTemporalAdapter.graphID(graph),
+      availability: .evaluated, outcome: .violated,
+      graphID: CanonicalGraphReceipt.graphRecordDigest(for: graph.graph),
       initialStateIDs: graph.graph.initialStateKeys.sorted().map(\.canonicalEncoding), traceAvailability: .available,
       traceEvidence: try Fixture.reference(fixture.module, path: "runs/swift-lasso.json"),
       lasso: try TemporalLassoWitness(prefixStateIDs: [], cycleStateIDs: ids + [ids[0]]))
@@ -179,14 +186,15 @@ struct TLCTemporalAdapterTests {
     #expect(result.status == .unavailable)
     #expect(FileManager.default.fileExists(atPath: fixture.output.appendingPathComponent("logs/tlc.stdout.log").path))
     #expect(FileManager.default.fileExists(atPath: fixture.output.appendingPathComponent("graph-events.jsonl").path))
-    #expect(FileManager.default.fileExists(atPath: fixture.output.appendingPathComponent("tlc-result.json").path))
+    #expect(FileManager.default.fileExists(atPath: fixture.output.appendingPathComponent("tlc-process.json").path))
     #expect(!FileManager.default.fileExists(atPath: fixture.output.appendingPathComponent("counterexample.json").path))
     #expect(!FileManager.default.fileExists(atPath: fixture.request.traceOutput.path))
     let resultJSON = try JSONSerialization.jsonObject(
-      with: Data(contentsOf: fixture.output.appendingPathComponent("tlc-result.json"))) as? [String: Any]
-    #expect(resultJSON?["status"] as? Int == 12)
-    #expect(resultJSON?["isViolation"] as? Bool == true)
-    #expect(resultJSON?["reportedExhaustiveCompletion"] as? Bool == false)
+      with: Data(contentsOf: fixture.output.appendingPathComponent("tlc-process.json"))) as? [String: Any]
+    let primary = resultJSON?["primary"] as? [String: Any]
+    #expect(primary?["status"] as? Int == 12)
+    #expect(primary?["isViolation"] as? Bool == true)
+    #expect(primary?["reportedExhaustiveCompletion"] as? Bool == false)
   }
 
   @Test("TLC temporal adapter rejects a trace path that collides with generated evidence")

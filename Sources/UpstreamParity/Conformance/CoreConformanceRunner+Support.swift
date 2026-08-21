@@ -16,22 +16,6 @@ struct Correlations {
     case .runner: runner
     }
   }
-  var json: [String: [String: String]] {
-    [
-      "swift": [
-        "caseID": swift.caseID, "runID": swift.runID.uuidString.lowercased(),
-        "engine": swift.engine.rawValue
-      ],
-      "tlc": [
-        "caseID": tlc.caseID, "runID": tlc.runID.uuidString.lowercased(),
-        "engine": tlc.engine.rawValue
-      ],
-      "runner": [
-        "caseID": runner.caseID, "runID": runner.runID.uuidString.lowercased(),
-        "engine": runner.engine.rawValue
-      ]
-    ]
-  }
 }
 enum RunnerError: Error {
   case outputAlreadyExists

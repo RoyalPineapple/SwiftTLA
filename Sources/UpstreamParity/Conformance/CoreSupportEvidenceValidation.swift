@@ -22,10 +22,6 @@ extension CoreSupportGate {
       && valueNormalizationsMatch(object["valueNormalizations"], declared: expected.valueNormalizations)
   }
 
-  func argumentsMatch(_ object: [String: Any], _ declared: CoreConformanceCasesManifest.Entry) -> Bool {
-    object["arguments"] as? [String] == declared.arguments
-  }
-
   func toolchainMatches(_ object: [String: Any], _ declared: CoreConformanceCasesManifest.Entry) -> Bool {
     !declared.governance.semanticCitations.isEmpty
       && pinMatches(object["declaredPin"] as? [String: Any])
@@ -170,8 +166,9 @@ extension CoreSupportGate {
     _ object: [String: Any], caseID: String, gateRunID: UUID
   ) -> Bool? {
     let phases = ["primary", "trace", "replay"]
-    guard Set(object.keys) == ["correlation", "attempted", "primary", "trace", "replay"],
-          correlationObjectMatches(object["correlation"] as? [String: Any], caseID: caseID,
+    guard Set(object.keys) == ["request", "attempted", "primary", "trace", "replay"],
+          let request = object["request"] as? [String: Any],
+          correlationObjectMatches(request["correlation"] as? [String: Any], caseID: caseID,
                                    engine: "tlc", gateRunID: gateRunID),
           let attempted = object["attempted"] as? [String],
           Set(attempted).count == attempted.count,

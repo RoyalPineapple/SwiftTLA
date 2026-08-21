@@ -717,7 +717,7 @@ private func validateCompleteGraphEvidence(
         stream,
         result: TLCProcessResult(status: 0, stdout: "Model checking completed. No error has been found.", stderr: ""))
     guard canonical.isPassEligible,
-          TLCTemporalAdapter.graphID(canonical) == comparison.tlcResult.graphID,
+          CanonicalGraphReceipt.graphRecordDigest(for: canonical.graph) == comparison.tlcResult.graphID,
           canonical.graph.initialStateKeys.sorted().map(\.canonicalEncoding) == comparison.tlcResult.initialStateIDs else {
         throw TemporalSymmetryCLIError.invalidEvidence("complete graph does not bind the temporal comparison")
     }

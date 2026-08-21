@@ -533,17 +533,19 @@ public struct CoreSupportGate: Sendable {
     }
     guard let evidence else { return CaseObservation(reasons: [.missingEvidence]) }
     let requiredFiles = [
-      "case.json", "toolchain.json", "arguments.json", "correlations.json", "run.json", "swift-run.json",
+      "run.json", "swift-run.json",
       "tlc-run.json", "comparison.json", "tlc-process.json", "raw-artifacts.json", "graph-events.jsonl"
     ]
     guard requiredFiles.allSatisfy({ FileManager.default.fileExists(atPath: evidence.directory.appendingPathComponent($0).path) }) else {
       return CaseObservation(reasons: [.partialEvidence])
     }
     do {
-      let caseJSON = try object(named: "case.json", in: evidence.directory)
-      let toolchainJSON = try object(named: "toolchain.json", in: evidence.directory)
-      let argumentsJSON = try object(named: "arguments.json", in: evidence.directory)
-      let correlationsJSON = try object(named: "correlations.json", in: evidence.directory)
+      let processJSON = try object(named: "tlc-process.json", in: evidence.directory)
+      guard let requestJSON = processJSON["request"] as? [String: Any],
+            let caseJSON = requestJSON["case"] as? [String: Any],
+            let toolchainJSON = requestJSON["toolchain"] as? [String: Any],
+            let argumentsJSON = requestJSON["arguments"] as? [String]
+      else { throw EvidenceError.invalidJSON }
       let runJSON = try object(named: "run.json", in: evidence.directory)
       let comparisonJSON = try object(named: "comparison.json", in: evidence.directory)
       let swiftLoaded = try canonicalRunEvidence(named: "swift-run.json", in: evidence.directory)
@@ -558,12 +560,12 @@ public struct CoreSupportGate: Sendable {
       else { throw EvidenceError.invalidJSON }
       let expectedCase = try declaredCaseContract(declaredCase)
       if !caseMatches(caseJSON, declaredCase, expectedCase)
-        || !argumentsMatch(argumentsJSON, declaredCase) {
+        || argumentsJSON != declaredCase.arguments {
         reasons.insert(.manifestDigestMismatch)
       }
       if !toolchainMatches(toolchainJSON, declaredCase) { reasons.insert(.toolchainDigestMismatch) }
       let correlation = try correlation(
-        caseID: declaredCase.id, gateRunID: gateRunID, correlations: correlationsJSON,
+        caseID: declaredCase.id, gateRunID: gateRunID, process: processJSON,
         run: runJSON, swift: swiftEvidence, tlc: tlcEvidence, comparison: comparisonJSON)
       guard let correlation else {
         reasons.insert(.foreignRun)
@@ -571,7 +573,6 @@ public struct CoreSupportGate: Sendable {
       }
       let completeGraphs = canonicalRunsAreComplete(swiftRun, tlcRun, requireExhaustiveCompletion: true)
       let matchingExactGraphs = canonicalRunsAgree(swiftRun, tlcRun)
-      let processJSON = try object(named: "tlc-process.json", in: evidence.directory)
       guard let processIsViolation = processLifecycle(
         processJSON, caseID: declaredCase.id, gateRunID: gateRunID
       ) else { throw EvidenceError.invalidJSON }
@@ -604,7 +605,7 @@ public struct CoreSupportGate: Sendable {
     }
   }
   private func references(in evidence: CoreSupportCaseEvidence) throws -> [CoreEvidenceReference] {
-    try ["case.json", "toolchain.json", "run.json", "comparison.json"].map { file in
+    try ["tlc-process.json", "run.json", "comparison.json"].map { file in
       try CoreEvidenceReference(
         path: evidence.relativeDirectory + "/" + file,
         sha256: SHA256.hex(try Data(contentsOf: evidence.directory.appendingPathComponent(file))))
@@ -613,17 +614,16 @@ public struct CoreSupportGate: Sendable {
   private func correlation(
     caseID: String,
     gateRunID: UUID,
-    correlations: [String: Any],
+    process: [String: Any],
     run: [String: Any],
     swift: CanonicalRunEvidence,
     tlc: CanonicalRunEvidence,
     comparison: [String: Any]
   ) throws -> CoreSupportCaseRunCorrelation? {
     let expectedRunID = gateRunID.uuidString.lowercased()
+    let processCorrelation = (process["request"] as? [String: Any])?["correlation"] as? [String: Any] ?? [:]
     let sources: [(String, [String: Any], String)] = [
-      ("swift", correlations["swift"] as? [String: Any] ?? [:], "swift"),
-      ("tlc", correlations["tlc"] as? [String: Any] ?? [:], "tlc"),
-      ("runner", correlations["runner"] as? [String: Any] ?? [:], "runner"),
+      ("tlc", processCorrelation, "tlc"),
       ("runner", run["correlation"] as? [String: Any] ?? [:], "runner"),
       ("runner", comparison["correlation"] as? [String: Any] ?? [:], "runner")
     ]
