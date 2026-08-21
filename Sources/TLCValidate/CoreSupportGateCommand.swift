@@ -247,7 +247,7 @@ func swiftSpec(_ identifier: String) throws -> TLASpec {
     switch identifier {
     case "hour-clock": return Example.hourClock.spec
     case "die-hard-type-ok": return Example.dieHardTypeOK.spec
-    case "multicar-elevator", "multicar-elevator-edge-mismatch": return MultiCarElevatorModel.spec
+    case "multicar-elevator", "multicar-elevator-edge-mismatch": return MultiCarElevator.spec
     case "simultaneous-swap": return simultaneousSwapConformanceSpec()
     default: throw CoreConformanceCLIError.unsupportedSwiftSpec(identifier)
     }

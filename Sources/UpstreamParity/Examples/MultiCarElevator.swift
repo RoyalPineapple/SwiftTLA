@@ -79,9 +79,7 @@ public enum MultiCarElevator {
         public static let direction = field(\CallFields.direction)
     }
 
-    public static var builderSpec: TLASpec { makeSpec() }
-
-    static func makeSpec() -> TLASpec {
+    public static var spec: TLASpec {
         let cars = Var<Function<CarID, Record<CarSchema>>>("cars")
         let calls = Var<SetExpr<Record<CallSchema>>>("calls")
         let lastMoveDoorClosed = Var<Bool>("lastMoveDoorClosed")
@@ -227,12 +225,6 @@ public enum MultiCarElevator {
     }
 }
 
-public struct MultiCarElevatorModel {
-    public static var spec: TLASpec {
-        MultiCarElevator.makeSpec()
-    }
-}
-
 extension Example {
     public static let multiCarElevator = Entry(
         id: "elevator/MultiCarElevator",
@@ -240,7 +232,7 @@ extension Example {
         upstreamModule: "Verification/CoreConformance/fixtures/multicar-elevator/MultiCarElevator.tla",
         upstreamCfg: nil,
         expectedDistinct: 3_276,
-        spec: MultiCarElevatorModel.spec,
+        spec: MultiCarElevator.spec,
         notes: "Bounded two-person, two-car, three-floor typed safety fixture."
     )
 }
