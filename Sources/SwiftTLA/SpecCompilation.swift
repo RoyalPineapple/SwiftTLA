@@ -846,14 +846,26 @@ public extension TLASpec {
         let symmetricMetadataByName = Dictionary(
             uniqueKeysWithValues: symmetricCollections.map { ($0.name, $0.metadata) }
         )
-        let initialPredicates = variables.map { variable -> String in
+        let initialPredicates = try variables.map { variable -> String in
+            guard let id = bindings.variables[variable.name],
+                  let initializer = semantics.variableInitializers[id],
+                  let initialValue = semantics.initialValues[id] else {
+                throw CompilationDiagnostic(
+                    code: .compilationIdentityMismatch,
+                    stage: .rendering,
+                    path: "variables.\(variable.name).initialization",
+                    expected: "a compiled initializer for this declared variable",
+                    actual: "the compiled layout has no matching initializer",
+                    nextSafeAction: "Compile the model again from its current source."
+                )
+            }
             if let metadata = symmetricMetadataByName[variable.name] {
                 return "\(variable.name) = [member \\in \(metadata.domainSymbol) |-> \(metadata.initial)]"
             }
-            if let set = variable.lazySet { return "\(variable.name) \\in \(set)" }
-            if let set = variable.initialSet { return "\(variable.name) \\in \(set)" }
-            if let expression = variable.initExpr { return "\(variable.name) = \(expression.tlaModuleSource)" }
-            return "\(variable.name) = \(variable.initial)"
+            if let set = initializer.lazySet { return "\(variable.name) \\in \(try renderer.state(set))" }
+            if let set = initializer.initialSet { return "\(variable.name) \\in \(try renderer.state(set))" }
+            if let expression = initializer.initExpr { return "\(variable.name) = \(try renderer.state(expression))" }
+            return "\(variable.name) = \(try renderer.state(.value(initialValue)))"
         }
         if initialPredicates.count == 1 {
             lines.append("Init == \(initialPredicates[0])")
