@@ -80,19 +80,6 @@ public enum MultiCarElevator {
         public static let direction = field(\CallFields.direction)
     }
 
-    private static let initialCarsValue: TLAValue = .function([
-        CarID.carA.tlaValue: .record([
-            "floor": FloorID.ground.tlaValue,
-            "doorsOpen": .bool(false),
-            "rider": .string("none")
-        ]),
-        CarID.carB.tlaValue: .record([
-            "floor": FloorID.top.tlaValue,
-            "doorsOpen": .bool(false),
-            "rider": .string("none")
-        ])
-    ])
-
     public static var builderSpec: TLASpec { makeSpec() }
 
     static func makeSpec() -> TLASpec {
@@ -135,7 +122,18 @@ public enum MultiCarElevator {
         }
 
         return #spec("MultiCarElevator") {
-            Variable(cars, initialCarsValue)
+            Variable(cars, TLAValue.function([
+                CarID.carA.tlaValue: .record([
+                    "floor": FloorID.ground.tlaValue,
+                    "doorsOpen": .bool(false),
+                    "rider": .string("none")
+                ]),
+                CarID.carB.tlaValue: .record([
+                    "floor": FloorID.top.tlaValue,
+                    "doorsOpen": .bool(false),
+                    "rider": .string("none")
+                ])
+            ]))
             Variable(calls, TLAValue.set([]))
             Variable(lastMoveDoorClosed, true)
             Constraint(calls.stateExpr.cardinality <= 1)
@@ -321,7 +319,18 @@ public struct MultiCarElevatorMacroFixture: Sendable {
             let cars: Var<Function<CarID, Record<CarSchema>>> = .init("cars")
             let calls: Var<SetExpr<Record<CallSchema>>> = .init("calls")
             let lastMoveDoorClosed: Var<Bool> = .init("lastMoveDoorClosed")
-            Variable(cars, initialCarsValue)
+            Variable(cars, TLAValue.function([
+                CarID.carA.tlaValue: .record([
+                    "floor": FloorID.ground.tlaValue,
+                    "doorsOpen": .bool(false),
+                    "rider": .string("none")
+                ]),
+                CarID.carB.tlaValue: .record([
+                    "floor": FloorID.top.tlaValue,
+                    "doorsOpen": .bool(false),
+                    "rider": .string("none")
+                ])
+            ]))
             Variable(calls, TLAValue.set([]))
             Variable(lastMoveDoorClosed, true)
             Constraint(calls.stateExpr.cardinality <= 1)
