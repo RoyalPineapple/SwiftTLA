@@ -355,44 +355,6 @@ private func value(
     }
   }
 
-  @Test("compiled functions survive constant resolution in constraints and invariant checks")
-  func runtimeFunctionsSurviveConstantResolution() throws {
-    let counter = Var<Int>("counter")
-    let increment = Var<Int>("step")
-    let isAtMostLimit = StateExpr.recursiveCall("IsAtMostLimit", [
-      counter.stateExpr,
-      .value(.constant("limit")),
-    ])
-    let spec = TLASpec("RuntimeFunctionConstraint") {
-      Constant("limit", 2)
-      Variable(counter, 0)
-      RuntimeFunc("IsAtMostLimit", tlaBody: "IsAtMostLimit(value, limit) == value <= limit") { values in
-        guard case .int(let value) = values[0], case .int(let limit) = values[1] else {
-          return .bool(false)
-        }
-        return .bool(value <= limit)
-      }
-      Action("advance", parameters: [ActionParameter("step", values: [1, 2])]) {
-        counter.becomes(counter + increment)
-      }
-      Constraint(isAtMostLimit)
-      Invariant("AtMostLimit") { isAtMostLimit }
-    }
-    let graph = try ModelChecker(spec: spec).exploreGraph()
-    let compilation = try spec.compile()
-
-    for (sourceID, source) in graph.states {
-      let checked = (graph.transitions[sourceID] ?? []).compactMap { transition -> (action: String, arguments: [TLAValue], state: TLAStateProjection)? in
-        guard let successor = graph.states[transition.target] else { return nil }
-        return (transition.label.action, transition.label.arguments, successor)
-      }
-      let runtimeSuccessors = try successors(compilation, from: source)
-
-      #expect(multiset(runtimeSuccessors) == multiset(checked))
-      #expect(compilation.propertyOutcomes(in: source) == [.satisfied(name: "AtMostLimit")])
-    }
-  }
-
   private func multiset(
     _ transitions: [(action: String, arguments: [TLAValue], state: TLAStateProjection)]
   ) -> [String: Int] {

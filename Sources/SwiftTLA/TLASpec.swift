@@ -189,8 +189,6 @@ public struct TLASpec: Sendable {
   public let importConfigurations: [FormalModuleConfiguration]
   /// Named source-level TLA+ `INSTANCE` declarations.
   public let moduleInstances: [FormalModuleInstance]
-  public var runtimeFuncs: [String: @Sendable ([TLAValue]) -> TLAValue] = [:]
-  public var runtimeFuncBodies: [String] = []
   public let symmetrySets: [SymmetrySet]
   public let symmetricCollections: [SymmetricCollectionDecl]
   /// Opaque source-level Algorithm evidence. This is distinct from the
@@ -594,24 +592,6 @@ public struct RecursiveFuncDecl: SpecComponent, Equatable {
   public let funcDef: RecursiveFunc
   init(_ funcDef: RecursiveFunc) { self.funcDef = funcDef }
 }
-/// Runtime recursive function — evaluated by calling actual Swift closure.
-public struct RuntimeFuncDecl: SpecComponent {
-  public let name: String
-  public let tlaBody: String  // TLA+ output
-  public let implementation: @Sendable ([TLAValue]) -> TLAValue
-  public init(
-    name: String, tlaBody: String, implementation: @escaping @Sendable ([TLAValue]) -> TLAValue
-  ) {
-    self.name = name
-    self.tlaBody = tlaBody
-    self.implementation = implementation
-  }
-}
-extension RuntimeFuncDecl: Equatable {
-  public static func == (lhs: RuntimeFuncDecl, rhs: RuntimeFuncDecl) -> Bool {
-    lhs.name == rhs.name && lhs.tlaBody == rhs.tlaBody
-  }
-}
 @resultBuilder
 public enum SpecBuilder {
   public static func buildBlock(_ components: [SpecComponent]...) -> [SpecComponent] {
@@ -634,7 +614,6 @@ public enum SpecBuilder {
   public static func buildExpression(_ expr: DeadlockDecl) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: ConstraintDecl) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: RecursiveFuncDecl) -> [SpecComponent] { [expr] }
-  public static func buildExpression(_ expr: RuntimeFuncDecl) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: SymmetrySetDecl) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: SymmetricCollectionDecl) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: Algorithm) -> [SpecComponent] { [expr] }
@@ -814,9 +793,4 @@ public func DefineRecursive(
   _ name: String, params: [String], @InvariantBuilder body: () -> StateExpr
 ) -> RecursiveFuncDecl {
   RecursiveFuncDecl(RecursiveFunc(name: name, params: params, body: body()))
-}
-public func RuntimeFunc(
-  _ name: String, tlaBody: String, _ implementation: @escaping @Sendable ([TLAValue]) -> TLAValue
-) -> RuntimeFuncDecl {
-  RuntimeFuncDecl(name: name, tlaBody: tlaBody, implementation: implementation)
 }
