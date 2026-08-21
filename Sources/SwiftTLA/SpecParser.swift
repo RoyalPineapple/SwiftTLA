@@ -79,8 +79,8 @@ public final class ParserSession {
     /// distinguish `sequence[index]` from a finite-function lookup without
     /// exposing raw type maps to authors.
     var algorithmTupleVariables: Set<String> = []
-    /// State declarations visible to the algorithm currently being parsed.
-    var algorithmStateNames: Set<String> = []
+    /// State declaration bindings visible to the source expression currently being parsed.
+    var sourceStateBindings: [String: StateExpr] = [:]
     var algorithmParseFailure: String?
 
     init(
@@ -1105,7 +1105,7 @@ public final class ParserSession {
             let name = reference.baseName.text
             if let value = scope.value(for: reference) { return value }
             if let constant = constants.value(named: name) { return .value(constant) }
-            if algorithmStateNames.contains(name) { return .variable(name) }
+            if let state = sourceStateBindings[name] { return state }
         }
         if let literal = expression.as(IntegerLiteralExprSyntax.self),
            let value = Int(literal.literal.text) {

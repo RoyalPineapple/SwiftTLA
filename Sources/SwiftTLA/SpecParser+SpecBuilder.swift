@@ -400,6 +400,14 @@ extension ParserSession {
                   let fc = initializer.as(FunctionCallExprSyntax.self)
             else { continue }
 
+            let existingVariableCount = result.variables.count
+            defer {
+                if result.variables.count > existingVariableCount,
+                   let variable = result.variables.last {
+                    sourceStateBindings[patternName] = .variable(variable.name)
+                }
+            }
+
             let stateVarInfo = resolveVarCall(fc)
             let varTypeName = swiftValueType(from: binding.typeAnnotation)
                 ?? stateVarInfo?.1
