@@ -301,7 +301,7 @@ struct TLCTemporalAdapterTests {
       let pin = coreCase.pin
       declaredCase = try TemporalSymmetryCase(
         id: coreCase.id, kind: .temporal, swiftSpec: "TemporalFixture",
-        provenance: try CoreDivergenceProvenance(
+        provenance: try CoreEvidenceProvenance(
           caseID: coreCase.id, moduleSHA256: coreCase.moduleSHA256, cfgSHA256: coreCase.cfgSHA256,
           argumentsSHA256: coreCase.argumentsSHA256, tlcTag: pin.tag, tlcCommit: pin.commit,
           tlcJarSHA256: pin.jarSHA256, javaDistribution: pin.javaDistribution, javaVersion: pin.javaVersion,

@@ -97,29 +97,29 @@ public struct TemporalSymmetryCaseEvidence: Sendable {
   public let manifestSHA256: String
   public let toolchainSHA256: String
   public let status: TemporalSymmetryEvidenceStatus
-  public let normalizedDifferenceFingerprint: String?
+  public let normalizedDifferenceDigest: String?
   public init(
     comparison: TemporalSymmetryComparisonEvidence,
     comparisonEvidence: CoreEvidenceReference,
     manifestSHA256: String,
     toolchainSHA256: String,
     status: TemporalSymmetryEvidenceStatus,
-    normalizedDifferenceFingerprint: String? = nil
+    normalizedDifferenceDigest: String? = nil
   ) throws {
     try comparisonEvidence.validate()
     guard TLCReferencePin.isSHA256(manifestSHA256), TLCReferencePin.isSHA256(toolchainSHA256) else {
       throw ConformanceGovernanceError.invalidField(record: comparison.caseID, field: "evidence digests")
     }
     let requiresFingerprint = comparison.outcome == .difference
-    guard requiresFingerprint == (normalizedDifferenceFingerprint?.isEmpty == false) else {
-      throw ConformanceGovernanceError.invalidField(record: comparison.caseID, field: "normalizedDifferenceFingerprint")
+    guard requiresFingerprint == (normalizedDifferenceDigest?.isEmpty == false) else {
+      throw ConformanceGovernanceError.invalidField(record: comparison.caseID, field: "normalizedDifferenceDigest")
     }
     self.comparison = comparison
     self.comparisonEvidence = comparisonEvidence
     self.manifestSHA256 = manifestSHA256
     self.toolchainSHA256 = toolchainSHA256
     self.status = status
-    self.normalizedDifferenceFingerprint = normalizedDifferenceFingerprint
+    self.normalizedDifferenceDigest = normalizedDifferenceDigest
   }
 }
 /// All gate inputs describe exactly one report and one P3 invocation.
@@ -266,7 +266,7 @@ public struct TemporalSymmetrySupportGate: Sendable {
     return .init(
       reasons: reasons,
       comparisonIsDifference: comparison.outcome == .difference,
-      fingerprint: evidence.normalizedDifferenceFingerprint,
+      differenceDigest: evidence.normalizedDifferenceDigest,
       reference: evidence.comparisonEvidence,
       correlation: comparison.correlation)
   }
@@ -323,7 +323,7 @@ public struct TemporalSymmetrySupportGate: Sendable {
     return Set(observations.compactMap { caseID, observation in
       guard observation.comparisonIsDifference else { return nil }
       guard let record = recordsByRegressionCase[caseID]?.first,
-            observation.fingerprint == record.normalizedDifferenceFingerprint else {
+            observation.differenceDigest == record.normalizedDifferenceDigest else {
         return caseID
       }
       return nil
@@ -357,19 +357,19 @@ public struct TemporalSymmetrySupportGate: Sendable {
   private struct CaseObservation {
     let reasons: Set<TemporalSymmetryReasonCode>
     let comparisonIsDifference: Bool
-    let fingerprint: String?
+    let differenceDigest: String?
     let reference: CoreEvidenceReference?
     let correlation: TemporalSymmetryCaseRunCorrelation?
     init(
       reasons: Set<TemporalSymmetryReasonCode>,
       comparisonIsDifference: Bool = false,
-      fingerprint: String? = nil,
+      differenceDigest: String? = nil,
       reference: CoreEvidenceReference? = nil,
       correlation: TemporalSymmetryCaseRunCorrelation? = nil
     ) {
       self.reasons = reasons
       self.comparisonIsDifference = comparisonIsDifference
-      self.fingerprint = fingerprint
+      self.differenceDigest = differenceDigest
       self.reference = reference
       self.correlation = correlation
     }

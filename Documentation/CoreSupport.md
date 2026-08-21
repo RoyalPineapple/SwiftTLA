@@ -119,7 +119,7 @@ The current disposition is `open`, `resolved`, `unsupported`,
 `awaitingSemanticsReview`, or `suspectedReferenceDefect`. Only `resolved`
 allows a linked divergence to stop blocking support, and it requires an exact
 latest comparison. An `unsupported` record remains in the ledger as a
-regression: its retained difference fingerprint must still match. See [core
+regression: its retained difference digest must still match. See [core
 graph conformance](CoreGraphConformance.md#divergences-and-support-admission)
 for the complete retention checklist.
 

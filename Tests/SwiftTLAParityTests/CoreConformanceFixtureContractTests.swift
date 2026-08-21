@@ -142,7 +142,7 @@ struct CoreConformanceFixtureContractTests {
     let configuration = fixtureURL("Tools/TLCGraphBridge/spike/BridgeGraph.cfg")
     let arguments = ["-workers", "1", "-fp", "1", "-seed", "1", "-deadlock"]
     return try CoreConformanceCase(
-      id: "adversarial-core-graph-v1",
+      id: "adversarial-core-graph",
       moduleSHA256: SHA256.hex(try Data(contentsOf: module)),
       cfgSHA256: SHA256.hex(try Data(contentsOf: configuration)),
       arguments: arguments,

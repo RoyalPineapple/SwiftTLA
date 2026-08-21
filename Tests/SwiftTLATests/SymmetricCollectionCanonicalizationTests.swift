@@ -140,8 +140,8 @@ struct SymmetricCollectionCanonicalizationTests {
       invariants: []
     )
 
-    let rawGraph = try ModelChecker(compilation: try unreduced.compile()).exploreGraph()
-    let reducedGraph = try ModelChecker(compilation: try symmetric.compile()).exploreGraph()
+    let rawGraph = try ModelChecker(compilation: try unreduced.compile(), configuration: .standard).exploreGraph()
+    let reducedGraph = try ModelChecker(compilation: try symmetric.compile(), configuration: .standard).exploreGraph()
     let groups = symmetric.symmetricCollections.map { $0.metadata.members }
     #expect(independentlyCanonicalizedGraph(rawGraph, groups: groups)
       == independentlyCanonicalizedGraph(reducedGraph, groups: groups))
@@ -170,8 +170,8 @@ struct SymmetricCollectionCanonicalizationTests {
       )
 
       let groups = symmetric.symmetricCollections.map { $0.metadata.members }
-      let rawGraph = try ModelChecker(compilation: try unreduced.compile()).exploreGraph()
-      let reducedGraph = try ModelChecker(compilation: try symmetric.compile()).exploreGraph()
+      let rawGraph = try ModelChecker(compilation: try unreduced.compile(), configuration: .standard).exploreGraph()
+      let reducedGraph = try ModelChecker(compilation: try symmetric.compile(), configuration: .standard).exploreGraph()
       #expect(independentlyCanonicalizedGraph(rawGraph, groups: groups)
         == independentlyCanonicalizedGraph(reducedGraph, groups: groups))
     }

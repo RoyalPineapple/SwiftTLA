@@ -507,7 +507,7 @@ extension TemporalSymmetryConformanceRunner {
     return projectRoot.appendingPathComponent("Verification/TemporalSymmetryConformance/fixtures/temporal/\(name)")
   }
 
-  private func pin(from provenance: CoreDivergenceProvenance) throws -> TLCReferencePin {
+  private func pin(from provenance: CoreEvidenceProvenance) throws -> TLCReferencePin {
     try TLCReferencePin(
       tag: provenance.tlcTag, commit: provenance.tlcCommit, jarSHA256: provenance.tlcJarSHA256,
       javaDistribution: provenance.javaDistribution, javaVersion: provenance.javaVersion,

@@ -54,7 +54,7 @@ private struct TypedFiniteInitialAlgorithm {
 struct TypedFormalCollectionTests {
   @Test func typedSetLowersAndChecksThroughBothPaths() throws {
     TypedSetAlgorithm._checkParserTree()
-    let result = try ModelChecker(compilation: try TypedSetAlgorithm.spec.compile()).check()
+    let result = try ModelChecker(compilation: try TypedSetAlgorithm.spec.compile(), configuration: .standard).check()
     guard case .ok(let count) = result.underlyingOutcome else {
       Issue.record("Expected successful set proof, got \(result)")
       return
@@ -65,7 +65,7 @@ struct TypedFormalCollectionTests {
 
   @Test func typedTupleLowersAndChecksThroughBothPaths() throws {
     TypedTupleAlgorithm._checkParserTree()
-    let result = try ModelChecker(compilation: try TypedTupleAlgorithm.spec.compile()).check()
+    let result = try ModelChecker(compilation: try TypedTupleAlgorithm.spec.compile(), configuration: .standard).check()
     guard case .ok(let count) = result.underlyingOutcome else {
       Issue.record("Expected successful tuple proof, got \(result)")
       return
@@ -86,7 +86,7 @@ struct TypedFormalCollectionTests {
 
   @Test func typedFiniteInitialDomainChecksThroughBothPaths() throws {
     TypedFiniteInitialAlgorithm._checkParserTree()
-    let result = try ModelChecker(compilation: try TypedFiniteInitialAlgorithm.spec.compile()).check()
+    let result = try ModelChecker(compilation: try TypedFiniteInitialAlgorithm.spec.compile(), configuration: .standard).check()
     guard case .ok(let count) = result.underlyingOutcome else {
       Issue.record("Expected successful finite-domain proof, got \(result)")
       return

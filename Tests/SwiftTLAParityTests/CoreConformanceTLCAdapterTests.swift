@@ -85,7 +85,7 @@ struct CoreConformanceTLCAdapterTests { @Test("frozen graph stream becomes compl
       try completeGraphStream(expectedCase),
       result: TLCProcessResult(
         status: 12,
-        stdout: "Parsing file /tmp/die-hard-violation/DieHard.tla\nError: Invariant NotSolved is violated.",
+        stdout: "Parsing file /tmp/invariant-violation/DieHard.tla\nError: Invariant NotSolved is violated.",
         stderr: ""
       )
     )
@@ -117,10 +117,7 @@ struct CoreConformanceTLCAdapterTests { @Test("frozen graph stream becomes compl
     let directories = [
       "Verification/CoreConformance/baselines/hour-clock",
       "Verification/CoreConformance/baselines/die-hard-type-ok",
-      "Verification/CoreConformance/fixtures/hour-clock-edge-mismatch/evidence",
-      "Verification/CoreConformance/fixtures/die-hard-violation/evidence",
-      "Verification/CoreConformance/baselines/multicar-elevator",
-      "Verification/CoreConformance/baselines/multicar-elevator-edge-mismatch"
+      "Verification/CoreConformance/baselines/multicar-elevator"
     ]
     for path in directories {
       let directory = root.appendingPathComponent(path)

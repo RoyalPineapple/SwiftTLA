@@ -453,15 +453,31 @@ extension ParserSession {
                     ))
                     continue
                 }
-                let initial: TLAValue = args.count >= 2
-                    ? parsedInitialValue(args[1].expression)
-                    : .int(0)
+                let initial: TLAValue
+                if args.count >= 2 {
+                    guard let parsed = parsedInitialValue(args[1].expression) else {
+                        result.diagnostics.append(.init(
+                            message: "Var requires a supported initial formal value.",
+                            source: call
+                        ))
+                        continue
+                    }
+                    initial = parsed
+                } else {
+                    initial = .int(0)
+                }
                 let inferredType = args.count >= 2 ? initialValueTypeName(from: args[1].expression) : nil
                 result.variables.append(.init(
                     name: varName, initial: initial, swiftTypeName: varTypeName ?? inferredType
                 ))
             } else {
-                let initial: TLAValue = parsedInitialValue(args[0].expression)
+                guard let initial = parsedInitialValue(args[0].expression) else {
+                    result.diagnostics.append(.init(
+                        message: "Var requires a supported initial formal value.",
+                        source: call
+                    ))
+                    continue
+                }
                 let inferredType = initialValueTypeName(from: args[0].expression)
                 result.variables.append(.init(
                     name: patternName, initial: initial, swiftTypeName: varTypeName ?? inferredType
@@ -612,18 +628,18 @@ extension ParserSession {
     }
 
     /// Converts a Swift initializer expression to a TLAValue.
-    func parseInitialExpr(_ expression: ExprSyntax) -> TLAValue {
+    func parseInitialExpr(_ expression: ExprSyntax) -> TLAValue? {
         if let decoded = decodeStateExpr(expression), case .value(let value) = decoded {
             return value
         }
         if let intVal = expression.as(IntegerLiteralExprSyntax.self) {
-            return .int(Int(intVal.literal.text) ?? 0)
+            return Int(intVal.literal.text).map(TLAValue.int)
         }
         if let boolVal = expression.as(BooleanLiteralExprSyntax.self) {
             return .bool(boolVal.literal.text == "true")
         }
         if let stringLit = expression.as(StringLiteralExprSyntax.self) {
-            return stringLit.representedLiteralValue.map(TLAValue.string) ?? .string("")
+            return stringLit.representedLiteralValue.map(TLAValue.string)
         }
         if let memberAccess = expression.as(MemberAccessExprSyntax.self) {
             if let baseRef = memberAccess.base?.as(DeclReferenceExprSyntax.self),
@@ -640,9 +656,9 @@ extension ParserSession {
            let memberAccess = fc.calledExpression.as(MemberAccessExprSyntax.self),
            let base = memberAccess.base?.as(DeclReferenceExprSyntax.self),
            base.baseName.text == "TLAValue" {
-            return parseTLAValueConstructor(name: memberAccess.declName.baseName.text, call: fc) ?? .int(0)
+            return parseTLAValueConstructor(name: memberAccess.declName.baseName.text, call: fc)
         }
-        return .int(0)
+        return nil
     }
 
     /// Returns the enum type name if `expression` is an enum case reference.
@@ -694,7 +710,7 @@ extension ParserSession {
     /// Evaluates a closed typed formal initializer through the same expression
     /// decoder used for actions. Literal-only parsing is insufficient for
     /// values such as `IntRange(1, through: 4)`.
-    func parsedInitialValue(_ expression: ExprSyntax) -> TLAValue {
+    func parsedInitialValue(_ expression: ExprSyntax) -> TLAValue? {
         if let decoded = decodeStateExpr(expression),
            let value = try? evaluateClosed(decoded) {
             return value

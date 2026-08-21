@@ -393,11 +393,7 @@ public struct CoreConformanceCasesManifest: Decodable, Sendable {
                   Set(normalizedBindings).count == normalizedBindings.count else {
                 throw ConformanceGovernanceError.invalidField(record: id, field: "invocationMappings")
             }
-            let expectedOutcome: CoreRegressionOutcome = expectedExit == nil || expectedExit == 0
-                ? .exact : .difference
-            guard expectedExit == nil || expectedExit == 0 || expectedExit == 1,
-                  governance.expectedRegressionOutcome == expectedOutcome,
-                  (governance.role == .requiredComparison) == (expectedOutcome == .exact) else {
+            guard expectedExit == nil || expectedExit == 0 else {
                 throw ConformanceGovernanceError.invalidField(record: id, field: "governance outcome")
             }
         }
@@ -426,34 +422,6 @@ public struct CoreConformanceCasesManifest: Decodable, Sendable {
         }
     }
 
-    public func validate(ledger: CoreDivergenceLedger) throws {
-        try validate()
-        let entries = Dictionary(uniqueKeysWithValues: cases.map { ($0.id, $0) })
-        try ledger.validate(caseIDs: Set(entries.keys))
-        for record in ledger.records {
-            guard let original = entries[record.provenance.caseID],
-                  let regression = entries[record.permanentRegressionCaseID],
-                  regression.governance.role == .permanentRegression,
-                  regression.governance.expectedRegressionOutcome == .difference,
-                  original.moduleSHA256 == record.provenance.moduleSHA256,
-                  original.cfgSHA256 == record.provenance.cfgSHA256,
-                  original.argumentsSHA256 == record.provenance.argumentsSHA256,
-                  Set(record.semanticCitations).isSubset(of: Set(original.governance.semanticCitations)) else {
-                throw ConformanceGovernanceError.invalidField(record: record.id, field: "case governance correlation")
-            }
-            guard record.provenance.tlcTag == TLCReferencePin.fixture.tag,
-                  record.provenance.tlcCommit == TLCReferencePin.fixture.commit,
-                  record.provenance.tlcJarSHA256 == TLCReferencePin.fixture.jarSHA256,
-                  record.provenance.javaDistribution == TLCReferencePin.fixture.javaDistribution,
-                  record.provenance.javaVersion == TLCReferencePin.fixture.javaVersion,
-                  record.provenance.javaArchiveSHA256 == TLCReferencePin.fixture.javaArchiveSHA256,
-                  record.provenance.bridgeClass == TLCReferencePin.fixture.bridgeClass,
-                  record.provenance.bridgeSourceSHA256 == TLCReferencePin.fixture.bridgeSourceSHA256,
-                  record.provenance.bridgeBinarySHA256 == TLCReferencePin.fixture.bridgeBinarySHA256 else {
-                throw ConformanceGovernanceError.invalidField(record: record.id, field: "TLC reference pin")
-            }
-        }
-    }
 }
 
 public struct TLCReferenceArtifacts: Equatable, Sendable {

@@ -367,7 +367,7 @@ func retainedBridgeCase() throws -> CoreConformanceCase {
   let configuration = root.appendingPathComponent("Tools/TLCGraphBridge/spike/BridgeGraph.cfg")
   let arguments = ["-workers", "1", "-fp", "1", "-seed", "1", "-deadlock"]
   return try CoreConformanceCase(
-    id: "adversarial-core-graph-v1", moduleSHA256: SHA256.hex(try Data(contentsOf: module)),
+    id: "adversarial-core-graph", moduleSHA256: SHA256.hex(try Data(contentsOf: module)),
     cfgSHA256: SHA256.hex(try Data(contentsOf: configuration)), arguments: arguments,
     argumentsSHA256: try CoreConformanceCase.argumentsDigest(arguments), workers: 1,
     fingerprintPolynomial: 1,

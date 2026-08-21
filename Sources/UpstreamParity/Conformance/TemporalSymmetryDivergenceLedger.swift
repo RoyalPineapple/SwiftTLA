@@ -3,58 +3,58 @@ import Foundation
 public struct TemporalSymmetryDivergenceComparison: Equatable, Codable, Sendable {
   public let evidence: CoreEvidenceReference
   public let outcome: TemporalSymmetryExpectedOutcome
-  public let normalizedDifferenceFingerprint: String?
+  public let normalizedDifferenceDigest: String?
 
-  public init(evidence: CoreEvidenceReference, outcome: TemporalSymmetryExpectedOutcome, normalizedDifferenceFingerprint: String?) throws {
+  public init(evidence: CoreEvidenceReference, outcome: TemporalSymmetryExpectedOutcome, normalizedDifferenceDigest: String?) throws {
     self.evidence = evidence
     self.outcome = outcome
-    self.normalizedDifferenceFingerprint = normalizedDifferenceFingerprint
+    self.normalizedDifferenceDigest = normalizedDifferenceDigest
     try validate()
   }
 
   public func validate() throws {
     try evidence.validate()
     let needsFingerprint = outcome == .difference
-    guard needsFingerprint == (normalizedDifferenceFingerprint?.isEmpty == false) else {
-      throw ConformanceGovernanceError.invalidField(record: "comparison", field: "normalizedDifferenceFingerprint")
+    guard needsFingerprint == (normalizedDifferenceDigest?.isEmpty == false) else {
+      throw ConformanceGovernanceError.invalidField(record: "comparison", field: "normalizedDifferenceDigest")
     }
   }
 
-  private enum CodingKeys: String, CodingKey, CaseIterable { case evidence, outcome, normalizedDifferenceFingerprint }
+  private enum CodingKeys: String, CodingKey, CaseIterable { case evidence, outcome, normalizedDifferenceDigest }
 
   public init(from decoder: Decoder) throws {
     let container = try ConformanceDecoding.container(decoder, keyedBy: CodingKeys.self)
     try self.init(
       evidence: container.decode(CoreEvidenceReference.self, forKey: .evidence),
       outcome: container.decode(TemporalSymmetryExpectedOutcome.self, forKey: .outcome),
-      normalizedDifferenceFingerprint: try container.decodeIfPresent(String.self, forKey: .normalizedDifferenceFingerprint))
+      normalizedDifferenceDigest: try container.decodeIfPresent(String.self, forKey: .normalizedDifferenceDigest))
   }
 }
 
 public struct TemporalSymmetryDivergenceRecord: Equatable, Codable, Sendable {
   public let id: String
   public let kind: TemporalSymmetryCaseKind
-  public let provenance: CoreDivergenceProvenance
+  public let provenance: CoreEvidenceProvenance
   public let semanticCitations: [String]
   public let reproducer: CoreFiniteBounds
   public let originalEvidence: CoreEvidenceReference
   public let permanentRegressionCaseID: String
   public let classification: ConformanceDivergenceClassification
   public let disposition: ConformanceDivergenceDisposition
-  public let normalizedDifferenceFingerprint: String
+  public let normalizedDifferenceDigest: String
   public let latestComparison: TemporalSymmetryDivergenceComparison
 
   public init(
     id: String,
     kind: TemporalSymmetryCaseKind,
-    provenance: CoreDivergenceProvenance,
+    provenance: CoreEvidenceProvenance,
     semanticCitations: [String],
     reproducer: CoreFiniteBounds,
     originalEvidence: CoreEvidenceReference,
     permanentRegressionCaseID: String,
     classification: ConformanceDivergenceClassification,
     disposition: ConformanceDivergenceDisposition,
-    normalizedDifferenceFingerprint: String,
+    normalizedDifferenceDigest: String,
     latestComparison: TemporalSymmetryDivergenceComparison
   ) throws {
     self.id = id
@@ -66,7 +66,7 @@ public struct TemporalSymmetryDivergenceRecord: Equatable, Codable, Sendable {
     self.permanentRegressionCaseID = permanentRegressionCaseID
     self.classification = classification
     self.disposition = disposition
-    self.normalizedDifferenceFingerprint = normalizedDifferenceFingerprint
+    self.normalizedDifferenceDigest = normalizedDifferenceDigest
     self.latestComparison = latestComparison
     try validate()
   }
@@ -76,21 +76,21 @@ public struct TemporalSymmetryDivergenceRecord: Equatable, Codable, Sendable {
     try reproducer.validate()
     try originalEvidence.validate()
     try latestComparison.validate()
-    guard !id.isEmpty, !permanentRegressionCaseID.isEmpty, !normalizedDifferenceFingerprint.isEmpty,
+    guard !id.isEmpty, !permanentRegressionCaseID.isEmpty, !normalizedDifferenceDigest.isEmpty,
           !semanticCitations.isEmpty, semanticCitations.allSatisfy({ !$0.isEmpty }) else {
       throw ConformanceGovernanceError.invalidField(record: id, field: "required evidence")
     }
     guard disposition != .resolved || latestComparison.outcome == .exact else {
       throw ConformanceGovernanceError.invalidField(record: id, field: "latestComparison")
     }
-    guard latestComparison.outcome != .difference || latestComparison.normalizedDifferenceFingerprint == normalizedDifferenceFingerprint else {
-      throw ConformanceGovernanceError.invalidField(record: id, field: "fingerprint drift")
+    guard latestComparison.outcome != .difference || latestComparison.normalizedDifferenceDigest == normalizedDifferenceDigest else {
+      throw ConformanceGovernanceError.invalidField(record: id, field: "difference digest drift")
     }
   }
 
   private enum CodingKeys: String, CodingKey, CaseIterable {
     case id, kind, provenance, semanticCitations, reproducer, originalEvidence, permanentRegressionCaseID
-    case classification, disposition, normalizedDifferenceFingerprint, latestComparison
+    case classification, disposition, normalizedDifferenceDigest, latestComparison
   }
 
   public init(from decoder: Decoder) throws {
@@ -98,14 +98,14 @@ public struct TemporalSymmetryDivergenceRecord: Equatable, Codable, Sendable {
     try self.init(
       id: container.decode(String.self, forKey: .id),
       kind: container.decode(TemporalSymmetryCaseKind.self, forKey: .kind),
-      provenance: container.decode(CoreDivergenceProvenance.self, forKey: .provenance),
+      provenance: container.decode(CoreEvidenceProvenance.self, forKey: .provenance),
       semanticCitations: container.decode([String].self, forKey: .semanticCitations),
       reproducer: container.decode(CoreFiniteBounds.self, forKey: .reproducer),
       originalEvidence: container.decode(CoreEvidenceReference.self, forKey: .originalEvidence),
       permanentRegressionCaseID: container.decode(String.self, forKey: .permanentRegressionCaseID),
       classification: container.decode(ConformanceDivergenceClassification.self, forKey: .classification),
       disposition: container.decode(ConformanceDivergenceDisposition.self, forKey: .disposition),
-      normalizedDifferenceFingerprint: container.decode(String.self, forKey: .normalizedDifferenceFingerprint),
+      normalizedDifferenceDigest: container.decode(String.self, forKey: .normalizedDifferenceDigest),
       latestComparison: container.decode(TemporalSymmetryDivergenceComparison.self, forKey: .latestComparison))
   }
 }

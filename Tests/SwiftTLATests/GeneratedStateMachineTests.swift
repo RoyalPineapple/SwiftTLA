@@ -386,7 +386,7 @@ struct GeneratedIntegerChoiceAlgorithmTests {
     func generatedModelRetainsIntegerChoice() throws {
         GeneratedIntegerChoiceAlgorithm._checkParserTree()
         let spec = GeneratedIntegerChoiceAlgorithm.spec
-        let graph = try ModelChecker(compilation: try spec.compile()).exploreGraph()
+        let graph = try ModelChecker(compilation: try spec.compile(), configuration: .standard).exploreGraph()
         #expect(try Set(graph.states.values.compactMap { try value("selected", in: $0) }) == [.int(0), .int(1), .int(2), .int(3)])
     }
 }
@@ -412,7 +412,7 @@ struct GeneratedAlgorithmStateConstraintTests {
         GeneratedAlgorithmStateConstraint._checkParserTree()
         #expect(GeneratedAlgorithmStateConstraint.spec.constraint
             == .lessThan(.variable("count"), .value(.int(2))))
-        let graph = try ModelChecker(compilation: try GeneratedAlgorithmStateConstraint.spec.compile()).exploreGraph()
+        let graph = try ModelChecker(compilation: try GeneratedAlgorithmStateConstraint.spec.compile(), configuration: .standard).exploreGraph()
         #expect(try Set(graph.states.values.compactMap { try value("count", in: $0) }) == [.int(0), .int(1)])
     }
 }
@@ -870,7 +870,7 @@ struct GeneratedStateMachineTests {
             [.int(2), .int(10), .int(100)], [.int(2), .int(10), .int(200)],
             [.int(2), .int(20), .int(100)], [.int(2), .int(20), .int(200)]
         ]
-        let graph = try ModelChecker(compilation: try builder.compile()).exploreGraph()
+        let graph = try ModelChecker(compilation: try builder.compile(), configuration: .standard).exploreGraph()
         #expect(graph.transitions[.init(0)]?.map(\.label.arguments) == expectedArguments)
 
         let machine = try EndToEndThreeParameterActionMachine.makeMachine()

@@ -458,7 +458,7 @@ struct LivenessConformanceTests {
             Variable(x, 0)
             Eventually("reachesOne", x == 1)
         }
-        let liveness = try ModelChecker(compilation: try livenessSpec.compile()).checkLiveness()
+        let liveness = try ModelChecker(compilation: try livenessSpec.compile(), configuration: .standard).checkLiveness()
         if case .livenessViolated = liveness.underlyingOutcome {
         } else {
             Issue.record("Expected liveness violation, got \(liveness)")

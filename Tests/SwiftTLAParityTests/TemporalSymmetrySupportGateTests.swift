@@ -224,7 +224,7 @@ struct TemporalSymmetrySupportGateTests {
       let comparison = try comparison ?? self.comparison(caseID: caseID, correlation: correlation)
       return try TemporalSymmetryCaseEvidence(
         comparison: .temporal(comparison), comparisonEvidence: try reference("temporal-comparison.json"),
-        manifestSHA256: digest, toolchainSHA256: digest, status: status, normalizedDifferenceFingerprint: fingerprint)
+        manifestSHA256: digest, toolchainSHA256: digest, status: status, normalizedDifferenceDigest: fingerprint)
     }
 
     func correlation(caseID: String = "temporal", gateRunID: UUID) throws -> TemporalSymmetryCaseRunCorrelation {
@@ -290,13 +290,13 @@ struct TemporalSymmetrySupportGateTests {
         id: "known-difference", kind: .temporal, provenance: try provenance(caseID: source.id, digest: digest),
         semanticCitations: ["TLA+ temporal logic"], reproducer: bounds, originalEvidence: try reference("original.json", digest: digest),
         permanentRegressionCaseID: regression.id, classification: .swiftTLADefect, disposition: .open,
-        normalizedDifferenceFingerprint: "known-difference",
+        normalizedDifferenceDigest: "known-difference",
         latestComparison: try TemporalSymmetryDivergenceComparison(
-          evidence: try reference("latest.json", digest: digest), outcome: .difference, normalizedDifferenceFingerprint: "known-difference"))
+          evidence: try reference("latest.json", digest: digest), outcome: .difference, normalizedDifferenceDigest: "known-difference"))
     }
 
-    private static func provenance(caseID: String, digest: String) throws -> CoreDivergenceProvenance {
-      try CoreDivergenceProvenance(
+    private static func provenance(caseID: String, digest: String) throws -> CoreEvidenceProvenance {
+      try CoreEvidenceProvenance(
         caseID: caseID, moduleSHA256: digest, cfgSHA256: digest, argumentsSHA256: digest,
         tlcTag: "v1.8.0", tlcCommit: "commit", tlcJarSHA256: digest, javaDistribution: "Temurin",
         javaVersion: "17", javaArchiveSHA256: digest, bridgeClass: "bridge", bridgeSourceSHA256: digest,

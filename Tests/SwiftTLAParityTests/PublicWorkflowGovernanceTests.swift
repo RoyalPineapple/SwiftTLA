@@ -195,7 +195,7 @@ struct PublicWorkflowGovernanceTests {
       try PublicWorkflowConformanceCase(
         id: id, category: .annotation, publicName: "@TLAValidated",
         finiteBounds: try CoreFiniteBounds(summary: "one state", limits: ["states": 1]),
-        semanticCitations: ["TLA+ Specifying Systems"], provenance: CoreDivergenceProvenance(
+        semanticCitations: ["TLA+ Specifying Systems"], provenance: CoreEvidenceProvenance(
           caseID: id, moduleSHA256: digest, cfgSHA256: digest, argumentsSHA256: digest,
           tlcTag: "v1.8.0", tlcCommit: "30cc3601321c3fc02e044d0ecb5c58d8921e18df", tlcJarSHA256: digest,
           javaDistribution: "Eclipse Temurin", javaVersion: "17.0.19+10", javaArchiveSHA256: digest,
@@ -290,8 +290,8 @@ struct PublicWorkflowGovernanceTests {
           id: "open", caseID: caseID, semanticCitations: ["TLA+ Specifying Systems"],
           reproducer: try CoreFiniteBounds(summary: "one state", limits: ["states": 1]),
           originalEvidence: try reference("original"), permanentRegressionCaseID: caseID,
-          classification: .swiftTLADefect, disposition: .open, normalizedDifferenceFingerprint: "difference",
-          latestComparison: try PublicWorkflowDivergenceComparison(evidence: try reference("latest"), outcome: .difference, normalizedDifferenceFingerprint: "difference"))
+          classification: .swiftTLADefect, disposition: .open, normalizedDifferenceDigest: "difference",
+          latestComparison: try PublicWorkflowDivergenceComparison(evidence: try reference("latest"), outcome: .difference, normalizedDifferenceDigest: "difference"))
       ])
     }
   }

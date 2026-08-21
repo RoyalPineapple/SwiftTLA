@@ -1,7 +1,0 @@
-{
-  "counterexample.json" : false,
-  "graph-events.jsonl" : true,
-  "graph-events.replay.jsonl" : false,
-  "graph-events.trace.jsonl" : false,
-  "replay.json" : false
-}

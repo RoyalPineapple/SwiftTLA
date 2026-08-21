@@ -30,7 +30,7 @@ package struct ModelChecker {
 
     init(
         compilation: CompiledSpecification,
-        configuration: FiniteExplorationConfiguration = .standard,
+        configuration: FiniteExplorationConfiguration,
         permutationProductBudget: Int = 100_000
     ) {
         self.spec = compilation.spec

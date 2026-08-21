@@ -53,7 +53,7 @@ exhaustive declared run and its bridge stream.
 every observed core disagreement with its original evidence, semantic
 citation, pinned tool and runtime identity, bounded reproducer,
 classification, disposition, regression case, normalized difference
-fingerprint, and latest comparison. Do not delete a record when a defect is
+digest, and latest comparison. Keep the record when a defect is
 fixed: preserve the regression and change its latest comparison to exact.
 
 Choose one classification for each record:
@@ -72,14 +72,14 @@ Choose one disposition for the current state of that record:
 |---|---|
 | `open` | The disagreement is still being investigated. |
 | `resolved` | The record stays in the ledger, and its latest comparison is exact. |
-| `unsupported` | The behavior is deliberately outside the support claim, including a retained negative control. Its recorded difference and fingerprint must still reproduce. |
+| `unsupported` | The behavior is outside the support claim, including a retained negative control. Its recorded difference and digest must still reproduce. |
 | `awaitingSemanticsReview` | A published-semantics decision is required before the record can be resolved. |
 | `suspectedReferenceDefect` | The pinned TLC reference is suspected, but the record is not resolved. |
 
 Only `resolved` is resolved to the gate. A linked record with any other
 disposition prevents a requested support entry from being admitted. The gate
 also requires each retained regression to have current evidence: an exact latest result for `resolved`, or
-the recorded difference fingerprint for every other disposition. A
+the recorded difference digest for every other disposition. A
 published-semantics ambiguity or suspected TLC defect must state the
 published-semantics result separately from TLC output.
 
@@ -90,7 +90,7 @@ Use this checklist when a declared core comparison differs:
 1. Reduce it to the smallest practical finite case and record its explicit
    bounds and semantic citations.
 2. Keep the original evidence, complete pinned input and toolchain identity,
-   and the normalized difference fingerprint in `divergences.json`.
+   and the normalized difference digest in `divergences.json`.
 3. Add or keep a permanent regression case in `cases.json`. Its expected
    result must be the retained exact result or the retained difference.
 4. Link the record from `support-surface.json`. Do not enlarge requested
@@ -102,7 +102,7 @@ Use this checklist when a declared core comparison differs:
    `resolved`.
 
 Do not delete a record to make a report pass. Do not change a difference
-fingerprint without retaining evidence for the new difference.
+digest without retaining evidence for the new difference.
 
 `Verification/CoreConformance/support-surface.json` defines the only support
 claims the gate can evaluate. The admission report is written to

@@ -133,7 +133,7 @@ unavailable.
 5. For symmetry cases, inspect raw and reduced graphs, orbit evidence,
    quotient evidence, and configuration records.
 6. If evidence differs, retain or update a divergence record with a minimized
-   reproducer and stable normalized fingerprint.
+   reproducer and stable normalized difference digest.
 7. Run the release check again after the correction.
 
 Never delete a divergence or downgrade a requested entry to obtain exit `0`.

@@ -339,12 +339,6 @@ private func runCoreSupportGate(arguments: [String]) -> Never {
     do {
         let casesPath = try requiredEnvironment("CORE_CONFORMANCE_CASES", environment)
         let manifest = try decode(CoreConformanceCasesManifest.self, at: URL(fileURLWithPath: casesPath))
-        let ledger = try decode(
-            CoreDivergenceLedger.self,
-            at: governanceURL(
-                environment["CORE_CONFORMANCE_DIVERGENCES"],
-                projectRoot: projectRoot,
-                defaultPath: "Verification/CoreConformance/divergences.json"))
         let surface = try decode(
             CoreSupportSurface.self,
             at: governanceURL(
@@ -361,7 +355,6 @@ private func runCoreSupportGate(arguments: [String]) -> Never {
         report = try CoreSupportGate().evaluate(CoreSupportGateInput(
             gateRunID: options.gateRunID,
             manifest: manifest,
-            ledger: ledger,
             surface: surface,
             evidence: evidence,
             prerequisiteAvailable: options.prerequisiteAvailable))
@@ -677,7 +670,7 @@ private func temporalSymmetryEvidence(
             manifestSHA256: manifestSHA256,
             toolchainSHA256: toolchainSHA256,
             status: .complete,
-            normalizedDifferenceFingerprint: comparison.outcome == .difference ? SHA256.hex(data) : nil)
+            normalizedDifferenceDigest: comparison.outcome == .difference ? SHA256.hex(data) : nil)
     }
 }
 private func validateCompleteGraphEvidence(

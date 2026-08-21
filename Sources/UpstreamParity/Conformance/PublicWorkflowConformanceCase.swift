@@ -42,7 +42,7 @@ public struct PublicWorkflowConformanceCase: Equatable, Codable, Sendable {
   public let publicName: String
   public let finiteBounds: CoreFiniteBounds
   public let semanticCitations: [String]
-  public let provenance: CoreDivergenceProvenance
+  public let provenance: CoreEvidenceProvenance
   public let sourceInput: CoreEvidenceReference
   public let configuration: CoreEvidenceReference
   public let expectedOutcome: PublicWorkflowExpectedOutcome
@@ -54,7 +54,7 @@ public struct PublicWorkflowConformanceCase: Equatable, Codable, Sendable {
     publicName: String,
     finiteBounds: CoreFiniteBounds,
     semanticCitations: [String],
-    provenance: CoreDivergenceProvenance,
+    provenance: CoreEvidenceProvenance,
     sourceInput: CoreEvidenceReference,
     configuration: CoreEvidenceReference,
     expectedOutcome: PublicWorkflowExpectedOutcome,
@@ -98,7 +98,7 @@ public struct PublicWorkflowConformanceCase: Equatable, Codable, Sendable {
       publicName: try container.decode(String.self, forKey: .publicName),
       finiteBounds: try container.decode(CoreFiniteBounds.self, forKey: .finiteBounds),
       semanticCitations: try container.decode([String].self, forKey: .semanticCitations),
-      provenance: try container.decode(CoreDivergenceProvenance.self, forKey: .provenance),
+      provenance: try container.decode(CoreEvidenceProvenance.self, forKey: .provenance),
       sourceInput: try container.decode(CoreEvidenceReference.self, forKey: .sourceInput),
       configuration: try container.decode(CoreEvidenceReference.self, forKey: .configuration),
       expectedOutcome: try container.decode(PublicWorkflowExpectedOutcome.self, forKey: .expectedOutcome),
@@ -164,12 +164,12 @@ public struct PublicWorkflowEvidenceBinding: Equatable, Codable, Sendable {
   public let evidenceRunID: UUID
   public let sourceInput: CoreEvidenceReference
   public let configuration: CoreEvidenceReference
-  public let provenance: CoreDivergenceProvenance
+  public let provenance: CoreEvidenceProvenance
   public let evidence: CoreEvidenceReference
 
   public init(
     caseID: String, gateRunID: UUID, evidenceRunID: UUID, sourceInput: CoreEvidenceReference,
-    configuration: CoreEvidenceReference, provenance: CoreDivergenceProvenance,
+    configuration: CoreEvidenceReference, provenance: CoreEvidenceProvenance,
     evidence: CoreEvidenceReference
   ) throws {
     self.caseID = caseID
@@ -213,7 +213,7 @@ public struct PublicWorkflowEvidenceBinding: Equatable, Codable, Sendable {
       evidenceRunID: try container.decode(UUID.self, forKey: .evidenceRunID),
       sourceInput: try container.decode(CoreEvidenceReference.self, forKey: .sourceInput),
       configuration: try container.decode(CoreEvidenceReference.self, forKey: .configuration),
-      provenance: try container.decode(CoreDivergenceProvenance.self, forKey: .provenance),
+      provenance: try container.decode(CoreEvidenceProvenance.self, forKey: .provenance),
       evidence: try container.decode(CoreEvidenceReference.self, forKey: .evidence))
   }
 }

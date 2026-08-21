@@ -141,7 +141,7 @@ struct TLAModuleBundleTests {
     #expect(FileManager.default.fileExists(atPath: directory.appendingPathComponent("UsesZSequences.tla").path))
     #expect(FileManager.default.fileExists(atPath: directory.appendingPathComponent("ZSequences.tla").path))
     #expect(FileManager.default.fileExists(atPath: directory.appendingPathComponent("bundle-manifest.json").path))
-    let check = try ModelChecker(compilation: try consumer.compile()).check()
+    let check = try ModelChecker(compilation: try consumer.compile(), configuration: .standard).check()
     guard case .ok = check.underlyingOutcome else {
       Issue.record("The imported ZSequences operators did not evaluate successfully.")
       return
@@ -199,7 +199,7 @@ struct TLAModuleBundleTests {
     let bundle = try consumer.compile().renderedTLAModuleBundle()
     #expect(bundle.imports.map { $0.name } == ["FormalArithmetic"])
     #expect(bundle.imports.first?.tla.contains("Twice(value) ==") == true)
-    let check = try ModelChecker(compilation: try consumer.compile()).check()
+    let check = try ModelChecker(compilation: try consumer.compile(), configuration: .standard).check()
     guard case .ok = check.underlyingOutcome else {
       Issue.record("The imported operator did not evaluate successfully.")
       return
@@ -238,7 +238,7 @@ struct TLAModuleBundleTests {
     #expect(FileManager.default.fileExists(
       atPath: directory.appendingPathComponent("bundle-manifest.json").path
     ))
-    let result = try ModelChecker(compilation: try consumer.compile()).check()
+    let result = try ModelChecker(compilation: try consumer.compile(), configuration: .standard).check()
     guard case .ok = result.underlyingOutcome else {
       Issue.record("The checker did not resolve the qualified module operator.")
       return
@@ -269,7 +269,7 @@ struct TLAModuleBundleTests {
     let resolved = try consumer.compile().formalModuleClosure.resolvedRecursiveFuncs
     #expect(resolved.map(\.name) == ["Math!CountDown"])
     #expect(resolved[0].body.description.contains("Math!CountDown"))
-    let result = try ModelChecker(compilation: try consumer.compile()).check()
+    let result = try ModelChecker(compilation: try consumer.compile(), configuration: .standard).check()
     guard case .ok = result.underlyingOutcome else {
       Issue.record("The checker did not resolve recursive instance calls.")
       return
@@ -297,7 +297,7 @@ struct TLAModuleBundleTests {
     let bundle = try consumer.compile().renderedTLAModuleBundle()
     #expect(bundle.imports[0].tla.contains("CONSTANTS Base"))
     #expect(!bundle.imports[0].tla.contains("ASSUME Base"))
-    let result = try ModelChecker(compilation: try consumer.compile()).check()
+    let result = try ModelChecker(compilation: try consumer.compile(), configuration: .standard).check()
     guard case .ok = result.underlyingOutcome else {
       Issue.record("The checker did not apply the module argument.")
       return
@@ -326,7 +326,7 @@ struct TLAModuleBundleTests {
 
     #expect(try consumer.compile().renderedTLAModuleBundle().tla.contains("Math == INSTANCE VariableParameterizedArithmetic WITH Base <- value"))
     #expect(try consumer.compile().renderedTLAModuleBundle().imports[0].tla.contains("VARIABLES Base"))
-    let result = try ModelChecker(compilation: try consumer.compile()).check()
+    let result = try ModelChecker(compilation: try consumer.compile(), configuration: .standard).check()
     guard case .ok = result.underlyingOutcome else {
       Issue.record("The checker did not substitute the state parameter.")
       return

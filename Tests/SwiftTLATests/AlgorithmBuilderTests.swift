@@ -939,7 +939,7 @@ struct AlgorithmBuilderTests {
             }
         }
 
-        let result = try ModelChecker(compilation: try compiledSourceSpecification(algorithm).compile()).check().underlyingOutcome
+        let result = try ModelChecker(compilation: try compiledSourceSpecification(algorithm).compile(), configuration: .standard).check().underlyingOutcome
         guard case .invariantViolated(let name, _, _) = result else {
             Issue.record("Expected Assert to produce an invariant violation, got \(result)")
             return

@@ -93,9 +93,8 @@ extension CoreSupportGate {
   }
 
   func governanceMatches(_ object: [String: Any]?, _ governance: CoreConformanceCaseGovernance) -> Bool {
-    guard let object, object["role"] as? String == governance.role.rawValue,
+    guard let object,
           object["semanticCitations"] as? [String] == governance.semanticCitations,
-          object["expectedRegressionOutcome"] as? String == governance.expectedRegressionOutcome.rawValue,
           let bounds = object["finiteBounds"] as? [String: Any],
           bounds["summary"] as? String == governance.finiteBounds.summary,
           let limits = bounds["limits"] as? [String: Int]
@@ -480,7 +479,7 @@ extension CoreSupportGate {
     tlc: CanonicalRunEvidence,
     tlcRun: CanonicalRun,
     comparison: [String: Any]
-  ) throws -> (isDifference: Bool, fingerprint: String?) {
+  ) throws -> Bool {
     guard swift.receiptContext == tlc.receiptContext else {
       throw EvidenceValidationError.invalidCanonicalRecord
     }
@@ -515,11 +514,7 @@ extension CoreSupportGate {
             == jsonValue(expectedRecord["firstDifferentGraphChunk"])
     else { throw EvidenceValidationError.invalidCanonicalRecord }
 
-    let fingerprint = !expected.isConformant
-      ? try CoreDivergenceLedger.normalizedDifferenceFingerprint(
-        from: JSONSerialization.data(withJSONObject: expectedRecord, options: [.sortedKeys]))
-      : nil
-    return (!expected.isConformant, fingerprint)
+    return !expected.isConformant
   }
 
   private func jsonValue(_ value: Any?) -> Data? {

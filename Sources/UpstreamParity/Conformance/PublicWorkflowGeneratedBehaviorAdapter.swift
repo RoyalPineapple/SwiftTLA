@@ -10,7 +10,7 @@ public struct PublicWorkflowGeneratedFixtureManifest: Equatable, Codable, Sendab
   public let sourceInput: CoreEvidenceReference
   public let configuration: CoreEvidenceReference
   public let semanticCitations: [String]
-  public let provenance: CoreDivergenceProvenance
+  public let provenance: CoreEvidenceProvenance
   public let builderEvidence: CoreEvidenceReference
   public let generatedEvidence: CoreEvidenceReference
   public let actionNames: [String]
@@ -22,7 +22,7 @@ public struct PublicWorkflowGeneratedFixtureManifest: Equatable, Codable, Sendab
     sourceInput: CoreEvidenceReference,
     configuration: CoreEvidenceReference,
     semanticCitations: [String],
-    provenance: CoreDivergenceProvenance,
+    provenance: CoreEvidenceProvenance,
     builderEvidence: CoreEvidenceReference,
     generatedEvidence: CoreEvidenceReference,
     actionNames: [String],
@@ -82,7 +82,7 @@ public struct PublicWorkflowGeneratedFixtureManifest: Equatable, Codable, Sendab
       sourceInput: try container.decode(CoreEvidenceReference.self, forKey: .sourceInput),
       configuration: try container.decode(CoreEvidenceReference.self, forKey: .configuration),
       semanticCitations: try container.decode([String].self, forKey: .semanticCitations),
-      provenance: try container.decode(CoreDivergenceProvenance.self, forKey: .provenance),
+      provenance: try container.decode(CoreEvidenceProvenance.self, forKey: .provenance),
       builderEvidence: try container.decode(CoreEvidenceReference.self, forKey: .builderEvidence),
       generatedEvidence: try container.decode(CoreEvidenceReference.self, forKey: .generatedEvidence),
       actionNames: try container.decode([String].self, forKey: .actionNames),
@@ -293,21 +293,18 @@ public struct PublicWorkflowGeneratedBehaviorRun: Codable, Sendable {
   public let comparison: PublicWorkflowComparison
   public let builderObservation: CoreEvidenceReference
   public let generatedObservation: CoreEvidenceReference
-  public let mismatchFingerprint: String?
 
   public init(
     manifest: CoreEvidenceReference,
     comparison: PublicWorkflowComparison,
     builderObservation: CoreEvidenceReference,
-    generatedObservation: CoreEvidenceReference,
-    mismatchFingerprint: String?
+    generatedObservation: CoreEvidenceReference
   ) {
     self.schema = Self.schema
     self.manifest = manifest
     self.comparison = comparison
     self.builderObservation = builderObservation
     self.generatedObservation = generatedObservation
-    self.mismatchFingerprint = mismatchFingerprint
   }
 }
 
@@ -378,13 +375,11 @@ public struct PublicWorkflowGeneratedBehaviorAdapter: Sendable {
     try ConformanceEvidence.writeCanonical(builder, to: builderURL)
     try ConformanceEvidence.writeCanonical(generated, to: generatedURL)
     try ConformanceEvidence.writeCanonical(comparison, to: comparisonURL)
-    let fingerprint = outcome == .difference ? try stableMismatchFingerprint(generated: generated, builder: builder) : nil
     let run = PublicWorkflowGeneratedBehaviorRun(
       manifest: try ConformanceEvidence.reference(for: manifestURL, beneath: root, data: manifestData),
       comparison: comparison,
       builderObservation: try ConformanceEvidence.reference(for: builderURL, beneath: root),
-      generatedObservation: try ConformanceEvidence.reference(for: generatedURL, beneath: root),
-      mismatchFingerprint: fingerprint)
+      generatedObservation: try ConformanceEvidence.reference(for: generatedURL, beneath: root))
     try ConformanceEvidence.writeCanonical(run, to: output.appendingPathComponent("run.json"))
     return run
   }
@@ -419,7 +414,7 @@ public struct PublicWorkflowGeneratedBehaviorAdapter: Sendable {
   }
 
   private func validateProvenance(
-    _ provenance: CoreDivergenceProvenance,
+    _ provenance: CoreEvidenceProvenance,
     source: Data,
     configuration: Data,
     toolchain: PublicWorkflowGeneratedBehaviorToolchain
@@ -449,7 +444,7 @@ public struct PublicWorkflowGeneratedBehaviorAdapter: Sendable {
 
   private func validateToolchain(
     _ toolchain: PublicWorkflowGeneratedBehaviorToolchain,
-    provenance: CoreDivergenceProvenance,
+    provenance: CoreEvidenceProvenance,
     beneath root: URL
   ) throws {
     for dependency in toolchain.dependencies { _ = try ConformanceEvidence.data(for: dependency.evidence, beneath: root) }
@@ -468,17 +463,6 @@ public struct PublicWorkflowGeneratedBehaviorAdapter: Sendable {
     guard observation == retained else {
       throw ConformanceGovernanceError.inconsistentReference(record: reference.path, field: "computed canonical observation")
     }
-  }
-
-  private func stableMismatchFingerprint(
-    generated: PublicWorkflowCanonicalObservation,
-    builder: PublicWorkflowCanonicalObservation
-  ) throws -> String {
-    struct Difference: Encodable {
-      let generated: PublicWorkflowCanonicalObservation
-      let builder: PublicWorkflowCanonicalObservation
-    }
-    return SHA256.hex(try ConformanceEvidence.canonicalData(Difference(generated: generated, builder: builder)))
   }
 
   private func observeBuilder(spec: TLASpec, maxStates: Int) throws -> PublicWorkflowCanonicalObservation {

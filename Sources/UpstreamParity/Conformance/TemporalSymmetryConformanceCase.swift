@@ -163,7 +163,7 @@ public struct TemporalSymmetryCase: Equatable, Codable, Sendable {
   public let id: String
   public let kind: TemporalSymmetryCaseKind
   public let swiftSpec: String
-  public let provenance: CoreDivergenceProvenance
+  public let provenance: CoreEvidenceProvenance
   public let finiteBounds: CoreFiniteBounds
   public let semanticCitations: [String]
   public let sourceInput: CoreEvidenceReference
@@ -174,7 +174,7 @@ public struct TemporalSymmetryCase: Equatable, Codable, Sendable {
     id: String,
     kind: TemporalSymmetryCaseKind,
     swiftSpec: String,
-    provenance: CoreDivergenceProvenance,
+    provenance: CoreEvidenceProvenance,
     finiteBounds: CoreFiniteBounds,
     semanticCitations: [String],
     sourceInput: CoreEvidenceReference,
@@ -224,7 +224,7 @@ public struct TemporalSymmetryCase: Equatable, Codable, Sendable {
       id: container.decode(String.self, forKey: .id),
       kind: container.decode(TemporalSymmetryCaseKind.self, forKey: .kind),
       swiftSpec: container.decode(String.self, forKey: .swiftSpec),
-      provenance: container.decode(CoreDivergenceProvenance.self, forKey: .provenance),
+      provenance: container.decode(CoreEvidenceProvenance.self, forKey: .provenance),
       finiteBounds: container.decode(CoreFiniteBounds.self, forKey: .finiteBounds),
       semanticCitations: container.decode([String].self, forKey: .semanticCitations),
       sourceInput: container.decode(CoreEvidenceReference.self, forKey: .sourceInput),

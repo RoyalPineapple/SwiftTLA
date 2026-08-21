@@ -242,7 +242,7 @@ public struct PublicWorkflowParserBuilderAdapter: Sendable {
     return run
   }
 
-  private func validateProvenance(_ provenance: CoreDivergenceProvenance, source: Data, configuration: Data,
+  private func validateProvenance(_ provenance: CoreEvidenceProvenance, source: Data, configuration: Data,
                                   toolchain: PublicWorkflowParserBuilderToolchain) throws {
     let tlc = try toolchain.nonApplicable("tlc")
     let java = try toolchain.nonApplicable("java")
@@ -263,7 +263,7 @@ public struct PublicWorkflowParserBuilderAdapter: Sendable {
   }
 
   private func validateToolchain(_ toolchain: PublicWorkflowParserBuilderToolchain,
-                                 provenance: CoreDivergenceProvenance, beneath root: URL) throws {
+                                 provenance: CoreEvidenceProvenance, beneath root: URL) throws {
     for dependency in toolchain.dependencies { _ = try ConformanceEvidence.data(for: dependency.evidence, beneath: root) }
     for nonApplicable in toolchain.notApplicable { _ = try ConformanceEvidence.data(for: nonApplicable.reason, beneath: root) }
     guard provenance.bridgeClass == "SwiftTLA.PublicWorkflowParserBuilderAdapter" else {
@@ -309,7 +309,7 @@ public struct PublicWorkflowParserBuilderAdapter: Sendable {
 
   private func observe(spec: TLASpec, diagnostics: [String]) throws -> PublicWorkflowCanonicalObservation {
     do {
-      return try canonicalObservation(spec: spec, run: try SwiftGraphAdapter().adapt(ModelChecker(compilation: try spec.compile()).explore()), diagnostics: diagnostics)
+      return try canonicalObservation(spec: spec, run: try SwiftGraphAdapter().adapt(ModelChecker(compilation: try spec.compile(), configuration: .standard).explore()), diagnostics: diagnostics)
     } catch {
       return try unavailableObservation("evaluation:\(String(describing: error))", diagnostics: diagnostics)
     }

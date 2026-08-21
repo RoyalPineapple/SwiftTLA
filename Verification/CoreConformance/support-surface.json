@@ -13,9 +13,10 @@
         }
       },
       "relation": "exactFiniteTLCGraph",
-      "mandatoryCaseIDs": ["hour-clock"],
-      "requestedStatus": "requested",
-      "linkedDivergenceIDs": []
+      "mandatoryCaseIDs": [
+        "hour-clock"
+      ],
+      "requestedStatus": "requested"
     },
     {
       "id": "hour-clock-transition-relation",
@@ -30,9 +31,10 @@
         }
       },
       "relation": "exactFiniteTLCGraph",
-      "mandatoryCaseIDs": ["hour-clock"],
-      "requestedStatus": "requested",
-      "linkedDivergenceIDs": []
+      "mandatoryCaseIDs": [
+        "hour-clock"
+      ],
+      "requestedStatus": "requested"
     },
     {
       "id": "die-hard-type-safety",
@@ -48,9 +50,10 @@
         }
       },
       "relation": "exactFiniteTLCGraph",
-      "mandatoryCaseIDs": ["die-hard-type-ok"],
-      "requestedStatus": "requested",
-      "linkedDivergenceIDs": []
+      "mandatoryCaseIDs": [
+        "die-hard-type-ok"
+      ],
+      "requestedStatus": "requested"
     },
     {
       "id": "multicar-elevator-reachable-state-space",
@@ -68,9 +71,10 @@
         }
       },
       "relation": "exactFiniteTLCGraph",
-      "mandatoryCaseIDs": ["multicar-elevator"],
-      "requestedStatus": "requested",
-      "linkedDivergenceIDs": []
+      "mandatoryCaseIDs": [
+        "multicar-elevator"
+      ],
+      "requestedStatus": "requested"
     },
     {
       "id": "multicar-elevator-transition-relation",
@@ -88,67 +92,10 @@
         }
       },
       "relation": "exactFiniteTLCGraph",
-      "mandatoryCaseIDs": ["multicar-elevator"],
-      "requestedStatus": "requested",
-      "linkedDivergenceIDs": []
-    },
-    {
-      "id": "multicar-elevator-altered-transition-control",
-      "behavior": "Altered MultiCarElevator request wrapper transition semantics",
-      "category": "transitionRelation",
-      "finiteBounds": {
-        "summary": "Two people, two cars, floors 0...2, and the deliberately disabled request__0_0_0 wrapper.",
-        "limits": {
-          "people": 2,
-          "cars": 2,
-          "floors": 3,
-          "states": 3276,
-          "variables": 3,
-          "wrappers": 80
-        }
-      },
-      "relation": "exactFiniteTLCGraph",
-      "mandatoryCaseIDs": ["multicar-elevator-edge-mismatch"],
-      "requestedStatus": "unsupported",
-      "linkedDivergenceIDs": ["multicar-elevator-edge-mismatch"],
-      "reason": "This retained negative control deliberately disables one ordered wrapper and cannot substantiate support."
-    },
-    {
-      "id": "hour-clock-altered-transition-control",
-      "behavior": "Altered HourClock HCnxt transition semantics",
-      "category": "transitionRelation",
-      "finiteBounds": {
-        "summary": "One integer variable over 1...12 with the deliberately altered 12 -> 2 edge.",
-        "limits": {
-          "states": 12,
-          "transitions": 12,
-          "variables": 1
-        }
-      },
-      "relation": "exactFiniteTLCGraph",
-      "mandatoryCaseIDs": ["hour-clock-edge-mismatch"],
-      "requestedStatus": "unsupported",
-      "linkedDivergenceIDs": ["hour-clock-edge-mismatch"],
-      "reason": "This retained negative control intentionally differs from the declared HourClock semantics and cannot substantiate support."
-    },
-    {
-      "id": "die-hard-notsolved-control",
-      "behavior": "DieHard NotSolved invariant outcome",
-      "category": "invariantSafety",
-      "finiteBounds": {
-        "summary": "Two jug variables bounded to 0...5 and 0...3 with a deliberately failing NotSolved invariant.",
-        "limits": {
-          "bigCapacity": 5,
-          "smallCapacity": 3,
-          "states": 16,
-          "variables": 2
-        }
-      },
-      "relation": "exactFiniteTLCGraph",
-      "mandatoryCaseIDs": ["die-hard-violation"],
-      "requestedStatus": "unsupported",
-      "linkedDivergenceIDs": ["die-hard-violation"],
-      "reason": "This retained negative control intentionally forces a TLC-only invariant failure and cannot substantiate support."
+      "mandatoryCaseIDs": [
+        "multicar-elevator"
+      ],
+      "requestedStatus": "requested"
     },
     {
       "id": "unproven-finite-core-graph-behavior",
@@ -161,9 +108,11 @@
         }
       },
       "relation": "exactFiniteTLCGraph",
-      "mandatoryCaseIDs": ["hour-clock", "die-hard-type-ok"],
+      "mandatoryCaseIDs": [
+        "hour-clock",
+        "die-hard-type-ok"
+      ],
       "requestedStatus": "unsupported",
-      "linkedDivergenceIDs": [],
       "reason": "No current exact case directly demonstrates broader core graph behavior."
     }
   ]

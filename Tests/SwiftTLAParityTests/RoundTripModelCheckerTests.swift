@@ -340,7 +340,7 @@ private func value(
       }
       Constraint(counter <= StateExpr.value(.constant("limit")))
     }
-    let graph = try ModelChecker(compilation: try spec.compile()).exploreGraph()
+    let graph = try ModelChecker(compilation: try spec.compile(), configuration: .standard).exploreGraph()
     let compilation = try spec.compile()
 
     for (sourceID, source) in graph.states {

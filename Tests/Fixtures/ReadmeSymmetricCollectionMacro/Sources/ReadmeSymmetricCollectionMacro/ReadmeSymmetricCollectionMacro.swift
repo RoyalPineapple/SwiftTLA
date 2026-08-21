@@ -43,7 +43,7 @@ guard generatedSpec.invariants.count == 1 else {
 guard case .forAll = generatedSpec.invariants[0].body else {
     throw FixtureError.invalidInvariant
 }
-guard case .bounded(_, .ok) = try ModelChecker(compilation: try generatedSpec.compile()).check() else {
+guard case .bounded(_, .ok) = try ModelChecker(compilation: try generatedSpec.compile(), configuration: .standard).check() else {
     throw FixtureError.incompleteCheck
 }
 

@@ -774,6 +774,20 @@ private func parserEnum(
         let count = try #require(TLAStateProjection.Token(validating: "count"))
         #expect(try state.projection(using: compilation.layout).value(for: count) == .int(3))
     }
+
+    @Test("unsupported variable initializers fail during parsing")
+    func rejectsUnsupportedVariableInitializer() throws {
+        let closure = try parseClosure("""
+        {
+            let count = Var("count", UnsupportedInitialValue())
+            count
+        }
+        """)
+        let parsed = SpecParser.parseSpecClosure(closure)
+
+        #expect(parsed.variables.isEmpty)
+        #expect(parsed.diagnostics.map(\.message) == ["Var requires a supported initial formal value."])
+    }
 }
 
 private enum ParserNode: String, FiniteDomainKey {

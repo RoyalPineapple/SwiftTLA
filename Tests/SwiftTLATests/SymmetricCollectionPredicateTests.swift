@@ -69,8 +69,8 @@ struct SymmetricCollectionPredicateTests {
       == direct.symmetricCollections.map(\.metadata))
     #expect(try parsedSpec.compile().identity == direct.compile().identity)
     #expect(try parsedSpec.compile().initialStateProjections() == direct.compile().initialStateProjections())
-    #expect(try ModelChecker(compilation: try parsedSpec.compile()).check().description
-      == ModelChecker(compilation: try direct.compile()).check().description)
+    #expect(try ModelChecker(compilation: try parsedSpec.compile(), configuration: .standard).check().description
+      == ModelChecker(compilation: try direct.compile(), configuration: .standard).check().description)
   }
 
   @Test("macro and source-model compilation share collection binder identity")
@@ -91,8 +91,8 @@ struct SymmetricCollectionPredicateTests {
     #expect(generated.symmetricCollections.map(\.metadata) == direct.symmetricCollections.map(\.metadata))
     #expect(normalized(generated.invariants.map(\.description)) == normalized(direct.invariants.map(\.description)))
     #expect(try generated.compile().initialStateProjections() == direct.compile().initialStateProjections())
-    #expect(try ModelChecker(compilation: try generated.compile()).check().description
-      == ModelChecker(compilation: try direct.compile()).check().description)
+    #expect(try ModelChecker(compilation: try generated.compile(), configuration: .standard).check().description
+      == ModelChecker(compilation: try direct.compile(), configuration: .standard).check().description)
     #expect(!generated.invariants.description.contains("PredicateMacroDevice"))
   }
 
@@ -143,7 +143,7 @@ struct SymmetricCollectionPredicateTests {
 
     #expect(generated.actions.count == 2)
     #expect(generated.invariants.count == 2)
-    #expect(try ModelChecker(compilation: try generated.compile()).check().description.contains("OK"))
+    #expect(try ModelChecker(compilation: try generated.compile(), configuration: .standard).check().description.contains("OK"))
   }
 
   @Test("Parsed collection predicates preserve invariant violations")
@@ -162,8 +162,8 @@ struct SymmetricCollectionPredicateTests {
     }
 
     #expect(parsed.diagnostics.isEmpty)
-    let parsedResult = try ModelChecker(compilation: try parsedSpec.compile()).check()
-    let directResult = try ModelChecker(compilation: try direct.compile()).check()
+    let parsedResult = try ModelChecker(compilation: try parsedSpec.compile(), configuration: .standard).check()
+    let directResult = try ModelChecker(compilation: try direct.compile(), configuration: .standard).check()
     #expect(parsedResult.description == directResult.description)
     guard case .bounded(_, .invariantViolated(let name, _, _)) = parsedResult else {
       Issue.record("Expected a bounded invariant violation, got: \(parsedResult)")

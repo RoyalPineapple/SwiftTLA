@@ -387,7 +387,7 @@ extension TemporalSymmetryGovernanceTests {
   private func temporalCase(id: String = "temporal", expectedOutcome: TemporalSymmetryExpectedOutcome = .exact) throws -> TemporalSymmetryCase {
     try TemporalSymmetryCase(
       id: id, kind: .temporal, swiftSpec: "TemporalFixture",
-      provenance: try CoreDivergenceProvenance(
+      provenance: try CoreEvidenceProvenance(
         caseID: id, moduleSHA256: digest, cfgSHA256: digest, argumentsSHA256: digest,
         tlcTag: "v1.8.0", tlcCommit: "commit", tlcJarSHA256: digest, javaDistribution: "Temurin",
         javaVersion: "17", javaArchiveSHA256: digest, bridgeClass: "bridge", bridgeSourceSHA256: digest,
@@ -402,15 +402,15 @@ extension TemporalSymmetryGovernanceTests {
   ) throws -> TemporalSymmetryDivergenceRecord {
     try TemporalSymmetryDivergenceRecord(
       id: "difference", kind: kind,
-      provenance: try CoreDivergenceProvenance(
+      provenance: try CoreEvidenceProvenance(
         caseID: provenanceCaseID, moduleSHA256: digest, cfgSHA256: digest, argumentsSHA256: digest,
         tlcTag: "v1.8.0", tlcCommit: "commit", tlcJarSHA256: digest, javaDistribution: "Temurin",
         javaVersion: "17", javaArchiveSHA256: digest, bridgeClass: "bridge", bridgeSourceSHA256: digest,
         bridgeBinarySHA256: digest),
       semanticCitations: ["TLA+ temporal logic"], reproducer: try bounds(), originalEvidence: try evidence("original.json"),
       permanentRegressionCaseID: regressionCaseID, classification: .swiftTLADefect, disposition: disposition,
-      normalizedDifferenceFingerprint: "difference", latestComparison: try TemporalSymmetryDivergenceComparison(
-        evidence: try evidence("latest.json"), outcome: .difference, normalizedDifferenceFingerprint: "difference"))
+      normalizedDifferenceDigest: "difference", latestComparison: try TemporalSymmetryDivergenceComparison(
+        evidence: try evidence("latest.json"), outcome: .difference, normalizedDifferenceDigest: "difference"))
   }
 
   private func exploration(_ engine: SymmetryExplorationEngine, _ reduced: Bool, _ runID: UUID) throws -> SymmetryExploration {

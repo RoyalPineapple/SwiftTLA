@@ -620,13 +620,11 @@ extension CoreConformanceRunner {
     ]
     if let governance = declaredCase.governance {
       snapshot["governance"] = [
-        "role": governance.role.rawValue,
         "finiteBounds": [
           "summary": governance.finiteBounds.summary,
           "limits": governance.finiteBounds.limits
         ],
-        "semanticCitations": governance.semanticCitations,
-        "expectedRegressionOutcome": governance.expectedRegressionOutcome.rawValue
+        "semanticCitations": governance.semanticCitations
       ]
     }
     return snapshot

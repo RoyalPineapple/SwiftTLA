@@ -3,27 +3,27 @@ import Foundation
 public struct PublicWorkflowDivergenceComparison: Equatable, Codable, Sendable {
   public let evidence: CoreEvidenceReference
   public let outcome: PublicWorkflowExpectedOutcome
-  public let normalizedDifferenceFingerprint: String?
+  public let normalizedDifferenceDigest: String?
 
-  public init(evidence: CoreEvidenceReference, outcome: PublicWorkflowExpectedOutcome, normalizedDifferenceFingerprint: String?) throws {
+  public init(evidence: CoreEvidenceReference, outcome: PublicWorkflowExpectedOutcome, normalizedDifferenceDigest: String?) throws {
     self.evidence = evidence
     self.outcome = outcome
-    self.normalizedDifferenceFingerprint = normalizedDifferenceFingerprint
+    self.normalizedDifferenceDigest = normalizedDifferenceDigest
     try validate()
   }
 
   public func validate() throws {
     try evidence.validate()
-    guard outcome == .difference ? normalizedDifferenceFingerprint?.isEmpty == false : normalizedDifferenceFingerprint == nil else {
-      throw ConformanceGovernanceError.invalidField(record: "comparison", field: "normalizedDifferenceFingerprint")
+    guard outcome == .difference ? normalizedDifferenceDigest?.isEmpty == false : normalizedDifferenceDigest == nil else {
+      throw ConformanceGovernanceError.invalidField(record: "comparison", field: "normalizedDifferenceDigest")
     }
   }
 
-  private enum CodingKeys: String, CodingKey, CaseIterable { case evidence, outcome, normalizedDifferenceFingerprint }
+  private enum CodingKeys: String, CodingKey, CaseIterable { case evidence, outcome, normalizedDifferenceDigest }
 
   public init(from decoder: Decoder) throws {
     let container = try ConformanceDecoding.container(decoder, keyedBy: CodingKeys.self)
-    try self.init(evidence: try container.decode(CoreEvidenceReference.self, forKey: .evidence), outcome: try container.decode(PublicWorkflowExpectedOutcome.self, forKey: .outcome), normalizedDifferenceFingerprint: try container.decodeIfPresent(String.self, forKey: .normalizedDifferenceFingerprint))
+    try self.init(evidence: try container.decode(CoreEvidenceReference.self, forKey: .evidence), outcome: try container.decode(PublicWorkflowExpectedOutcome.self, forKey: .outcome), normalizedDifferenceDigest: try container.decodeIfPresent(String.self, forKey: .normalizedDifferenceDigest))
   }
 }
 
@@ -36,10 +36,10 @@ public struct PublicWorkflowDivergenceRecord: Equatable, Codable, Sendable {
   public let permanentRegressionCaseID: String
   public let classification: ConformanceDivergenceClassification
   public let disposition: ConformanceDivergenceDisposition
-  public let normalizedDifferenceFingerprint: String
+  public let normalizedDifferenceDigest: String
   public let latestComparison: PublicWorkflowDivergenceComparison
 
-  public init(id: String, caseID: String, semanticCitations: [String], reproducer: CoreFiniteBounds, originalEvidence: CoreEvidenceReference, permanentRegressionCaseID: String, classification: ConformanceDivergenceClassification, disposition: ConformanceDivergenceDisposition, normalizedDifferenceFingerprint: String, latestComparison: PublicWorkflowDivergenceComparison) throws {
+  public init(id: String, caseID: String, semanticCitations: [String], reproducer: CoreFiniteBounds, originalEvidence: CoreEvidenceReference, permanentRegressionCaseID: String, classification: ConformanceDivergenceClassification, disposition: ConformanceDivergenceDisposition, normalizedDifferenceDigest: String, latestComparison: PublicWorkflowDivergenceComparison) throws {
     self.id = id
     self.caseID = caseID
     self.semanticCitations = semanticCitations
@@ -48,7 +48,7 @@ public struct PublicWorkflowDivergenceRecord: Equatable, Codable, Sendable {
     self.permanentRegressionCaseID = permanentRegressionCaseID
     self.classification = classification
     self.disposition = disposition
-    self.normalizedDifferenceFingerprint = normalizedDifferenceFingerprint
+    self.normalizedDifferenceDigest = normalizedDifferenceDigest
     self.latestComparison = latestComparison
     try validate()
   }
@@ -57,23 +57,23 @@ public struct PublicWorkflowDivergenceRecord: Equatable, Codable, Sendable {
     try reproducer.validate()
     try originalEvidence.validate()
     try latestComparison.validate()
-    guard !id.isEmpty, !caseID.isEmpty, !permanentRegressionCaseID.isEmpty, !normalizedDifferenceFingerprint.isEmpty,
+    guard !id.isEmpty, !caseID.isEmpty, !permanentRegressionCaseID.isEmpty, !normalizedDifferenceDigest.isEmpty,
           !semanticCitations.isEmpty, semanticCitations.allSatisfy({ !$0.isEmpty }) else {
       throw ConformanceGovernanceError.invalidField(record: id, field: "required evidence")
     }
     guard disposition != .resolved || latestComparison.outcome == .exact else {
       throw ConformanceGovernanceError.invalidField(record: id, field: "latest comparison")
     }
-    guard latestComparison.outcome != .difference || latestComparison.normalizedDifferenceFingerprint == normalizedDifferenceFingerprint else {
-      throw ConformanceGovernanceError.invalidField(record: id, field: "fingerprint drift")
+    guard latestComparison.outcome != .difference || latestComparison.normalizedDifferenceDigest == normalizedDifferenceDigest else {
+      throw ConformanceGovernanceError.invalidField(record: id, field: "difference digest drift")
     }
   }
 
-  private enum CodingKeys: String, CodingKey, CaseIterable { case id, caseID, semanticCitations, reproducer, originalEvidence, permanentRegressionCaseID, classification, disposition, normalizedDifferenceFingerprint, latestComparison }
+  private enum CodingKeys: String, CodingKey, CaseIterable { case id, caseID, semanticCitations, reproducer, originalEvidence, permanentRegressionCaseID, classification, disposition, normalizedDifferenceDigest, latestComparison }
 
   public init(from decoder: Decoder) throws {
     let container = try ConformanceDecoding.container(decoder, keyedBy: CodingKeys.self)
-    try self.init(id: try container.decode(String.self, forKey: .id), caseID: try container.decode(String.self, forKey: .caseID), semanticCitations: try container.decode([String].self, forKey: .semanticCitations), reproducer: try container.decode(CoreFiniteBounds.self, forKey: .reproducer), originalEvidence: try container.decode(CoreEvidenceReference.self, forKey: .originalEvidence), permanentRegressionCaseID: try container.decode(String.self, forKey: .permanentRegressionCaseID), classification: try container.decode(ConformanceDivergenceClassification.self, forKey: .classification), disposition: try container.decode(ConformanceDivergenceDisposition.self, forKey: .disposition), normalizedDifferenceFingerprint: try container.decode(String.self, forKey: .normalizedDifferenceFingerprint), latestComparison: try container.decode(PublicWorkflowDivergenceComparison.self, forKey: .latestComparison))
+    try self.init(id: try container.decode(String.self, forKey: .id), caseID: try container.decode(String.self, forKey: .caseID), semanticCitations: try container.decode([String].self, forKey: .semanticCitations), reproducer: try container.decode(CoreFiniteBounds.self, forKey: .reproducer), originalEvidence: try container.decode(CoreEvidenceReference.self, forKey: .originalEvidence), permanentRegressionCaseID: try container.decode(String.self, forKey: .permanentRegressionCaseID), classification: try container.decode(ConformanceDivergenceClassification.self, forKey: .classification), disposition: try container.decode(ConformanceDivergenceDisposition.self, forKey: .disposition), normalizedDifferenceDigest: try container.decode(String.self, forKey: .normalizedDifferenceDigest), latestComparison: try container.decode(PublicWorkflowDivergenceComparison.self, forKey: .latestComparison))
   }
 }
 
