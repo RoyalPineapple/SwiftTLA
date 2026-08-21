@@ -310,7 +310,7 @@ struct CompilerPipelineCanonicalizationTests {
             invariants: []
         )
         let compilation = try spec.compile()
-        let state = try FormalState(formalValues: [.int(0), .int(0)], compilation: compilation)
+        let state = try CompiledState(formalValues: [.int(0), .int(0)], compilation: compilation)
         let nextStates = try CompiledActionEnumerator(state: state, model: compilation.model)
             .enumerate(try #require(compilation.model.actions.first))
 
@@ -334,7 +334,7 @@ struct CompilerPipelineCanonicalizationTests {
             invariants: []
         )
         let compilation = try spec.compile()
-        let state = try FormalState(formalValues: [.int(0)], compilation: compilation)
+        let state = try CompiledState(formalValues: [.int(0)], compilation: compilation)
         let next = try CompiledActionEnumerator(state: state, model: compilation.model)
             .enumerate(try #require(compilation.model.actions.first))
 
@@ -365,7 +365,7 @@ struct CompilerPipelineCanonicalizationTests {
             formalOperatorDefinitions: [double]
         )
         let compilation = try spec.compile()
-        let state = try FormalState(formalValues: [.int(0)], compilation: compilation)
+        let state = try CompiledState(formalValues: [.int(0)], compilation: compilation)
         let next = try CompiledActionEnumerator(state: state, model: compilation.model)
             .enumerate(try #require(compilation.model.actions.first))
 
@@ -413,7 +413,7 @@ struct CompilerPipelineCanonicalizationTests {
             formalOperatorDefinitions: [applyTwice]
         )
         let compilation = try spec.compile()
-        let state = try FormalState(formalValues: [.int(0)], compilation: compilation)
+        let state = try CompiledState(formalValues: [.int(0)], compilation: compilation)
         let next = try CompiledActionEnumerator(state: state, model: compilation.model)
             .enumerate(try #require(compilation.model.actions.first))
 
@@ -498,7 +498,7 @@ struct CompilerPipelineCanonicalizationTests {
     @Test("formal state stores values by compiled variable identity")
     func formalStateUsesVariableSlots() throws {
         let spec = TLASpec(
-            name: "FormalState",
+            name: "CompiledState",
             variables: [
                 .init(name: "first", initial: .int(1)),
                 .init(name: "second", initial: .int(2)),
@@ -509,7 +509,7 @@ struct CompilerPipelineCanonicalizationTests {
         let compilation = try spec.compile()
         let first = compilation.layout.variables[0].id
         let second = compilation.layout.variables[1].id
-        let state = try FormalState(formalValues: [.int(1), .int(2)], compilation: compilation)
+        let state = try CompiledState(formalValues: [.int(1), .int(2)], compilation: compilation)
         let updated = try state.updating(second, to: .integer(3))
 
         #expect(try state.value(for: first) == .integer(1))
@@ -533,7 +533,7 @@ struct CompilerPipelineCanonicalizationTests {
             invariants: []
         ).compile()
 
-        let foreignState = try FormalState(formalValues: [.int(0)], compilation: first)
+        let foreignState = try CompiledState(formalValues: [.int(0)], compilation: first)
         #expect(throws: CompiledEvaluationError.self) {
             try CompiledRuntime(compilation: second).successors(from: foreignState)
         }
@@ -557,7 +557,7 @@ struct CompilerPipelineCanonicalizationTests {
             invariants: []
         )
         let compilation = try spec.compile()
-        let state = try FormalState(formalValues: [.int(1)], compilation: compilation)
+        let state = try CompiledState(formalValues: [.int(1)], compilation: compilation)
 
         guard case .existsAction(let binder, _, .guard_(let expression)) = compilation.model.actions[0].body else {
             Issue.record("Expected a compiled action binder")
@@ -585,7 +585,7 @@ struct CompilerPipelineCanonicalizationTests {
             invariants: []
         )
         let compilation = try spec.compile()
-        let state = try FormalState(formalValues: [], compilation: compilation)
+        let state = try CompiledState(formalValues: [], compilation: compilation)
 
         guard case .guard_(let compiled) = compilation.model.actions[0].body else {
             Issue.record("Expected a compiled guard")
@@ -603,7 +603,7 @@ struct CompilerPipelineCanonicalizationTests {
             invariants: []
         )
         let compilation = try spec.compile()
-        let state = try FormalState(formalValues: [.int(1)], compilation: compilation)
+        let state = try CompiledState(formalValues: [.int(1)], compilation: compilation)
 
         let successors = try CompiledActionEnumerator(state: state, model: compilation.model).enumerate(compilation.model.actions[0])
 

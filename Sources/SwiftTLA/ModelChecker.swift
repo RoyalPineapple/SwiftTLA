@@ -152,21 +152,21 @@ public struct ModelChecker {
 
 private func compiledBFS(
     runtime: CompiledRuntime,
-    seeds: [FormalState],
+    seeds: [CompiledState],
     layout: CompiledLayout,
     checkDeadlock: Bool,
     specificationName: String,
     maxStates: Int
 ) throws -> ModelExplorationResult {
-    var queue: [FormalState] = []
-    var stateToID: [FormalState: StateGraph.StateID] = [:]
-    var idToState: [StateGraph.StateID: FormalState] = [:]
+    var queue: [CompiledState] = []
+    var stateToID: [CompiledState: StateGraph.StateID] = [:]
+    var idToState: [StateGraph.StateID: CompiledState] = [:]
     var initialStateIDs: [StateGraph.StateID] = []
     var transitions: [StateGraph.StateID: [StateGraph.Transition]] = [:]
-    var predecessors: [FormalState: (FormalState, String)] = [:]
+    var predecessors: [CompiledState: (CompiledState, String)] = [:]
     var nextID = 0
 
-    func stateProjection(_ state: FormalState) throws -> TLAStateProjection {
+    func stateProjection(_ state: CompiledState) throws -> TLAStateProjection {
         try state.projection(using: layout)
     }
 
@@ -183,8 +183,8 @@ private func compiledBFS(
         )
     }
 
-    func trace(to final: FormalState, initial: FormalState) throws -> [TraceStep] {
-        var steps: [(FormalState, String)] = []
+    func trace(to final: CompiledState, initial: CompiledState) throws -> [TraceStep] {
+        var steps: [(CompiledState, String)] = []
         var current = final
         while let predecessor = predecessors[current] {
             steps.append((current, predecessor.1))

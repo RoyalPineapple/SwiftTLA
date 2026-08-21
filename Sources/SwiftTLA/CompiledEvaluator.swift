@@ -15,7 +15,7 @@ enum EvalError: Error, CustomStringConvertible {
 }
 
 struct CompiledEvaluator {
-    let state: FormalState
+    let state: CompiledState
     let model: CompiledModel
     let bindings: CompiledBindings
     let enabledActions: Set<ActionID>
@@ -24,7 +24,7 @@ struct CompiledEvaluator {
     let remainingRecursionDepth: Int
 
     init(
-        state: FormalState,
+        state: CompiledState,
         model: CompiledModel,
         bindings: CompiledBindings = .init(),
         enabledActions: Set<ActionID> = [],
@@ -528,7 +528,7 @@ package func evaluateClosed(_ expression: StateExpr) throws -> TLAValue {
         actions: [],
         invariants: [.init(name: "value", body: expression)]
     ).compile()
-    let state = try FormalState(values: [CompiledValue](), compilation: compilation)
+    let state = try CompiledState(values: [CompiledValue](), compilation: compilation)
     guard let invariant = compilation.model.invariants.first else {
         throw CompiledEvaluationError.unresolvedOperator
     }

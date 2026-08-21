@@ -131,7 +131,7 @@ public struct CompiledSpecification: Sendable {
         arguments: [TLAValue],
         from state: TLAStateProjection
     ) throws -> [TLAStateProjection] {
-        let formalState = try FormalState(projection: state, compilation: self)
+        let formalState = try CompiledState(projection: state, compilation: self)
         return try CompiledRuntime(compilation: self)
             .successors(for: action, from: formalState)
             .filter { $0.arguments == arguments }
@@ -142,9 +142,9 @@ public struct CompiledSpecification: Sendable {
         in state: TLAStateProjection
     ) -> [CompiledPropertyOutcome] {
         let runtime = CompiledRuntime(compilation: self)
-        let formalState: FormalState
+        let formalState: CompiledState
         do {
-            formalState = try FormalState(projection: state, compilation: self)
+            formalState = try CompiledState(projection: state, compilation: self)
         } catch {
             return model.invariants.map {
                 .evaluationFailed(

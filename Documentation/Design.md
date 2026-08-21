@@ -453,10 +453,10 @@ graph TD
 | `TLAValue` | TLAValue.swift | — | 8-case runtime value |
 | `Var<T>` | Var.swift | name | `.becomes`, `.stays`, `@dynamicMemberLookup` |
 | `TLASpec` | TLASpec.swift | DSL builder | immutable spec with 14 component types |
-| `CompiledEvaluator` | CompiledEvaluator.swift | CompiledStateExpr + FormalState | CompiledValue |
-| `CompiledActionEnumerator` | CompiledActionEnumerator.swift | CompiledAction + FormalState | slot-backed successors |
+| `CompiledEvaluator` | CompiledEvaluator.swift | CompiledStateExpr + CompiledState | CompiledValue |
+| `CompiledActionEnumerator` | CompiledActionEnumerator.swift | CompiledAction + CompiledState | slot-backed successors |
 | `ModelChecker` | ModelChecker.swift | TLASpec | CheckResult + StateGraph |
-| `CompiledRuntime` | CompiledRuntime.swift | CompiledSpecification | FormalState successors and invariant results |
+| `CompiledRuntime` | CompiledRuntime.swift | CompiledSpecification | CompiledState successors and invariant results |
 | `SpecParser` | SpecParser.swift | SwiftSyntax | DSL types (7 public methods) |
 | `ModelMacro` | ModelMacro.swift | struct source | extension + runtime property |
 | `PrettyPrint` | TLASpec+PrettyPrint.swift | TLASpec | .tla string (13-step generation) |

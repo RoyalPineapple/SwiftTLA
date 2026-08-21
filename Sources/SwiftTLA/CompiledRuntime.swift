@@ -4,14 +4,14 @@ struct CompiledRuntime {
     private var layout: CompiledLayout { compilation.layout }
     private var model: CompiledModel { compilation.model }
 
-    func initialStates() throws -> [FormalState] {
+    func initialStates() throws -> [CompiledState] {
         let initialValues = try layout.variables.map { variable in
             guard let value = model.initialValues[variable.id] else {
                 throw CompiledEvaluationError.invalidVariableID(variable.id)
             }
             return value
         }
-        var states = [try FormalState(values: initialValues, compilation: compilation)]
+        var states = [try CompiledState(values: initialValues, compilation: compilation)]
 
         for variable in layout.variables {
             guard let initializer = model.variableInitializers[variable.id] else { continue }
@@ -40,7 +40,7 @@ struct CompiledRuntime {
         return states
     }
 
-    func successors(from state: FormalState) throws -> [CompiledSuccessor] {
+    func successors(from state: CompiledState) throws -> [CompiledSuccessor] {
         try state.requireIdentity(compilation.identity)
         let enabledActions = try enabledActions(in: state)
         return try model.actions.flatMap { action in
@@ -48,14 +48,14 @@ struct CompiledRuntime {
         }
     }
 
-    func successors(for actionID: ActionID, from state: FormalState) throws -> [CompiledSuccessor] {
+    func successors(for actionID: ActionID, from state: CompiledState) throws -> [CompiledSuccessor] {
         try state.requireIdentity(compilation.identity)
         return try successors(for: actionID, from: state, enabledActions: try enabledActions(in: state))
     }
 
     private func successors(
         for actionID: ActionID,
-        from state: FormalState,
+        from state: CompiledState,
         enabledActions: Set<ActionID>
     ) throws -> [CompiledSuccessor] {
         guard let action = model.actions.first(where: { $0.id == actionID }) else {
@@ -67,23 +67,23 @@ struct CompiledRuntime {
             .map { .init(action: actionID, arguments: $0.arguments, state: $0.state) }
     }
 
-    func assumeHolds(in state: FormalState) throws -> Bool {
+    func assumeHolds(in state: CompiledState) throws -> Bool {
         try state.requireIdentity(compilation.identity)
         guard let assume = model.assume else { return true }
         return try boolean(assume, in: state)
     }
 
-    func invariantHolds(_ invariant: CompiledInvariant, in state: FormalState) throws -> Bool {
+    func invariantHolds(_ invariant: CompiledInvariant, in state: CompiledState) throws -> Bool {
         try state.requireIdentity(compilation.identity)
         return try boolean(invariant.body, in: state, enabledActions: try enabledActions(in: state))
     }
 
-    func predicateHolds(_ predicate: CompiledStateExpr, in state: FormalState) throws -> Bool {
+    func predicateHolds(_ predicate: CompiledStateExpr, in state: CompiledState) throws -> Bool {
         try state.requireIdentity(compilation.identity)
         return try boolean(predicate, in: state, enabledActions: try enabledActions(in: state))
     }
 
-    func canonicalState(_ state: FormalState) throws -> FormalState {
+    func canonicalState(_ state: CompiledState) throws -> CompiledState {
         try state.requireIdentity(compilation.identity)
         let groups = model.symmetricCollections.map {
             SymmetricCollectionPermutationGroup(members: $0.members)
@@ -108,12 +108,12 @@ struct CompiledRuntime {
         }
     }
 
-    private func constraintHolds(in state: FormalState) throws -> Bool {
+    private func constraintHolds(in state: CompiledState) throws -> Bool {
         guard let constraint = model.constraint else { return true }
         return try boolean(constraint, in: state)
     }
 
-    private func enabledActions(in state: FormalState) throws -> Set<ActionID> {
+    private func enabledActions(in state: CompiledState) throws -> Set<ActionID> {
         var result = Set<ActionID>()
         for action in model.actions {
             if try !CompiledActionEnumerator(state: state, model: model).enumerate(action).isEmpty {
@@ -125,7 +125,7 @@ struct CompiledRuntime {
 
     private func boolean(
         _ expression: CompiledStateExpr,
-        in state: FormalState,
+        in state: CompiledState,
         enabledActions: Set<ActionID> = []
     ) throws -> Bool {
         guard case .boolean(let result) = try CompiledEvaluator(
@@ -142,7 +142,7 @@ struct CompiledRuntime {
 struct CompiledSuccessor: Sendable {
     let action: ActionID
     let arguments: [TLAValue]
-    let state: FormalState
+    let state: CompiledState
 }
 
 package enum CompiledPropertyOutcome: Sendable, Equatable {

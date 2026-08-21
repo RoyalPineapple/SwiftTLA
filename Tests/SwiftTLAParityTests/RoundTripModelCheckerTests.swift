@@ -9,7 +9,7 @@ import UpstreamParity
 private func compiledSuccessors(
   for action: ActionExpr,
   from values: [(String, TLAValue)]
-) throws -> (CompiledSpecification, [FormalState]) {
+) throws -> (CompiledSpecification, [CompiledState]) {
   let spec = TLASpec(
     name: "ActionExpressionFixture",
     variables: values.sorted { $0.0 < $1.0 }.map { NamedVar(name: $0.0, initial: $0.1) },
@@ -25,7 +25,7 @@ private func compiledSuccessors(
 
 private func value(
   named name: String,
-  in state: FormalState,
+  in state: CompiledState,
   compilation: CompiledSpecification
 ) throws -> TLAValue {
   let variable = try #require(compilation.layout.variableID(named: name))
@@ -270,7 +270,7 @@ private func value(
     _ compilation: CompiledSpecification,
     from state: TLAStateProjection
   ) throws -> [(action: String, arguments: [TLAValue], state: TLAStateProjection)] {
-    let formalState = try FormalState(projection: state, compilation: compilation)
+    let formalState = try CompiledState(projection: state, compilation: compilation)
     return try CompiledRuntime(compilation: compilation)
       .successors(from: formalState)
       .map { successor in

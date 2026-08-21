@@ -140,7 +140,7 @@ struct SymmetricCollectionMacroRuntimeTests {
     from projection: TLAStateProjection
   ) throws -> [TLAStateProjection] {
     let compilation = try spec.compile()
-    let state = try FormalState(
+    let state = try CompiledState(
       projection: projection,
       compilation: compilation
     )

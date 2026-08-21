@@ -1,4 +1,4 @@
-struct FormalState: Hashable, Sendable {
+struct CompiledState: Hashable, Sendable {
     private let compilationIdentity: CompilationIdentity
     private let values: [CompiledValue]
 
@@ -45,16 +45,16 @@ struct FormalState: Hashable, Sendable {
         return values[variable.ordinal]
     }
 
-    func updating(_ variable: VariableID, to value: CompiledValue) throws -> FormalState {
+    func updating(_ variable: VariableID, to value: CompiledValue) throws -> CompiledState {
         guard values.indices.contains(variable.ordinal) else {
             throw CompiledEvaluationError.invalidVariableID(variable)
         }
         var updated = values
         updated[variable.ordinal] = value
-        return FormalState(validatedValues: updated, compilationIdentity: compilationIdentity)
+        return CompiledState(validatedValues: updated, compilationIdentity: compilationIdentity)
     }
 
-    func updating(_ assignments: [VariableID: CompiledValue]) throws -> FormalState {
+    func updating(_ assignments: [VariableID: CompiledValue]) throws -> CompiledState {
         var updated = self
         for assignment in assignments {
             updated = try updated.updating(assignment.key, to: assignment.value)
@@ -62,8 +62,8 @@ struct FormalState: Hashable, Sendable {
         return updated
     }
 
-    func transformingFormalValues(_ transform: (TLAValue) -> TLAValue) -> FormalState {
-        FormalState(
+    func transformingFormalValues(_ transform: (TLAValue) -> TLAValue) -> CompiledState {
+        CompiledState(
             validatedValues: values.map { $0.transformingFormalValues(transform) },
             compilationIdentity: compilationIdentity
         )

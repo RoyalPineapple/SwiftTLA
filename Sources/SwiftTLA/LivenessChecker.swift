@@ -254,7 +254,7 @@ public struct LivenessChecker {
         in projection: TLAStateProjection,
         compilation: CompiledSpecification
     ) throws -> Bool {
-        let state = try FormalState(projection: projection, compilation: compilation)
+        let state = try CompiledState(projection: projection, compilation: compilation)
         return try CompiledRuntime(compilation: compilation).predicateHolds(predicate, in: state)
     }
 

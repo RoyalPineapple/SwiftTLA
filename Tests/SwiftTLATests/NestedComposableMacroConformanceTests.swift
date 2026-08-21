@@ -24,7 +24,7 @@ struct NestedComposableMacroConformanceTests {
                 guard let successor = graph.states[transition.target] else { return nil }
                 return (transition.label.action, transition.label.arguments, successor)
             }
-            let state = try FormalState(projection: source, compilation: compilation)
+            let state = try CompiledState(projection: source, compilation: compilation)
             let runtimeSuccessors = try CompiledRuntime(compilation: compilation)
                 .successors(from: state)
                 .map { successor in

@@ -22,7 +22,7 @@ public struct CompiledActionExecutor<Label: Hashable & Sendable>: Sendable {
         for action: Label,
         from state: TLAStateProjection
     ) throws -> [TLAStateProjection] {
-        let formalState = try FormalState(projection: state, compilation: compilation)
+        let formalState = try CompiledState(projection: state, compilation: compilation)
         let compiledAction = try compiledAction(for: action)
         let expectedArguments = arguments(action).map(CompiledValue.init(formal:))
         guard argumentSets(for: compiledAction).contains(expectedArguments) else {
@@ -34,7 +34,7 @@ public struct CompiledActionExecutor<Label: Hashable & Sendable>: Sendable {
     }
 
     public func availableLabels(in state: TLAStateProjection) throws -> [Label] {
-        let formalState = try FormalState(projection: state, compilation: compilation)
+        let formalState = try CompiledState(projection: state, compilation: compilation)
         return try runtime.successors(from: formalState).reduce(into: []) { labels, successor in
             guard let label = self.label(successor.action.ordinal, successor.arguments) else {
                 throw GeneratedMachineError.noMatchingSuccessor
