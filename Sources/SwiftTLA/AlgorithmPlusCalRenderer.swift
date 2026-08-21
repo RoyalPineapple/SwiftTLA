@@ -1,40 +1,27 @@
-/// A problem encountered while printing an Algorithm model as PlusCal.
 public struct AlgorithmPlusCalRenderDiagnostic: Error, Sendable, Hashable, CustomStringConvertible {
-    /// The rendering capability that could not be satisfied.
     public let failedConcept: String
-    /// Canonical Algorithm IR path of the unsupported node.
     public let path: String
-    /// The direct PlusCal spelling or renderer capability that was required.
     public let expected: String
-    /// The actual Algorithm IR node encountered by the renderer.
     public let actual: String
-    /// Rendering is pure: a diagnostic never creates semantics or changes state.
-    public let stateChange: StateChange
     public let nextSafeAction: String
-
-    public enum StateChange: String, Sendable, Hashable {
-        case none
-    }
 
     public init(
         failedConcept: String,
         path: String,
         expected: String,
         actual: String,
-        nextSafeAction: String,
-        stateChange: StateChange = .none
+        nextSafeAction: String
     ) {
         self.failedConcept = failedConcept
         self.path = path
         self.expected = expected
         self.actual = actual
         self.nextSafeAction = nextSafeAction
-        self.stateChange = stateChange
     }
 
     public var description: String {
         "PlusCal rendering failed: \(failedConcept). Path: \(path). Expected: \(expected). "
-            + "Actual: \(actual). State change: \(stateChange.rawValue). Next safe action: \(nextSafeAction)"
+            + "Actual: \(actual). Next safe action: \(nextSafeAction)"
     }
 }
 
