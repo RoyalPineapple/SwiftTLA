@@ -123,12 +123,12 @@ public enum MultiCarElevator {
 
         return #spec("MultiCarElevator") {
             Variable(cars, TLAValue.function([
-                CarID.carA.tlaValue: .record([
+                CarID.carA.tlaValue: TLAValue.record([
                     "floor": FloorID.ground.tlaValue,
                     "doorsOpen": .bool(false),
                     "rider": .string("none")
                 ]),
-                CarID.carB.tlaValue: .record([
+                CarID.carB.tlaValue: TLAValue.record([
                     "floor": FloorID.top.tlaValue,
                     "doorsOpen": .bool(false),
                     "rider": .string("none")
@@ -320,12 +320,12 @@ public struct MultiCarElevatorMacroFixture: Sendable {
             let calls: Var<SetExpr<Record<CallSchema>>> = .init("calls")
             let lastMoveDoorClosed: Var<Bool> = .init("lastMoveDoorClosed")
             Variable(cars, TLAValue.function([
-                CarID.carA.tlaValue: .record([
+                CarID.carA.tlaValue: TLAValue.record([
                     "floor": FloorID.ground.tlaValue,
                     "doorsOpen": .bool(false),
                     "rider": .string("none")
                 ]),
-                CarID.carB.tlaValue: .record([
+                CarID.carB.tlaValue: TLAValue.record([
                     "floor": FloorID.top.tlaValue,
                     "doorsOpen": .bool(false),
                     "rider": .string("none")
