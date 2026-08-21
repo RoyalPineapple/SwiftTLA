@@ -443,18 +443,6 @@ public struct FormalOperatorDecl: SpecComponent, Equatable {
   public init(_ definition: FormalOperatorDefinition) {
     self.definition = definition
   }
-
-  var tlaText: String {
-    let parameters = definition.parameters.map { parameter in
-      switch parameter {
-      case .value(let name): return name
-      case .operator(let name, let arity):
-        return "\(name)(\(Array(repeating: "_", count: arity).joined(separator: ", ")))"
-      }
-    }.joined(separator: ", ")
-    let declaration = parameters.isEmpty ? definition.name : "\(definition.name)(\(parameters))"
-    return "\(declaration) == \(definition.body)"
-  }
 }
 
 public func FormalDefinition(
