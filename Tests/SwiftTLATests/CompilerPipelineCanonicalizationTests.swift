@@ -330,8 +330,10 @@ struct CompilerPipelineCanonicalizationTests {
         )
         let compilation = try spec.compile()
         let state = try CompiledState(formalValues: [.int(0), .int(0)], compilation: compilation)
-        let nextStates = try CompiledActionEnumerator(state: state, semantics: compilation.semantics, layout: compilation.layout)
-            .enumerate(try #require(compilation.semantics.actions.first))
+        let action = try #require(compilation.semantics.actions.first)
+        let nextStates = try CompiledRuntime(compilation: compilation)
+            .successors(for: action.id, from: state)
+            .map(\.state)
 
         #expect(nextStates.count == 1)
         #expect(try nextStates[0].value(for: .init(ordinal: 0)) == .integer(2))
@@ -354,8 +356,10 @@ struct CompilerPipelineCanonicalizationTests {
         )
         let compilation = try spec.compile()
         let state = try CompiledState(formalValues: [.int(0)], compilation: compilation)
-        let next = try CompiledActionEnumerator(state: state, semantics: compilation.semantics, layout: compilation.layout)
-            .enumerate(try #require(compilation.semantics.actions.first))
+        let action = try #require(compilation.semantics.actions.first)
+        let next = try CompiledRuntime(compilation: compilation)
+            .successors(for: action.id, from: state)
+            .map(\.state)
 
         let values = try next.map { try $0.value(for: .init(ordinal: 0)) }
         #expect(Set(values) == [.integer(1), .integer(2)])
@@ -385,8 +389,10 @@ struct CompilerPipelineCanonicalizationTests {
         )
         let compilation = try spec.compile()
         let state = try CompiledState(formalValues: [.int(0)], compilation: compilation)
-        let next = try CompiledActionEnumerator(state: state, semantics: compilation.semantics, layout: compilation.layout)
-            .enumerate(try #require(compilation.semantics.actions.first))
+        let action = try #require(compilation.semantics.actions.first)
+        let next = try CompiledRuntime(compilation: compilation)
+            .successors(for: action.id, from: state)
+            .map(\.state)
 
         guard case .assign(_, .operatorApplication(.reference(let id, _), _)) = compilation.semantics.actions[0].body else {
             Issue.record("Expected an operator identity")
@@ -433,8 +439,10 @@ struct CompilerPipelineCanonicalizationTests {
         )
         let compilation = try spec.compile()
         let state = try CompiledState(formalValues: [.int(0)], compilation: compilation)
-        let next = try CompiledActionEnumerator(state: state, semantics: compilation.semantics, layout: compilation.layout)
-            .enumerate(try #require(compilation.semantics.actions.first))
+        let action = try #require(compilation.semantics.actions.first)
+        let next = try CompiledRuntime(compilation: compilation)
+            .successors(for: action.id, from: state)
+            .map(\.state)
 
         #expect(try #require(next.first).value(for: .init(ordinal: 0)) == .integer(6))
     }
@@ -674,11 +682,10 @@ struct CompilerPipelineCanonicalizationTests {
         let compilation = try spec.compile()
         let state = try CompiledState(formalValues: [.int(1)], compilation: compilation)
 
-        let successors = try CompiledActionEnumerator(
-            state: state,
-            semantics: compilation.semantics,
-            layout: compilation.layout
-        ).enumerate(compilation.semantics.actions[0])
+        let action = compilation.semantics.actions[0]
+        let successors = try CompiledRuntime(compilation: compilation)
+            .successors(for: action.id, from: state)
+            .map(\.state)
 
         #expect(successors.count == 1)
         #expect(try successors[0].value(for: compilation.layout.variables[0].id) == .integer(2))

@@ -22,9 +22,9 @@ private func compiledSuccessors(
     compilation: compilation
   )
   let action = try #require(compilation.semantics.actions.first)
-  return try CompiledActionEnumerator(state: state, semantics: compilation.semantics, layout: compilation.layout)
-    .enumerate(action)
-    .map { try $0.projection(using: compilation.layout) }
+  return try CompiledRuntime(compilation: compilation)
+    .successors(for: action.id, from: state)
+    .map { try $0.state.projection(using: compilation.layout) }
 }
 
 private func compiledInitialProjections(_ spec: TLASpec) throws -> [TLAStateProjection] {
