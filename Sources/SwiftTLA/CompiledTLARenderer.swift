@@ -98,8 +98,13 @@ struct CompiledTLARenderer {
             return "FoldFunction(\(try formalLambda(operation)), \(try state(initial)), \(try state(sequence)))"
         case .operatorApplication(let operation, let arguments):
             let arguments = try arguments.map(formalArgument).joined(separator: ", ")
-            let operation = try formalOperator(operation)
-            return arguments.isEmpty ? operation : "\(operation)(\(arguments))"
+            let renderedOperation = try formalOperator(operation)
+            switch operation {
+            case .lambda:
+                return "(\(renderedOperation))(\(arguments))"
+            case .reference:
+                return arguments.isEmpty ? renderedOperation : "\(renderedOperation)(\(arguments))"
+            }
         case .recursiveCall(let operation, let arguments):
             let name = try operatorName(operation)
             return arguments.isEmpty ? name : "\(name)(\(try arguments.map(state).joined(separator: ", ")))"
@@ -121,7 +126,7 @@ struct CompiledTLARenderer {
     private func formalOperator(_ operation: CompiledFormalOperator) throws -> String {
         switch operation {
         case .lambda(let lambda):
-            return "LAMBDA \(try lambda.parameters.map(binderName).joined(separator: ", ")) : \(try state(lambda.body))"
+            return try formalLambda(lambda)
         case .reference(let id, _): return try operatorName(id)
         }
     }
