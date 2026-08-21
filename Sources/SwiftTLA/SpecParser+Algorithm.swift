@@ -26,9 +26,12 @@ extension ParserSession {
         var macros: [String: AlgorithmMacroDefinition] = [:]
         let outerConstants = constants
         let outerTupleVariables = algorithmTupleVariables
+        let outerStateNames = algorithmStateNames
         algorithmTupleVariables = []
+        algorithmStateNames = []
         defer {
             algorithmTupleVariables = outerTupleVariables
+            algorithmStateNames = outerStateNames
             constants = outerConstants
         }
         for statement in closure.statements {
@@ -50,6 +53,9 @@ extension ParserSession {
                 if case .shared(let state) = component,
                    state.isTuple {
                     algorithmTupleVariables.insert(state.root)
+                }
+                if case .shared(let state) = component {
+                    algorithmStateNames.insert(state.root)
                 }
                 continue
             }
@@ -108,7 +114,6 @@ extension ParserSession {
         guard let call = expression.as(FunctionCallExprSyntax.self),
               call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "FormalDefinition"
         else { return nil }
-        guard call.trailingClosure != nil else { return nil }
         guard let definition = decodeFormalDefinition(call) else {
             algorithmParseFailure = algorithmParseFailure
                 ?? "FormalDefinition could not decode its typed parameters or formal body."
@@ -205,6 +210,7 @@ extension ParserSession {
                ),
                case .local(let local) = component {
                 locals.append(local)
+                algorithmStateNames.insert(local.root)
                 procedureScope = typedFacadeScope(
                     procedureScope,
                     binding: local.root,
@@ -353,6 +359,7 @@ extension ParserSession {
                     initialSet: state.initialSet,
                     swiftTypeName: state.swiftTypeName
                 )))
+                algorithmStateNames.insert(state.root)
                 processScope = typedFacadeScope(
                     processScope,
                     binding: state.root,

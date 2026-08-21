@@ -79,6 +79,8 @@ public final class ParserSession {
     /// distinguish `sequence[index]` from a finite-function lookup without
     /// exposing raw type maps to authors.
     var algorithmTupleVariables: Set<String> = []
+    /// State declarations visible to the algorithm currently being parsed.
+    var algorithmStateNames: Set<String> = []
     var algorithmParseFailure: String?
 
     init(
@@ -334,13 +336,16 @@ public final class ParserSession {
     /// Parses `Domain.all.members(before: process)`, the typed formal set of
     /// members declared before a process. This stays finite and explicit; it
     /// is not a Swift collection operation.
-    private func decodePrecedingFormalMembers(_ expression: ExprSyntax) -> StateExpr? {
+    private func decodePrecedingFormalMembers(
+        _ expression: ExprSyntax,
+        scope: TypedFacadeScope = .empty
+    ) -> StateExpr? {
         guard let call = expression.as(FunctionCallExprSyntax.self),
               call.calledExpression.as(MemberAccessExprSyntax.self)?.declName.baseName.text == "members",
               let base = call.calledExpression.as(MemberAccessExprSyntax.self)?.base,
               let domain = finiteAlgorithmDomain(base),
               let currentSyntax = call.arguments.first(where: { $0.label?.text == "before" })?.expression,
-              let current = decodeStateExpr(currentSyntax)
+              let current = decodeTypedFacadeValue(currentSyntax, scope: scope)
         else { return nil }
 
         var result = StateExpr.setLiteral([])
@@ -447,13 +452,16 @@ public final class ParserSession {
         )
     }
 
-    private func decodeBoundedSubsetDomain(_ expression: ExprSyntax) -> StateExpr? {
+    private func decodeBoundedSubsetDomain(
+        _ expression: ExprSyntax,
+        scope: TypedFacadeScope = .empty
+    ) -> StateExpr? {
         guard let call = expression.as(FunctionCallExprSyntax.self),
               let name = call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text,
               name == "Subsets" || name == "NonEmptySubsets"
         else { return nil }
         guard let valuesSyntax = call.arguments.first(where: { $0.label?.text == "of" })?.expression,
-              let values = decodeStateExpr(valuesSyntax)
+              let values = decodeTypedFacadeValue(valuesSyntax, scope: scope)
         else {
             algorithmParseFailure = "Subsets could not decode its finite formal set."
             return nil
@@ -580,6 +588,12 @@ public final class ParserSession {
         _ expression: ExprSyntax,
         scope: TypedFacadeScope
     ) -> StateExpr? {
+        if let precedingMembers = decodePrecedingFormalMembers(expression, scope: scope) {
+            return precedingMembers
+        }
+        if let subsets = decodeBoundedSubsetDomain(expression, scope: scope) {
+            return subsets
+        }
         // SwiftSyntax represents a parenthesized expression as a one-element
         // tuple. Keep decoding through the typed path so scoped facade values
         // such as `current.expr` retain their lexical scope.
@@ -622,6 +636,14 @@ public final class ParserSession {
            call.arguments.count == 1,
            let value = call.arguments.first?.expression {
             return decodeTypedFacadeValue(value, scope: scope)
+                ?? type.terminalArgumentName(at: 0).flatMap { typeName in
+                    guard let member = value.as(MemberAccessExprSyntax.self),
+                          member.base == nil,
+                          let formalValue = enumDefinition(named: typeName)?
+                            .value(named: member.declName.baseName.text)
+                    else { return nil }
+                    return .value(formalValue)
+                }
         }
         if let localRecursion = decodeLocalRecursion(expression, scope: scope) {
             return localRecursion
@@ -912,12 +934,12 @@ public final class ParserSession {
            let parameter = closureParameterNames(in: closure).first,
            closure.statements.count == 1,
            case .expr(let bodySyntax) = closure.statements.first?.item {
-            let scope = typedFacadeScope(
-                .empty,
+            let functionScope = typedFacadeScope(
+                scope,
                 binding: parameter,
                 to: .variable("__pcal_function_key")
             )
-            let body = decodeTypedFacadeValue(bodySyntax, scope: scope)
+            let body = decodeTypedFacadeValue(bodySyntax, scope: functionScope)
                 ?? decodeTypedDefaultValue(bodySyntax, expectedType: literalType.argument(at: 1))
             guard let body else { return nil }
             return .functionLiteral(
@@ -1038,6 +1060,23 @@ public final class ParserSession {
         _ expression: ExprSyntax,
         scope: TypedFacadeScope
     ) -> StateExpr? {
+        if let reference = expression.as(DeclReferenceExprSyntax.self) {
+            let name = reference.baseName.text
+            if let value = scope.value(for: reference) { return value }
+            if let constant = constants.value(named: name) { return .value(constant) }
+            if algorithmStateNames.contains(name) { return .variable(name) }
+        }
+        if let literal = expression.as(IntegerLiteralExprSyntax.self),
+           let value = Int(literal.literal.text) {
+            return .value(.int(value))
+        }
+        if let literal = expression.as(BooleanLiteralExprSyntax.self) {
+            return .value(.bool(literal.literal.text == "true"))
+        }
+        if let literal = expression.as(StringLiteralExprSyntax.self),
+           let value = literal.representedLiteralValue {
+            return .value(.string(value))
+        }
         // A typed function selector can be an explicit finite-domain enum
         // case (for example, `Process.p0`). Resolve it before the typed
         // facade treats member access as a record field or a property.
