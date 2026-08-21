@@ -227,17 +227,25 @@ extension TLASpec {
     let renderer = AlgorithmPlusCalRenderer(model: algorithm.model)
     let sourceProperties = try renderer.sourcePropertyDefinitions()
     let sourcePropertyNames = sourceProperties.map(\.name)
+    let topLevelProperties = invariants
+      .filter { sourcePropertyNames.contains($0.name) == false }
+      .map { invariant in
+        (name: invariant.name, definition: "\(invariant.name) == \(invariant.body.tlaModuleSource)")
+      }
+    let topLevelPropertyNames = topLevelProperties.map(\.name)
     let loweredPropertyNames = invariants.map(\.name) + temporalProperties.map(\.name)
     guard Set(sourcePropertyNames).count == sourcePropertyNames.count,
+          Set(topLevelPropertyNames).count == topLevelPropertyNames.count,
           Set(loweredPropertyNames).count == loweredPropertyNames.count,
-          Set(sourcePropertyNames).union(renderer.translatorOwnedPropertyNames()) == Set(loweredPropertyNames)
+          Set(sourcePropertyNames + topLevelPropertyNames)
+            .union(renderer.translatorOwnedPropertyNames()) == Set(loweredPropertyNames)
     else {
         throw AlgorithmPlusCalRenderDiagnostic(
           failedConcept: "authored PlusCal property export",
           path: "TLASpec.properties",
-          expected: "one retained Algorithm source property for every lowered property",
-          actual: "source properties \(sourcePropertyNames); lowered properties \(loweredPropertyNames)",
-          nextSafeAction: "Declare properties inside Algorithm, or add a source-level renderer for the top-level declaration before exporting PlusCal."
+          expected: "one rendered typed property for every lowered property",
+          actual: "Algorithm properties \(sourcePropertyNames); top-level typed properties \(topLevelPropertyNames); lowered properties \(loweredPropertyNames)",
+          nextSafeAction: "Give each property a unique name and use a supported typed property expression."
         )
     }
     let declarationSections = try authoredPlusCalDeclarationSections()
@@ -250,7 +258,7 @@ extension TLASpec {
       definitionsAfterInstances: [],
       algorithm: algorithm.model,
       defineDeclarations: declarationSections.define,
-      postTranslationDeclarations: sourceProperties.map(\.definition)
+      postTranslationDeclarations: (sourceProperties + topLevelProperties).map(\.definition)
         + authoredPlusCalSymmetry
     )
     return module

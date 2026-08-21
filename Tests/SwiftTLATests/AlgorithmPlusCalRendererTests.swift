@@ -131,6 +131,22 @@ struct AlgorithmPlusCalRendererTests {
         #expect(definitionRange.lowerBound < actionRange.lowerBound)
     }
 
+    @Test("renders typed properties outside the authored Algorithm")
+    func rendersTopLevelTypedProperty() throws {
+        let spec = TLASpec("Compiler Property") {
+            Algorithm("Counter") {
+                let count = SharedVar("count", initial: 0)
+                count
+                Do("done") { Stop() }
+            }
+            Invariant("CountIsZero") { StateExpr.variable("count") == 0 }
+        }
+
+        let rendered = try spec.compile().renderedPlusCalBundle().root.tla
+
+        #expect(rendered.contains("CountIsZero =="))
+    }
+
     @Test("rejects unresolved authored declaration dependencies")
     func rejectsMissingDeclarationDependency() {
         #expect(throws: AlgorithmPlusCalRenderDiagnostic.self) {
