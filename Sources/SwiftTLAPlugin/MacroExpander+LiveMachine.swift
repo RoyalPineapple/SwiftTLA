@@ -140,7 +140,7 @@ extension MacroExpander {
                 ) throws -> Rejection {
                     let reason: RejectionReason
                     switch value.reason {
-                    case .runtimeUnavailable(let reason): reason = .runtimeUnavailable(_unavailability(reason))
+                    case .runtimeUnavailable(let unavailability): reason = .runtimeUnavailable(Self._unavailability(unavailability))
                     case .actionNotEnabled: reason = .actionNotEnabled
                     case .identityRoutedActionRequiresID: reason = .identityRoutedActionRequiresID
                     }

@@ -48,7 +48,7 @@ extension MacroExpander {
             @MainActor public init(live: Live) async throws {
                 _live = live
                 _reducer = _GeneratedMachineStorage.LiveObservableReducer<State, \(actionType)>(
-                    identity: live.identity,
+                    identity: .init(value: live.identity.value),
                     decode: { try State(storage: live._storage, storageState: $0) }
                 )
                 let subscription: _GeneratedMachineStorage.LiveSubscription<\(actionType)>
