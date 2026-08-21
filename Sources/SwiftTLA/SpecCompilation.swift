@@ -383,7 +383,6 @@ public struct CompilationDiagnostic: Error, Sendable, Hashable, CustomStringConv
         case duplicateAction
         case duplicateInvariant
         case duplicateRecordField
-        case unresolvedImport
         case compilationIdentityMismatch
         case cyclicFormalModule
         case conflictingFormalModuleSource
@@ -447,27 +446,11 @@ public struct CompilationDiagnostic: Error, Sendable, Hashable, CustomStringConv
 }
 
 public extension SpecParser.ParsedSpecComponents {
-    /// Lowers parser output exactly once into the canonical formal payload.
-    ///
-    /// Callers may contribute invariants derived from Swift-only type facts;
-    /// those facts never carry a second copy of formal expressions.
+    /// Compiles parser output and generated-machine type facts.
     func compile(
         specificationName: String,
         additionalInvariants: [NamedInvariant] = []
     ) throws -> CompiledSpecification {
-        let resolvedImports = try imports.map { name -> TLASpec in
-            guard let module = FormalModuleRegistry.lookup(name) else {
-                throw CompilationDiagnostic(
-                    code: .unresolvedImport,
-                    stage: .lowering,
-                    path: "imports.\(name)",
-                    expected: "a registered formal module named '\(name)'",
-                    actual: "no registered module",
-                    nextSafeAction: "Register or import the named formal module, then compile again."
-                )
-            }
-            return module
-        }
         let spec = TLASpec(
             name: specificationName,
             variables: variables.map(\.formal),
@@ -482,7 +465,7 @@ public extension SpecParser.ParsedSpecComponents {
             definitions: definitions,
             constraint: constraint,
             formalOperatorDefinitions: formalOperatorDefinitions,
-            imports: resolvedImports,
+            imports: imports,
             importConfigurations: importConfigurations,
             moduleInstances: moduleInstances,
             symmetrySets: symmetrySets,

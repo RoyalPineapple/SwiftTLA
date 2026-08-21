@@ -840,11 +840,9 @@ public func Instance(
 }
 // swiftlint:enable identifier_name
 
-/// The formal modules that macro expansion can resolve from authored
-/// `Import(Module.module)` and `Instance("name", of: Module.module)` declarations.
-public enum FormalModuleRegistry {
-  public static func lookup(_ name: String) -> TLASpec? {
-    switch name {
+enum BuiltInFormalModules {
+  static func resolve(_ sourceName: String) -> TLASpec? {
+    switch sourceName {
     case "Folds": Folds.module
     case "Functions", "FunctionsModule": FunctionsModule.module
     case "Util", "KeyValueStoreUtil": KeyValueStoreUtil.module
