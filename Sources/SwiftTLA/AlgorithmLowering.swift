@@ -446,7 +446,7 @@ enum AlgorithmLowerer {
         )]
             + sharedVariables
         if !procedures.isEmpty {
-            variables.append(NamedVar(name: CompilerControlSymbol.stack.rawValue, initial: .tuple([]), origin: .compiler))
+            variables.append(NamedVar(name: CompilerControlSymbol.stack.rawValue, initial: .tuple([]), origin: .procedureStack))
         }
         variables += procedureVariables
         let variableNames = variables.map(\.name)
@@ -641,7 +641,7 @@ enum AlgorithmLowerer {
             + procedureSlots(procedures).map { ($0.root, StateExpr.variable($0.root)) }
         let push = ActionExpr.assign(
             CompilerControlSymbol.stack.rawValue,
-            .tupleConcatenate(.tupleLiteral([StateExpr.record(Dictionary(uniqueKeysWithValues: frameFields))]), .variable(CompilerControlSymbol.stack.rawValue))
+            .tupleConcatenate(.tupleLiteral([StateExpr.record(Dictionary(uniqueKeysWithValues: frameFields))]), .procedureStack)
         )
         let parameterAssignments = zip(procedure.parameters, arguments).map {
             ActionExpr.assign($0.0.root, $0.1)
@@ -656,7 +656,7 @@ enum AlgorithmLowerer {
         procedures: [AlgorithmProcedureModel]
     ) -> ActionExpr {
         guard owner != nil else { return .guard_(.value(.bool(false))) }
-        let stack = StateExpr.variable(CompilerControlSymbol.stack.rawValue)
+        let stack = StateExpr.procedureStack
         let frame = StateExpr.tupleHead(stack)
         let restore = (procedureSlots(procedures).map { ActionExpr.assign($0.root, .recordAccess(frame, $0.root)) }
             + [
@@ -699,7 +699,7 @@ enum AlgorithmLowerer {
             return .guard_(.value(.bool(false)))
         }
         let process = StateExpr.variable(processBinding)
-        let stack = StateExpr.functionApply(.variable(CompilerControlSymbol.stack.rawValue), process)
+        let stack = StateExpr.functionApply(.procedureStack, process)
         let frameFields = [
             (CompilerControlSymbol.procedure.rawValue, StateExpr.value(.string(procedure.name))),
             (CompilerControlSymbol.programCounter.rawValue, returnTo)
@@ -710,7 +710,7 @@ enum AlgorithmLowerer {
         let push = ActionExpr.assign(
             CompilerControlSymbol.stack.rawValue,
             .except(
-                .variable(CompilerControlSymbol.stack.rawValue),
+                .procedureStack,
                 process,
                 .tupleConcatenate(.tupleLiteral([StateExpr.record(Dictionary(uniqueKeysWithValues: frameFields))]), stack)
             )
@@ -732,12 +732,12 @@ enum AlgorithmLowerer {
     ) -> ActionExpr {
         guard owner != nil else { return .guard_(.value(.bool(false))) }
         let process = StateExpr.variable(processBinding)
-        let stack = StateExpr.functionApply(.variable(CompilerControlSymbol.stack.rawValue), process)
+        let stack = StateExpr.functionApply(.procedureStack, process)
         let frame = StateExpr.tupleHead(stack)
         let restore = procedureSlots(procedures).map {
             ActionExpr.assign($0.root, .except(.variable($0.root), process, .recordAccess(frame, $0.root)))
         } + [
-            .assign(CompilerControlSymbol.stack.rawValue, .except(.variable(CompilerControlSymbol.stack.rawValue), process, .tupleTail(stack))),
+            .assign(CompilerControlSymbol.stack.rawValue, .except(.procedureStack, process, .tupleTail(stack))),
             transfer(toExpression: .recordAccess(frame, CompilerControlSymbol.programCounter.rawValue))
         ]
         return restore.reduce(
@@ -1116,7 +1116,7 @@ enum AlgorithmLowerer {
     private static func rewrite(_ expression: StateExpr, localRoots: Set<String>) -> StateExpr {
         func rewritten(_ expression: StateExpr, localRoots: Set<String>) -> StateExpr {
             switch expression {
-            case .sourceIssue, .value, .programCounter, .controlLocation:
+            case .sourceIssue, .value, .programCounter, .procedureStack, .controlLocation:
                 return expression
             case .variable(let name):
                 if name == builderProcessIdentifier { return .variable(processBinding) }

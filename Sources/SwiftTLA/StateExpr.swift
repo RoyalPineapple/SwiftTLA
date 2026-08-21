@@ -262,6 +262,7 @@ public indirect enum StateExpr: Hashable, Sendable, CustomStringConvertible {
     case value(TLAValue)
     case variable(String)
     case programCounter
+    case procedureStack
     case controlLocation(ControlLocationReference)
 
     case add(StateExpr, StateExpr)
@@ -339,6 +340,7 @@ public indirect enum StateExpr: Hashable, Sendable, CustomStringConvertible {
         case .value(let v): return v.description
         case .variable(let n): return n
         case .programCounter: return CompilerControlSymbol.programCounter.rawValue
+        case .procedureStack: return CompilerControlSymbol.stack.rawValue
         case .controlLocation(let reference): return TLAValue.string(reference.sourceName).description
         case .add(let a, let b): return "(\(a) + \(b))"
         case .subtract(let a, let b): return "(\(a) - \(b))"
@@ -484,7 +486,7 @@ private extension FormalCallArgument {
 
 private func localOperatorCalls(in expression: StateExpr) -> Set<String> {
     switch expression {
-    case .sourceIssue, .value, .variable, .programCounter, .controlLocation, .enabledAction:
+    case .sourceIssue, .value, .variable, .programCounter, .procedureStack, .controlLocation, .enabledAction:
         return []
     case .recursiveCall(let name, let arguments):
         return Set([name]).union(

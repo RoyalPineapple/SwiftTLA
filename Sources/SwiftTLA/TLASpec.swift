@@ -9,6 +9,7 @@ enum VariableOrigin: Sendable, Equatable {
   case source
   case compiler
   case programCounter
+  case procedureStack
 }
 
 public struct NamedVar: Sendable, CustomStringConvertible, Equatable {

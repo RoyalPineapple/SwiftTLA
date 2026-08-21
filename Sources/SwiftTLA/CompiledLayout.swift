@@ -210,6 +210,12 @@ struct CompiledLayout: Hashable, Sendable {
         }?.id
     }
 
+    func procedureStackID() -> VariableID? {
+        variables.first {
+            $0.declaration.origin == .procedureStack
+        }?.id
+    }
+
     func actionID(named name: String) -> ActionID? {
         actions.first { $0.declaration.name == name }?.id
     }
@@ -254,6 +260,7 @@ struct CompiledLayout: Hashable, Sendable {
             case .source: origin = "source"
             case .compiler: origin = "compiler"
             case .programCounter: origin = "programCounter"
+            case .procedureStack: origin = "procedureStack"
             }
             return "\(ordinal):\(kind.utf8.count):\(kind)\(name.utf8.count):\(name)\(origin.utf8.count):\(origin)"
         }.joined(separator: "|")
@@ -307,7 +314,7 @@ struct CompiledLayout: Hashable, Sendable {
                 return
             case .value(let value):
                 visit(value)
-            case .variable, .programCounter, .controlLocation, .enabledAction:
+            case .variable, .programCounter, .procedureStack, .controlLocation, .enabledAction:
                 return
             case .negate(let value), .not(let value), .cardinality(let value), .powerSet(let value),
                  .unionAll(let value), .tupleLength(let value), .tupleHead(let value), .tupleTail(let value),
@@ -725,6 +732,16 @@ struct BindingValidator {
                     path: path,
                     expected: "a compiler-owned program counter",
                     actual: "this model has no program counter"
+                )
+            }
+            references[path] = .variable(id)
+        case .procedureStack:
+            guard let id = layout.procedureStackID() else {
+                throw diagnostic(
+                    code: .unknownReference,
+                    path: path,
+                    expected: "a compiler-owned procedure stack",
+                    actual: "this model has no procedure stack"
                 )
             }
             references[path] = .variable(id)

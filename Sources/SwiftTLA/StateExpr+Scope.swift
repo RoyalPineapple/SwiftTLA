@@ -6,7 +6,7 @@ extension StateExpr {
     /// for deciding when it must rename a binder to avoid capture.
     var freeVariableNames: Set<String> {
         return switch self {
-        case .sourceIssue, .value, .programCounter, .controlLocation, .enabledAction:
+        case .sourceIssue, .value, .programCounter, .procedureStack, .controlLocation, .enabledAction:
             []
         case .variable(let name):
             [name]
