@@ -21,6 +21,7 @@ extension ParserSession {
         public var imports: [String] = []
         public var importConfigurations: [FormalModuleConfiguration] = []
         public var moduleInstances: [FormalModuleInstance] = []
+        public var sourceAlgorithms: [Algorithm] = []
         public var formalParameters: [FormalModuleParameter] = []
         public var formalOperatorDefinitions: [FormalOperatorDefinition] = []
         public var definitions: [DirectModuleDefinition] = []
@@ -30,6 +31,55 @@ extension ParserSession {
         /// the ordinary parsed specification tree.
         public var algorithmFidelityTokens: [AlgorithmFidelityToken] = []
         public var constants: [ConstantDecl] = []
+
+        public func swiftVariableTypes() -> [String: String] {
+            var types = Dictionary(
+                uniqueKeysWithValues: variables.compactMap { variable in
+                    variable.swiftTypeName.map { (variable.name, $0) }
+                }
+            )
+            for algorithm in sourceAlgorithms {
+                let localNames = Set(algorithm.model.processes.flatMap { process in
+                    process.components.compactMap {
+                        guard case .local(let state) = $0 else { return nil }
+                        return state.root
+                    }
+                })
+                for state in algorithm.model.stateDeclarations {
+                    if let type = state.swiftTypeName {
+                        types[state.root] = localNames.contains(state.root) ? "TLAValue" : type
+                    }
+                }
+            }
+            return types
+        }
+
+        public func machineSurfaceSwiftFacts(
+            for compilation: CompiledSpecification
+        ) -> MachineSurfaceSwiftFacts {
+            let processDomains = sourceAlgorithms.flatMap { algorithm in
+                algorithm.model.processes.map { ($0.domain, $0.typeName) }
+            }
+            var actionBindingTypes = Dictionary(
+                uniqueKeysWithValues: actions.map { ($0.name, $0.bindingSwiftTypes) }
+            )
+            for action in compilation.spec.actions {
+                let bindings = action.bindings.reduce(into: [String: String]()) { types, binding in
+                    if let domain = processDomains.first(where: { $0.0 == binding.values }) {
+                        types[binding.name] = domain.1
+                    }
+                }
+                if !bindings.isEmpty { actionBindingTypes[action.name] = bindings }
+            }
+            return .init(
+                variableTypes: swiftVariableTypes(),
+                actionBindingTypes: actionBindingTypes,
+                symmetricCollections: Dictionary(uniqueKeysWithValues: symmetricCollections.map {
+                    ($0.name, .init(elementType: $0.elementType, valueType: $0.valueType))
+                }),
+                collectionActions: Dictionary(uniqueKeysWithValues: collectionActions.map { ($0.name, $0.collectionName) })
+            )
+        }
     }
 
     public struct ParsedVariable: Sendable, Equatable {

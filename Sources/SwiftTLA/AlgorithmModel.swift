@@ -40,6 +40,24 @@ internal struct AlgorithmModel: Sendable {
         }
     }
 
+    var stateDeclarations: [AlgorithmStateModel] {
+        components.flatMap { component in
+            switch component {
+            case .shared(let state): return [state]
+            case .process(let process):
+                return process.components.compactMap {
+                    guard case .local(let state) = $0 else { return nil }
+                    return state
+                }
+            case .procedure(let procedure):
+                return procedure.parameters.map {
+                    .init(root: $0.root, initial: $0.initial, swiftTypeName: $0.swiftTypeName)
+                } + procedure.locals
+            default: return []
+            }
+        }
+    }
+
     /// Names the generated PlusCal process operators exactly as pcal.trans
     /// does, including collisions with authored declarations.
     func translatedProcessNames() -> [String] {

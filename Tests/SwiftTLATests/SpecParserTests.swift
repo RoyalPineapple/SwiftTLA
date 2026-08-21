@@ -24,8 +24,15 @@ private func parserEnum(
 }
 
 @Suite(.serialized) struct AlgorithmBuilderParsingTests {
+    private func compile(
+        _ parsed: SpecParser.ParsedSpecComponents,
+        named name: String
+    ) throws -> CompiledSpecification {
+        try parsed.compile(specificationName: name)
+    }
+
     @Test("Algorithm Each Do syntax lowers through the ordinary parser AST")
-    func parsesBoundedAlgorithm() {
+    func parsesBoundedAlgorithm() throws {
         let source = """
         {
             Algorithm("Counter") {
@@ -46,12 +53,15 @@ private func parserEnum(
         )
 
         #expect(parsed.diagnostics.isEmpty)
-        #expect(parsed.variables.map(\.name) == ["count", "pc"])
-        #expect(parsed.actions.map(\.name) == ["increment", "Terminating"])
-        #expect(parsed.actions.first?.bindings == [
+        let compilation = try compile(parsed, named: "Counter")
+        let specification = compilation.spec
+        #expect(specification.variables.map(\.name) == ["pc", "count"])
+        #expect(specification.actions.map(\.name) == ["increment", "Terminating"])
+        #expect(specification.actions.first?.bindings == [
             ActionBinding(name: "process", values: [.string("left"), .string("right")])
         ])
-        #expect(parsed.actions.first?.bindingSwiftTypes == ["process": "Node"])
+        let facts = parsed.machineSurfaceSwiftFacts(for: compilation)
+        #expect(facts.actionBindingTypes["increment"] == ["process": "Node"])
     }
 
     @Test("Algorithm parser rejects declarations it does not lower")
@@ -76,7 +86,7 @@ private func parserEnum(
     }
 
     @Test("parser lowers the mechanical PlusCal statements through the shared IR")
-    func parsesMechanicalPlusCalStatements() {
+    func parsesMechanicalPlusCalStatements() throws {
         let source = """
         {
             Algorithm("Counter") {
@@ -100,15 +110,16 @@ private func parserEnum(
         )
 
         #expect(parsed.diagnostics.isEmpty)
-        #expect(parsed.invariants.map(\.name) == ["__pcal_assert_increment_0_0", "__pcal_assert_increment_0_1"])
-        #expect(parsed.fairness == [
+        let specification = try compile(parsed, named: "Counter").spec
+        #expect(specification.invariants.map(\.name) == ["__pcal_assert_increment_0_0", "__pcal_assert_increment_0_1"])
+        #expect(specification.fairness == [
             .strongFairnessActionCall(.init(name: "increment", arguments: [.string("left")])),
             .strongFairnessActionCall(.init(name: "increment", arguments: [.string("right")]))
         ])
     }
 
     @Test("Algorithm parser preserves a process-bound formal lambda application")
-    func parsesProcessScopedFormalLambdaApplication() {
+    func parsesProcessScopedFormalLambdaApplication() throws {
         let source = """
         {
             Algorithm("ScopedFormalLambda") {
@@ -139,8 +150,9 @@ private func parserEnum(
         )
 
         #expect(parsed.diagnostics.isEmpty)
-        #expect(parsed.actions.map(\.name) == ["advance", "Terminating"])
-        #expect(parsed.actions.first?.body.description.contains("LAMBDA value : (value + 1)") == true)
+        let specification = try compile(parsed, named: "ScopedFormalLambda").spec
+        #expect(specification.actions.map(\.name) == ["advance", "Terminating"])
+        #expect(specification.actions.first?.body.description.contains("LAMBDA value : (value + 1)") == true)
     }
 
     @Test("formal operator parsing failure retains all six diagnostic fields")
@@ -174,7 +186,7 @@ private func parserEnum(
     }
 
     @Test("parser lowers ordered multi-source With bindings")
-    func parsesThreeIndependentWithBindings() {
+    func parsesThreeIndependentWithBindings() throws {
         let source = """
         {
             Algorithm("ThreeWith") {
@@ -195,8 +207,9 @@ private func parserEnum(
         let parsed = SpecParser.parseSpecClosure(closure)
 
         #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
-        #expect(parsed.actions.first?.body.description.contains("__pcal_with_0") == true)
-        #expect(parsed.actions.first?.body.description.contains("__pcal_with_2") == true)
+        let specification = try compile(parsed, named: "ThreeWith").spec
+        #expect(specification.actions.first?.body.description.contains("__pcal_with_0") == true)
+        #expect(specification.actions.first?.body.description.contains("__pcal_with_2") == true)
     }
 
     @Test("parser expands a bounded statement macro in its caller's atomic step")

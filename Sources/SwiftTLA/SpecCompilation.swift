@@ -493,6 +493,7 @@ public extension SpecParser.ParsedSpecComponents {
             symmetrySets: symmetrySets,
             symmetricCollections: symmetricCollections.map(\.declaration),
             algorithmFidelityTokens: algorithmFidelityTokens,
+            sourceAlgorithms: sourceAlgorithms,
             authoredPlusCalDeclarations: authoredPlusCalDeclarations
         )
         return try spec.compile()
